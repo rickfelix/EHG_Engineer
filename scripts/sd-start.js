@@ -198,6 +198,12 @@ async function enforceDependencyGate(sd, effectiveId) {
 // so an == 'human_action_required' equality check would silently miss a HELD SD that is ALSO an
 // orchestrator parent or test-fixture key (adversarial review finding, ship-gate self-review).
 function enforceHumanActionGate(sd, effectiveId) {
+  // QF-20260903-179: the EXISTING claimant re-attaching to an SD it already holds is exempt.
+  // This fence exists to stop NEW dispatch onto a row awaiting a human, not to evict the owner
+  // from work it already holds — live incident: the refusal nulled the active claim, worker-
+  // checkin read the null as idle, and anti-wind-down auto-self-claimed an unrelated SD.
+  const sessionId = process.env.CLAUDE_SESSION_ID;
+  if (sessionId && sd?.claiming_session_id === sessionId) return;
   // SD-ARCH-HOTSPOT-SD-START-001 FR-6 (prospective-testing D6): route through the
   // shared ALL-MATCH classifier and key on the SPECIFIC axis — .includes(), never
   // length>0, so a HELD SD that is also an orchestrator/fixture still surfaces the
@@ -380,7 +386,10 @@ async function getSDDetails(sdId) {
   // Note: legacy_id column was deprecated and removed - using sd_key instead
   const { data, error } = await supabase
     .from('strategic_directives_v2')
-    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope, governance_metadata, metadata, completion_date, updated_at, updated_by')
+    // QF-20260903-179: claiming_session_id added so enforceHumanActionGate can exempt the
+    // existing claimant re-attaching to its own held SD (it was previously absent from this
+    // select entirely, so a same-session-id exemption check here could never have matched).
+    .select('id, sd_key, title, status, current_phase, priority, progress_percentage, is_working_on, sd_type, created_at, target_application, venture_id, scope, governance_metadata, metadata, completion_date, updated_at, updated_by, claiming_session_id')
     .or(`sd_key.eq.${sdId},id.eq.${sdId}`)
     .single();
 
