@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 function makeMockSupabase(capture) {
   return {
-    from(table) {
+    from(_table) {
       return {
         select() { return this; },
         eq() { return this; },
@@ -56,13 +56,11 @@ describe('FR-2: a hard-failing second readback catches dropped payload content',
     vi.doUnmock('../../../lib/checkers/readback-checker.mjs');
   });
 
-  it('propagates (throws) into the caller when the second readback rejects — the row survived the first (soft) check but failed the payload-completeness check', async () => {
-    const { ReadbackFieldMismatchError } = await vi.importActual('../../../lib/checkers/readback-checker.mjs');
+  it('propagates (throws) into the caller when the row genuinely dropped a non-empty warnings array — the row survived the first (soft) check but failed the payload-completeness check', async () => {
     const verifyReadback = vi.fn()
       .mockResolvedValueOnce({ verdict: 'PASS', row: {} }) // the pre-existing soft check: passes
-      .mockRejectedValueOnce( // FR-2's new hard check: the row dropped `warnings`
-        new ReadbackFieldMismatchError('verifyReadback: field "warnings" mismatch', { table: 'sub_agent_execution_results', field: 'warnings' })
-      );
+      // FR-2's new hard check: the row's own warnings came back empty, despite a non-empty send.
+      .mockResolvedValueOnce({ verdict: 'PASS', row: { warnings: [], recommendations: [] } });
     vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
       const actual = await importOriginal();
       return { ...actual, verifyReadback };
@@ -77,18 +75,22 @@ describe('FR-2: a hard-failing second readback catches dropped payload content',
     })).rejects.toThrow(/warnings/);
 
     expect(verifyReadback).toHaveBeenCalledTimes(2);
-    // The second (hard) call is scoped to the content fields, not verdict/sub_agent_code/sd_id.
+    // MEASURED CORRECTION (TESTING sub-agent, EXEC): warnings/recommendations are NOT compared by
+    // exact value here (jsonb array-of-object key order is not stable across a round trip) --
+    // only presence is checked, in-process against the returned row, not via expectedFields.
     expect(verifyReadback).toHaveBeenNthCalledWith(2, expect.objectContaining({
       table: 'sub_agent_execution_results',
       match: { id: 'inserted-row-id' },
-      expectedFields: expect.objectContaining({
-        warnings: ['a real warning the row must keep'],
-      }),
+      expectedFields: expect.not.objectContaining({ warnings: expect.anything() }),
     }));
   });
 
-  it('does not change behavior for a normal, fully-persisted row (both readbacks pass)', async () => {
-    const verifyReadback = vi.fn().mockResolvedValue({ verdict: 'PASS', row: {} });
+  it('does not change behavior for a normal, fully-persisted row (both readbacks pass, content survives with unrelated key reordering)', async () => {
+    const verifyReadback = vi.fn()
+      .mockResolvedValueOnce({ verdict: 'PASS', row: {} })
+      // The jsonb round trip reordered object keys within the array -- semantically identical,
+      // byte different. This must NOT be treated as a dropped field (the bug this test pins).
+      .mockResolvedValueOnce({ verdict: 'PASS', row: { recommendations: [{ issue: 'y', severity: 'x' }] } });
     vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
       const actual = await importOriginal();
       return { ...actual, verifyReadback };
@@ -99,7 +101,7 @@ describe('FR-2: a hard-failing second readback catches dropped payload content',
       verdict: 'PASS',
       confidence: 90,
       summary: 'all good',
-      recommendations: ['do X'],
+      recommendations: [{ severity: 'x', issue: 'y' }],
     });
 
     expect(result.id).toBe('inserted-row-id');

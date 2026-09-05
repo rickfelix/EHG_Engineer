@@ -173,4 +173,33 @@ describe('QF-20260803-007 — the writer must not discard payload while returnin
     expect(capture.inserted.metadata._findings_stripped).toBe(true);
     warn.mockRestore();
   });
+
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H: message and hallucination_check are PRESERVED (metadata.message/metadata.hallucination_check), not merely exempted from the fail-loud check', async () => {
+    // TESTING sub-agent (EXEC, GAP-1): the PERSISTED_ELSEWHERE exemption for these two fields is
+    // trivially satisfiable by dropping their content to null while still avoiding the throw --
+    // the fix's own comment claims "preserving the content ... is the actual fix," which this test
+    // pins as an assertion, not prose.
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
+      verdict: 'MANUAL_REQUIRED',
+      confidence: 50,
+      message: 'VALIDATION instructions displayed above. Manual analysis required.',
+      hallucination_check: { performed: true, score: 87, passed: true },
+    });
+
+    expect(capture.inserted.metadata.message).toBe('VALIDATION instructions displayed above. Manual analysis required.');
+    expect(capture.inserted.metadata.hallucination_check).toEqual({ performed: true, score: 87, passed: true });
+  });
+
+  it('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H: a nested results.metadata.findings is recorded via _findings_had_keys, the branch FR-1 also exempts', async () => {
+    const { storeSubAgentResults } = await import('../../../lib/sub-agent-executor/results-storage.js');
+    await storeSubAgentResults('VALIDATION', 'SD-TEST-001', null, {
+      verdict: 'PASS',
+      confidence: 90,
+      metadata: { findings: { risk: 'high', owner: 'adam' } },
+    });
+
+    expect(capture.inserted.metadata._findings_stripped).toBe(true);
+    expect(capture.inserted.metadata._findings_had_keys.sort()).toEqual(['owner', 'risk']);
+  });
 });
