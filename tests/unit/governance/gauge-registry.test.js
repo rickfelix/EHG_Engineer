@@ -21,14 +21,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 28 seed entries (27 prior + off-canonical-qf-mint, SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 FR-2, merged alongside orphaned-escalated-qf from QF-20260831-191)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(28);
+  it('exports exactly 29 seed entries (28 prior + agent-tool-hook-liveness, SD-LEO-INFRA-RESTORE-AGENT-TOOL-001 FR-4)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(29);
   });
 
-  it('25 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('26 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(25);
+    expect(live).toHaveLength(26);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -102,11 +102,12 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 25 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 26 enabled entries', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(25);
+    expect(selected).toHaveLength(26);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
+      'agent-tool-hook-liveness',
       'coordinator-sourced-sd',
       'expired-premise-tags',
       'fw3-cmv-rejecter-fake-separation',
@@ -147,6 +148,17 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(mix.ownerRole).toBe('coordinator');
     expect(mix.thresholdConfig.tripWhen({ sustainedBreach: true })).toBe(true);
     expect(mix.thresholdConfig.tripWhen({ sustainedBreach: false })).toBe(false);
+  });
+
+  it('[TS-6/TS-7] SD-LEO-INFRA-RESTORE-AGENT-TOOL-001: agent-tool-hook-liveness has a resolvable detectorFn, ownerRole coordinator, and RED only when zero task_hook rows AND active sessions both hold', () => {
+    const entry = GAUGE_REGISTRY.find((e) => e.id === 'agent-tool-hook-liveness');
+    expect(entry).toBeTruthy();
+    expect(entry.detectorFn).toBe('agent-tool-hook-liveness');
+    expect(entry.ownerRole).toBe('coordinator');
+    // TS-6: zero task_hook rows in 7 days + at least one active session -> RED
+    expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
+    // TS-7: at least one task_hook row in 7 days -> GREEN regardless of session activity
+    expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
   });
 
   it('QF-20260705-915: operator-cash-attestation-missing has a resolvable detectorFn, ownerRole chairman, and the >0-count tripWhen convention', () => {
