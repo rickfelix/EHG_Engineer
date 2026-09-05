@@ -5,6 +5,7 @@
 
 - [2026-09-05](#2026-09-05)
   - [Bugfix](#bugfix)
+  - [Infrastructure](#infrastructure)
 - [2026-09-04](#2026-09-04)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -266,6 +267,15 @@
 - **A ratification marker relocated within an already-satisfied multi-target contract no longer reads as a regression** - SD-LEO-FIX-MARKER-RESOLVER-WIRING-001
   - `lib/chairman/ratification-regression-detector.mjs`'s `regressed` verdict treated stage1 (whole-section removal) and stage2 (the scalar single-file marker check) identically, so a marker still present in a companion file the same named contract resolves to — just not the one file stage2 checks — read as a false regression even when contract coverage (SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-B's multi-target resolver) was fully checked and clean.
   - A checked-and-satisfied `contractCoverage` now vetoes stage2's contribution only; stage1 is never vetoed, since a whole-section removal is a real regression regardless of coverage, and an unmeasurable coverage (24 of 53 live rows have no derivable git-commit pin) never suppresses a real hit. The one existing test asserting the pre-fix behavior was explicitly superseded (not silently changed) with an inline rationale comment, and a new test pins that stage1 always wins over satisfied coverage.
+
+### Infrastructure
+
+- **Periodic-liveness ladder now routes a laddered process to its live owner instead of always paging the chairman** - SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001
+  - Rung 2 (`emitLadderDigest`, `scripts/periodic-liveness-watcher.mjs`) previously wrote unconditionally into `chairman_decisions` with `blocking:true` for every laddered process regardless of owner, so a coordinator loop running 90 minutes late reached the chairman's decision queue and email exactly like a genuinely unowned/dead process. A new pure decision function, `decideLadderRoute` (`lib/periodic-liveness/ladder-escalation.mjs`), gates on `ownerTarget.live===true` first: a live, non-chairman owner now gets an ack-required `periodic_liveness_owner_directive` row (`lib/periodic-liveness/owner-directive-writer.mjs`) targeted at the owning role seat via `session_coordination`, never a chairman write at all.
+  - A dead/unresolvable owner, a chairman-owned process, or an FR-1b unacked-timeout (`climb.count >= LADDER_THRESHOLD+3`) still reaches the chairman, but as one non-blocking (`blocking:false`) `chairman_awareness` advisory row per UTC calendar day (`lib/periodic-liveness/chairman-awareness-writer.mjs`) instead of a blocking per-process row and a guaranteed email.
+  - `emitLadderDigest` itself is unchanged — `lib/coordination/lane-dead-letter-alarm.cjs` still calls it directly for its own, unrelated comms-lane dead-letter breach alerting; only the periodic-liveness watcher's call site was rewired.
+  - Also closed a scheduler cadence-misdeclaration class (`scripts/ci/scheduler-round-cadence-parity.mjs`) that had 3 `periodic_process_registry` rows (`okr-day28-hardstop`, `portfolio_review`, `stage_health`) reading OVERDUE purely from a registry value disagreeing with the scheduler's own registered cadence, and registered the new directive kind in `lib/fleet/worker-status.cjs`'s `DIRECTIVE_KINDS` allowlist so `worker-ack-directive.cjs` and the coordination inbox can actually process it (an unregistered kind is auto-read-and-dropped before any ack path sees it).
+  - See `docs/governance/chairman-decision-surfaces.md` for the full surface-level writeup.
 
 ## 2026-09-03
 
