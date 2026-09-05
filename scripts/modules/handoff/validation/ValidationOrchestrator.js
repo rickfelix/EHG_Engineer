@@ -922,7 +922,11 @@ export class ValidationOrchestrator {
   async buildGatesFromRules(hardcodedGates, handoffType, context = {}) {
     // Orchestrator children use a reduced gate set defined by the executor.
     // Skip database-driven rules to prevent heavy gates from being re-injected.
-    const isOrchestratorChild = context.sd?.metadata?.parent_orchestrator || context.sd?.metadata?.auto_generated;
+    // QF-20260905-678: this predicate must match the executor's OWN child-detection predicate
+    // (executors/exec-to-plan/index.js) verbatim -- a bare parent_sd_id (no metadata flags) is
+    // ALSO sufficient there, but was missing here, so this guard failed to skip for such a child
+    // and re-merged 14 duplicate DB-driven gates on top of its own reduced set.
+    const isOrchestratorChild = context.sd?.metadata?.parent_orchestrator || context.sd?.metadata?.auto_generated || context.sd?.parent_sd_id;
     if (isOrchestratorChild) {
       console.log('   ⏭️  Orchestrator child: skipping database-driven gate rules');
       return hardcodedGates;
