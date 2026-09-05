@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 4
+**Generated**: 2026-09-05T10:58:44.446Z
+**Rows**: 6
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (10 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -28,6 +28,9 @@
 | epistemic_tag | `text` | **NO** | `'UNKNOWN'::text` | - |
 | created_at | `timestamp with time zone` | YES | `now()` | - |
 | updated_at | `timestamp with time zone` | YES | `now()` | - |
+| produced_at | `timestamp with time zone` | YES | - | - |
+| expires_at | `timestamp with time zone` | YES | - | - |
+| citations | `jsonb` | YES | `'[]'::jsonb` | - |
 
 ## Constraints
 
@@ -39,13 +42,17 @@
 
 ### Check Constraints
 - `competitive_baselines_baseline_type_check`: CHECK ((baseline_type = ANY (ARRAY['COMPETITOR'::text, 'STATUS_QUO'::text])))
-- `competitive_baselines_epistemic_tag_check`: CHECK ((epistemic_tag = ANY (ARRAY['FACT'::text, 'ASSUMPTION'::text, 'SIMULATION'::text, 'UNKNOWN'::text])))
+- `competitive_baselines_epistemic_tag_check`: CHECK ((epistemic_tag = ANY (ARRAY['FACT'::text, 'ASSUMPTION'::text, 'SIMULATION'::text, 'UNKNOWN'::text, 'OBSERVED'::text])))
 
 ## Indexes
 
 - `competitive_baselines_pkey`
   ```sql
   CREATE UNIQUE INDEX competitive_baselines_pkey ON public.competitive_baselines USING btree (id)
+  ```
+- `idx_competitive_baselines_expires_at`
+  ```sql
+  CREATE INDEX idx_competitive_baselines_expires_at ON public.competitive_baselines USING btree (expires_at)
   ```
 - `idx_competitive_baselines_venture_id`
   ```sql

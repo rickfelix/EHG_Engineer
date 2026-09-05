@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-09-05T10:58:44.446Z
 **Rows**: 0
 **RLS**: Enabled (2 policies)
 
@@ -41,7 +41,7 @@
 - `convergence_ledger_stages_run_id_stage_key`: UNIQUE (run_id, stage)
 
 ### Check Constraints
-- `convergence_ledger_stages_stage_check`: CHECK (((stage >= 0) AND (stage <= 26)))
+- `convergence_ledger_stages_stage_check`: CHECK (((stage >= 0) AND (stage <= 27)))
 - `convergence_ledger_stages_stage_status_check`: CHECK (((stage_status IS NULL) OR (stage_status = ANY (ARRAY['clean'::text, 'churning'::text, 'escalated'::text]))))
 
 ## Indexes
