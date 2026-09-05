@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-05](#2026-09-05)
+  - [Bugfix](#bugfix)
 - [2026-09-04](#2026-09-04)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix)
@@ -178,7 +180,14 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
-## 2026-09-04
+## 2026-09-05
+
+### Bugfix
+
+- **Both writers into `sub_agent_execution_results` now stamp `session_id`; the gate-verdict cache now keys reuse on execution id and gate code version** - SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E
+  - `lib/sub-agent-executor/results-storage.js`'s `storeSubAgentResults()` and `scripts/hooks/task-subagent-recorder.cjs`'s hook-based insert both read `CLAUDE_SESSION_ID` already but never persisted it — the parent workstream's own measured finding that `session_id` "HAS NO COLUMN" on the evidence table. Both now stamp an explicit `metadata.session_id` (a real session id or `null`, never omitted), following the existing `repo_path`/`executed_from_cwd` metadata-provenance precedent; no migration required. The `results-storage.js` stamp is placed after the caller-supplied metadata spread (anti-clobber), matching the file's existing `original_verdict`/`evaluated_commit_sha` pattern.
+  - Mid-build, the coordinator ruled on a genuine scope ambiguity in the SD's own title ("the verdict cache"): it is `scripts/modules/handoff/gate-verdict-cache.js`, the handoff-gate performance cache. Its reuse key is extended from `input_hash` alone to `input_hash + execution_id + gate code_version`, for every registered gate and on both PASS-reuse and FAIL-REPLAY, so a cached verdict can only be reused by the SAME `handoff.js execute()` invocation that produced it — closing the gap where a verdict computed by one execution could be silently presented as gate evidence for a different one (ratification 6c263823: "a reused cached verdict is gate evidence and must carry its run identifier").
+  - In-process retry-loop reuse (multiple attempts within one `handoff.js execute()` call) is unaffected, since every attempt shares one minted execution id. Cross-execution reuse — the module's original "177 rejections in 4 days" motivating case — now requires a fresh evaluation. Measured, disclosed cost: 1342 PASS-reuse hits recorded via `GATE_VERDICT_CACHE` telemetry since 2026-06-11, most/all of which are cross-execution by construction and are expected to stop hitting under this change.
 
 ### Infrastructure
 
