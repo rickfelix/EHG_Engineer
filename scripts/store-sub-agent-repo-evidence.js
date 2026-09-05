@@ -17,7 +17,7 @@
  */
 import 'dotenv/config';
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../lib/sub-agents/resolve-repo.js';
-import { storeSubAgentResults } from '../lib/sub-agent-executor/results-storage.js';
+import { storeSubAgentResults, TOP_LEVEL_FIELDS_PERSISTED_TO_METADATA } from '../lib/sub-agent-executor/results-storage.js';
 import { getSupabaseClient } from '../lib/sub-agent-executor/supabase-client.js';
 import { normalizeSDId } from './modules/sd-id-normalizer.js';
 import { loadContentPayload, extractContentArg } from './add-prd-to-database.js';
@@ -36,19 +36,30 @@ export const LIKELY_VERDICT_FIELDS = ['status', 'overall_status', 'overall_verdi
 /**
  * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H (FR-1): the top-level fields storeSubAgentResults()
  * recognizes (mapped to a column, or declared in its own PERSISTED_ELSEWHERE exemption list).
- * Intentionally duplicated here rather than imported -- PERSISTED_ELSEWHERE is local to
- * storeSubAgentResults(), not module-exported -- and scoped ONLY to this script's own
- * garbage-tolerant boundary (see the call site below); a real field storeSubAgentResults later
- * learns to accept just needs adding here too, at worst degrading gracefully back to today's
- * "relocate into metadata" behavior in the meantime, never a silent drop.
+ *
+ * A FIELD MISSING FROM THIS SET IS NOT DROPPED -- it is RELOCATED into
+ * metadata._raw_payload_extra by the call site below. That is a safe default for genuine
+ * garbage, but it is the WRONG place for a field the canonical writer already handles: the
+ * content survives at a different key, so a consumer reading metadata.blockers finds nothing
+ * while metadata._raw_payload_extra.blockers holds the value. Same class of quiet mismatch this
+ * SD exists to close, one indirection over.
+ *
+ * DERIVED, not retyped, for the eighteen fields the writer now persists into metadata. The third
+ * verification pass on this SD found that list had grown to eighteen while this set still listed
+ * two of them, and a hand-copied set is guaranteed to lag again. The remaining names below are
+ * still literal because they correspond to real record COLUMNS and to PERSISTED_ELSEWHERE entries
+ * that stay function-local to storeSubAgentResults(); only the exported half can be imported.
  */
 const KNOWN_RESULT_FIELDS = new Set([
   'verdict', 'confidence', 'critical_issues', 'warnings', 'recommendations', 'detailed_analysis',
   'summary', 'execution_time_ms', 'validation_mode', 'justification', 'conditions', 'phase',
   'metadata', 'findings', 'options', 'metrics', 'error', 'stack', 'message', 'hallucination_check',
   'confidence_score', 'verdict_chain', 'sd_id', 'sd_key',
-  // TESTING sub-agent re-verify pass: security.js's baseline_applied and regression.js's mode.
+  // security.js's baseline_applied and regression.js's mode (second re-verify pass).
   'baseline_applied', 'mode',
+  // RISK's assessment, RCA's analysis, STORIES' counters, the venture-stage family's blockers
+  // and artifact, and every module's own `timestamp` (third re-verify pass).
+  ...Object.keys(TOP_LEVEL_FIELDS_PERSISTED_TO_METADATA),
 ]);
 
 /**
