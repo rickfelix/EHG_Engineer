@@ -48,11 +48,37 @@ describe('stampConstraintsBlock (isolated)', () => {
     expect(row.body).toContain('awaiting Solomon review');
   });
 
-  it('AC-7 integration: a human_action_note-only hold (FR-3 widened key) renders too', async () => {
+  // FR-3 CORRECTED (evidence 4298bd82): these four keys are read DIRECTLY by stampConstraintsBlock,
+  // never through the shared resolveHoldProvenance -- widening THAT function moved 64 live SDs
+  // into a newly-resolved, unreleasable hold via two other gate-affecting consumers
+  // (post-merge-handoff-orchestrator.js, belt-census.cjs). See claim-eligibility.test.js's own
+  // regression guard confirming resolveHoldProvenance does NOT resolve these four keys.
+  it('AC-7: human_action_note renders directly (not via resolveHoldProvenance)', async () => {
     const sb = stubSupabase({ human_action_note: 'awaiting chairman ceremony' });
     const row = { message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: 'SD-TEST-001' } };
     await stampConstraintsBlock(sb, row, silentLog);
-    expect(row.body).toContain('awaiting chairman ceremony');
+    expect(row.body).toContain('Human action note: awaiting chairman ceremony');
+  });
+
+  it('AC-7: human_action_reason renders directly', async () => {
+    const sb = stubSupabase({ human_action_reason: 'needs manual verification' });
+    const row = { message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: 'SD-TEST-001' } };
+    await stampConstraintsBlock(sb, row, silentLog);
+    expect(row.body).toContain('Human action reason: needs manual verification');
+  });
+
+  it('AC-7: human_action_required=true renders as a boolean line', async () => {
+    const sb = stubSupabase({ human_action_required: true });
+    const row = { message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: 'SD-TEST-001' } };
+    await stampConstraintsBlock(sb, row, silentLog);
+    expect(row.body).toContain('Human action required: true');
+  });
+
+  it('AC-7: needs_coordinator_review_reason renders directly', async () => {
+    const sb = stubSupabase({ needs_coordinator_review_reason: 'evidence-absent pending runner output' });
+    const row = { message_type: 'WORK_ASSIGNMENT', payload: { assigned_sd: 'SD-TEST-001' } };
+    await stampConstraintsBlock(sb, row, silentLog);
+    expect(row.body).toContain('Coordinator review note: evidence-absent pending runner output');
   });
 
   it('AC-11: renders "CONSTRAINTS: none recorded" when no constraint-bearing keys are present', async () => {
