@@ -32,6 +32,9 @@ const RECONCILIATION_MIGRATION_PATHS = [
   // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001: the new periodic_liveness_owner_directive
   // DIRECTIVE_KINDS entry, registered for all four roles.
   path.join(REPO_ROOT, 'database/migrations/20260905_role_drain_sets_add_periodic_liveness_owner_directive.sql'),
+  // QF-20260906-162: the new signal_receipt kind, joining BACKPRESSURE_EXEMPT_KINDS and so
+  // registered for all four roles (mirroring the six pre-existing exempt kinds' precedent).
+  path.join(REPO_ROOT, 'database/migrations/20260906_role_drain_sets_add_signal_receipt.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -160,9 +163,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 102 (98 prior + 4 reconciliation: periodic_liveness_owner_directive for all four roles, SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001)', () => {
+  it('total seed row count is exactly 106 (102 prior + 4 reconciliation: signal_receipt for all four roles, QF-20260906-162)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(102);
+    expect(matches.length).toBe(106);
   });
 });

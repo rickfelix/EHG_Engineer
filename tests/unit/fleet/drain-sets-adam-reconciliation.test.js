@@ -50,10 +50,13 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // read at 19:15:02 while the advisory it cancelled was read at 19:20:56 and acted on.
     // +1 each (29/19/27/25) as of SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001: a new
     // DIRECTIVE_KINDS entry (periodic_liveness_owner_directive) is spread into all four sets.
-    expect(DRAIN_SETS.adam.length).toBe(29);
-    expect(DRAIN_SETS.solomon.length).toBe(19);
-    expect(DRAIN_SETS.coordinator.length).toBe(27);
-    expect(DRAIN_SETS.worker.length).toBe(25);
+    // +1 each again (30/20/28/26) as of QF-20260906-162: 'signal_receipt' joined
+    // BACKPRESSURE_EXEMPT_KINDS (a coordinator delivery receipt must bypass a busy target's
+    // backlog cap the same way the six pre-existing exempt kinds do), spread into all four sets.
+    expect(DRAIN_SETS.adam.length).toBe(30);
+    expect(DRAIN_SETS.solomon.length).toBe(20);
+    expect(DRAIN_SETS.coordinator.length).toBe(28);
+    expect(DRAIN_SETS.worker.length).toBe(26);
   });
 
   it('the 8 reconciled kinds are present in DRAIN_SETS.adam', () => {
