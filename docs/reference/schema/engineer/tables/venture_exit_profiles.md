@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-09-06T17:42:38.372Z
 **Rows**: 1
 **RLS**: Enabled (4 policies)
 
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (11 total)
+## Columns (13 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -29,6 +29,8 @@
 | created_at | `timestamp with time zone` | **NO** | `now()` | - |
 | exit_context | `text` | YES | `'planning'::text` | Context in which the exit profile was created: planning (Stage 9) or readiness_assessment (later stages) |
 | review_period | `text` | YES | - | Review period label, e.g. Q1-2026, for tracking when the profile was assessed |
+| readiness_assessment | `jsonb` | YES | - | Cached separation-rehearsal results. Read by server/routes/eva-exit.js; no write path exists yet (Phase 3 feature, SD-VENTURE-ACQUISITIONREADINESS-ARCHITECTURE-ORCH-001-C) -- restored by SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-D to stop a confirmed crash on GET /api/eva/exit/portfolio-readiness, not to complete the persist step. |
+| updated_at | `timestamp with time zone` | **NO** | `now()` | Standard row-update timestamp, matching sibling table venture_exit_readiness. Auto-maintained by trg_venture_exit_profiles_updated_at. |
 
 ## Constraints
 
@@ -87,6 +89,13 @@
 - **Using**: `(venture_id IN ( SELECT ventures.id
    FROM ventures
   WHERE (ventures.created_by = auth.uid())))`
+
+## Triggers
+
+### trg_venture_exit_profiles_updated_at
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION set_venture_exit_profiles_updated_at()`
 
 ---
 

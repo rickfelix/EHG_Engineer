@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 277
+**Generated**: 2026-09-06T17:42:38.372Z
+**Rows**: 293
 **RLS**: Enabled (4 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -117,6 +117,21 @@
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_doctrine_of_constraint()`
+
+### trg_leo_protocol_sections_history_delete
+
+- **Timing**: AFTER DELETE
+- **Action**: `EXECUTE FUNCTION log_leo_protocol_sections_history()`
+
+### trg_leo_protocol_sections_history_insert
+
+- **Timing**: AFTER INSERT
+- **Action**: `EXECUTE FUNCTION log_leo_protocol_sections_history()`
+
+### trg_leo_protocol_sections_history_update
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION log_leo_protocol_sections_history()`
 
 ---
 
