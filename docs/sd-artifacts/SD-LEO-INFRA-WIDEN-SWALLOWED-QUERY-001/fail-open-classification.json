@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T19:45:51.695Z",
+  "generated_at": "2026-09-06T19:50:11.129Z",
   "counts": {
-    "has_catch": 34
+    "has_catch": 32
   },
   "results": [
     {
@@ -135,20 +135,6 @@
       "line": 102,
       "kind": "data",
       "snippet": "const { data: sibRows } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/vision-score.js",
-      "line": 168,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/vision-score.js",
-      "line": 336,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
       "classification": "has_catch"
     },
     {
