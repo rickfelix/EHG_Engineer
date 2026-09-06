@@ -3,6 +3,7 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 const tracker = require('../../scripts/lib/sessions/loop-state-tracker.cjs');
+const { withSchemaDriftDetection } = require('../../lib/supabase-client-schema-drift.cjs');
 
 // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001 unit tests.
 // Covers: constants match DB whitelist, validation, missing-session graceful
@@ -62,12 +63,16 @@ describe('loop-state-tracker: setLoopState', () => {
     process.stderr.write = originalWrite;
   });
 
-  function makeMockSupabase({ updateError = null, count = 1 } = {}) {
+  // QF-20260905-970: the real postgrest-js .update().eq().select(cols) chain
+  // resolves { data, error } — count is NOT part of this shape (a {count,head}
+  // options object on this arity-1 select() is silently discarded on the wire).
+  // The mock must match that contract, not the pre-fix code's mental model of it.
+  function makeMockSupabase({ updateError = null, data = [{ session_id: 'sess-12345678' }] } = {}) {
     return {
       from: vi.fn(() => ({
         update: vi.fn(() => ({
           eq: vi.fn(() => ({
-            select: vi.fn(async () => ({ error: updateError, count }))
+            select: vi.fn(async () => ({ error: updateError, data: updateError ? null : data }))
           }))
         }))
       }))
@@ -88,7 +93,7 @@ describe('loop-state-tracker: setLoopState', () => {
   });
 
   it('returns ok when update affects one row', async () => {
-    const supa = makeMockSupabase({ count: 1 });
+    const supa = makeMockSupabase({ data: [{ session_id: 'sess-12345678' }] });
     const result = await tracker.setLoopState('sess-12345678', tracker.LOOP_STATE_AWAITING_TICK, {
       supabase: supa
     });
@@ -96,14 +101,57 @@ describe('loop-state-tracker: setLoopState', () => {
     expect(supa.from).toHaveBeenCalledWith('claude_sessions');
   });
 
-  it('returns skipped + warns to stderr when session row not found (count=0)', async () => {
+  it('returns skipped + warns to stderr when session row not found (empty data)', async () => {
     const result = await tracker.setLoopState('sess-missing', tracker.LOOP_STATE_EXITED, {
-      supabase: makeMockSupabase({ count: 0 })
+      supabase: makeMockSupabase({ data: [] })
     });
     expect(result).toEqual({ ok: false, skipped: 'session_not_found' });
     const combined = stderrMessages.join('');
     expect(combined).toContain('no session row found');
     expect(combined).toContain('sess-missing');
+  });
+
+  // QF-20260905-970 regression canary: setLoopState's real update chain is
+  // .update().eq().select('session_id') — a SINGLE arg, run through the
+  // production schema-drift proxy. A prior version called
+  // .select('session_id', { count: 'exact', head: true }); that extra arg is
+  // silently dropped by postgrest-js's arity-1 select() on a mutation chain,
+  // so `count` always resolved null and the proxy rejected every SUCCESSFUL
+  // write as COUNT_UNMEASURABLE. This must resolve { ok: true }, not reject.
+  it('resolves ok:true through the real schema-drift proxy (regression canary)', async () => {
+    const rawSupabase = {
+      from: () => ({
+        update: () => ({
+          eq: () => ({
+            select: async () => ({ data: [{ session_id: 'sess-12345678' }], error: null, count: null })
+          })
+        })
+      })
+    };
+    const result = await tracker.setLoopState('sess-12345678', tracker.LOOP_STATE_AWAITING_TICK, {
+      supabase: withSchemaDriftDetection(rawSupabase)
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  // The same proxy correctly rejects the OLD two-arg {count,head} shape,
+  // proving the canary above is discriminating and not vacuously true.
+  it('the old {count,head} select() shape DOES get rejected by the drift proxy', async () => {
+    const rawSupabase = {
+      from: () => ({
+        update: () => ({
+          eq: () => ({
+            select: (..._args) => ({
+              then: (onFulfilled) => onFulfilled({ data: null, error: null, count: null })
+            })
+          })
+        })
+      })
+    };
+    const wrapped = withSchemaDriftDetection(rawSupabase);
+    await expect(
+      wrapped.from('claude_sessions').update({}).eq('session_id', 'x').select('session_id', { count: 'exact', head: true })
+    ).rejects.toThrow(/COUNT_UNMEASURABLE|count unmeasurable/i);
   });
 
   it('returns error + warns to stderr when supabase update fails — never throws', async () => {

@@ -70,11 +70,19 @@ async function setLoopState(sessionId, state, options = {}) {
   }
 
   try {
-    const { error, count } = await supabase
+    // QF-20260905-970: PostgrestTransformBuilder.select() (the builder returned
+    // by .update()) is arity-1 — a {count,head} options object here is silently
+    // discarded, so no `count=exact` header is ever sent and `count` comes back
+    // null on every call, real or successful. That null count made
+    // lib/supabase-client-schema-drift.cjs's proxy reject EVERY successful write
+    // as COUNT_UNMEASURABLE, after the PATCH had already landed. Row-affected
+    // count comes from `data` under the `return=representation` Prefer header
+    // .select() already sets unconditionally.
+    const { data, error } = await supabase
       .from('claude_sessions')
       .update({ loop_state: state })
       .eq('session_id', sessionId)
-      .select('session_id', { count: 'exact', head: true });
+      .select('session_id');
 
     if (error) {
       process.stderr.write(
@@ -83,7 +91,7 @@ async function setLoopState(sessionId, state, options = {}) {
       return { ok: false, error: error.message };
     }
 
-    if (count === 0) {
+    if (!Array.isArray(data) || data.length === 0) {
       // Session row does not exist yet (cold-start race) or was just released.
       // Non-fatal: surface to stderr so operators can audit, but do not throw.
       process.stderr.write(
