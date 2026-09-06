@@ -11,6 +11,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
 import { fetchAllPaginated } from '../../../lib/db/fetch-all-paginated.mjs';
 import { resolveAutoProceed, getChainOrchestrators } from './auto-proceed-resolver.js';
@@ -745,12 +746,15 @@ async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, cor
 
   // Idempotency: check if already scored today
   const today = new Date().toISOString().slice(0, 10);
-  const { data: existing } = await supabase
-    .from('eva_vision_scores')
-    .select('id')
-    .eq('sd_key', sdKey)
-    .gte('scored_at', today + 'T00:00:00Z')
-    .limit(1);
+  const existing = await safeQuery(
+    supabase
+      .from('eva_vision_scores')
+      .select('id')
+      .eq('sd_key', sdKey)
+      .gte('scored_at', today + 'T00:00:00Z')
+      .limit(1),
+    { site: 'orchestrator-completion-hook:existing_score' }
+  );
 
   if (existing && existing.length > 0) {
     console.log(`   ℹ️  Heal already scored today for ${sdKey} — skipping`);
