@@ -1,0 +1,37 @@
+name: No-cd-and-run Recipe Lint
+
+# QF-20260905-646 part (c): the lint script (scripts/lint/no-cd-and-run-recipe-lint.mjs) and its
+# allowlist/tests already existed but were never wired to an actual CI trigger -- dead-by-
+# construction. This workflow is the missing wiring: blocks any PR that adds a NEW `cd <dir>`
+# recipe chained with a second command (`&&`, `;`, or a following line) to a root-level
+# CLAUDE*.md file or a .claude/commands/*.md doc, beyond the count-anchored allowlist in
+# scripts/lint/no-cd-and-run-recipe-allowlist.json.
+#
+# HARD CONSTRAINT (per the documented 32-day CI-blindness incident on the sibling
+# ismainmodule-classguard-lint.yml workflow): list ONE path-filter entry PER PATTERN below.
+# GitHub Actions does NOT expand brace-glob alternation -- never combine paths into one glob.
+
+on:
+  pull_request:
+    paths:
+      - 'CLAUDE*.md'
+      - '.claude/commands/*.md'
+      - 'scripts/lint/no-cd-and-run-recipe-lint.mjs'
+      - 'scripts/lint/no-cd-and-run-recipe-allowlist.json'
+      - '.github/workflows/no-cd-and-run-recipe-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no-cd-and-run-recipe-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect new cd-and-run recipes in command docs
+        run: node scripts/lint/no-cd-and-run-recipe-lint.mjs
