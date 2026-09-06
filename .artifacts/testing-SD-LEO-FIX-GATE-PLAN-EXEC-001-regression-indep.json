@@ -1,0 +1,60 @@
+{
+  "totalPrds": 4678,
+  "errored": 0,
+  "measured": 4678,
+  "heuristic": 4618,
+  "ai": 60,
+  "oldPass": 4459,
+  "newPass": 4535,
+  "newlyPassing": 76,
+  "regressions": 0,
+  "aiPathVerdictChanges": 0,
+  "regSamples": [],
+  "newlySamples": [
+    {
+      "id": "aa640b0d-ba6d-4699-b55a-3f0620053433",
+      "score": 90,
+      "cat": "feature",
+      "type": "feature",
+      "issues": [
+        "aa640b0d-ba6d-4699-b55a-3f0620053433: 1 placeholder/boilerplate requirements"
+      ]
+    },
+    {
+      "id": "PRD-E2E-UAT-COVERAGE-001",
+      "score": 80,
+      "cat": "testing",
+      "type": "orchestrator",
+      "issues": [
+        "PRD-E2E-UAT-COVERAGE-001: 1 placeholder/boilerplate requirements"
+      ]
+    },
+    {
+      "id": "PRD-SD-QUALITY-UI-001",
+      "score": 90,
+      "cat": "product_feature",
+      "type": "feature",
+      "issues": [
+        "PRD-SD-QUALITY-UI-001: 1 placeholder/boilerplate requirements"
+      ]
+    },
+    {
+      "id": "PRD-SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D",
+      "score": 90,
+      "cat": "infrastructure",
+      "type": "database",
+      "issues": [
+        "PRD-SD-LEO-GEN-RENAME-COLUMNS-SELF-001-D: 1 placeholder/boilerplate requirements"
+      ]
+    },
+    {
+      "id": "PRD-a1967ac4-0498-45ab-b345-83fd339e50c4",
+      "score": 80,
+      "cat": "Orchestrator",
+      "type": "feature",
+      "issues": [
+        "PRD-a1967ac4-0498-45ab-b345-83fd339e50c4: 2 placeholder/boilerplate requirements"
+      ]
+    }
+  ]
+}

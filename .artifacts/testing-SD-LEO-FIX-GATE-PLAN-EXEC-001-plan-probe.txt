@@ -1,0 +1,19 @@
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+threshold for (Fix, bugfix) = [33m55[39m
+threshold for (undefined, undefined) = [33m70[39m
+threshold for (Infrastructure, bugfix) = [33m50[39m
+threshold for (Security, bugfix) = [33m68[39m
+   ℹ️  Using heuristic PRD validation (sdType: bugfix)
+
+[TS-4 empty PRD] score=53 passed=false issues=2 warnings=5 method=heuristic
+   issues: ["PRD-EMPTY: Insufficient functional requirements (0, min 3)","PRD-EMPTY: Insufficient acceptance criteria (0, min 3)"]
+
+[TS-2 {} PRD] score=0 passed=false hasDetails=false max_score=undefined
+   ℹ️  Using heuristic PRD validation (sdType: bugfix)
+
+[TS-1 cand: 3 FRs ok, 2 ACs (insufficient), all optional present] score=85 passed=false issues=1 warnings=0 method=heuristic
+   issues: ["PRD-85: Insufficient acceptance criteria (2, min 3)"]
+   ℹ️  Using heuristic PRD validation (sdType: bugfix)
+
+[TS-5 cand 55: 3 placeholder FRs (-30) + 2 boilerplate AC (-10) + short summary (-5)] score=75 passed=false issues=1 warnings=1 method=heuristic
+   issues: ["PRD-55: 2 placeholder/boilerplate requirements"]
