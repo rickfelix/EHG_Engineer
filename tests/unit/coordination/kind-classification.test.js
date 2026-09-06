@@ -93,6 +93,18 @@ describe('TRAP (a) — rows carrying no payload.kind', () => {
   });
 });
 
+describe('SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-3) — worker_signal kind stamp does not regress the friction lane', () => {
+  it('a row with BOTH payload.kind=worker_signal AND payload.signal_type set classifies as actionable via the kind path, not unrecognized', () => {
+    // Guards against classifyCoordinationRow's `if (kind)` short-circuit: once payload.kind is
+    // present, the function never falls through to the signal_type check below it, so an
+    // unregistered kind here would misclassify every /signal row as unrecognized.
+    const row = { payload: { kind: 'worker_signal', signal_type: 'harness-bug' } };
+    const v = classifyCoordinationRow(row);
+    expect(v.classification).toBe('actionable');
+    expect(v.classification).not.toBe('unrecognized');
+  });
+});
+
 describe('the surfacing property (controls — the classifier must be able to say "I do not know")', () => {
   it('CONTROL: an unregistered kind comes back unrecognized', () => {
     // Without this the classifier could satisfy every assertion above by defaulting everything to

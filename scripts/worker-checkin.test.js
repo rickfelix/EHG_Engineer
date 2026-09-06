@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, isAutoStartableQF, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, isAutoStartableQF, getQfPickerVerdict, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -402,6 +402,24 @@ describe('QF self-claim: isAutoStartableQF predicate (FR-2)', () => {
   });
 });
 
+describe('QF self-claim: getQfPickerVerdict demotion (SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-A)', () => {
+  it('a fresh, otherwise-eligible QF is eligible and does not need verify', () => {
+    expect(getQfPickerVerdict(freshQF('QF-1'), Date.now())).toEqual({ eligible: true, needsVerify: false });
+  });
+  it('a QF stale ONLY on age is eligible but demoted to needsVerify', () => {
+    const old = freshQF('QF-1', { created_at: new Date(Date.now() - (STALE_QF_DAYS + 1) * DAY).toISOString() });
+    expect(getQfPickerVerdict(old, Date.now())).toEqual({ eligible: true, needsVerify: true });
+  });
+  it('a stale QF that ALSO fails a hard gate (e.g. in_progress) stays fully excluded', () => {
+    const old = freshQF('QF-1', { status: 'in_progress', created_at: new Date(Date.now() - (STALE_QF_DAYS + 1) * DAY).toISOString() });
+    expect(getQfPickerVerdict(old, Date.now())).toEqual({ eligible: false, needsVerify: false });
+  });
+  it('a stale QF with a risk-keyword hit stays fully excluded (staleness demotion is not a risk bypass)', () => {
+    const old = freshQF('QF-1', { title: 'rotate payment credentials', created_at: new Date(Date.now() - (STALE_QF_DAYS + 1) * DAY).toISOString() });
+    expect(getQfPickerVerdict(old, Date.now())).toEqual({ eligible: false, needsVerify: false });
+  });
+});
+
 describe('QF self-claim: runCheckin QF tier (FR-1/3/4/6)', () => {
   const base = { session: { metadata: {}, sd_key: null }, messages: [] };
 
@@ -423,13 +441,35 @@ describe('QF self-claim: runCheckin QF tier (FR-1/3/4/6)', () => {
     expect(r.qf).toBeUndefined();
   });
 
-  it('skips stale and pr/commit QFs, then idles', async () => {
+  it('skips pr/commit QFs (already in flight), then idles', async () => {
     const sb = makeStub({ ...base, candidates: [], quickFixes: [
-      freshQF('QF-OLD', { created_at: new Date(Date.now() - (STALE_QF_DAYS + 2) * DAY).toISOString() }),
       freshQF('QF-HASPR', { pr_url: 'http://pr' }),
     ] });
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('idle');
+  });
+
+  // SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-A: a QF held out ONLY by staleness (the
+  // STALE_QF_DAYS cliff) is DEMOTED to claimable-with-verify, not hard-excluded. Before this
+  // fix, isAutoStartableQF's age check made the QF below permanently unclaimable (idle).
+  it('self-claims a stale QF via the claimable-with-verify demotion instead of excluding it', async () => {
+    const sb = makeStub({ ...base, candidates: [], quickFixes: [
+      freshQF('QF-OLD', { created_at: new Date(Date.now() - (STALE_QF_DAYS + 2) * DAY).toISOString() }),
+    ], claimResults: { 'QF-OLD': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed_qf');
+    expect(r.qf).toBe('QF-OLD');
+    expect(r.needs_verify).toBe(true);
+    expect(r.message).toMatch(/VERIFY-FIRST/);
+  });
+
+  it('does not flag a fresh QF as needing verify (no behavior change for the common case)', async () => {
+    const sb = makeStub({ ...base, candidates: [], quickFixes: [freshQF('QF-FRESH')], claimResults: { 'QF-FRESH': true } });
+    const r = await runCheckin(sb, 'sess-1', noCoord);
+    expect(r.action).toBe('self_claimed_qf');
+    expect(r.qf).toBe('QF-FRESH');
+    expect(r.needs_verify).toBeUndefined();
+    expect(r.message).not.toMatch(/VERIFY-FIRST/);
   });
 
   it('skips a foreign-held QF (claim_sd refuses) to the next claimable QF', async () => {

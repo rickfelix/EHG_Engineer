@@ -53,9 +53,15 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // +1 each again (30/20/28/26) as of QF-20260906-162: 'signal_receipt' joined
     // BACKPRESSURE_EXEMPT_KINDS (a coordinator delivery receipt must bypass a busy target's
     // backlog cap the same way the six pre-existing exempt kinds do), spread into all four sets.
-    expect(DRAIN_SETS.adam.length).toBe(30);
-    expect(DRAIN_SETS.solomon.length).toBe(20);
-    expect(DRAIN_SETS.coordinator.length).toBe(28);
+    // +1 to adam/solomon/coordinator ONLY (31/21/29, worker unchanged at 26) as of
+    // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001: 'worker_signal' added as a standalone
+    // literal (not via a shared const spread) to solomon/michael/adam/coordinator so
+    // worker-signal.cjs's newly-typed payload.kind classifies as actionable at every role it
+    // can be sent to — worker-signal.cjs never targets the worker role, so DRAIN_SETS.worker
+    // is deliberately untouched.
+    expect(DRAIN_SETS.adam.length).toBe(31);
+    expect(DRAIN_SETS.solomon.length).toBe(21);
+    expect(DRAIN_SETS.coordinator.length).toBe(29);
     expect(DRAIN_SETS.worker.length).toBe(26);
   });
 

@@ -130,6 +130,10 @@ describe("SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4: notifySignalResolvedByPromotion
     // QF-20260830-144: payload.kind must be an ADVISORY_KIND so worker-ack-advisory.cjs can
     // retire this row — without it the row was unackable by either lane, forever.
     expect(c.inserts[0].payload.kind).toBe('signal_resolved');
+    // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-4): see the disposition-path test's
+    // equivalent assertion for the sender_session/sender_type rationale.
+    expect(c.inserts[0].sender_session).toBe('stale-session-sweep');
+    expect(c.inserts[0].sender_type).toBe('coordinator');
     expect(c.getRow('sig-1').payload.notification_sent).toBe(true);
   });
 

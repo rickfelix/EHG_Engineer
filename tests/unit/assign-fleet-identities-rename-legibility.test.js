@@ -22,7 +22,8 @@ describe('QF-20260829-976: buildIdentityMessage', () => {
     expect(msg.body).not.toMatch(/RENAMED|stale/i);
     expect(msg.payload).not.toHaveProperty('prior_callsign');
     expect(msg.payload).not.toHaveProperty('renamed_at');
-    expect(msg.payload).toEqual({ color: 'blue', callsign: 'Charlie', display_name: 'Charlie | idle', tier_rank: 4 });
+    // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-2): payload.kind is now stamped.
+    expect(msg.payload).toEqual({ kind: 'SET_IDENTITY', color: 'blue', callsign: 'Charlie', display_name: 'Charlie | idle', tier_rank: 4 });
   });
 
   it('rename (prior callsign differs): subject/body carry BOTH names, payload has prior_callsign', () => {
