@@ -1,13 +1,24 @@
 #!/usr/bin/env node
-// scripts/michael/gmail-triage.mjs — the Gmail feeder, part 1: label reconcile and rules-first matching.
-// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D (FR-4). Spec §5 gmail-triage. Host Task Scheduler, 04:30-05:30 ET.
+// scripts/michael/gmail-triage.mjs — the Gmail feeder: label reconcile, rules-first matching (FR-4) and
+// record-then-act with the per-date modify ceiling and borderline resurfacing (FR-5).
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D. Spec §5 gmail-triage. Host Task Scheduler, 04:30-05:30 ET.
 //
-// READ-ONLY against Gmail in this PR: labels.list, threads.list, threads.get(format=metadata, four headers,
-// never a body). Rows go to michael_gmail_triage_items by (et_date, thread_id): a matched thread carries
-// class, rule_key and an action_intent ONLY when its rule has auto_apply=true and auto_apply_verb in
-// (label, archive) (SECURITY F-2); an unmatched thread is class NULL (queued for the seat); fleet-class
-// threads are class 'fleet' and left for the seat and child G. NO threads.modify call exists in this
-// module: --modify is refused MODIFY_NOT_LANDED until PR 4b lands the ceiling.
+// Reads: labels.list, threads.list, threads.get(format=metadata, four headers, never a body). Rows go to
+// michael_gmail_triage_items by (et_date, thread_id): a matched thread carries class, rule_key and an
+// action_intent ONLY when its rule has auto_apply=true and auto_apply_verb in (label, archive)
+// (SECURITY F-2); an unmatched thread is class NULL (queued for the seat); fleet-class threads are class
+// 'fleet' and left for the seat and child G.
+//
+// Three modes: dry-run (default, nothing written), --apply (rows and intents recorded, nothing modified),
+// --apply --modify (intents executed through modifyThread, TRASH/SPAM already refused there). The
+// registrar registers --apply WITHOUT --modify; promotion is an explicit chairman re-register.
+// CEILING (SECURITY F-1 / RISK S1): MICHAEL_GMAIL_MODIFY_CEILING bounds the ET DATE, not the run — the
+// budget is the ceiling minus counts.threads_modified summed over every prior run of the date; when it
+// is exhausted the run writes counts.ceiling_hit=true and every later fire that day is inert (feeder.mjs
+// reads ceiling_hit) until a human clears it. Record-then-act: an intent is a row before it is an API
+// call, action_taken_at is stamped after the call, and a re-run acts only on intents without it. A
+// thread archived earlier that reappears with a newer last_message_id is written borderline=true with
+// its class kept and no automatic action.
 //
 // Writes are guarded (DATABASE DB-D4/DB-D5): create-if-absent upsert with ignoreDuplicates, then an
 // update of the feeder-owned columns only, filtered by action_taken_at IS NULL so a chairman decision
@@ -15,21 +26,22 @@
 // DRY-RUN BY DEFAULT (--apply writes rows). assertHostVenue runs FIRST regardless of injected auth.
 // Logs and counts carry ids and numbers only; no subject, sender or body reaches a row or a log line.
 //
-// Usage: node scripts/michael/gmail-triage.mjs [--apply] [--et-date YYYY-MM-DD] [--json]
+// Usage: node scripts/michael/gmail-triage.mjs [--apply [--modify]] [--et-date YYYY-MM-DD] [--json]
 import 'dotenv/config';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { createMichaelClient, parseArgs, readRows, writeRows, refusal, emit } from '../../lib/michael/db.mjs';
 import { runFeeder, exitCodeFor, gracefulExit } from '../../lib/michael/feeder.mjs';
 import { assertHostVenue } from '../../lib/integrations/google/chairman-oauth.js';
-import { listThreads, getThreadMeta, listLabels, THREADS_MAX_RESULTS } from '../../lib/michael/gmail-client.mjs';
+import { listThreads, getThreadMeta, listLabels, modifyThread, THREADS_MAX_RESULTS } from '../../lib/michael/gmail-client.mjs';
 import { matchGmailRule } from '../../lib/michael/rules-match.mjs';
+import { resolveConstant } from '../../lib/michael/constants.mjs';
 
 export const FEEDER = 'gmail-triage';
 export const FLEET_CLASS = 'fleet';
 export const INTENT_VERBS = Object.freeze(['label', 'archive']);
 /** The columns this feeder owns on michael_gmail_triage_items; never action_taken_at, verified_by, needs_you, summary. */
-export const ITEM_KEYS = Object.freeze(['et_date', 'thread_id', 'class', 'rule_key', 'action_intent', 'last_message_id']);
-export const ITEM_UPDATE_KEYS = Object.freeze(['class', 'rule_key', 'action_intent', 'last_message_id']);
+export const ITEM_KEYS = Object.freeze(['et_date', 'thread_id', 'class', 'rule_key', 'action_intent', 'last_message_id', 'borderline']);
+export const ITEM_UPDATE_KEYS = Object.freeze(['class', 'rule_key', 'action_intent', 'last_message_id', 'borderline']);
 export const LABEL_KEYS = Object.freeze(['label_id', 'name', 'last_seen_in_gmail_at']);
 
 /** Pure: the two inbox queries; keep_in_inbox label names are excluded from the fresh query. */
@@ -50,15 +62,34 @@ export function intentFor(rule, match) {
   return labelId ? `label:${labelId}` : null;
 }
 
-/** Pure: the item row for one thread given the first matching rule (or none). Uniform key set. */
-export function itemRow({ etDate, meta, rule, match }) {
+/** Pure: the label change one intent means. 'archive' removes INBOX; 'label:<id>' adds that label. */
+export function labelChangeFor(intent) {
+  if (intent === 'archive') return { removeLabelIds: ['INBOX'], addLabelIds: [] };
+  const m = /^label:(.+)$/.exec(String(intent || ''));
+  return m ? { addLabelIds: [m[1]], removeLabelIds: [] } : null;
+}
+
+/** Pure: the modify budget left for the ET date — the ceiling minus threads_modified over every prior run. */
+export function budgetFor(ceiling, priorRuns = []) {
+  const used = priorRuns.reduce((n, r) => n + (r && r.counts && Number.isFinite(Number(r.counts.threads_modified)) ? Number(r.counts.threads_modified) : 0), 0);
+  return { used, budget: Math.max(ceiling - used, 0) };
+}
+
+/**
+ * Pure: the item row for one thread given the first matching rule (or none). Uniform key set. `prior` is
+ * an earlier row for the thread that was archived (action_intent archive, action_taken_at set): when the
+ * thread is back with a newer last_message_id it is borderline — class kept, no automatic action (FR-5).
+ */
+export function itemRow({ etDate, meta, rule, match, prior = null }) {
+  const resurfaced = Boolean(prior && prior.last_message_id && meta.lastMessageId && prior.last_message_id !== meta.lastMessageId);
   return {
     et_date: etDate,
     thread_id: String(meta.threadId),
-    class: match ? (match.class || rule.rule_key || null) : null,
+    class: resurfaced ? (prior.class ?? (match ? (match.class || rule.rule_key || null) : null)) : (match ? (match.class || rule.rule_key || null) : null),
     rule_key: match ? rule.rule_key : null,
-    action_intent: match ? intentFor(rule, match) : null,
+    action_intent: resurfaced ? null : (match ? intentFor(rule, match) : null),
     last_message_id: meta.lastMessageId || null,
+    borderline: resurfaced,
   };
 }
 
@@ -77,19 +108,25 @@ export function firstMatch(rules, thread, missingClasses = new Set()) {
 export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gmail, env = process.env } = {}) {
   const a = parseArgs(argv);
   const apply = a.apply === true;
+  const modify = a.modify === true;
   if (a.date !== undefined) return refusal('FLAG_UNSUPPORTED', '--date is not supported on feeders; use --et-date YYYY-MM-DD');
-  if (a.modify === true) return refusal('MODIFY_NOT_LANDED', '--modify (executing intents against Gmail) lands in PR 4b with the per-date ceiling; this build records intents only');
+  if (modify && !apply) return refusal('MODIFY_REQUIRES_APPLY', '--modify executes recorded intents; pass --apply --modify so action_taken_at can be stamped (record-then-act)');
   const etDateOverride = a['et-date'] !== undefined ? String(a['et-date']) : undefined;
   if (etDateOverride !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(etDateOverride)) return refusal('ET_DATE_INVALID', '--et-date must be YYYY-MM-DD');
   try { assertHostVenue(env); } catch (e) { return refusal(e.code || 'HOST_VENUE_REQUIRED', e.message); }
+  const ceilingRes = resolveConstant('MICHAEL_GMAIL_MODIFY_CEILING', env);
+  if (!ceilingRes.ok) return refusal(ceilingRes.refusal, ceilingRes.message, { variable: ceilingRes.variable });
+  const ceiling = ceilingRes.value;
   const deps = { auth, gmailFactory: gmail, sb, env };
 
   return runFeeder({
     feeder: FEEDER,
     etDateOverride,
     dryRun: !apply,
-    run: async ({ etDate }) => {
-      const counts = { dry_run: !apply, labels_seen: 0, missing_labels: [], threads_seen: 0, matched: 0, unmatched: 0, fleet: 0, intents: 0, skipped_class: 0, meta_failed: 0, truncated_query: [] };
+    run: async ({ etDate, priorRuns = [] }) => {
+      const { used, budget } = budgetFor(ceiling, priorRuns);
+      const counts = { dry_run: !apply, modify: modify, ceiling, budget_before: budget, threads_modified: 0, modify_failed: 0, ceiling_hit: false, borderline: 0, labels_seen: 0, missing_labels: [], threads_seen: 0, matched: 0, unmatched: 0, fleet: 0, intents: 0, skipped_class: 0, meta_failed: 0, truncated_query: [] };
+      counts.date_modified_before = used;
 
       // 1. labels: reconcile the registry (three owned columns) and find configured classes missing from Gmail
       const labels = await listLabels(deps);
@@ -123,17 +160,29 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
       }
       counts.threads_seen = ids.size;
 
-      // 4. metadata + rules-first matching
-      const rows = [];
+      // 4. metadata + rules-first matching; earlier archived rows for this batch feed the borderline rule (narrowed guard read, DB-D13)
+      const metas = [];
       for (const threadId of ids) {
         const m = await getThreadMeta({ threadId }, deps);
         if (!m.ok) { counts.meta_failed += 1; continue; }
-        const hit = firstMatch(rules.rows, m.meta, missingClasses);
-        if (hit && hit.skipped) { counts.skipped_class += 1; rows.push(itemRow({ etDate, meta: m.meta, rule: null, match: null })); counts.unmatched += 1; continue; }
-        const row = itemRow({ etDate, meta: m.meta, rule: hit ? hit.rule : null, match: hit ? hit.match : null });
+        metas.push(m.meta);
+      }
+      const archived = new Map();
+      if (metas.length) {
+        const prior = await readRows(sb, 'michael_gmail_triage_items', (q) => q.in('thread_id', metas.map((m) => String(m.threadId))).eq('action_intent', 'archive').not('action_taken_at', 'is', null).order('et_date', { ascending: false }), { select: 'thread_id,last_message_id,class,et_date' });
+        if (prior.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'prior' } };
+        for (const p of prior.rows) if (!archived.has(p.thread_id)) archived.set(p.thread_id, p);
+      }
+      const rows = [];
+      for (const meta of metas) {
+        const hit = firstMatch(rules.rows, meta, missingClasses);
+        const priorRow = archived.get(String(meta.threadId)) || null;
+        if (hit && hit.skipped) { counts.skipped_class += 1; rows.push(itemRow({ etDate, meta, rule: null, match: null, prior: priorRow })); counts.unmatched += 1; continue; }
+        const row = itemRow({ etDate, meta, rule: hit ? hit.rule : null, match: hit ? hit.match : null, prior: priorRow });
         if (row.class === FLEET_CLASS) counts.fleet += 1;
         if (hit) counts.matched += 1; else counts.unmatched += 1;
         if (row.action_intent) counts.intents += 1;
+        if (row.borderline) counts.borderline += 1;
         rows.push(row);
       }
 
@@ -151,7 +200,30 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
         counts.rows_written = rows.length;
         counts.updates = updates;
       }
-      const degraded = counts.missing_labels.length > 0 || counts.truncated_query.length > 0 || counts.meta_failed > 0;
+
+      // 6. act (--modify only): every recorded intent of the date without action_taken_at, in creation order,
+      // within the date budget; stamp action_taken_at after each successful call (record-then-act).
+      let attempted = 0;
+      if (apply && modify) {
+        const pending = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).not('action_intent', 'is', null).is('action_taken_at', null).eq('borderline', false).order('created_at', { ascending: true }), { select: 'thread_id,action_intent' });
+        if (pending.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'pending' } };
+        counts.pending_intents = pending.rows.length;
+        for (const item of pending.rows) {
+          if (counts.threads_modified >= budget) { counts.ceiling_hit = true; break; }
+          const change = labelChangeFor(item.action_intent);
+          if (!change) { counts.modify_failed += 1; continue; }
+          attempted += 1;
+          const m = await modifyThread({ threadId: item.thread_id, ...change }, deps);
+          if (!m.ok) { counts.modify_failed += 1; continue; }
+          const stamp = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update({ action_taken_at: new Date().toISOString() }).eq('et_date', etDate).eq('thread_id', item.thread_id).is('action_taken_at', null));
+          if (!stamp.ok) return { status: 'failed', counts: { ...counts, error_code: stamp.refusal, phase: 'stamp' } };
+          counts.threads_modified += 1;
+        }
+        if (!counts.ceiling_hit && budget === 0 && pending.rows.length) counts.ceiling_hit = true;
+        counts.intents_left = Math.max(pending.rows.length - counts.threads_modified - counts.modify_failed, 0);
+      }
+      if (attempted > 0 && counts.threads_modified === 0) return { status: 'failed', counts: { ...counts, error_code: 'ALL_MODIFIES_FAILED', phase: 'modify' } };
+      const degraded = counts.missing_labels.length > 0 || counts.truncated_query.length > 0 || counts.meta_failed > 0 || counts.ceiling_hit || counts.modify_failed > 0;
       return { status: degraded ? 'degraded' : 'ok', counts, preview: apply ? undefined : rows };
     },
   }, { sb, env, now });

@@ -1,8 +1,8 @@
-// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D / FR-4, TS-7, TS-11, TS-15, TS-17 — gmail-triage part 1 (read-only).
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D / FR-4 + FR-5, TS-5, TS-6, TS-7, TS-11, TS-15, TS-17 — gmail-triage.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { stubClient } from '../../lib/michael/db.test.js';
-import { runGmailTriage, inboxQueries, intentFor, itemRow, firstMatch, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
+import { runGmailTriage, inboxQueries, intentFor, itemRow, firstMatch, labelChangeFor, budgetFor, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
 
 // 05:00 ET on 2026-09-06 (EDT) -> 09:00Z (inside 04:30-05:30); 02:00 ET -> 06:00Z.
 const NOW = new Date('2026-09-06T09:00:00.000Z');
@@ -34,13 +34,13 @@ function gmailFactory({ labels = [{ id: 'L_receipts', name: 'Receipts', type: 'u
       threads: {
         list: async (args) => { calls.push(['threads.list', args]); if (reject.list) throw reject.list; const ids = args.q.startsWith('in:inbox newer') ? fresh : sweep; return { data: { threads: ids.map((id) => ({ id })) } }; },
         get: async (args) => { calls.push(['threads.get', args]); if (reject.get && reject.get.has(args.id)) throw new Error('boom'); return { data: meta(args.id) }; },
-        modify: async () => { throw new Error('modify must never be called in PR 4a'); },
+        modify: async (args) => { calls.push(['threads.modify', args]); if (reject.modify && reject.modify.has(args.id)) throw Object.assign(new Error('modify refused'), { code: 403 }); return { data: { id: args.id, messages: [{}] } }; },
       },
     } };
   };
 }
 /** DB stub scripted per table; records every call. */
-function db({ runs = [], labels = [], rules = RULES, absent = false } = {}) {
+function db({ runs = [], labels = [], rules = RULES, absent = false, archived = [], pending = null } = {}) {
   const calls = [];
   const sb = stubClient((table, ops) => {
     calls.push({ table, kind: ops[0].op, ops });
@@ -49,6 +49,14 @@ function db({ runs = [], labels = [], rules = RULES, absent = false } = {}) {
     if (table === 'michael_feeder_runs') return { data: runs, error: null };
     if (table === 'michael_gmail_labels') return { data: labels, error: null };
     if (table === 'michael_rules') return { data: rules, error: null };
+    if (table === 'michael_gmail_triage_items') {
+      // the prior-archived read is keyed by .in('thread_id', batch); the pending read by .is('action_taken_at', null)
+      if (ops.some((o) => o.op === 'in')) return { data: archived, error: null };
+      // pending intents: what --apply wrote this run unless the test seeds an explicit ledger state
+      if (pending) return { data: pending, error: null };
+      const up = calls.find((c) => c.table === 'michael_gmail_triage_items' && c.kind === 'upsert');
+      return { data: up ? up.ops[0].args[0].filter((r) => r.action_intent && !r.borderline).map((r) => ({ thread_id: r.thread_id, action_intent: r.action_intent })) : [], error: null };
+    }
     return { data: [], error: null };
   });
   return { sb, calls };
@@ -71,20 +79,29 @@ describe('pure helpers', () => {
     const hit = firstMatch(RULES, meta);
     expect(hit.rule.rule_key).toBe('gmail/exelon-digest');
     const row = itemRow({ etDate: '2026-09-06', meta, rule: hit.rule, match: hit.match });
-    expect(row).toEqual({ et_date: '2026-09-06', thread_id: 't1', class: 'newsletter', rule_key: 'gmail/exelon-digest', action_intent: 'archive', last_message_id: 'm1' });
+    expect(row).toEqual({ et_date: '2026-09-06', thread_id: 't1', class: 'newsletter', rule_key: 'gmail/exelon-digest', action_intent: 'archive', last_message_id: 'm1', borderline: false });
     expect(Object.keys(row)).toEqual([...ITEM_KEYS]);
-    expect(itemRow({ etDate: '2026-09-06', meta: { threadId: 't4', lastMessageId: null }, rule: null, match: null })).toEqual({ et_date: '2026-09-06', thread_id: 't4', class: null, rule_key: null, action_intent: null, last_message_id: null });
+    expect(itemRow({ etDate: '2026-09-06', meta: { threadId: 't4', lastMessageId: null }, rule: null, match: null })).toEqual({ et_date: '2026-09-06', thread_id: 't4', class: null, rule_key: null, action_intent: null, last_message_id: null, borderline: false });
+    // TS-6: a thread archived earlier that is back with a newer last message is borderline, class kept, no intent
+    expect(itemRow({ etDate: '2026-09-06', meta, rule: hit.rule, match: hit.match, prior: { thread_id: 't1', last_message_id: 'm0', class: 'newsletter' } })).toMatchObject({ borderline: true, class: 'newsletter', action_intent: null, rule_key: 'gmail/exelon-digest' });
+    expect(itemRow({ etDate: '2026-09-06', meta, rule: hit.rule, match: hit.match, prior: { thread_id: 't1', last_message_id: 'm1', class: 'newsletter' } })).toMatchObject({ borderline: false, action_intent: 'archive' });
+    expect(labelChangeFor('archive')).toEqual({ removeLabelIds: ['INBOX'], addLabelIds: [] });
+    expect(labelChangeFor('label:L_receipts')).toEqual({ addLabelIds: ['L_receipts'], removeLabelIds: [] });
+    expect(labelChangeFor('delete')).toBe(null);
+    expect(budgetFor(60, [{ counts: { threads_modified: 25 } }, { counts: { threads_modified: 10 } }, { counts: {} }])).toEqual({ used: 35, budget: 25 });
+    expect(budgetFor(60, [{ counts: { threads_modified: 70 } }])).toEqual({ used: 70, budget: 0 });
     expect(firstMatch(RULES, meta, new Set(['newsletter']))).toMatchObject({ skipped: true });
     expect(firstMatch(RULES, { threadId: 'x', from: 'nobody', subject: 'nothing' })).toBe(null);
   });
 });
 
 describe('runGmailTriage', () => {
-  it('refuses GITHUB_ACTIONS=true before any call, refuses --modify with MODIFY_NOT_LANDED, --date, and a bad --et-date', async () => {
+  it('refuses GITHUB_ACTIONS=true before any call, --modify without --apply, --date, a bad --et-date, and an invalid ceiling', async () => {
     const calls = [];
     const { sb, calls: dbCalls } = db();
     expect(await runGmailTriage({ sb, argv: ['--apply'], now: NOW, auth: 'AUTH', gmail: gmailFactory({}, calls), env: { ...env, GITHUB_ACTIONS: 'true' } })).toMatchObject({ ok: false, refusal: 'HOST_VENUE_REQUIRED' });
-    expect(await runGmailTriage({ sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({}, calls), env })).toMatchObject({ ok: false, refusal: 'MODIFY_NOT_LANDED' });
+    expect(await runGmailTriage({ sb, argv: ['--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({}, calls), env })).toMatchObject({ ok: false, refusal: 'MODIFY_REQUIRES_APPLY' });
+    expect(await runGmailTriage({ sb, argv: ['--apply'], now: NOW, auth: 'AUTH', gmail: gmailFactory({}, calls), env: { ...env, MICHAEL_GMAIL_MODIFY_CEILING: '1e308' } })).toMatchObject({ ok: false, refusal: 'CONSTANT_INVALID' });
     expect(await runGmailTriage({ sb, argv: ['--date', '2026-09-06'], now: NOW, auth: 'AUTH', env })).toMatchObject({ ok: false, refusal: 'FLAG_UNSUPPORTED' });
     expect(await runGmailTriage({ sb, argv: ['--et-date', 'x'], now: NOW, auth: 'AUTH', env })).toMatchObject({ ok: false, refusal: 'ET_DATE_INVALID' });
     expect(calls).toEqual([]); expect(dbCalls).toEqual([]);
@@ -136,6 +153,12 @@ describe('runGmailTriage', () => {
       expect(u.ops[3].args).toEqual(['action_taken_at', null]);
     }
     expect(dbCalls.filter((c) => c.table === 'michael_feeder_runs').map((c) => c.kind)).toEqual(['select', 'insert', 'update']);
+    expect(r.counts).toMatchObject({ modify: false, threads_modified: 0 });
+  });
+  it('--apply without --modify never calls threads.modify (the registrar\'s shadow mode)', async () => {
+    const calls = [];
+    await runGmailTriage({ sb: db().sb, argv: ['--apply'], now: NOW, auth: 'AUTH', gmail: gmailFactory({}, calls), env });
+    expect(calls.filter((c) => c[0] === 'threads.modify')).toEqual([]);
   });
   it('TS-7: a configured class whose label is missing from Gmail degrades, is listed, and its rule is skipped while others proceed', async () => {
     const { sb } = db({ labels: [{ label_id: 'L_news', name: 'Newsletters', class: 'newsletter', keep_in_inbox: false }, { label_id: 'L_receipts', name: 'Receipts', class: 'receipt', keep_in_inbox: false }] });
@@ -155,9 +178,80 @@ describe('runGmailTriage', () => {
     const t = await runGmailTriage({ sb: db().sb, argv: [], now: NOW, auth: 'AUTH', gmail: gmailFactory({ fresh: Object.keys(big), sweep: [], threads: big }), env });
     expect(t).toMatchObject({ status: 'degraded', counts: { truncated_query: ['fresh'], threads_seen: 200 } });
   });
-  it('no modify call exists in the module and no credential is read directly (source assertions)', () => {
+  it('TS-5: 80 intents with ceiling 60 yield exactly 60 modify calls in creation order, degraded with ceiling_hit, 20 intents left', async () => {
+    const threads = Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`a${i}`, { from: 'alerts@exelon.com', subject: `digest ${i}`, lastMessageId: `m${i}` }]));
+    const calls = [];
+    const { sb, calls: dbCalls } = db();
+    const r = await runGmailTriage({ sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({ fresh: Object.keys(threads), sweep: [], threads }, calls), env });
+    const mods = calls.filter((c) => c[0] === 'threads.modify');
+    expect(mods).toHaveLength(60);
+    expect(mods[0][1]).toEqual({ userId: 'me', id: 'a0', requestBody: { addLabelIds: [], removeLabelIds: ['INBOX'] } });
+    expect(new Set(mods.map((m) => m[1].id)).size).toBe(60);
+    expect(r).toMatchObject({ action: 'run', status: 'degraded', counts: { ceiling: 60, budget_before: 60, threads_modified: 60, ceiling_hit: true, intents_left: 20, modify_failed: 0 } });
+    const stamps = dbCalls.filter((c) => c.table === 'michael_gmail_triage_items' && c.kind === 'update' && 'action_taken_at' in c.ops[0].args[0]);
+    expect(stamps).toHaveLength(60);
+    for (const s of stamps) { expect(Object.keys(s.ops[0].args[0])).toEqual(['action_taken_at']); expect(s.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is']); }
+    expect(dbCalls.filter((c) => c.table === 'michael_feeder_runs' && c.kind === 'update')[0].ops[0].args[0]).toMatchObject({ status: 'degraded', counts: { ceiling_hit: true, threads_modified: 60 } });
+  });
+  it('TS-5 re-run: after an interrupted run only the intents without action_taken_at are acted on', async () => {
+    const threads = Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`a${i}`, { from: 'alerts@exelon.com', subject: `digest ${i}`, lastMessageId: `m${i}` }]));
+    // the killed run stamped a0..a29; the ledger now holds 50 pending intents
+    const pending = Array.from({ length: 50 }, (_, i) => ({ thread_id: `a${i + 30}`, action_intent: 'archive' }));
+    const calls = [];
+    const runs = [{ attempt: 1, status: 'skipped', counts: { phase: 'started' }, started_at: '2026-09-06T08:30:00.000Z', finished_at: null }];
+    const r = await runGmailTriage({ sb: db({ runs, pending }).sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({ fresh: Object.keys(threads), sweep: [], threads }, calls), env });
+    const ids = calls.filter((c) => c[0] === 'threads.modify').map((c) => c[1].id);
+    expect(ids).toHaveLength(50);
+    expect(ids.some((id) => Number(id.slice(1)) < 30)).toBe(false);
+    expect(r).toMatchObject({ attempt: 2, status: 'ok', counts: { threads_modified: 50, ceiling_hit: false } });
+  });
+  it('the ceiling bounds the ET date: prior runs\' threads_modified shrink the budget and exhaust it (five fires, exactly 60 for the date)', async () => {
+    const threads = Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`a${i}`, { from: 'alerts@exelon.com', subject: `digest ${i}`, lastMessageId: `m${i}` }]));
+    const gmail = (calls) => gmailFactory({ fresh: Object.keys(threads).slice(0, 200), sweep: Object.keys(threads).slice(200), threads }, calls);
+    let total = 0; const runs = [];
+    for (let fire = 1; fire <= 5; fire += 1) {
+      const calls = [];
+      // fires at 04:30, 04:45, 05:00, 05:15, 05:30 ET (the window is inclusive of 05:30)
+      const now = new Date(Date.parse('2026-09-06T08:30:00.000Z') + (fire - 1) * 15 * 60 * 1000);
+      const r = await runGmailTriage({ sb: db({ runs: [...runs] }).sb, argv: ['--apply', '--modify'], now, auth: 'AUTH', gmail: gmail(calls), env });
+      total += calls.filter((c) => c[0] === 'threads.modify').length;
+      if (fire === 1) { expect(r).toMatchObject({ action: 'run', counts: { threads_modified: 60, ceiling_hit: true } }); runs.unshift({ attempt: fire, status: 'degraded', counts: r.counts, started_at: now.toISOString(), finished_at: now.toISOString() }); }
+      else expect(r).toMatchObject({ action: 'inert', reason: 'ceiling_hit' });
+    }
+    expect(total).toBe(60);
+    // and a prior run that used 45 without tripping the flag leaves a 15 budget
+    const calls = [];
+    const partial = [{ attempt: 1, status: 'degraded', counts: { threads_modified: 45 }, started_at: '2026-09-06T08:30:00.000Z', finished_at: '2026-09-06T08:31:00.000Z' }];
+    const r = await runGmailTriage({ sb: db({ runs: partial }).sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmail(calls), env });
+    expect(calls.filter((c) => c[0] === 'threads.modify')).toHaveLength(15);
+    expect(r).toMatchObject({ counts: { budget_before: 15, date_modified_before: 45, threads_modified: 15, ceiling_hit: true } });
+  });
+  it('TS-6: a previously archived thread back with a newer last message is written borderline and not modified', async () => {
+    const calls = [];
+    const { sb, calls: dbCalls } = db({ archived: [{ thread_id: 't1', last_message_id: 'm0', class: 'newsletter', et_date: '2026-09-05' }] });
+    const r = await runGmailTriage({ sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({}, calls), env });
+    const up = dbCalls.find((c) => c.table === 'michael_gmail_triage_items' && c.kind === 'upsert');
+    const t1 = up.ops[0].args[0].find((x) => x.thread_id === 't1');
+    expect(t1).toMatchObject({ borderline: true, class: 'newsletter', action_intent: null, last_message_id: 'm1' });
+    expect(calls.filter((c) => c[0] === 'threads.modify').map((c) => c[1].id)).toEqual(['t2']);
+    expect(r.counts).toMatchObject({ borderline: 1, threads_modified: 1 });
+    const priorRead = dbCalls.find((c) => c.table === 'michael_gmail_triage_items' && c.kind === 'select' && c.ops.some((o) => o.op === 'not'));
+    expect(priorRead.ops.find((o) => o.op === 'in').args[0]).toBe('thread_id');
+  });
+  it('a modify rejecting for one thread leaves it unstamped, counts modify_failed, and continues; all failing is failed', async () => {
+    const calls = [];
+    const { sb, calls: dbCalls } = db();
+    const r = await runGmailTriage({ sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({ reject: { modify: new Set(['t1']) } }, calls), env });
+    expect(calls.filter((c) => c[0] === 'threads.modify').map((c) => c[1].id)).toEqual(['t1', 't2']);
+    expect(r).toMatchObject({ status: 'degraded', counts: { modify_failed: 1, threads_modified: 1 } });
+    const stamps = dbCalls.filter((c) => c.table === 'michael_gmail_triage_items' && c.kind === 'update' && 'action_taken_at' in c.ops[0].args[0]);
+    expect(stamps.map((s) => s.ops[2].args[1])).toEqual(['t2']);
+    const all = await runGmailTriage({ sb: db().sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({ reject: { modify: new Set(['t1', 't2']) } }), env });
+    expect(all).toMatchObject({ status: 'failed', counts: { error_code: 'ALL_MODIFIES_FAILED', modify_failed: 2 } });
+  });
+  it('no credential is read directly and googleapis is not imported (source assertions)', () => {
     const codeOnly = (text) => text.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
     const src = codeOnly(readFileSync(new URL('./gmail-triage.mjs', import.meta.url), 'utf8'));
-    expect(src).not.toMatch(/modifyThread|threads\.modify|readHostKey|getStoredTokens|MICHAEL_ENCRYPTION_KEY|from 'googleapis'/);
+    expect(src).not.toMatch(/threads\.modify\(|readHostKey|getStoredTokens|MICHAEL_ENCRYPTION_KEY|from 'googleapis'/);
   });
 });
