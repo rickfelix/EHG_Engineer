@@ -1,0 +1,235 @@
+{
+  "mode": "all",
+  "scanned": 5574,
+  "violations": [
+    {
+      "filePath": "scripts/adam-coordinator-health.mjs",
+      "line": 463,
+      "column": 33,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/canary/run-canary-probe.mjs",
+      "line": 193,
+      "column": 27,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/coordinator-relay-drain.cjs",
+      "line": 70,
+      "column": 31,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/coordinator-reply.cjs",
+      "line": 58,
+      "column": 10,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/drain-dead-letter-coordination.mjs",
+      "line": 124,
+      "column": 30,
+      "message": "target_session sourced from an echoed row field (target_session) may be stale by the time this insert fires — re-resolve via getActiveAdamId/getActiveSolomonId/getActiveCoordinatorId instead of echoing a prior row. To override: // eslint-disable-next-line no-echoed-session-coordination-target -- <reason>"
+    },
+    {
+      "filePath": "scripts/execute-stop.mjs",
+      "line": 98,
+      "column": 27,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/fleet-coaching.cjs",
+      "line": 94,
+      "column": 27,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/fleet-coaching.cjs",
+      "line": 177,
+      "column": 35,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/fleet-dashboard.cjs",
+      "line": 1620,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/fleet-dashboard.cjs",
+      "line": 1722,
+      "column": 9,
+      "message": "target_session sourced from an echoed row field (sender_session) may be stale by the time this insert fires — re-resolve via getActiveAdamId/getActiveSolomonId/getActiveCoordinatorId instead of echoing a prior row. To override: // eslint-disable-next-line no-echoed-session-coordination-target -- <reason>"
+    },
+    {
+      "filePath": "scripts/gauge-runner.mjs",
+      "line": 514,
+      "column": 37,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/gauge-runner.mjs",
+      "line": 518,
+      "column": 38,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/hooks/coordination-inbox.cjs",
+      "line": 549,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/row-growth-snapshot.cjs",
+      "line": 97,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/scripts-reachability-gauge.mjs",
+      "line": 297,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/solomon-ledger-pending-resurface.cjs",
+      "line": 324,
+      "column": 27,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 1135,
+      "column": 13,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 1484,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 2166,
+      "column": 13,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 2272,
+      "column": 13,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 2856,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 3124,
+      "column": 17,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 3640,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 4136,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 4158,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 4174,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/stale-session-sweep.cjs",
+      "line": 4189,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "scripts/subsystem-review-rotation.cjs",
+      "line": 61,
+      "column": 29,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "lib/adam/outbound-silence-watchdog.js",
+      "line": 156,
+      "column": 34,
+      "message": "target_session sourced from an echoed row field (target_session) may be stale by the time this insert fires — re-resolve via getActiveAdamId/getActiveSolomonId/getActiveCoordinatorId instead of echoing a prior row. To override: // eslint-disable-next-line no-echoed-session-coordination-target -- <reason>"
+    },
+    {
+      "filePath": "lib/adam/outbound-silence-watchdog.js",
+      "line": 191,
+      "column": 13,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "lib/claim-validity-gate.js",
+      "line": 654,
+      "column": 17,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "lib/coordinator/adam-action-ack.cjs",
+      "line": 286,
+      "column": 11,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "lib/coordinator/canary-trigger.cjs",
+      "line": 125,
+      "column": 29,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "lib/coordinator/presence-grounding-signals.cjs",
+      "line": 139,
+      "column": 34,
+      "message": "target_session sourced from an echoed row field (target_session) may be stale by the time this insert fires — re-resolve via getActiveAdamId/getActiveSolomonId/getActiveCoordinatorId instead of echoing a prior row. To override: // eslint-disable-next-line no-echoed-session-coordination-target -- <reason>"
+    },
+    {
+      "filePath": "lib/coordinator/reserve-sd.cjs",
+      "line": 87,
+      "column": 35,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "lib/coordinator/self-id-handshake.cjs",
+      "line": 215,
+      "column": 29,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "lib/npm-install-lock.cjs",
+      "line": 71,
+      "column": 27,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    },
+    {
+      "filePath": "lib/periodic-liveness/owner-directive-writer.mjs",
+      "line": 82,
+      "column": 35,
+      "message": "Raw .from('session_coordination').insert(...) bypasses the canonical choke point (insertCoordinationRow() in lib/coordinator/dispatch.cjs), which validates the target and enforces dispatch rules. To override: // eslint-disable-next-line no-raw-session-coordination-insert -- <reason>"
+    }
+  ],
+  "blocking": false
+}

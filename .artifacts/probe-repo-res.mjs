@@ -1,0 +1,10 @@
+import { resolveSubAgentRepo } from '../lib/sub-agents/resolve-repo.js';
+import { createClient } from '@supabase/supabase-js';
+import 'dotenv/config';
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: sd } = await supabase.from('strategic_directives_v2').select('id,sd_key,target_application').eq('sd_key','SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001').maybeSingle();
+console.log('SD:', JSON.stringify(sd));
+const { data: apps } = await supabase.from('applications').select('id,name,local_path').limit(20);
+console.log('APPS:', JSON.stringify(apps));
+const r = await resolveSubAgentRepo({ sdId: sd.id, targetApplication: sd.target_application, subAgentCode:'TESTING', fallback: process.cwd(), supabase });
+console.log('RES:', JSON.stringify(r));

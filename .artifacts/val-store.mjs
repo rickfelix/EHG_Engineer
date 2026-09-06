@@ -1,0 +1,77 @@
+import 'dotenv/config';
+import { storeSubAgentResults } from '../lib/sub-agent-executor/results-storage.js';
+import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../lib/sub-agents/resolve-repo.js';
+
+const SD_KEY = 'SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001';
+
+const results = {
+  verdict: 'CONDITIONAL_PASS',
+  confidence: 92,
+  execution_time_ms: 900000,
+  summary: 'LEAD gate: no duplicate SD/PRD; all four writer sites re-verified BROKEN at HEAD 9126e8903f2; premise re-measured live at 43.25% vs 10% budget (worse than the 37.9% cited). Three uncited same-file overlaps must be sequenced by PLAN, and the SD population table needs re-baselining against the gauge predicates.',
+  findings: [
+    { id: 'DUP-1', severity: 'info', title: 'No PRD exists', detail: 'product_requirements_v2 returns 0 rows for sd_id=7e67cfe7-d71d-48d4-8d84-fbc500ff4240 and directive_id=SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001. GATE 2 clear to create.' },
+    { id: 'DUP-2', severity: 'info', title: 'No duplicate SD', detail: 'Scanned 80 non-terminal SDs by key/title and by scope/description text for the five target paths. No SD claims machine-writer stamping or the lane-lint exemption list. SD-LEO-ORCH-CAPA-RECORD-TRUTH-001 (active/EXEC) and -001-B (pending_approval) name stale-session-sweep.cjs but for claim/liveness release-site routing, not coordination-row stamping.' },
+    { id: 'ADJ-1', severity: 'info', title: 'QF-20260904-935 genuinely open + non-overlapping', detail: 'status=open, no pr_url/commit_sha/disposition. Scope is registerRollCall hardcoding sender_type=worker/available in lib/checkin/steps/roll-call.cjs + scripts/worker-checkin.cjs:402-415. Different files, different concern (who registers) vs this SD (what a row stamps). Adjacency verified by reading its own row, not the SD claim.' },
+    { id: 'ADJ-2', severity: 'info', title: 'QF-20260904-695 genuinely open + non-overlapping', detail: 'status=open, no pr_url/commit_sha. Scope is the backpressure counter at lib/coordinator/dispatch.cjs:1100 not applying INFORMATIONAL_KINDS. Different file; touches kind-classification only on the send-gate side, not the gauge exemption list.' },
+    { id: 'ADJ-3', severity: 'low', title: 'Receipts SD adjacent, but the kind-lists are one file apart', detail: 'SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 is draft/LEAD, scope LEAD-CORRECTED 2026-09-06 11:42Z. Its FR-1(c) adds signal_receipt to INFORMATIONAL_KINDS in lib/fleet/worker-status.cjs. This SD FR-3 edits a DIFFERENT list (LEGITIMATELY_BODYLESS_KINDS in lane-lint-gauge.cjs) but the gauge UNIONS ADAM_EXCLUDED_KINDS from worker-status.cjs, so PLAN should name the file boundary explicitly. Related: SD-LEO-FIX-DELIVERY-RECEIPT-SEVERITY-001 (in_progress/PLAN_PRD) already merged QF-20260906-162 PR #8338 for the narrow receipt writer.' },
+    { id: 'OVL-1', severity: 'high', title: 'UNCITED OVERLAP: QF-20260905-666 edits the exact same two sweep insert sites', detail: 'QF-20260905-666 (status=open, unclaimed, no PR) fix is: in stale-session-sweep.cjs signal_resolved notice emitter, look up coordinator_reply rows with payload.reply_to = sig.id and embed reply body + reply_row_id. That is scripts/stale-session-sweep.cjs:2161-2181 and :2265-2282, the identical two inserts this SD FR-2 rewrites for sender_session. Same-hunk conflict. PLAN must absorb QF-666 into this SD or sequence it explicitly.' },
+    { id: 'OVL-2', severity: 'medium', title: 'UNCITED OVERLAP: QF-20260904-116 appends to the same ORPHAN_ENTRIES array as FR-5', detail: 'QF-20260904-116 (status=open, unclaimed) adds ten entries to lib/governance/orphan-writers-registry.js ORPHAN_ENTRIES (14 today) and notes a test-asserted baseline count that must move with a named cause. FR-5 appends the gauge + exemption list to the same array and must move the same baseline. File-level conflict plus a shared test assertion.' },
+    { id: 'OVL-3', severity: 'medium', title: 'FR-2 enforcement leans on a zero-yield gate', detail: 'QF-20260905-934 (open) proves session-coordination-insert-classguard-lint.yml never blocks: actions/checkout@v4 shallow clone has no origin/main, candidateFilesDiff throws, the script falls back to --all advisory mode (blocking = mode === diff), exit 0 on 41 violations. FR-2 says raw inserts are routed through the canonical writer; FR-4 CI census must assert independently, not rely on that lint.' },
+    { id: 'CODE-1', severity: 'high', title: 'assign-fleet-identities.cjs CONFIRMED BROKEN (2 sites)', detail: 'scripts/assign-fleet-identities.cjs:679-691 (refresh path) and :784-796 (new-assignment path via buildIdentityMessage). Both stamp message_type=SET_IDENTITY, subject, body, sender_type=coordinator, expires_at. NEITHER stamps sender_session. Neither payload carries kind (payload = color, callsign, display_name, tier_rank [, prior_callsign, renamed_at]). Hits BOTH isUntypedRow and isEmptySenderRow (coordinator is not in LEGITIMATE_EMPTY_SENDER_TYPES = [sweep, system]).' },
+    { id: 'CODE-2', severity: 'high', title: 'worker-signal.cjs CONFIRMED BROKEN (1 site, untyped only)', detail: 'scripts/worker-signal.cjs:717-737 builds payload = signal_type, body, severity, sender_callsign, sd_key, repo [, subtype, block_class, links_sd] with NO kind key, inserted via insertCoordinationRow with sender_session=sessionId, sender_type=worker, message_type=INFO, body present. So it hits isUntypedRow ONLY: sender and body are already correct. The SD described fix (add payload.kind=worker_signal beside the existing payload.signal_type) is accurate and minimal. CAUTION for PLAN: worker-signal.cjs documents INVARIANTS that INTENT rows and consult/request rows must NOT carry signal_type; buildIntentPayload/buildRequestPayload/buildSolomonConsultPayload already set kind (coordinator_request, solomon_consult). Only the FR-3a signal path is kindless.' },
+    { id: 'CODE-3', severity: 'high', title: 'stale-session-sweep.cjs CONFIRMED BROKEN (2 sites, empty-sender only)', detail: 'scripts/stale-session-sweep.cjs:2161-2181 (disposition path) and :2265-2282 (SD-completed path). Both hardcode sender_session:null AND sender_type:coordinator. Both DO carry payload.kind=signal_resolved and a real body, so they hit isEmptySenderRow ONLY. Note the cheapest passing change would be sender_type:sweep (already in LEGITIMATE_EMPTY_SENDER_TYPES) but that mis-attributes a coordinator-authored disposition; FR-2 says never empty, so a named system principal in sender_session is the SD-conformant answer.' },
+    { id: 'CODE-4', severity: 'high', title: 'periodic-liveness-watcher.mjs CONFIRMED BROKEN (2 sites, both classes)', detail: 'scripts/periodic-liveness-watcher.mjs:428-444 (emitOverdueSignal) and :454-470 (emitPersistentUnverifiedSignal). Both insert message_type=INFO, target_session, subject, sender_type=periodic-liveness-watcher, payload.kind=periodic_liveness_flag, and NO sender_session column AND NO body column at all. periodic_liveness_flag is in neither ADAM_EXCLUDED_KINDS nor LEGITIMATELY_BODYLESS_KINDS, so these hit isEmptySenderRow AND isBodylessRow. Solomon MEASURED at :405-432; lines shifted to 428/454 after SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (3388d5db7e8 / f2477982e03, 2026-09-05 19:05 and 20:51 EDT) added expected_window_et to evaluateRow. That commit did NOT touch the insert stamping.' },
+    { id: 'FRESH-1', severity: 'info', title: 'No post-mint implementation drift', detail: 'git log --since=2026-09-05T01:02 over the five paths returns 9 commits, none adding sender_session or payload.kind to any of the six insert sites: CAPA-RECORD-TRUTH-001-E release-site routing (b44de8cf964 / 24b723d9df2 / d7183383580), SESSION-IDENTITY-MARKER-CALLERS-001 join fixes (75b36884440 / cda54b6eb20), QF-20260905-761 stuck-drain, MICHAEL-002-A expected_window_et. lib/coordination/lane-lint-gauge.cjs unchanged since 8bd3db1a014 (2026-07-12). Only open PR touching any target file is #6732 (fleet-identity roster), no stamping overlap. SD text is still accurate one day on.' },
+    { id: 'PREMISE-1', severity: 'high', title: 'PREMISE RE-MEASURED LIVE: intact and worse', detail: 'Ran node scripts/coordinator-lane-lint-gauge.cjs --window-hours 24 --max-violation-ratio 0.10 at HEAD 9126e8903f2 on 2026-09-06: LANE_LINT_GAUGE window=24h rows=1607 untyped_row=376 bodyless_row=5 empty_sender_row=314 resurface_dedup_drift=0; LANE_LINT_BUDGET violations=695/1607 ratio=0.4325 max=0.1 EXCEEDED. The SD cited 37.9%; live is 43.25%. The failing-cron premise is confirmed by the gauge itself, not inherited from the coordinator sample.' },
+    { id: 'PREMISE-2', severity: 'medium', title: 'SD population table is mis-attributed: re-baseline FR-1 against the gauge predicates', detail: 'The SD description (from the coordinator raw 1,000-row sample) names roll_call bodyless 298 and coordinator_reservation bodyless 21 as dominant classes. Both kinds have been in LEGITIMATELY_BODYLESS_KINDS since the gauge was introduced (8bd3db1a014, 2026-07-12), so the gauge NEVER counted them. Live bodyless_row is 5 of 695. The FR-2 one-line-body limb therefore moves under 1% of the number; untyped (376) + empty_sender (314) are the whole problem. FR-1 census must be computed with isUntypedRow/isBodylessRow/isEmptySenderRow from lib/coordination/lane-lint-gauge.cjs, not from a raw kind histogram.' },
+    { id: 'PREMISE-3', severity: 'high', title: 'The four named writers alone cannot clear the 10% budget: FR-4 exit predicates unreachable as scoped', detail: 'To pass, violations must fall from 695 to under 161 of 1607. The SD names four writers (six insert sites). Nothing in the SD or in this read establishes those six sites produce 534+ of the 695 daily violations. FR-1 must produce a per-kind ATTRIBUTION (violations by payload.kind and sender_type, each mapped to writer file:line) BEFORE FR-2 scope is frozen, or FR-4(b) fixture-green and FR-4(c) two-consecutive-green weekly cron readings will not be achievable and the SD will close with the cron still red.' }
+  ],
+  conditions: [
+    { action: 'PLAN FR-1 must compute the census with the gauge own predicates (isUntypedRow/isBodylessRow/isEmptySenderRow) over a live 24h window and publish a per-kind violation ATTRIBUTION mapping each violating kind+sender_type to its writer file:line, before FR-2 writer scope is frozen. Current live: 695/1607 = 43.25%, of which untyped=376, empty_sender=314, bodyless=5.', priority: 'high', blocking: true },
+    { action: 'PLAN must sequence or absorb QF-20260905-666 (open, unclaimed): it rewrites the identical two stale-session-sweep.cjs signal_resolved inserts at :2161 and :2265 that FR-2 touches. Same-hunk conflict.', priority: 'high', blocking: true },
+    { action: 'PLAN must sequence QF-20260904-116 (open, unclaimed) against FR-5: both append to ORPHAN_ENTRIES in lib/governance/orphan-writers-registry.js and both must move the same test-asserted known-orphan baseline count with a named cause.', priority: 'medium', blocking: false },
+    { action: 'FR-4 CI census must assert independently of session-coordination-insert-classguard-lint.yml, which QF-20260905-934 proves is a zero-yield gate (shallow checkout, advisory --all fallback, exit 0 on 41 violations).', priority: 'medium', blocking: false },
+    { action: 'PLAN must state whether FR-4(c) two-consecutive-green weekly cron readings is an in-SD exit predicate or a post-merge watch item; at 43.25% today it cannot be satisfied inside a single EXEC cycle.', priority: 'medium', blocking: false },
+    { action: 'For stale-session-sweep FR-2, decide deliberately between a named system principal in sender_session (SD-conformant) and flipping sender_type to sweep (already gauge-exempt but mis-attributes a coordinator-authored disposition). Do not take the exemption shortcut silently.', priority: 'medium', blocking: false }
+  ],
+  justification: 'CONDITIONAL_PASS at LEAD GATE 1. Duplicate check clear: zero PRD rows exist for this SD, and no non-terminal SD among 80 scanned claims machine-writer stamping or the lane-lint exemption list. All three SD-cited adjacent items were verified from their own rows rather than the SD claim: QF-20260904-935 and QF-20260904-695 are both status=open with null pr_url/commit_sha/disposition and target different files (roll-call registration; dispatch backpressure counter); the receipts SD is draft/LEAD and edits INFORMATIONAL_KINDS in worker-status.cjs, a different list from the gauge LEGITIMATELY_BODYLESS_KINDS. All four writer sites were re-read at HEAD 9126e8903f2 and are still broken exactly as described, with no post-mint commit adding sender_session or payload.kind. The premise was re-measured by running the gauge live rather than inheriting the SD number: 695/1607 = 43.25% against a 0.10 budget, EXCEEDED, worse than the 37.9% cited. Conditional rather than PASS for three reasons: (1) three same-file overlaps the SD does not cite, namely QF-20260905-666 rewriting the identical two sweep inserts, QF-20260904-116 appending to the identical registry array, and QF-20260905-934 showing the classguard lint FR-2 leans on never blocks; (2) the SD population table attributes the bulk of violations to bodyless roll_call rows the gauge has exempted since 2026-07-12, so live bodyless is 5 of 695 and the FR-2 body limb is nearly inert; (3) the six named insert sites are not shown to account for the 534 violations that must disappear for the FR-4 exit predicates to be reachable. None of these invalidate the SD; they are PRD-shaping conditions for GATE 2.',
+  metrics: {
+    prds_existing: 0,
+    non_terminal_sds_scanned: 80,
+    duplicate_sds_found: 0,
+    uncited_overlaps_found: 3,
+    writer_sites_verified_broken: 6,
+    writer_files_verified: 4,
+    live_gauge_rows: 1607,
+    live_gauge_untyped: 376,
+    live_gauge_bodyless: 5,
+    live_gauge_empty_sender: 314,
+    live_gauge_ratio: 0.4325,
+    live_gauge_budget: 0.10,
+    head_commit: '9126e8903f2',
+    post_mint_commits_touching_targets: 9,
+    post_mint_commits_altering_stamping: 0
+  },
+  metadata: {
+    gate: 'GATE_1_LEAD_PRE_APPROVAL',
+    sd_key: SD_KEY,
+    sd_uuid: '7e67cfe7-d71d-48d4-8d84-fbc500ff4240',
+    evidence_instruments: [
+      'supabase read: strategic_directives_v2 (80 non-terminal rows, key+title+scope+description text scan)',
+      'supabase read: product_requirements_v2 by sd_id and by directive_id (0 rows)',
+      'supabase read: quick_fixes by id for QF-20260904-935, QF-20260904-695, QF-20260905-666, QF-20260904-116, QF-20260905-934',
+      'source read at HEAD 9126e8903f2 of all 6 insert sites plus lib/coordination/lane-lint-gauge.cjs predicates and lib/fleet/worker-status.cjs ADAM_EXCLUDED_KINDS',
+      'git log --since=2026-09-05T01:02 over the 5 target paths; git log -S over the gauge exempt list',
+      'gh pr list --state open with a file filter over the 5 target paths',
+      'LIVE RUN: node scripts/coordinator-lane-lint-gauge.cjs --window-hours 24 --max-violation-ratio 0.10'
+    ]
+  }
+};
+
+const resolution = await resolveSubAgentRepo({ sdId: SD_KEY, subAgentCode: 'VALIDATION' });
+applySubAgentRepoVerdict(results, resolution, { skipVerdictAdjust: false });
+
+const stored = await storeSubAgentResults('VALIDATION', SD_KEY, { metadata: { version: '3.0.0' } }, results, { sdKey: SD_KEY, phase: 'LEAD' });
+console.log('STORED:', JSON.stringify(stored)?.slice(0, 400));
+console.log('FINAL VERDICT:', results.verdict, '| repo_path:', results.metadata.repo_path, '| resolved:', results.metadata.repo_resolved);

@@ -1,0 +1,939 @@
+{
+  "id": "PRD-SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001",
+  "directive_id": "SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001",
+  "title": "Lane hygiene: writer census, six/eight writer fixes, gauge fixture",
+  "version": "1.0",
+  "status": "approved",
+  "category": "technical",
+  "priority": "high",
+  "executive_summary": "The daily lane-lint-gauge-cron.yml fails because 33% of session_coordination rows in its own 24h window (532 of 1609, measured live via lib/coordination/lane-lint-gauge.",
+  "business_context": null,
+  "technical_context": null,
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Writer census recorded as the PRD baseline table",
+      "priority": "critical",
+      "description": "One census over lib/ and scripts/ of every session_coordination insert path (canonical insertCoordinationRow callers and raw .from('session_coordination').insert sites), naming for each: file:line, kind (if any), sender_session/sender_type, and whether it is exempt under LEGITIMATELY_BODYLESS_KINDS / LEGITIMATE_EMPTY_SENDER_TYPES in lib/coordination/lane-lint-gauge.cjs. Live 24h-window attribution (measured this session against the gauge's own runLaneLintGauge over its default 24h window, 1609 rows): SET_IDENTITY/coordinator/no-kind+no-sender 162; INFO/coordinator/signal_resolved (typed, sender_session null) 125; INFO/worker WORKER_SIGNAL rows keyed on payload.signal_type with no payload.kind 148 across signal_type values feedback(75) stuck(39) harness-bug(26) spec-conflict(4) need-sweep(2) prd-ambiguous(1) other(1); INFO/system NODE_MODULES_LOCK (payload has no kind; sender_type='system' already exempt) 66; STALE_WARNING/dashboard (no kind) 4; INFO/periodic-liveness-watcher periodic_liveness_flag (typed, no sender_session, no body) 3. Residual NOT in this SD's scope, named for the record: INFO/adam solomon_consult 10 and account_switch_notice 10 (Adam's own redacted advisory lane, deliberately senderless by that lane's existing design note — out of scope, candidate follow-up), adam_channel_health_probe 2 (self-checking probe, out of scope), signal_receipt 2 (explicitly owned by SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001, not this SD). FR-1's six covered writers total 438 of 532 violating rows (82%); with the two sibling fixes in FR-1b/FR-1c, 508 of 532 (95%), leaving a residual union ratio of about 1.5% against the 10% budget.",
+      "acceptance_criteria": [
+        "The PRD (this document) states the per-writer violation counts above as the baseline, sourced from a live run of runLaneLintGauge/computeRowViolationCounts, not the coordinator's original raw-predicate estimate.",
+        "Every writer this SD fixes is named with its exact file:line; every writer explicitly left out of scope is named with a one-line reason."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "assign-fleet-identities.cjs SET_IDENTITY rows carry sender_session and the already-registered kind literal",
+      "priority": "critical",
+      "description": "scripts/assign-fleet-identities.cjs has three raw session_coordination insert sites for SET_IDENTITY broadcasts (the rebroadcast-on-drift site around line 679-691, the new-assignment site around line 784-796, and a third variant). Each currently omits both payload.kind and sender_session, and both branches of buildIdentityMessage() already populate a non-empty `body` column, so typing the kind will not create a NEW bodyless violation. Add payload.kind: 'SET_IDENTITY' (the exact uppercase literal already registered in the DRAIN_SETS/role_drain_sets seed and recognized by lib/fleet/orphan-reroute-sweep.js as a known kind; using the lowercase 'set_identity' instead would be a DIFFERENT, unrecognized literal that the reroute sweep could then re-target and steal from a live worker's inbox — verified via risk-agent finding against orphan-reroute-sweep.js:145/162). Add sender_session: the coordinator's own resolved session id (the value already available in main() via _mySessionId / resolveOwnSessionId, already in scope at every insert site) so these rows carry real provenance instead of null. Wrap the three insert calls in try/catch: routing an insert that already reaches assertValidTarget/backpressure indirectly (if ever moved to insertCoordinationRow) or that hits a transient DB error must not abort the naming loop for every other worker mid-run — catch, warn, and continue to the next worker. TESTING (PLAN, evidence 3e0331d8-68ac-4027-a43f-8c795de07d1c) confirmed only 2 of the 3 raw insert sites route through buildIdentityMessage() — the third (~line 713 area, the initial-assignment SET_IDENTITY send) constructs its payload inline and is NOT reachable from the builder. sender_session must therefore be added directly at EACH of the three insert call sites (not solely inside buildIdentityMessage), reading the already-in-scope coordinator session id local to main()/its callers.",
+      "acceptance_criteria": [
+        "All three SET_IDENTITY insert sites in scripts/assign-fleet-identities.cjs stamp payload.kind: 'SET_IDENTITY' (exact casing) and sender_session: <coordinator session id>.",
+        "A live 24h gauge sample shows zero untyped_row or empty_sender_row violations with sender_type='coordinator' and subject starting 'Identity'.",
+        "Existing tests in tests/unit/assign-fleet-identities-*.test.js still pass; a new assertion confirms payload.kind and sender_session are present on the constructed message object.",
+        "A single insert failure (simulated DB error) logs a warning and the naming loop continues to the next worker instead of throwing.",
+        "tests/unit/assign-fleet-identities-rename-legibility.test.js's exact toEqual() assertion on the constructed message is relaxed to toMatchObject() (or an explicit payload.kind assertion is added) before this FR's payload.kind addition lands, so the added field does not fail an over-exact pre-existing assertion."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "worker-signal.cjs stamps payload.kind='worker_signal' beside payload.signal_type, and the coordinator drain set recognizes it",
+      "priority": "critical",
+      "description": "scripts/worker-signal.cjs (~line 703-737) already stamps sender_session and a real body through insertCoordinationRow — its only gauge violation is untyped_row, because it deliberately never sets payload.kind (keying on payload.signal_type instead, a two-vocabulary split documented at the top of the file). Add payload.kind: 'worker_signal' to the payload object ALONGSIDE the existing signal_type field (additive, not a replacement — nothing currently reading payload.signal_type changes). This alone would regress the friction channel: lib/fleet/worker-status.cjs classifyCoordinationRow() checks `if (kind)` first and returns inside that branch, so an unregistered 'worker_signal' kind would flip every /signal row from classification 'actionable' (via the signal_type fallback) to 'unrecognized' before ever reaching the signal_type check — confirmed live by risk-agent against worker-status.cjs:333. To prevent that regression, register 'worker_signal' as a recognized, actionable kind in the SAME PR: add it to DRAIN_SETS.coordinator in lib/fleet/worker-status.cjs (and to the corresponding role_drain_sets DB seed row, mirroring the existing pattern for other coordinator-drained kinds) so the newly-typed rows still classify as 'actionable' via the kind path, not merely via the signal_type fallback. Confirmed non-regression: lib/coordinator/dispatch.cjs's backpressure exemption (assertSendBackpressure) already keys on payload.signal_type presence, not kind absence, so it is unaffected either way. OPEN DECISION FOR EXEC (surfaced by TESTING, evidence 3e0331d8-68ac-4027-a43f-8c795de07d1c): worker-signal.cjs accepts --to, so a /signal can be sent to a worker, Adam, Solomon, or Michael target, not only the coordinator. Registering 'worker_signal' in DRAIN_SETS.coordinator alone leaves the other three role drain sets unaware of the kind, which could trip a confident-mismatch warn in the addressee-role-match warn path for a non-coordinator-targeted signal. EXEC must register 'worker_signal' in ALL FOUR role drain sets (coordinator, solomon, michael, adam) and their role_drain_sets DB seed rows UNLESS a live check first confirms the warn path is never reached for this write pattern — this is a decision to make and document at EXEC time, not a silent single-set registration.",
+      "acceptance_criteria": [
+        "worker-signal.cjs's insertCoordinationRow call includes payload.kind: 'worker_signal' alongside the existing signal_type field.",
+        "'worker_signal' is added to DRAIN_SETS.coordinator in lib/fleet/worker-status.cjs and to the role_drain_sets seed for the coordinator role.",
+        "tests/unit/coordination/kind-classification.test.js (or a new sibling test) asserts a row with payload.kind='worker_signal' AND payload.signal_type set classifies as 'actionable', basis 'drain_set' or 'informational_registry' as appropriate — never 'unrecognized'.",
+        "The existing WORKER_SIGNAL backpressure-exemption test suite (tests/unit/coordinator/dispatch-send-backpressure.test.js) still passes unmodified, confirming the exemption keys on signal_type, not kind.",
+        "The role_drain_sets DB seed migration adds a ('coordinator','worker_signal') row (and the other three roles per the OPEN DECISION above) so tests/unit/*drain-set-registry*.test.js's seed-parity loop passes without manual exception.",
+        "tests/unit/*drain-sets-adam-reconciliation*.test.js's DRAIN_SETS.coordinator.length pinned count is bumped by exactly the number of sets 'worker_signal' is added to."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "stale-session-sweep.cjs signal_resolved notices carry a real sender_session without changing sender_type",
+      "priority": "critical",
+      "description": "scripts/stale-session-sweep.cjs has two signal_resolved raw insert sites (~line 2161 disposition path, ~line 2265 promotion path), both already typed (payload.kind='signal_resolved') and already carrying a real body, but both hardcode sender_session: null with sender_type: 'coordinator'. The gauge's LEGITIMATE_EMPTY_SENDER_TYPES allowlist is ['sweep','system'] and does not include 'coordinator', so these are pure empty_sender_row violations. Fix by setting sender_session to a named system principal string, e.g. 'stale-session-sweep', rather than changing sender_type away from 'coordinator' — changing sender_type to 'sweep' was considered and rejected: lib/coordinator/michael-identity.cjs:248, lib/coordinator/solomon-identity.cjs:245, and scripts/coordinator-hourly-review.cjs:154 all filter on .eq('sender_type','coordinator') for role-retarget rescue logic, and retyping these rows away from 'coordinator' would silently exclude them from those readers (confirmed by risk-agent and Explore agent independently). A sender_session value alone (any non-empty string) clears isEmptySenderRow regardless of sender_type, so this is a zero-blast-radius fix. Both sites are inside a file with 11 pre-existing session-coordination-insert-classguard-lint violations; note (informational, not a scope item) that QF-20260905-934 measured the classguard CI workflow's shallow checkout means it always falls back to advisory --all mode today, so this is not a live merge blocker, but each touched line should still carry (or keep) its existing eslint-disable-next-line pragma for the classguard rule per repo convention.",
+      "acceptance_criteria": [
+        "Both signal_resolved insert sites in scripts/stale-session-sweep.cjs set sender_session: 'stale-session-sweep' (or equivalent named principal) and leave sender_type: 'coordinator' unchanged.",
+        "tests/unit/coordinator/signal-resolved-disposition-path.test.js and tests/unit/coordinator/signal-resolved-promotion-path.test.js pass with an added assertion on sender_session.",
+        "A live 24h gauge sample shows zero empty_sender_row violations for payload.kind='signal_resolved'.",
+        "No behavior change to any reader filtering on sender_type='coordinator' (michael-identity.cjs, solomon-identity.cjs, coordinator-hourly-review.cjs) — those files are untouched by this SD."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "periodic-liveness-watcher.mjs OVERDUE/UNVERIFIED flags carry sender_session and a one-line body",
+      "priority": "high",
+      "description": "scripts/periodic-liveness-watcher.mjs's emitOverdueSignal (~line 421-440) and emitPersistentUnverifiedSignal (~line 454-468) both write payload.kind='periodic_liveness_flag' (already typed) with sender_type='periodic-liveness-watcher' and NO sender_session and NO body/payload.body — the only writer in this SD's scope that is genuinely bodyless as well as senderless (confirmed: readCanonicalBody finds neither a body column nor payload.body on these inserts). Add sender_session: 'periodic-liveness-watcher' (mirroring the precedent already established in lib/periodic-liveness/owner-directive-writer.mjs:45, which uses the identical literal as its sender_session for the same class of writer) and add a one-line body field naming the process and state, e.g. body: `${row.display_name || row.process_key} is ${evaluation.state === 'OVERDUE' ? 'OVERDUE' : 'UNVERIFIED for over 7 days'}${invocationNote}` for the overdue path and the equivalent for the unverified path. These rows are owner-routed once per episode and never feed the ladder digest (per the SD's own sourcing note), so no exemption-list change is needed once they carry real sender/body — they simply stop violating. TESTING (PLAN, evidence 3e0331d8-68ac-4027-a43f-8c795de07d1c) found emitPersistentUnverifiedSignal has NO existing test coverage anywhere in the suite (only emitOverdueSignal is tested) — a new test must be authored for the UNVERIFIED path, not merely an extension of the existing OVERDUE test, or half of this FR ships unpinned.",
+      "acceptance_criteria": [
+        "Both emitOverdueSignal and emitPersistentUnverifiedSignal set sender_session: 'periodic-liveness-watcher' and a non-empty body.",
+        "tests/unit/periodic-liveness/watcher-emit-overdue-signal.test.js (and its UNVERIFIED sibling if present) pass with new assertions on sender_session and body.",
+        "A live 24h gauge sample shows zero bodyless_row or empty_sender_row violations for payload.kind='periodic_liveness_flag'.",
+        "A new test (sibling to tests/unit/periodic-liveness/watcher-emit-overdue-signal.test.js) covers emitPersistentUnverifiedSignal's sender_session and body directly — this path currently has zero test coverage."
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Two cheap sibling untyped-writer fixes: NODE_MODULES_LOCK and dashboard STALE_WARNING",
+      "priority": "medium",
+      "description": "Two additional writers surfaced by this SD's live census contribute 70 of the 532 measured violations (66 + 4) at near-zero fix cost and zero reader risk, so they are folded into this SD rather than left as a known gap that reopens the budget question on the next measurement. (a) lib/npm-install-lock.cjs's acquireLock() insert (~line 71) has payload {lock_type, status, holder_session, locked_at} with no payload.kind; sender_type is already 'system' (exempt), so this is a pure untyped_row fix — add payload.kind: 'node_modules_lock'. Confirmed safe: lib/worktree-manager.js's own doc states the lock protocol is payload-based (matched on payload.lock_type/status), not kind-based, and findActiveLock() filters only on payload->>lock_type/status — nothing reads on kind's absence. (b) scripts/fleet-dashboard.cjs's STALE_WARNING insert (~line 1621-1628) has no payload.kind and sender_type='dashboard' (not exempt); message_type='STALE_WARNING' is already a known UNDRAINABLE_WORKER_MESSAGE_TYPES member (lib/coordinator/undrainable-message-types.cjs) sent fire-and-forget with .catch(()=>{}), so this insert deliberately bypasses insertCoordinationRow already — add payload.kind: 'stale_heartbeat_warning' and sender_session: 'fleet-dashboard' directly to the literal insert object; body is already non-empty so no bodyless risk.",
+      "acceptance_criteria": [
+        "lib/npm-install-lock.cjs's lock-acquire insert carries payload.kind: 'node_modules_lock'.",
+        "scripts/fleet-dashboard.cjs's STALE_WARNING insert carries payload.kind: 'stale_heartbeat_warning' and sender_session: 'fleet-dashboard'.",
+        "A live 24h gauge sample shows zero untyped_row violations for subject='NODE_MODULES_LOCK' or message_type='STALE_WARNING'."
+      ]
+    },
+    {
+      "id": "FR-7",
+      "title": "Preventive exit predicates in CI: writer-census unit test and gauge fixture",
+      "priority": "high",
+      "description": "(a) A unit test asserts each of the six/eight writer call sites fixed by FR-2 through FR-6 stamps payload.kind and (sender_session OR an exempt sender_type) at construction time — implemented as a small table-driven test that imports each writer's message-building logic where it is already a pure/exported function (buildIdentityMessage, buildIdentityMessage's rebroadcast path) and, where the insert is inline (worker-signal.cjs, stale-session-sweep.cjs, periodic-liveness-watcher.mjs, npm-install-lock.cjs, fleet-dashboard.cjs), asserts against the actual insert call via existing test doubles/fixtures in each file's test suite, so a future edit that drops a stamp fails CI naming the specific writer. (b) Extend tests/unit/coordination/lane-lint-gauge.test.js (or lane-lint-budget.test.js) with a fixture window containing one clean row per fixed shape (SET_IDENTITY-typed-with-sender, worker_signal-typed, signal_resolved-with-sender, periodic_liveness_flag-with-sender-and-body, node_modules_lock-typed, stale_heartbeat_warning-typed) asserting computeRowViolationCounts returns all-zero for that fixture. (c) The daily cron's own verdict (gh run list for lane-lint-gauge-cron.yml) is read green for two consecutive weekly readings before this workstream is considered closed — an operational, not code-level, exit predicate tracked via the existing periodic_process_registry row for this cron. TESTING (PLAN, evidence 3e0331d8-68ac-4027-a43f-8c795de07d1c) specifies two corrections: (i) FR-7(b)'s fixture MUST include a RED control (the same six/eight rows with their stamps stripped) asserting a non-zero violation count — an all-zero assertion with no red control would pass identically before and after the fix and prove nothing; the control must also correctly treat lib/npm-install-lock.cjs's row as sender_type='system' (already exempt), so stripping only its kind should show up as untyped_row, never empty_sender_row. (ii) FR-7(a)'s writer-census test is best implemented as a table-driven static guard (e.g. tests/static-guards/session-coordination-writer-census.test.js) pinning a manifest of the 8 writer sites and their expected occurrence count/shape, rather than per-file runtime mocks — most of these are inline inserts in large CLI-main files where a runtime harness costs far more than the 1-2 assertions it buys; a manifest-count approach also catches a newly ADDED unstamped writer, not only a regression on an existing one.",
+      "acceptance_criteria": [
+        "A new or extended unit test fails (naming the offending writer) if any of the six/eight fixed call sites is edited to drop its kind or sender stamp.",
+        "The gauge fixture test in FR-7(b) passes with an all-zero result over the synthetic clean-shapes window.",
+        "Two consecutive weekly gh run list reads of lane-lint-gauge-cron.yml show conclusion=success before this SD's tracked workstream is marked closed (verified post-merge, not at PLAN-TO-EXEC gate time).",
+        "The FR-7(b) fixture includes a RED control (stamps stripped) asserting a non-zero, correctly-classified violation count, not only a green all-zero assertion.",
+        "FR-7(a) is implemented as a table-driven static guard over a pinned writer manifest (file:line + expected stamp presence), not per-file runtime mocks."
+      ]
+    },
+    {
+      "id": "FR-8",
+      "title": "Registry entry: gauge and its exemption list in the orphan-writers registry",
+      "priority": "medium",
+      "description": "Add one entry to lib/governance/orphan-writers-registry.js ORPHAN_ENTRIES documenting the lane-lint gauge itself (writer: the six/eight fixed session_coordination call sites; reader: lib/coordination/lane-lint-gauge.cjs + scripts/coordinator-lane-lint-gauge.cjs's exceedsLintBudget; predicate: the two exported exemption constants LEGITIMATELY_BODYLESS_KINDS and LEGITIMATE_EMPTY_SENDER_TYPES ARE the declared, reasoned exemption list — no new list is introduced), following the existing 'orphan-writers-triage-pass' entry's shape as a template (validateOrphanEntry's required fields: id, entry_type from ENTRY_TYPES, writer object, reader object with file/description, predicate object with description). Note for EXEC: QF-20260904-116 is an open, unclaimed quick-fix that ALSO appends entries to this same ORPHAN_ENTRIES array (a different, unrelated set of ten orphan specimens) and moves the same baseline-count assertion; rebase/merge this FR's single new entry against main immediately before merging to avoid a silent baseline-count collision, rather than assuming this SD's diff is the only pending change to that file.",
+      "acceptance_criteria": [
+        "lib/governance/orphan-writers-registry.js ORPHAN_ENTRIES gains one new, valid entry (passes validateOrphanEntry) describing the lane-lint gauge's writer/reader/predicate.",
+        "The existing orphan-writers-registry baseline-count test is updated to the new total, with a comment naming this SD as the cause of the increment.",
+        "EXEC verifies at merge time (not at PRD-authoring time) that the array addition does not collide with QF-20260904-116 if that quick-fix has landed first.",
+        "tests/unit/*orphan-writers-registry*.test.js's PINNED_TOTAL_ENTRIES constant is bumped by exactly 1 and re-read live at merge time (not assumed) to account for QF-20260904-116 landing first if it has."
+      ]
+    }
+  ],
+  "non_functional_requirements": [],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Additive-only payload changes",
+      "description": "Every payload.kind addition is additive (new field on an existing payload object); no existing field is removed or renamed, and no message_type or table schema changes."
+    },
+    {
+      "id": "TR-2",
+      "title": "No new exemption list",
+      "description": "FR-3's classification fix and this SD generally reuse the two existing exported gauge constants (LEGITIMATELY_BODYLESS_KINDS, LEGITIMATE_EMPTY_SENDER_TYPES) and the existing DRAIN_SETS/INFORMATIONAL_KINDS registries in lib/fleet/worker-status.cjs — no parallel vocabulary is introduced."
+    },
+    {
+      "id": "TR-3",
+      "title": "Single PR, multi-file",
+      "description": "All FRs ship in one PR sharing one acceptance test (the cron reads green); expected diff spans 7-8 small files plus 1-2 test files, individually trivial (1-6 line edits each) but collectively exceeding the ≤100 LOC default target — justified per CLAUDE.md's documented-exception path because the defect is inherently a multi-writer hygiene sweep and splitting it would leave the budget unmet by any single piece."
+    },
+    {
+      "id": "TR-4",
+      "title": "Pre-implementation test baseline established",
+      "description": "TESTING ran the 10 affected suites pre-implementation (PLAN phase, evidence 3e0331d8-68ac-4027-a43f-8c795de07d1c): 123/123 green. EXEC re-runs the same suites post-implementation as the regression baseline comparison, not a fresh unscoped run."
+    }
+  ],
+  "system_architecture": "{\"summary\":\"No new components; six/eight existing session_coordination writers gain payload.kind and/or sender_session stamps, one classification registry (DRAIN_SETS.coordinator) gains one entry, and the orphan-writers registry gains one entry.\",\"components\":[{\"name\":\"scripts/assign-fleet-identities.cjs\",\"change\":\"SET_IDENTITY inserts stamp payload.kind + sender_session; wrapped in try/catch\"},{\"name\":\"scripts/worker-signal.cjs\",\"change\":\"stamps payload.kind='worker_signal' beside signal_type\"},{\"name\":\"lib/fleet/worker-status.cjs\",\"change\":\"DRAIN_SETS.coordinator gains 'worker_signal'\"},{\"name\":\"scripts/stale-session-sweep.cjs\",\"change\":\"two signal_resolved inserts gain sender_session (sender_type unchanged)\"},{\"name\":\"scripts/periodic-liveness-watcher.mjs\",\"change\":\"two inserts gain sender_session + body\"},{\"name\":\"lib/npm-install-lock.cjs\",\"change\":\"lock insert gains payload.kind\"},{\"name\":\"scripts/fleet-dashboard.cjs\",\"change\":\"STALE_WARNING insert gains payload.kind + sender_session\"},{\"name\":\"lib/governance/orphan-writers-registry.js\",\"change\":\"one new ORPHAN_ENTRIES row for the gauge\"}]}",
+  "data_model": {},
+  "api_specifications": [],
+  "ui_ux_requirements": [],
+  "implementation_approach": "{\"summary\":\"Sequential, low-risk per-file edits verified against each file's existing test suite; run the gauge live before and after to confirm the measured drop.\",\"steps\":[\"Fix FR-2 (SET_IDENTITY) and FR-3 (worker_signal + DRAIN_SETS) together since FR-3 has a same-PR non-regression dependency.\",\"Fix FR-4 (stale-session-sweep sender_session) and FR-5 (periodic-liveness-watcher sender_session+body).\",\"Fix FR-6 (npm-install-lock, fleet-dashboard).\",\"Add FR-7 CI census test and gauge fixture.\",\"Add FR-8 registry entry, rebasing against main for the QF-20260904-116 array-collision risk.\",\"Run scripts/coordinator-lane-lint-gauge.cjs live to confirm the measured violation count drops from 532/1609 toward the projected ~24/1609 residual.\"]}",
+  "technology_stack": [],
+  "dependencies": [],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "type": "integration",
+      "expected": "union violation ratio (untyped+bodyless+empty_sender)/windowRows is under 10%, down from the measured 33% baseline",
+      "scenario": "Live gauge run after merge over the same 24h window shape"
+    },
+    {
+      "id": "TS-2",
+      "type": "unit",
+      "expected": "classifyCoordinationRow on a payload with kind='worker_signal' and signal_type set returns classification='actionable'",
+      "scenario": "worker-signal.cjs kind stamp does not regress friction-channel classification"
+    },
+    {
+      "id": "TS-3",
+      "type": "unit",
+      "expected": "orphan-reroute-sweep.js's recognized-kind check treats newly-typed SET_IDENTITY rows identically to today's behavior (no re-targeting regression)",
+      "scenario": "assign-fleet-identities.cjs SET_IDENTITY kind casing matches the existing registered literal"
+    },
+    {
+      "id": "TS-4",
+      "type": "unit",
+      "expected": "role-retarget rescue filters in michael-identity.cjs/solomon-identity.cjs/coordinator-hourly-review.cjs still match signal_resolved rows after the fix",
+      "scenario": "stale-session-sweep.cjs sender_type unchanged"
+    },
+    {
+      "id": "TS-5",
+      "type": "unit",
+      "expected": "computeRowViolationCounts returns {untyped_row:0, bodyless_row:0, empty_sender_row:0} for the fixed-shape fixture window",
+      "scenario": "CI census fixture over synthetic clean rows"
+    }
+  ],
+  "acceptance_criteria": [
+    "lane-lint-gauge-cron.yml reads green for two consecutive weekly runs post-merge",
+    "The gauge's own two-number output (violations under 10%, exempt count by kind with reasons) is reproducible on demand via scripts/coordinator-lane-lint-gauge.cjs",
+    "A fixture writer missing a required stamp fails the new CI census test, naming the writer"
+  ],
+  "performance_requirements": {},
+  "plan_checklist": [
+    {
+      "text": "PRD created and saved",
+      "checked": true
+    },
+    {
+      "text": "SD requirements mapped to technical specs",
+      "checked": true
+    },
+    {
+      "text": "Technical architecture defined",
+      "checked": true
+    },
+    {
+      "text": "Implementation approach documented",
+      "checked": true
+    },
+    {
+      "text": "Test scenarios defined",
+      "checked": true
+    },
+    {
+      "text": "Acceptance criteria established",
+      "checked": true
+    },
+    {
+      "text": "Integration & operationalization documented",
+      "checked": true
+    },
+    {
+      "text": "Exploration summary documented"
+    },
+    {
+      "text": "Resource requirements estimated",
+      "checked": false
+    },
+    {
+      "text": "Timeline and milestones set",
+      "checked": false
+    },
+    {
+      "text": "Risk assessment completed",
+      "checked": true
+    }
+  ],
+  "exec_checklist": [
+    {
+      "text": "Development environment setup",
+      "checked": false
+    },
+    {
+      "text": "Core functionality implemented",
+      "checked": false
+    },
+    {
+      "text": "Unit tests written",
+      "checked": false
+    },
+    {
+      "text": "Integration tests completed",
+      "checked": false
+    },
+    {
+      "text": "Code review completed",
+      "checked": false
+    },
+    {
+      "text": "Documentation updated",
+      "checked": false
+    }
+  ],
+  "validation_checklist": [
+    {
+      "text": "All acceptance criteria met",
+      "checked": false
+    },
+    {
+      "text": "Performance requirements validated",
+      "checked": false
+    },
+    {
+      "text": "Security review completed",
+      "checked": false
+    },
+    {
+      "text": "User acceptance testing passed",
+      "checked": false
+    },
+    {
+      "text": "Deployment readiness confirmed",
+      "checked": false
+    }
+  ],
+  "progress": 73,
+  "phase": "planning",
+  "phase_progress": {},
+  "risks": [
+    {
+      "risk": "FR-3's payload.kind='worker_signal' stamp regresses the friction channel's classification if the DRAIN_SETS registration is omitted or lands in a separate PR",
+      "severity": "high",
+      "mitigation": "Both changes ship in the same PR/commit; TS-2 pins the non-regression as a unit test, not an assumption"
+    },
+    {
+      "risk": "FR-2's kind casing ('SET_IDENTITY' vs 'set_identity') diverges from what orphan-reroute-sweep.js already recognizes, causing the sweep to re-target and steal identity messages from a live worker",
+      "severity": "high",
+      "mitigation": "Use the exact existing uppercase literal already present in the DRAIN_SETS/role_drain_sets seed and worker-status.cjs; TS-3 pins this"
+    },
+    {
+      "risk": "FR-4 changes stale-session-sweep.cjs's sender_type instead of adding sender_session, silently breaking role-retarget rescue filters in three other files",
+      "severity": "medium",
+      "mitigation": "Explicitly keep sender_type='coordinator' unchanged; only add sender_session; TS-4 pins the three affected readers"
+    },
+    {
+      "risk": "FR-8's registry-array addition collides with the open, unclaimed QF-20260904-116 which independently appends to the same ORPHAN_ENTRIES array and moves the same baseline-count assertion",
+      "severity": "low",
+      "mitigation": "EXEC rebases against main immediately before merge and resolves any array/baseline conflict rather than assuming exclusivity; flagged to the coordinator as a known overlap, not a scope duplicate"
+    },
+    {
+      "risk": "Fixing only the six/eight named writers may not be sufficient if traffic composition shifts (e.g. a new high-volume untyped writer appears) before the two-consecutive-week cron-green exit predicate is reached",
+      "severity": "low",
+      "mitigation": "FR-1's census and FR-7's fixture make any NEW untyped/senderless writer visible immediately (CI test fails naming it) rather than silently eroding the budget again"
+    }
+  ],
+  "constraints": [],
+  "assumptions": [],
+  "stakeholders": [
+    {
+      "name": "Chairman (Solo Entrepreneur)",
+      "needs": [
+        "ROI visibility",
+        "Resource efficiency",
+        "Quick iteration",
+        "Strategic alignment"
+      ],
+      "persona_id": "chairman",
+      "pain_points": [
+        "Too much detail",
+        "Missing financial KPIs",
+        "Slow feedback loops"
+      ],
+      "success_criteria": [
+        "Clear ROI path",
+        "Minimal overhead",
+        "Measurable outcomes"
+      ]
+    },
+    {
+      "name": "EVA (AI Chief of Staff)",
+      "needs": [
+        "Clear orchestration APIs",
+        "Reliable automation",
+        "Observable state"
+      ],
+      "persona_id": "eva",
+      "pain_points": [
+        "Unclear agent boundaries",
+        "Missing context",
+        "Brittle integrations"
+      ],
+      "success_criteria": [
+        "Autonomous execution",
+        "Predictable behavior",
+        "Graceful degradation"
+      ]
+    },
+    {
+      "name": "DevOps Engineer",
+      "needs": [
+        "Reliable deployments",
+        "Clear monitoring",
+        "Fast rollback"
+      ],
+      "persona_id": "devops_engineer",
+      "pain_points": [
+        "Flaky pipelines",
+        "Missing logs",
+        "Configuration drift"
+      ],
+      "success_criteria": [
+        "Zero-downtime deploys",
+        "Full observability",
+        "Fast recovery"
+      ]
+    }
+  ],
+  "approved_by": null,
+  "approval_date": null,
+  "planned_start": null,
+  "planned_end": null,
+  "actual_start": null,
+  "actual_end": null,
+  "created_at": "2026-09-06T12:00:34.967981",
+  "updated_at": "2026-09-06T12:01:07.552348",
+  "created_by": "PLAN",
+  "updated_by": null,
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001",
+    "created_via": "content_arg",
+    "validated_at": "2026-09-06T12:00:33.819Z",
+    "risk_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 85,
+      "sd_context": "7e67cfe7-d71d-48d4-8d84-fbc500ff4240",
+      "executed_at": "2026-09-06T12:00:44.658Z",
+      "execution_id": "93319cf4-5b61-4dd2-be4a-a12f068e9d36",
+      "generated_at": "2026-09-06T12:00:44.658Z",
+      "raw_analysis": null,
+      "justification": null,
+      "critical_issues": [
+        {
+          "issue": "Database changes: schema, table, view. Schema migration required",
+          "score": 9,
+          "domain": "Data Migration",
+          "mitigation_required": true
+        },
+        {
+          "issue": "UI changes: ui, dashboard, form. Complex UI components",
+          "score": 8,
+          "domain": "UI/UX",
+          "mitigation_required": true
+        }
+      ],
+      "recommendations": [
+        {
+          "title": "Critical Risk Mitigation Required",
+          "priority": "CRITICAL",
+          "description": "2 critical risk(s) identified. Develop mitigation plan before proceeding to EXEC phase. Consider: additional research, proof of concept, architecture review."
+        },
+        {
+          "title": "Data Migration Risk Management",
+          "priority": "HIGH",
+          "description": "High risk in data migration. Recommendations: Engage specialist sub-agent, add checkpoint validation, include fallback plan."
+        },
+        {
+          "title": "UI/UX Risk Management",
+          "priority": "HIGH",
+          "description": "High risk in ui/ux. Recommendations: Engage specialist sub-agent, add checkpoint validation, include fallback plan."
+        }
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "content_quality": {
+      "mode": "off",
+      "score": 74,
+      "passed": true,
+      "threshold": 70
+    },
+    "design_analysis": {
+      "sd_context": {
+        "id": "SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001",
+        "scope": "IN SCOPE. FR-1 WRITER CENSUS: one census over lib and scripts of every session_coordination insert path (the canonical insertCoordinationRow callers and any raw .from('session_coordination').insert), listing kind, whether it stamps sender_session, message_type and body, and whether the kind is in INFORMATIONAL_KINDS; written on the PRD as the baseline table. FR-2 WRITERS STAMP: every machine writer stamps sender_session (the emitting session id, or a named system principal for schedulers, never empty), message_type, and a one-line body that says what the row is (a roll call states its seat and availability; a liveness flag names the process and state; a digest states its count), through the canonical writer; raw inserts are routed through it. FR-3 GAUGE CONTRACT: the lane-lint gauge (scripts/cron/lane-lint-gauge or its lib) reads a declared exemption list of machine kinds that legitimately carry no human body, each with a reason, and reports two numbers: violations among non-exempt rows against the 10 percent budget, and the exempt count by kind; an exemption without a reason fails the gauge's own self-check. FR-4 PREVENTIVE EXIT PREDICATES IN CI (ratification 49656c8c): (a) a unit test over the writer census asserts every listed writer stamps the three fields (a new writer without them fails CI); (b) a fixture run of the gauge over a synthetic window with only machine rows asserts 0 percent non-exempt violations; (c) the daily cron's own verdict is asserted green for two consecutive weekly readings before the workstream closes. FR-5 REGISTRY: the gauge and its exemption list are registered in the orphan-writers registry with their acting reader named.\n\nOUT OF SCOPE: retention of the lane (retention_archive, QF-20260904-715 and SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 cover the consult-row lifetime); the backpressure counter (QF-695); role-seat roll calls (QF-935); the receipt row shape (COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001); any new lane or kind.\n\nFOURTH WRITER ADDED (Solomon e7ce9a95, MEASURED 01:25Z at scripts/periodic-liveness-watcher.mjs:405-432): emitPersistentUnverifiedSignal writes periodic_liveness_flag rows with sender_type periodic-liveness-watcher, NO sender_session and NO body, which is 6 of the gauge's remaining violations in his sample. FR-2 covers it explicitly: that writer stamps a sender_session (or a declared system principal in the sweep/system class) and a one-line body naming the process and state, alongside the roll_call, completion_nudge and ledger-digest writers. Note for the builder: these flag rows are owner-routed once per episode and never feed the ladder digest (Solomon, same read), so they are exempt-eligible on the FR-3 list only if the reason names that.\n\nSTEP-0 OBJECTION ADOPTED (Solomon 125617e0, sent 01:13Z to a broadcast target and read by Adam only at 02:3xZ after his board-check pointer; MEASURED by Solomon 01:10-01:12Z with the gauge's OWN predicates, lib/coordination/lane-lint-gauge.cjs computeRowViolationCounts, over the newest 1,000 rows plus the three writer sites). PREMISE RELABELLED: the 37.9 percent in the description is INHERITED from the coordinator's raw predicate and is NOT the gauge's number; roll_call, coordinator_reservation, seat_busy_reservation and fence_notice are in LEGITIMATELY_BODYLESS_KINDS (:57) and isBodylessRow returns false for them (:110), so the gauge counts 0 roll_call violations. THE GAUGE'S OWN READING, same 1,000 rows: untyped_row 210, bodyless_row 6, empty_sender_row 179 (113 of them inside the 210), union about 282 = 28 percent, still over the 10 percent budget. COMPOSITION: SET_IDENTITY/coordinator/no-sender 113; INFO/worker [WORKER_SIGNAL:*] rows with payload.signal_type and no payload.kind 83; signal_resolved with no sender 56; INFO/system NODE_MODULES_LOCK 10; periodic_liveness_flag 6; adam_channel_health_probe 3; CLAIM_RELEASED/sweep 3; STALE_WARNING/dashboard 1. THREE WRITERS ARE 252 OF 282. SCOPE RESHAPED (supersedes FR-1 to FR-3 above): FR-1 scripts/assign-fleet-identities.cjs:691 and :797 raw inserts go through the canonical writer with kind set_identity and sender_session = the coordinator. FR-2 scripts/worker-signal.cjs:703-716 stamps payload.kind = worker_signal beside signal_type (two-vocabulary split, not a missing stamp); the gauge's isUntypedRow is unchanged. FR-3 scripts/stale-session-sweep.cjs:2130 and :2232 signal_resolved rows carry sender_type sweep or a sender_session. FR-4 one gauge fixture asserting the three shapes read clean; the periodic_liveness_flag writer (6 rows) rides as a fourth line. NO new exemption list: the two exported constants ARE the declared list, and any growth imports INFORMATIONAL_KINDS (worker-status.cjs:266), one vocabulary per axis. WITHDRAWN: the former FR-2 rule that every machine writer stamps a one-line body (roll calls' and reservations' emptiness is the contract, detectors.cjs:140). Expected residual after the three: about 23 of 1,000, 2.3 percent, under budget. TIERING NOTE for the coordinator: Solomon reads this as three Tier-1 QFs plus a fixture; Adam keeps the SD as the umbrella because the three changes and the fixture fit one PR under 100 LOC and share one acceptance (the daily gauge cron green); the coordinator may split it at dispatch.",
+        "title": "session_coordination lane hygiene: every machine writer stamps sender_session, message_type and a body, and the lane-lint gauge names the machine kinds it exempts, so the 10 percent violation budget is meetable and the daily gauge cron stops failing"
+      },
+      "generated_at": "2026-09-06T12:00:34.037Z",
+      "raw_analysis": "DESIGN Analysis Results:\nVerdict: CONDITIONAL_PASS\nConfidence: 60%\n\nRecommendations:\n  1. Validate infrastructure concerns: deployment, monitoring, rollback, CI/CD integration\n\nwarnings: [\n  {\n    \"severity\": \"HIGH\",\n    \"issue\": \"Sub-agent scanned an unresolved or empty repo (repo_resolved=true, probe_exists=false)\",\n    \"recommendation\": \"Verify the SD target_application resolves to the correct repo; an empty/wrong tree yields zero violations and must not pass as green\"\n  }\n]\n\ndetailed_analysis: {\n  \"sd_type\": \"infrastructure\",\n  \"sd_type_source\": \"declared\",\n  \"skip_reason\": \"Non-UI SD type (infrastructure) - UI/UX design validation not applicable\",\n  \"validation_approach\": \"Infrastructure design review: deployment, CI/CD, monitoring, rollback, config management\",\n  \"infra_checklist\": [\n    \"Deployment strategy documented\",\n    \"CI/CD pipeline integration verified\",\n    \"Monitoring and alerting configured\",\n    \"Rollback procedure defined\",\n    \"Configuration management approach specified\"\n  ]\n}\n\nfindings: {\n  \"design_system_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"component_analysis\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"accessibility_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"responsive_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"consistency_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"workflow_review\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no user-facing workflows\"\n  }\n}\n\nmetadata: {\n  \"repo_path\": \"C:/Users/rickf/Projects/_EHG/EHG_Engineer\",\n  \"repo_resolved\": true,\n  \"components_dir_exists\": true,\n  \"skip_reason\": \"non_ui_sd_type:infrastructure\",\n  \"registry_source\": \"db\",\n  \"executed_from_cwd\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001\",\n  \"probe_exists\": false,\n  \"verdict_chain\": [\n    {\n      \"from\": \"PASS\",\n      \"to\": \"CONDITIONAL_PASS\",\n      \"mutator\": \"lib/sub-agents/resolve-repo.js:applySubAgentRepoVerdict\",\n      \"reason\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\"\n    }\n  ]\n}\n\noptions: {\n  \"timeout\": 120000,\n  \"repo_path\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001\",\n  \"target_application\": \"EHG_Engineer\",\n  \"_injectedBrief\": \"--- Five-Point Brief ---\\nSymptom: <describe what IS happening>\\nLocation: <file/endpoint/table>\\nFrequency: <pattern/timing>\\nPrior Attempts: <what you already tried>\\nDesired Outcome: <clear success criteria>\\nContext: SD SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (LEAD phase)\\n--- End Brief ---\",\n  \"taskContract\": {\n    \"contract_id\": \"8393915e-23fa-4aee-bcac-7593e740c143\",\n    \"summary\": \"Contract 8393915e-23fa-4aee-bcac-7593e740c143: LEO_EXECUTOR → DESIGN | Execute Senior Design Sub-Agent analysis for SD SD...\"\n  },\n  \"inputArtifacts\": [\n    \"1f295de8-50e0-4410-a043-b1ae56b80b9f\"\n  ],\n  \"sdKey\": \"SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001\",\n  \"sdUUID\": \"7e67cfe7-d71d-48d4-8d84-fbc500ff4240\"\n}\n\nconditions: [\n  {\n    \"action\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\",\n    \"priority\": \"medium\",\n    \"blocking\": false\n  }\n]\njustification: CONDITIONAL_PASS recorded by applySubAgentRepoVerdict: repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\n\nsub_agent: {\n  \"id\": \"2ebfbd8a-5aa0-4907-bb47-33a2dd04254f\",\n  \"code\": \"DESIGN\",\n  \"name\": \"Senior Design Sub-Agent\",\n  \"description\": \"## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition\\n\\n**🆕 NEW in v6.0.0**: Proactive learning, accessibility-first patterns, scope estimation protocol\\n\\n### Overview\\n**Mission**: Ensure design compliance, accessibility (WCAG 2.1 AA), and consistent UX across all implementations.\\n\\n**Philosophy**: **Accessibility-first design prevents technical debt.**\\n\\n**Tech Stack**: Vite + React + Shadcn UI + TypeScript + Tailwind CSS\\n\\n**Component Sizing Sweet Spot**: 300-600 lines of code (optimal for testing and maintenance)\\n\\n---\\n\\n## 🔍 PROACTIVE LEARNING INTEGRATION (SD-LEO-LEARN-001)\\n\\n### Before Starting ANY Design/UI Work\\n\\n**MANDATORY**: Query issue_patterns table for proven solutions:\\n\\n```bash\\n# Check for known UI/UX issue patterns\\nnode scripts/search-prior-issues.js \\\"UI component design\\\"\\n\\n# Query issue_patterns table\\nnode -e \\\"\\nimport { createDatabaseClient } from './lib/supabase-connection.js';\\n(async () => {\\n  const client = await createDatabaseClient('engineer', { verify: false });\\n  const result = await client.query(\\\\`\\n    SELECT pattern_id, issue_summary, proven_solutions, prevention_checklist\\n    FROM issue_patterns\\n   "
+    },
+    "stories_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 95,
+      "sd_context": "7e67cfe7-d71d-48d4-8d84-fbc500ff4240",
+      "executed_at": "2026-09-06T12:01:04.366Z",
+      "execution_id": "cbe360f4-9337-4399-98ff-a5aeaac4c5cc",
+      "generated_at": "2026-09-06T12:01:04.366Z",
+      "raw_analysis": null,
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        {
+          "title": "Stories Already Complete",
+          "description": "8 stories already have implementation context. This is a success - no additional work needed."
+        },
+        {
+          "title": "EXEC Phase Guidance",
+          "description": "User stories now include: implementation_context (architecture patterns, component locations), architecture_references (existing code to reference), example_code_patterns (code snippets), and testing_scenarios (test cases)."
+        }
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "database_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 100,
+      "sd_context": "7e67cfe7-d71d-48d4-8d84-fbc500ff4240",
+      "executed_at": "2026-09-06T12:00:52.847Z",
+      "execution_id": "25df7d56-a2d5-463a-82fb-3ec862c58339",
+      "generated_at": "2026-09-06T12:00:52.847Z",
+      "raw_analysis": {},
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        "No database migrations needed for this SD"
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "measured_baseline": {
+      "measured_at": "2026-09-06T11:xx:00Z",
+      "measured_by": "lib/coordination/lane-lint-gauge.cjs runLaneLintGauge (live, this session)",
+      "untyped_row": 380,
+      "window_rows": 1609,
+      "bodyless_row": 5,
+      "empty_sender_row": 316
+    },
+    "generation_pattern": "generate_first_then_insert",
+    "plan_prd_sub_agents": {
+      "agents": [
+        {
+          "code": "DATABASE",
+          "verdict": "PASS",
+          "confidence": 100,
+          "executed_at": "2026-09-06T12:01:06.503Z"
+        },
+        {
+          "code": "RISK",
+          "verdict": "PASS",
+          "confidence": 85,
+          "executed_at": "2026-09-06T12:01:06.503Z"
+        },
+        {
+          "code": "STORIES",
+          "verdict": "PASS",
+          "confidence": 95,
+          "executed_at": "2026-09-06T12:01:06.503Z"
+        }
+      ],
+      "all_passed": true,
+      "executed_at": "2026-09-06T12:01:06.503Z"
+    },
+    "grounding_validation": {
+      "note": "10 requirements have <50% confidence but this is expected for implementation-level PRDs. No hallucination detected.",
+      "sd_id": "7e67cfe7-d71d-48d4-8d84-fbc500ff4240",
+      "has_issues": false,
+      "all_results": [
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 19.631901840490798,
+              "detail": "24.5% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 30,
+              "detail": "1/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.2222222222222223,
+              "detail": "11.1% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.5185412406271301,
+          "is_flagged": false,
+          "explanation": "Low confidence (52%): This requirement may not be grounded in the SD source. 11.1% alignment with strategic objectives",
+          "requirement_id": "FR-1",
+          "requirement_type": "functional",
+          "requirement_title": "Writer census recorded as the PRD baseline table"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 10.332681017612524,
+              "detail": "12.9% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/5 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.5757575757575757,
+              "detail": "7.9% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.119084385933701,
+          "is_flagged": true,
+          "explanation": "Low confidence (12%): This requirement may not be grounded in the SD source. 0/5 key phrases match SD. 7.9% alignment with strategic objectives",
+          "requirement_id": "FR-2",
+          "requirement_type": "functional",
+          "requirement_title": "assign-fleet-identities.cjs SET_IDENTITY rows carry sender_session and the already-registered kind literal"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 11.911468812877263,
+              "detail": "14.9% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/6 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.051282051282051,
+              "detail": "10.3% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.13962750864159315,
+          "is_flagged": true,
+          "explanation": "Low confidence (14%): This requirement may not be grounded in the SD source. 0/6 key phrases match SD. 10.3% alignment with strategic objectives",
+          "requirement_id": "FR-3",
+          "requirement_type": "functional",
+          "requirement_title": "worker-signal.cjs stamps payload.kind='worker_signal' beside payload.signal_type, and the coordinator drain set recognizes it"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 12.947976878612717,
+              "detail": "16.2% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.702127659574468,
+              "detail": "8.5% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.14650104538187186,
+          "is_flagged": true,
+          "explanation": "Low confidence (15%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 8.5% alignment with strategic objectives",
+          "requirement_id": "FR-4",
+          "requirement_type": "functional",
+          "requirement_title": "stale-session-sweep.cjs signal_resolved notices carry a real sender_session without changing sender_type"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 11.380753138075315,
+              "detail": "14.2% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/5 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.9402985074626866,
+              "detail": "9.7% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.13321051645538,
+          "is_flagged": true,
+          "explanation": "Low confidence (13%): This requirement may not be grounded in the SD source. 0/5 key phrases match SD. 9.7% alignment with strategic objectives",
+          "requirement_id": "FR-5",
+          "requirement_type": "functional",
+          "requirement_title": "periodic-liveness-watcher.mjs OVERDUE/UNVERIFIED flags carry sender_session and a one-line body"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 9.554655870445345,
+              "detail": "11.9% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2,
+              "detail": "10.0% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.11554655870445345,
+          "is_flagged": true,
+          "explanation": "Low confidence (12%): This requirement may not be grounded in the SD source. 11.9% semantic overlap with SD. 0/1 key phrases match SD. 10.0% alignment with strategic objectives",
+          "requirement_id": "FR-6",
+          "requirement_type": "functional",
+          "requirement_title": "Two cheap sibling untyped-writer fixes: NODE_MODULES_LOCK and dashboard STALE_WARNING"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 17.53653444676409,
+              "detail": "21.9% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.6993865030674846,
+              "detail": "13.5% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.20235920949831573,
+          "is_flagged": true,
+          "explanation": "Low confidence (20%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 13.5% alignment with strategic objectives",
+          "requirement_id": "FR-7",
+          "requirement_type": "functional",
+          "requirement_title": "Preventive exit predicates in CI: writer-census unit test and gauge fixture"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 10.122448979591836,
+              "detail": "12.7% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.5,
+              "detail": "12.5% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.12622448979591835,
+          "is_flagged": true,
+          "explanation": "Low confidence (13%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 12.5% alignment with strategic objectives",
+          "requirement_id": "FR-8",
+          "requirement_type": "functional",
+          "requirement_title": "Registry entry: gauge and its exemption list in the orphan-writers registry"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 2.876404494382023,
+              "detail": "3.6% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/3 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 3.3962264150943393,
+              "detail": "17.0% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.06272630909476362,
+          "is_flagged": true,
+          "explanation": "Low confidence (6%): This requirement may not be grounded in the SD source. 3.6% semantic overlap with SD. 0/3 key phrases match SD. 17.0% alignment with strategic objectives",
+          "requirement_id": "TR-1",
+          "requirement_type": "technical",
+          "requirement_title": "Additive-only payload changes"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 4.8,
+              "detail": "6.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.9411764705882355,
+              "detail": "14.7% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.07741176470588235,
+          "is_flagged": true,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 6.0% semantic overlap with SD. 0/1 key phrases match SD. 14.7% alignment with strategic objectives",
+          "requirement_id": "TR-2",
+          "requirement_type": "technical",
+          "requirement_title": "No new exemption list"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 4.796573875802998,
+              "detail": "6.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/0 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.3255813953488373,
+              "detail": "11.6% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.07122155271151835,
+          "is_flagged": true,
+          "explanation": "Low confidence (7%): This requirement may not be grounded in the SD source. 6.0% semantic overlap with SD. 0/0 key phrases match SD. 11.6% alignment with strategic objectives",
+          "requirement_id": "TR-3",
+          "requirement_type": "technical",
+          "requirement_title": "Single PR, multi-file"
+        }
+      ],
+      "issue_reason": null,
+      "validated_at": "2026-09-06T12:00:33.759Z",
+      "grounding_score": 0.1556776892318662,
+      "average_confidence": 0.1556776892318662,
+      "flagged_requirements": [
+        {
+          "id": "FR-2",
+          "type": "functional",
+          "title": "assign-fleet-identities.cjs SET_IDENTITY rows carry sender_session and the already-registered kind literal",
+          "confidence": 0.119084385933701,
+          "explanation": "Low confidence (12%): This requirement may not be grounded in the SD source. 0/5 key phrases match SD. 7.9% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-3",
+          "type": "functional",
+          "title": "worker-signal.cjs stamps payload.kind='worker_signal' beside payload.signal_type, and the coordinator drain set recognizes it",
+          "confidence": 0.13962750864159315,
+          "explanation": "Low confidence (14%): This requirement may not be grounded in the SD source. 0/6 key phrases match SD. 10.3% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-4",
+          "type": "functional",
+          "title": "stale-session-sweep.cjs signal_resolved notices carry a real sender_session without changing sender_type",
+          "confidence": 0.14650104538187186,
+          "explanation": "Low confidence (15%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 8.5% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-5",
+          "type": "functional",
+          "title": "periodic-liveness-watcher.mjs OVERDUE/UNVERIFIED flags carry sender_session and a one-line body",
+          "confidence": 0.13321051645538,
+          "explanation": "Low confidence (13%): This requirement may not be grounded in the SD source. 0/5 key phrases match SD. 9.7% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-6",
+          "type": "functional",
+          "title": "Two cheap sibling untyped-writer fixes: NODE_MODULES_LOCK and dashboard STALE_WARNING",
+          "confidence": 0.11554655870445345,
+          "explanation": "Low confidence (12%): This requirement may not be grounded in the SD source. 11.9% semantic overlap with SD. 0/1 key phrases match SD. 10.0% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-7",
+          "type": "functional",
+          "title": "Preventive exit predicates in CI: writer-census unit test and gauge fixture",
+          "confidence": 0.20235920949831573,
+          "explanation": "Low confidence (20%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 13.5% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-8",
+          "type": "functional",
+          "title": "Registry entry: gauge and its exemption list in the orphan-writers registry",
+          "confidence": 0.12622448979591835,
+          "explanation": "Low confidence (13%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 12.5% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-1",
+          "type": "technical",
+          "title": "Additive-only payload changes",
+          "confidence": 0.06272630909476362,
+          "explanation": "Low confidence (6%): This requirement may not be grounded in the SD source. 3.6% semantic overlap with SD. 0/3 key phrases match SD. 17.0% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-2",
+          "type": "technical",
+          "title": "No new exemption list",
+          "confidence": 0.07741176470588235,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 6.0% semantic overlap with SD. 0/1 key phrases match SD. 14.7% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-3",
+          "type": "technical",
+          "title": "Single PR, multi-file",
+          "confidence": 0.07122155271151835,
+          "explanation": "Low confidence (7%): This requirement may not be grounded in the SD source. 6.0% semantic overlap with SD. 0/0 key phrases match SD. 11.6% alignment with strategic objectives"
+        }
+      ],
+      "requirements_flagged": 10,
+      "implementation_context": "web",
+      "requirements_validated": 11,
+      "validation_duration_ms": 58
+    },
+    "lead_scope_amendment": "Scope expanded at LEAD from the SD's own reshaped FR-1/FR-2/FR-3/FR-4 text to add FR-6 (npm-install-lock.cjs, fleet-dashboard.cjs) after live re-measurement showed the original three writers alone (438/532=82% of violations) left an 18% residual worth closing at near-zero marginal cost; also corrected FR-2's originally-considered kind casing to the pre-registered 'SET_IDENTITY' literal and FR-4's fix from a sender_type change to a sender_session addition, per risk-agent (c4c674e8-bb18-4346-a12f-50217692a4d9) and validation-agent (f35b8d3e-5fc4-4a1c-b602-d2139991408c) evidence.",
+    "known_overlaps_not_scope_duplicates": [
+      "QF-20260905-666 (same code region as FR-4, different defect: missing reply-linkage in the disposition notice, compatible with this SD's sender_session fix)",
+      "QF-20260904-116 (appends different entries to the same ORPHAN_ENTRIES array as FR-8; rebase risk, not scope overlap)",
+      "QF-20260905-934 (classguard CI lint currently advisory-only due to a shallow-checkout defect; de-risks but does not change FR-4's approach)"
+    ],
+    "plan_testing_refinements": {
+      "evidence_id": "3e0331d8-68ac-4027-a43f-8c795de07d1c",
+      "baseline": "123/123 green pre-implementation across 10 affected suites",
+      "breaking_tests_identified": [
+        "tests/unit/assign-fleet-identities-rename-legibility.test.js (exact toEqual -> relax to toMatchObject)",
+        "tests/unit/*drain-sets-adam-reconciliation*.test.js (DRAIN_SETS.coordinator.length pinned count)",
+        "tests/unit/*drain-set-registry*.test.js (role_drain_sets seed-parity count)",
+        "tests/unit/*orphan-writers-registry*.test.js (PINNED_TOTAL_ENTRIES)"
+      ]
+    }
+  },
+  "content": "# Product Requirements Document\n\n## Strategic Directive\nSD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001\n\n## Title\nsession_coordination lane hygiene: every machine writer stamps sender_session, message_type and a body, and the lane-lint gauge names the machine kinds it exempts, so the 10 percent violation budget is meetable and the daily gauge cron stops failing\n\n## Status\nPlanning\n\n## Executive Summary\nThe daily lane-lint-gauge-cron.yml fails because 33% of session_coordination rows in its own 24h window (532 of 1609, measured live via lib/coordination/lane-lint-gauge.cjs's own predicates: 380 untyped_row, 5 bodyless_row, 316 empty_sender_row) violate the gauge's 10% hygiene budget, and every violating row is written by harness machinery, not a person. Per-writer attribution over that same window shows six sites account for 438 of the 532 violations (SET_IDENTITY broadcasts 162, signal_resolved notices 125, the WORKER_SIGNAL friction channel 148, periodic_liveness_flag 3) and two cheap sibling fixes (NODE_MODULES_LOCK 66, dashboard STALE_WARNING 4) bring covered violations to 508 of 532. This PRD types and/or sender-stamps those six writers through minimal, reader-safe edits (verified against every downstream consumer that branches on the fields being changed), leaving a projected residual of about 24 of 1609 rows (1.5%), comfortably under the 10% budget. A CI census test and gauge fixture make a future untyped/unstamped writer fail fast instead of silently re-breaking the cron.\n\n## Functional Requirements\n\n### FR-1: undefined\nOne census over lib/ and scripts/ of every session_coordination insert path (canonical insertCoordinationRow callers and raw .from('session_coordination').insert sites), naming for each: file:line, kind (if any), sender_session/sender_type, and whether it is exempt under LEGITIMATELY_BODYLESS_KINDS / LEGITIMATE_EMPTY_SENDER_TYPES in lib/coordination/lane-lint-gauge.cjs. Live 24h-window attribution (measured this session against the gauge's own runLaneLintGauge over its default 24h window, 1609 rows): SET_IDENTITY/coordinator/no-kind+no-sender 162; INFO/coordinator/signal_resolved (typed, sender_session null) 125; INFO/worker WORKER_SIGNAL rows keyed on payload.signal_type with no payload.kind 148 across signal_type values feedback(75) stuck(39) harness-bug(26) spec-conflict(4) need-sweep(2) prd-ambiguous(1) other(1); INFO/system NODE_MODULES_LOCK (payload has no kind; sender_type='system' already exempt) 66; STALE_WARNING/dashboard (no kind) 4; INFO/periodic-liveness-watcher periodic_liveness_flag (typed, no sender_session, no body) 3. Residual NOT in this SD's scope, named for the record: INFO/adam solomon_consult 10 and account_switch_notice 10 (Adam's own redacted advisory lane, deliberately senderless by that lane's existing design note — out of scope, candidate follow-up), adam_channel_health_probe 2 (self-checking probe, out of scope), signal_receipt 2 (explicitly owned by SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001, not this SD). FR-1's six covered writers total 438 of 532 violating rows (82%); with the two sibling fixes in FR-1b/FR-1c, 508 of 532 (95%), leaving a residual union ratio of about 1.5% against the 10% budget.\n**Priority**: critical\n**Acceptance Criteria**:- The PRD (this document) states the per-writer violation counts above as the baseline, sourced from a live run of runLaneLintGauge/computeRowViolationCounts, not the coordinator's original raw-predicate estimate.- Every writer this SD fixes is named with its exact file:line; every writer explicitly left out of scope is named with a one-line reason.\n\n### FR-2: undefined\nscripts/assign-fleet-identities.cjs has three raw session_coordination insert sites for SET_IDENTITY broadcasts (the rebroadcast-on-drift site around line 679-691, the new-assignment site around line 784-796, and a third variant). Each currently omits both payload.kind and sender_session, and both branches of buildIdentityMessage() already populate a non-empty `body` column, so typing the kind will not create a NEW bodyless violation. Add payload.kind: 'SET_IDENTITY' (the exact uppercase literal already registered in the DRAIN_SETS/role_drain_sets seed and recognized by lib/fleet/orphan-reroute-sweep.js as a known kind; using the lowercase 'set_identity' instead would be a DIFFERENT, unrecognized literal that the reroute sweep could then re-target and steal from a live worker's inbox — verified via risk-agent finding against orphan-reroute-sweep.js:145/162). Add sender_session: the coordinator's own resolved session id (the value already available in main() via _mySessionId / resolveOwnSessionId, already in scope at every insert site) so these rows carry real provenance instead of null. Wrap the three insert calls in try/catch: routing an insert that already reaches assertValidTarget/backpressure indirectly (if ever moved to insertCoordinationRow) or that hits a transient DB error must not abort the naming loop for every other worker mid-run — catch, warn, and continue to the next worker.\n**Priority**: critical\n**Acceptance Criteria**:- All three SET_IDENTITY insert sites in scripts/assign-fleet-identities.cjs stamp payload.kind: 'SET_IDENTITY' (exact casing) and sender_session: <coordinator session id>.- A live 24h gauge sample shows zero untyped_row or empty_sender_row violations with sender_type='coordinator' and subject starting 'Identity'.- Existing tests in tests/unit/assign-fleet-identities-*.test.js still pass; a new assertion confirms payload.kind and sender_session are present on the constructed message object.- A single insert failure (simulated DB error) logs a warning and the naming loop continues to the next worker instead of throwing.\n\n### FR-3: undefined\nscripts/worker-signal.cjs (~line 703-737) already stamps sender_session and a real body through insertCoordinationRow — its only gauge violation is untyped_row, because it deliberately never sets payload.kind (keying on payload.signal_type instead, a two-vocabulary split documented at the top of the file). Add payload.kind: 'worker_signal' to the payload object ALONGSIDE the existing signal_type field (additive, not a replacement — nothing currently reading payload.signal_type changes). This alone would regress the friction channel: lib/fleet/worker-status.cjs classifyCoordinationRow() checks `if (kind)` first and returns inside that branch, so an unregistered 'worker_signal' kind would flip every /signal row from classification 'actionable' (via the signal_type fallback) to 'unrecognized' before ever reaching the signal_type check — confirmed live by risk-agent against worker-status.cjs:333. To prevent that regression, register 'worker_signal' as a recognized, actionable kind in the SAME PR: add it to DRAIN_SETS.coordinator in lib/fleet/worker-status.cjs (and to the corresponding role_drain_sets DB seed row, mirroring the existing pattern for other coordinator-drained kinds) so the newly-typed rows still classify as 'actionable' via the kind path, not merely via the signal_type fallback. Confirmed non-regression: lib/coordinator/dispatch.cjs's backpressure exemption (assertSendBackpressure) already keys on payload.signal_type presence, not kind absence, so it is unaffected either way.\n**Priority**: critical\n**Acceptance Criteria**:- worker-signal.cjs's insertCoordinationRow call includes payload.kind: 'worker_signal' alongside the existing signal_type field.- 'worker_signal' is added to DRAIN_SETS.coordinator in lib/fleet/worker-status.cjs and to the role_drain_sets seed for the coordinator role.- tests/unit/coordination/kind-classification.test.js (or a new sibling test) asserts a row with payload.kind='worker_signal' AND payload.signal_type set classifies as 'actionable', basis 'drain_set' or 'informational_registry' as appropriate — never 'unrecognized'.- The existing WORKER_SIGNAL backpressure-exemption test suite (tests/unit/coordinator/dispatch-send-backpressure.test.js) still passes unmodified, confirming the exemption keys on signal_type, not kind.\n\n### FR-4: undefined\nscripts/stale-session-sweep.cjs has two signal_resolved raw insert sites (~line 2161 disposition path, ~line 2265 promotion path), both already typed (payload.kind='signal_resolved') and already carrying a real body, but both hardcode sender_session: null with sender_type: 'coordinator'. The gauge's LEGITIMATE_EMPTY_SENDER_TYPES allowlist is ['sweep','system'] and does not include 'coordinator', so these are pure empty_sender_row violations. Fix by setting sender_session to a named system principal string, e.g. 'stale-session-sweep', rather than changing sender_type away from 'coordinator' — changing sender_type to 'sweep' was considered and rejected: lib/coordinator/michael-identity.cjs:248, lib/coordinator/solomon-identity.cjs:245, and scripts/coordinator-hourly-review.cjs:154 all filter on .eq('sender_type','coordinator') for role-retarget rescue logic, and retyping these rows away from 'coordinator' would silently exclude them from those readers (confirmed by risk-agent and Explore agent independently). A sender_session value alone (any non-empty string) clears isEmptySenderRow regardless of sender_type, so this is a zero-blast-radius fix. Both sites are inside a file with 11 pre-existing session-coordination-insert-classguard-lint violations; note (informational, not a scope item) that QF-20260905-934 measured the classguard CI workflow's shallow checkout means it always falls back to advisory --all mode today, so this is not a live merge blocker, but each touched line should still carry (or keep) its existing eslint-disable-next-line pragma for the classguard rule per repo convention.\n**Priority**: critical\n**Acceptance Criteria**:- Both signal_resolved insert sites in scripts/stale-session-sweep.cjs set sender_session: 'stale-session-sweep' (or equivalent named principal) and leave sender_type: 'coordinator' unchanged.- tests/unit/coordinator/signal-resolved-disposition-path.test.js and tests/unit/coordinator/signal-resolved-promotion-path.test.js pass with an added assertion on sender_session.- A live 24h gauge sample shows zero empty_sender_row violations for payload.kind='signal_resolved'.- No behavior change to any reader filtering on sender_type='coordinator' (michael-identity.cjs, solomon-identity.cjs, coordinator-hourly-review.cjs) — those files are untouched by this SD.\n\n### FR-5: undefined\nscripts/periodic-liveness-watcher.mjs's emitOverdueSignal (~line 421-440) and emitPersistentUnverifiedSignal (~line 454-468) both write payload.kind='periodic_liveness_flag' (already typed) with sender_type='periodic-liveness-watcher' and NO sender_session and NO body/payload.body — the only writer in this SD's scope that is genuinely bodyless as well as senderless (confirmed: readCanonicalBody finds neither a body column nor payload.body on these inserts). Add sender_session: 'periodic-liveness-watcher' (mirroring the precedent already established in lib/periodic-liveness/owner-directive-writer.mjs:45, which uses the identical literal as its sender_session for the same class of writer) and add a one-line body field naming the process and state, e.g. body: `${row.display_name || row.process_key} is ${evaluation.state === 'OVERDUE' ? 'OVERDUE' : 'UNVERIFIED for over 7 days'}${invocationNote}` for the overdue path and the equivalent for the unverified path. These rows are owner-routed once per episode and never feed the ladder digest (per the SD's own sourcing note), so no exemption-list change is needed once they carry real sender/body — they simply stop violating.\n**Priority**: high\n**Acceptance Criteria**:- Both emitOverdueSignal and emitPersistentUnverifiedSignal set sender_session: 'periodic-liveness-watcher' and a non-empty body.- tests/unit/periodic-liveness/watcher-emit-overdue-signal.test.js (and its UNVERIFIED sibling if present) pass with new assertions on sender_session and body.- A live 24h gauge sample shows zero bodyless_row or empty_sender_row violations for payload.kind='periodic_liveness_flag'.\n\n### FR-6: undefined\nTwo additional writers surfaced by this SD's live census contribute 70 of the 532 measured violations (66 + 4) at near-zero fix cost and zero reader risk, so they are folded into this SD rather than left as a known gap that reopens the budget question on the next measurement. (a) lib/npm-install-lock.cjs's acquireLock() insert (~line 71) has payload {lock_type, status, holder_session, locked_at} with no payload.kind; sender_type is already 'system' (exempt), so this is a pure untyped_row fix — add payload.kind: 'node_modules_lock'. Confirmed safe: lib/worktree-manager.js's own doc states the lock protocol is payload-based (matched on payload.lock_type/status), not kind-based, and findActiveLock() filters only on payload->>lock_type/status — nothing reads on kind's absence. (b) scripts/fleet-dashboard.cjs's STALE_WARNING insert (~line 1621-1628) has no payload.kind and sender_type='dashboard' (not exempt); message_type='STALE_WARNING' is already a known UNDRAINABLE_WORKER_MESSAGE_TYPES member (lib/coordinator/undrainable-message-types.cjs) sent fire-and-forget with .catch(()=>{}), so this insert deliberately bypasses insertCoordinationRow already — add payload.kind: 'stale_heartbeat_warning' and sender_session: 'fleet-dashboard' directly to the literal insert object; body is already non-empty so no bodyless risk.\n**Priority**: medium\n**Acceptance Criteria**:- lib/npm-install-lock.cjs's lock-acquire insert carries payload.kind: 'node_modules_lock'.- scripts/fleet-dashboard.cjs's STALE_WARNING insert carries payload.kind: 'stale_heartbeat_warning' and sender_session: 'fleet-dashboard'.- A live 24h gauge sample shows zero untyped_row violations for subject='NODE_MODULES_LOCK' or message_type='STALE_WARNING'.\n\n### FR-7: undefined\n(a) A unit test asserts each of the six/eight writer call sites fixed by FR-2 through FR-6 stamps payload.kind and (sender_session OR an exempt sender_type) at construction time — implemented as a small table-driven test that imports each writer's message-building logic where it is already a pure/exported function (buildIdentityMessage, buildIdentityMessage's rebroadcast path) and, where the insert is inline (worker-signal.cjs, stale-session-sweep.cjs, periodic-liveness-watcher.mjs, npm-install-lock.cjs, fleet-dashboard.cjs), asserts against the actual insert call via existing test doubles/fixtures in each file's test suite, so a future edit that drops a stamp fails CI naming the specific writer. (b) Extend tests/unit/coordination/lane-lint-gauge.test.js (or lane-lint-budget.test.js) with a fixture window containing one clean row per fixed shape (SET_IDENTITY-typed-with-sender, worker_signal-typed, signal_resolved-with-sender, periodic_liveness_flag-with-sender-and-body, node_modules_lock-typed, stale_heartbeat_warning-typed) asserting computeRowViolationCounts returns all-zero for that fixture. (c) The daily cron's own verdict (gh run list for lane-lint-gauge-cron.yml) is read green for two consecutive weekly readings before this workstream is considered closed — an operational, not code-level, exit predicate tracked via the existing periodic_process_registry row for this cron.\n**Priority**: high\n**Acceptance Criteria**:- A new or extended unit test fails (naming the offending writer) if any of the six/eight fixed call sites is edited to drop its kind or sender stamp.- The gauge fixture test in FR-7(b) passes with an all-zero result over the synthetic clean-shapes window.- Two consecutive weekly gh run list reads of lane-lint-gauge-cron.yml show conclusion=success before this SD's tracked workstream is marked closed (verified post-merge, not at PLAN-TO-EXEC gate time).\n\n### FR-8: undefined\nAdd one entry to lib/governance/orphan-writers-registry.js ORPHAN_ENTRIES documenting the lane-lint gauge itself (writer: the six/eight fixed session_coordination call sites; reader: lib/coordination/lane-lint-gauge.cjs + scripts/coordinator-lane-lint-gauge.cjs's exceedsLintBudget; predicate: the two exported exemption constants LEGITIMATELY_BODYLESS_KINDS and LEGITIMATE_EMPTY_SENDER_TYPES ARE the declared, reasoned exemption list — no new list is introduced), following the existing 'orphan-writers-triage-pass' entry's shape as a template (validateOrphanEntry's required fields: id, entry_type from ENTRY_TYPES, writer object, reader object with file/description, predicate object with description). Note for EXEC: QF-20260904-116 is an open, unclaimed quick-fix that ALSO appends entries to this same ORPHAN_ENTRIES array (a different, unrelated set of ten orphan specimens) and moves the same baseline-count assertion; rebase/merge this FR's single new entry against main immediately before merging to avoid a silent baseline-count collision, rather than assuming this SD's diff is the only pending change to that file.\n**Priority**: medium\n**Acceptance Criteria**:- lib/governance/orphan-writers-registry.js ORPHAN_ENTRIES gains one new, valid entry (passes validateOrphanEntry) describing the lane-lint gauge's writer/reader/predicate.- The existing orphan-writers-registry baseline-count test is updated to the new total, with a comment naming this SD as the cause of the increment.- EXEC verifies at merge time (not at PRD-authoring time) that the array addition does not collide with QF-20260904-116 if that quick-fix has landed first.\n\n## Technical Requirements\n\n### TR-1: undefined\n\n### TR-2: undefined\n\n### TR-3: undefined\n\n## System Architecture\n### Components\n#### scripts/assign-fleet-identities.cjs\n#### scripts/worker-signal.cjs\n#### lib/fleet/worker-status.cjs\n#### scripts/stale-session-sweep.cjs\n#### scripts/periodic-liveness-watcher.mjs\n#### lib/npm-install-lock.cjs\n#### scripts/fleet-dashboard.cjs\n#### lib/governance/orphan-writers-registry.js\n\n## Implementation Approach\n\n## Test Scenarios\n\n### TS-1: Live gauge run after merge over the same 24h window shape\n\n### TS-2: worker-signal.cjs kind stamp does not regress friction-channel classification\n\n### TS-3: assign-fleet-identities.cjs SET_IDENTITY kind casing matches the existing registered literal\n\n### TS-4: stale-session-sweep.cjs sender_type unchanged\n\n### TS-5: CI census fixture over synthetic clean rows\n\n## Acceptance Criteria\n\n1. lane-lint-gauge-cron.yml reads green for two consecutive weekly runs post-merge\n2. The gauge's own two-number output (violations under 10%, exempt count by kind with reasons) is reproducible on demand via scripts/coordinator-lane-lint-gauge.cjs\n3. A fixture writer missing a required stamp fails the new CI census test, naming the writer\n\n## Risks & Mitigations\n\n### FR-3's payload.kind='worker_signal' stamp regresses the friction channel's classification if the DRAIN_SETS registration is omitted or lands in a separate PR\n**Mitigation**: Both changes ship in the same PR/commit; TS-2 pins the non-regression as a unit test, not an assumption\n\n### FR-2's kind casing ('SET_IDENTITY' vs 'set_identity') diverges from what orphan-reroute-sweep.js already recognizes, causing the sweep to re-target and steal identity messages from a live worker\n**Mitigation**: Use the exact existing uppercase literal already present in the DRAIN_SETS/role_drain_sets seed and worker-status.cjs; TS-3 pins this\n\n### FR-4 changes stale-session-sweep.cjs's sender_type instead of adding sender_session, silently breaking role-retarget rescue filters in three other files\n**Mitigation**: Explicitly keep sender_type='coordinator' unchanged; only add sender_session; TS-4 pins the three affected readers\n\n### FR-8's registry-array addition collides with the open, unclaimed QF-20260904-116 which independently appends to the same ORPHAN_ENTRIES array and moves the same baseline-count assertion\n**Mitigation**: EXEC rebases against main immediately before merge and resolves any array/baseline conflict rather than assuming exclusivity; flagged to the coordinator as a known overlap, not a scope duplicate\n\n### Fixing only the six/eight named writers may not be sufficient if traffic composition shifts (e.g. a new high-volume untyped writer appears) before the two-consecutive-week cron-green exit predicate is reached\n**Mitigation**: FR-1's census and FR-7's fixture make any NEW untyped/senderless writer visible immediately (CI test fails naming it) rather than silently eroding the budget again\n\n\n---\n*Generated by LLM PRD Content Generation (GPT 5.2)*\n*Date: 2026-09-06T12:00:33.946Z*",
+  "evidence_appendix": null,
+  "backlog_items": [],
+  "sd_id": "7e67cfe7-d71d-48d4-8d84-fbc500ff4240",
+  "planning_section": {
+    "quality_gates": [],
+    "risk_analysis": {},
+    "success_metrics": [],
+    "timeline_breakdown": {},
+    "implementation_steps": [],
+    "reasoning_depth_used": "standard",
+    "resource_requirements": {}
+  },
+  "reasoning_analysis": {},
+  "complexity_analysis": {},
+  "reasoning_depth": "standard",
+  "confidence_score": null,
+  "research_confidence_score": null,
+  "exploration_summary": null,
+  "document_type": "prd",
+  "integration_operationalization": {
+    "consumers": [
+      "lane-lint-gauge-cron.yml (GitHub Actions cron)",
+      "scripts/coordinator-lane-lint-gauge.cjs (manual/CI invocation)",
+      "lib/fleet/worker-status.cjs classifyCoordinationRow (coordinator inbox classification, consumes the new worker_signal kind)",
+      "lib/governance/orphan-writers-registry.js consumers (weekly known-orphan count)"
+    ],
+    "dependencies": [
+      "lib/coordination/lane-lint-gauge.cjs (unchanged predicates, this SD does not modify the gauge's own logic)",
+      "lib/fleet/worker-status.cjs DRAIN_SETS/role_drain_sets seed (FR-3 registration)",
+      "lib/coordinator/dispatch.cjs insertCoordinationRow (worker-signal.cjs's existing choke point, unmodified)"
+    ],
+    "data_contracts": [
+      "session_coordination.payload.kind gains two new literal values in circulation: 'worker_signal', 'node_modules_lock', 'stale_heartbeat_warning' (all additive, no schema change)"
+    ],
+    "runtime_config": [
+      "none — no new env vars or feature flags"
+    ],
+    "observability_rollout": [
+      "Post-merge: run scripts/coordinator-lane-lint-gauge.cjs manually to confirm the immediate violation-count drop; then observe lane-lint-gauge-cron.yml's next two scheduled runs for green per FR-7(c)"
+    ]
+  },
+  "goal_summary": null,
+  "venture_id": null,
+  "smoke_test_cmd": null,
+  "activation_test_id": null
+}
