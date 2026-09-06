@@ -8,6 +8,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-3/FR-4): branch→owner resolution replaces the anchored
 // regex. See lib/git/branch-owner.js for why a widened regex is provably impossible.
 import { branchBelongsToSd, loadKeySet, isRefCharsetSafe, OWNER_REASON, BRANCH_TYPE_TOKENS } from '../../../../../lib/git/branch-owner.js';
@@ -1635,11 +1636,14 @@ export function createPhaseCoverageExitGate(supabase) {
           const sd = sdMap.get(assignedKey);
           if (!sd) {
             // SD key referenced but not found in linked SDs — check if it exists at all
-            const { data: anySD } = await supabase
-              .from('strategic_directives_v2')
-              .select('sd_key, status')
-              .eq('sd_key', assignedKey)
-              .single();
+            const anySD = await safeQuery(
+              supabase
+                .from('strategic_directives_v2')
+                .select('sd_key, status')
+                .eq('sd_key', assignedKey)
+                .single(),
+              { site: 'lead-final-approval/gates:phase-coverage:any_sd' }
+            );
 
             if (anySD && ['completed', 'released'].includes(anySD.status)) {
               covered.push({ phase, sd_key: assignedKey, status: anySD.status });
@@ -1702,6 +1706,11 @@ export function createPhaseCoverageExitGate(supabase) {
         return { passed: true, score: 100, max_score: 100, issues: [], warnings, details: { deferred_phases: deferred.length } };
       } catch (err) {
         console.log(`   ⚠️  Error: ${err.message}`);
+        // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-2: a genuine query-discipline failure must
+        // not be swallowed into the same lenient advisory pass as an ordinary unexpected error.
+        if (err.code === 'QUERY_FAILED' || err.code === 'COUNT_UNMEASURABLE') {
+          return { passed: false, score: 0, max_score: 100, issues: [`Phase coverage could not run — query failed: ${err.message}`], warnings: [] };
+        }
         return { passed: true, score: 50, max_score: 100, issues: [], warnings: [`Phase coverage exit error: ${err.message}`] };
       }
     },
