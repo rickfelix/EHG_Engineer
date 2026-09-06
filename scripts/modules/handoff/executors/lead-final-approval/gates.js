@@ -1798,7 +1798,10 @@ export function createChairmanApplyVerificationGate(supabase) {
         // SD's promise of a migration must be verifiable); ungated SDs degrade to declared/
         // sdKeyOwnsFile-only detection on a lookup failure (majority of the fleet, unchanged risk).
         const reposWithPaths = computeReposForSD(sd);
-        const { files: prFiles, error: prError } = await findMergedPrFileList(sdKey, reposWithPaths);
+        // QF-20260906-048: `sb` (resolved above) must be threaded through — findMergedPrFileList
+        // calls loadKeySet(sb) internally, and without a real client it correctly reports
+        // could-not-determine rather than silently resolving an empty (fail-open) key set.
+        const { files: prFiles, error: prError } = await findMergedPrFileList(sdKey, reposWithPaths, sb);
         if (prError && gated) {
           return failClosed(`PR file-list lookup failed for chairman-gated SD: ${prError}`, sdKey);
         }

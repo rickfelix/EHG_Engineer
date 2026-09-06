@@ -319,6 +319,41 @@ describe('computePlanAdherence (TS-2)', () => {
     expect(result.starved).toBe(true);
     expect(result.in_flight_unlinked).toEqual(['SD-A-001']);
   });
+
+  // SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-D (FR-5): non_terminal split, additive to the
+  // pre-existing top-level all-corpus triple asserted implicitly above.
+  it('roadmap_link_exceptions.non_terminal.without_reason is 0 when the only reasonless row is completed', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    const supabase = makeFakeSupabase({
+      strategic_directives_v2: [
+        { sd_key: 'SD-DONE-1', status: 'completed', metadata: { roadmap_link_exception: { reason_supplied: false, operator_reason: 'no-reason-supplied' } } },
+      ],
+    });
+    const result = await computePlanAdherence(supabase);
+    expect(result.roadmap_link_exceptions.without_reason).toBe(1);
+    expect(result.roadmap_link_exceptions.non_terminal.without_reason).toBe(0);
+  });
+
+  it('roadmap_link_exceptions.non_terminal.without_reason is 1 when that same row is draft', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    const supabase = makeFakeSupabase({
+      strategic_directives_v2: [
+        { sd_key: 'SD-DRAFT-1', status: 'draft', metadata: { roadmap_link_exception: { reason_supplied: false, operator_reason: 'no-reason-supplied' } } },
+      ],
+    });
+    const result = await computePlanAdherence(supabase);
+    expect(result.roadmap_link_exceptions.without_reason).toBe(1);
+    expect(result.roadmap_link_exceptions.non_terminal.without_reason).toBe(1);
+  });
+
+  it('the fail-soft catch branch carries a non_terminal sub-object so a fault never reads as a clean zero', async () => {
+    vi.spyOn(waveLinkage, 'computeWaveLinkageCoverage').mockResolvedValueOnce({ coverage: null, linked: 0, total: 0, starved: false, unlinkedKeys: [] });
+    // A supabase whose .not() throws synchronously forces countRoadmapLinkExceptionsLive's catch branch.
+    const throwingSupabase = { from: () => ({ select: () => ({ not: () => { throw new Error('boom'); } }) }) };
+    const result = await computePlanAdherence(throwingSupabase);
+    expect(result.roadmap_link_exceptions.unmeasured).toBe(true);
+    expect(result.roadmap_link_exceptions.non_terminal).toEqual({ total: 0, with_reason: 0, without_reason: 0, unmeasured: true });
+  });
 });
 
 describe('computeFailLoudIntegrity (TS-3)', () => {

@@ -38,6 +38,9 @@ const RECONCILIATION_MIGRATION_PATHS = [
   // SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001: the new capped_pool_broadcast
   // kind, joining BACKPRESSURE_EXEMPT_KINDS and so registered for all four roles (same precedent).
   path.join(REPO_ROOT, 'database/migrations/20260906_role_drain_sets_add_capped_pool_broadcast.sql'),
+  // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001: the new worker_signal kind, registered for
+  // coordinator/solomon/michael/adam (not worker — worker-signal.cjs never targets that role).
+  path.join(REPO_ROOT, 'database/migrations/20260906_role_drain_sets_add_worker_signal.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -166,9 +169,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 110 (106 prior + 4 reconciliation: capped_pool_broadcast for all four roles, SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001)', () => {
+  it('total seed row count is exactly 113 (106 prior + 4 reconciliation: capped_pool_broadcast for all four roles, SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 + 3 reconciliation: worker_signal for coordinator/solomon/adam, SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 — that migration\'s michael row is outside this pattern\'s (solomon|adam|coordinator|worker) role set, so only 3 of its 4 new rows are matched here)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(110);
+    expect(matches.length).toBe(113);
   });
 });

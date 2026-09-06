@@ -2158,8 +2158,13 @@ async function notifySignalResolvedByDisposition(supabase) {
         continue;
       }
 
+      // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-4): sender_session is a named
+      // system principal (not null) so the lane-lint gauge stops counting this row as
+      // empty_sender_row. sender_type stays 'coordinator' deliberately — michael-identity.cjs,
+      // solomon-identity.cjs and coordinator-hourly-review.cjs all filter on
+      // .eq('sender_type','coordinator') for role-retarget rescue logic and must keep matching.
       await supabase.from('session_coordination').insert({
-        sender_session: null,
+        sender_session: 'stale-session-sweep',
         sender_type: 'coordinator',
         target_session: owner.session_id,
         message_type: 'INFO',
@@ -2262,8 +2267,10 @@ async function notifySignalResolvedByPromotion(supabase) {
       }
 
       // Send SIGNAL_RESOLVED to owner.
+      // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-4): see the disposition-path
+      // writer above for the sender_session/sender_type rationale.
       await supabase.from('session_coordination').insert({
-        sender_session: null,
+        sender_session: 'stale-session-sweep',
         sender_type: 'coordinator',
         target_session: owner.session_id,
         message_type: 'INFO',

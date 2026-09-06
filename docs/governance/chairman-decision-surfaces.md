@@ -32,7 +32,7 @@
 
 | # | Surface | Mechanism | Writers | Pending shape | Queue coverage |
 |---|---------|-----------|---------|---------------|----------------|
-| 1 | `chairman_decisions` | Table; atomic decide via `fn_chairman_decide` RPC (the name `decide_chairman_decision` does not exist on the live DB) | Venture stage-gate machinery (stage_gate/review/promotion_gate rows), `lib/chairman/record-pending-decision.mjs` proxy (session_question rows) | `status='pending'` (`decision='pending'`) | **Covered** — branch 4 (`chairman_approval`), **except session_question rows** — excluded from the queue since SD-EHG-CONSOLE-QUEUE-POLLUTION-001 (confirmed live: 100% of session_question rows are machine-internal PM-stall telemetry, not genuine chairman questions); reachable via `chairman_excluded_signals` |
+| 1 | `chairman_decisions` | Table; atomic decide via `fn_chairman_decide` RPC (the name `decide_chairman_decision` does not exist on the live DB) | Venture stage-gate machinery (stage_gate/review/promotion_gate rows), `lib/chairman/record-pending-decision.mjs` proxy (session_question rows, and — since SD-LEO-INFRA-DURABLE-CHAIRMAN-KEYSTROKE-001 — `lib/chairman/classifier-denial-guard.mjs`'s classifier-denied/migration-apply-wait rows) | `status='pending'` (`decision='pending'`) | **Covered** — branch 4 (`chairman_approval`), **except session_question rows** — excluded from the queue since SD-EHG-CONSOLE-QUEUE-POLLUTION-001 (confirmed live: 100% of session_question rows are machine-internal PM-stall telemetry, not genuine chairman questions); reachable via `chairman_excluded_signals` |
 | 2 | `venture_decisions` | Table; gate decisions per venture stage | Venture gate flow | `decision IS NULL` | **Covered** — branches 2/3 (`gate_decision`) |
 | 3 | `agent_messages` escalations | Table; agent→chairman escalation messages | Agent fleet (`message_type='escalation'`) | `status='pending'` | **Covered** — branch 1 (`escalation`) |
 | 4 | `feedback` (critical/high) | Table; durable flag/issue channel | `/signal`, `log-harness-bug.js`, sub-agents, captures, retros | `severity IN ('critical','high') AND resolved_at IS NULL AND status NOT IN ('resolved','wont_fix')` | **Covered (new)** — branch 5 (`flag_review`), **minus a machine-internal category denylist** (`harness_backlog`/`fleet_dormancy`/`process_enforcement`) since SD-EHG-CONSOLE-QUEUE-POLLUTION-001 — genuine categories still surface unchanged |
@@ -199,3 +199,31 @@ watcher's call site was rewired. CI predicates: `scripts/ci/chairman-awareness-l
 (negative — no advisory row may carry a reason other than `dead_owner`/`chairman_owned`) and
 `scripts/ci/owner-directive-positive-count.mjs` (positive counterpart, avoiding an all-negative
 suite that would pass merely because the new writer path was never exercised).
+
+## Classifier-denied commands and ungated migration-apply waits join surface #1 (SD-LEO-INFRA-DURABLE-CHAIRMAN-KEYSTROKE-001 / QF-20260906-881, 2026-09-06)
+
+Two events previously had no path onto any covered surface, living instead on hand-kept board notes:
+(a) an **ungated migration-apply wait** — `CHAIRMAN_APPLY_VERIFICATION`'s `ordinaryUnapplied` branch
+writes no `chairman_decisions` row (unlike its `ceremonyPending` sibling), and (b) a worker `/signal
+stuck` naming a host-level command the Claude Code auto-mode permission classifier denied
+(`apply-migration.js`, `leo-create-sd.js`, `schtasks`, `permissions.allow`).
+
+`lib/chairman/classifier-denial-guard.mjs`'s `runClassifierDenialGuard` (wired into
+`scripts/adam-quiet-tick.mjs` alongside the existing chairman-gated-decision-row-guard call) scans
+both sources and writes each as a `chairman_decisions` row, `decision_type='chairman_approval'` —
+reusing surface #1 rather than inventing a new table. `resolveAndVerifyClassifierDenial` (called
+from `scripts/chairman-decisions.mjs`'s `chairmanDecide` writer, the same trigger point as the
+existing site-review-attestation / acquisition-pipeline bridges) verifies a `migration_apply_wait`
+approval against a fresh `classifyMigrationApplyState()` read before closing anything — an approval
+that doesn't actually correspond to an applied migration never falsely resolves the flag.
+
+**Adversarial-review fix before merge**: the first version of `resolveAndVerifyClassifierDenial`
+resolved every open `completion_flag_finding` feedback row tagged with the approved decision's
+`sd_key` — since that category has no per-item correlation key beyond `source_sd`, approving one
+migration-apply-wait decision would have silently closed an SD's *unrelated* completion-flag
+findings too (e.g. an unrelated harness-friction note captured at the same SD's completion).
+Fixed to additionally require the finding's own text to name the specific file/command the
+decision verified, so only the genuinely-covered finding closes. Dedup (`alreadyCovered`) is keyed
+on `(sd_key, kind, file)`, not just `(sd_key, kind)`, so a second distinct unapplied migration on
+the same SD still surfaces instead of being permanently masked by an earlier row for a different
+file.

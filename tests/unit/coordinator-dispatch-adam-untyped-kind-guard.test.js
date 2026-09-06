@@ -101,6 +101,21 @@ describe('insertCoordinationRow: Adam-directed untyped-kind guard (QF-20260709-0
     expect(res.data.payload.kind).toBe('coordinator_notice');
   });
 
+  // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-3): pins a real behavior change flagged
+  // by EXEC-phase TESTING and SECURITY review — before this SD, worker-signal.cjs's --to adam
+  // path sent payload.kind=undefined (only signal_type was set), so an Adam-directed /signal
+  // was REFUSED here as an untyped kind. worker-signal.cjs now stamps payload.kind='worker_signal'
+  // AND 'worker_signal' is registered in DRAIN_SETS.adam, so the same send is now ADMITTED —
+  // not a new capability (worker-signal.cjs already had raw write access to session_coordination
+  // regardless of kind; this is a read-side classification fix), but a real, previously-unpinned
+  // change in what this send-time guard accepts.
+  it('allows an Adam-directed worker_signal row (previously refused as untyped before this SD)', async () => {
+    const sb = stubSupabase({ adamSessionId: ADAM_TARGET });
+    const row = { message_type: 'INFO', target_session: ADAM_TARGET, payload: { kind: 'worker_signal', signal_type: 'harness-bug', body: 'fyi' } };
+    const res = await insertCoordinationRow(sb, row, { logger: silentLog });
+    expect(res.data.payload.kind).toBe('worker_signal');
+  });
+
   it('fails open (allows the send) when no live Adam resolves', async () => {
     const sb = stubSupabase({ adamSessionId: null });
     const row = { message_type: 'INFO', target_session: ADAM_TARGET, payload: { kind: 'coordinator_notice', body: 'fyi' } };

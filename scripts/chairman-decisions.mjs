@@ -20,6 +20,7 @@ import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.mjs';
 import { resolveAndWriteChairmanSiteReviewAttestation } from '../lib/eva/bridge/chairman-site-review-attestation.js';
 import { resolveAndRunAcquisitionPipeline } from '../lib/eva/bridge/domain-acquisition-trigger.js';
+import { resolveAndVerifyClassifierDenial } from '../lib/chairman/classifier-denial-guard.mjs';
 
 const parsed = parseArgs(process.argv.slice(2));
 if (parsed.error) {
@@ -171,6 +172,18 @@ const writers = {
     } catch (pipelineErr) {
       result.domain_acquisition_pipeline_error = pipelineErr.message;
       console.error('[chairman-decisions] domain-acquisition pipeline FAILED (non-fatal, primary decision already recorded): ' + pipelineErr.message);
+    }
+
+    // QF-20260906-881: same trigger point as the two bridges above — on approval of a
+    // chairman_approval row minted by classifier-denial-guard.mjs, re-verify the concrete
+    // measured case (a named migration is now APPLIED) and, if confirmed, resolve the covering
+    // completion-flag feedback row. Never blocks/unwinds the primary write above.
+    try {
+      const denial = await resolveAndVerifyClassifierDenial(db, { decisionId: id, action });
+      if (denial.ran) result.classifier_denial_verification = denial;
+    } catch (denialErr) {
+      result.classifier_denial_verification_error = denialErr.message;
+      console.error('[chairman-decisions] classifier-denial verification FAILED (non-fatal, primary decision already recorded): ' + denialErr.message);
     }
 
     return result;

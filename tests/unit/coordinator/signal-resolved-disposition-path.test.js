@@ -160,6 +160,11 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4 TS-6: POSITIVE control — a lon
     // QF-20260830-144: payload.kind must be an ADVISORY_KIND so worker-ack-advisory.cjs can
     // retire this row — without it the row was unackable by either lane, forever.
     expect(c.inserts[0].payload.kind).toBe('signal_resolved');
+    // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-4): sender_session is a named
+    // system principal now (not null), so the lane-lint gauge stops counting this row as
+    // empty_sender_row; sender_type stays 'coordinator' — see the writer's own comment for why.
+    expect(c.inserts[0].sender_session).toBe('stale-session-sweep');
+    expect(c.inserts[0].sender_type).toBe('coordinator');
     expect(c.getRow('sig-1').payload.notification_sent).toBe(true);
     // MUTATION: require payload.routed_to_sd_key here too -> this fixture has none, so the
     // notification would never fire, and this is precisely the gap FR-4 exists to close.

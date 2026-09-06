@@ -27,6 +27,11 @@ describe('checkin step registry (lib/checkin/steps/index.cjs)', () => {
       // already held. Demoting it below directed-assignment silently un-fences coordinator dispatch.
       'canary-claim-fence',
       'directed-assignment',
+      // SD-LEO-INFRA-CHECKIN-DIRECTED-BEFORE-RESUME-001 (FR-1 hardening): if resume yielded a
+      // rediscovered claim to a directed row this tick and the claim attempt did NOT succeed,
+      // restore ctx.mySd and stop here -- before the narrower orchestrator_parent hold below,
+      // and before any self-claim tier could evict the still-held real claim.
+      'resume-yield-fallback',
       // QF-20260831-947 (fork b): a WORK_ASSIGNMENT just purged as orchestrator_parent-ineligible,
       // with the parent independently completable, stops here instead of falling through to
       // self-claim -- MECHANICAL suppression, no prose read required.

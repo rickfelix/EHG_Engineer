@@ -1625,8 +1625,12 @@ async function printPredictions(d) {
         message_type: 'STALE_WARNING',
         subject: 'Heartbeat aging on ' + s.sd_key.split('-').pop() + ' — approaching stale threshold',
         body: 'Your session on ' + s.sd_key + ' has not heartbeated in ' + s.heartbeat_age_human + '. If you are still working, send a heartbeat. If stuck, consider releasing the claim.',
-        payload: { session_id: s.session_id, heartbeat_age: s.heartbeat_age_seconds, stale_threshold: STALE_THRESHOLD },
-        sender_type: 'dashboard'
+        // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-6): payload.kind is purely
+        // additive (untyped_row fix); sender_session is a named system principal since
+        // sender_type='dashboard' is not in the gauge's LEGITIMATE_EMPTY_SENDER_TYPES.
+        payload: { kind: 'stale_heartbeat_warning', session_id: s.session_id, heartbeat_age: s.heartbeat_age_seconds, stale_threshold: STALE_THRESHOLD },
+        sender_type: 'dashboard',
+        sender_session: 'fleet-dashboard'
       }).then(() => {}).catch(() => {}); // Non-blocking
   }
 

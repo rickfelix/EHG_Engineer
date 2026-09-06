@@ -57,9 +57,15 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // CONSTRAINTS-001: 'capped_pool_broadcast' joined BACKPRESSURE_EXEMPT_KINDS for the same
     // reason (a fleet-wide over-cap notice must reach every live seat regardless of backlog
     // depth), spread into all four sets.
-    expect(DRAIN_SETS.adam.length).toBe(31);
-    expect(DRAIN_SETS.solomon.length).toBe(21);
-    expect(DRAIN_SETS.coordinator.length).toBe(29);
+    // +1 to adam/solomon/coordinator ONLY, worker UNCHANGED (32/22/30/27) as of
+    // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001, landing on main concurrently with the SD
+    // above: 'worker_signal' added as a standalone literal (not via a shared const spread) to
+    // solomon/michael/adam/coordinator so worker-signal.cjs's newly-typed payload.kind classifies
+    // as actionable at every role it can be sent to — worker-signal.cjs never targets the worker
+    // role, so DRAIN_SETS.worker stops at 27 (the capped_pool_broadcast addition only).
+    expect(DRAIN_SETS.adam.length).toBe(32);
+    expect(DRAIN_SETS.solomon.length).toBe(22);
+    expect(DRAIN_SETS.coordinator.length).toBe(30);
     expect(DRAIN_SETS.worker.length).toBe(27);
   });
 

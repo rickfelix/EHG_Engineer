@@ -1447,7 +1447,9 @@ async function main() {
             const child = spawn(
               process.execPath,
               [path.join(__dirname, '..', 'worker-signal.cjs'), ...args],
-              { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _SESSION_ID } }
+              // QF-20260906-508 (QF-335 Part 1): windowsHide -- a detached child without it opens a
+              // visible console on Windows, on EVERY tool call on EVERY seat (chairman saw the flicker).
+              { detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, CLAUDE_SESSION_ID: _SESSION_ID } }
             );
             child.unref();
           }
