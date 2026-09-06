@@ -356,6 +356,11 @@
     ]
   },
   "permissions": {
-    "allow": []
+    "allow": [
+      "Bash(node scripts/:*)",
+      "Bash(git commit:*)",
+      "Bash(git -C:*)",
+      "Bash(cd .worktrees/:*)"
+    ]
   }
 }
