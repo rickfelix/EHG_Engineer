@@ -1,8 +1,8 @@
-<!-- file_content_hash: 47d61b37accb4eb7 -->
+<!-- file_content_hash: e2bbad23b8351ead -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-09-03 8:25:44 PM
+**Generated**: 2026-09-06 5:12:08 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -635,23 +635,22 @@ When multiple Claude Code instances may run concurrently on different SDs:
 
 #### Before Starting EXEC Phase:
 ```bash
-# 1. Create isolated worktree (NOT shared C:/Users/rickf/Projects/_EHG/ehg)
-cd C:/Users/rickf/Projects/_EHG/ehg
-git worktree add C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID} -b feat/${SD_ID}-branch
+# 1. Create isolated worktree (NOT shared C:/Users/rickf/Projects/_EHG/ehg) -- absolute paths,
+#    never `cd`, so a single unscoped directory change never has to be classifier-approved.
+git -C C:/Users/rickf/Projects/_EHG/ehg worktree add C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID} -b feat/${SD_ID}-branch
 
-# 2. Work ONLY in worktree directory
-cd C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
+# 2. Work ONLY in the worktree directory -- reference it by absolute path, never cd into it
+WORKTREE=C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
 
-# 3. All git operations happen here
-git add . && git commit -m "feat(${SD_ID}): description"
-git push origin feat/${SD_ID}-branch
+# 3. All git operations use -C; scripts run by absolute path from the repo root
+git -C "$WORKTREE" add . && git -C "$WORKTREE" commit -m "feat(${SD_ID}): description"
+git -C "$WORKTREE" push origin feat/${SD_ID}-branch
 ```
 
 #### After PR Merged:
 ```bash
-# Cleanup worktree
-cd C:/Users/rickf/Projects/_EHG/ehg
-git worktree remove C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
+# Cleanup worktree (no cd needed -- git worktree remove takes the path directly)
+git -C C:/Users/rickf/Projects/_EHG/ehg worktree remove C:/Users/rickf/Projects/_EHG/ehg/.worktrees/${SD_ID}
 ```
 
 ### Forbidden Operations (Multi-Instance)
@@ -906,8 +905,7 @@ Before creating EXEC→PLAN handoff, EXEC MUST run:
 
 #### 1. Unit Tests (Business Logic Validation)
 ```bash
-cd C:/Users/rickf/Projects/_EHG/ehg
-npm run test:unit
+npm --prefix C:/Users/rickf/Projects/_EHG/ehg run test:unit
 ```
 - **What it validates**: Service layer, business logic, data transformations
 - **Failure means**: Core functionality is broken
@@ -916,8 +914,7 @@ npm run test:unit
 
 #### 2. E2E Tests (UI/Integration Validation)
 ```bash
-cd C:/Users/rickf/Projects/_EHG/ehg
-npm run test:e2e
+npm --prefix C:/Users/rickf/Projects/_EHG/ehg run test:e2e
 ```
 - **What it validates**: User flows, component rendering, integration
 - **Failure means**: User-facing features don't work
@@ -2053,8 +2050,8 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
 | `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
+| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
 
 ### leo_protocols
 
@@ -2080,8 +2077,8 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 | Column | Valid Values | Hint |
 |--------|--------------|------|
 | `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
-| `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 | `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
+| `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
 
 ### sd_scope_deliverables
 
@@ -2106,9 +2103,12 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | draft, completed, in_progress, ready | Use one of: draft, completed, in_progress, ready. NOT "approved" - that is not a valid value. |
 | `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
+| `implementation_context` | ::text) AND (implementation_context <>  | Use one of: ::text) AND (implementation_context <>  |
 | `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
+| `priority` | critical, high, medium, low, minimal | Use one of: critical, high, medium, low, minimal |
+| `status` | draft, ready, in_progress, testing, completed, blocked | Use one of: draft, ready, in_progress, testing, completed, blocked |
+| `story_key` | ^[A-Z0-9-]+:US-[0-9]{3,}$ | Use one of: ^[A-Z0-9-]+:US-[0-9]{3,}$ |
 
 
 
@@ -2187,6 +2187,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-09-03*
+*Generated from database: 2026-09-06*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

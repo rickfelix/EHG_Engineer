@@ -141,6 +141,36 @@ describe('FR-5: capability resolved from absent or unrecognized evidence is obse
     setUnresolvedCapabilitySink(() => { throw new Error('sink exploded'); });
     expect(() => seatRankForModelEffort('gemini-3-5-pro', 'high')).not.toThrow();
   });
+
+  // QF-20260903-623: the live specimen -- a RECOGNIZED model with no effort stamp -- was
+  // misreported as reason='unrecognized_model' / resolved_to=WEAKEST_MODEL (both false).
+  // The measured cause is a missing effort stamp; the measured outcome is whatever
+  // deriveWorkerTierRank actually returns, which reads the PERSISTED tier_rank and can be
+  // well above the weakest rung.
+  it('a recognized model with no effort stamp reports no_effort_stamp and the ACTUAL derived rank, not an assumed downgrade', () => {
+    stampRankForWorker({ session_id: '724c8947', metadata: { model: 'claude-sonnet-5', tier_rank: 2 } }, []);
+    const e = events.find((x) => x.context === '724c8947');
+    expect(e).toBeDefined();
+    expect(e.reason).toBe('no_effort_stamp');
+    expect(e.reason).not.toBe('unrecognized_model');
+    expect(e.resolved_to).toBe(2);
+    expect(e.resolved_to).not.toBe(WEAKEST_MODEL);
+  });
+
+  it('an unrecognized model with no effort stamp still reports unrecognized_model (the model IS the problem)', () => {
+    stampRankForWorker({ session_id: 'w5', metadata: { model: 'gemini-3-5-pro' } }, []);
+    const e = events.find((x) => x.context === 'w5');
+    expect(e).toBeDefined();
+    expect(e.reason).toBe('unrecognized_model');
+  });
+
+  it('resolveSeatModel (the other call site) is unchanged: still reports unrecognized_model / WEAKEST_MODEL with no opts', () => {
+    resolveSeatModel('gemini-3-5-pro', 'w6');
+    const e = events.find((x) => x.context === 'w6');
+    expect(e).toBeDefined();
+    expect(e.reason).toBe('unrecognized_model');
+    expect(e.resolved_to).toBe(WEAKEST_MODEL);
+  });
 });
 
 // ── FR-6: ADMISSION CONTROL, added at EXEC on live coordinator evidence ─────────

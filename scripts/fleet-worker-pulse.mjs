@@ -15,6 +15,12 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import { liveFleetWorkers, isFleetWorker, FREEZE_TERM_COLUMNS } from '../lib/fleet/genuine-worker.mjs';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+
+// SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-6: self-stamp periodic_process_registry's
+// host_cron:fleet-worker-pulse row so the alarm's OWN delivered cadence is honestly gauged,
+// rather than only inferred from GHA's own (measured 200-280 min median) API-reported cadence.
+export const HOST_CRON_PROCESS_KEY = 'host_cron:fleet-worker-pulse';
 
 const PROVISIONED_WINDOW = parseInt(process.env.COORD_PROVISIONED_WINDOW_MIN || '480', 10) * 60000;
 const RETENTION_HOURS = parseInt(process.env.FLEET_PULSE_RETENTION_HOURS || '6', 10);
@@ -58,7 +64,7 @@ export async function fetchPulseSessions(db) {
   return data;
 }
 
-async function main() {
+export async function main(deps = {}) {
   // createClient lives INSIDE main() and main() is import-guarded below, so importing this module
   // performs no I/O — previously an import would have read claude_sessions, INSERTed a pulse row and
   // run the prune DELETE, which is why nothing could test it. Guard pattern copied from
@@ -67,6 +73,11 @@ async function main() {
   const me = process.env.CLAUDE_SESSION_ID;
   const t = Date.now();
   const DRY = !!process.env.FLEET_PULSE_DRYRUN || process.argv.includes('--dry-run');
+
+  // FR-6: liveness first, and non-fatal — a genuine invocation is recorded even if the pulse
+  // logic below throws. Mirrors scripts/cron/adam-decision-scheduler-tick.mjs's own convention.
+  try { await (deps.stampLastFired || stampLastFired)(db, HOST_CRON_PROCESS_KEY); }
+  catch (err) { console.warn(`[fleet-pulse] liveness stamp failed (non-fatal): ${err.message}`); }
 
   const sessRaw = await fetchPulseSessions(db);
 

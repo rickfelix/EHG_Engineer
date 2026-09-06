@@ -145,6 +145,33 @@ function parseSummary(output) {
 }
 
 /**
+ * Extract text content from a tool_response of unknown shape (SD-LEO-INFRA-RESTORE-AGENT-TOOL-001).
+ * No live-captured Agent-tool tool_response payload exists to ground-truth its exact shape (only
+ * Bash/Read shapes are verified in this repo), so this handles the 3 plausible shapes defensively
+ * and falls through to the caller's existing 'unknown'/'' behavior on anything else -- it never
+ * throws.
+ * @param {*} toolResponse
+ * @returns {*} best-effort content to feed into parseVerdict()/parseSummary(); may be the input
+ *   unchanged if no known shape matched (callers already handle arbitrary shapes)
+ */
+function extractResponseContent(toolResponse) {
+  if (typeof toolResponse === 'string') return toolResponse;
+  if (toolResponse && typeof toolResponse === 'object') {
+    // Anthropic message-content shape: { content: [{ type: 'text', text: '...' }, ...] }
+    if (Array.isArray(toolResponse.content)) {
+      const text = toolResponse.content
+        .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
+        .map((b) => b.text)
+        .join('\n');
+      if (text) return text;
+    }
+  }
+  // Flat object (already carries verdict/summary fields) or anything else -- pass through
+  // unchanged; parseVerdict()/parseSummary() already handle arbitrary objects and strings.
+  return toolResponse;
+}
+
+/**
  * Prepare raw_output for storage (FR-3)
  * @param {*} output - Task tool output
  * @returns {Object} JSONB-compatible object
@@ -355,17 +382,64 @@ async function insertRecord(record) {
 }
 
 /**
+ * Build the sub_agent_execution_results record from already-resolved values.
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: pulled out of processHookInput as a pure function so the
+ * metadata.session_id stamp can be asserted directly against process.env.CLAUDE_SESSION_ID
+ * without exercising insertRecord's real supabase I/O.
+ */
+function buildSubAgentRecord({ sdId, toolName, subagentType, verdict, summary, rawOutput, invocationId, toolCallId, attributionSource }) {
+  return {
+    sd_id: sdId,
+    sub_agent_code: subagentType,
+    sub_agent_name: subagentType,
+    verdict: verdict,
+    confidence: verdict === 'pass' ? 100 : verdict === 'fail' ? 0 : 50,
+    summary: summary,
+    raw_output: rawOutput,
+    invocation_id: invocationId,
+    source: 'task_hook',
+    metadata: {
+      tool_call_id: toolCallId,
+      recorded_by: 'task-subagent-recorder.cjs',
+      recorded_at: new Date().toISOString(),
+      // FR-2: how the SD was resolved, so gates/auditors can distrust 'shared-file-fallback' rows.
+      attribution_source: attributionSource,
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: unconditional session_id stamp, mirroring the
+      // canonical results-storage.js writer -- explicit null (never omitted) when unset, so this
+      // second writer into the same table cannot leave the provenance stamp path-partial.
+      session_id: process.env.CLAUDE_SESSION_ID || null,
+      // SD-LEO-INFRA-RESTORE-AGENT-TOOL-001 (FR-3): ratification 6c263823's provenance triple --
+      // producer (tool_name), run identifier (invocation_id, already a top-level field), content
+      // hash (SHA-256 of the serialized raw_output, same hashing discipline generateInvocationId
+      // already applies to tool_input).
+      tool_name: toolName,
+      content_hash: crypto
+        .createHash('sha256')
+        .update(JSON.stringify(rawOutput ?? null))
+        .digest('hex')
+    }
+  };
+}
+
+/**
  * Process hook input and record Task sub-agent invocation
  * @param {Object} hookInput - PostToolUse hook input
  */
 async function processHookInput(hookInput) {
   const toolName = hookInput.tool_name || '';
   const toolInput = hookInput.tool_input || {};
-  const toolResult = hookInput.tool_result || hookInput.result || null;
-  const toolCallId = hookInput.tool_call_id || hookInput.call_id || null;
+  // SD-LEO-INFRA-RESTORE-AGENT-TOOL-001 (FR-2): tool_response is the VERIFIED field (RCA
+  // 2026-05-04, scripts/hooks/__tests__/session-id-propagation-canary.test.js:13-16) -- neither
+  // tool_result nor result exists in the real PostToolUse contract; kept only as a defensive
+  // fallback for harness variance this repo has not directly observed. Likewise tool_use_id is
+  // the verified call-id field, not tool_call_id/call_id.
+  const originalToolResponse = hookInput.tool_response ?? hookInput.tool_result ?? hookInput.result ?? null;
+  const toolResult = extractResponseContent(originalToolResponse);
+  const toolCallId = hookInput.tool_use_id ?? hookInput.tool_call_id ?? hookInput.call_id ?? null;
 
-  // FR-1: Only process Task tool invocations
-  if (toolName !== 'Task') {
+  // FR-1: Only process Task/Agent sub-agent-spawning tool invocations. 'Agent' is the current
+  // harness name; 'Task' is kept for older harness builds (SD-LEO-INFRA-RESTORE-AGENT-TOOL-001).
+  if (toolName !== 'Task' && toolName !== 'Agent') {
     return;
   }
 
@@ -398,31 +472,25 @@ async function processHookInput(hookInput) {
     });
   }
 
-  // Prepare raw_output (FR-3)
-  const rawOutput = prepareRawOutput(toolResult);
+  // Prepare raw_output (FR-3) -- the ORIGINAL tool_response, not the text extracted from it, so
+  // auditors can see the true payload shape (SD-LEO-INFRA-RESTORE-AGENT-TOOL-001).
+  const rawOutput = prepareRawOutput(originalToolResponse);
 
   // Get active SD if available — session-scoped resolution (SD-LEO-INFRA-SUB-AGENT-EVIDENCE-001).
   const { sdId, attributionSource } = await getActiveSD();
 
   // Build record
-  const record = {
-    sd_id: sdId,
-    sub_agent_code: normalizedSubagentType,
-    sub_agent_name: normalizedSubagentType,
-    verdict: verdict,
-    confidence: verdict === 'pass' ? 100 : verdict === 'fail' ? 0 : 50,
-    summary: summary,
-    raw_output: rawOutput,
-    invocation_id: invocationId,
-    source: 'task_hook',
-    metadata: {
-      tool_call_id: toolCallId,
-      recorded_by: 'task-subagent-recorder.cjs',
-      recorded_at: new Date().toISOString(),
-      // FR-2: how the SD was resolved, so gates/auditors can distrust 'shared-file-fallback' rows.
-      attribution_source: attributionSource
-    }
-  };
+  const record = buildSubAgentRecord({
+    sdId,
+    toolName,
+    subagentType: normalizedSubagentType,
+    verdict,
+    summary,
+    rawOutput,
+    invocationId,
+    toolCallId,
+    attributionSource
+  });
 
   try {
     const result = await insertRecord(record);
@@ -510,4 +578,18 @@ if (require.main === module) {
 }
 
 // SD-LEO-INFRA-SUB-AGENT-EVIDENCE-001: export the resolver for the concurrent-session regression test.
-module.exports = { getActiveSD, readSdIdFromFile };
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: export buildSubAgentRecord (pure) so the metadata.session_id
+// stamp can be asserted directly without exercising insertRecord's real supabase I/O.
+// SD-LEO-INFRA-RESTORE-AGENT-TOOL-001: export the other pure functions the fix touches (guard
+// behavior lives in processHookInput but is exercised via these building blocks) so the new
+// verdict/summary/provenance tests need no DB mocking.
+module.exports = {
+  getActiveSD,
+  readSdIdFromFile,
+  buildSubAgentRecord,
+  extractResponseContent,
+  parseVerdict,
+  parseSummary,
+  generateInvocationId,
+  processHookInput
+};

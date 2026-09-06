@@ -21,7 +21,9 @@ import os from 'node:os';
 import { createRequire } from 'node:module';
 import { createClient } from '@supabase/supabase-js';
 
-const { assertDaemonCensus } = createRequire(import.meta.url)('../lib/fleet/daemon-census.cjs');
+const require = createRequire(import.meta.url);
+const { assertDaemonCensus } = require('../lib/fleet/daemon-census.cjs');
+const { terminalSessionUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 
 const cleanup = process.argv.includes('--cleanup');
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -63,7 +65,7 @@ if (!cleanup) {
 }
 
 const ids = result.leaked.map((l) => l.session_id);
-const { error } = await supabase.from('claude_sessions').update({ status: 'released' }).in('session_id', ids);
+const { error } = await supabase.from('claude_sessions').update(terminalSessionUpdate('released')).in('session_id', ids);
 if (error) { console.log('cleanup FAILED: ' + error.message); process.exit(1); }
 console.log(`\nreleased ${ids.length} leaked session(s). Re-run without --cleanup to confirm.`);
 process.exit(0);

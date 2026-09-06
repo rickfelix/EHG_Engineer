@@ -10,9 +10,10 @@
 // a guard with nothing to block. So the hook is asserted TWO-SIDED: it must still ALLOW, and it must
 // still BLOCK. An allow-only check passes even on a completely dead guard.
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -107,5 +108,84 @@ describe('FR-9 seam 3: pre-tool-enforce is importable AND still enforces', () =>
     // The fail-open drain must survive inside the guard — losing it reintroduces the libuv crash
     // that silently aborted PreToolUse, i.e. enforcement skipped without any signal.
     expect(src).toMatch(/await drainUndiciPool\(\); process\.exit\(0\);/);
+  });
+});
+
+// SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-4: live-subprocess specimens (a) and (d).
+// Specimen (b), the true cross-claim BLOCK, is proven at the pure-function composition level in
+// tests/unit/worktree-claim-decision-qf087.test.js instead of here -- it needs a real, non-null
+// claimedSdKey, and fabricating one means mutating the live claims DB from a unit test (unsafe)
+// or depending on fleet state (non-deterministic). Specimens (a) and (d) need no DB claim: an
+// unclaimed session's claimedSdKey resolves to null, which fails open regardless of the derived
+// key -- so both specimens use a random unclaimed session id and assert on the DEBUG stderr
+// introspection line (LEO_CLAIM_GUARD_DEBUG=1) for {derivedKey, source}, since the allow path
+// writes no audit row to inspect (auditPermissionDecision fires on the block path only).
+// Specimen (c), the QF-20260804-087 regression, is tests/unit/worktree-claim-decision-qf087.test.js
+// unmodified (this SD makes zero change to the qfHeld tri-state).
+describe('SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-4: branch-first derivation specimens', () => {
+  const UNCLAIMED_SESSION_ID = 'test-unclaimed-session-000000000000';
+
+  /** Build a throwaway `.worktrees/<pathKey>/` git-init fixture with `branch` checked out. */
+  function makeWorktreeFixture(pathKey, branch) {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'claim-guard-fr4-'));
+    const treeRoot = path.join(tmpRoot, '.worktrees', pathKey);
+    fs.mkdirSync(treeRoot, { recursive: true });
+    const gitOpts = { cwd: treeRoot, stdio: 'ignore' };
+    execFileSync('git', ['init', '-q'], gitOpts);
+    execFileSync('git', ['config', 'user.email', 'fr4@test.local'], gitOpts);
+    execFileSync('git', ['config', 'user.name', 'FR-4 fixture'], gitOpts);
+    const targetFile = path.join(treeRoot, 'x.js');
+    fs.writeFileSync(targetFile, '// fixture\n');
+    execFileSync('git', ['add', '.'], gitOpts);
+    execFileSync('git', ['commit', '-q', '-m', 'init'], gitOpts);
+    execFileSync('git', ['checkout', '-q', '-b', branch], gitOpts);
+    return { tmpRoot, treeRoot, targetFile };
+  }
+
+  // spawnSync (not execFileSync) is required here: execFileSync only exposes stderr via
+  // error.stderr when the process exits NON-zero (it discards stderr entirely on success),
+  // and specimens (a)/(d) both need to inspect stderr on the ALLOW (exit 0) path.
+  // process.execPath (an absolute path), not the bare string "node", is required so specimen
+  // (d)'s PATH-stripped env can still locate the interpreter to launch the hook at all --
+  // only `git` (resolved by bare name inside the hook) is meant to become unresolvable.
+  function runHookWithEnv(payload, envOverrides) {
+    const res = spawnSync(process.execPath, [HOOK], {
+      input: JSON.stringify(payload),
+      encoding: 'utf8',
+      timeout: 60000,
+      env: { ...process.env, ...envOverrides },
+    });
+    return { status: res.status, stdout: res.stdout || '', stderr: res.stderr || '' };
+  }
+
+  it('(a) reused-tree ALLOW: branch names the full child key, not the stale directory name', () => {
+    const { tmpRoot, targetFile } = makeWorktreeFixture(
+      'QF-20260903-188',
+      'feat/SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B'
+    );
+    try {
+      const result = runHookWithEnv(
+        { session_id: UNCLAIMED_SESSION_ID, tool_name: 'Edit', tool_input: { file_path: targetFile } },
+        { LEO_CLAIM_GUARD_DEBUG: '1' }
+      );
+      expect(result.status).toBe(0);
+      expect(result.stderr).toMatch(/derivedKey=SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B source=branch/);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('(d) git unavailable falls back to the path source, matching pre-FR-1 behavior', () => {
+    const { tmpRoot, targetFile } = makeWorktreeFixture('SD-X-001', 'feat/SD-X-001');
+    try {
+      const result = runHookWithEnv(
+        { session_id: UNCLAIMED_SESSION_ID, tool_name: 'Edit', tool_input: { file_path: targetFile } },
+        { LEO_CLAIM_GUARD_DEBUG: '1', PATH: '', Path: '' } // strip PATH so `git` cannot be resolved
+      );
+      expect(result.status).toBe(0);
+      expect(result.stderr).toMatch(/derivedKey=SD-X-001 source=path/);
+    } finally {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 });

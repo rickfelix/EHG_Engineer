@@ -12,13 +12,15 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import {
   parseArgs, routeDecision, sortPending, effectivePriority, formatAge, renderPendingLine, USAGE,
-  partitionQueue,
+  partitionQueue, deferralActorLabel,
 } from '../lib/chairman/decision-queue.mjs';
 import { indexDispositions, ageClockFor, DEFERRAL_CATEGORY, DISPOSITION_SELECT } from '../lib/chairman/decision-disposition.mjs';
+import { parseDuration as parseSnoozeDuration } from '../lib/quality/snooze-manager.js';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.mjs';
 import { resolveAndWriteChairmanSiteReviewAttestation } from '../lib/eva/bridge/chairman-site-review-attestation.js';
 import { resolveAndRunAcquisitionPipeline } from '../lib/eva/bridge/domain-acquisition-trigger.js';
+import { resolveAndVerifyClassifierDenial } from '../lib/chairman/classifier-denial-guard.mjs';
 
 const parsed = parseArgs(process.argv.slice(2));
 if (parsed.error) {
@@ -172,6 +174,18 @@ const writers = {
       console.error('[chairman-decisions] domain-acquisition pipeline FAILED (non-fatal, primary decision already recorded): ' + pipelineErr.message);
     }
 
+    // QF-20260906-881: same trigger point as the two bridges above — on approval of a
+    // chairman_approval row minted by classifier-denial-guard.mjs, re-verify the concrete
+    // measured case (a named migration is now APPLIED) and, if confirmed, resolve the covering
+    // completion-flag feedback row. Never blocks/unwinds the primary write above.
+    try {
+      const denial = await resolveAndVerifyClassifierDenial(db, { decisionId: id, action });
+      if (denial.ran) result.classifier_denial_verification = denial;
+    } catch (denialErr) {
+      result.classifier_denial_verification_error = denialErr.message;
+      console.error('[chairman-decisions] classifier-denial verification FAILED (non-fatal, primary decision already recorded): ' + denialErr.message);
+    }
+
     return result;
   },
   // feedback rows — resolve with a resolution note.
@@ -210,17 +224,29 @@ const writers = {
     if (!data?.length) throw new Error('okr generation ' + id + ' not found or not pending');
     return { table: 'okr_generation_log', id, status: 'rejected' };
   },
-  // deferral — durable audit row; the item stays pending (visibility act, not a decision).
+  // deferral — durable audit row; the item stays pending (visibility act, not a decision — see
+  // lib/chairman/decision-disposition.mjs's header for why removing it from pending/blocking on
+  // a bare defer would be the catastrophic direction, not the fix). QF-20260903-766 closes two
+  // narrower, real gaps instead: (1) the title previously hardcoded "Chairman" regardless of the
+  // actual DECIDED_BY actor; (2) snoozed_until was never written, so isHeld() — already built to
+  // read it — never had anything to read. An explicit --review-in duration now populates it;
+  // omitting the flag preserves the existing open-ended "not now" behavior exactly.
   recordDeferral: async (d) => {
+    let snoozedUntil = null;
+    if (d.reviewIn) {
+      snoozedUntil = new Date(Date.now() + parseSnoozeDuration(d.reviewIn)).toISOString();
+    }
+    const actor = deferralActorLabel(DECIDED_BY);
     const { data, error } = await db.from('feedback').insert({
       type: CHAIRMAN_FEEDBACK_TYPE, source_application: 'EHG_Engineer', source_type: 'auto_capture',
       category: 'chairman_decision_deferred', status: 'new', severity: 'low',
-      title: `Chairman deferred ${d.decisionType}:${d.id}`,
+      title: `${actor} deferred ${d.decisionType}:${d.id}`,
       description: d.rationale || '(no rationale provided)',
+      snoozed_until: snoozedUntil,
       metadata: { decision_type: d.decisionType, target_id: d.id, decided_by: DECIDED_BY, deferred_at: new Date().toISOString() },
     }).select('id');
     if (error) throw new Error('deferral feedback insert: ' + error.message);
-    return { table: 'feedback', feedback_id: data?.[0]?.id, note: 'item remains pending' };
+    return { table: 'feedback', feedback_id: data?.[0]?.id, snoozed_until: snoozedUntil, note: 'item remains pending' };
   },
 };
 

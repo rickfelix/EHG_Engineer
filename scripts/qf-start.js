@@ -20,9 +20,17 @@ import { spawnSync } from 'node:child_process';
 import dotenv from 'dotenv';
 import { createRequire } from 'node:module';
 import { repoUnfitReason } from '../lib/fleet/qf-repo-fitness.js';
+// SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-5: quota-check-before-claim + the
+// worktree provisioning that used to happen only at create-quick-fix.js mint time.
+import { enforceWorktreeQuota } from '../lib/worktree-quota.js';
+import { getRepoRoot, getWorktreesDir, createWorkTypeWorktree } from '../lib/worktree-manager.js';
 
 // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: canonical chairman-gated-hold predicate (CJS).
 const { isChairmanGatedQF } = createRequire(import.meta.url)('../lib/fleet/qf-gated-hold.cjs');
+// SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E (Child E): stamp provenance after a successful claim
+// below. qfId is QF-shaped, so claim-stamp.cjs's stampClaim auto-routes to the QF-side merge
+// (fail-soft on the not-yet-applied quick_fixes.metadata column).
+const { stampClaim } = createRequire(import.meta.url)('../lib/fleet/claim-stamp.cjs');
 
 dotenv.config();
 
@@ -96,6 +104,30 @@ async function main() {
     console.warn(`[qf-start] liveness fence skipped (failing open): ${e && e.message}`);
   }
 
+  // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-5: quota check STRICTLY BEFORE
+  // claim_sd. Provisioning previously happened only at create-quick-fix.js MINT time,
+  // which claimed the QF row first and then attempted the worktree — a full pool threw
+  // WORKTREE_QUOTA_EXCEEDED AFTER the claim, and that path exited without releasing it,
+  // leaking a claimed-but-unworkable QF row. Checking here, before this session claims
+  // anything, means a full pool refuses cleanly with the row still unclaimed for the
+  // next opportunity — never a leaked claim.
+  const repoRoot = getRepoRoot();
+  const worktreesDir = getWorktreesDir(repoRoot);
+  try {
+    enforceWorktreeQuota(repoRoot, worktreesDir);
+  } catch (e) {
+    if (e?.errorCode === 'WORKTREE_QUOTA_EXCEEDED' || e?.errorCode === 'WORKTREE_DISK_PRESSURE') {
+      console.error(`✗ Quick-fix ${qfId} NOT claimed: ${e.message}`);
+      console.error('  Reap stale worktrees first, then retry:');
+      console.error('    node scripts/worktree-reaper.mjs --execute');
+      console.error('    node scripts/worktree-reaper.mjs --execute --stage2 --yes');
+      await safeExit(3);
+    }
+    // Any OTHER error (e.g. a transient git failure) must not block a claim the quota
+    // check cannot actually speak to — matches enforceWorktreeQuota's own callers, which
+    // swallow non-quota/non-disk errors rather than treat them as a refusal.
+  }
+
   const { data, error } = await supabase.rpc('claim_sd', {
     p_sd_id: qfId,
     p_session_id: sessionId,
@@ -116,10 +148,30 @@ async function main() {
     await safeExit(3);
   }
 
+  try {
+    await stampClaim(supabase, qfId, sessionId, 'env');
+  } catch { /* fail-soft: a provenance-stamp hiccup must never break the claim itself */ }
+
   console.log(`✓ Quick-fix ${qfId} claimed (session ${sessionId})`);
   console.log(`  Branch convention: qf/${qfId}`);
   console.log(`  Complete with: node scripts/complete-quick-fix.js ${qfId} --pr-url <url>`);
   console.log('');
+
+  // FR-5: provision the worktree AFTER the claim succeeds (quota was already verified
+  // above, before the claim). Best-effort: a provisioning failure here must not undo an
+  // already-successful claim — the same fallback callers of createWorkTypeWorktree rely
+  // on (branch-only mode) applies here too.
+  try {
+    const result = createWorkTypeWorktree({ workType: 'QF', workKey: qfId, branch: `qf/${qfId}`, repoRoot });
+    if (result.mode === 'worktree') {
+      console.log(`  ${result.created ? 'Created' : 'Reusing existing'} worktree: ${result.path}`);
+      await supabase.from('quick_fixes').update({ branch_name: result.branch }).eq('id', qfId);
+    } else {
+      console.log(`  ⚠️  Worktree creation fell back (${result.reason}) — working from ${repoRoot}`);
+    }
+  } catch (e) {
+    console.log(`  ⚠️  Worktree provisioning failed (${e?.message || e}) — claim stands; retry provisioning manually if needed.`);
+  }
 
   // Delegate the details display to the existing canonical reader.
   const out = spawnSync(process.execPath, ['scripts/read-quick-fix.js', qfId], {

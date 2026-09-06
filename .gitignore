@@ -338,6 +338,11 @@ src/client/dist/
 !.claude/agents/_model-tracking-section.md
 .claude/.agent-gen-hash
 
+# Michael generated review copies (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-B, spec §2 "Prose for
+# review only"): scripts/michael-rules-render.mjs writes RULES.md/CLOSURES.md for the chairman;
+# the rows are the source of truth and the seat never reads these files.
+docs/michael/generated/
+
 # Account handoff exchange (local session state between account switches)
 .claude/handoff/
 
@@ -371,9 +376,14 @@ src/client/dist/
 .claude/tmp/
 .claude/pids/
 .claude/active-coordinator.json
+.claude/active-michael.json
 .claude/fleet-dashboard-state.json
 .claude/worktree-reaper-state.json
 .claude/retry-state-*.json.tmp-*
+
+# SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-2: per-worktree coordinator reuse marker.
+# Never committed -- it names a transient reuse handoff, not tracked repo state.
+.worktree-reuse.json
 
 # Cross-session scratch droppings — QF-20260603-141 (only patterns with ZERO tracked-file conflicts)
 # .claude/last-outcome-*.json: per-session Stop-hook outcome snapshots, never committed (0 tracked)
@@ -568,6 +578,7 @@ scratchpad/
 .artifacts/testing-agent-llm-canary/
 .artifacts/testing-c1/
 .artifacts/testing-scratch/
+.artifacts/testing-stage23/
 .artifacts/testing-tmp/
 .artifacts/tmp-alpha2/
 .artifacts/val-drive-forcing/
@@ -581,3 +592,9 @@ scratchpad/
 # fixture is written+removed in tests/integration/migration-apply-state-ledger-wiring.test.js;
 # this makes a stray leftover (hard process kill mid-test) invisible to `git add -A` too.
 database/chairman-gated/__test-*
+
+# Pre-encode snapshots of leo_protocol_sections content. The durable record is the DB row
+# plus the ratification rows; the before-state is recoverable from the PR diff. Third instance
+# of the untracked-by-convention pattern QF-20260902-429 covers for seat records and artifacts.
+scripts/one-off/encode-backup-*/
+scripts/one-off/adam-provenance-split/

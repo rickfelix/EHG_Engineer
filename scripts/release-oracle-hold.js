@@ -15,7 +15,7 @@ import dotenv from 'dotenv';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import {
   releaseSdOracleHold, releaseQfOracleHold, isBoundedWaitElapsed, BOUNDED_WAIT_MS,
-  extractConsultRowIdFromQfCondition, printRemainingIneligibility,
+  extractConsultRowIdFromQfCondition, printRemainingIneligibility, lookupConsultRowRecord,
 } from '../lib/fleet/hold-writer.js';
 
 dotenv.config();
@@ -33,15 +33,13 @@ export function parseReleaseOracleArgs(argv) {
   return out;
 }
 
+// SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-1): thin wrapper over the shared archive-aware
+// lookup — a consult row deleted by cleanup_expired_coordination (1h after creation) previously
+// read consult_row_not_found forever, requiring --force on every release past that hour even
+// though retention_archive still carries the row's created_at.
 async function lookupConsultRowCreatedAt(supabase, consultRowId) {
-  if (!consultRowId) return null;
-  const { data, error } = await supabase
-    .from('session_coordination')
-    .select('created_at')
-    .eq('id', consultRowId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data.created_at;
+  const record = await lookupConsultRowRecord(supabase, consultRowId);
+  return record?.created_at ?? null;
 }
 
 /**
@@ -99,7 +97,10 @@ export async function releaseOracleHold({ sdKey, qfId, consultRowId, releasedBy 
     // of the supabase-js client used to look up the consult row above.
     return releaseSdOracleHold(sdKey, { consultRowId, consultRowCreatedAt, releasedBy });
   }
-  return releaseQfOracleHold(supabaseClient, qfId);
+  // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-4): thread the same provenance the SD branch
+  // already receives -- the QF branch previously dropped it, leaving the degraded-release audit
+  // trail dead by construction on QF holds (quick_fixes is what batch-mint-sweep actually holds).
+  return releaseQfOracleHold(supabaseClient, qfId, { consultRowId, consultRowCreatedAt, releasedBy });
 }
 
 async function main() {

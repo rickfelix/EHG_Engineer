@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
+const { terminalSessionUpdate, sessionStatusUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 const { PLAN_CONTENT_MARKER } = require('../lib/sd-enrichment-markers.cjs');
 // SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 (FR-3): the readability invariant, shared with the
 // dispatch choke point this file's WORK_ASSIGNMENT insert deliberately bypasses.
@@ -32,6 +33,22 @@ const { describeUnreadableAssignment } = require('../lib/fleet/assignment-target
 const { parseSdDependencies } = require('../lib/utils/parse-sd-dependencies.cjs'); // QF-20260525-542
 const { buildRetentionAckPayload } = require('../lib/retention/retention-ack-marker.cjs'); // FR-7
 const { PROMOTION_ACK_KEY, isPromotionAcked } = require('../lib/coordinator/promotion-ack.cjs'); // SIGNAL-ROUTER-AUTO-001 FR-8
+const { hasCorrelatedReply } = require('../lib/coordinator/reply-correlation.cjs'); // QF-20260905-761
+/**
+ * QF-20260905-761 (measured on row c4312703): given the age-eligible STUCK signals (live
+ * sender, severity below high, older than the drain cutoff) and a pool of candidate reply
+ * rows, splits them into ones safe to age-drain (a correlated reply already exists) and
+ * ones that must be marked OVERDUE instead — acknowledged_at must stay null on those so
+ * every acknowledged_at-IS-NULL inbox/overdue surface keeps seeing them. Pure — no I/O — so
+ * the split is unit-testable without a live session_coordination table.
+ */
+function splitAgeEligibleStuckSignals(ageEligible, replyPool) {
+  const replied = ageEligible.filter((s) => hasCorrelatedReply(s, [...ageEligible, ...replyPool]));
+  const repliedIds = new Set(replied.map((s) => s.id));
+  const unreplied = ageEligible.filter((s) => !repliedIds.has(s.id));
+  return { replied, unreplied };
+}
+module.exports.splitAgeEligibleStuckSignals = splitAgeEligibleStuckSignals;
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate (same one the
 // worker self_claim path uses) so CLAIM_FIX never re-affirms an orchestrator PARENT / dep-blocked SD.
 const { evaluateDispatchEligibility, classifyDispatchIneligibility, classifyAllDispatchIneligibility, TEST_FIXTURE_KEY_RE } = require('../lib/fleet/claim-eligibility.cjs');
@@ -47,7 +64,7 @@ const { assertSdDispatchable, isFullUuid } = require('../lib/coordinator/dispatc
 const { CLAIM_HOLDING_STATUSES, computeClaimedSdKeys } = require('../lib/claim/holding-statuses.cjs');
 const { SILENCE_HARD_CAP_MS } = require('../lib/fleet/silence-cap.cjs'); // FR-4: shared writer<=reader cap
 const { detectDormantWorkers } = require('../lib/fleet/dormancy-watchdog.cjs'); // QF-20260703-076
-const { getMarkerSessionIds } = require('../lib/fleet/cc-pid-liveness.cjs'); // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 FR-2/FR-3
+const { getMarkerSessionIds, markerDirs } = require('../lib/fleet/cc-pid-liveness.cjs'); // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001 FR-2/FR-3; markerDirs added SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 FR-3
 
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 2 — the sweep ACTS on what it
 // fetches, so a read silently capped at the PostgREST 1000-row max means claims not
@@ -71,18 +88,22 @@ function isDormancyWatchdogEnabled(env = process.env) {
 // 4d1be256-dbc4-4e37-a661-72ffb6453bc0): pure, exported AND-gate so the join can be
 // unit-tested without a live claude_sessions table or real pid-*.json marker files.
 // dormancyMarkers is the raw shape returned by lib/fleet/cc-pid-liveness.cjs's
-// getMarkerSessionIds() -- { [marker.session_id]: { claude_session_id, pid, alive } }.
-// CRITICAL: joins on each marker's claude_session_id field (the CLAUDE_SESSION_ID UUID
-// that claude_sessions.session_id also is), NEVER the marker's own session_id (the
-// map's OWN key, a DIFFERENT identifier) -- a naive join on the wrong key silently
-// fails open (matches nothing), making this AND-gate inert while looking shipped.
+// getMarkerSessionIds() -- { [session_id]: { pid, alive } }.
+//
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3): this previously joined on each
+// marker's claude_session_id field, a field NO marker writer has ever populated (verified
+// against scripts/hooks/capture-session-id.cjs's marker object shape) -- the join set was
+// ALWAYS empty, so this AND-gate protected ZERO dormant candidates from release since it
+// shipped. The marker's OWN session_id -- the map's key, returned by getMarkerSessionIds() --
+// IS the CLAUDE_SESSION_ID (capture-session-id.cjs writes the SessionStart hook's own
+// session_id verbatim into the marker), so the join must use the map key directly.
 function filterDormantByPidLiveness(dormantCandidates, dormancyMarkers) {
-  const aliveClaudeSessionIds = new Set(
-    Object.values(dormancyMarkers || {})
-      .filter((m) => m && m.alive && m.claude_session_id)
-      .map((m) => m.claude_session_id)
+  const aliveSessionIds = new Set(
+    Object.entries(dormancyMarkers || {})
+      .filter(([, m]) => m && m.alive)
+      .map(([sessionId]) => sessionId)
   );
-  return (dormantCandidates || []).filter((d) => !aliveClaudeSessionIds.has(d.session_id));
+  return (dormantCandidates || []).filter((d) => !aliveSessionIds.has(d.session_id));
 }
 
 const HEADLESS_ZOMBIE_MIN_MS = 15 * 60 * 1000;
@@ -961,11 +982,14 @@ function computeBareShellEnrichment(sd, { searchDirs, fsModule, pathModule }) {
 // live Claude Code processes share the same session_id (identity collision).
 // Supports both pid-*.json (CLI sessions) and fallback-*.json (Desktop sessions).
 // Returns: [{ pid, session_id, marker_path, cc_pid, sse_port }]
-function detectIdentityCollisions() {
-  const markerDir = path.resolve(__dirname, '../.claude/session-identity');
-  if (!fs.existsSync(markerDir)) return { collisions: [], aliveMarkers: [] };
-
-  const markers = fs.readdirSync(markerDir)
+// SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3, TS-8): markerDir is an optional
+// override (test-injection seam, mirroring lib/fleet/cc-pid-liveness.cjs's own contract) so this
+// function is hermetically unit-testable without touching the real, host-local
+// .claude/session-identity directory. An explicit markerDir still pins the scan to exactly that
+// one directory (unchanged single-dir contract for the 2 existing test-injection call sites).
+function readCollisionMarkersFromDir(markerDir) {
+  if (!fs.existsSync(markerDir)) return [];
+  return fs.readdirSync(markerDir)
     .filter(f => /^pid-\d+\.json$/.test(f) || /^fallback-\d+-\d+\.json$/.test(f))
     .map(f => {
       const filePath = path.resolve(markerDir, f);
@@ -975,10 +999,22 @@ function detectIdentityCollisions() {
         const pidMatch = f.match(/^pid-(\d+)\.json$/);
         const pid = pidMatch ? Number(pidMatch[1]) : Number(data.pid);
         if (!pid || isNaN(pid)) return null;
-        return { pid, session_id: data.session_id, claude_session_id: data.claude_session_id || null, cc_pid: data.cc_pid || pid, sse_port: data.sse_port, marker_path: filePath, mtime: fs.statSync(filePath).mtimeMs };
+        return { pid, session_id: data.session_id, cc_pid: data.cc_pid || pid, sse_port: data.sse_port, marker_path: filePath, mtime: fs.statSync(filePath).mtimeMs };
       } catch { return null; }
     })
     .filter(Boolean);
+}
+
+// VALIDATION sub-agent finding at PLAN-TO-LEAD (evidence row d9cba8d8-2558-4a4e-9055-003d8e108100):
+// this was a THIRD independent single-directory re-derivation (FR-3's own description named it),
+// left un-unioned even after the dead claude_session_id field was fixed -- its 3 no-arg call sites
+// (qfSweepAliveCcPids/sweepAliveCcPids) feed isSessionAlive/shouldHoldClaim, live claim-release
+// guards, so a session live only in another worktree checkout would still read as dead here.
+// No-arg now unions across markerDirsFn() (default real markerDirs), matching cc-pid-liveness.cjs's
+// own no-arg contract; an explicit markerDir argument is unchanged (pins to exactly that directory).
+function detectIdentityCollisions(markerDir, markerDirsFn = markerDirs) {
+  const dirs = markerDir ? [markerDir] : markerDirsFn();
+  const markers = dirs.flatMap((dir) => readCollisionMarkersFromDir(dir));
 
   // Check which PIDs are alive.
   // For CLI markers (pid-*.json), check the specific PID.
@@ -1010,22 +1046,24 @@ function detectIdentityCollisions() {
     bySession[m.session_id].push(m);
   }
 
-  // Collisions: same session_id claimed by multiple live PIDs
-  // Enhanced: also detect when markers share session_id but have different CLAUDE_SESSION_IDs
+  // Collisions: same session_id claimed by multiple live PIDs.
+  //
+  // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 (FR-3): this used to also claim to detect
+  // "markers sharing session_id but with different CLAUDE_SESSION_IDs" via a has_csid_divergence
+  // flag sourced from a claude_session_id field NO marker writer has ever populated -- always an
+  // empty Set, so the flag was always false. Worse: even a populated field could never have
+  // diverged, since collision entries are grouped by bySession[m.session_id] in the first place --
+  // every marker in one collision's `markers` array shares the same session_id by construction, so
+  // a "claude_session_id" meant to equal that same field could never differ within the group. The
+  // check was dead by construction, not just by a missing writer. Removed rather than re-pointed
+  // at a different field.
   const collisions = Object.entries(bySession)
-    .filter(([, arr]) => {
-      if (arr.length > 1) return true;
-      // Single marker but CLAUDE_SESSION_ID differs from session_id — potential upstream mismatch
-      return false;
-    })
+    .filter(([, arr]) => arr.length > 1)
     .map(([sessionId, markers]) => {
       const sorted = markers.sort((a, b) => a.mtime - b.mtime); // oldest first
-      // Use CLAUDE_SESSION_ID for split decisions when available
-      const uniqueCsids = new Set(sorted.map(m => m.claude_session_id).filter(Boolean));
       return {
         session_id: sessionId,
         markers: sorted,
-        has_csid_divergence: uniqueCsids.size > 1
       };
     });
 
@@ -1040,9 +1078,8 @@ async function splitCollidingSessions(supabase, collisions, actions, warnings) {
     const keeper = collision.markers[0]; // oldest marker keeps the session
     const extras = collision.markers.slice(1); // newer markers get split
 
-    const csidNote = collision.has_csid_divergence ? ' (CLAUDE_SESSION_IDs diverge — using CSID for split)' : '';
     actions.push('IDENTITY_COLLISION: session ' + collision.session_id.substring(0, 12) + '... shared by PIDs ' +
-      collision.markers.map(m => m.pid).join(', ') + ' — keeper PID=' + keeper.pid + csidNote);
+      collision.markers.map(m => m.pid).join(', ') + ' — keeper PID=' + keeper.pid);
 
     for (const extra of extras) {
       // Use marker-based UUID if available, fall back to PID-based format
@@ -1074,7 +1111,7 @@ async function splitCollidingSessions(supabase, collisions, actions, warnings) {
           codebase: path.resolve(__dirname, '..'),
           status: 'idle',
           heartbeat_at: new Date().toISOString(),
-          metadata: { split_from: collision.session_id, split_reason: 'IDENTITY_COLLISION', original_pid: extra.pid, claude_session_id: extra.claude_session_id || null }
+          metadata: { split_from: collision.session_id, split_reason: 'IDENTITY_COLLISION', original_pid: extra.pid }
         });
 
       if (insertErr) {
@@ -1273,12 +1310,16 @@ async function clearStaleQfClaims(supabase, now, actions, warnings) {
       // open/in_progress QF claim. Skip this release pass on guard failure.
       let holderRows;
       try {
+        // Widened for the liveness SSOT: isSessionAlive reads is_alive, status, heartbeat_at,
+        // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
+        // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added -- without it, isSessionAlive's FR-2
+        // deny-list for a released/stale holder never fires here (session.status is undefined),
+        // which is the exact producer-side starvation that left the e60956f5 holder reading alive
+        // for 8.6 hours after being released.
         holderRows = await fapPaginate(() => supabase
           .from('claude_sessions')
-          // Widened for the liveness SSOT: isSessionAlive reads is_alive, heartbeat_at,
-          // terminal_id (PID), process_alive_at (tick) and expected_silence_until (armed silence).
-          // Selecting heartbeat_at ALONE is what reduced this decider to a single signal.
-          .select('session_id, heartbeat_at, is_alive, terminal_id, process_alive_at, expected_silence_until')
+          .select('session_id, heartbeat_at, is_alive, status, terminal_id, process_alive_at, expected_silence_until')
           .in('session_id', holderIds)
           .order('session_id', { ascending: true })); // unique tiebreaker (FR-6)
       } catch (guardErr) {
@@ -1561,16 +1602,17 @@ async function runQaFixtureScan(ctx) {
     // by QF-20260504-081 but this one was missed.
     const { error } = await supabase
       .from('claude_sessions')
-      .update({
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released);
+      // sessionStatusUpdate() adds is_alive:false only when the resolved status is terminal.
+      .update(sessionStatusUpdate(targetStatus, {
         sd_key: null,
-        status: targetStatus,
         released_at: now.toISOString(),
         released_reason: releasedReason,
         worktree_path: null,
         worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
-      })
+      }))
       .eq('session_id', s.session_id);
 
     if (!error) {
@@ -1649,16 +1691,16 @@ async function runQaFixtureScan(ctx) {
     // for ALL release sites — adding a new release path? Add worktree_branch:null too.
     const { error } = await supabase
       .from('claude_sessions')
-      .update({
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released).
+      .update(sessionStatusUpdate(targetStatus, {
         sd_key: null,
-        status: targetStatus,
         released_at: now.toISOString(),
         released_reason: 'SWEEP_ORPHANED_CLAIM',
         worktree_path: null,
         worktree_branch: null,
         has_uncommitted_changes: false,
         current_branch: null
-      })
+      }))
       .eq('session_id', s.session_id);
 
     if (!error) {
@@ -2558,7 +2600,10 @@ async function main() {
       // later at this function's line ~1664 from detectIdentityCollisions() -- this
       // block runs before that and before the no-sessions early-return, so it cannot
       // depend on either). See filterDormantByPidLiveness's own doc for the keyspace
-      // join detail.
+      // join detail. Could-not-determine (empty map, e.g. off-checkout) protects NOBODY here --
+      // filterDormantByPidLiveness only REMOVES a candidate from `dormant` on a confirmed-alive
+      // marker, so this feeds a DORMANCY ALERT, not a release; it can under-protect, never
+      // over-flag a live session as newly dormant.
       const dormant = filterDormantByPidLiveness(dormantCandidates, getMarkerSessionIds());
       const DORMANCY_ALERT_THRESHOLD = 2;
       if (dormant.length >= DORMANCY_ALERT_THRESHOLD) {
@@ -2796,10 +2841,10 @@ async function main() {
     const pidLive = s.pid ? isProcessRunning(Number(s.pid)) : false;
     // QF-20260508-230: ck_claude_sessions_worktree_state_consistency requires sd_key IS NOT NULL
     // OR (worktree_path IS NULL AND worktree_branch IS NULL) -- every release site must clear both.
-    await supabase.from('claude_sessions').update({
-      sd_key: null, status: 'released', released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
+    await supabase.from('claude_sessions').update(terminalSessionUpdate('released', {
+      sd_key: null, released_at: now.toISOString(), released_reason: 'SWEEP_HEADLESS_ZOMBIE',
       worktree_path: null, worktree_branch: null, has_uncommitted_changes: false, current_branch: null,
-    }).eq('session_id', s.session_id);
+    })).eq('session_id', s.session_id);
     actions.push('HEADLESS_ZOMBIE: released ' + s.session_id + ' (sd=' + (s.sd_key || 'none') + ', pid=' + s.pid + ', pid_live=' + pidLive + ')');
     await supabase.from('session_coordination').insert({
       message_type: 'INFO',
@@ -3370,16 +3415,16 @@ async function main() {
       // sibling release at workingOnCompleted branch (line ~480) had the same bug.
       const { error } = await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): targetStatus is conditional (idle/released).
+        .update(sessionStatusUpdate(targetStatus, {
           sd_key: null,
-          status: targetStatus,
           released_at: now.toISOString(),
           released_reason: 'SWEEP_CONFLICT_RESOLUTION',
           worktree_path: null,
           worktree_branch: null,
           has_uncommitted_changes: false,
           current_branch: null
-        })
+        }))
         .eq('session_id', evict.session_id);
 
       if (!error) {
@@ -3618,15 +3663,15 @@ async function main() {
     if (isFixtureSession(s.session_id)) {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_FIXTURE_SESSION_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
       if (sd.claiming_session_id === s.session_id) {
@@ -3657,15 +3702,15 @@ async function main() {
     if (!isFullUuid(s.session_id)) {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_NON_UUID_SESSION_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
       if (sd.claiming_session_id === s.session_id) {
@@ -3686,15 +3731,15 @@ async function main() {
     if (sd.status === 'completed' || sd.status === 'cancelled') {
       await supabase
         .from('claude_sessions')
-        .update({
+        // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+        .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
           sd_key: null,
-          status: s.status === 'ACTIVE' ? 'idle' : 'released',
           released_at: now.toISOString(),
           released_reason: 'SWEEP_SD_TERMINAL_CLAIM_FIX',
           worktree_path: null,
           worktree_branch: null,
           current_branch: null,
-        })
+        }))
         .eq('session_id', s.session_id)
         .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this terminal SD
       actions.push('CLAIM_FIX: cleared stale sd_key on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' is ' + sd.status + ')');
@@ -3723,15 +3768,15 @@ async function main() {
         // session's stale sd_key (bilateral release), mirroring the terminal-status clear above.
         await supabase
           .from('claude_sessions')
-          .update({
+          // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+          .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
             sd_key: null,
-            status: s.status === 'ACTIVE' ? 'idle' : 'released',
             released_at: now.toISOString(),
             released_reason: 'SWEEP_SD_INELIGIBLE_CLAIM_FIX',
             worktree_path: null,
             worktree_branch: null,
             current_branch: null,
-          })
+          }))
           .eq('session_id', s.session_id)
           .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
         actions.push('CLAIM_FIX: cleared stale sd_key on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' ineligible: ' + verdict.reason + ')');
@@ -3757,15 +3802,15 @@ async function main() {
           // worktree_branch (mirrors the fixture/non-uuid/terminal bilateral-release branches above).
           await supabase
             .from('claude_sessions')
-            .update({
+            // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): conditional idle/released status.
+            .update(sessionStatusUpdate(s.status === 'ACTIVE' ? 'idle' : 'released', {
               sd_key: null,
-              status: s.status === 'ACTIVE' ? 'idle' : 'released',
               released_at: now.toISOString(),
               released_reason: 'SWEEP_STALE_BINDING_CLAIM_FIX',
               worktree_path: null,
               worktree_branch: null,
               current_branch: null,
-            })
+            }))
             .eq('session_id', s.session_id)
             .eq('sd_key', s.sd_key); // race guard: only clear if still pointing at this SD
           actions.push('CLAIM_FIX: cleared stale sd_key binding on session ' + s.session_id.substring(0, 20) + ' (SD ' + s.sd_key + ' authoritatively claimed by live session ' + sd.claiming_session_id.substring(0, 20) + ')');
@@ -3976,11 +4021,27 @@ async function main() {
     // untouched: a failed liveness read must never read as "all senders dead".
     const HELD_SEVERITIES = new Set(['high', 'critical']);
     const senderIsDead = (s) => !s.sender_session || !liveSenders.has(s.sender_session);
-    const drainRows = senderGuardFailed ? [] : stuck.filter((s) => {
-      if (senderIsDead(s)) return true;                       // dead sender — drain at any severity
-      if (HELD_SEVERITIES.has(String(s.payload?.severity || '').toLowerCase())) return false; // live + urgent — HOLD
-      return s.created_at < stuckAgeCutoff;                   // live + routine — age-drain as before
-    });
+    const ageEligible = senderGuardFailed ? [] : stuck.filter((s) =>
+      !senderIsDead(s) &&
+      !HELD_SEVERITIES.has(String(s.payload?.severity || '').toLowerCase()) &&
+      s.created_at < stuckAgeCutoff);
+    // QF-20260905-761 (measured on row c4312703): a coordinator reply usually lands as a
+    // FRESH row (payload.reply_to / payload.correlation_id — SD-LEO-INFRA-ACKSTAMP-FALSE-
+    // METRICS-C6-001), never an update to this row's own acknowledged_at. Age-draining
+    // without checking for one stamps acknowledged_at on a genuinely UNANSWERED escalation,
+    // making it invisible to every acknowledged_at-IS-NULL inbox/overdue surface.
+    let replyPool = [];
+    if (ageEligible.length > 0) {
+      try {
+        replyPool = await fapPaginate(() => supabase
+          .from('session_coordination')
+          .select('id, payload')
+          .or('payload->>reply_to.not.is.null,payload->>correlation_id.not.is.null')
+          .order('id', { ascending: true }));
+      } catch { replyPool = []; }
+    }
+    const { replied: ageReplied, unreplied: ageUnreplied } = splitAgeEligibleStuckSignals(ageEligible, replyPool);
+    const drainRows = senderGuardFailed ? [] : [...stuck.filter(senderIsDead), ...ageReplied];
     const drainStuckIds = drainRows.map(s => s.id);
     // SD-LEO-INFRA-WORKER-ESCALATION-WRITE-001 (FR-7): this drain used to stamp a BARE
     // acknowledged_at via `.in('id', batch)`, which made a flood-control retirement permanently
@@ -4013,8 +4074,21 @@ async function main() {
       const ageCount = drainStuckIds.length - deadCount;
       const parts = [];
       if (deadCount > 0) parts.push(deadCount + ' dead-sender');
-      if (ageCount > 0) parts.push(ageCount + ' aged-out (live sender, severity below high)');
+      if (ageCount > 0) parts.push(ageCount + ' aged-out (live sender, severity below high, reply found)');
       actions.push('CLEANUP: drained ' + drainStuckIds.length + ' STUCK signal(s) — ' + parts.join(' + ') + ' (acknowledged_at stamped, payload.auto_acked=true — NOT an answer)');
+    }
+    // QF-20260905-761: aged-out, live-sender, NO-reply signals are marked OVERDUE instead of
+    // silently acked — acknowledged_at stays null so printInbox()/fetchAllOutstandingSignals()
+    // (both gate on acknowledged_at IS NULL) keep surfacing them until a real reply lands.
+    for (let i = 0; i < ageUnreplied.length; i += 50) {
+      const batch = ageUnreplied.slice(i, i + 50);
+      await Promise.all(batch.map((s) => supabase
+        .from('session_coordination')
+        .update({ payload: { ...(s.payload || {}), overdue: true } })
+        .eq('id', s.id)));
+    }
+    if (ageUnreplied.length > 0) {
+      actions.push('WORKER SIGNALS: ' + ageUnreplied.length + ' STUCK signal(s) marked OVERDUE (aged out, live sender, no coordinator reply found) — acknowledged_at intentionally NOT stamped: ' + ageUnreplied.map(s => String(s.id).slice(0, 8)).join(', '));
     }
     // Report what was deliberately NOT drained, so a held signal is visible rather than merely
     // un-retired. Without this the fix would be silent in exactly the way the bug was.
@@ -4648,6 +4722,7 @@ module.exports.resolveAcceptedHandoffSets = resolveAcceptedHandoffSets;
 module.exports.resolveOrchestratorParentSdKeys = resolveOrchestratorParentSdKeys;
 module.exports.isDormancyWatchdogEnabled = isDormancyWatchdogEnabled; // SD-FDBK-ENH-CONFIRMED-LIVE-TODAY-001
 module.exports.filterDormantByPidLiveness = filterDormantByPidLiveness; // SD-LEO-INFRA-FIX-RESIDUAL-PROCESS-001
+module.exports.detectIdentityCollisions = detectIdentityCollisions; // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001
 module.exports.isHeadlessZombie = isHeadlessZombie; // QF-20260704-081
 module.exports.HEADLESS_ZOMBIE_MIN_MS = HEADLESS_ZOMBIE_MIN_MS; // QF-20260704-081
 // SD-ARCH-HOTSPOT-SWEEP-001 (PRD FR-2 / TS-3): promoted classification-time helper —

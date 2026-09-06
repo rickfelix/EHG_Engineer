@@ -31,12 +31,16 @@ const { hasFreshHeartbeat, hasTickAlive, hasPidAlive } = require('../lib/fleet/s
 const { pidVenueCapability } = require('../lib/fleet/pid-venue.cjs');
 import { parseLivenessClasses, partitionRowsByClasses } from '../lib/periodic-liveness/class-split.mjs';
 import { resolveOwnerTarget } from '../lib/periodic-liveness/owner-target-resolver.mjs';
-import { climbLadder, resetConsecutiveMiss, emitLadderDigest } from '../lib/periodic-liveness/ladder-escalation.mjs';
+import { climbLadder, resetConsecutiveMiss, decideLadderRoute } from '../lib/periodic-liveness/ladder-escalation.mjs';
+import { writeOwnerDirective, findExistingOwnerDirective, isOwnerDirectiveActioned, resolveOwnerDirective } from '../lib/periodic-liveness/owner-directive-writer.mjs';
+import { writeChairmanAwareness, resolveChairmanAwareness } from '../lib/periodic-liveness/chairman-awareness-writer.mjs';
 import { gapAdjustedAgeMs } from '../lib/periodic-liveness/cron-gap.mjs';
-import { recordPendingDecision, escalateChairmanDecision } from '../lib/chairman/record-pending-decision.mjs';
-import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
+import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, medianRatioAlarm, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
 import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { resolveGitHubRepo } from '../lib/repo-paths.js';
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6): the windowed-expectation check reads the ET
+// wall-clock from the injectable `now` through the same helpers the chairman ET gates use.
+import { etLocalHour, etLocalMinute } from '../lib/time/chairman-et-wall-clock.js';
 
 const UNVERIFIED_ESCALATION_MS = 7 * 24 * 60 * 60 * 1000; // FR-5: >7 continuous days
 
@@ -216,6 +220,35 @@ async function resolveSchedulerRound(row) {
   return { lastFiredAt: epochMs ? new Date(epochMs).toISOString() : null };
 }
 
+/**
+ * SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6, spec §1.5, ratification 42111a33 Q7): a row may
+ * carry expected_window_et = {start:'HH:MM', end:'HH:MM'} in America/New_York wall-clock. Inside the
+ * window the process is expected (normal evaluation); outside it is INTENTIONALLY_DOWN — a windowed
+ * expectation, not a blind spot and not a false OVERDUE for the other ~21 hours. Pure; a malformed
+ * or absent window returns null so the caller falls through to the prior currently_expected_active
+ * behaviour. The column CHECK narrows the shape, but the watcher does NOT rely on it: an out-of-range
+ * hour ('25:00') read as 1500 minutes would grade the row INTENTIONALLY_DOWN forever with no alarm
+ * (SEC-M4), so the parser refuses hour > 23 / minute > 59 itself and returns null.
+ * @param {object} row
+ * @param {number|Date} now
+ * @returns {boolean|null} true=inside, false=outside, null=no usable window
+ */
+function isInsideExpectedWindowEt(row, now = Date.now()) {
+  const w = row && row.expected_window_et;
+  if (!w || typeof w !== 'object') return null;
+  const parse = (hhmm) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+    if (!m) return NaN;
+    const h = Number(m[1]), mm = Number(m[2]);
+    return h <= 23 && mm <= 59 ? h * 60 + mm : NaN;
+  };
+  const s = parse(w.start), e = parse(w.end);
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+  const instant = now instanceof Date ? now : new Date(now);
+  const minute = etLocalHour(instant) * 60 + etLocalMinute(instant);
+  return s <= e ? (minute >= s && minute <= e) : (minute >= s || minute <= e);
+}
+
 async function evaluateRow(row, ctx = {}) {
   // TR-6 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): injectable clock seam, same style as the
   // existing pidVenue seam (see the class-split doc comment above) -- required so gap/lag-relative
@@ -223,6 +256,13 @@ async function evaluateRow(row, ctx = {}) {
   // inside/outside a declared cron gap, rather than depending on the wall-clock hour a test
   // happens to run in.
   const { now = Date.now() } = ctx;
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6): the windowed check runs BEFORE the
+  // currently_expected_active short-circuit, so a windowed row keeps currently_expected_active=true
+  // (it IS expected, inside its window) and still reads INTENTIONALLY_DOWN outside it.
+  const inWindow = isInsideExpectedWindowEt(row, now);
+  if (inWindow === false) {
+    return { process_key: row.process_key, state: STATE.INTENTIONALLY_DOWN, signal_note: `outside expected_window_et ${row.expected_window_et.start}-${row.expected_window_et.end} ET` };
+  }
   if (!row.currently_expected_active) {
     return { process_key: row.process_key, state: STATE.INTENTIONALLY_DOWN };
   }
@@ -384,6 +424,7 @@ async function emitOverdueSignal(row, evaluation) {
   const requiredInvocation = row.liveness_source_ref?.required_invocation;
   const invocationNote = requiredInvocation ? ` (requires invocation: '${requiredInvocation}')` : '';
 
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A adds the expected_window_et check to evaluateRow above. target_session comes from resolveOwnerTarget (liveness-validated peer resolvers or the coordinator fallback), never an echoed field.
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
     target_session: ownerTarget.target,
@@ -409,6 +450,7 @@ async function emitOverdueSignal(row, evaluation) {
 async function emitPersistentUnverifiedSignal(row) {
   const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
 
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan for the same reason as emitOverdueSignal above (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A touches evaluateRow, not this insert). target_session comes from resolveOwnerTarget.
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
     target_session: ownerTarget.target,
@@ -572,10 +614,16 @@ async function main({ includeFixtures = false } = {}) {
   }
 
   const results = [];
-  const ladderCandidates = [];
+  // QF-20260903-060: rows whose MEDIAN observed gap exceeds 3x configured even though every run
+  // succeeds -- see medianRatioAlarm's doc comment for why this stays independent of `state`.
+  const medianRatioAlarms = [];
   for (const row of evaluate) {
     const evaluation = await evaluateRow(row, { ghaDecisions, ghaGapStats });
     results.push(evaluation);
+    if (row.liveness_source === 'github_actions_api') {
+      const alarm = medianRatioAlarm(row, ghaGapStats);
+      if (alarm) medianRatioAlarms.push({ process_key: row.process_key, ...alarm });
+    }
 
     // Adversarial-review finding (PR #5562, CRITICAL): dedup must be a per-episode STATE
     // TRANSITION check (row.last_state !== OVERDUE -> OVERDUE), never "has this process_key ever
@@ -614,12 +662,30 @@ async function main({ includeFixtures = false } = {}) {
       try {
         const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
         const climb = await climbLadder({ supabase, row, ownerTarget });
-        if (climb.laddered) ladderCandidates.push({
-          process_key: row.process_key,
-          display_name: row.display_name,
-          signature: deriveFailureSignature(row, evaluation),
-          required_invocation: row.liveness_source_ref?.required_invocation || null,
-        });
+        // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001 / FR-1/FR-1b/FR-2: re-evaluate the
+        // routing decision on EVERY tick once the row has laddered at least once (climb.count
+        // keeps growing on every subsequent OVERDUE tick, always >=1 once climb.laddered has ever
+        // been true for this episode, since LADDER_THRESHOLD===1) -- this is what lets FR-1b's
+        // unacked-directive timeout (climb.count >= LADDER_THRESHOLD+3) fall through to the
+        // chairman path on a LATER tick, not just the first one.
+        if (climb.count >= 1) {
+          const existingDirective = await findExistingOwnerDirective(supabase, row.process_key);
+          const directiveActioned = existingDirective ? isOwnerDirectiveActioned(existingDirective) : false;
+          const decision = decideLadderRoute({ rawOwner: row.owner, ownerTarget, climb, directiveActioned });
+          if (decision.route === 'owner_directive') {
+            const result = await writeOwnerDirective(supabase, {
+              targetSession: decision.target,
+              processKey: row.process_key,
+              displayName: row.display_name,
+              signature: deriveFailureSignature(row, evaluation),
+              requiredInvocation: row.liveness_source_ref?.required_invocation || null,
+            });
+            if (!result.written) console.error(`[periodic-liveness-watcher] writeOwnerDirective FAILED (non-fatal) for ${row.process_key}: ${result.error}`);
+          } else {
+            const result = await writeChairmanAwareness(supabase, { processKey: row.process_key, reason: decision.reason });
+            if (!result.written) console.error(`[periodic-liveness-watcher] writeChairmanAwareness FAILED (non-fatal) for ${row.process_key}: ${result.error}`);
+          }
+        }
       } catch (err) {
         console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
       }
@@ -630,6 +696,21 @@ async function main({ includeFixtures = false } = {}) {
       // counter for all of them (adversarial-review finding, PR #5940, LOW), not just OK, so a
       // later unrelated episode never inherits a stale carried-forward count.
       await resetConsecutiveMiss(supabase, row.process_key);
+      // FR-3: a recovered process self-resolves whichever row type it laddered into, if any --
+      // both resolve calls are fail-soft no-ops (return {resolved:false}) when no row exists,
+      // so this is safe to call unconditionally rather than tracking which path was taken.
+      if (row.last_state === STATE.OVERDUE) {
+        try {
+          const existingDirective = await findExistingOwnerDirective(supabase, row.process_key);
+          if (existingDirective) {
+            await resolveOwnerDirective(supabase, existingDirective.id);
+          } else {
+            await resolveChairmanAwareness(supabase, row.process_key);
+          }
+        } catch (err) {
+          console.error(`[periodic-liveness-watcher] ladder resolution FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
+        }
+      }
       // FR-5: escalate a row that has just crossed >7 continuous days UNVERIFIED, the same way
       // OVERDUE rows are escalated -- fires once per episode (hasCrossedUnverifiedThreshold only
       // returns true on the tick where the threshold is first crossed).
@@ -648,15 +729,18 @@ async function main({ includeFixtures = false } = {}) {
     }
   }
 
-  // One ladder digest decision per TICK (001-B FR-3), regardless of how many rows laddered --
-  // closes the per-process chairman-flood finding (risk-agent HIGH). Wrapped defensively (PR
-  // #5940 adversarial review) so a failure here can never skip the self-liveness upsert below.
-  if (ladderCandidates.length > 0) {
-    try {
-      await emitLadderDigest(supabase, ladderCandidates, { recordPending: recordPendingDecision, escalate: escalateChairmanDecision });
-    } catch (err) {
-      console.error(`[periodic-liveness-watcher] emitLadderDigest FAILED (non-fatal): ${err.message}`);
-    }
+  // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001: the per-tick chairman digest
+  // (emitLadderDigest) is no longer called here -- each row's owner-directive or
+  // chairman-awareness write happens inline in the OVERDUE branch above, per-row, via
+  // decideLadderRoute. emitLadderDigest itself is UNCHANGED and remains
+  // lib/coordination/lane-dead-letter-alarm.cjs's exclusive allow-listed paging surface for an
+  // unrelated concern (comms-lane dead-letter breach alerting) -- deliberately not touched here.
+
+  // QF-20260903-060: surface median-ratio drift every cycle, independent of OVERDUE/OK state, so
+  // the gap is legible without a query (the self-adjusting max floor above hides exactly this).
+  if (medianRatioAlarms.length > 0) {
+    console.warn(`[periodic-liveness-watcher] MEDIAN-RATIO ALARM: ${medianRatioAlarms.length} row(s) delivering >3x configured interval by median gap though every run succeeds: `
+      + medianRatioAlarms.map((a) => `${a.process_key}=${a.ratio.toFixed(1)}x`).join(', '));
   }
 
   // Self-liveness: upsert the watcher's own last-run row (self_stamped, session_bound=false).
@@ -703,4 +787,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 }
 
-export { main as runWatcher, evaluateRow, emitOverdueSignal, emitPersistentUnverifiedSignal, stampStateChangeAnchor, deriveFailureSignature, STATE, UNVERIFIED_ESCALATION_MS };
+export { main as runWatcher, evaluateRow, isInsideExpectedWindowEt, emitOverdueSignal, emitPersistentUnverifiedSignal, stampStateChangeAnchor, deriveFailureSignature, STATE, UNVERIFIED_ESCALATION_MS };

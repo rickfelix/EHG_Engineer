@@ -36,3 +36,31 @@ describe('schema-reference-lint.yml is blocking (QF-20260704-026)', () => {
     expect(SOURCE).toMatch(/schema-lint-disable-line/);
   });
 });
+
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-4, TS-6) — pin the CI SCAN MODE.
+//
+// Nothing pinned this before: the --diff-only constraint existed solely as a literal `run:` string
+// in the workflow, so flipping the scan mode in either direction passed the whole suite silently.
+// That matters in both directions. Today the backlog means --all would block every unrelated PR on
+// violations they did not introduce. After FR-5 reaches zero, FR-6 flips this to --all deliberately
+// and MUST update EXPECTED_SCAN_MODE in the same commit — which is the point: the change becomes a
+// visible line in the diff instead of an invisible behaviour swap.
+const EXPECTED_SCAN_MODE = '--diff'; // FR-6 changes this to '--all' once the whole-tree count is 0
+
+describe('schema-reference-lint.yml scan mode is pinned (FR-4/TS-6)', () => {
+  const invocations = SOURCE.split('\n').filter((l) => l.includes('schema-reference-lint.mjs'));
+
+  it('invokes the lint exactly once', () => {
+    expect(invocations).toHaveLength(1);
+  });
+
+  it(`invokes it with the expected scan mode (${EXPECTED_SCAN_MODE})`, () => {
+    expect(invocations[0]).toContain(EXPECTED_SCAN_MODE);
+  });
+
+  it('does not pass BOTH scan modes (an ambiguous invocation resolves to --all silently)', () => {
+    const hasAll = invocations[0].includes('--all');
+    const hasDiff = invocations[0].includes('--diff');
+    expect(hasAll && hasDiff).toBe(false);
+  });
+});

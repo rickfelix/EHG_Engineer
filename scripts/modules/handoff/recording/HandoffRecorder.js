@@ -23,7 +23,44 @@ import { captureFailurePattern } from '../failure-pattern-capture.js';
 import { NOT_MEASURED_SCORE } from '../gates/fr-delivery-classifier.js';
 // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 (FR-1/FR-3)
 import { buildPreflightRemediation, truncateValidationDetails, findPriorSaemRemediation } from './preflight-remediation.js';
+
+/**
+ * QF-20260903-469 — record WHICH TREE produced a handoff verdict.
+ *
+ * THE DEFECT. Verifying a commit is in main is NOT evidence that the code about to execute
+ * contains it. MEASURED on a live completion: after the PR_MERGE_VERIFICATION fix merged,
+ * LEAD-FINAL still reported "No branch was ever pushed" — the exact false negative that fix
+ * removes — because the gate ran the OLD FILE. Two lagging trees in sequence: the shared ROOT
+ * was 2 commits behind (git fetch updates origin/main, NOT the checkout, so the commit was
+ * verifiably in main while a content grep of the working copy found zero occurrences of the new
+ * scan), and the SD's OWN WORKTREE was 19 behind — and sd-start.js runs the handoff from there,
+ * so a fresh root would not have saved it.
+ *
+ * WHY A STAMP RATHER THAN A FRESHNESS ASSERTION AT ENTRY. A gate that silently runs stale code
+ * emits verdicts indistinguishable from real ones IN BOTH DIRECTIONS: a stale PASS certifies work
+ * against a check that no longer exists, and a stale FAIL blocks correct work over a defect
+ * already fixed. Refusing to run only prevents future cases; recording the commit makes
+ * historical verdicts auditable, and costs one field.
+ *
+ * HONEST NULL, DELIBERATELY. The key is ALWAYS present. `null` means COULD NOT DETERMINE — never
+ * "fresh" and never "same as HEAD". Omitting the key on failure would make an unmeasured verdict
+ * indistinguishable from an unstamped one, which is the very asymmetry this row is about. And
+ * note what is NOT added here: no `if (sha && ...)` consumer guard, because a falsy sha silently
+ * opting a check out is a live defect elsewhere in this codebase (subagent-evidence-gate.js:326,
+ * 142 of the 500 most recent evidence rows) and must not be reproduced.
+ *
+ * @returns {{executing_commit_sha: string|null, executing_cwd: string}}
+ */
+function executingTreeStamp() {
+  const cwd = process.cwd();
+  return { executing_commit_sha: resolveEvaluatedCommitSha(cwd), executing_cwd: cwd };
+}
 import { resolveClaimIdentity } from '../../../../lib/claim/claim-identity.js';
+// QF-20260903-469: REUSED, not reimplemented. This resolver already exists for sub-agent
+// evidence rows (results-storage.js:394) — injectable exec, 5s-bounded, never throws, null on
+// failure. Writing a second sha resolver would be the duplicate-representation defect this
+// programme exists to abolish, committed inside the fix for a provenance gap.
+import { resolveEvaluatedCommitSha } from '../../../../lib/sub-agent-executor/results-storage.js';
 // SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D (FR-1/FR-2)
 import { buildPhaseSnapshotWindow } from '../../../../lib/governance/phase-snapshot-window.mjs';
 // QF-20260830-312: ceremony-vs-real-fix measurability
@@ -261,6 +298,8 @@ export class HandoffRecorder {
         verified_at: new Date().toISOString(),
         verifier: 'unified-handoff-system.js',
         score_source: scoreSource,
+        // QF-20260903-469: which tree actually evaluated this ACCEPTED verdict (stale PASS half).
+        ...executingTreeStamp(),
         // SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 (FR-2): never fabricated -- absent when not bypassed.
         ...(isBypassed ? { bypass: buildPersistedBypassMetadata(result, { actor: recorderIdentity() }) } : {})
       },
@@ -498,6 +537,9 @@ export class HandoffRecorder {
           },
           rejected_at: new Date().toISOString(),
           reason: result.reasonCode,
+          // QF-20260903-469: and the REJECTED verdict too — a stale FAIL blocks correct work
+          // over a defect already fixed, which is exactly how this row was discovered.
+          ...executingTreeStamp(),
           message: result.message,
           ...(preflightRemediation.length > 0 ? {
             preflight_remediation: preflightRemediation,
@@ -530,6 +572,17 @@ export class HandoffRecorder {
       artifact_hash: await computeArtifactHash(this.supabase, sdUuid),
     };
 
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2, SECURITY finding LOW follow-up, evidence
+    // 361e7bc6): a self-authored-bypass REFUSAL never reaches buildPersistedBypassMetadata (it
+    // is not an accepted/bypassed result) -- stamp its check status directly so this, the most
+    // security-relevant outcome, never persists as the "predates FR-B2" null value.
+    if (result.bypassSelfAuthorshipCheckStatus) {
+      execution.metadata = {
+        ...(execution.metadata || {}),
+        bypass_self_authorship_check_status: result.bypassSelfAuthorshipCheckStatus,
+      };
+    }
+
     try {
       // Pre-validate - for rejections, try to fix common issues
       const preValidation = await this.validationOrchestrator.preValidateData('sd_phase_handoffs', execution);
@@ -554,6 +607,23 @@ export class HandoffRecorder {
       }
 
       console.log(`📝 Failure recorded: ${executionId}`);
+
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1): a bypass attempt can still end
+      // rejected (e.g. a different, unbypassed gate also failed, or the FR-B2 self-authorship
+      // refusal fired). Join the bypass_ledger row this rejection originated from back to it.
+      // Best-effort, same non-fail-closed rationale as the accepted-path join-back in createArtifact().
+      if (result.bypassLedgerId) {
+        // SECURITY finding LOW (evidence dcf8dab7): write-once -- .is('handoff_id', null)
+        // stops a retry/duplicate call from overwriting an already-correct join.
+        const { error: ledgerJoinError } = await this.supabase
+          .from('bypass_ledger')
+          .update({ handoff_id: executionId })
+          .eq('id', result.bypassLedgerId)
+          .is('handoff_id', null);
+        if (ledgerJoinError) {
+          console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+        }
+      }
 
       // SD-MAN-INFRA-WORKER-WORKTREE-SELF-001: Increment handoff_fail_count for fleet telemetry
       // SD-LEO-FIX-HANDOFF-QUERY-BATCHING-001: Batch update replaces N+1 loop
@@ -1014,6 +1084,13 @@ export class HandoffRecorder {
         metadata.gate_results = result.gateResults;
         metadata.gate_results_version =
           Object.values(result.gateResults).some(r => r && r.input_hash) ? 2 : 1;
+        // FR-9 (SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-A): stamp the GATE2-yellow-zone
+        // SD_TYPE_THRESHOLD acceptance, when ValidationOrchestrator.validateGates() granted
+        // one, so the two scores are auditable on the handoff record itself.
+        if (result.yellowZoneAccept) {
+          metadata.yellow_zone_accept = result.yellowZoneAccept;
+          console.log('   🟡 yellow_zone_accept stamped to metadata.yellow_zone_accept');
+        }
       } else {
         console.warn('   ⚠️  No gateResults in result object - cross-handoff traceability compromised');
       }
@@ -1124,6 +1201,23 @@ export class HandoffRecorder {
       }
 
       console.log('✅ Handoff accepted and stored in sd_phase_handoffs');
+
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B1): join the bypass_ledger row this
+      // acceptance originated from back to the handoff row it just produced. Best-effort --
+      // the FAIL-CLOSED audit guarantee already lives on cli-main.js's original ledger+audit-log
+      // writes; this is enrichment of an already-durable row, not the guarantee itself.
+      if (isBypassed && result.bypassLedgerId) {
+        // SECURITY finding LOW (evidence dcf8dab7): write-once -- .is('handoff_id', null)
+        // stops a retry/duplicate call from overwriting an already-correct join.
+        const { error: ledgerJoinError } = await this.supabase
+          .from('bypass_ledger')
+          .update({ handoff_id: handoffId })
+          .eq('id', result.bypassLedgerId)
+          .is('handoff_id', null);
+        if (ledgerJoinError) {
+          console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+        }
+      }
 
       // SD-LEO-INFRA-HANDOFF-PREFLIGHT-AUTO-001 FR-3: stamp this accepted row with any
       // prior SAEM (preflight) rejection(s) it resolves, for auditability. Fail-open and

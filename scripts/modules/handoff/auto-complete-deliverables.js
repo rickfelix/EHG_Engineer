@@ -488,19 +488,22 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
       // v3.2: All items are now completed by JS (no longer defers to missing trigger)
 
       // Verified by JS module - update with verification details
+      const verifiedNowIso = new Date().toISOString();
       const { error: updateError } = await supabase
         .from('sd_scope_deliverables')
         .update({
           completion_status: 'completed',
           verified_by: verifiedBy,
-          verified_at: new Date().toISOString(),
+          verified_at: verifiedNowIso,
           completion_evidence: `Verified via: ${verification.sources.join(', ')} [${verification.tier}]`,
           completion_notes: `Auto-completed (v3.1) with ${verification.confidence.toFixed(0)}% confidence via ${verification.tier}. ${verification.doubleChecked ? 'Double-checked with secondary sources.' : ''}`,
-          updated_at: new Date().toISOString(),
+          updated_at: verifiedNowIso,
+          completed_at: verifiedNowIso,
           metadata: {
             auto_completed: true,
-            auto_completed_at: new Date().toISOString(),
+            auto_completed_at: verifiedNowIso,
             handoff_id: handoffId,
+            producer: 'auto_complete_js',
             verification: {
               version: '3.1',
               tier: verification.tier,

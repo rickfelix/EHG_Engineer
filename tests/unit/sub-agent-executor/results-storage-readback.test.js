@@ -89,7 +89,10 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
     const result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } });
 
     expect(capture.insertedTable).toBe('sub_agent_execution_results');
-    expect(verifyReadback).toHaveBeenCalledTimes(1);
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-H (FR-2): a second, hard-failing readback now runs
+    // alongside this pre-existing soft one — see results-storage-payload-completeness-readback.test.js
+    // for its dedicated wiring/failure-propagation coverage.
+    expect(verifyReadback).toHaveBeenCalledTimes(2);
     expect(verifyReadback).toHaveBeenCalledWith(expect.objectContaining({
       table: 'sub_agent_execution_results',
       match: { id: 'inserted-row-id' },
@@ -116,7 +119,7 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
     const result = await storeSubAgentResults('TESTING', 'SD-TEST-001', null, { verdict: 'PASS', confidence: 90, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } });
 
     expect(capture.updated).not.toBeNull(); // the update branch, not insert, actually ran
-    expect(verifyReadback).toHaveBeenCalledTimes(1);
+    expect(verifyReadback).toHaveBeenCalledTimes(2); // FR-2: soft + hard readback, see note above
     expect(verifyReadback).toHaveBeenCalledWith(expect.objectContaining({
       table: 'sub_agent_execution_results',
       match: { id: 'existing-row-id' },
@@ -129,9 +132,15 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
       getSupabaseClient: async () => makeMockSupabase(capture, { dedupHit: false }),
     }));
     const { ReadbackRowcountError } = await vi.importActual('../../../lib/checkers/readback-checker.mjs');
-    const verifyReadback = vi.fn().mockRejectedValue(
-      new ReadbackRowcountError('verifyReadback: expected exactly 1 row, got 0', { table: 'sub_agent_execution_results' })
-    );
+    // FR-2 added a SECOND (hard) verifyReadback call after this pre-existing soft one. Failing
+    // only the first call (mockRejectedValueOnce) keeps this test scoped to what it has always
+    // tested — the soft call's failure being swallowed — without also exercising the hard call,
+    // which has its own dedicated propagation test below.
+    const verifyReadback = vi.fn()
+      .mockRejectedValueOnce(
+        new ReadbackRowcountError('verifyReadback: expected exactly 1 row, got 0', { table: 'sub_agent_execution_results' })
+      )
+      .mockResolvedValueOnce({ verdict: 'PASS', row: {} });
     vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
       const actual = await importOriginal();
       return { ...actual, verifyReadback };
@@ -148,7 +157,7 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
       thrown = e;
     }
 
-    expect(thrown, 'a checker failure must not propagate into the caller').toBeNull();
+    expect(thrown, 'a soft (first-call) checker failure must not propagate into the caller').toBeNull();
     expect(result.id).toBe('inserted-row-id'); // return value unchanged despite the checker failure
 
     const readbackLogs = errorSpy.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('READBACK-CHECK-FAILED'));
@@ -162,9 +171,11 @@ describe('FR-4: storeSubAgentResults() <-> readback checker wiring', () => {
       getSupabaseClient: async () => makeMockSupabase(capture, { dedupHit: true }),
     }));
     const { ReadbackFieldMismatchError } = await vi.importActual('../../../lib/checkers/readback-checker.mjs');
-    const verifyReadback = vi.fn().mockRejectedValue(
-      new ReadbackFieldMismatchError('verifyReadback: field mismatch', { table: 'sub_agent_execution_results', field: 'verdict' })
-    );
+    const verifyReadback = vi.fn()
+      .mockRejectedValueOnce(
+        new ReadbackFieldMismatchError('verifyReadback: field mismatch', { table: 'sub_agent_execution_results', field: 'verdict' })
+      )
+      .mockResolvedValueOnce({ verdict: 'PASS', row: {} });
     vi.doMock('../../../lib/checkers/readback-checker.mjs', async (importOriginal) => {
       const actual = await importOriginal();
       return { ...actual, verifyReadback };

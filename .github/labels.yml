@@ -224,3 +224,8 @@
 - name: "breaking-change"
   color: "D93F0B"
   description: "Breaking change - requires migration"
+
+# Drift Sweeps (SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A FR-6)
+- name: "template-success-criteria-sweep"
+  color: "FBCA04"
+  description: "New completed SD found with 100%-template success_criteria"

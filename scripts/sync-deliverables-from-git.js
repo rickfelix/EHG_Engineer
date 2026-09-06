@@ -16,12 +16,13 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { execSync } from 'child_process';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 import { resolveRepoPath } from '../lib/repo-paths.js';
+import { runHardenedGit } from '../lib/git/hardened-runner.cjs';
+import { anchoredKeyPattern, LANDED_LOG_MAX_BUFFER_BYTES } from '../lib/drive-loop/score/leg1-landed-alocal.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,79 +90,72 @@ function inferTypeFromPath(filePath) {
 }
 
 /**
- * Parse git commits for an SD
+ * Parse git commits for an SD or QF key.
+ *
+ * QF-20260903-950 (defect 3, structural -- supersedes the branch-diff model this function used
+ * previously, see git history for defects 1/2 fixed against that model first): a branch-vs-main
+ * diff goes blind the moment a PR squash-merges. After a squash-merge the branch's own tip
+ * commit becomes an ancestor of main (or the branch ref is reused/fast-forwarded onto the squash
+ * commit), so `main..branch` reads ZERO regardless of how much real work landed -- and that is
+ * exactly the set of SDs arriving at completion, the case this tool exists to serve.
+ *
+ * Chairman-ratified alternative (amendment dc828e43, lib/drive-loop/score/leg1-landed-alocal.js):
+ * scan EVERY commit subject in the ref's history and end-anchor-match the SD/QF key, never a
+ * branch-ancestry diff. Reusing that exact predicate (anchoredKeyPattern) rather than a second,
+ * independently-drifting regex -- see that file's header for the full false-positive/negative
+ * trade-off this inherits, and LANDED_LOG_MAX_BUFFER_BYTES for why the corpus fetch needs an
+ * explicit large buffer (a real full-history subject corpus measured well past Node's 1MB
+ * spawnSync default).
+ *
+ * THROWS on a genuine git failure (via runHardenedGit, lib/git/hardened-runner.cjs, which spawns
+ * with an argv array and shell:false and throws on any non-zero exit) -- never silently returns
+ * [] for "could not look" (defect 2, the crash-reported-as-zero bug this also fixes for the new
+ * model, since the old embedded-shell-redirect crash path no longer exists at all).
  */
-function getGitCommits(sdId, repoPath, sinceBranch = 'main') {
-  try {
-    // Get commits on the SD branch that aren't on main
-    const branchName = `feat/${sdId}`;
+function getGitCommits(sdId, repoPath, sinceRef = 'main') {
+  const pattern = anchoredKeyPattern(sdId);
 
-    // First check if branch exists
-    try {
-      execSync(`git -C "${repoPath}" rev-parse --verify ${branchName}`, { encoding: 'utf-8', stdio: 'pipe' });
-    } catch {
-      console.log(`   ℹ️  Branch ${branchName} not found, trying alternate patterns...`);
-      // Try to find a branch containing the SD-ID
-      const branches = execSync(`git -C "${repoPath}" branch -a`, { encoding: 'utf-8' });
-      const matchingBranch = branches.split('\n').find(b => b.includes(sdId));
-      if (!matchingBranch) {
-        return [];
-      }
+  const subjectLog = runHardenedGit(
+    ['log', sinceRef, '--format=%H|%s'],
+    { cwd: repoPath, maxBuffer: LANDED_LOG_MAX_BUFFER_BYTES }
+  );
+
+  const matchingHashes = subjectLog.split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const sep = line.indexOf('|');
+      return sep === -1 ? null : { hash: line.slice(0, sep), subject: line.slice(sep + 1) };
+    })
+    .filter(row => row && pattern.test(row.subject))
+    .map(row => row.hash);
+
+  return matchingHashes.map(hash => parseCommitNameStatus(hash, repoPath));
+}
+
+/**
+ * Fetch and parse ONE commit's file changes. Only called for a commit whose subject already
+ * end-anchor-matched the key, so this never runs once per commit on main -- only once per
+ * commit actually landed under this key.
+ */
+function parseCommitNameStatus(hash, repoPath) {
+  const out = runHardenedGit(
+    ['show', hash, '--name-status', '--format=%H|%s|%ai'],
+    { cwd: repoPath, maxBuffer: 10 * 1024 * 1024 }
+  );
+  const [header, ...rest] = out.split('\n');
+  const [commitHash, message, date] = header.split('|');
+  const files = [];
+  for (const line of rest) {
+    const fileMatch = line.match(/^([AMD])\t(.+)$/);
+    if (fileMatch) {
+      files.push({
+        operation: fileMatch[1] === 'A' ? 'create' : fileMatch[1] === 'M' ? 'modify' : 'delete',
+        path: fileMatch[2]
+      });
     }
-
-    // Get commit log with file changes
-    const logOutput = execSync(
-      `git -C "${repoPath}" log ${sinceBranch}..HEAD --name-status --pretty=format:"%H|%s|%ai" 2>/dev/null || echo ""`,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 }
-    );
-
-    if (!logOutput.trim()) {
-      return [];
-    }
-
-    const commits = [];
-    let currentCommit = null;
-
-    for (const line of logOutput.split('\n')) {
-      if (!line.trim()) continue;
-
-      // Check if this is a commit header line
-      if (line.includes('|') && line.length === 40 + line.indexOf('|') - 40 + line.length - line.lastIndexOf('|')) {
-        // Parse commit header
-        const parts = line.split('|');
-        if (parts.length >= 3 && parts[0].length === 40) {
-          if (currentCommit) {
-            commits.push(currentCommit);
-          }
-          currentCommit = {
-            hash: parts[0],
-            message: parts[1],
-            date: parts[2],
-            files: []
-          };
-          continue;
-        }
-      }
-
-      // Parse file change line (A/M/D followed by tab and filename)
-      const fileMatch = line.match(/^([AMD])\t(.+)$/);
-      if (fileMatch && currentCommit) {
-        currentCommit.files.push({
-          operation: fileMatch[1] === 'A' ? 'create' : fileMatch[1] === 'M' ? 'modify' : 'delete',
-          path: fileMatch[2]
-        });
-      }
-    }
-
-    if (currentCommit) {
-      commits.push(currentCommit);
-    }
-
-    return commits;
-  } catch (error) {
-    console.error(`   ❌ Git error: ${error.message}`);
-    return [];
   }
+  return { hash: commitHash, message, date, files };
 }
 
 /**
@@ -249,7 +243,7 @@ async function syncDeliverables(sdId, options = {}) {
   // Get deliverables for this SD
   const { data: deliverables, error: delError } = await supabase
     .from('sd_scope_deliverables')
-    .select('id, deliverable_name, deliverable_type, completion_status')
+    .select('id, deliverable_name, deliverable_type, completion_status, metadata')
     .eq('sd_id', sdUuid)
     .neq('completion_status', 'completed');
 
@@ -265,8 +259,16 @@ async function syncDeliverables(sdId, options = {}) {
 
   if (!silent) console.log(`   📦 Found ${deliverables.length} pending deliverables`);
 
-  // Parse git commits (branches are named feat/<sd_key>, never feat/<uuid>)
-  const commits = getGitCommits(sdKey, repoPath);
+  // Parse git commits (branches are named feat/<sd_key>, never feat/<uuid>). getGitCommits now
+  // THROWS on a genuine git failure (QF-20260903-950 defect 2) -- a crash must be reported as a
+  // failure, never folded into the same "0 commits" success path a real empty result takes.
+  let commits;
+  try {
+    commits = getGitCommits(sdKey, repoPath);
+  } catch (error) {
+    if (!silent) console.log(`   ❌ Could not read git history: ${error.message}`);
+    return { success: false, error: error.message };
+  }
 
   if (commits.length === 0) {
     if (!silent) console.log('   ℹ️  No commits found on SD branch');
@@ -309,7 +311,8 @@ async function syncDeliverables(sdId, options = {}) {
             name: match.deliverable.deliverable_name,
             commitHash: commit.hash,
             commitMessage: commit.message,
-            confidence: match.confidence
+            confidence: match.confidence,
+            existingMetadata: match.deliverable.metadata || {}
           });
         }
       }
@@ -339,11 +342,18 @@ async function syncDeliverables(sdId, options = {}) {
         verified_at: new Date().toISOString(),
         completion_evidence: `Git commit ${update.commitHash.substring(0, 7)}: ${update.commitMessage}`,
         completion_notes: `Auto-matched from git history with ${update.confidence}% confidence`,
+        // SEC-G7/SEC-G4 (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-4 SECURITY findings): this
+        // previously REPLACED metadata wholesale, clobbering anything already there; now
+        // merges. Also stamps producer, or the new sd_scope_deliverables completed_at trigger
+        // stamps completed_at with no producer, misclassifying this legitimate git-sync
+        // automation as an unprovenanced hand-typed UPDATE.
         metadata: {
+          ...update.existingMetadata,
           auto_completed: true,
           matched_by: 'git_sync',
           commit_hash: update.commitHash,
-          confidence: update.confidence
+          confidence: update.confidence,
+          producer: 'git_sync'
         }
       })
       .eq('id', deliverableId);

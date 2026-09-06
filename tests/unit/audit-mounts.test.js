@@ -14,7 +14,6 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { auditMounts } from '../../lib/audit-mounts.js';
 
 const REPO = path.join(__dirname, '..', '..');
@@ -199,12 +198,17 @@ describe('FR-5 SAFETY: the mutation half never touched a real file', () => {
     // call site. If a future change makes auditMounts write files, or a test starts
     // mutating server/index.js in place to prove discrimination, this fails.
     //
-    // SCOPED DELIBERATELY to server/index.js rather than asserting the WHOLE tree is
-    // clean. The first version checked `git status --porcelain` globally and failed on
-    // this suite's own untracked files — it was asserting a property of the developer's
-    // workspace, not of this code, and would have failed for anyone mid-edit. What the
-    // rule actually protects is the live call site.
-    const dirty = execFileSync('git', ['status', '--porcelain', '--', 'server/index.js'], { cwd: REPO, encoding: 'utf8' }).trim();
-    expect(dirty).toBe('');
+    // CONTENT-EQUALITY, not ambient git status (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-A):
+    // the prior version ran `git status --porcelain -- server/index.js` and asserted it
+    // was empty, which conflates "this suite's auditMounts calls didn't write to the
+    // file" with "the file happens to carry no unrelated, legitimate, already-in-progress
+    // edit from a different change" -- a false positive that fires on any concurrent,
+    // real edit to server/index.js that has nothing to do with this suite. Comparing the
+    // file's on-disk content now against `indexSource`, captured at module load before any
+    // test in this file ran, proves the property this test actually cares about (auditMounts
+    // performed no file I/O during this suite's execution) without depending on the state
+    // of the rest of the working tree.
+    const currentContent = fs.readFileSync(INDEX_PATH, 'utf8').replace(/\r\n/g, '\n');
+    expect(currentContent).toBe(indexSource);
   });
 });

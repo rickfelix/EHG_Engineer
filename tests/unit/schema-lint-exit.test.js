@@ -32,3 +32,34 @@ describe('computeExitCode — schema-reference lint exit decision', () => {
     expect(computeExitCode({ violations: 42, degradedFallback: false })).toBe(1);
   });
 });
+
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-2, TS-3) — a stale snapshot must FAIL, not warn.
+// Every verdict is computed against the committed snapshot, so a zero measured against a snapshot
+// older than the schema is "agrees with a stale picture", not "matches the live schema" — and it
+// used to print identically to a genuine clean run.
+describe('computeExitCode — snapshot staleness (FR-2)', () => {
+  it('TS-3a: a stale snapshot blocks even with ZERO violations — this is the false-zero trap', () => {
+    expect(computeExitCode({ violations: 0, degradedFallback: false, snapshotStale: true })).toBe(1);
+  });
+
+  it('TS-3b: a stale snapshot blocks with violations too', () => {
+    expect(computeExitCode({ violations: 5, degradedFallback: false, snapshotStale: true })).toBe(1);
+  });
+
+  it('TS-3c: a FRESH snapshot with zero violations still exits 0 — staleness is not a blanket block', () => {
+    expect(computeExitCode({ violations: 0, degradedFallback: false, snapshotStale: false })).toBe(0);
+  });
+
+  it('TS-3d: degradedFallback still wins over staleness (advisory runs never block)', () => {
+    // Deliberate precedence: a degraded run announces itself as advisory and asserts no pass, so
+    // there is no false zero to protect against. Making it block would re-introduce the
+    // flaky-fetch false-blocking SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001 removed.
+    expect(computeExitCode({ violations: 0, degradedFallback: true, snapshotStale: true })).toBe(0);
+  });
+
+  it('TS-3e: omitting snapshotStale is byte-identical to the pre-FR-2 behaviour', () => {
+    expect(computeExitCode({ violations: 0, degradedFallback: false })).toBe(0);
+    expect(computeExitCode({ violations: 3, degradedFallback: false })).toBe(1);
+    expect(computeExitCode({ violations: 3, degradedFallback: true })).toBe(0);
+  });
+});

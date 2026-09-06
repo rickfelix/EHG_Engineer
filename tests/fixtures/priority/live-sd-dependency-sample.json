@@ -1,0 +1,332 @@
+[
+  {
+    "sd_key": "SD-ALTIFYAI-LEO-ORCH-SPRINT-2026-002",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {
+      "conditional_note": "Edge recorded by Adam f27a883d 2026-08-29 ~23:2xZ per coordinator dispatch-rank audit + Solomon/Adam gating rulings: DIRECTION-BLIND-KILL-001 ships the direction-aware gate fix that unblocks the sanctioned AltifyAI 24->23 revert, which gates the REAL S23 UAT run, which gates this sprint continuing toward the chairman S24 walk. Lifts automatically on DIRECTION-BLIND-KILL-001 completion."
+    }
+  },
+  {
+    "sd_key": "SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-B",
+    "status": "draft",
+    "dependencies": [
+      {
+        "sd_id": "SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-A"
+      }
+    ],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-C",
+    "status": "draft",
+    "dependencies": [
+      {
+        "sd_id": "SD-FDBK-ENH-EHG-OPERATING-COMPANY-001-B"
+      }
+    ],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-FDBK-INFRA-LOOP-REWARDS-CATCHES-001",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012",
+    "status": "active",
+    "dependencies": [
+      {
+        "sd_key": "none",
+        "description": "No blocking dependencies — corrective patterns from retrospective analysis"
+      }
+    ],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEARN-FIX-LEARNING-IMPROVEMENT-006",
+    "status": "draft",
+    "dependencies": [
+      {
+        "sd_key": "none",
+        "description": "No blocking dependencies — corrective patterns from retrospective analysis"
+      }
+    ],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-FIX-DELIVERY-RECEIPT-SEVERITY-001",
+    "status": "in_progress",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-FIX-KPI-COUNTS-CHEAP-001",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-FIX-REMEDIATION-TEST-SUITE-006",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-GEN-ALTIFYAI-FIRST-CUSTOMER-001",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-APPLY-PENDING-LEO-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-CHECKIN-DIRECTED-BEFORE-RESUME-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-CORE-SKILLS-REBUILD-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-DRIVE-SCORE-LEG4-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-DURABLE-CHAIRMAN-KEYSTROKE-001",
+    "status": "pending_approval",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001",
+    "status": "in_progress",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-FINANCIAL-TIER2-ASSUMPTION-REGISTER-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001",
+    "status": "in_progress",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-A",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-B",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-C",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-D",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-REPAIR-DECAYED-EHG-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G",
+    "status": "pending_approval",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A",
+    "status": "pending_approval",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-B",
+    "status": "pending_approval",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002",
+    "status": "active",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-E",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-F",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-H",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-I",
+    "status": "draft",
+    "dependencies": [],
+    "metadata": {}
+  },
+  {
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J",
+    "status": "draft",
+    "dependencies": [
+      {
+        "sd_id": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G"
+      }
+    ],
+    "metadata": {}
+  }
+]

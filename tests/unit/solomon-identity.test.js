@@ -27,6 +27,15 @@ const {
 const NOW = 1_700_000_000_000; // fixed injected clock (ms)
 const FRESH_HB = new Date(NOW - 60_000).toISOString(); // 1 min ago — within SOLOMON_FRESH_MS
 const STALE_HB = new Date(NOW - SOLOMON_FRESH_MS - 1).toISOString(); // just past the window
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-5, F-2): classifySeat's cut point at this site is
+// max(SOLOMON_FRESH_MS/60000, SOLOMON_TOOL_SILENCE_CUT_FLOOR_MINUTES) = max(10, 15) = 15 minutes
+// (the floor was added post-EXEC-TESTING-review, evidence 50b3e3c0-0f5f-460d-a3ea-f6472eb0976f, to
+// stop a naive per-site conversion from false-positiving on a real 11-minute tool-call gap).
+// FRESH_TOOL_AT sits well inside it; STUCK_TOOL_AT sits comfortably past it (with margin, not a
+// boundary value), so decideSingleSolomonGuard's tool-activity check (FR-2) has an unambiguous
+// STUCK verdict to fold on.
+const FRESH_TOOL_AT = new Date(NOW - 60_000).toISOString(); // 1 min ago
+const STUCK_TOOL_AT = new Date(NOW - 30 * 60_000).toISOString(); // 30 min ago, well past the 15-min cut
 
 // ── pickCanonicalSolomon ──────────────────────────────────────────────────────
 
@@ -101,12 +110,41 @@ describe('decideSingleSolomonGuard', () => {
 
   it('returns action=refuse when a FRESH prior solomon exists (not self)', () => {
     const priorSolomons = [
-      { session_id: 'other', heartbeat_at: FRESH_HB },
+      { session_id: 'other', heartbeat_at: FRESH_HB, last_tool_at: FRESH_TOOL_AT },
     ];
     const result = decideSingleSolomonGuard({ priorSolomons, selfSessionId: 'me', nowMs: NOW });
     expect(result.action).toBe('refuse');
     expect(result.freshPriors).toContain('other');
     expect(result.retire).toEqual([]);
+  });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-2/FR-6): the exact specimen shape this SD exists to
+  // fix -- fresh heartbeat, but the tool-call loop has actually died. Pre-fix, this read as a
+  // fresh prior (refuse); post-fix, classifySeat's STUCK verdict folds it to NOT-fresh.
+  it('a fresh-heartbeat but tool-silent (STUCK) prior is NOT treated as fresh (FR-2)', () => {
+    const priorSolomons = [
+      { session_id: 'heartbeating-shell', heartbeat_at: FRESH_HB, last_tool_at: STUCK_TOOL_AT },
+    ];
+    const result = decideSingleSolomonGuard({ priorSolomons, selfSessionId: 'me', nowMs: NOW });
+    expect(result.action).toBe('retire_stale_then_register');
+    expect(result.retire).toContain('heartbeating-shell');
+    expect(result.freshPriors).toEqual([]);
+  });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (F-11, RE-corrected post-EXEC-REGRESSION-review, evidence
+  // d900a26a-8d14-48c4-ae35-def914e341e7): last_tool_at absent (classifySeat UNKNOWN) now folds to
+  // FRESH -- a freshly-registered Solomon has not yet made a tool call, so UNKNOWN is the NORMAL
+  // state for a genuinely live, seconds-old singleton. This is the exact regression scripts/
+  // solomon-register.test.js's pre-existing "a FRESH prior Solomon => REFUSED" case caught: this
+  // SD's original (wrong) fold direction let a second registration clear a young, genuinely-alive
+  // singleton.
+  it('a fresh-heartbeat prior with no last_tool_at (UNKNOWN) IS still treated as fresh (F-11)', () => {
+    const priorSolomons = [
+      { session_id: 'just-registered', heartbeat_at: FRESH_HB },
+    ];
+    const result = decideSingleSolomonGuard({ priorSolomons, selfSessionId: 'me', nowMs: NOW });
+    expect(result.action).toBe('refuse');
+    expect(result.freshPriors).toContain('just-registered');
   });
 
   it('returns action=retire_stale_then_register when only STALE priors exist', () => {
@@ -133,8 +171,8 @@ describe('decideSingleSolomonGuard', () => {
 
   it('refuses when a fresh OTHER exists even though self is also in the list', () => {
     const priorSolomons = [
-      { session_id: 'me', heartbeat_at: FRESH_HB },
-      { session_id: 'other-fresh', heartbeat_at: FRESH_HB },
+      { session_id: 'me', heartbeat_at: FRESH_HB, last_tool_at: FRESH_TOOL_AT },
+      { session_id: 'other-fresh', heartbeat_at: FRESH_HB, last_tool_at: FRESH_TOOL_AT },
     ];
     const result = decideSingleSolomonGuard({ priorSolomons, selfSessionId: 'me', nowMs: NOW });
     expect(result.action).toBe('refuse');
@@ -144,7 +182,7 @@ describe('decideSingleSolomonGuard', () => {
 
   it('prefers refuse over retire when one prior is fresh and another is stale', () => {
     const priorSolomons = [
-      { session_id: 'fresh-other', heartbeat_at: FRESH_HB },
+      { session_id: 'fresh-other', heartbeat_at: FRESH_HB, last_tool_at: FRESH_TOOL_AT },
       { session_id: 'stale-other', heartbeat_at: STALE_HB },
     ];
     const result = decideSingleSolomonGuard({ priorSolomons, selfSessionId: 'me', nowMs: NOW });

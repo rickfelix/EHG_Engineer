@@ -30,7 +30,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { discoverAllProcesses } from '../lib/periodic-liveness/enumerate-processes.mjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
@@ -40,6 +40,11 @@ const supabase = createClient(
 );
 
 const ROLE_SESSION_INTERVAL_SECONDS = 1800; // 30-min tick, matches the fleet's own ScheduleWakeup idle-tick convention
+
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (spec §1.5): the Michael seat's expected-active window,
+// America/New_York wall-clock, stored in periodic_process_registry.expected_window_et. Exported so the
+// idempotency test and the watcher test can assert the same literal.
+export const MICHAEL_EXPECTED_WINDOW_ET = Object.freeze({ start: '04:30', end: '07:30' });
 
 // QF-20260710-257: known rounds map to their DECLARED cadence — prefix inference put
 // gap_analysis / vision_rescore / corrective_generation (registered 'weekly' in
@@ -76,8 +81,9 @@ async function seedRoleSessions() {
     throw new Error(`claude_sessions query failed: ${e.message}`);
   }
 
-  // Only the 3 role loops the SD's own specimens name (Adam/coordinator/Solomon) -- sprint-reasoner-*
-  // are explicitly non-fleet/non-role sessions per established fleet convention, out of this seed.
+  // The 3 role loops the SD's own specimens name (Adam/coordinator/Solomon) plus, since
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A, the Michael seat -- sprint-reasoner-* are
+  // explicitly non-fleet/non-role sessions per established fleet convention, out of this seed.
   const seen = new Set();
   const upserts = [];
   for (const row of rows || []) {
@@ -85,8 +91,15 @@ async function seedRoleSessions() {
     let processKey = null;
     let displayName = null;
     let ref = null;
+    let expectedWindowEt = null;
     if (md.role === 'adam') { processKey = 'role_session:adam'; displayName = 'Adam (role-session loop)'; ref = { metadata_filter: { role: 'adam' } }; }
     else if (md.role === 'solomon') { processKey = 'role_session:solomon'; displayName = 'Solomon (role-session loop)'; ref = { metadata_filter: { role: 'solomon' } }; }
+    // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (spec §1.5, ratification 42111a33 Q7): the Michael
+    // seat carries a WINDOWED expectation -- 04:30-07:30 ET -- instead of the role-session force-true.
+    // currently_expected_active stays true (the watcher's windowed check runs BEFORE that short-circuit
+    // and yields INTENTIONALLY_DOWN outside the window), so the seat is watched inside the window and
+    // never alarmed on outside it. The owner-registry suppression rides KNOWN_PEERS ('michael').
+    else if (md.role === 'michael') { processKey = 'role_session:michael'; displayName = 'Michael (role-session loop, 04:30-07:30 ET window)'; ref = { metadata_filter: { role: 'michael' } }; expectedWindowEt = MICHAEL_EXPECTED_WINDOW_ET; }
     else if (md.is_coordinator === true) { processKey = 'role_session:coordinator'; displayName = 'Coordinator (role-session loop)'; ref = { metadata_filter: { is_coordinator: true } }; }
     if (!processKey || seen.has(processKey)) continue;
     seen.add(processKey);
@@ -100,6 +113,9 @@ async function seedRoleSessions() {
       liveness_source_ref: ref,
       session_bound: true,
       currently_expected_active: true,
+      // Only set for the Michael row; omitted (not null-written) elsewhere so the upsert stays
+      // byte-identical for the other roles and safe while the column migration is unapplied.
+      ...(expectedWindowEt ? { expected_window_et: expectedWindowEt } : {}),
       updated_at: new Date().toISOString(),
     });
   }
@@ -155,6 +171,47 @@ async function seedSchedulerRounds() {
   return upserts;
 }
 
+// SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-6: hand-listed self_stamped rows for the two
+// alarm crons FR-5 registers as host-local tasks (fleet-down-alert.mjs, fleet-worker-pulse.mjs).
+// Hand-listed rather than routed through discoverAllProcesses/discoverCronScripts for the same
+// reason DECLARED_ROUND_INTERVALS overrides prefix-inferred scheduler_round intervals above:
+// the real cadence is KNOWN upfront (matches each script's own gha_cron:*.yml sibling row,
+// already live at 900s/grace 3) and mechanical discovery would either miss these entirely
+// (the underlying scripts live at scripts/*.mjs, not scripts/cron/*, where only their FR-5
+// wrapper .cmd files -- not scanned by discoverCronScripts' .mjs/.cjs/.js filter -- reside) or
+// assign the wrong (86400s daily default) interval if it did find them. periodic-liveness-
+// watcher.mjs is deliberately NOT given a third row here: it already self-tracks via its own
+// __watcher_self__ mechanism, which improves automatically once FR-5 fires it more often.
+export const HOST_ALARM_CRON_INTERVAL_SECONDS = 900; // matches gha_cron:fleet-down-alert-cron.yml / gha_cron:fleet-worker-pulse-cron.yml
+export async function seedHostAlarmCrons() {
+  return [
+    {
+      process_key: 'host_cron:fleet-down-alert',
+      display_name: 'Host-local cron: fleet-down-alert.mjs',
+      owner: 'coordinator-fleet',
+      process_type: 'standalone_cron',
+      expected_interval_seconds: HOST_ALARM_CRON_INTERVAL_SECONDS,
+      liveness_source: 'self_stamped',
+      liveness_source_ref: { discovered_from: 'sd_leo_infra_loop_liveness_discriminator_001_fr6', script: 'scripts/fleet-down-alert.mjs' },
+      session_bound: false,
+      currently_expected_active: true,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      process_key: 'host_cron:fleet-worker-pulse',
+      display_name: 'Host-local cron: fleet-worker-pulse.mjs',
+      owner: 'coordinator-fleet',
+      process_type: 'standalone_cron',
+      expected_interval_seconds: HOST_ALARM_CRON_INTERVAL_SECONDS,
+      liveness_source: 'self_stamped',
+      liveness_source_ref: { discovered_from: 'sd_leo_infra_loop_liveness_discriminator_001_fr6', script: 'scripts/fleet-worker-pulse.mjs' },
+      session_bound: false,
+      currently_expected_active: true,
+      updated_at: new Date().toISOString(),
+    },
+  ];
+}
+
 // FR-2: standalone_cron pass — one owned row per discovered recurring process. New rows get the
 // coordinator interim owner ('coordinator-fleet') per the parent LEAD condition (never silently
 // unowned); EXISTING rows keep their current owner — a re-run must never clobber a later
@@ -206,11 +263,12 @@ async function seedStandaloneCrons() {
   });
 }
 
-async function main() {
+export async function main() {
   const roleUpserts = await seedRoleSessions();
   const roundUpserts = await seedSchedulerRounds();
   const cronUpserts = await seedStandaloneCrons();
-  const all = [...roleUpserts, ...roundUpserts, ...cronUpserts];
+  const hostAlarmCronUpserts = await seedHostAlarmCrons();
+  const all = [...roleUpserts, ...roundUpserts, ...cronUpserts, ...hostAlarmCronUpserts];
 
   if (all.length === 0) {
     console.log('No mechanically-derivable registry rows found (0 role sessions, 0 scheduler rounds) -- nothing to seed.');
@@ -227,10 +285,17 @@ async function main() {
   console.log(`  role_session: ${roleUpserts.length}`);
   console.log(`  scheduler_round: ${roundUpserts.length}`);
   console.log(`  standalone_cron: ${cronUpserts.length}`);
+  console.log(`  host_alarm_cron: ${hostAlarmCronUpserts.length}`);
   for (const row of data) console.log(`  - ${row.process_key}`);
 }
 
-main().catch((err) => {
-  console.error(`[seed-periodic-process-registry] FAILED: ${err.message}`);
-  process.exit(1);
-});
+// SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-6 (TESTING sub-agent finding, EXEC-TO-PLAN):
+// previously unguarded -- importing this module for its pure seed*() functions ran the entire
+// live-DB seeding pipeline as a side effect of import, which is why seedHostAlarmCrons() could
+// not be safely unit-tested. Guard pattern matches every other setup-*/seed-* script in this repo.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(`[seed-periodic-process-registry] FAILED: ${err.message}`);
+    process.exit(1);
+  });
+}

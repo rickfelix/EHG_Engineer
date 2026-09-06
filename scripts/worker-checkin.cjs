@@ -1290,9 +1290,13 @@ async function foreignSessionForSd(sb, sdKey, mySessionId) {
   // caller of this function (isForeignSessionLive, foreignClaimantBlocksSteal) -- the exact
   // "a rung that cannot see the constraint is not evidence of absence" failure documented in
   // database/migrations/20260727_v_active_sessions_expose_tick_and_silence.sql.
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: status added -- the 5th producer feeding isSessionAlive()
+  // that FR-2's original 4-site sweep missed (testing-agent EXEC review, 688ca3f5). Without it,
+  // FR-2's released/stale deny-list is inert here for a 'stale' row (v_active_sessions' own WHERE
+  // clause already excludes status='released', so only the 'stale' case is live for this caller).
   const { data: sessions } = await sb
     .from('v_active_sessions')
-    .select('session_id, is_alive, heartbeat_at, heartbeat_age_seconds, terminal_id, current_branch, process_alive_at, expected_silence_until')
+    .select('session_id, is_alive, status, heartbeat_at, heartbeat_age_seconds, terminal_id, current_branch, process_alive_at, expected_silence_until')
     .eq('sd_key', sdKey)
     .neq('session_id', mySessionId)
     .limit(1);
@@ -1653,7 +1657,7 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
     // SD-LEO-INFRA-CHECKIN-NAME-ON-ARRIVAL-001 (FR-4): role sessions (Adam/Solomon) run the fleet but
     // are NOT worker-pool members. Adam short-circuits to action=idle — exactly what the FR-1-relaxed
     // gate now names — so exclude them here at the authoritative metadata read too.
-    if (myMeta.role === 'adam' || myMeta.role === 'solomon') return null;
+    if (myMeta.role === 'adam' || myMeta.role === 'solomon' || myMeta.role === 'michael') return null; // michael: SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A
     // FR-4: widen the ghost guard to the shared isFixtureSession superset so *-probe-* / QF-TEST-*
     // sessions (which the narrow isTestSessionId prefix list misses, bug 7b59dac8) never burn a pool
     // slot on an idle check-in. Fail-open: if the .mjs import fails, the gate's isTestSessionId

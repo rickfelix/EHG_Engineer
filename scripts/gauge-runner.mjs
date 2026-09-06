@@ -75,7 +75,11 @@ import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
 import { findOverdueHolds } from '../lib/governance/hold-state-sweep.js';
 import { findOrphanedEscalatedQfs } from '../lib/governance/orphaned-escalated-qf-sweep.js';
-import { readHoldStateMode } from '../lib/governance/hold-state-contract.js';
+import { readHoldStateMode, isStructuredPredicate } from '../lib/governance/hold-state-contract.js';
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-D (FR-6): the first non-test importer of the release-condition
+// evaluator. Before this it had exactly one importer — its own unit test — and its docblock said
+// consumers were "not-yet-built".
+import { classifyReleaseConditions } from '../lib/governance/release-condition-predicate.js';
 import { scanOpenQfsForOffCanonicalMints } from '../lib/fleet/off-canonical-mint-gauge.js';
 import { runCheck as checkWindDownRecurrence } from './gauges/wind-down-recurrence-check.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the hold-state-overdue detector's
@@ -216,10 +220,64 @@ function buildDetectorResolvers(supabase) {
         .gte('created_at', sevenDaysAgoIso);
       if (violationsErr) throw new Error('hold-state-overdue violations query failed: ' + violationsErr.message);
 
+      /*
+       * SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-D (FR-6) — THE CONSUMER for release_condition_predicate.
+       *
+       * lib/governance/release-condition-predicate.js shipped fail-closed and complete, and had
+       * exactly ONE importer: its own unit test. Its docblock said consumers were "not-yet-built" and
+       * they never were. This is that consumer, landing in the SAME commit as the producer, because a
+       * producer without a consumer is the exact failure the module already committed once.
+       *
+       * WHY THE THREE-WAY SPLIT MATTERS. evaluate() is FAIL-CLOSED: an unrecognized type, missing
+       * state, or malformed predicate all return false. So "false" means BOTH "condition genuinely not
+       * met" AND "I could not evaluate this here". Reporting those as one number would be a lying
+       * instrument of precisely the kind this workstream exists to remove, so unevaluable is counted
+       * SEPARATELY and never folded into unmet. This gauge can honestly supply state only for
+       * db_row_exists; test_green and manual_flag need a state provider that does not exist yet, and
+       * they are reported as unevaluable rather than silently counted as unmet.
+       */
+      // Paginated to completion, NOT .limit(N): PostgREST re-clamps at 1000 rows, so a capped read
+      // would measure the cap rather than the population — the same false-negative the sibling query
+      // above is paginated to avoid. A silently truncated denominator here would understate the
+      // prose-only gap this counter exists to expose.
+      let predicateRows;
+      try {
+        predicateRows = await fetchAllPaginated(() => supabase
+          .from('hold_state_contract_violations')
+          .select('id, surface, release_condition, release_condition_predicate')
+          .gte('created_at', sevenDaysAgoIso)
+          .order('id', { ascending: true })); // unique tiebreaker: stable page boundaries
+      } catch (error) {
+        throw new Error('hold-state-overdue predicate query failed: ' + error.message);
+      }
+
+      // The gauge injects ONLY the state it can honestly supply. It deliberately does NOT fabricate a
+      // self-referential count (an earlier cut passed rowCounts.hold_state_contract_violations =
+      // rows.length, which could only ever resolve met degenerately, from its own result set).
+      // Everything it cannot answer is reported UNEVALUABLE, never unmet — classifyReleaseConditions
+      // gates on the presence of the specific state KEY, so a predicate keyed to a table the gauge did
+      // not count cannot be misreported as not-met.
+      const injectedState = {};
+      const counts = classifyReleaseConditions(predicateRows || [], injectedState, isStructuredPredicate);
+
       return {
         ...findOverdueHolds(data, Date.now()),
         mode: readHoldStateMode(),
         recentViolationCount: recentViolationCount || 0,
+        // A MET condition surfaces here instead of sitting silent — the exit predicate this child owns.
+        releaseConditionsMet: counts.met,
+        releaseConditionsUnmet: counts.unmet,
+        // Reported separately, never folded into unmet: fail-closed false is not evidence of not-met.
+        // Non-zero here means a state provider is still missing, which is a DIFFERENT problem from a
+        // condition that is genuinely not yet satisfied, and the two must not be summed.
+        releaseConditionsUnevaluableHere: counts.unevaluable,
+        structuredPredicateCount: counts.structured,
+        // SEC-D-1 defence in depth: a stored predicate that still throws is COUNTED, never fatal. A
+        // non-zero value here means malformed data reached the evaluator and the row was skipped —
+        // visible rather than silently voiding the whole detector for the tick.
+        malformedPredicateCount: counts.malformed,
+        // The remaining work, made countable: conditions still carried as prose a machine cannot read.
+        proseOnlyConditionCount: counts.proseOnly,
       };
     },
     // QF-20260831-191: escalated QFs with no linked SD -- the work sits in no lane, invisible.
@@ -388,6 +446,34 @@ function buildDetectorResolvers(supabase) {
     'wind-down-recurrence': async () => {
       const result = await checkWindDownRecurrence({ supabase });
       return { ...result, count: result.alarmed ? 1 : 0 };
+    },
+    // SD-LEO-INFRA-RESTORE-AGENT-TOOL-001 (FR-4): task-subagent-recorder.cjs had ZERO rows in its
+    // entire history before this SD (matcher/guard named 'Task' only + two independent field-name
+    // bugs reading tool_result/result and tool_call_id/call_id instead of the verified
+    // tool_response/tool_use_id contract) -- undetected for the hook's whole life because nothing
+    // watched for its silence. This gauge is that watch: RED means source=task_hook produced no
+    // rows in 7 days while the fleet was demonstrably active (a regression of the exact class this
+    // SD fixed), not merely "no sub-agents happened to run".
+    'agent-tool-hook-liveness': async () => {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { count: taskHookCount, error: hookErr } = await supabase
+        .from('sub_agent_execution_results')
+        .select('id', { count: 'exact', head: true })
+        .eq('source', 'task_hook')
+        .gte('created_at', sevenDaysAgo);
+      if (hookErr) throw new Error('agent-tool-hook-liveness: sub_agent_execution_results query failed: ' + hookErr.message);
+      const { count: activeSessionCount, error: sessErr } = await supabase
+        .from('claude_sessions')
+        .select('id', { count: 'exact', head: true })
+        .gte('heartbeat_at', sevenDaysAgo);
+      if (sessErr) throw new Error('agent-tool-hook-liveness: claude_sessions query failed: ' + sessErr.message);
+      const taskHookCountSafe = taskHookCount || 0;
+      const activeSessionCountSafe = activeSessionCount || 0;
+      return {
+        task_hook_count: taskHookCountSafe,
+        active_session_count: activeSessionCountSafe,
+        count: taskHookCountSafe === 0 && activeSessionCountSafe > 0 ? 1 : 0,
+      };
     },
   };
 }

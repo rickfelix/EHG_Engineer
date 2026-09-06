@@ -5,6 +5,7 @@
  * Provides template method pattern for consistent handoff execution flow.
  */
 
+import crypto from 'node:crypto';
 import ResultBuilder from '../ResultBuilder.js';
 import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import path from 'path';
@@ -364,6 +365,10 @@ export class BaseExecutor {
               gate: 'GATE_COORDINATOR_AUTHORITY_FENCE',
               patternId: options.patternId,
               followupSdKey: options.followupSdKey,
+              ledgerId: options.bypassLedgerId,
+              // FR-B2's self-authorship check only applies to sub-agent-evidence gate failures --
+              // this site has no evidence row to compare against, ever.
+              selfAuthorshipCheckStatus: 'not_applicable_authority_fence',
             });
           } else {
             try { endSpan(rootSpan, { result: 'authority_fence' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
@@ -507,6 +512,11 @@ export class BaseExecutor {
           enabled: cacheEnabled && !!priorResults,
           prior: priorResults || {},
           _allowed: cacheEnabled,
+          // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: one id per execute() invocation, shared by
+          // every attempt in the retry loop below (in-process reuse still works) but never
+          // matching a DIFFERENT invocation's prior results loaded from the DB above (cross-
+          // execution reuse now requires a fresh evaluation — see gate-verdict-cache.js).
+          executionId: crypto.randomUUID(),
         };
         if (validationContext._verdictCache.enabled) {
           console.log(`   ♻️  Gate-verdict cache armed (${Object.keys(priorResults).length} prior gate result(s) with input hashes)`);
@@ -658,6 +668,80 @@ export class BaseExecutor {
       // SD-LEARN-010:US-005: Handle bypass validation
       if (!gateResults.passed) {
         if (options.bypassValidation) {
+          // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2): refuse -- do not override -- a
+          // bypass whose actor authored the failing evidence. The evidence gate (e.g.
+          // GATE_SUBAGENT_EVIDENCE) already fetches session_id for each failing/non-evidence
+          // agent; this only reads what is already carried on the gate's own details.
+          //
+          // SECURITY finding HIGH-1 (evidence dcf8dab7): gateResults.failedGate is FIRST-WINS
+          // (ValidationOrchestrator.js sets it once and later steps like OIV can clobber it) --
+          // reading only gateResults.gateResults[failedGate] misses a failing evidence gate
+          // whenever a DIFFERENT gate also failed and won the failedGate designation. Scan every
+          // executed gate's details, not just the one named by failedGate.
+          const evidenceEntries = [];
+          for (const [gateName, gateResult] of Object.entries(gateResults.gateResults || {})) {
+            for (const entry of [...(gateResult?.details?.failing || []), ...(gateResult?.details?.non_evidence || [])]) {
+              evidenceEntries.push({ ...entry, _sourceGate: gateName });
+            }
+          }
+          const actorSessionId = process.env.CLAUDE_SESSION_ID || null;
+          // SECURITY finding HIGH-2 (evidence dcf8dab7): a guard may decline to run, but must
+          // never report a number it did not take. Distinguish "checked, no match" from "could
+          // not check" so the persisted bypass metadata never reads as ambiguously silent.
+          let selfAuthorshipCheckStatus;
+          if (!actorSessionId) selfAuthorshipCheckStatus = 'skipped_no_actor_session';
+          else if (evidenceEntries.length === 0) selfAuthorshipCheckStatus = 'not_applicable_no_evidence_detail';
+          else if (!evidenceEntries.some((e) => e?.session_id)) selfAuthorshipCheckStatus = 'skipped_no_evidence_session_id';
+          else selfAuthorshipCheckStatus = 'cleared';
+          const selfAuthoredEntry = actorSessionId
+            ? evidenceEntries.find((e) => e?.session_id && e.session_id === actorSessionId)
+            : null;
+          if (selfAuthoredEntry) selfAuthorshipCheckStatus = 'refused';
+
+          if (selfAuthoredEntry) {
+            console.log('');
+            console.log('🚫 BYPASS REFUSED: actor authored the failing evidence');
+            console.log(`   Failed gate: ${selfAuthoredEntry._sourceGate}`);
+            console.log(`   Agent: ${selfAuthoredEntry.agent} | verdict: ${selfAuthoredEntry.verdict}`);
+            console.log('');
+            try {
+              const { emitValidationAuditLog } = await import('../../../lib/emit-validation-audit-log.mjs');
+              await emitValidationAuditLog({
+                supabase: this.supabase,
+                correlation_id: crypto.randomUUID(),
+                sd_id: sd?.id || sdId,
+                validator_name: 'base_executor_bypass_self_authored_refusal',
+                failure_reason: `--bypass-validation refused for ${this.handoffType}: actor session ${actorSessionId} authored the failing ${selfAuthoredEntry.agent} evidence (verdict=${selfAuthoredEntry.verdict})`,
+                failure_category: 'bypass_refused_self_authored',
+                metadata: { handoff_type: this.handoffType, gate: selfAuthoredEntry._sourceGate, agent: selfAuthoredEntry.agent, verdict: selfAuthoredEntry.verdict, bypass_ledger_id: options.bypassLedgerId || null },
+                execution_context: 'BaseExecutor.js:execute (gate_failure bypass site)',
+              });
+            } catch (auditErr) {
+              console.warn(`   ⚠️  bypass-refusal audit emission failed (non-blocking): ${auditErr.message}`);
+            }
+            try { endSpan(rootSpan, { result: 'bypass_refused_self_authored' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
+            // FR-B1: carry bypassLedgerId at the top level (matching applyBypassToResult's
+            // shape) so HandoffRecorder.recordFailure can join this rejection back to the
+            // ledger row cli-main.js already wrote, even though this path never sets bypassInfo.
+            return {
+              ...ResultBuilder.gateFailure('GATE_BYPASS_SELF_AUTHORED_REFUSED', {
+                issues: [`Bypass refused: actor session ${actorSessionId} authored the failing ${selfAuthoredEntry.agent} evidence (verdict=${selfAuthoredEntry.verdict}) that --bypass-validation attempted to override.`],
+                score: 0,
+                max_score: 100,
+                warnings: gateResults.warnings,
+              }, `GATE_BYPASS_SELF_AUTHORED_REFUSED: ${selfAuthoredEntry._sourceGate} — the bypassing actor authored the evidence it would override`),
+              bypassed: true,
+              bypassLedgerId: options.bypassLedgerId || null,
+              // SECURITY finding LOW follow-up (evidence 361e7bc6): this return bypasses
+              // buildBypassStamp entirely (it never proceeds to a bypassInfo-carrying success),
+              // so 'refused' -- the single most security-relevant outcome HIGH-2 exists to
+              // make legible -- previously never reached HandoffRecorder, persisting as null
+              // (the exact "predates FR-B2" value it must never be confused with). Stamped
+              // directly here since this path never touches buildBypassStamp/applyBypassToResult.
+              bypassSelfAuthorshipCheckStatus: selfAuthorshipCheckStatus,
+            };
+          }
+
           console.log('');
           console.log('⚠️  BYPASS ACTIVE: Gate failures overridden');
           console.log(`   Failed gate: ${gateResults.failedGate}`);
@@ -675,6 +759,10 @@ export class BaseExecutor {
             issues: gateResults.issues,
             patternId: options.patternId,
             followupSdKey: options.followupSdKey,
+            ledgerId: options.bypassLedgerId,
+            // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2, SECURITY finding HIGH-2): never let
+            // "the check cleared it" and "the check could not run" look identical downstream.
+            selfAuthorshipCheckStatus,
           });
           // Continue execution despite gate failure
         } else {
@@ -808,7 +896,12 @@ export class BaseExecutor {
       // Step 4: Execute type-specific logic
       let step4Span;
       try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
-      const executionResult = await this.executeSpecific(sdId, sd, options, gateResults);
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-2/FR-3: bypassInfo is already fully resolved by
+      // this point (set at line 362 or 755, both before this call) but was never threaded into
+      // executeSpecific -- passed as a named object (not a positional arg) per TESTING sub-agent
+      // recommendation, so a future accidental capture of an extra positional argument elsewhere
+      // is self-evident rather than silently wrong.
+      const executionResult = await this.executeSpecific(sdId, sd, options, gateResults, { bypassInfo });
       try { endSpan(step4Span, { result: executionResult.success ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       if (!executionResult.success) {
         try { endSpan(rootSpan, { result: 'exec_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
@@ -859,6 +952,12 @@ export class BaseExecutor {
         maxScore: gateResults.totalMaxScore,
         gateCount: gateResults.gateCount,
         warnings: gateResults.warnings,
+        // FR-9 (SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-A): this explicit field list is the
+        // ONLY thing that survives from the raw ValidationOrchestrator result to
+        // HandoffRecorder -- yellowZoneAccept was set by validateGates() but silently dropped
+        // here, so the metadata.yellow_zone_accept audit stamp never actually reached
+        // production despite passing in isolation (Explore evidence, LEAD-TO-PLAN review).
+        yellowZoneAccept: gateResults.yellowZoneAccept,
       }, bypassInfo);
 
     } catch (error) {
@@ -939,9 +1038,13 @@ export class BaseExecutor {
    * @param {object} sd - SD record
    * @param {object} options - Options
    * @param {object} gateResults - Results from gate validation
+   * @param {{bypassInfo: object|null}} [_execContext] - SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G:
+   *   bypassInfo, already resolved earlier in execute(), for a subclass that must persist its own
+   *   accepted-row write before returning (e.g. lead-final-approval). Optional -- subclasses that
+   *   don't need it can ignore this parameter entirely.
    * @returns {Promise<object>} Execution result
    */
-  async executeSpecific(_sdId, _sd, _options, _gateResults) {
+  async executeSpecific(_sdId, _sd, _options, _gateResults, _execContext) {
     throw new Error('Subclass must implement executeSpecific()');
   }
 

@@ -19,14 +19,92 @@
  * Default is GUARDED (isReapable): a worktree owned by a live session OR holding
  * uncommitted/unpushed work is SKIPPED, not removed. --force overrides the guard
  * but STILL pre-unlinks node_modules — the gut-prevention is unconditional.
+ *
+ * QF-20260903-419: the guard above previously never checked LIVE CLAIM state — it
+ * only ever passed the isReapable default liveOwner:false, so a git-clean worktree
+ * (content-only check) was always removable even when another seat had re-claimed
+ * the SD/QF since. Two live-claimed trees were destroyed this way. resolveLiveClaim
+ * below queries the actual claim row for the worktree's SD/QF key before removal;
+ * a query failure fails CLOSED (treated as live) since content alone can never
+ * prove absence of a claim.
  */
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import { createClient } from '@supabase/supabase-js';
 import { removeWorktreeViaGit, getRepoRoot, safeRecursiveRm } from '../lib/worktree-manager.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { isKnownWedged, FREEZE_CUT_MINUTES } from '../lib/fleet/genuine-worker.mjs';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { markerDirs: defaultMarkerDirs, getMarkerSessionIds: defaultGetMarkerSessionIds } = require('../lib/fleet/cc-pid-liveness.cjs');
 
 const WORKTREES_DIR = '.worktrees';
+
+/** Branch → SD/QF key, matching the convention scripts/worktree-reaper.mjs already reaps by. */
+export function keyFromBranch(branch) {
+  const m = String(branch || '').match(/^(?:refs\/heads\/)?(?:feat|qf|fix|chore|hotfix)\/(.+)$/);
+  return m ? m[1] : null;
+}
+
+/**
+ * SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1b (VALIDATION finding B): claim-ROW
+ * PRESENCE alone is not proof of liveness — a session that died without releasing its
+ * claim pins the row as "live" forever, with no liveness probe at all. This is checked
+ * ONLY when a claiming_session_id already exists (an ADDITIVE narrowing, never a
+ * widening): a claiming session we cannot positively prove dead still reads live,
+ * preserving resolveLiveClaim's existing fail-closed contract for every other caller.
+ * "Proven dead" = no resident PID by the marker-dir UNION (a live process anywhere
+ * always wins) AND (released_at set OR the tool clock is frozen past RECLAIM's
+ * freeze-cut) — never heartbeat alone, per FR-1b.
+ * @returns {Promise<boolean>} true iff positively proven dead
+ */
+async function isClaimingSessionProvenDead(sessionId, { supabase, markerDirsFn, getMarkerSessionIdsFn, nowMs }) {
+  try {
+    for (const dir of markerDirsFn()) {
+      if (getMarkerSessionIdsFn(dir)[sessionId]?.alive) return false; // resident PID — definitely live
+    }
+    const { data: row, error } = await supabase
+      .from('claude_sessions')
+      .select('session_id, released_at, last_tool_at, loop_state, heartbeat_at')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+    if (error || !row) return false; // cannot verify — not proven dead, fail closed
+    if (row.released_at) return true; // released AND no resident PID
+    return isKnownWedged(row, nowMs, FREEZE_CUT_MINUTES); // frozen past cut, never heartbeat alone
+  } catch { return false; } // cannot verify — not proven dead
+}
+
+/**
+ * Is the SD/QF this worktree belongs to CURRENTLY claimed by any session? Checked
+ * against the live DB row, never inferred from worktree content. Fail-CLOSED: a
+ * lookup that cannot run (no key, no client, query error) reports liveOwner:true —
+ * an unverifiable claim must never look like "safe to remove".
+ * @returns {Promise<boolean>}
+ */
+export async function resolveLiveClaim(key, { supabaseClient, markerDirsFn = defaultMarkerDirs, getMarkerSessionIdsFn = defaultGetMarkerSessionIds, nowMs = Date.now() } = {}) {
+  if (!key) return false; // no resolvable SD/QF key — nothing this check can protect
+  let supabase = supabaseClient;
+  if (!supabase) {
+    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const apiKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    if (!url || !apiKey) return true; // cannot verify — fail closed
+    try { supabase = createClient(url, apiKey, { auth: { persistSession: false } }); }
+    catch { return true; }
+  }
+  try {
+    const table = /^QF-/i.test(key) ? 'quick_fixes' : 'strategic_directives_v2';
+    const idColumn = table === 'quick_fixes' ? 'id' : 'sd_key';
+    const { data, error } = await supabase
+      .from(table).select('claiming_session_id').eq(idColumn, key).maybeSingle();
+    if (error) return true; // query failed — fail closed, cannot verify absence of a claim
+    const claimingSessionId = data?.claiming_session_id;
+    if (!claimingSessionId) return false;
+    const provenDead = await isClaimingSessionProvenDead(claimingSessionId, { supabase, markerDirsFn, getMarkerSessionIdsFn, nowMs });
+    return !provenDead;
+  } catch { return true; } // fail closed
+}
 
 function listWorktrees(repoRoot) {
   try {
@@ -54,7 +132,7 @@ export function resolveWorktreePath(arg, repoRoot) {
   return path.join(repoRoot, WORKTREES_DIR, arg); // conventional fallback
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const force = args.includes('--force') || args.includes('-f');
   const target = args.find((a) => !a.startsWith('-'));
@@ -70,10 +148,18 @@ function main() {
     process.exit(2);
   }
 
+  // QF-20260903-419: content (git status/log) cannot see a LIVE CLAIM another
+  // seat took after this one released — resolve the actual DB claim state
+  // before removal rather than trusting the caller's memory of having released.
+  const wtEntry = listWorktrees(repoRoot).find((w) => path.resolve(w.path) === path.resolve(wtPath));
+  const key = keyFromBranch(wtEntry?.branch) || target;
+  const liveOwner = !force && await resolveLiveClaim(key);
+
   // removeWorktreeViaGit pre-unlinks node_modules FIRST, then `git worktree
   // remove --force`. guard:!force skips a live/dirty worktree (protective).
   const res = removeWorktreeViaGit(wtPath, repoRoot, {
     guard: !force,
+    liveOwner,
     allowFail: true,
     logger: (m) => console.warn(m),
   });
@@ -116,5 +202,5 @@ function main() {
 
 // Only run when invoked directly (keep resolveWorktreePath importable for tests).
 if (isMainModule(import.meta.url)) {
-  main();
+  main().catch((e) => { console.error(`✗ ${e.message}`); process.exit(1); });
 }

@@ -113,6 +113,28 @@ function reconcileClient({ sds, ventures }) {
 
 const silent = () => {};
 
+// SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: mark/unmark now write via the atomic
+// mergeMetadataKeys()/removeMetadataKey() partial-key helpers (injectable) instead of a
+// full-blob .update({metadata:...}) against the mock supabase client. These stand in for the
+// real helpers, recording to c.updates in the same shape the previous full-blob write did so
+// the existing assertions keep checking the same thing (which key ended up set/absent).
+function markUnmarkMocks(c, sds) {
+  return {
+    mergeMetadataKeysFn: async (sdKey, patch) => {
+      const row = sds.find((s) => s.sd_key === sdKey);
+      c.updates.push({ table: 'strategic_directives_v2', id: row?.id, payload: { metadata: { ...(row?.metadata || {}), ...patch } } });
+      return { merged: true, sdKey };
+    },
+    removeMetadataKeyFn: async (sdKey, key) => {
+      const row = sds.find((s) => s.sd_key === sdKey);
+      const metadata = { ...(row?.metadata || {}) };
+      delete metadata[key];
+      c.updates.push({ table: 'strategic_directives_v2', id: row?.id, payload: { metadata } });
+      return { removed: true, sdKey };
+    },
+  };
+}
+
 describe('FR-2: bidirectional clone-tree reconciliation', () => {
   const sds = [
     { id: 'sd-leaked', sd_key: 'SD-LEAKED', status: 'draft', metadata: { venture_id: 'v-clone' } },             // clone, unmarked -> MARK
@@ -138,7 +160,7 @@ describe('FR-2: bidirectional clone-tree reconciliation', () => {
 
   it('apply marks the leaked clone + un-marks the wrongly-marked real venture (idempotent on the OK rows)', async () => {
     const c = reconcileClient({ sds, ventures });
-    const r = await reconcileCloneTreeExclusion({ supabase: c, dryRun: false, log: silent });
+    const r = await reconcileCloneTreeExclusion({ supabase: c, dryRun: false, log: silent, ...markUnmarkMocks(c, sds) });
     expect(r.marked).toBe(1);
     expect(r.unmarked).toBe(1);
     expect(c.updates).toHaveLength(2);

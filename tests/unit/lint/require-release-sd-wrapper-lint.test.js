@@ -245,10 +245,13 @@ describe('require-release-sd-wrapper-lint.mjs -- count-anchored allowlist (isola
 });
 
 describe('require-release-sd-wrapper-lint.mjs -- real corpus allowlist (read-only)', () => {
+  // QF-20260903-532: spawns a subprocess that walks the real scripts/+lib/ tree (~thousands of
+  // files); measured well past vitest's 60s default under this fleet's real concurrent-session
+  // disk load — a second, environment-driven flake source independent of scanned content.
   it('the real corpus allowlist loads without throwing and the real repo passes clean', () => {
     const { exitCode } = runDriver(REPO_ROOT);
     expect(exitCode).toBe(0);
-  });
+  }, 120_000);
 
   it('the real allowlist file itself is untouched by this suite', () => {
     // Guards against a future edit reintroducing the real-file-mutation pattern this suite

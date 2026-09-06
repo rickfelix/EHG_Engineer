@@ -92,6 +92,24 @@ describe('runPreSendConsultLane — FR-1 non-blocking + FR-2 discriminator', () 
     expect(inserted[0].row.payload.body).toContain('[PRE-SEND CONSULT]');
   });
 
+  it('QF-20260905-194: a numeric expiresAt (epoch ms) is normalized to an ISO string before the insert', async () => {
+    const { deps, inserted } = makeDeps();
+    const numericInput = { ...INPUT, expiresAt: Date.now() + 24 * 60 * 60 * 1000 };
+    await runPreSendConsultLane(numericInput, deps);
+
+    expect(inserted).toHaveLength(1);
+    const expiresAt = inserted[0].row.expires_at;
+    expect(typeof expiresAt).toBe('string');
+    expect(() => new Date(expiresAt).toISOString()).not.toThrow();
+    expect(new Date(expiresAt).toISOString()).toBe(expiresAt);
+  });
+
+  it('QF-20260905-194: a caller-supplied ISO string expiresAt passes through unchanged', async () => {
+    const { deps, inserted } = makeDeps();
+    await runPreSendConsultLane(INPUT, deps);
+    expect(inserted[0].row.expires_at).toBe('2026-07-26T00:00:00Z');
+  });
+
   it('falls back to broadcast when no live Solomon, and survives a lookup throw', async () => {
     const { deps, inserted } = makeDeps({
       getActiveSolomonId: async () => { throw new Error('lookup down'); },

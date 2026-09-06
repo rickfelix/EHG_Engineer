@@ -11,7 +11,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  driveBreakdownFactsFromReport, selectTopLeverLeg, composeDriveLine, RATIFIED_POSSIBLE,
+  driveBreakdownFactsFromReport, selectTopLeverLeg, composeDriveLine, driveFlatnessClause,
+  RATIFIED_POSSIBLE, TRAILING_WINDOW,
 } from '../../../lib/fleet/exec-email-drive-line.mjs';
 import { RATIFIED_LEG_IDS } from '../../../lib/drive-loop/score/drive-score-legs.js';
 
@@ -144,22 +145,22 @@ describe('composeDriveLine — the ONE query both chairman surfaces share', () =
     drive_score: scoreFixture([{ leg: 'leg1_landed', value: 2 }, { leg: 'leg2_uptake', value: 1 }, { leg: 'leg4_capacity', value: 1 }]),
   };
 
-  it('queries drive_reports ordered by generated_at DESC, limited to 1 (FR-8)', async () => {
+  it('queries drive_reports ordered by generated_at DESC, limited to TRAILING_WINDOW (FR-8, widened by FR-4)', async () => {
     const sb = makeDriveSupabase([ROW]);
     await composeDriveLine({ supabase: sb });
-    expect(sb._calls).toHaveLength(1);
+    expect(sb._calls).toHaveLength(1); // still ONE query — FR-4 widened it rather than adding a second
     const call = sb._calls[0];
     expect(call.table).toBe('drive_reports');
     expect(call.ops.some((o) => o.m === 'order' && o.args[0] === 'generated_at' && o.args[1]?.ascending === false)).toBe(true);
-    expect(call.ops.some((o) => o.m === 'limit' && o.args[0] === 1)).toBe(true);
+    expect(call.ops.some((o) => o.m === 'limit' && o.args[0] === TRAILING_WINDOW)).toBe(true);
   });
 
-  it('returns the rendered line plus runId/generatedAt for traceability', async () => {
+  it('returns the rendered line plus runId/generatedAt for traceability, plus the FR-4 distinct/N clause', async () => {
     const sb = makeDriveSupabase([ROW]);
     const result = await composeDriveLine({ supabase: sb });
     expect(result.runId).toBe('drive-2026-08-15');
     expect(result.generatedAt).toBe('2026-08-15T10:00:00Z');
-    expect(result.line).toMatch(/^4\/6 = leg1_landed 2 \+ leg2_uptake 1 \+ leg4_capacity 1; top lever: \w+ \(as of 2026-08-15\)$/);
+    expect(result.line).toMatch(/^4\/6 = leg1_landed 2 \+ leg2_uptake 1 \+ leg4_capacity 1; top lever: \w+ \(as of 2026-08-15\) \| distinct\/1 = 1 \(target >= 3\)$/);
   });
 
   it('fail-soft: no supabase client -> null, never throws', async () => {
@@ -185,6 +186,69 @@ describe('composeDriveLine — the ONE query both chairman surfaces share', () =
   it('fail-soft: a row with an unreadable score -> null', async () => {
     const sb = makeDriveSupabase([{ run_id: 'r1', generated_at: '2026-08-15T00:00:00Z', drive_score: {} }]);
     await expect(composeDriveLine({ supabase: sb })).resolves.toBeNull();
+  });
+
+  // TS-7/TS-8/TS-11 (PRD SD-LEO-FIX-DRIVE-SCORE-GRADIENT-001, FR-4)
+  const rowAt = (score, generatedAt) => ({
+    run_id: `r-${generatedAt}`,
+    generated_at: generatedAt,
+    drive_score: scoreFixture([{ leg: 'leg1_landed', value: score }]),
+  });
+
+  it('[TS-7] "flat" is present when the newest 6 trailing readings are identical', async () => {
+    const rows = Array.from({ length: 6 }, (_, i) => rowAt(3.5, `2026-09-0${i + 1}T00:00:00Z`)).reverse();
+    const sb = makeDriveSupabase(rows);
+    const result = await composeDriveLine({ supabase: sb });
+    expect(result.line).toMatch(/flat/);
+    expect(result.line).toMatch(/distinct\/6 = 1 \(target >= 3\)/);
+  });
+
+  it('[TS-8] "flat" is absent when at least one of the newest 6 differs; the distinct/N clause is still present', async () => {
+    const rows = [
+      rowAt(3.9, '2026-09-06T00:00:00Z'), // newest, differs
+      ...Array.from({ length: 5 }, (_, i) => rowAt(3.5, `2026-09-0${i + 1}T00:00:00Z`)),
+    ];
+    const sb = makeDriveSupabase(rows);
+    const result = await composeDriveLine({ supabase: sb });
+    expect(result.line).not.toMatch(/flat/);
+    expect(result.line).toMatch(/distinct\/6 = 2 \(target >= 3\)/);
+  });
+
+  it('[TS-11] fewer than 10 (and fewer than 6) rows exist: never throws, denominator is the ACTUAL count, "flat" never asserted', async () => {
+    const rows = [rowAt(3.5, '2026-09-05T00:00:00Z'), rowAt(3.5, '2026-09-04T00:00:00Z')];
+    const sb = makeDriveSupabase(rows);
+    const result = await composeDriveLine({ supabase: sb });
+    expect(result).not.toBeNull();
+    expect(result.line).not.toMatch(/flat/); // only 2 available, fewer than the 6-reading flat window
+    expect(result.line).toMatch(/distinct\/2 = 1 \(target >= 3\)/); // 2, never a false 10
+  });
+});
+
+describe('driveFlatnessClause — PURE helper (FR-4)', () => {
+  it('reports the actual count as the denominator, never a hardcoded 10', () => {
+    expect(driveFlatnessClause([3.5, 3.5])).toBe('distinct/2 = 1 (target >= 3)');
+    expect(driveFlatnessClause([])).toBe('distinct/0 = 0 (target >= 3)');
+  });
+
+  it('flags flat only when at least 6 readings exist AND the newest 6 are all identical', () => {
+    expect(driveFlatnessClause([3.5, 3.5, 3.5, 3.5, 3.5, 3.5])).toMatch(/flat/);
+    expect(driveFlatnessClause([3.5, 3.5, 3.5, 3.5, 3.5])).not.toMatch(/flat/); // only 5, below the window
+    expect(driveFlatnessClause([3.9, 3.5, 3.5, 3.5, 3.5, 3.5])).not.toMatch(/flat/); // 6 available, one differs
+  });
+
+  it('a longer trailing history is scoped to the newest 6 for flatness, but the full history for distinct/N', () => {
+    // 10 readings: newest 6 identical, but two older ones differ -- distinct/10 must still be 2,
+    // while flat is still true because it looks ONLY at the newest 6.
+    const trailing = [3.5, 3.5, 3.5, 3.5, 3.5, 3.5, 3.9, 3.5, 3.5, 3.5];
+    const clause = driveFlatnessClause(trailing);
+    expect(clause).toMatch(/flat/);
+    expect(clause).toMatch(/distinct\/10 = 2 \(target >= 3\)/);
+  });
+
+  it('never throws or produces NaN on non-numeric/missing entries', () => {
+    expect(driveFlatnessClause([null, undefined, NaN, -1, 3.5])).toBe('distinct/1 = 1 (target >= 3)');
+    expect(driveFlatnessClause(null)).toBe('distinct/0 = 0 (target >= 3)');
+    expect(driveFlatnessClause(undefined)).toBe('distinct/0 = 0 (target >= 3)');
   });
 });
 

@@ -92,9 +92,15 @@ OPTIONAL FLAGS (sub-agent specific):
   --no-auto-migrations    Don't auto-execute migrations (DATABASE)
   --diagnose-rls          Diagnose RLS policy issues via Supabase CLI (DATABASE)
   --table-name <table>    Specify table for RLS diagnosis (DATABASE)
-  --phase <phase>         Explicit SD phase to stamp on the stored evidence row
-                          (e.g. EXEC_TO_PLAN). Optional -- omitted calls derive
-                          phase from the SD's own current_phase automatically.
+  --phase <phase>         Explicit SD phase (e.g. PLAN_PRD, EXEC_TO_PLAN). If
+                          omitted, the SD's current_phase is used ONLY as a
+                          fallback for the STORED EVIDENCE ROW's phase field --
+                          it is NOT passed to the sub-agent's own logic. For a
+                          phase-sensitive sub-agent (e.g. TESTING, which gates
+                          pre- vs post-implementation behavior on this value),
+                          omitting --phase fails CLOSED to the stricter
+                          (post-implementation) path by design -- pass --phase
+                          explicitly for any phase-gated sub-agent invocation.
   --diff-range <range>    Post-merge re-verify mode (TESTING): explicit
                           "<from>..<to>" git range to use instead of the default
                           main...HEAD (which is empty once the branch is merged).

@@ -121,6 +121,24 @@ describe('releaseClaimBothSurfaces', () => {
     expect(r.oldHolderGone).toBe(true);
   });
 
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E FR-1: the direct-clear retire path routes through the
+  // shared terminalSessionUpdate() chokepoint, so is_alive:false is now written in the same
+  // statement as status:'released'.
+  it('FR-1: the retire path writes is_alive:false alongside status:released', async () => {
+    const db = makeDb(seed());
+    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1' });
+    const sessUpdate = db.calls.updates.find((u) => u.table === 'claude_sessions');
+    expect(sessUpdate.payload).toMatchObject({ status: 'released', is_alive: false });
+    expect(db.tables.claude_sessions[0].is_alive).toBe(false);
+  });
+
+  it('FR-1: the idle (unclaim) path does NOT write is_alive — idle is not a terminal state', async () => {
+    const db = makeDb(seed());
+    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1', sessionStatus: 'idle' });
+    const sessUpdate = db.calls.updates.find((u) => u.table === 'claude_sessions');
+    expect(sessUpdate.payload).not.toHaveProperty('is_alive');
+  });
+
   it('sessionStatus: "idle" keeps the session alive (unclaim, not retire)', async () => {
     const db = makeDb(seed());
     await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1', sessionStatus: 'idle' });

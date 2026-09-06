@@ -65,6 +65,18 @@ const STALE_THRESHOLD = parseInt(process.env.STALE_SESSION_THRESHOLD_SECONDS, 10
 // POSTGREST_MAX_ROWS in lib/db/fetch-all-paginated.mjs — ESM, not require()-able here)
 // is presumed silently truncated. Genuinely-unbounded reads paginate via fapPaginate();
 // small-set reads keep their single fetch but pass through this tripwire.
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-3/FR-4: pure-extracted idle-row predicate, matching the
+// idleSessions filter's exact composition. Takes seatIdleVerdict as a parameter rather than
+// importing it at module scope: this is a .cjs file and the shared predicate lives in an
+// ESM-only module, loaded via a dynamic import() inside loadData(). Exported so the
+// frozen-population differential harness (an ESM test file that imports seatIdleVerdict
+// directly) calls this REAL production predicate rather than a harness-side reimplementation.
+function isDashboardIdleCandidate(s, ctx, seatIdleVerdictFn) {
+  return !s.qf_id &&
+    s.heartbeat_age_seconds < ctx.deadThresholdSeconds &&
+    seatIdleVerdictFn(s, { coordinatorId: ctx.coordinatorId, sdHolderSessionIds: null }).idle;
+}
+
 function warnIfCapTruncated(rows, site) {
   const list = Array.isArray(rows) ? rows : [];
   if (list.length === 1000) {
@@ -284,11 +296,16 @@ async function loadData() {
   // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001 (bug 623eb17d): the idle "available worker" list (and the
   // belt-countdown capacity math fed from it) must exclude role/identity polluters. Load the shared
   // predicate + active coordinator id once so the idle filter below drops adam/non_fleet/coordinator/
-  // fixture sessions. isDispatchableFleetMember (NOT isGenuineCountableWorker) is used on purpose: a
-  // just-finished worker is released with claimed_at nulled, so an everClaimed-based predicate would
-  // under-count real idle capacity. Dynamic import: this is a .cjs reading an .mjs SoT.
+  // fixture sessions. Dynamic import: this is a .cjs reading an .mjs SoT.
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2: migrated off isDispatchableFleetMember onto the
+  // consolidated seatIdleVerdict, which ALSO excludes a stale metadata.is_coordinator=true flag
+  // (isDispatchableFleetMember did not -- this is an intended delta, not a parity gap: it closes
+  // the exact regression this SD exists to fix). A just-finished worker is released with
+  // claimed_at nulled, so an everClaimed-based predicate would under-count real idle capacity --
+  // seatIdleVerdict's identity axes (coordinator/adam/non_fleet/is_coordinator/quarantined/
+  // parked/fixture) preserve that "released == available" property.
   const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
-  const { isDispatchableFleetMember } = await import('../lib/fleet/session-predicates.mjs');
+  const { seatIdleVerdict } = await import('../lib/fleet/seat-idle-predicate.mjs');
   let _dashCoordinatorId = null;
   try { _dashCoordinatorId = await getActiveCoordinatorId(supabase); } catch { _dashCoordinatorId = null; }
 
@@ -296,6 +313,8 @@ async function loadData() {
   // Cross-reference heartbeat age with PID marker liveness:
   // A session with stale heartbeat but living CC PID is loading context or between tool calls.
   // terminal_id format: "win-cc-{port}-{ccPid}" — extract ccPid and check marker files.
+  // Could-not-determine (empty set) just under-reports PID-alive rows in this DISPLAY-only
+  // dashboard -- never renders a destructive verdict, never marks a row dead on its own.
   const aliveCcPids = getAliveCcPids();
   // SD-LEO-INFRA-PID-LIVENESS-DURABLE-VENUE-001 (C2): this WAS a local re-implementation doing
   // s.terminal_id.split('-') and taking the last segment — a third copy of logic that is simply
@@ -385,16 +404,20 @@ async function loadData() {
   );
   const DEAD_THRESHOLD = STALE_THRESHOLD * 3; // 15min
   // SD-FDBK-INFRA-SHARED-FLEET-WORKER-001: only dispatchable fleet MEMBERS count as idle/available —
-  // exclude adam/non_fleet/coordinator/fixture (isDispatchableFleetMember fails toward "member" on
-  // garbage, so a classification quirk never hides a true idle worker).
+  // exclude adam/non_fleet/coordinator/is_coordinator/quarantined/parked/fixture (seatIdleVerdict
+  // fails toward "not idle" on garbage, so a classification quirk never hides a true idle worker
+  // by MIS-counting it as busy -- but it also never OVER-counts a real holder as idle).
+  // sdHolderSessionIds: null reproduces the exact `!!s.sd_key` mirror check this consumer used
+  // before (deliberate: SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001 established qf_id, kept inline below,
+  // as the AUTHORITATIVE claim source -- sd_key is only ever the mirror here, which is precisely
+  // what the null branch of the three-state contract means: no resolved Set, fall open to the
+  // mirror). heartbeat_age_seconds freshness stays an inline conjunct rather than routing through
+  // the shared not-fresh axis: DEAD_THRESHOLD (15min) is this consumer's own dashboard-display
+  // window, distinct from the RECENTLY_RELEASED/SPIN_UP_GRACE windows other consumers apply, and
+  // the not-fresh axis no-ops on a null/undefined reading while this consumer's original check
+  // excluded on it -- kept separate to avoid a silent widening of what counts as idle.
   const idleSessions = allSessions.filter(s =>
-    !s.sd_key &&
-    // SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: a live QF claim is a claim. sd_key is only the
-    // MIRROR (lib/claim/get-my-claims.cjs:8-15); quick_fixes.claiming_session_id is authoritative
-    // and the view surfaces it as qf_id. Without this, a QF holder reads as available.
-    !s.qf_id &&
-    s.heartbeat_age_seconds < DEAD_THRESHOLD &&
-    isDispatchableFleetMember(s, _dashCoordinatorId)
+    isDashboardIdleCandidate(s, { coordinatorId: _dashCoordinatorId, deadThresholdSeconds: DEAD_THRESHOLD }, seatIdleVerdict)
   );
 
   const completedChildren = children.filter(c => c.status === 'completed').length;
@@ -564,6 +587,8 @@ function formatSilentUntil(s) {
 // ── Section: Workers ──
 function printWorkers(d) {
   const now = new Date();
+  // Could-not-determine (empty map) just means the csid column below reads blank and the
+  // UNREGISTERED section further down finds no orphans -- never marks a listed worker dead.
   const markerIds = getMarkerSessionIds();
 
   // Detect terminal_id collisions among active workers
@@ -626,9 +651,14 @@ function printWorkers(d) {
       // worktree. Writer-side fix is a flagged follow-up.
       const wip = s.has_uncommitted_changes === true ? 'Y' : s.has_uncommitted_changes === false ? 'N' : '-';
       const struggleTag = (s.handoff_fail_count || 0) > 3 ? ' [STRUGGLING]' : '';
-      // markerIds[id] is { claude_session_id, pid, alive } per getMarkerSessionIds(); read property before substring
+      // SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001: markerIds is keyed BY session_id (the
+      // map's own key IS the CLAUDE_SESSION_ID -- there is no separate claude_session_id field
+      // on the marker; the previous read of markerEntry.claude_session_id was always undefined).
+      // The CSID column exists to show which session_id a live marker confirms for this row when
+      // multiple rows share a tty -- that's s.session_id itself, gated on a marker actually
+      // existing for it.
       const markerEntry = markerIds[s.session_id];
-      const csid = hasCollision ? pad((markerEntry?.claude_session_id || '').substring(0, 10), 12) : '';
+      const csid = hasCollision ? pad((markerEntry ? s.session_id : '').substring(0, 10), 12) : '';
       const activity = formatActivity(s);
       const silent = formatSilentUntil(s);
       const mcRow = d.mcByWorker && d.mcByWorker[s.session_id];
@@ -1631,6 +1661,79 @@ const { hasCorrelatedReply } = require('../lib/coordinator/reply-correlation.cjs
 // TRUE oldest-first age instead, "so a 2.5h latency is visible at the tick, not discovered in
 // retro" (this SD's own provenance). Reuses DEFAULT_ALERT_AGE_MIN, not a new SLA constant.
 const { fetchAllOutstandingSignals, formatCoordinatorOverdueWarning } = require('../lib/fleet/outstanding-signals.cjs');
+// QF-20260906-162: delivery-receipt write-site imports — dispatchToWorker carries the shared
+// backpressure/target-role guards (signal_receipt is exempt from the former, see dispatch.cjs);
+// PAYLOAD_KINDS.SIGNAL_RECEIPT is the canonical kind literal (lib/fleet/worker-status.cjs).
+const { dispatchToWorker } = require('../lib/coordinator/dispatch.cjs');
+const { PAYLOAD_KINDS: DASH_PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
+
+/**
+ * QF-20260906-162: WRITE SITE — called by the coordinator inbox core (printInbox, below) at
+ * the moment it enumerates a batch of signal rows. For each row carrying
+ * payload.signal_type='stuck' AND payload.severity='high', writes ONE kind=signal_receipt
+ * row back to the original sender via dispatchToWorker (which carries the shared
+ * backpressure/target-role guards — signal_receipt is registered exempt from the former in
+ * lib/coordinator/dispatch.cjs). A RECEIPT, never an ack: never sets acknowledged_at/
+ * answered_at on the original signal row — that stays coordinator-ack-signal.cjs's job
+ * alone. Idempotent by construction: checks for an existing receipt (by
+ * payload.correlation_id) before writing, so re-enumerating the same still-unacknowledged
+ * row on a later render never double-writes. Fail-soft throughout — a receipt-write failure
+ * must never break the coordinator's own inbox render.
+ *
+ * Extracted as its own exported, injectable-client function (unlike printInbox itself, which
+ * has no injectable client) specifically so this write path is directly unit-testable.
+ *
+ * @param {object} supabase - injected Supabase client
+ * @param {string} coordinatorId - the coordinator's own session id (payload.producer)
+ * @param {Array<{id:string, sender_session:string, payload:object}>} signals - the enumerated batch
+ * @returns {Promise<{written:number, skipped:number}>}
+ */
+async function writeSignalReceipts(supabase, coordinatorId, signals) {
+  const highStuckSignals = (signals || []).filter((s) => s.payload?.signal_type === 'stuck' && s.payload?.severity === 'high');
+  let written = 0;
+  let skipped = 0;
+  if (highStuckSignals.length === 0) return { written, skipped };
+
+  const runId = crypto.randomUUID();
+  let existingReceiptCorrelationIds = new Set();
+  try {
+    // Explicit literal bound (count-truncation-diff-lint): highStuckSignals is drawn from
+    // printInbox()'s own .limit(20) batch, so 50 is generous headroom even allowing for a
+    // rare duplicate receipt row per correlation_id — never a truncation risk in practice.
+    const { data: existingReceipts } = await supabase
+      .from('session_coordination')
+      .select('payload')
+      .eq('payload->>kind', DASH_PAYLOAD_KINDS.SIGNAL_RECEIPT)
+      .in('payload->>correlation_id', highStuckSignals.map((s) => s.id))
+      .limit(50);
+    existingReceiptCorrelationIds = new Set((existingReceipts || []).map((r) => r.payload?.correlation_id));
+  } catch { /* fail-soft: an existence-check failure risks a duplicate receipt, never a lost inbox render */ }
+
+  for (const s of highStuckSignals) {
+    if (existingReceiptCorrelationIds.has(s.id)) { skipped++; continue; }
+    if (!s.sender_session) { skipped++; continue; } // no target to receipt back to
+    try {
+      await dispatchToWorker(supabase, {
+        message_type: 'INFO',
+        target_session: s.sender_session,
+        sender_session: coordinatorId,
+        subject: '[SIGNAL_RECEIPT] coordinator inbox has seen this stuck/high signal',
+        payload: {
+          kind: DASH_PAYLOAD_KINDS.SIGNAL_RECEIPT,
+          producer: coordinatorId,
+          run_id: runId,
+          enumerated_row_id: s.id,
+          correlation_id: s.id,
+        },
+      });
+      written++;
+    } catch (e) {
+      console.log(`  (signal_receipt write skipped for ${s.id}: ${e.message || e})`);
+      skipped++;
+    }
+  }
+  return { written, skipped };
+}
 
 // ── Section: Worker-Signal Inbox (FR-3a) ──
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001
@@ -1684,6 +1787,12 @@ async function printInbox() {
     return;
   }
 
+  // QF-20260906-162: WRITE SITE — the coordinator inbox core, AT THE MOMENT it enumerates a
+  // severity=high signal_type=stuck row, writes ONE kind=signal_receipt row back to the
+  // sender. See writeSignalReceipts below (extracted for direct unit testing — printInbox
+  // itself has no injectable client).
+  await writeSignalReceipts(supabase, coordinatorId, signals);
+
   // QF-20260704-877: signals.length is capped by .limit(20) above, so it can never report
   // more than 20 even when the true unacknowledged backlog is larger — the label read "20
   // unread signal(s)" indefinitely regardless of triage progress. Query the true set (same
@@ -1735,15 +1844,22 @@ async function printInbox() {
   console.log('  ' + pad('Type', 16) + pad('Severity', 10) + pad('Callsign', 12) + pad('Age', 8) + 'Body');
   console.log('  ' + '─'.repeat(68));
 
+  // QF-20260905-761: a row the stuck-drain marked OVERDUE (aged out, no coordinator reply
+  // found — see stale-session-sweep.cjs's STUCK_SIGNAL_DRAIN) renders ahead of fresh rows so
+  // it is never pushed off this newest-first window by more recent traffic. Stable sort
+  // preserves newest-first order within each group.
+  const orderedSignals = [...signals].sort((a, b) => (b.payload?.overdue ? 1 : 0) - (a.payload?.overdue ? 1 : 0));
+
   const ids = [];
-  for (const s of signals) {
+  for (const s of orderedSignals) {
     const sigType = s.payload?.signal_type || '?';
     const severity = s.payload?.severity || 'medium';
     const callsign = s.payload?.sender_callsign || '(none)';
     const ageMin = Math.floor((Date.now() - new Date(s.created_at).getTime()) / 60_000);
     const ageStr = ageMin < 60 ? ageMin + 'm' : Math.floor(ageMin / 60) + 'h';
     const bodyPreview = (s.body || s.payload?.body || '').replace(/\n/g, ' ').substring(0, 28);
-    console.log('  ' + pad(sigType, 16) + pad(severity, 10) + pad(callsign, 12) + pad(ageStr, 8) + bodyPreview);
+    const overdueTag = s.payload?.overdue ? 'OVERDUE ' : '';
+    console.log('  ' + overdueTag + pad(sigType, 16) + pad(severity, 10) + pad(callsign, 12) + pad(ageStr, 8) + bodyPreview);
     ids.push(s.id);
   }
 
@@ -3266,7 +3382,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate, writeSignalReceipts };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.

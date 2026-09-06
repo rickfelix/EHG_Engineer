@@ -229,17 +229,12 @@ app.use(express.json());
 // note at the top of this file.
 installFleetUiSurface(app, { root: path.join(PROJECT_ROOT, 'server', 'public', 'fleet-ui') });
 
-// NOTE: /api/webhooks/github-ci-status (api/webhooks/github-ci-status.js) is
-// intentionally NOT mounted here. Its ESM/CJS crash and an unauthenticated
-// dev-mode bypass were fixed (SD-FDBK-FIX-BLOCKING-STRIPE-LIVE-001), but CI's
-// schema-reference-lint + a live-schema probe confirmed the handler's business
-// logic references three tables that do not exist in production
-// (ci_cd_failure_resolutions, ci_cd_pipeline_status, ci_cd_monitoring_config)
-// and three non-existent strategic_directives_v2 columns (ci_cd_status,
-// last_pipeline_run, pipeline_health_score) — database/migrations/leo-ci-cd-
-// integration.sql defines them but was never applied. Mounting a route whose
-// core logic cannot run against the real schema is unsafe; deferred to a
-// follow-up once that migration gap is properly resolved.
+// NOTE: api/webhooks/github-ci-status.js was deleted (SD-LEO-ORCH-CAPA-SCHEMA-
+// TRUTH-001-E-A). It was never mounted here, and its business logic referenced
+// three tables and three strategic_directives_v2 columns that never existed in
+// production (the migration that would have created them, database/migrations/
+// leo-ci-cd-integration.sql, was authored but never applied) — retired rather
+// than resurrected, since nothing depended on it working.
 // =============================================================================
 // API ROUTES
 // =============================================================================

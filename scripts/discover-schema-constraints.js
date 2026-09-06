@@ -12,6 +12,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 import dotenv from 'dotenv';
 import pg from 'pg';
 
@@ -65,7 +66,34 @@ async function discoverConstraints(client, tableName) {
   return result.rows;
 }
 
-function parseCheckConstraint(definition) {
+// QF-20260903-935: DATABASE_URL (direct pg connection) isn't configured in every environment
+// this script runs in. exec_sql is the RPC every other live-catalog audit in this repo already
+// falls back to (see audit-enum-coverage.js) -- reuse it here so the fleet's canonical
+// derive-from-catalog tool actually runs where DATABASE_URL is absent, instead of a doc row
+// silently drifting from the live constraint until a write probe happens to catch it.
+export async function discoverConstraintsViaSupabase(supabase, tableName) {
+  const { data, error } = await supabase.rpc('exec_sql', {
+    sql_text: `
+      SELECT
+        c.conname AS constraint_name,
+        c.contype AS constraint_type,
+        pg_get_constraintdef(c.oid) AS constraint_definition,
+        a.attname AS column_name
+      FROM pg_constraint c
+      JOIN pg_class t ON c.conrelid = t.oid
+      JOIN pg_namespace n ON t.relnamespace = n.oid
+      LEFT JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(c.conkey)
+      WHERE t.relname = '${tableName}'
+        AND n.nspname = 'public'
+        AND c.contype = 'c'
+      ORDER BY c.conname
+    `.trim(),
+  });
+  if (error) throw new Error(`exec_sql error for ${tableName}: ${error.message}`);
+  return data?.[0]?.result || [];
+}
+
+export function parseCheckConstraint(definition) {
   // Extract valid values from CHECK constraint definition
   // Examples:
   //   CHECK ((status = ANY (ARRAY['draft'::text, 'completed'::text])))
@@ -113,23 +141,28 @@ async function main() {
   console.log('='.repeat(50));
   if (dryRun) console.log('   Mode: DRY RUN (no changes will be made)\n');
 
-  // Connect to PostgreSQL directly for system catalog queries
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL
-  });
+  // Prefer a direct PostgreSQL connection when DATABASE_URL is configured; otherwise fall
+  // back to the exec_sql RPC (QF-20260903-935) so this script runs anywhere the Supabase
+  // service-role client already works.
+  const useDirectPg = Boolean(process.env.DATABASE_URL);
+  const client = useDirectPg ? new Client({ connectionString: process.env.DATABASE_URL }) : null;
+  const supabase = createSupabaseServiceClient();
 
   try {
-    await client.connect();
-    console.log('✅ Connected to PostgreSQL\n');
-
-    // Also connect to Supabase for inserts
-    const supabase = createSupabaseServiceClient();
+    if (useDirectPg) {
+      await client.connect();
+      console.log('✅ Connected to PostgreSQL\n');
+    } else {
+      console.log('ℹ️  DATABASE_URL not set — using exec_sql RPC via Supabase\n');
+    }
 
     const tablesToScan = specificTable ? [specificTable] : TARGET_TABLES;
     const discovered = [];
 
     for (const table of tablesToScan) {
-      const constraints = await discoverConstraints(client, table);
+      const constraints = useDirectPg
+        ? await discoverConstraints(client, table)
+        : await discoverConstraintsViaSupabase(supabase, table);
 
       if (constraints.length === 0) {
         console.log(`   ${table}: No CHECK constraints found`);
@@ -229,8 +262,8 @@ async function main() {
     console.error('❌ Error:', error.message);
     process.exit(1);
   } finally {
-    await client.end();
+    if (useDirectPg) await client.end();
   }
 }
 
-main();
+if (isMainModule(import.meta.url)) main();

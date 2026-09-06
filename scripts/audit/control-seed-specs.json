@@ -136,7 +136,11 @@
         "path": "database/migrations/20260731000001_seeded_rls_defect.sql",
         "content": "-- SEEDED DEFECT: SELECT policy references a tenant-shaped column without binding it\n-- to the caller's own identity, so any anon caller reads every tenant's rows.\nCREATE POLICY seeded_anon_select_widgets ON public.widgets\n  FOR SELECT TO anon\n  USING (venture_id IS NOT NULL);\n"
       }
-    ]
+    ],
+    "observability_proof": {
+      "input": "SQL file TEXT under the three RLS_LINT_CORPUS_DIRS directories (database/migrations, database/manual-updates, supabase/migrations -- lib/lint/rls-lint-corpus-dirs.mjs), enumerated via git diff --name-only/git ls-files --others (diff mode, base ref from env RLS_LINT_BASE or origin/main) or fs.readdirSync per directory (--all mode); each file's CREATE POLICY statements paren-balance-extracted and classified via classifyViolation(). Consumes no DB columns and no environment variables besides the optional RLS_LINT_BASE override.",
+      "seen": "Live --all sweep against this repo's real tree on 2026-09-05 (SD-LEO-FIX-RLS-LINT-CORPUS-WIDTH-001's own PR #8240, after widening the corpus from one directory to three): `node scripts/lint/rls-anon-tenant-predicate-lint.mjs --all --json` scanned 1590 files across all three directories and reported 639 real violations (advisory, non-blocking) -- not a fixture positive, the actual live backlog across database/migrations, database/manual-updates, and supabase/migrations."
+    }
   },
   {
     "name": "no-mocked-sut-import-lint",
@@ -638,6 +642,198 @@
     "observability_proof": {
       "input": "The SOURCE TEXT of a single .js/.mjs/.cjs file, passed directly to findIlikeOnUuid(source, uuidColumns, filePath) as a string, with block and line comments BLANKED (not deleted, so reported line numbers stay true) before matching -- the escape-hatch marker check runs against the ORIGINAL unblanked text, not the blanked copy. It consumes NO database columns and NO filesystem walk at the function level -- the caller supplies both the text and the uuid-column Set. Its OUTPUT SIGNAL is the returned array of findings, each {file, line, column, message}; an empty array means no ilike/like-on-uuid call was found in that text.",
       "seen": "A REAL positive on REAL DEPLOYED SOURCE, not a temp-dir fixture: run against lib/commands/claim-command.js as it stands on origin/main, it returns exactly ONE finding, at line 120, column=session_id, from '.like('session_id', ...)'. session_id is a genuine uuid-typed column (database/uuid-columns-census.json) on a live call site -- one of 24 pre-existing findings measured across the repo 2026-08-29 via 'node scripts/lint/ilike-on-uuid-lint.mjs' (full sweep, no --diff), none of which are in this control's own diff. Two-sided in the same measurement: 0 findings on this PR's own new files."
+    }
+  },
+  {
+    "name": "schema-reference-extract",
+    "script": "scripts/lint/schema-reference-extract.mjs",
+    "rootFlag": null,
+    "seedTest": "tests/unit/lint/schema-reference-extract.test.js",
+    "neuter": {
+      "find": "const text = blankComments(rawText);",
+      "replace": "const text = rawText;",
+      "why": "Reverts the extractor to matching RAW text, which is the exact pre-fix defect: a .from() sitting inside a // or /* */ comment is matched as a live schema reference. That is the central branch TS-1a, TS-1b and TS-1c exercise, including the self-demonstrating case where the lint matched the regex literals that DOCUMENT its own matcher (scripts/hooks/lib/supabase-operative.cjs:17-18) and reported them as missing table_name. A neutered extractor re-inflates the whole-tree count with phantom violations that no code fix can ever clear, which pushes maintainers toward the allowlist and the schema-lint-disable-line pragma -- converting a lint defect into permanent suppression of the escape budget SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C exists to freeze."
+    },
+    "note": "SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-1). Uses the seedTest form, not fixtures, DELIBERATELY and not as a fallback: schema-reference-extract.mjs is a PURE module (no fs, no DB, no process) with no CLI entry point, so there is nothing to aim at a fixture directory -- running the file does nothing. Its CLI wrapper scripts/lint/schema-reference-lint.mjs is not a substitute target either, because it loads database/schema-reference-snapshot.json and would degrade rather than fire inside a scratch dir with no snapshot. The committed test already plants both polarities the branch needs: references inside line comments, block comments and template literals (must NOT fire) and genuine references including one on a line with a trailing comment (must STILL fire), plus TS-2c pinning that line numbers are preserved.",
+    "observability_proof": {
+      "input": "extractReferences consumes the raw UTF-8 text of every candidate file, read by scripts/lint/schema-reference-lint.mjs:270-271, and matches four patterns against it: FROM_RE (.from with a quoted table), a .select() literal lookahead, an insert/update/upsert object-key walk, and SQL_REF_RE for raw SQL. Extracted refs are compared in findViolations against the keys of snapshot.tables and snapshot.views from database/schema-reference-snapshot.json. It consumes no environment variables and no database columns directly; the exit signal is carried by computeExitCode in scripts/lint/schema-lint-exit.mjs.",
+      "seen": "Real positives observed on the live repo corpus, not a temp-dir fixture, on 2026-09-03: node scripts/lint/schema-reference-lint.mjs --all measured 358 violations across 4316 files (exit 1) BEFORE this fix and 348 across 4317 AFTER, a drop of exactly 10. Two of those cleared violations were genuine false positives this control was emitting against real committed source at scripts/hooks/lib/supabase-operative.cjs:17-18. The control also runs on every pull request as a blocking job via .github/workflows/schema-reference-lint.yml:69 (continue-on-error false at line 48), so the deployment environment where it receives its subject is CI, and the pre-fix 358 is the measured record of it receiving and reporting on the real tree."
+    }
+  },
+  {
+    "name": "schema-lint-exit",
+    "script": "scripts/lint/schema-lint-exit.mjs",
+    "rootFlag": null,
+    "seedTest": "tests/unit/schema-lint-exit.test.js",
+    "neuter": {
+      "find": "  if (snapshotStale) return 1;    // FR-2: a zero measured against a stale snapshot is not a pass",
+      "replace": "  if (false) return 1;",
+      "why": "Disables the FR-2 staleness block, restoring the exact pre-fix defect: a run measured against a snapshot older than the live schema exits 0 and is reported as a pass. That is the false-zero trap SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C exists to close -- trap (a) in its own spine -- and it is the branch TS-3a and TS-3b exercise. A neutered exit helper is invisible in normal operation because the SUCCESS path is the one that breaks: violations still block, so the lint looks healthy, while the one signal that the verdict might be meaningless silently stops mattering."
+    },
+    "note": "SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-2). seedTest form, deliberately: schema-lint-exit.mjs is a PURE decision helper (a single total function over a state object, no fs, no DB, no process, no CLI), so there is no invocation to aim at a fixture directory. The committed test covers the full truth table including the deliberate precedence -- degradedFallback wins over snapshotStale -- and TS-3e pins that omitting snapshotStale is byte-identical to the pre-FR-2 behaviour.",
+    "observability_proof": {
+      "input": "computeExitCode consumes exactly one object: { violations:number, degradedFallback:boolean, snapshotStale:boolean }. violations is allViolations.length (NEW drift only; pre-existing violations are deliberately excluded per QF-20260802-742), degradedFallback is set only in the --diff unresolvable-base catch at schema-reference-lint.mjs:209, and snapshotStale is derived from snapshot.generated_at against STALE_DAYS=7. Its return value is assigned to process.exitCode at schema-reference-lint.mjs, which is the signal the blocking CI job reads.",
+      "seen": "Measured end to end on the live repo on 2026-09-03, isolating the false zero rather than confounding it with the 348-violation backlog: the SAME node scripts/lint/schema-reference-lint.mjs --diff run reporting 0 new violations across 2 files exited 0 with a fresh snapshot, and exited 1 after the committed snapshot generated_at was backdated 30 days -- proving the staleness input reaches this function and changes the exit signal in the deployment path, not just in a fixture. The snapshot was restored and verified clean in git after the trial. The consuming job is .github/workflows/schema-reference-lint.yml:69, blocking (continue-on-error false at line 48)."
+    }
+  },
+  {
+    "name": "schema-lint-escape-budget",
+    "script": "scripts/lint/schema-lint-escape-budget.mjs",
+    "rootFlag": null,
+    "seedTest": "tests/unit/lint/schema-lint-escape-budget.test.js",
+    "neuter": {
+      "find": "    ok: failures.length === 0,",
+      "replace": "    ok: true,",
+      "why": "Forces compareBudgets to report OK regardless of what it found, which is the precise way this control dies quietly: the failures array is still computed and still correct, so the code reads as working, while the verdict stops depending on it. That is the branch TS-4a through TS-4d exercise (allowlist files growth, allowlist tables growth, a new pragma file, and a second pragma in an already-suppressed file). A neutered budget check means the only thing standing between a green build and a purchased zero is gone, and nothing else in the pipeline measures escape growth."
+    },
+    "note": "SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-3). seedTest form, deliberately: the runnable entry point needs a real git history with a resolvable merge base, so a fixture directory cannot exercise it -- the comparison IS the control, and it was extracted into the pure compareBudgets function precisely so the verdict is testable without a repo. TS-4g additionally asserts a DECLARED blind spot rather than a capability: moving a pragma between files keeps the total flat and is NOT caught.",
+    "observability_proof": {
+      "input": "Two git revs. From each it reads scripts/lint/schema-reference-allowlist.json via git show (counting the files and tables arrays) and counts occurrences of the literal schema-lint-disable-line via git grep -o, scoped by pathspec to the six RUNTIME_DIRS and the six code extensions the lint itself scans. The base rev comes from git merge-base against SCHEMA_LINT_BASE (default origin/main); an option-shaped value is refused rather than absorbed. Its exit code is the signal the blocking CI job reads.",
+      "seen": "Measured on the live repo on 2026-09-03, both polarities, not a fixture. CLEAN: base=412b6cb1, allowlist files 12->12, tables 27->27, pragmas 157->157, exit 0. SEEDED GROWTH, via a real commit on the branch that was reset immediately after: allowlist tables 27->28 and pragmas 157->158, exit 1, with the failure naming both additions exactly -- added seeded_budget_growth_table and lib/lint/added-line-text.mjs (0 -> 1). The 157 figure is the suppression-relevant subset scoped to scanned dirs; the tree-wide count including tests and docs is 233, and the two numbers are not interchangeable."
+    }
+  },
+  {
+    "name": "directory-only-worktree-key-lint",
+    "script": "scripts/lint/directory-only-worktree-key-lint.mjs",
+    "rootFlag": "--root",
+    "extraArgs": [
+      "--enforce"
+    ],
+    "fixtures": [
+      {
+        "path": "scripts/hooks/seeded-directory-only-worktree-key-defect.cjs",
+        "content": "const WORKTREE_PATH_RE = /[/\\\\]\\.worktrees[/\\\\]([^/\\\\]+)/;\nconst key = filePath.match(WORKTREE_PATH_RE)[1];\nif (key !== claimedSdKey) block();\n"
+      }
+    ],
+    "note": "SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-5b. --enforce is required in extraArgs since the control is advisory (exit 0) by default and only the exit code is enforcing -- without it the trial would observe DETECTS-but-exits-0 and the harness's own VERDICT.SILENT/BLOCKS distinction (mirrors fleet-liveness-select-lint's note on the same pitfall) would misclassify a working control.",
+    "observability_proof": {
+      "input": "Regex source text under scripts/hooks/**: a capturing group immediately following the literal `.worktrees`, filtered to those containing a negated character class (`[^`) or an escaped separator (backslash) so English prose and template-literal interpolations near the word \".worktrees\" do not register (verified: neither scripts/hooks/set-activity-state.cjs's prefix-capture nor scripts/hooks/concurrent-session-worktree.cjs's path.join construction trip it). Consumes no database columns or environment variables -- pure source-text scan.",
+      "seen": "Run against this repo's real scripts/hooks/** on 2026-09-04 (this SD's own PR): found exactly 1 real hit, scripts/hooks/pre-tool-enforce.cjs:368 (WORKTREE_PATH_RE itself), adjudicated and allowlisted as the sanctioned fallback source in the branch>marker>path precedence chain -- not a fixture positive, a real one the lint found in production code and a human then reviewed."
+    }
+  },
+  {
+    "name": "unsafe-sd-metadata-full-blob-write-lint",
+    "script": "scripts/lint/unsafe-sd-metadata-full-blob-write-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [],
+    "note": "SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001 FR-4. TESTED IN DEFAULT (full-sweep) MODE, not --diff -- a scratch fixture dir has no meaningful git history/PR base for the diff-only CI path to compare against, so the default full-sweep mode is the only one a fixture trial can exercise; the --diff wiring itself is exercised by this repo's own PR CI run (unsafe-sd-metadata-full-blob-write-lint.yml), not this seed test.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-metadata-fullblob-defect.js",
+        "content": "// SEEDED DEFECT: client-side read-then-full-blob-replace metadata write.\nexport async function stampSeeded(supabase, id, x) {\n  const { data: row } = await supabase.from('strategic_directives_v2').select('metadata').eq('id', id).maybeSingle();\n  await supabase.from('strategic_directives_v2').update({ metadata: { ...row.metadata, seeded_metadata_fullblob_defect: x } }).eq('id', id);\n}\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-metadata-fullblob-defect",
+      "strategic_directives_v2"
+    ],
+    "observability_proof": {
+      "input": "Source text under lib/** and scripts/** (excluding scripts/one-off, scripts/one-time, scripts/temp, scripts/archive): a `.update({` call whose object-literal body (within an 800-char window) contains both a `metadata:` key and an object-spread `...`, gated at the file level on the literal string `strategic_directives_v2` being present (comments blanked before both checks). Consumes no database columns or environment variables -- pure source-text scan.",
+      "seen": "Run against this repo's real lib/ and scripts/ on 2026-09-05 (this SD's own PR, before the 9 sites it fixed were migrated): found 51 real hits, e.g. lib/eva/lifecycle-sd-bridge.js:1804 and lib/sd/amend-sd.js:81 -- both genuine, still-live read-then-full-blob-replace writes against strategic_directives_v2.metadata, confirmed by reading the surrounding code, not a fixture positive."
+    }
+  },
+  {
+    "name": "session-identity-path-callers-lint",
+    "script": "scripts/lint/session-identity-path-callers-lint.mjs",
+    "rootFlag": null,
+    "cwdScope": true,
+    "extraArgs": [],
+    "note": "SD-LEO-INFRA-SESSION-IDENTITY-MARKER-CALLERS-001 FR-4/FR-6. Registered here rather than lib/governance/orphan-writers-registry.js: that registry's 7 ENTRY_TYPES all catalog a writer whose output goes UNCONSUMED (validateOrphanEntry() requires either a refs_drain_descriptor with no consumer, or an explicit reader+predicate proving non-consumption). This lint's own reader is CI itself -- it gates every PR via .github/workflows/session-identity-path-callers-lint.yml -- so it is not an orphan-writer specimen under that taxonomy and would not validate against it. control-seed-specs.json + control-seed-test-lint.mjs is this repo's actual already-enforced mechanism for proving a new detector control is not itself blind (see the sibling unsafe-sd-metadata-full-blob-write-lint entry immediately above, added under the same rationale by the prior SD in this session). Always exits 0 (advisory, never blocking) by design, so detection is read from stdout text via detectTokens, not from the exit code -- mirrors progress-column-lint's note above on the same reporting-only shape.",
+    "fixtures": [
+      {
+        "path": "lib/seeded-session-identity-path-defect.js",
+        "content": "// SEEDED DEFECT: derives the session-identity marker path itself instead of importing\n// MARKER_DIR/markerDirs from the SSOT (lib/fleet/cc-pid-liveness.cjs) -- this SD's own root\n// cause, repeated.\nimport path from 'node:path';\nexport function markerDir() { return path.join(process.cwd(), '.claude', 'session-identity'); }\n"
+      }
+    ],
+    "detectTokens": [
+      "seeded-session-identity-path-defect"
+    ],
+    "observability_proof": {
+      "input": "Source text under lib/** and scripts/** (excluding node_modules, one-off, one-time, temp, archive, archived-sd-scripts; lib/fleet/cc-pid-liveness.cjs and scripts/hooks/capture-session-id.cjs excluded by design -- the SSOT and its canonical per-checkout writer): a file is flagged when its comment-blanked text mentions the `.claude/session-identity` path literal (or a bare `'session-identity'`/`\"session-identity\"` segment) and does not import anything from cc-pid-liveness.cjs. Consumes no database columns or environment variables -- pure source-text scan, always exits 0.",
+      "seen": "Run against this repo's real lib/ and scripts/ on 2026-09-05 (this SD's own PR): found 7 real hits -- lib/hooks/session-id.cjs, lib/resolve-own-session.cjs, lib/resolve-own-session.js, lib/session-identity-sot.js, lib/session-manager.mjs, lib/terminal-identity.js, scripts/hooks/concurrent-session-worktree.cjs -- not a fixture positive. CORRECTED 2026-09-05 (PLAN-phase TESTING sub-agent review, evidence row f2f7b837-d9a1-44ff-94ea-bda354193e33, independently re-verified by direct read): an earlier version of this note wrongly wrote off 6 of the 7 as false positives referencing only the unrelated `current` pointer file. In fact FOUR are genuine same-class single-directory pid-*.json readers, none touching the `current` pointer: scripts/hooks/concurrent-session-worktree.cjs:44 (`path.resolve(__dirname, '../../.claude/session-identity')` then a hand-rolled `getAliveMarkerSessionIds()`), lib/hooks/session-id.cjs:149/:166 (`path.resolve(__dirname, '../../.claude/session-identity')`, reads `pid-<ccPid>.json` and readdirSyncs `pid-*.json` by mtime), lib/resolve-own-session.cjs:100 (`path.resolve(__dirname, '../.claude/session-identity', 'pid-${ccPid}.json')`), and lib/terminal-identity.js:210-214 (readdirSync filtered to `pid-*.json` in a single _repoRoot-derived dir) -- all confirmed by reading the file. TWO are genuine false positives, unrelated to PID markers: lib/session-identity-sot.js (the `current`/`.lock` reconciliation module this note originally had in mind) and lib/resolve-own-session.js (a message string, not a real path derivation). ONE is borderline/different file class: lib/session-manager.mjs:60 is single-directory but reads `${sessionId}.json`, not `pid-*.json` -- arguably not the same defect shape, not asserted either way. This correction matters because FR-4's stated end-state is driving the baseline to zero; miscounting genuine hits as false positives would let real instances hide indefinitely. A follow-up migrating the 4 genuine readers onto markerDirs() is tracked as a gap, not fixed in this SD."
+    }
+  },
+  {
+    "name": "claude-sessions-terminal-chokepoint-lint",
+    "script": "scripts/lint/claude-sessions-terminal-chokepoint-lint.mjs",
+    "rootFlag": "--root",
+    "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1 census-completeness AC). Structurally modeled on require-main-guard-in-one-off-lint.mjs (also --root scoped). The allowlist loaded during the trial is ALWAYS the real repo scripts/audit/claude-sessions-terminal-chokepoint-allowlist.json (ALLOWLIST_PATH is derived from the script own __dirname, not from --root), so the seeded fixture below (a synthetic scripts/ dir under a temp root, not a real repo path) cannot collide with a real allowlist entry.",
+    "fixtures": [
+      {
+        "path": "scripts/seeded-claude-sessions-terminal-chokepoint-defect.mjs",
+        "content": "// SEEDED DEFECT: a claude_sessions UPDATE setting status='released' with no is_alive write\n// and no chokepoint routing -- the exact liveness-SSOT defect class SD-LEO-ORCH-CAPA-RECORD-\n// TRUTH-001-E closed.\nasync function bad(supabase, id) {\n  await supabase\n    .from('claude_sessions')\n    .update({ status: 'released', released_at: new Date().toISOString() })\n    .eq('session_id', id);\n}\n"
+      }
+    ],
+    "observability_proof": {
+      "input": "claude_sessions .update( sites across scripts/** and lib/** (fs.readdirSync directory walk, excluding archive/one-off/_deprecated/smoke/tests), text-scanned for a literal status:'released'|'stale' anchored within 6 lines of the nearest .from('claude_sessions') and inspected for either terminalSessionUpdate(/sessionStatusUpdate( routing or an inline is_alive:false, filtered against scripts/audit/claude-sessions-terminal-chokepoint-allowlist.json by file:line. Consumes no DB columns and no environment variables.",
+      "seen": "Run against this repo's real scripts/ and lib/ on 2026-09-05 (this SD's own PR #8237): 0 needs-review across 21 live claude_sessions UPDATE sites (all either route through the FR-1 chokepoint or, at the single pre-chokepoint reference site scripts/stale-session-sweep.cjs, already set is_alive:false inline) -- not a fixture positive; the negative result is expected since this SD's own PR just finished routing every known writer."
+    }
+  },
+  {
+    "name": "no-cd-and-run-recipe-lint",
+    "script": "scripts/lint/no-cd-and-run-recipe-lint.mjs",
+    "rootFlag": "--root",
+    "note": "QF-20260905-646. --root added specifically to make this control seed-testable (it otherwise computes REPO_ROOT from __dirname, not cwd/argv, so it was previously unaimable).",
+    "fixtures": [
+      {
+        "path": "CLAUDE_SEEDTEST.md",
+        "content": "# Seed test defect\n```bash\ncd /some/seeded/path\nnpm run test\n```\n"
+      }
+    ],
+    "detectTokens": [
+      "CLAUDE_SEEDTEST.md",
+      "cd /some/seeded/path"
+    ],
+    "observability_proof": {
+      "input": "Reads the literal markdown TEXT of CLAUDE*.md (repo root) and .claude/commands/*.md via fs.readFileSync -- no database columns, no environment variables, no exit-signal beyond its own exit code.",
+      "seen": "Real positive observed against the LIVE repo (not a fixture), 2026-09-05: running this lint against the actual .claude/commands/*.md + CLAUDE_EXEC.md corpus (before the allowlist was added) surfaced 1 real violation in .claude/commands/ship.md (a load-bearing worktree-cleanup cd, QF-20260404-445) and 4 real violations in .claude/commands/triangulation-protocol.md (a multi-repo exploration recipe) -- both independently confirmed genuine pre-existing cd-and-run recipes, now tracked in scripts/lint/no-cd-and-run-recipe-allowlist.json."
+    }
+  },
+  {
+    "name": "no-cd-and-run-recipe-lint-test-fixtures",
+    "script": "scripts/lint/no-cd-and-run-recipe-lint.test.js",
+    "seedTest": "scripts/lint/no-cd-and-run-recipe-lint.test.js",
+    "neuter": {
+      "find": "cd .worktrees/SD-X\\nnpm test",
+      "replace": "echo .worktrees/SD-X\\nnpm test",
+      "why": "Breaks the 'flags cd-and-run in an untagged fence' fixture's seeded cd line into a non-cd echo line, so findCdAndRunViolations(md) returns [] for it and that test's toBeGreaterThan(0) assertion fails -- proving the fixture is load-bearing, not vacuous."
+    },
+    "note": "This test file itself matches CONTROL_GLOBS (scripts/lint/**/*.js) and was NEW in this diff, so control-seed-test-lint required its own entry despite being a test file rather than a detection script. seedTest points at itself since its own assertions are what is being certified; neuter mutates its own fixture literal, the only file NEUTER_FILE_NOT_SCRIPT permits touching.",
+    "observability_proof": {
+      "input": "Consumes no external input -- a pure vitest unit test asserting findCdAndRunViolations() return values against inline string fixtures it defines itself.",
+      "seen": "Real positive observed 2026-09-05: npx vitest run scripts/lint/no-cd-and-run-recipe-lint.test.js against the shipped no-cd-and-run-recipe-lint.mjs passed 9/9 locally, exercising the same detection code path enforced at merge time by this repo's CI."
+    }
+  },
+  {
+    "name": "adam-completion-claim-reader-probe",
+    "script": "scripts/audit/adam-completion-claim-reader-probe.mjs",
+    "seedTest": "tests/unit/audit/adam-completion-claim-reader-probe.test.js",
+    "neuter": {
+      "find": "export const COMPLETION_CLAIM_RE = /\\b(?:is|are|was|were|now|already)\\s+(?!not\\s)(done|complete|completed|safe|ready|claimable)\\b/i;",
+      "replace": "export const COMPLETION_CLAIM_RE = /$IMPOSSIBLE_NEVER_MATCHES^/i;",
+      "why": "Breaks classifyCompletionClaim() so isCompletionClaim is false for every input -- the 'specimen 1/2/3: flagged' tests assert isCompletionClaim===true and fail once neutered, proving the completion-claim detector is load-bearing, not vacuous."
+    },
+    "note": "QF-20260903-098. DB-querying script (session_coordination rows), not repo-scannable -- no --root/cwd scoping fits, so seedTest points at the committed unit test exercising the pure classifyCompletionClaim() function directly (no DB required for the test).",
+    "observability_proof": {
+      "input": "session_coordination rows where sender_type='adam', columns subject/body/created_at, over a caller-supplied [since,until) window (CLI: --since/--until, default trailing 7 days).",
+      "seen": "2026-09-05 dry run over 2026-08-29..2026-09-06 against the live DB: scanned=243 Adam-outbound rows, claims=10 (completion-language matches), flagged=0 (every claim in this window also named a reader) -- confirms the query and classifier run end-to-end against real data."
+    }
+  },
+  {
+    "name": "quiet-tick-token-parity-lint",
+    "script": "scripts/lint/quiet-tick-token-parity-lint.mjs",
+    "rootFlag": null,
+    "seedTest": "tests/unit/lint/quiet-tick-token-parity-lint.test.js",
+    "neuter": {
+      "find": "const missingFromConsumer = [...emitted].filter((t) => t !== 'QUIET_TICK_ERROR' && !allowed.has(t));",
+      "replace": "const missingFromConsumer = [];",
+      "why": "Blinds the one comparison the control exists for: an emitted token absent from the consumer's allowlist is the CRITICAL finding (a QUIET_TICK_* line that falls through the startup prompt's NO-OP gate unactioned). With missingFromConsumer forced empty, the committed test 'flags a token the emitter prints but the consumer never mentions (missingFromConsumer)' must go RED because its fixture emitter prints QUIET_TICK_NEW_ALERT and the consumer never mentions it."
+    },
+    "note": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A: pre-existing control (QF-20260711-095) reached by the AMR diff filter when its PAIRS table gained the michael emitter/consumer pair. Uses the seedTest form DELIBERATELY: PAIRS paths resolve against a module-relative ROOT with no --root/--dir flag, so a fixture trial cannot be aimed at a scratch dir without adding a scoping flag to a control this SD only extends. The committed test already plants the exact positive (emitter prints a token the consumer lacks) via a temp-dir fixture passed straight to checkPairs(pairs, root).",
+    "observability_proof": {
+      "input": "The source text of each PAIRS entry's emitter (scripts/{adam,coordinator,michael}-quiet-tick.mjs) and consumer (scripts/{adam,coordinator,michael}-startup-check.mjs), read with readFileSync relative to the module's own repo root, comments stripped, scanned with /QUIET_TICK_[A-Z_]+/g; plus scripts/lint/quiet-tick-token-parity-allowlist.json (pair:token -> reason). No database columns, no environment variables.",
+      "seen": "Two real positives on live invocations, not fixtures. (1) QF-20260711-095, the control's own landing commit 7073f87aeb7: running it against the real repo surfaced adam-quiet-tick.mjs emitting QUIET_TICK_VENTURE_STALL_ALERT and QUIET_TICK_INBOX_CAP that adam-startup-check.mjs never mentioned, fixed in the same commit. (2) 2026-09-05, SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A EXEC: the first run over the new michael pair reported a dead-reference advisory because the consumer's list was named QUIET_TICK_TOKENS (an identifier matching the token regex), which is why that list ships as MICHAEL_TICK_TOKENS; the re-run printed '0 drift — parity OK.' for all three pairs. Runs in CI via .github/workflows/quiet-tick-token-parity-lint.yml on every PR touching the paired scripts (advisory mode; --enforce is the blocking flag)."
     }
   }
 ]

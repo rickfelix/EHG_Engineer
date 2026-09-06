@@ -140,6 +140,18 @@ export function isEngagementBasePopulationMember(session, coordinatorId) {
  * to eliminate. isKnownWedged has its OWN staleness authority (last_tool_at + loop_state),
  * independent of heartbeat_at, and is the correct arbiter for "is this session dead."
  *
+ * WEDGED IS CHECKED SECOND, AHEAD OF isClaimed AND TAIL (QF-20260904-650,
+ * SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-2). The `wedged` term was previously computed
+ * on entry and then discarded: `if (isClaimed && isClaimed(session)) return 'ENGAGED';` returned
+ * before it was ever consulted, so a live-heartbeat, CLAIMED, tool-frozen seat classified ENGAGED
+ * forever — the ZOMBIE branch further down was reachable only for the UNCLAIMED population, the
+ * one population that cannot strand work. Measured live: one health report carried
+ * utilization.live_workers=3 (correct) beside engagement.engaged=6/zombie=0 (wrong) from this
+ * same predicate. A wedged session is now ZOMBIE regardless of claim state, matching the module's
+ * own bucket precedence (ENGAGED > TAIL > ZOMBIE > IDLE is the DOCUMENTED precedence, but a
+ * confirmed dead loop must outrank a claim/release signal that a dead loop cannot have
+ * meaningfully produced).
+ *
  * @param {object} session
  * @param {(session: object) => boolean} isClaimed - injected claim signal (TR-3: each caller
  *   supplies its own — the forecaster's claimsBySession union, KPI-1's !!s.sd_key — this
@@ -164,7 +176,11 @@ export function classifySessionBucket(session, { isClaimed, nowMs = Date.now(), 
 
     if (!isLive) return wedged ? 'ZOMBIE' : 'EXCLUDED';
 
-    // From here, isLive === true — ENGAGED and TAIL both require a live session underneath them.
+    // From here, isLive === true. wedged is checked BEFORE isClaimed/TAIL (FR-2 fix) --
+    // see the docstring above for why the prior ordering never reached this branch for any
+    // claimed session.
+    if (wedged) return 'ZOMBIE';
+
     if (isClaimed && isClaimed(session)) return 'ENGAGED';
 
     const { isCompletionRelease, DEFAULT_COMPLETION_GRACE_MS } = loadDetectors();
@@ -175,7 +191,6 @@ export function classifySessionBucket(session, { isClaimed, nowMs = Date.now(), 
     }
 
     if (session.last_tool_at == null) return 'UNKNOWN';
-    if (wedged) return 'ZOMBIE';
     return 'IDLE';
   } catch {
     return 'UNKNOWN'; // per-session fail-soft — one malformed row must never abort the batch

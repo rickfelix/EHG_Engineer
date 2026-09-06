@@ -21,7 +21,10 @@ describe('SD-LEO-INFRA-ROLE-SESSION-NAMING-001: role-status-identity', () => {
     expect(ROLE_IDENTITY.adam.callsign).toBe('Adam');
     expect(ROLE_IDENTITY.coordinator.callsign).toBe('Coordinator');
     expect(ROLE_IDENTITY.solomon.callsign).toBe('Solomon');
+    expect(ROLE_IDENTITY.michael).toEqual({ callsign: 'Michael', color: 'green' }); // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A
     for (const r of Object.values(ROLE_IDENTITY)) expect(STATUSLINE_COLORS.has(r.color)).toBe(true);
+    // Role colors are distinct so the status line never shows two roles in one color.
+    expect(new Set(Object.values(ROLE_IDENTITY).map((r) => r.color)).size).toBe(Object.keys(ROLE_IDENTITY).length);
     expect(IDENTITY_DIR.replace(/\\/g, '/')).toMatch(/\.claude$/);
   });
 

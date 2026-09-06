@@ -19,6 +19,13 @@ import { recordPendingDecision } from '../../../../../lib/chairman/record-pendin
 
 // Core Protocol Gate - SD Start Gate (SD-LEO-INFRA-ENHANCED-PROTOCOL-FILE-001)
 import { createSdStartGate } from '../../gates/core-protocol-gate.js';
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-F: GATE_SUBAGENT_EVIDENCE is not registered at
+// LEAD-FINAL-APPROVAL at all (REQUIRED_SUBAGENTS['LEAD-FINAL-APPROVAL'] is []), so this is the
+// backstop that would have caught the confirmed defect: a CRITICAL sub-agent finding recorded
+// during an EARLIER phase, naming an EARLIER handoff, that no gate ever consulted before the SD
+// shipped to completion. Advisory-first (see the gate's own doc comment for the historical
+// population this would retroactively affect if bound on day one).
+import { createUnresolvedCriticalConditionGate } from '../../gates/subagent-evidence-gate.js';
 import {
   classifyFrDelivery,
   projectGateResult,
@@ -81,6 +88,16 @@ export { createPhantomTestAuditGate };
 // evidence instead of a silent pass (SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-C)
 import { createAcceptanceTierDowngradeGate } from './gates/acceptance-tier-downgrade-gate.js';
 export { createAcceptanceTierDowngradeGate };
+// Success-Criteria-Unpopulated Gate — names any success_criteria entry still carrying the
+// [UNPOPULATED] sentinel measure at final approval, observe-only by default (SD-LEO-FIX-
+// LEAD-FINAL-APPROVAL-002)
+import { createSuccessCriteriaUnpopulatedGate } from './gates/success-criteria-unpopulated-gate.js';
+export { createSuccessCriteriaUnpopulatedGate };
+// Acceptance-Artifact Gate — refuses completion when a declared metadata.acceptance_artifact
+// pointer resolves to a missing/provenance-less/self-reported-unsatisfied row, observe-only by
+// default (SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B)
+import { createAcceptanceArtifactGate } from './gates/acceptance-artifact-gate.js';
+export { createAcceptanceArtifactGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
 // SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B: block completion of a
@@ -1048,6 +1065,81 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
             }
           }
 
+          // QF-20260903-574: Scan C2 — per-candidate-branch `--head` lookup, ADDITIVE to Scan C.
+          //
+          // WHY Scan C alone is not enough: `--search` matches the SD key in a PR's TITLE/BODY
+          // TEXT, never its branch name. An SD whose PR prose omits the literal key therefore
+          // reads as zero merge evidence even when headRefName is a byte-exact match. MEASURED on
+          // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-B: `--search <key>` returns exactly ONE PR — #8116,
+          // headRefName feat/…-001-C, a DIFFERENT CHILD — which branchBelongsToSd then correctly
+          // rejects, so mergedPRs lands at 0 and the gate reports never_pushed. A false negative
+          // built on a false positive. Its real PRs #8118 (feat/…-001-B, merged 2026-09-03
+          // 16:18:59Z) and #8127 (…-001-B-fr6, 17:21:03Z) carry substantial 3968- and 2428-char
+          // bodies that simply say "CAPA W1 child B"; both merge commits are ancestors of main.
+          // `--head feat/…-001-B` returns #8118 immediately. Three SDs sat at pending_approval /
+          // LEAD_FINAL on this, and the failure text steers the operator straight at
+          // --bypass-validation — manufacturing routine bypassing of a gate that is otherwise right.
+          //
+          // DO NOT "SIMPLIFY" THIS BY DROPPING --search FROM SCAN C ABOVE. The comment at ~:1002
+          // records a MEASURED reason it exists: bare `--state merged --limit 100` sees only the
+          // 100 most-recently-merged PRs repo-wide (~50h window), so anything older false-positives
+          // as never_pushed. Scan C answers "merged recently, key in the prose"; Scan C2 answers
+          // "merged ever, on a branch this SD owns". Both are needed; neither replaces the other.
+          if (mergedPRs.length === 0) {
+            const HEAD_SCAN_MAX_PROBES = 15;
+            // CANDIDATES COME FROM sdId, **NOT** FROM keySet. keySet is the GLOBAL set of every
+            // known sd_key (~5.5k entries, loaded in branch-owner.js) whose only job is to let
+            // branchBelongsToSd resolve prefix collisions — iterating it here would build ~27k
+            // candidates and burn the probe budget on other SDs' branches, finding nothing. This
+            // gate must probe THIS SD's own branch names.
+            const headCandidates = RECOGNIZED_BRANCH_TYPES.map(type => `${type}/${sdId}`);
+            // Plus any LOCAL branch the resolver already attributes to this SD, which catches the
+            // suffixed shapes the exact <type>/<key> forms miss (e.g. …-001-B-fr6, merged as
+            // PR #8127). Host-local and therefore best-effort: when the gate runs on a different
+            // machine than EXEC this simply contributes nothing, and the exact forms still stand.
+            for (const { localPath: repoPath } of reposWithPaths) {
+              try {
+                const localRefs = execSync('git for-each-ref --format=%(refname:short) refs/heads/', {
+                  encoding: 'utf8', cwd: repoPath, timeout: 10000
+                });
+                for (const b of localRefs.split('\n').map(s => s.trim()).filter(Boolean)) {
+                  if (branchBelongsToSd(b, sdId, keySet).belongs && !headCandidates.includes(b)) headCandidates.push(b);
+                }
+              } catch (_refsErr) { /* best-effort only — see above */ }
+            }
+            let probes = 0;
+            outer:
+            for (const { githubRepo: repo } of reposWithPaths) {
+              for (const branch of headCandidates) {
+                if (probes >= HEAD_SCAN_MAX_PROBES) break outer;
+                probes += 1;
+                try {
+                  const headResult = execFileSync(
+                    'gh',
+                    ['pr', 'list', '--repo', repo, '--state', 'merged', '--head', branch, '--json', 'number,headRefName,url,mergedAt', '--limit', '10'],
+                    { encoding: 'utf8', timeout: 30000 }
+                  );
+                  const headPrs = JSON.parse(headResult || '[]');
+                  // Still gated on branchBelongsToSd: --head is an exact-name filter, but the
+                  // ownership resolver stays the single authority on what belongs to this SD.
+                  const owned = headPrs.filter(pr => branchBelongsToSd(pr.headRefName, sdId, keySet).belongs);
+                  if (owned.length > 0) {
+                    mergedPRs.push(...owned.map(pr => ({ ...pr, repo })));
+                    break outer;
+                  }
+                } catch (_headErr) {
+                  // DELIBERATELY does NOT set scanCFailed. Scan C2 is purely additive positive
+                  // evidence; a gh hiccup here must leave the verdict AND its reason code exactly
+                  // as Scan A/B/C already determined, because FR-4's census keys off never_pushed
+                  // and this scan must not be able to convert that into a different failure.
+                }
+              }
+            }
+            if (mergedPRs.length > 0) {
+              console.log(`   ✅ Scan C2 found merge evidence by branch that Scan C's text search missed (${probes} probe(s))`);
+            }
+          }
+
           if (scanCFailed && mergedPRs.length === 0) {
             return {
               passed: false,
@@ -1899,6 +1991,10 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   gates.push(createRetrospectiveExistsGate(supabase));
   gates.push(createPRMergeVerificationGate(supabase));
 
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-F: last-chance backstop for an unresolved
+  // structured CRITICAL sub-agent finding anywhere in this SD's evidence history.
+  gates.push(createUnresolvedCriticalConditionGate(supabase));
+
   // Chairman-Apply Verification (SD-LEO-INFRA-CHAIRMAN-APPLY-FLAG-001; widened to all SDs by
   // SD-LEO-INFRA-COMPLETION-FAIL-OWN-001) — refuses completion of
   // any SD whose own staged migration was never applied. Registration is a manual push
@@ -1948,7 +2044,8 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // ADKAR Adoption Gate — completion safeguard (SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B)
   // No-op for any SD without metadata.requires_adoption=true. Blocks/warns (per
   // ENFORCE_ADKAR_GATE) on missing ADKAR stage evidence-or-waiver for SDs that set it.
-  // Default warn-only; set ENFORCE_ADKAR_GATE=true to block.
+  // ENFORCED BY DEFAULT (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D3); set
+  // ENFORCE_ADKAR_GATE=false to fall back to warn-only.
   gates.push(createAdkarAdoptionGate(supabase));
 
   // Deferred-Followups Home — SD-LEO-INFRA-COMPLETION-GATE-DEFERRED-HOME-001
@@ -1967,6 +2064,15 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // works against real data. Closes 26th writer-consumer asymmetry witness.
   // (SD-LEO-INFRA-REQUIRE-END-END-001 FR-2)
   gates.push(createActivationInvariantGate(supabase, prdRepo));
+
+  // Success-Criteria-Unpopulated Gate — names any success_criteria entry still carrying the
+  // [UNPOPULATED] sentinel measure, observe-only by default (SD-LEO-FIX-LEAD-FINAL-APPROVAL-002)
+  gates.push(createSuccessCriteriaUnpopulatedGate());
+
+  // Acceptance-Artifact Gate — refuses completion when a declared metadata.acceptance_artifact
+  // pointer resolves to missing/provenance-less/self-reported-unsatisfied evidence, observe-only
+  // by default (SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B)
+  gates.push(createAcceptanceArtifactGate(supabase));
 
   // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: GATE4_WORKFLOW_ROI is intentionally NOT pushed here —
   // it already runs at LEAD-FINAL via the validator-registry DB rules (see header note). The (A)
@@ -1996,5 +2102,7 @@ export default {
   createDeferredFollowupsGate,
   createCrossSdFileOverlapTemporalShipGate,
   createActivationInvariantGate,
+  createSuccessCriteriaUnpopulatedGate,
+  createAcceptanceArtifactGate,
   getRequiredGates
 };

@@ -12,6 +12,7 @@ import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 import { runPreflightRetroCheck } from '../../retro-filters.js';
 import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
+import { deriveBypassAwareRecordFields, buildPersistedBypassMetadata } from '../../../../../lib/handoff/bypass-stamp.js';
 
 /**
  * Project the orchestrator's per-gate results into a compact, queryable shape for persistence
@@ -40,7 +41,17 @@ export function projectGateResultsForPersistence(gateResults) {
       score: r && typeof r.score === 'number' ? r.score : null,
       max_score: r && typeof r.max_score === 'number' ? r.max_score : (r && typeof r.maxScore === 'number' ? r.maxScore : null),
       passed: !!(r && r.passed),
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D1: `required` now reflects the gate's real
+      // static declaration (ValidationOrchestrator merges it in before this projection runs).
+      // `required_effective` is only present for the rare validator that deliberately overrides
+      // it dynamically (e.g. FR_DELIVERY_VERIFICATION warn-only mode) -- read that when present,
+      // since it is the more truthful "was this actually blocking on this run" answer.
       required: !!(r && r.required),
+      ...(r && typeof r.required_effective === 'boolean' ? { required_effective: r.required_effective } : {}),
+      // `status` distinguishes a type-skip (passed:true but never really evaluated) from a real
+      // pass; `skip_reason` names why, when applicable.
+      ...(r && typeof r.status === 'string' ? { status: r.status } : {}),
+      ...(r && typeof r.skip_reason === 'string' ? { skip_reason: r.skip_reason } : {}),
     };
     // FR-delivery gates carry the classification the auditor actually needs — specifically
     // whether a shortfall was UNVERIFIABLE (blind) or UNDELIVERED (genuinely missing).
@@ -58,6 +69,102 @@ export function projectGateResultsForPersistence(gateResults) {
     }
     return entry;
   });
+}
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-2/FR-3: derive the canonical write's validation_passed/
+ * score_source/metadata.bypass fields from bypassInfo, via the SAME shared
+ * deriveBypassAwareRecordFields function every other handoff type already uses correctly.
+ * Extracted as its own pure function (mirroring projectGateResultsForPersistence's pattern above)
+ * so this logic is directly testable without driving executeSpecific()'s full DB-touching
+ * completion cascade. Confirmed live defect this replaces: a genuinely bypassed LEAD-FINAL-
+ * APPROVAL was previously recorded validation_passed=true with no bypass marker anywhere on the
+ * canonical sd_phase_handoffs row (specimen: row 987bfd16-0eb8-4c68-9729-9ac032872317).
+ *
+ * @param {object|null} bypassInfo - from BaseExecutor's bypassInfo, or null when not bypassed
+ * @returns {{validation_passed: boolean, score_source: string, bypass: object|null}}
+ */
+export function deriveCanonicalLfaFields(bypassInfo) {
+  const { isBypassed, scoreSource, validationPassed } = deriveBypassAwareRecordFields({ bypassed: !!bypassInfo }, 'measured');
+  const bypass = isBypassed
+    ? buildPersistedBypassMetadata(
+        { bypassReason: bypassInfo.reason, bypassedGates: bypassInfo.gates, bypassPatternId: bypassInfo.patternId, bypassFollowupSdKey: bypassInfo.followupSdKey, bypassSelfAuthorshipCheckStatus: bypassInfo.selfAuthorshipCheckStatus },
+        { actor: bypassInfo.source }
+      )
+    : null;
+  return { validation_passed: validationPassed, score_source: scoreSource, bypass };
+}
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-3: for the reconcile path (a DIFFERENT, earlier
+ * invocation's completion -- this call's own bypassInfo would typically be null even when that
+ * earlier completion was genuinely bypassed), copy validation_passed/score_source/bypass straight
+ * across from the sibling leo_handoff_executions row (already correctly stamped by
+ * HandoffRecorder) rather than re-deriving or hardcoding validation_passed:true. Pure, directly
+ * testable without a DB.
+ *
+ * @param {{validation_passed?: boolean, validation_details?: {score_source?: string, bypass?: object}}|null} srcRow
+ * @param {boolean} scoreMeasured - fallback measured/not_measured inference, used only when srcRow is absent
+ * @returns {{validation_passed: boolean, score_source: string, bypass: object|null}}
+ */
+export function deriveReconciledLfaFields(srcRow, scoreMeasured) {
+  if (!srcRow) {
+    return { validation_passed: true, score_source: scoreMeasured ? 'measured' : 'not_measured', bypass: null };
+  }
+  return {
+    validation_passed: !!srcRow.validation_passed,
+    score_source: srcRow.validation_details?.score_source || (scoreMeasured ? 'measured' : 'not_measured'),
+    bypass: srcRow.validation_details?.bypass || null,
+  };
+}
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: join bypass_ledger.handoff_id back to the canonical
+ * LEAD-FINAL-APPROVAL row this write produced. Extracted as its own pure(ish), directly-testable
+ * function (mirroring projectGateResultsForPersistence's pattern above) so the join-back logic
+ * doesn't require driving LeadFinalApprovalExecutor.executeSpecific()'s full completion cascade
+ * (retro/learning/notification side effects) just to exercise this one write.
+ *
+ * WHY THIS EXISTS: measured live before this fix, bypass_ledger.handoff_id was 0/33 populated for
+ * LEAD-FINAL-APPROVAL rows specifically -- child B (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B, FR-B1)
+ * already shipped a working join-back in HandoffRecorder.js's recordFailure()/createArtifact(),
+ * but LEAD-FINAL-APPROVAL's canonical accepted-row write is its own dedicated insert
+ * (SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001) that never routes through HandoffRecorder.recordSuccess(),
+ * so that join-back never fired for this phase.
+ *
+ * Best-effort, non-fail-closed: the FAIL-CLOSED audit guarantee already lives on cli-main.js's
+ * original ledger+audit-log writes; this only enriches an already-durable row. Write-once
+ * (.is('handoff_id', null)) matches the SECURITY-hardened pattern HandoffRecorder.js uses.
+ * SECURITY finding L1 (adversarial review, 2026-09-05): also scoped by sd_id when given, so a
+ * stray/reused bypassLedgerId can never join to a DIFFERENT SD's canonical handoff row -- not
+ * reachable via any shipped entry point today (bypassLedgerId is minted fresh per invocation and
+ * threaded once), but the query costs nothing extra to make structurally correct rather than
+ * merely "not currently exploitable."
+ * SECURITY finding M6: the whole body is try/caught internally (not just relying on the caller
+ * to keep this out of a fail-loud block) so this function can never throw -- genuinely
+ * best-effort, not best-effort-by-caller-convention.
+ *
+ * @param {Object} supabase
+ * @param {string|null|undefined} bypassLedgerId
+ * @param {string|null|undefined} handoffId - the canonical sd_phase_handoffs row's id
+ * @param {string|null|undefined} [sdId] - defense-in-depth scope; omitted, the join is unscoped
+ * @returns {Promise<void>}
+ */
+export async function joinBypassLedgerToCanonicalHandoff(supabase, bypassLedgerId, handoffId, sdId) {
+  if (!supabase || !bypassLedgerId || !handoffId) return;
+  try {
+    let query = supabase
+      .from('bypass_ledger')
+      .update({ handoff_id: handoffId })
+      .eq('id', bypassLedgerId);
+    if (sdId) query = query.eq('sd_id', sdId);
+    const { error: ledgerJoinError } = await query.is('handoff_id', null);
+    if (ledgerJoinError) {
+      console.warn(`   ⚠️  bypass_ledger.handoff_id join-back failed (non-blocking): ${ledgerJoinError.message}`);
+    }
+  } catch (joinEx) {
+    console.warn(`   ⚠️  bypass_ledger.handoff_id join-back errored (non-blocking): ${joinEx.message}`);
+  }
 }
 
 /**
@@ -111,6 +218,8 @@ import { getWorkflowForType } from '../../cli/workflow-definitions.js';
 // SD-LEO-FIX-POST-MERGE-AUTOMATION-001 FR-2: CAS guard on the terminal completion
 // UPDATE + loser-side pre-insert cleanup (post-merge automation vs worker race).
 import { attemptCasCompletion, cleanupLosingPreInsert } from './cas-completion.js';
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2: refuse completion while an unreleased chairman hold stands.
+import { isUnreleasedChairmanHold, formatHoldProvenance, resolveHoldProvenance } from '../../../../../lib/fleet/claim-eligibility.cjs';
 
 // SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-A (F1): surface the SD's genuine retro
 // known-issues instead of a hardcoded placeholder. Non-throwing by construction (see module doc).
@@ -425,7 +534,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     return getRequiredGates(this.supabase, this.prdRepo, sd);
   }
 
-  async executeSpecific(sdId, sd, options, gateResults) {
+  async executeSpecific(sdId, sd, options, gateResults, execContext = {}) {
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-2/FR-3: bypassInfo is resolved earlier in
+    // BaseExecutor.execute() (before this canonical write ever runs) and threaded in here --
+    // this executor previously never received it, so a genuinely bypassed LEAD-FINAL-APPROVAL
+    // was recorded validation_passed=true with no bypass marker at all on the canonical row
+    // (confirmed live specimen: sd_phase_handoffs row 987bfd16, vs the correctly-stamped
+    // leo_handoff_executions row 4b8cb8fa for the SAME approval).
+    const bypassInfo = execContext?.bypassInfo ?? null;
     // If already completed, just return success
     if (options._alreadyCompleted) {
       console.log('\n✅ SD already completed - verification passed');
@@ -446,6 +562,26 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         message: 'SD already completed - all gates verified',
         alreadyCompleted: true
       };
+    }
+
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2 (AC-4), moved here per SECURITY review
+    // (evidence 62a7d823, SEC-3): checking AFTER the LHE/SPH pre-insert below left a
+    // permanent ghost sd_phase_handoffs row asserting LEAD-FINAL-APPROVAL was 'accepted' for
+    // an SD that was in fact refused -- the exact artifact this file's own comment above
+    // names as v_sd_completion_integrity's sole completion evidence. sd.metadata is already
+    // in hand at function entry, so this check needs nothing the pre-insert produces.
+    // Narrow predicate (FR-1) -- NOT resolveHoldProvenance() as-is, which over-matches
+    // deferred_by / not_worker_claimable_reason (legitimately compatible with completion).
+    // Uses resolveHoldProvenance() for display text (SECURITY finding SEC-2: a hand-built
+    // provenance object bypassed the control-char stripping resolveHoldProvenance's local
+    // s() helper applies -- Adversarial-review W3, embedded \n/ESC forging rendered lines).
+    if (isUnreleasedChairmanHold(sd.metadata)) {
+      const holdText = formatHoldProvenance(resolveHoldProvenance(sd.metadata));
+      console.log('   \u274c Completion refused: unreleased chairman hold — ' + holdText);
+      return ResultBuilder.rejected(
+        'UNRELEASED_CHAIRMAN_HOLD',
+        'SD has an unreleased chairman hold and cannot be completed: ' + holdText + '. Release via releaseHold() (lib/fleet/claim-eligibility.cjs) before re-running LEAD-FINAL-APPROVAL.'
+      );
     }
 
     console.log('\n📊 STATE TRANSITION: Final Approval');
@@ -545,6 +681,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // #4674 idempotency check (existing accepted LFA row -> skip) makes the later
     // recorder call a no-op. FAIL-LOUD AND FAIL-EARLY: if this canonical write
     // fails, the SD is NEVER flipped to completed — stronger than #4674's post-hoc throw.
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: the canonical handoff id, set inside the try
+    // block below (whichever branch runs), then joined to bypass_ledger AFTER the try/catch --
+    // SECURITY finding M6 (adversarial review, 2026-09-05): join-back must never live inside a
+    // block whose catch converts any exception into CANONICAL_LFA_WRITE_FAILED, since the
+    // canonical row is by then already durably written and the join is pure enrichment.
+    let canonicalHandoffId = null;
     try {
       const { HANDOFF_SYSTEM_TAG } = await import('../../recording/HandoffRecorder.js');
       const { data: existingLfa } = await this.supabase
@@ -568,7 +710,21 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           if (isFallbackKnownIssues(knownIssues)) knownIssues = [];
           knownIssues = [...knownIssues, caughtGapIssue];
         }
-        const { error: canonErr } = await this.supabase
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-2/FR-3: derive validation_passed/score_source/
+        // bypass via the extracted, directly-tested deriveCanonicalLfaFields, instead of
+        // hardcoding validation_passed:true with no bypass marker. A non-bypassed approval is
+        // unaffected (score_source falls through to 'measured', validation_passed=true) -- this
+        // is additive correctness, not a behavior change for the common case.
+        const canonicalFields = deriveCanonicalLfaFields(bypassInfo);
+        const canonicalMetadata = {
+          canonical_pre_completion_write: true,
+          sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001',
+          // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 FR-5: make the per-gate verdicts
+          // auditable after the run. Previously absent on all 62 LEAD-FINAL rows.
+          gate_results: projectGateResultsForPersistence(gateResults),
+          ...(canonicalFields.bypass ? { bypass: canonicalFields.bypass } : {}),
+        };
+        const { data: canonRow, error: canonErr } = await this.supabase
           .from('sd_phase_handoffs')
           .insert({
             sd_id: sd.id,
@@ -584,18 +740,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
             action_items: [{ item: 'None — SD lifecycle complete; post-completion tail follows' }],
             completeness_report: { validation_score: normalizedScore },
             validation_score: normalizedScore,
-            validation_passed: true,
-            validation_details: { written_by: 'LeadFinalApprovalExecutor pre-completion canonical write' },
+            validation_passed: canonicalFields.validation_passed,
+            validation_details: { written_by: 'LeadFinalApprovalExecutor pre-completion canonical write', score_source: canonicalFields.score_source },
             accepted_at: new Date().toISOString(),
             created_by: HANDOFF_SYSTEM_TAG,
-            metadata: {
-              canonical_pre_completion_write: true,
-              sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001',
-              // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 FR-5: make the per-gate verdicts
-              // auditable after the run. Previously absent on all 62 LEAD-FINAL rows.
-              gate_results: projectGateResultsForPersistence(gateResults)
-            }
-          });
+            metadata: canonicalMetadata
+          })
+          .select('id')
+          .single();
         if (canonErr) {
           console.log(`   ❌ Canonical LFA write failed (SD NOT completed): ${canonErr.message}`);
           await this._cleanupPendingPreInsert(sd.id, usePendingPath);
@@ -606,14 +758,24 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           );
         }
         console.log('   ✅ Canonical accepted LFA row written pre-completion (sd_phase_handoffs)');
+        canonicalHandoffId = canonRow?.id || null;
       } else {
         console.log(`   ℹ️  Canonical accepted LFA row already exists (${existingLfa.id})`);
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: also join on the re-run/idempotent path --
+        // TESTING finding (adversarial review, 2026-09-05): a retried bypass attempt that lands
+        // here (canonical row already exists from a prior attempt) previously never joined at
+        // all, silently reproducing the exact 0/33-unjoined condition this fix exists to close.
+        canonicalHandoffId = existingLfa.id;
       }
     } catch (canonEx) {
       console.log(`   ❌ Canonical LFA write errored (SD NOT completed): ${canonEx.message}`);
       await this._cleanupPendingPreInsert(sd.id, usePendingPath);
       return ResultBuilder.rejected('CANONICAL_LFA_WRITE_FAILED', `Canonical LFA write errored: ${canonEx.message}`);
     }
+
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D4: see joinBypassLedgerToCanonicalHandoff's own
+    // docblock above for why this runs here, outside the try/catch above.
+    await joinBypassLedgerToCanonicalHandoff(this.supabase, options.bypassLedgerId, canonicalHandoffId, sd.uuid_id || sd.id);
 
     // Transition SD to completed status
     // SD-MAN-INFRA-SAME-TURN-NEXT-001 FR-3: capture the completing session id
@@ -1113,21 +1275,27 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
       // Source the score/provenance from the genuine accepted leo_handoff_executions
       // LFA row (the real completion evidence), falling back to the gate result then 100.
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-3: also select validation_passed and
+      // validation_details -- this invocation never has its own bypassInfo (it handles a
+      // DIFFERENT, earlier invocation's completion), so validation_passed/bypass are COPIED
+      // from the sibling leo_handoff_executions row (already correctly stamped by
+      // HandoffRecorder via deriveBypassAwareRecordFields) rather than hardcoded/re-derived.
       const { data: lheRows } = await this.supabase
         .from('leo_handoff_executions')
-        .select('id, validation_score')
+        .select('id, validation_score, validation_passed, validation_details')
         .eq('sd_id', sd.id)
         .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
         .eq('status', 'accepted')
         .order('created_at', { ascending: false })
         .limit(1);
-      const srcId = lheRows && lheRows[0] ? lheRows[0].id : null;
-      const srcScoreMeasured = !!((lheRows && lheRows[0] && lheRows[0].validation_score != null)
+      const srcRow = lheRows && lheRows[0] ? lheRows[0] : null;
+      const srcId = srcRow ? srcRow.id : null;
+      const srcScoreMeasured = !!((srcRow && srcRow.validation_score != null)
         || (gateResults && gateResults.actualScore != null));
-      const srcScore = (lheRows && lheRows[0] && lheRows[0].validation_score != null)
-        ? lheRows[0].validation_score
+      const srcScore = (srcRow && srcRow.validation_score != null)
+        ? srcRow.validation_score
         : (gateResults && gateResults.actualScore != null ? gateResults.actualScore : NOT_MEASURED_SCORE);
-      const srcScoreSource = srcScoreMeasured ? 'measured' : 'not_measured';
+      const reconciledFields = deriveReconciledLfaFields(srcRow, srcScoreMeasured);
 
       // F1/FR-3: surface genuine retro known-issues on the resume/reconcile path too, combined
       // with (never replacing) the existing honest provenance note. combineKnownIssuesWithProvenance
@@ -1155,11 +1323,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           action_items: [{ item: 'None — historical reconciliation; the already-completed path now self-heals via this branch' }],
           completeness_report: { validation_score: srcScore, source: 'leo_handoff_executions' },
           validation_score: srcScore,
-          validation_passed: true,
-          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42', score_source: srcScoreSource },
+          validation_passed: reconciledFields.validation_passed,
+          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42', score_source: reconciledFields.score_source },
           accepted_at: new Date().toISOString(),
           created_by: 'ADMIN_OVERRIDE',
-          metadata: { canonical_reconcile_write: true, resume_path: true, source_execution_id: srcId, sd_ref: 'SD-REFILL-0038AO42' }
+          metadata: {
+            canonical_reconcile_write: true, resume_path: true, source_execution_id: srcId, sd_ref: 'SD-REFILL-0038AO42',
+            ...(reconciledFields.bypass ? { bypass: reconciledFields.bypass } : {}),
+          }
         });
       if (insErr) {
         console.warn(`   ⚠️  Canonical LFA reconcile failed (non-fatal): ${insErr.message}. Run scripts/one-off/backfill-lfa-canonical-rows.mjs --execute to clear the ghost.`);

@@ -1,0 +1,237 @@
+{
+  "executive_summary": "The schema reference lint is armed for new code and dark for the backlog: CI invokes it with --diff only (.github/workflows/schema-reference-lint.yml:69), so the whole-tree state is never asserted. Measured 2026-09-03, --all reports 358 violations across 4316 files and exits 1. This PRD drives that measured baseline to zero and then arms --all in CI, so a new phantom table or column reference fails the build. Two false-zero traps are handled explicitly rather than assumed. Trap (a), a zero asserted against the stale 2026-08-30 snapshot, was tested and DISPROVEN: regenerating the snapshot leaves the violation set identical, 358 before and after with the sets matching exactly, so staleness contributes zero of the 358 -- but staleness is still promoted from warning to failure as prevention. Trap (b), a zero bought by widening an escape, is closed by freezing both escape budgets against a pinned base commit: the allowlist at scripts/lint/schema-reference-allowlist.json (12 files / 27 tables) and the inline schema-lint-disable-line pragma (233 occurrences across 129 files). The root cause of the only non-code violations is that the extractor strips neither comments nor string literals, so it matches example code -- including, at scripts/hooks/lib/supabase-operative.cjs:17-18, the regex patterns that document the lint's own matcher. Those are fixed in the extractor, never by an escape entry. The verification story is a deliberate phantom reference that must fail CI, proving the check is live rather than merely present.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Extractor precision: stop matching references inside comments and string literals",
+      "description": "scripts/lint/schema-reference-extract.mjs extractReferences (lines 108-162) runs FROM_RE and the select/insert/update/upsert regexes against raw file text read at scripts/lint/schema-reference-lint.mjs:270-271, stripping neither comments nor string literals. It therefore reports example code as real schema references. The proof case is self-demonstrating: scripts/hooks/lib/supabase-operative.cjs:17-18 are the regex literals that DOCUMENT the lint's own matcher, sitting in trailing // comments, and the lint reports them as missing table_name. Adopt stripComments from lib/lint/added-line-text.mjs (lines 91-96) -- the lint already imports isFixturePath/isFixtureEntry from that same module at schema-reference-lint.mjs:40, so it is one import away and introduces no new dependency. Its sibling stripStringLiterals deliberately leaves TEMPLATE literals intact (documented at lines 107-111), so the template-literal half needs handling that does not widen that shared helper. This is the ONLY honest remedy for these 10 violations: routing them through the allowlist or the pragma would consume the escape budget FR-3 freezes, converting a lint defect into a permanent suppression.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A reference appearing only inside a line comment, a block comment, or a template-literal example contributes no violation.",
+        "scripts/hooks/lib/supabase-operative.cjs:17-18 no longer appear in --all output, with no allowlist or pragma entry added for them.",
+        "The measured 358 drops by exactly the comment/template-literal count (10 by the worker's classification) and by nothing else.",
+        "Offsets/line numbers reported for surviving violations are unchanged, so stripping does not shift reported positions."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Snapshot staleness fails the run instead of warning",
+      "description": "scripts/lint/schema-reference-lint.mjs:129-133 computes ageDays against STALE_DAYS (7, declared at line 55) and emits console.warn only. ageDays is never passed to computeExitCode (scripts/lint/schema-lint-exit.mjs:18-21), which reads only violations and degradedFallback, so a run against a snapshot older than the schema passes. Promote staleness to a failure so a zero can never be asserted against a snapshot that no longer describes the database. Note for honesty about impact: this is PREVENTION, not backlog reduction -- regenerating the snapshot was measured to leave the violation set byte-identical, so this requirement will not move the 358.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A run whose snapshot generated_at is older than STALE_DAYS exits non-zero with a message naming the snapshot age and the regeneration command.",
+        "A run with a fresh snapshot is unaffected.",
+        "The staleness failure is distinguishable in output from a violations failure, so the two causes are never confused.",
+        "The existing degradedFallback advisory-exit behaviour is preserved unchanged."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Freeze both escape budgets against a pinned base commit",
+      "description": "The two ways to buy a false zero are the allowlist and the inline pragma. Record both counts and fail CI if either grows. The allowlist is scripts/lint/schema-reference-allowlist.json (ALLOWLIST_PATH at scripts/lint/schema-reference-lint.mjs:51), currently 12 files entries and 27 tables entries -- NOT database/schema-reference-allowlist.json, which does not exist anywhere in the repo and which the SD spine originally named; a check built against that path would read a nonexistent file and assert does-not-grow vacuously. The pragma schema-lint-disable-line is parsed by pragmaAt (scripts/lint/schema-reference-extract.mjs:42-47) at line granularity, currently 233 occurrences across 129 files, about 4 of which are the lint's own definition and docstring rather than suppressions. The baseline MUST be computed from the merge-base commit rather than a stored wall-clock number: the count was observed moving during this SD's own LEAD phase when a sibling agent's untracked script quoted the pragma string, which is exactly how a hard-coded baseline goes stale and stops meaning anything.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A PR that adds an allowlist files or tables entry fails the check, naming the added entry.",
+        "A PR that adds a schema-lint-disable-line occurrence fails the check, naming file and line.",
+        "Removing entries or pragmas passes -- the budget is a ceiling, not a fixed value.",
+        "Both baselines are derived from the merge-base commit at run time, never read from a committed literal count.",
+        "The lint's own definition/docstring occurrences are excluded from the pragma tally by construction, not by a magic subtraction."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "A deliberately introduced phantom reference fails CI",
+      "description": "Criterion 4 of the SD: prove the check is LIVE rather than merely present. A test or CI canary introduces a reference to a table and a column that do not exist in the snapshot and asserts the lint reports them and exits non-zero. This is the requirement that distinguishes a wired check from a check-shaped object, and it is the one that catches a future refactor silently disarming the gate. Per the fleet standard reaffirmed on 2026-09-03: a fix must add assertions that the OLD blocking behaviour still fires, otherwise the fix is indistinguishable from deleting the check.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A test asserts that a phantom TABLE reference produces a violation and a non-zero exit.",
+        "A test asserts that a phantom COLUMN reference on an existing table produces a violation and a non-zero exit.",
+        "The canary asserts the failure comes from the violation path, not from an unrelated error or a staleness failure.",
+        "A test pins the CI scan mode, so a silent regression from --all back to --diff fails the suite. No test currently does this."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Burn the remaining real violations to zero, staged by tree",
+      "description": "After FR-1 removes the ~10 noise violations, the residue is real drift and must be fixed rather than suppressed. Measured shape: 254 distinct missing objects across 146 files; 205 are column references and EVERY ONE is on a table that exists (real column drift, zero on a missing table); 49 are table references. By tree: lib 191, scripts 140, src 10, server 10, api 7. Each violation resolves to exactly one of: the reference is wrong and the code is fixed; the object is genuinely absent and the code path is dead and removed; or the reference is correct and the snapshot is wrong, in which case the snapshot is regenerated. Delivery is staged as separate PRs by tree so no single PR touches 146 unrelated files across marketing, sub-agent execution, EVA bridge, cost agent, stories generation and hooks -- that is not reviewable regardless of literal LOC, and CLAUDE.md's PR ceiling is a reviewability constraint. One confirmed instance to disposition explicitly: lib/eva/bridge/replit-prompt-formatter.js:223 selects venture_resources.resource_url, but that table carries repo_url and deployment_url.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "schema-reference-lint --all reports 0 violations.",
+        "Zero of the fixes were achieved by adding an allowlist entry or an inline pragma (enforced by FR-3).",
+        "Each staged PR leaves the tree in a state where the --all count strictly decreases and never increases.",
+        "Every removed code path is removed because it was dead, with the evidence recorded, not because it was inconvenient to fix."
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Wire CI to --all and arm the blocking assertion, only after zero",
+      "description": "Change the CI invocation at .github/workflows/schema-reference-lint.yml:69 from --diff to --all so the whole tree is asserted on every PR, with continue-on-error already false (line 48). SEQUENCING IS A HARD REQUIREMENT, not a preference: this arming lands ONLY after FR-5 reaches zero. Arming it mid-sequence would either block every unrelated PR on a backlog they did not create, or force the assertion to tolerate a non-zero baseline -- and the SD is explicit that a non-zero baseline must never be asserted as a pass. The pre-existing/new split (scripts/lint/schema-lint-scope.mjs, QF-20260802-742) exists precisely so a backlog does not block unrelated PRs; under --all with mergeBase null every violation counts as new, which is correct only once the count is zero.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "CI invokes the lint with --all and the job is blocking.",
+        "The arming commit lands only when --all already reports 0, verifiable from the commit order.",
+        "A PR introducing a phantom reference fails this CI job (FR-4's canary proves the wiring end to end).",
+        "The --diff pre-existing/new split behaviour is not deleted, so the tool remains usable in diff mode."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No gate weakening and no bypass flags",
+      "description": "No --bypass-validation, no allowlist or pragma growth, no lowering of a threshold, and no deletion of an existing assertion. Every behavioural fix adds a test asserting the OLD blocking behaviour still fires; without that, a fix is indistinguishable from deleting the check."
+    },
+    {
+      "id": "TR-2",
+      "title": "Reuse the existing helper rather than a third re-implementation",
+      "description": "FR-1 adopts stripComments from lib/lint/added-line-text.mjs rather than writing new stripping logic. scripts/lib/migration-object-parser.js stripLineAndBlockComments and stripDollarQuotedBodies are NOT candidates: they are module-private and are SQL-grammar strippers, the wrong grammar for a JS/TS scanner."
+    },
+    {
+      "id": "TR-3",
+      "title": "Baselines pinned at a commit, never a committed literal",
+      "description": "FR-3's two counts derive from the merge-base at run time. A hard-coded count goes stale silently; this SD observed its own pragma baseline move during LEAD when an unrelated untracked script quoted the pragma string."
+    },
+    {
+      "id": "TR-4",
+      "title": "Staged delivery, each PR independently reviewable",
+      "description": "FR-1 through FR-4 are small and independent and land first. FR-5 lands as separate per-tree PRs. FR-6 lands last. Each PR must leave CI green and the --all count monotonically non-increasing."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "A .from() reference inside a // comment, a /* */ block, and a template-literal example contributes no violation",
+      "type": "unit",
+      "expected": "extractReferences returns no reference for any of the three; supabase-operative.cjs:17-18 specifically produce none"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "A real .from() reference on the same line as, or adjacent to, a comment is still extracted",
+      "type": "unit",
+      "expected": "Stripping removes only commented content; live references and their reported line numbers are unchanged"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "A snapshot older than STALE_DAYS is used",
+      "type": "unit",
+      "expected": "Non-zero exit with a staleness-specific message, distinguishable from a violations failure"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "A PR adds one allowlist tables entry, and separately one schema-lint-disable-line pragma",
+      "type": "integration",
+      "expected": "The escape-budget check fails in both cases and names the addition; removing entries passes"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "A deliberately phantom table reference and a phantom column on an existing table are introduced",
+      "type": "integration",
+      "expected": "Both are reported and the process exits non-zero via the violations path"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "The CI workflow invocation is changed from --all back to --diff",
+      "type": "unit",
+      "expected": "The scan-mode pin test fails, so the regression cannot land silently"
+    }
+  ],
+  "acceptance_criteria": [
+    "schema-reference-lint --all reports 0 violations across the tree.",
+    "CI invokes the lint with --all as a blocking job, armed only after the count already reached zero.",
+    "Neither escape budget grew: allowlist stays at or below 12 files / 27 tables and the pragma count at or below its merge-base baseline.",
+    "A snapshot older than STALE_DAYS fails the run rather than warning.",
+    "A deliberately introduced phantom table or column reference fails CI, proving the check is live."
+  ],
+  "risks": [
+    {
+      "risk": "Arming --all in CI before the backlog reaches zero blocks every unrelated PR on a backlog they did not create.",
+      "mitigation": "FR-6 sequencing is a hard requirement: the arming commit lands only after --all reports 0, verifiable from commit order. FR-5's staged PRs keep the count monotonically non-increasing until then.",
+      "severity": "high"
+    },
+    {
+      "risk": "The burn-down is achieved by suppression rather than repair, producing a zero that means nothing.",
+      "mitigation": "FR-3 freezes both escape budgets against the merge-base and fails CI on growth, so a suppressed finding cannot reach zero unnoticed. FR-1 fixes the only legitimate noise class in the extractor instead of spending escape budget on it.",
+      "severity": "high"
+    },
+    {
+      "risk": "Comment/string stripping is over-broad and silently hides real references, converting a false-positive fix into a false-negative.",
+      "mitigation": "TS-2 asserts live references adjacent to comments still extract with unchanged line numbers, and FR-4's phantom canary independently proves the detector still fires. The count must drop by exactly the classified noise figure and by nothing else.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Removing a 'dead' code path that was actually live, on the strength of a lint finding alone.",
+      "mitigation": "FR-5 requires each removal to record its dead-path evidence; a reference whose object is genuinely absent means the path cannot execute successfully today, and where that is not demonstrable the reference is fixed rather than the path deleted.",
+      "severity": "medium"
+    },
+    {
+      "risk": "A hard-coded escape baseline goes stale and the freeze stops meaning anything.",
+      "mitigation": "TR-3 derives both counts from the merge-base at run time. This SD observed the pragma count move during its own LEAD phase, which is the concrete reason the literal was rejected.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "The schema-reference-lint CI job on every pull request",
+      "Any worker relying on the deploy-drift signal to trust that code matches the live schema"
+    ],
+    "dependencies": [
+      "database/schema-reference-snapshot.json and its writer scripts/lint/schema-reference-snapshot.mjs",
+      "lib/lint/added-line-text.mjs stripComments (already an import-path neighbour of the lint)",
+      "scripts/lint/schema-lint-scope.mjs pre-existing/new split and scripts/lint/schema-lint-exit.mjs computeExitCode"
+    ],
+    "data_contracts": [
+      "No schema change. The snapshot JSON shape is read, not altered.",
+      "scripts/lint/schema-reference-allowlist.json shape is read for the budget check, not altered."
+    ],
+    "runtime_config": [
+      "SCHEMA_LINT_BASE selects the diff base and is reused as the pin for the FR-3 budget baseline",
+      "STALE_DAYS (scripts/lint/schema-reference-lint.mjs:55) governs FR-2's failure threshold"
+    ],
+    "observability_rollout": [
+      "The --all violation count is the rollout metric; it must decrease monotonically to 0 across the staged PRs and never increase.",
+      "FR-4's phantom canary is the liveness probe: if it ever stops failing, the gate has been disarmed."
+    ]
+  },
+  "system_architecture": {
+    "summary": "Three small changes inside the existing lint pipeline (extractor precision, staleness exit wiring, escape-budget check) plus a staged backlog burn-down, then a one-line CI flag change armed last.",
+    "components": [
+      { "name": "scripts/lint/schema-reference-extract.mjs", "change": "Strip comments and template-literal examples before matching (FR-1)" },
+      { "name": "scripts/lint/schema-reference-lint.mjs", "change": "Wire snapshot staleness into the exit code (FR-2)" },
+      { "name": "scripts/lint/schema-lint-exit.mjs", "change": "Accept a staleness cause distinct from violations (FR-2)" },
+      { "name": "scripts/lint/schema-reference-allowlist.json", "change": "Unchanged by construction; its entry count becomes a frozen budget (FR-3)" },
+      { "name": ".github/workflows/schema-reference-lint.yml", "change": "--diff to --all at line 69, plus the escape-budget check; armed last (FR-3, FR-6)" },
+      { "name": "tests/unit/lint/schema-reference-extract.test.js", "change": "Add comment/string and phantom-canary coverage (FR-1, FR-4)" },
+      { "name": "lib, scripts, src, server, api", "change": "Burn down 348 real phantom references across 146 files, staged by tree (FR-5)" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Land the four small hardening requirements first, burn the backlog down per tree, and arm the blocking whole-tree assertion last.",
+    "steps": [
+      "PR 1 (FR-1): adopt stripComments in the extractor, handle template-literal examples, add TS-1 and TS-2. Re-measure --all; the count must drop by exactly the classified noise figure.",
+      "PR 2 (FR-2, FR-4): wire staleness into the exit code and add the phantom canary plus the CI scan-mode pin test.",
+      "PR 3 (FR-3): add the escape-budget check computing both baselines from the merge-base, with TS-4 proving it fails on growth and passes on removal.",
+      "PR 4..n (FR-5): burn down by tree -- src/server/api (27) first as the smallest, then scripts (140), then lib (191). Each PR disposition-records its fixes and keeps the count monotonically decreasing.",
+      "Final PR (FR-6): flip .github/workflows/schema-reference-lint.yml:69 to --all once the count is already 0, and confirm the canary fails CI end to end."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "node scripts/lint/schema-reference-lint.mjs --all",
+      "expected_outcome": "Reports 0 violations and exits 0 once the burn-down is complete (baseline at PRD time: 358 violations in 4316 files, exit 1)"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Add a reference to a table that does not exist, then run node scripts/lint/schema-reference-lint.mjs --all",
+      "expected_outcome": "The phantom reference is reported by file and line and the process exits non-zero"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Add one entry to scripts/lint/schema-reference-allowlist.json and run the escape-budget check",
+      "expected_outcome": "The check fails, naming the added entry; reverting the addition makes it pass"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C"
+  }
+}

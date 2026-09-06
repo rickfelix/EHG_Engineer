@@ -72,6 +72,11 @@ const PROTOCOL_FILES = [
   // matters MORE than the other two, not less — a seat that reads only the charter has read a
   // POINTER to binding pin/window/degradation rules, not the rules themselves.
   'CLAUDE_SOLOMON_MODEL_POSTURE.md',
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4): the Michael role contract (verified at
+  // /michael activation by scripts/michael-register.cjs checkContractRead, same mechanism as Solomon)
+  // and its BINDING model-posture companion — a seat that reads only the charter has read a pointer.
+  'CLAUDE_MICHAEL.md',
+  'CLAUDE_MICHAEL_MODEL_POSTURE.md',
   // SD-LEO-INFRA-ROLE-CONTRACT-READ-GATE-001 / FR-2 prerequisite. Originally the coordinator was
   // the ONLY role whose contract was small enough to read in one call, and the ONLY role with no
   // verifier of any kind — its priming requirement terminated in a self-attestation nothing

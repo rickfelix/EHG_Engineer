@@ -41,7 +41,9 @@ const { contractReadVerdict, contractLineCount, singleReadFit } = require('../li
 // fetchAllSolomonsStrict (not fetchFreshSolomons) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
 // discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
-const { fetchAllSolomonsStrict, decideSingleSolomonGuard, isFresh, SOLOMON_FRESH_MS } = require('../lib/coordinator/solomon-identity.cjs');
+const { fetchAllSolomonsStrict, decideSingleSolomonGuard, isFresh, isFreshAndActive, SOLOMON_FRESH_MS } = require('../lib/coordinator/solomon-identity.cjs');
+// QF-20260905-201: same-host dead-process proof (see scripts/adam-register.cjs for the measured specimen).
+const { isSeatProcessDead } = require('../lib/coordinator/role-seat-liveness.cjs');
 // Phase E (not yet shipped): drainSolomonOutbound will live in scripts/solomon-advisory.cjs.
 // Loaded lazily at the call site so this module loads without solomon-advisory.cjs present.
 
@@ -117,7 +119,7 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
       message: `Refused: prior-Solomon freshness read failed (${priorRead.error}) — cannot verify the singleton is free; not registering (fail-closed).` };
   }
   const priorSolomons = priorRead.rows;
-  const decision = decideSingleSolomonGuard({ priorSolomons, selfSessionId: sessionId, nowMs });
+  const decision = decideSingleSolomonGuard({ priorSolomons, selfSessionId: sessionId, nowMs, isProcessDead: isSeatProcessDead });
   if (decision.action === 'refuse') {
     // A FRESH prior Solomon holds the singleton — do NOT register a 2nd and do NOT clear the prior
     // (the deliberate divergence: never kill a legitimately-restarting Solomon mid-canary).
@@ -201,9 +203,37 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
     } else {
       // QF-20260822-719: isFresh(heartbeatAt, nowMs, freshMs) has no default for freshMs — the
       // missing 3rd arg made this always false (identical class fixed in adam-register.cjs).
+      //
+      // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-3, REVISED after implementation-time measurement,
+      // then AGAIN after F-7, evidence d9d88102-2dfe-49bb-b319-887db2b361bd): this PRD originally
+      // proposed ORing in lib/fleet/genuine-worker.mjs's isKnownWedged here; measured wrong. A
+      // SECOND, deeper defect was then found by end-to-end probing: decision.retire can contain a
+      // session with a STILL-FRESH heartbeat -- decideSingleSolomonGuard's FR-2 fix excludes a
+      // heartbeat-fresh-but-tool-STUCK prior from `fresh`, placing it in `retire` for a TOOL
+      // ACTIVITY reason, not a heartbeat reason. Re-checking such an entry's heartbeat here would
+      // ALWAYS find it fresh (that is the defining property of a heartbeating shell) and skip it
+      // FOREVER, leaving a confirmed-dead session permanently role-tagged. See the identical,
+      // longer rationale in scripts/adam-register.cjs. decision.retireToolStuck (FR-2) names these
+      // entries so they can be re-validated on tool activity instead of heartbeat.
+      const bySessionId = new Map(currentRead.rows.map((a) => [a.session_id, a]));
       const freshNow = new Set(currentRead.rows.filter((a) => isFresh(a.heartbeat_at, nowMs2, SOLOMON_FRESH_MS)).map((a) => a.session_id));
+      const toolStuckSet = new Set(decision.retireToolStuck || []);
+      // QF-20260905-201: dead-process entries re-validate on the PROCESS, never heartbeat (frozen fresh).
+      const deadProcessSet = new Set(decision.retireDeadProcess || []);
+      const deadProcessStillDead = new Set(
+        (decision.retireDeadProcess || []).filter((sid) => isSeatProcessDead(bySessionId.get(sid))),
+      );
+      const toolStuckRacedBack = new Set(
+        (decision.retireToolStuck || []).filter((sid) => {
+          const row = bySessionId.get(sid);
+          return row && isFreshAndActive(row, nowMs2, SOLOMON_FRESH_MS);
+        }),
+      );
       for (const sid of decision.retire) {
-        if (freshNow.has(sid)) continue; // became fresh since the decision — do NOT clear a restarting Solomon
+        const skip = deadProcessSet.has(sid)
+          ? !deadProcessStillDead.has(sid)
+          : (toolStuckSet.has(sid) ? toolStuckRacedBack.has(sid) : freshNow.has(sid));
+        if (skip) continue; // became fresh since the decision — do NOT clear a restarting Solomon
         const r = await supabase.rpc('clear_solomon_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
         if (!(r && r.error)) retired.push(sid); // best-effort: a failed stale-clear is swept later
       }
@@ -238,6 +268,7 @@ async function registerSolomon(supabase, sessionId, opts = {}) {
   }
 
   return { ok: true, action, session_id: sessionId, role: SOLOMON_ROLE, non_fleet: true, retired, drained,
+    retired_dead_process: (decision.retireDeadProcess || []).filter((sid) => retired.includes(sid)),
     message: `Registered as the single Solomon${retired.length ? ` (retired stale prior(s): ${retired.join(', ')}; re-targeted ${drained} inbound row(s))` : ''}${fallbackReason ? ` — fail-soft JS merge (set_solomon_flag RPC ${fallbackReason}; apply the chairman-gated migration for atomic writes)` : ' via atomic set_solomon_flag'}.` };
 }
 

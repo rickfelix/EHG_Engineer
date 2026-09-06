@@ -63,16 +63,33 @@ describe('classifyMerges / detectUnwitnessedMerges (identity matching)', () => {
 
   it('matches case-insensitively on repo', () => {
     const merges = [{ repo: 'rickfelix/EHG_Engineer', prNumber: 5, mergedAt: '2026-07-04T00:00:00Z' }];
-    const telemetryRows = [{ repo: 'rickfelix/ehg_engineer', pr_number: 5 }];
+    const telemetryRows = [{ repo: 'rickfelix/ehg_engineer', pr_number: 5, rungs: [{ id: 'P5', status: 'pass' }] }];
     const result = detectUnwitnessedMerges(merges, telemetryRows);
     expect(result.count).toBe(0);
   });
 
   it('a real matching row marks the merge witnessed', () => {
     const merges = [{ repo: 'rickfelix/ehg', prNumber: 10, mergedAt: '2026-07-04T00:00:00Z' }];
-    const telemetryRows = [{ repo: 'rickfelix/ehg', pr_number: 10 }];
+    const telemetryRows = [{ repo: 'rickfelix/ehg', pr_number: 10, rungs: [{ id: 'P5', status: 'pass' }] }];
     const classified = classifyMerges(merges, telemetryRows);
     expect(classified[0].witnessed).toBe(true);
+  });
+
+  // QF-20260904-983: a reconcile-sweep row EXISTS (repo+pr_number match) but carries no
+  // rung-level verdicts -- it must NOT count as witnessed, or the sweep silences the gauge
+  // without anything ever being verified (the exact defect this QF fixes).
+  it('a row that exists but has rungs=[] (reconcile-sweep placeholder) is NOT witnessed', () => {
+    const merges = [{ repo: 'rickfelix/ehg', prNumber: 11, mergedAt: '2026-07-04T00:00:00Z' }];
+    const telemetryRows = [{ repo: 'rickfelix/ehg', pr_number: 11, rungs: [] }];
+    const classified = classifyMerges(merges, telemetryRows);
+    expect(classified[0].witnessed).toBe(false);
+  });
+
+  it('a row missing the rungs field entirely is NOT witnessed', () => {
+    const merges = [{ repo: 'rickfelix/ehg', prNumber: 12, mergedAt: '2026-07-04T00:00:00Z' }];
+    const telemetryRows = [{ repo: 'rickfelix/ehg', pr_number: 12 }];
+    const classified = classifyMerges(merges, telemetryRows);
+    expect(classified[0].witnessed).toBe(false);
   });
 
   it('empty telemetry rows means every merge is unwitnessed', () => {
@@ -175,7 +192,7 @@ describe('computeAdoptionReadiness', () => {
     for (let i = 0; i < 7; i++) {
       const day = dayOffset(today, i);
       merges.push({ repo: 'rickfelix/ehg', prNumber: 100 + i, mergedAt: `${day}T12:00:00Z` });
-      telemetryRows.push({ repo: 'rickfelix/ehg', pr_number: 100 + i });
+      telemetryRows.push({ repo: 'rickfelix/ehg', pr_number: 100 + i, rungs: [{ id: 'P5', status: 'pass' }] });
     }
     return { merges, telemetryRows };
   }
@@ -207,7 +224,7 @@ describe('computeAdoptionReadiness', () => {
     offsets.forEach((offset, idx) => {
       const day = dayOffset(TODAY, offset);
       merges.push({ repo: 'rickfelix/ehg', prNumber: 200 + idx, mergedAt: `${day}T12:00:00Z` });
-      telemetryRows.push({ repo: 'rickfelix/ehg', pr_number: 200 + idx });
+      telemetryRows.push({ repo: 'rickfelix/ehg', pr_number: 200 + idx, rungs: [{ id: 'P5', status: 'pass' }] });
     });
 
     const readiness = computeAdoptionReadiness({ merges, telemetryRows, today: TODAY, requiredConsecutiveDays: 7 });

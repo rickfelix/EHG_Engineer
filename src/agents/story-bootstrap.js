@@ -49,71 +49,20 @@ class StoryAgentBootstrap {
   }
 
   setupEventListeners() {
-    // Listen for new PRDs
-    this.supabase
-      .channel('prd-changes')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'product_requirements_v3'
-      }, async (payload) => {
-        console.log('📦 New PRD detected:', payload.new.prd_id);
-
-        if (process.env.FEATURE_AUTO_STORIES === 'true') {
-          // Trigger story generation
-          await this.agent.handleStoryCreate({
-            sd_key: payload.new.sd_id,
-            prd_id: payload.new.prd_id,
-            timestamp: new Date().toISOString()
-          });
-        }
-      })
-      .subscribe();
-
-    // Listen for test run completions (simulated)
+    // product_requirements_v3 realtime subscription retired (SD-LEO-ORCH-CAPA-
+    // SCHEMA-TRUTH-001-E-A): that relation never existed live -- its CREATE TABLE
+    // (database/schema/010_ehg_backlog_schema.sql) was authored but never applied,
+    // and this was already flagged unresolved in the 2026-06-10 committed-unapplied
+    // sweep. Retired rather than resurrected; PRD change events are not observed.
     console.log('👂 Listening for story verification events...');
   }
 
   async checkPendingWork() {
-    // Check for any PRDs without stories
+    // product_requirements_v3 query retired (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-A):
+    // that relation never existed live. Flipping FEATURE_STORY_AGENT=true previously
+    // crashed here with Postgres 42P01; this now no-ops with a clear log instead.
     console.log('🔍 Checking for PRDs without stories...');
-
-    const { data: prds } = await this.supabase
-      .from('product_requirements_v3')
-      .select('prd_id, sd_id')
-      .eq('status', 'approved')
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (!prds || prds.length === 0) {
-      console.log('  No approved PRDs found');
-      return;
-    }
-
-    // Check each PRD for stories
-    for (const prd of prds) {
-      const { data: stories } = await this.supabase
-        .from('sd_backlog_map')
-        .select('story_key')
-        .eq('sd_id', prd.sd_id)
-        .not('story_key', 'is', null)
-        .limit(1);
-
-      if (!stories || stories.length === 0) {
-        console.log(`  ⚠️ PRD ${prd.prd_id} has no stories`);
-
-        if (process.env.FEATURE_AUTO_STORIES === 'true') {
-          console.log(`  🔄 Triggering story generation for ${prd.prd_id}...`);
-          await this.agent.handleStoryCreate({
-            sd_key: prd.sd_id,
-            prd_id: prd.prd_id,
-            timestamp: new Date().toISOString()
-          });
-        }
-      } else {
-        console.log(`  ✅ PRD ${prd.prd_id} has ${stories.length} stories`);
-      }
-    }
+    console.log('  ⚠️ product_requirements_v3 was retired (never existed live) -- skipping');
   }
 
   async shutdown() {

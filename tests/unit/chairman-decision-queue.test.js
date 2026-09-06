@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   parseArgs, routeDecision, effectivePriority, sortPending, priorityRank,
   partitionQueue, isTerminalRecord, isCorrectiveFinding, renderPendingLine,
+  deferralActorLabel,
 } from '../../lib/chairman/decision-queue.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -59,6 +60,27 @@ describe('TS-3 never-auto-decide', () => {
   it('parseArgs round-trips a valid decide with rationale', () => {
     const p = parseArgs(['decide', 'okr_acceptance:gen-1', 'approve', '--rationale', 'looks right']);
     expect(p).toMatchObject({ command: 'decide', decisionType: 'okr_acceptance', id: 'gen-1', decision: 'approve', rationale: 'looks right' });
+  });
+});
+
+describe('QF-20260903-766 — deferral review date + actor attribution', () => {
+  it('parseArgs extracts --review-in on a defer alongside --rationale, in either order', () => {
+    const a = parseArgs(['decide', 'chairman_approval:x-1', 'defer', '--rationale', 'not yet', '--review-in', '3d']);
+    expect(a).toMatchObject({ command: 'decide', decision: 'defer', rationale: 'not yet', reviewIn: '3d' });
+
+    const b = parseArgs(['decide', 'chairman_approval:x-1', 'defer', '--review-in', '1w', '--rationale', 'not yet']);
+    expect(b).toMatchObject({ decision: 'defer', rationale: 'not yet', reviewIn: '1w' });
+  });
+
+  it('parseArgs leaves reviewIn null when --review-in is absent (preserves the open-ended defer)', () => {
+    const p = parseArgs(['decide', 'chairman_approval:x-1', 'defer', '--rationale', 'not yet']);
+    expect(p.reviewIn).toBeNull();
+  });
+
+  it('deferralActorLabel maps the chairman-cli default to "Chairman" and passes any other actor through verbatim', () => {
+    expect(deferralActorLabel('chairman-cli')).toBe('Chairman');
+    expect(deferralActorLabel('adam-cli')).toBe('adam-cli');
+    expect(deferralActorLabel(undefined)).toBe('unknown actor');
   });
 });
 

@@ -58,9 +58,21 @@ test('FR-1: releaseRowOnExitBestEffort PATCH body sets status=released + release
   // The DB row must be marked released (not just stale), and the reason tag
   // must be queryable for ops triage. TICK_PARENT_ESRCH distinguishes this
   // path from SWEEP_PID_DEAD and from the canonical PR-open release.
-  assert.match(tickSrc, /status:\s*['"]released['"]/);
+  //
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E (FR-1): the PATCH body is now built via the shared
+  // terminalSessionUpdate() chokepoint rather than an inline {status:'released', ...} literal,
+  // so this asserts the call shape instead of the literal key:value pair.
+  assert.match(tickSrc, /terminalSessionUpdate\(\s*['"]released['"]/);
   assert.match(tickSrc, /released_reason:\s*reason/);
   assert.match(tickSrc, /'TICK_PARENT_ESRCH'/);
+});
+
+test('FR-1: releaseRowOnExitBestEffort routes through terminalSessionUpdate (is_alive:false lands in the same statement)', () => {
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E FR-1: the raw REST PATCH bypasses supabase-js entirely,
+  // which is exactly why a .from('claude_sessions')-keyed writer census would miss it. Requiring
+  // the source to import and call the shared chokepoint here means a future edit cannot silently
+  // drop back to a hand-rolled literal that omits is_alive.
+  assert.match(tickSrc, /require\(['"]\.\.\/lib\/fleet\/terminal-session-update\.cjs['"]\)/);
 });
 
 test('FR-1: releaseRowOnExitBestEffort PATCH WHERE filters status=in.(active,idle,stale) (idempotent)', () => {

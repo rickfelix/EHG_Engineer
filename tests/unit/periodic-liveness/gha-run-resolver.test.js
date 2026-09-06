@@ -9,6 +9,7 @@ import {
   latestRunPerWorkflow,
   classifyGhaCronRows,
   observedGapStats,
+  medianRatioAlarm,
   shouldStampDecision,
   batchTimeRange,
   isBatchFresh,
@@ -193,12 +194,54 @@ describe('observedGapStats', () => {
   it('a single-sample workflow (no consecutive pair) reports maxGapMs=0, not a false floor', () => {
     const runs = [run({ path: '.github/workflows/lonely.yml', created_at: '2026-08-24T00:00:00Z', run_started_at: '2026-08-24T00:00:00Z' })];
     const stats = observedGapStats(runs);
-    expect(stats.get('lonely.yml')).toEqual({ maxGapMs: 0, sampleCount: 1 });
+    expect(stats.get('lonely.yml')).toEqual({ maxGapMs: 0, medianGapMs: 0, sampleCount: 1 });
   });
 
   it('skips runs with no resolvable path, same as latestRunPerWorkflow', () => {
     const stats = observedGapStats([{ created_at: '2026-08-24T00:00:00Z', conclusion: 'success' }]);
     expect(stats.size).toBe(0);
+  });
+
+  it('QF-20260903-060: medianGapMs is the middle gap, robust to one outlier max', () => {
+    // Gaps: 10min, 12min, 200min (the max). Median of [10,12,200] is 12min, not skewed by the
+    // one-off spike the max-based floor would absorb.
+    const runs = [
+      run({ path: '.github/workflows/bar.yml', created_at: '2026-08-24T00:00:00Z', run_started_at: '2026-08-24T00:00:00Z' }),
+      run({ path: '.github/workflows/bar.yml', created_at: '2026-08-24T00:10:00Z', run_started_at: '2026-08-24T00:10:00Z' }),
+      run({ path: '.github/workflows/bar.yml', created_at: '2026-08-24T00:22:00Z', run_started_at: '2026-08-24T00:22:00Z' }),
+      run({ path: '.github/workflows/bar.yml', created_at: '2026-08-24T03:42:00Z', run_started_at: '2026-08-24T03:42:00Z' }),
+    ];
+    const stats = observedGapStats(runs);
+    expect(stats.get('bar.yml').medianGapMs).toBe(12 * 60 * 1000);
+    expect(stats.get('bar.yml').maxGapMs).toBe(200 * 60 * 1000);
+  });
+});
+
+describe('medianRatioAlarm', () => {
+  const row = (overrides = {}) => ({ process_key: 'gha_cron:steady-slow.yml', expected_interval_seconds: 900, ...overrides });
+
+  it('QF-20260903-060: flags a workflow whose MEDIAN gap is >3x configured even though every run succeeds (the max-floor absorbs this as OK)', () => {
+    // 5 successful runs, every consecutive gap ~220min against a 15min (900s) configured interval
+    // -- the exact "every run succeeds, nothing reports a problem" shape from the ticket.
+    const stats = new Map([['steady-slow.yml', { maxGapMs: 230 * 60 * 1000, medianGapMs: 220 * 60 * 1000, sampleCount: 5 }]]);
+    const alarm = medianRatioAlarm(row(), stats);
+    expect(alarm).not.toBeNull();
+    expect(alarm.ratio).toBeCloseTo((220 * 60 * 1000) / (900 * 1000), 2);
+  });
+
+  it('does not alarm when the median is within 3x configured', () => {
+    const stats = new Map([['steady-slow.yml', { maxGapMs: 40 * 60 * 1000, medianGapMs: 20 * 60 * 1000, sampleCount: 5 }]]);
+    expect(medianRatioAlarm(row(), stats)).toBeNull();
+  });
+
+  it('does not alarm on fewer than 4 samples -- one slow pair should not trip it', () => {
+    const stats = new Map([['steady-slow.yml', { maxGapMs: 230 * 60 * 1000, medianGapMs: 220 * 60 * 1000, sampleCount: 3 }]]);
+    expect(medianRatioAlarm(row(), stats)).toBeNull();
+  });
+
+  it('never alarms for a row with no declared expected_interval_seconds', () => {
+    const stats = new Map([['steady-slow.yml', { maxGapMs: 230 * 60 * 1000, medianGapMs: 220 * 60 * 1000, sampleCount: 5 }]]);
+    expect(medianRatioAlarm(row({ expected_interval_seconds: 0 }), stats)).toBeNull();
   });
 });
 

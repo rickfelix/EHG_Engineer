@@ -65,7 +65,7 @@ router.post('/:ventureId/go-live', asyncHandler(async (req, res) => {
     .upsert({
       venture_id: ventureId,
       artifact_type: 'blueprint_go_live',
-      stage_number: 24,
+      lifecycle_stage: 24,
       artifact_data: {
         launched_at: launchedAt,
         launched_by: 'chairman',

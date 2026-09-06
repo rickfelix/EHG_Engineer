@@ -15,7 +15,7 @@ const NOW = 1_800_000_000_000; // fixed reference instant
 describe('checkNewSessionHealth', () => {
   it('healthy: fresh heartbeat + active loop_state', () => {
     const result = checkNewSessionHealth(
-      { heartbeat_at: new Date(NOW - 10_000).toISOString(), loop_state: 'active' },
+      { heartbeat_at: new Date(NOW - 10_000).toISOString(), loop_state: 'active', last_tool_at: new Date(NOW - 10_000).toISOString() },
       { nowMs: NOW, freshMs: 5 * 60 * 1000 },
     );
     expect(result.healthy).toBe(true);
@@ -23,7 +23,37 @@ describe('checkNewSessionHealth', () => {
 
   it('healthy: fresh heartbeat + unknown loop_state (freshly-booted default)', () => {
     const result = checkNewSessionHealth(
-      { heartbeat_at: new Date(NOW - 10_000).toISOString(), loop_state: 'unknown' },
+      { heartbeat_at: new Date(NOW - 10_000).toISOString(), loop_state: 'unknown', last_tool_at: new Date(NOW - 10_000).toISOString() },
+      { nowMs: NOW, freshMs: 5 * 60 * 1000 },
+    );
+    expect(result.healthy).toBe(true);
+  });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-2/FR-6): fresh heartbeat + reachable loop_state, but
+  // the tool-call loop has actually died -- the exact specimen shape this SD exists to fix.
+  // Pre-fix, this read healthy (authorizing retire_old + worktree deletion of a possibly-good old
+  // singleton in favor of a new one that never actually came up); post-fix, classifySeat's STUCK
+  // verdict folds it to unhealthy.
+  it('unhealthy: fresh heartbeat + active loop_state but tool-silent (STUCK) (FR-2)', () => {
+    const result = checkNewSessionHealth(
+      { heartbeat_at: new Date(NOW - 10_000).toISOString(), loop_state: 'active', last_tool_at: new Date(NOW - 60 * 60 * 1000).toISOString() },
+      { nowMs: NOW, freshMs: 5 * 60 * 1000 },
+    );
+    expect(result.healthy).toBe(false);
+    expect(result.reason).toMatch(/tool activity/);
+  });
+
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (F-1, RE-corrected post-EXEC-TESTING-review, evidence
+  // 50b3e3c0-0f5f-460d-a3ea-f6472eb0976f): UNKNOWN (last_tool_at absent) folds OPEN at this site,
+  // unlike the two election-guard sites (adam-identity.cjs/solomon-identity.cjs), because this
+  // function evaluates a JUST-SPAWNED session. lib/fleet/reboot-respawn-runner.js's
+  // reconcileSpawnedSession calls this within ~2.5 seconds of spawn, where a legitimately healthy
+  // brand-new session cannot yet have a tool clock -- folding UNKNOWN to unhealthy here broke that
+  // caller outright (15/15 -> 11/15 on tests/unit/fleet/reboot-respawn-runner.test.js). Only a
+  // POSITIVELY CONFIRMED STUCK verdict fails this specific check.
+  it('healthy: fresh heartbeat + active loop_state, no last_tool_at yet (UNKNOWN folds OPEN here, F-1)', () => {
+    const result = checkNewSessionHealth(
+      { heartbeat_at: new Date(NOW - 10_000).toISOString(), loop_state: 'active' },
       { nowMs: NOW, freshMs: 5 * 60 * 1000 },
     );
     expect(result.healthy).toBe(true);
@@ -77,7 +107,7 @@ function makeFakeSupabase({ newSession, updateOldSpy }) {
       return {
         select() {
           return {
-            eq: (_col, val) => ({
+            eq: (_col, _val) => ({
               maybeSingle: async () => ({ data: newSession, error: null }),
             }),
           };
@@ -116,7 +146,7 @@ describe('sequenceSingletonRefresh — ordering guarantee (TS-1, TS-2, TS-3)', (
   it('TS-1: healthy new session -> old session retire IS called with released_at/released_reason set (register-then-retire order)', async () => {
     const updateOldSpy = vi.fn();
     const supabase = makeFakeSupabase({
-      newSession: { session_id: 'new-1', heartbeat_at: new Date().toISOString(), loop_state: 'active' },
+      newSession: { session_id: 'new-1', heartbeat_at: new Date().toISOString(), loop_state: 'active', last_tool_at: new Date().toISOString() },
       updateOldSpy,
     });
 
@@ -133,6 +163,8 @@ describe('sequenceSingletonRefresh — ordering guarantee (TS-1, TS-2, TS-3)', (
     expect(patch.released_reason).toBe(RETIRED_REASON);
     expect(patch.status).toBe('released');
     expect(typeof patch.released_at).toBe('string');
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E FR-1: routed through terminalSessionUpdate().
+    expect(patch.is_alive).toBe(false);
   });
 
   it('TS-3: never observes both retire_old for an unhealthy session and hold_old for a healthy one (decision matrix is exhaustive/exclusive)', async () => {

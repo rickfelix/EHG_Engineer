@@ -1,0 +1,92 @@
+name: Template Success-Criteria Sweep
+
+# SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A / FR-6 — modeled on phantom-completion-sweep.yml's shape:
+# a dated baseline (this SD's own landing, 852 historical rows -- see FR-5's
+# stamp-template-sc-disposition-002-a.mjs, whose --dry-run this reuses read-only), a daily cron
+# re-running the SAME measurement, and a GitHub issue opened on any NEW occurrence beyond the
+# baseline. Report-only via issue, not a build failure, matching phantom-completion-sweep.yml's
+# severity level for this class of drift. The historical 852 baseline is excluded from triggering
+# (only NEW occurrences count) -- consistent with FR-5's disposition marker.
+
+on:
+  schedule:
+    # Daily at 09:15 UTC (offset from phantom-completion-sweep's 09:00 to avoid runner contention)
+    - cron: '15 9 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sweep:
+    name: Detect NEW completed SDs with 100%-template success_criteria
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Run template success-criteria sweep (read-only)
+        id: sweep
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          # --dry-run: read-only, never writes. Baseline is the count measured at this SD's
+          # landing (852, SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A FR-5) -- any count ABOVE it means
+          # a NEW SD completed with 100%-template success_criteria since GATE_PLACEHOLDER_CONTENT_
+          # DETECTION's FR-1 flip should have blocked it.
+          #
+          # SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A follow-up (adversarial review, PR #8247): a broken
+          # sweep (DB auth failure, a refactor that renames/moves analyzePlaceholderContent, a
+          # strategic_directives_v2 schema change) must FAIL this job, not silently report
+          # new_detected=false and exit 0 -- the entire point of this workflow is to be a trustable
+          # "no new drift" signal, and a sweep that can go quietly blind defeats that. So: the
+          # script's own exit code is checked explicitly (no `|| true` masking it), AND an unparsable
+          # affected count is treated as a hard failure, not a soft ::warning:: + exit 0.
+          BASELINE=852
+          set +e
+          OUTPUT=$(node scripts/one-off/stamp-template-sc-disposition-002-a.mjs --dry-run 2>&1)
+          SCRIPT_EXIT=$?
+          set -e
+          echo "$OUTPUT"
+          if [ "$SCRIPT_EXIT" -ne 0 ]; then
+            echo "::error::stamp-template-sc-disposition-002-a.mjs --dry-run exited $SCRIPT_EXIT -- the sweep could not run, treating as a failure rather than silently reporting no drift."
+            exit 1
+          fi
+          AFFECTED=$(echo "$OUTPUT" | grep -oE '100%-template success_criteria \(affected\): [0-9]+' | grep -oE '[0-9]+$' || echo "")
+          if [ -z "$AFFECTED" ]; then
+            echo "::error::Could not parse affected count from sweep output -- the sweep's contract with this workflow has drifted (script output shape changed). Failing loud rather than silently skipping the comparison."
+            exit 1
+          fi
+          if [ "$AFFECTED" -gt "$BASELINE" ]; then
+            echo "new_detected=true" >> "$GITHUB_OUTPUT"
+            NEW_COUNT=$((AFFECTED - BASELINE))
+            {
+              echo "## New 100%-Template success_criteria Completion(s) Detected"
+              echo ""
+              echo "Baseline (SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A, historical/grandfathered): $BASELINE"
+              echo "Current affected count: $AFFECTED"
+              echo "New since baseline: $NEW_COUNT"
+              echo ""
+              echo '```'
+              echo "$OUTPUT"
+              echo '```'
+            } > /tmp/issue-body.md
+          else
+            echo "new_detected=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open issue on new occurrence
+        if: steps.sweep.outputs.new_detected == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "New template success_criteria completion(s): $(date -u +%Y-%m-%d)" \
+            --label template-success-criteria-sweep \
+            --body-file /tmp/issue-body.md

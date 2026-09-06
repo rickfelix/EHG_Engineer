@@ -13,6 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createActivationInvariantGate } from './activation-invariant-gate.js';
+import { computeContentHash } from '../../../../../../lib/sub-agent-executor/evidence-provenance.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +35,7 @@ function mockSupabase(prdRow, evidenceRow) {
         return {
           select() { return this; },
           eq() { return this; },
+          in() { return this; },
           gte() { return this; },
           order() { return this; },
           limit() { return this; },
@@ -149,5 +151,199 @@ describe('createActivationInvariantGate — happy path', () => {
     expect(result.score).toBe(100);
     expect(result.details.triggered).toBe(true);
     expect(result.details.evidence_id).toBe('ev-uuid');
+  });
+});
+
+describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D2: evidence-staleness check', () => {
+  // A distinct mock: the staleness check queries sub_agent_execution_results WITHOUT the
+  // TESTING-evidence-freshness query's .gte()/.eq('sub_agent_code', 'TESTING') filters, so it
+  // needs its own newestEvidenceRow, separate from the (possibly absent/mismatched) TESTING
+  // evidence row used by the pre-existing activation-invariant checks below it.
+  function mockSupabaseWithNewestEvidence(prdRow, testingEvidenceRow, newestEvidenceRow) {
+    return {
+      from(table) {
+        if (table === 'product_requirements_v2') {
+          return { select() { return this; }, eq() { return this; }, limit() { return this; }, maybeSingle: async () => ({ data: prdRow || null }) };
+        }
+        if (table === 'sub_agent_execution_results') {
+          let usesGte = false;
+          return {
+            select() { return this; },
+            eq() { return this; },
+            in() { return this; },
+            gte() { usesGte = true; return this; },
+            order() { return this; },
+            limit() { return this; },
+            maybeSingle: async () => ({ data: (usesGte ? testingEvidenceRow : newestEvidenceRow) || null }),
+          };
+        }
+        return { select() { return this; }, eq() { return this; }, limit() { return this; }, maybeSingle: async () => ({ data: null }) };
+      },
+    };
+  }
+
+  afterAll(() => { delete process.env.LEO_DISABLE_LFA_STALENESS_CHECK; });
+
+  it('fails (not triggered SD, staleness runs unconditionally) when the newest evidence is older than 72h', async () => {
+    const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 80 * 3600000).toISOString() };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(false);
+    expect(result.issues[0]).toMatch(/SUBAGENT_EVIDENCE_STALE/);
+    expect(result.details.age_hours).toBeGreaterThanOrEqual(80);
+  });
+
+  it('passes (not triggered SD) when the newest evidence is within 72h', async () => {
+    const freshRow = { id: 'fresh-ev-uuid', created_at: new Date(Date.now() - 1 * 3600000).toISOString() };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, freshRow), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(true);
+  });
+
+  it('passes when no evidence row exists at all (nothing to be stale)', async () => {
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, null), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(true);
+  });
+
+  it('LEO_DISABLE_LFA_STALENESS_CHECK bypasses a genuinely stale row', async () => {
+    process.env.LEO_DISABLE_LFA_STALENESS_CHECK = '1';
+    const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 200 * 3600000).toISOString() };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(true);
+    delete process.env.LEO_DISABLE_LFA_STALENESS_CHECK;
+  });
+
+  it('SECURITY finding H1 fix: the ACTIV-CHAIN-DEFERRED bypass no longer silently exempts a stale SD -- staleness runs FIRST and blocks independently', async () => {
+    const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 200 * 3600000).toISOString() };
+    const sd = { ...triggeredSD, metadata: { governance_metadata: { bypass_reason: 'ACTIV-CHAIN-DEFERRED:JIRA-999' } } };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
+    const result = await gate.validator({ sd, sdId: sd.id });
+    expect(result.passed).toBe(false);
+    expect(result.issues[0]).toMatch(/SUBAGENT_EVIDENCE_STALE/);
+    // NOT the activation-chain bypass shape -- this is the staleness verdict, unrelated to it.
+    expect(result.details.bypassed).toBeUndefined();
+  });
+
+  it('the ACTIV-CHAIN-DEFERRED bypass still applies normally once staleness clears (fresh evidence)', async () => {
+    const freshRow = { id: 'fresh-ev-uuid', created_at: new Date(Date.now() - 1 * 3600000).toISOString() };
+    const sd = { ...triggeredSD, metadata: { governance_metadata: { bypass_reason: 'ACTIV-CHAIN-DEFERRED:JIRA-999' } } };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, freshRow), null);
+    const result = await gate.validator({ sd, sdId: sd.id });
+    expect(result.passed).toBe(true);
+    expect(result.details.bypassed).toBe(true);
+  });
+
+  it('a stale-evidence FAIL carries a remediation naming the fix and the audited kill switch', async () => {
+    const staleRow = { id: 'stale-ev-uuid', created_at: new Date(Date.now() - 100 * 3600000).toISOString() };
+    const gate = createActivationInvariantGate(mockSupabaseWithNewestEvidence(null, null, staleRow), null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.details.remediation).toMatch(/execute-subagent\.js/);
+    expect(result.details.remediation).toContain('LEO_DISABLE_LFA_STALENESS_CHECK');
+  });
+
+  it('a query error during the staleness lookup fails OPEN (does not itself block completion)', async () => {
+    const throwingSupabase = {
+      from(table) {
+        if (table === 'sub_agent_execution_results') {
+          return {
+            select() { return this; },
+            eq() { return this; },
+            in() { return this; },
+            gte() { return this; },
+            order() { return this; },
+            limit() { return this; },
+            maybeSingle: async () => { throw new Error('connection reset'); },
+          };
+        }
+        return { select() { return this; }, eq() { return this; }, limit() { return this; }, maybeSingle: async () => ({ data: null }) };
+      },
+    };
+    const gate = createActivationInvariantGate(throwingSupabase, null);
+    const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+    expect(result.passed).toBe(true);
+  });
+
+  it('a query returning {data:null, error} (not a throw) also fails OPEN, not silently -- TESTING finding: error was previously discarded', async () => {
+    const errorReturningSupabase = {
+      from(table) {
+        if (table === 'sub_agent_execution_results') {
+          return {
+            select() { return this; },
+            eq() { return this; },
+            in() { return this; },
+            gte() { return this; },
+            order() { return this; },
+            limit() { return this; },
+            maybeSingle: async () => ({ data: null, error: { message: 'permission denied for table sub_agent_execution_results' } }),
+          };
+        }
+        return { select() { return this; }, eq() { return this; }, limit() { return this; }, maybeSingle: async () => ({ data: null }) };
+      },
+    };
+    const gate = createActivationInvariantGate(errorReturningSupabase, null);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const result = await gate.validator({ sd: nonTriggeredSD, sdId: nonTriggeredSD.id });
+      expect(result.passed).toBe(true); // fails open
+      expect(logSpy.mock.calls.some((args) => String(args[0]).includes('Evidence-staleness check error'))).toBe(true);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+});
+
+describe('SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance grading (advisory-first rollout)', () => {
+  const fakeTestPath = 'scripts/modules/activation-invariant/trigger-evaluator.test.js';
+  const prd = { id: 'prd-uuid', sd_id: triggeredSD.id, activation_test_id: fakeTestPath };
+
+  function fullyProvenancedEvidence(overrides = {}) {
+    const base = {
+      id: 'ev-uuid',
+      verdict: 'PASS',
+      confidence: 92,
+      created_at: new Date().toISOString(),
+      phase: 'LEAD-FINAL-APPROVAL',
+      source: 'sub_agent_executor',
+      invocation_id: 'inv-provenance-test',
+      critical_issues: [],
+      warnings: [],
+      recommendations: [],
+      detailed_analysis: 'analysis',
+      summary: 'ok',
+      ...overrides,
+    };
+    const contentHash = computeContentHash(base);
+    return { ...base, metadata: { activation_invariant_verified: true, session_id: 'sess-provenance-test', content_hash: contentHash } };
+  }
+
+  afterAll(() => { delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE; });
+
+  it('advisory (default, mode unset): a provenance-absent row still passes, with a warning naming the missing field', async () => {
+    delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE;
+    const evidence = fullyProvenancedEvidence({ source: 'manual' });
+    const gate = createActivationInvariantGate(mockSupabase(prd, evidence), null);
+    const result = await gate.validator({ sd: triggeredSD, sdId: triggeredSD.id });
+    expect(result.passed).toBe(true);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_PROVENANCE_ABSENT/.test(w) && /source/.test(w))).toBe(true);
+  });
+
+  it('block mode: the same provenance-absent row fails the gate', async () => {
+    process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE = 'block';
+    const evidence = fullyProvenancedEvidence({ source: 'manual' });
+    const gate = createActivationInvariantGate(mockSupabase(prd, evidence), null);
+    const result = await gate.validator({ sd: triggeredSD, sdId: triggeredSD.id });
+    expect(result.passed).toBe(false);
+    delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE;
+  });
+
+  it('a fully-provenanced row produces no provenance warning in either mode', async () => {
+    delete process.env.SUBAGENT_EVIDENCE_PROVENANCE_MODE;
+    const evidence = fullyProvenancedEvidence();
+    const gate = createActivationInvariantGate(mockSupabase(prd, evidence), null);
+    const result = await gate.validator({ sd: triggeredSD, sdId: triggeredSD.id });
+    expect(result.passed).toBe(true);
+    expect(result.warnings.some(w => /SUBAGENT_EVIDENCE_PROVENANCE_ABSENT/.test(w))).toBe(false);
   });
 });

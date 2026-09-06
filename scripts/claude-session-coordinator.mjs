@@ -224,14 +224,25 @@ async function releaseSD() {
 
   console.log(`Releasing: ${session.sd_id}`);
 
-  const result = await sessionManager.releaseCurrentClaim('manual');
+  // QF-20260903-602: releaseCurrentClaim (lib/session-manager.mjs:853) guards on
+  // session.sd_key, a field its own RPC (release_sd) never reads, so a claim visible only
+  // on the authoritative column (the case just handled above) could never be released here.
+  // release_sd_by_key takes the target key directly and checks strategic_directives_v2 /
+  // quick_fixes' own claim columns, so it releases what this session actually holds
+  // regardless of whether the local mirror agrees — and it is SD+QF-aware, unlike the
+  // SD-only releaseClaimBothSurfaces, so the same command now also frees a held QF slot.
+  const { bestEffortReleaseSdByKey } = await import('../lib/fleet/best-effort-release.mjs');
+  const releaseSupabase = createSupabaseServiceClient();
+  const result = await bestEffortReleaseSdByKey(releaseSupabase, session.session_id, session.sd_id, 'manual',
+    (m) => console.log(`  ${m}`));
 
-  if (result.success) {
+  if (result.released) {
     console.log(`${colors.green}✓ Released successfully${colors.reset}\n`);
-    console.log(`  Released SD: ${result.released_sd}`);
+    console.log(`  Released: ${session.sd_id}`);
+  } else if (result.skipped === 'sd_mismatch') {
+    console.log(`${colors.yellow}Nothing to release: this session holds ${result.heldSdKey || '(nothing)'}, not ${session.sd_id}.${colors.reset}`);
   } else {
-    console.log(`${colors.red}✗ Release failed: ${result.error}${colors.reset}`);
-    console.log(`  ${result.message || ''}`);
+    console.log(`${colors.red}✗ Release failed: ${result.error || 'unknown error'}${colors.reset}`);
   }
 
   console.log(`\n${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
@@ -245,8 +256,10 @@ async function showStatus() {
   console.log(`${colors.bold} CLAUDE SESSION STATUS${colors.reset}`);
   console.log(`${colors.cyan}═══════════════════════════════════════════════════════════════════${colors.reset}\n`);
 
-  // Cleanup stale first
-  await sessionManager.cleanupStaleSessions();
+  // SD-LEO-INFRA-STALE-SWEEP-LIVENESS-SSOT-001 (FR-4): the status path no longer triggers the
+  // cross-seat cleanupStaleSessions walk -- it previously meant every routine "show status"
+  // could release OTHER sessions' claims off a stale local file. Only the scheduled sweep (the
+  // `cleanup` command below) retains the cross-seat walk.
 
   const sessions = await sessionManager.getActiveSessions();
   const currentSession = sessionManager.getCurrentSession();

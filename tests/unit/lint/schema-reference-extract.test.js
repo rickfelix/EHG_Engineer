@@ -132,3 +132,99 @@ describe('findViolations — comparator', () => {
     expect(v[0].missing).toBe('ghost_tbl');
   });
 });
+
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-1) — the extractor used to match RAW text, so it reported
+// example code as real schema references. TS-1 pins the fix; TS-2 is the two-sided contract required
+// by lib/lint/added-line-text.mjs: a genuine occurrence MUST still fire after blanking, or the fix
+// degrades into a blanket suppressor — the same blind-guard shape this workstream exists to abolish.
+describe('extractReferences — comments and literal examples (QF/SD schema-truth C, FR-1)', () => {
+  it('TS-1a: a .from() inside a line comment contributes no reference', () => {
+    expect(extractReferences("// supabase.from('ghost_tbl')\n")).toEqual([]);
+  });
+
+  it('TS-1b: a .from() inside a block comment contributes no reference', () => {
+    expect(extractReferences("/*\n * supabase.from('ghost_tbl').select('nope')\n */\n")).toEqual([]);
+  });
+
+  it('TS-1c: THE SELF-DEMONSTRATING CASE — the lint no longer matches its own documentation', () => {
+    // Verbatim shape of scripts/hooks/lib/supabase-operative.cjs:17-18, the regex literals that
+    // DOCUMENT this matcher. Pre-fix these produced two `missing table_name (from)` violations.
+    const src = [
+      'const PATTERNS = [',
+      "  /\.from\(\s*['\"`](\w+)['\"`]\s*\)/,         // .from('table_name')",
+      "  /supabase\.from\(\s*['\"`](\w+)['\"`]\s*\)/, // supabase.from('table_name')",
+      '];',
+    ].join('\n');
+    expect(extractReferences(src).filter((r) => r.table === 'table_name')).toEqual([]);
+  });
+
+  it('TS-1d: a .from() example inside a template literal contributes no reference', () => {
+    const src = 'const doc = `\n  const { data } = await supabase.from(\'ghost_tbl\').select(\'*\');\n`;\n';
+    expect(extractReferences(src)).toEqual([]);
+  });
+
+  it('TS-2a: a REAL reference still fires — blanking is not a blanket suppressor', () => {
+    const refs = extractReferences("const r = await supabase.from('ventures').select('id, name');");
+    expect(refs.find((r) => r.type === 'table' && r.table === 'ventures')).toBeTruthy();
+    expect(refs.some((r) => r.type === 'column' && r.column === 'name')).toBe(true);
+  });
+
+  it('TS-2b: a real reference on the same line as a trailing comment still fires', () => {
+    const refs = extractReferences("await supabase.from('ventures').select('id'); // .from('ghost_tbl')");
+    expect(refs.filter((r) => r.type === 'table').map((r) => r.table)).toEqual(['ventures']);
+  });
+
+  it('TS-2c: LINE NUMBERS ARE PRESERVED across a block comment — blanking must not shift offsets', () => {
+    // The reason stripComments from added-line-text.mjs is NOT usable here: it collapses a block
+    // comment to a single space, which would move this reference off line 6 and silently mis-report
+    // the location of every violation after any block comment.
+    const src = [
+      'const a = 1;',        // 1
+      '/*',                  // 2
+      ' * filler',           // 3
+      ' * filler',           // 4
+      ' */',                 // 5
+      "await supabase.from('ventures').select('id');", // 6
+    ].join('\n');
+    const t = extractReferences(src).find((r) => r.type === 'table');
+    expect(t).toBeTruthy();
+    expect(t.line).toBe(6);
+  });
+
+  it('TS-2d: a real reference AFTER a template-literal example still fires', () => {
+    const src = 'const doc = `supabase.from(\'ghost_tbl\')`;\nawait supabase.from(\'ventures\').select(\'id\');';
+    expect(extractReferences(src).filter((r) => r.type === 'table').map((r) => r.table)).toEqual(['ventures']);
+  });
+
+  it('TS-2e: the disable pragma still suppresses, and is read from the ORIGINAL text', () => {
+    expect(extractReferences("await supabase.from('ghost_tbl'); // schema-lint-disable-line")).toEqual([]);
+  });
+});
+
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-4, TS-5) — THE PHANTOM CANARY.
+//
+// The requirement that distinguishes a wired check from a check-shaped object. FR-1 taught this
+// extractor to ignore more things, and every such change carries the risk of ignoring the thing it
+// exists to catch. These assertions are the standing proof that a deliberately-introduced phantom
+// still fires; if they ever pass vacuously, the gate has been disarmed.
+describe('phantom canary — the detector still fires (FR-4)', () => {
+  it('TS-5a: a phantom TABLE reference is reported', () => {
+    const v = findViolations(extractReferences("await supabase.from('seeded_phantom_table').select('id')"), SNAPSHOT);
+    expect(v.map((x) => x.missing)).toContain('seeded_phantom_table');
+  });
+
+  it('TS-5b: a phantom COLUMN on an EXISTING table is reported', () => {
+    const v = findViolations(extractReferences("await supabase.from('ventures').select('id, seeded_phantom_column')"), SNAPSHOT);
+    expect(v.map((x) => x.missing)).toContain('ventures.seeded_phantom_column');
+  });
+
+  it('TS-5c: the canary is not satisfied by a real reference — a clean file reports nothing', () => {
+    // Guards against the canary passing for the wrong reason (e.g. a comparator that flags
+    // everything). Without this, TS-5a/b would still pass against a broken-open detector.
+    expect(findViolations(extractReferences("await supabase.from('ventures').select('id, name')"), SNAPSHOT)).toEqual([]);
+  });
+
+  it('TS-5d: a phantom introduced INSIDE a comment is NOT reported — FR-1 and FR-4 do not fight', () => {
+    expect(findViolations(extractReferences("// supabase.from('seeded_phantom_table')"), SNAPSHOT)).toEqual([]);
+  });
+});

@@ -26,6 +26,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluateTrigger } from '../../../../activation-invariant/trigger-evaluator.js';
+import { gradeProvenance, PRODUCER_ALLOWLIST } from '../../../../../../lib/sub-agent-executor/evidence-provenance.js';
+import { resolveSubagentEvidenceProvenanceMode } from '../../../gates/subagent-evidence-gate.js';
 
 const GATE_NAME = 'GATE_ACTIVATION_INVARIANT';
 const __filename = fileURLToPath(import.meta.url);
@@ -35,6 +37,50 @@ const ROOT_DIR = path.resolve(__dirname, '../../../../../..');
 
 const EVIDENCE_FRESHNESS_MS = 24 * 60 * 60 * 1000; // 24 hours
 const BYPASS_TOKEN = 'ACTIV-CHAIN-DEFERRED';
+
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D2: no evidence-staleness check exists anywhere in
+// the LEAD-FINAL-APPROVAL pipeline today -- subagent-evidence-gate.js's own staleness/freshness
+// logic is wired only into LEAD-TO-PLAN/PLAN-TO-EXEC/EXEC-TO-PLAN/PLAN-TO-LEAD, never here. A
+// naive port of that file's commit-SHA-equality check would be vacuous by construction at LFA
+// (measured: sd.worktree_path is null/already-reaped for 57/60 of recently completed SDs, so it
+// would silently no-op ~95% of the time). This check is deliberately DB-only (created_at vs. now
+// -- NOT a hard created_at>=phase_started_at boundary, which was this SD's own original framing
+// but would wedge most SDs: phase_started_at resolves to the immediately-prior PLAN-TO-LEAD
+// acceptance, typically seconds/minutes before LEAD-FINAL-APPROVAL runs in the same session, and
+// most real evidence predates that moment by design). An absolute age-from-now threshold matches
+// the measured population exactly (trailing-30-day newest-evidence age: p90=2.7h, >72h=1/120=0.8%)
+// and cannot be defeated by a reaped worktree.
+const LFA_STALENESS_THRESHOLD_MS = 72 * 60 * 60 * 1000; // 72 hours
+const STALENESS_KILL_SWITCH_ENV = 'LEO_DISABLE_LFA_STALENESS_CHECK';
+
+function lfaStalenessCheckDisabled(env = process.env) {
+  const v = env[STALENESS_KILL_SWITCH_ENV];
+  return v === '1' || String(v).toLowerCase() === 'true';
+}
+
+/**
+ * Newest sub_agent_execution_results row for the SD, any code -- "has anything relevant run
+ * recently". SECURITY finding M2 (adversarial review, 2026-09-05): scoped to PRODUCER_ALLOWLIST
+ * sources only -- an unfiltered query is trivially reset by any row from any code with any
+ * content, including the 'manual' DB-default source that evidence-provenance.js's own module
+ * doc explicitly excludes as "not a producer's own asserted identity."
+ * Throws (does not swallow) on a genuine query error, so the caller's fail-open catch actually
+ * fires and logs -- TESTING finding (adversarial review, 2026-09-05): the original destructure
+ * discarded `error`, so a real DB/RLS failure silently looked identical to "no evidence found".
+ */
+async function loadNewestEvidence({ supabase, sdId }) {
+  if (!supabase || !sdId) return null;
+  const { data, error } = await supabase
+    .from('sub_agent_execution_results')
+    .select('id, created_at')
+    .eq('sd_id', sdId)
+    .in('source', PRODUCER_ALLOWLIST)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`loadNewestEvidence query failed: ${error.message}`);
+  return data || null;
+}
 
 function logEvent(payload) {
   // Mirror existing [GATE_LOG] convention.
@@ -71,9 +117,11 @@ async function loadPRD({ supabase, prdRepo, sdId }) {
 async function loadTestingEvidence({ supabase, sdId }) {
   if (!supabase) return null;
   const cutoff = new Date(Date.now() - EVIDENCE_FRESHNESS_MS).toISOString();
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: widened to add source, invocation_id, and the columns
+  // computeContentHash() needs to re-derive a row's content hash for provenance grading.
   const { data } = await supabase
     .from('sub_agent_execution_results')
-    .select('id, verdict, confidence, metadata, created_at, phase')
+    .select('id, verdict, confidence, metadata, created_at, phase, source, invocation_id, critical_issues, warnings, recommendations, detailed_analysis, summary')
     .eq('sd_id', sdId)
     .eq('sub_agent_code', 'TESTING')
     .gte('created_at', cutoff)
@@ -137,7 +185,74 @@ export function createActivationInvariantGate(supabase, prdRepo) {
       const sd = ctx?.sd || null;
       const sdId = sd?.id || ctx?.sdId;
 
-      // Step 1: bypass via existing --bypass-validation reason-text discriminator.
+      // Step 1 (FR-D2): evidence-staleness check, unconditional -- runs FIRST, before the
+      // activation-chain bypass below and regardless of whether this SD triggers the
+      // schema+UI+worker heuristic further down, since staleness is a property of every
+      // LEAD-FINAL-APPROVAL handoff, not just chain-triggered or chain-bypassed ones.
+      //
+      // SECURITY finding H1 (adversarial review, 2026-09-05): this check originally ran AFTER the
+      // ACTIV-CHAIN-DEFERRED bypass-reason branch, which is self-attested SD metadata with no
+      // ledger row, no quota consumption, and no disclosure that it was ALSO silently widened to
+      // cover an unrelated concern (evidence freshness) -- a gate-evidence-provenance violation
+      // per this repo's own ratified rule. Moved above that branch so staleness has exactly ONE
+      // bypass path: the kill switch below, which IS now audited (see the else branch).
+      //
+      // Fails OPEN on a lookup error (consistent with subagent-evidence-gate.js's own cache-probe
+      // convention: "any probe error falls open to a normal run") -- a transient DB hiccup
+      // fetching evidence should not itself become a new denial-of-completion vector; only an
+      // actual, positively-confirmed stale-evidence finding blocks.
+      if (!lfaStalenessCheckDisabled()) {
+        try {
+          const newestEvidence = await loadNewestEvidence({ supabase, sdId });
+          if (newestEvidence?.created_at) {
+            const ageMs = Date.now() - new Date(newestEvidence.created_at).getTime();
+            if (ageMs > LFA_STALENESS_THRESHOLD_MS) {
+              const ageHours = Math.round(ageMs / 3600000);
+              const issue = `SUBAGENT_EVIDENCE_STALE: newest sub-agent evidence for this SD (row ${newestEvidence.id}) is ${ageHours}h old (threshold ${Math.round(LFA_STALENESS_THRESHOLD_MS / 3600000)}h) -- no fresh evidence recorded close to completion`;
+              console.log(`   ❌ ${issue}`);
+              logEvent({ sd_id: sdId, verdict: 'FAIL', missing: 'fresh_evidence', evidence_id: newestEvidence.id, age_hours: ageHours });
+              return {
+                passed: false,
+                score: 0,
+                max_score: 100,
+                issues: [issue],
+                warnings: [],
+                details: {
+                  staleness_check: true,
+                  evidence_id: newestEvidence.id,
+                  age_hours: ageHours,
+                  remediation: `[ACTIVATION_INVARIANT_STALENESS] FAIL\n\nNewest sub-agent evidence for this SD is ${ageHours}h old (threshold ${Math.round(LFA_STALENESS_THRESHOLD_MS / 3600000)}h).\n\nFix: run any sub-agent for this SD (e.g. node scripts/execute-subagent.js --code VALIDATION --sd-id <SD-ID>) to refresh the clock, then re-run LEAD-FINAL-APPROVAL.\n\nEmergency bypass (audited, non-quota-consuming): ${STALENESS_KILL_SWITCH_ENV}=1`,
+                },
+              };
+            }
+          }
+        } catch (err) {
+          console.log(`   ⚠️  Evidence-staleness check error (non-blocking, fails open): ${err.message}`);
+        }
+      } else {
+        console.log(`   ⚠️  ${STALENESS_KILL_SWITCH_ENV} active — staleness check bypassed`);
+        // SECURITY finding M5 (adversarial review, 2026-09-05): the kill switch previously left no
+        // durable trace, unlike every other bypass path in this file. Audit it the same way.
+        try {
+          const { randomUUID } = await import('crypto');
+          const { emitValidationAuditLog } = await import('../../../../../lib/emit-validation-audit-log.mjs');
+          await emitValidationAuditLog({
+            supabase,
+            correlation_id: randomUUID(),
+            sd_id: sdId,
+            validator_name: 'activation_invariant_gate',
+            failure_reason: `Evidence-staleness check bypassed via ${STALENESS_KILL_SWITCH_ENV}`,
+            failure_category: 'bypass',
+            metadata: { gate: GATE_NAME, kill_switch: STALENESS_KILL_SWITCH_ENV },
+            execution_context: 'lead-final-approval/gates/activation-invariant-gate.js',
+          });
+        } catch (auditErr) {
+          console.warn(`   ⚠️  Staleness kill-switch audit emission failed (non-blocking): ${auditErr.message}`);
+        }
+      }
+
+      // Step 2: bypass via existing --bypass-validation reason-text discriminator (activation
+      // chain only -- does NOT cover the staleness check above, which already ran).
       const bypassReason = sd?.metadata?.governance_metadata?.bypass_reason || '';
       if (typeof bypassReason === 'string' && bypassReason.includes(BYPASS_TOKEN)) {
         console.log(`   ⚠️  Bypass active via reason-text "${BYPASS_TOKEN}"`);
@@ -171,7 +286,7 @@ export function createActivationInvariantGate(supabase, prdRepo) {
         };
       }
 
-      // Step 2: evaluate trigger heuristic.
+      // Step 3: evaluate trigger heuristic.
       const triggerResult = evaluateTrigger(sd);
       if (!triggerResult.triggered) {
         console.log(`   ℹ️  Not triggered (${triggerResult.reason}) — SD does not ship schema+UI+worker chain`);
@@ -309,18 +424,53 @@ export function createActivationInvariantGate(supabase, prdRepo) {
       // PASS — all conditions hold.
       console.log(`   ✅ Activation invariant verified (evidence row: ${evidence.id})`);
       logEvent({ sd_id: sdId, verdict: 'PASS', evidence_id: evidence.id, activation_test_id: activationTestId });
+
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance grading, advisory-only by default
+      // (shared SUBAGENT_EVIDENCE_PROVENANCE_MODE flag, same as subagent-evidence-gate.js).
+      // session_id/content_hash come from the already-selected `metadata` object here, unlike
+      // subagent-evidence-gate.js's aliased projection — flattened onto a shallow copy so
+      // gradeProvenance's contract (flat top-level fields) stays identical across both callers.
+      const provenanceGrade = gradeProvenance(
+        { ...evidence, session_id: evidence.metadata?.session_id, content_hash: evidence.metadata?.content_hash }
+      );
+      const provenanceMode = resolveSubagentEvidenceProvenanceMode();
+      const provenanceWarnings = [];
+      if (provenanceGrade.absent) {
+        const msg = `[ADVISORY] SUBAGENT_EVIDENCE_PROVENANCE_ABSENT: TESTING evidence row ${evidence.id} is missing ${provenanceGrade.missingField} — treated as absent provenance, not weak. `
+          + `${provenanceMode === 'block' ? 'Blocking' : 'Non-blocking (advisory)'} per SUBAGENT_EVIDENCE_PROVENANCE_MODE=${provenanceMode}.`;
+        console.log(`   ⚠️  ${msg}`);
+        provenanceWarnings.push(msg);
+        if (provenanceMode === 'block') {
+          return {
+            passed: false,
+            score: 0,
+            max_score: 100,
+            issues: [`SUBAGENT_EVIDENCE_PROVENANCE_ABSENT: TESTING evidence row ${evidence.id} missing ${provenanceGrade.missingField}`],
+            warnings: [],
+            details: {
+              triggered: true,
+              prd_id: prd.id,
+              activation_test_id: activationTestId,
+              evidence_id: evidence.id,
+              provenance_absent: provenanceGrade,
+            },
+          };
+        }
+      }
+
       return {
         passed: true,
         score: 100,
         max_score: 100,
         issues: [],
-        warnings: [],
+        warnings: provenanceWarnings,
         details: {
           triggered: true,
           prd_id: prd.id,
           activation_test_id: activationTestId,
           evidence_id: evidence.id,
           evidence_confidence: evidence.confidence,
+          provenance_absent: provenanceGrade.absent ? provenanceGrade : null,
         },
       };
     },

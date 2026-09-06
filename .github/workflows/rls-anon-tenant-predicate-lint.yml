@@ -14,12 +14,21 @@ name: RLS Anon-Role Tenant-Predicate-Sufficiency Lint
 # GENUINELY BLOCKING (no continue-on-error): mirrors session-coordination-insert-
 # classguard-lint.yml's own rationale -- this repo's `npm run lint` is not invoked by any
 # other CI workflow, so a dedicated workflow is the real enforcement mechanism.
+#
+# SD-LEO-FIX-RLS-LINT-CORPUS-WIDTH-001: paths below MUST mirror
+# lib/lint/rls-lint-corpus-dirs.mjs's RLS_LINT_CORPUS_DIRS exactly (a `paths:`
+# trigger can't import a JS module) -- enforced by
+# tests/unit/lint/rls-lint-corpus-dirs-workflow-consistency.test.js, which fails if
+# the two ever diverge.
 
 on:
   pull_request:
     paths:
       - 'database/migrations/**/*.sql'
+      - 'database/manual-updates/**/*.sql'
+      - 'supabase/migrations/**/*.sql'
       - 'scripts/lint/rls-anon-tenant-predicate-lint.mjs'
+      - 'lib/lint/rls-lint-corpus-dirs.mjs'
       - '.github/workflows/rls-anon-tenant-predicate-lint.yml'
 
 concurrency:

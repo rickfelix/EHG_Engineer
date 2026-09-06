@@ -2,10 +2,10 @@
 
 Category: Deployment
 Status: Approved
-Version: 1.0.0
+Version: 1.1.0
 Author: SD-LEO-INFRA-FLEET-DOWN-ALERT-001
-Last Updated: 2026-08-22
-Tags: fleet, alerting, chairman-sms, operations
+Last Updated: 2026-09-06
+Tags: fleet, alerting, chairman-sms, operations, loop-liveness
 
 ## Overview
 
@@ -40,6 +40,31 @@ All are optional; defaults are chosen for the near-term small-fleet deployment t
 | `MAX_HOSTS_PROCESSED_PER_RUN` | 200 | Caps total hosts (dead + alive) given a fresh `system_events` verdict in one run — bounds DB read/write volume independent of the paging cap. |
 | `DEAD_COORDINATOR_STALE_MIN` | 15 | Staleness threshold for the dead-coordinator arm. |
 | `FLEET_DOWN_CONSECUTIVE_PULSES` | 3 | Consecutive zero-active pulses required before the worker-fleet-email arm fires. |
+
+## Host-scheduled cron + delivered-cadence gauge (SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001)
+
+Prior to this SD, `fleet-down-alert.mjs` and `fleet-worker-pulse.mjs` ran only via
+`fleet-down-alert-cron.yml`'s GitHub Actions schedule — a trigger this SD's own investigation
+found had no independent evidence of *actually firing* on cadence, only that the workflow file
+existed. Two additions close that observability gap without touching the alert logic itself:
+
+1. **Host-scheduled redundant trigger** (`scripts/setup-alarm-cron-tasks.mjs`, FR-5): registers
+   both scripts (plus `periodic-liveness-watcher.mjs`'s timestamp classes) as Windows Task
+   Scheduler entries on a 15-minute cadence, launched hidden via `wscript.exe //B run-hidden.vbs`
+   (established pattern — see the sibling `setup-*-task.mjs` scripts). Supports
+   `--dry-run`/`--verify`/`--status`/`--remove`. **Known gap**: live registration
+   (`schtasks /Create`) is a system-level host mutation the Claude Code permission classifier
+   denies in an unattended session — this SD shipped the script and its unit tests, but the
+   actual host registration still needs a differently-permissioned session or a human operator
+   to run it once.
+2. **Delivered-cadence gauge** (`scripts/alarm-cron-cadence-report.mjs`, FR-6): both scripts now
+   call `stampLastFired(db, HOST_CRON_PROCESS_KEY)` (non-fatal, wrapped in try/catch) on every
+   run, writing to the same `periodic_process_registry` table the fleet's watcher-of-watchers
+   already reads (`host_cron:fleet-down-alert`, `host_cron:fleet-worker-pulse`). The report script
+   reuses `periodic-liveness-watcher.mjs`'s own `evaluateRow` to classify each as
+   OK/OVERDUE/UNVERIFIED — never a bare `0` on a read failure. This is what actually answers "is
+   the cron still firing?", independent of whether the GH Actions schedule or the host task is
+   the thing currently keeping it alive.
 
 ## Known, disclosed operational risks
 
@@ -76,3 +101,9 @@ hosts, or before relying on this alert's timeliness during a chairman quiet wind
   mutation-tested EXEC findings, and the deep-tier `/ship` security findings.
 - `docs/protocol/fleet-coordinator-and-worker-behavior.md` — general fleet liveness/coordination
   behavior this alert system consumes.
+- SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 — added the host-scheduled cron redundancy and
+  delivered-cadence gauge described above; also the SD that introduced
+  `lib/fleet/genuine-worker.mjs`'s `classifyLoopLiveness`/`classifyLoopLivenessStrict` (a
+  loop-liveness discriminator distinguishing a genuinely live worker from a wedged one whose
+  `heartbeat_at` alone still looks fresh — consumed by `scripts/lib/engagement-buckets.mjs` and
+  `lib/adam/outbound-silence-watchdog.js`, not by this alert system directly).

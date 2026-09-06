@@ -481,3 +481,64 @@ describe('review-gate closed-enum false-positive fixes (a78478f9 + 03ccc4d4)', (
     expect(names(crlf)).toContain('schema_corruption');
   });
 });
+
+// CRIT-003 auth_bypass — QF-20260904-868. The ticket that reported this false positive
+// attributed it to a bypassed addedLinesOnly filter (a genuine unified-diff CONTEXT line,
+// "re-disable RLS" in database/chairman-gated/README.md, allegedly reaching the pattern
+// despite the width-1 filter). Verified empirically that premise is WRONG: that context
+// line does NOT appear in the segment's addedBody at all — addedLinesOnly already filters
+// it out correctly. The REAL cause: a single diff "line" can be a machine-generated blob
+// with no embedded newlines (e.g. a JSON.stringify test-evidence artifact), sometimes over
+// a million characters — the proximity pattern's unconstrained '.*' trivially co-occurs
+// two unrelated substrings by chance across such a line. Fixed with a line-length cap in
+// addedLinesOnly (MAX_SCANNABLE_LINE_LENGTH), not a path-based exemption or an
+// addedLinesOnly routing fix (nothing was unrouted).
+describe('CRIT-003 auth_bypass — oversized single-line generated-artifact false positive (QF-20260904-868)', () => {
+  it('does NOT flag an oversized single-line JSON blob that coincidentally co-occurs "disable" and "security" far apart', () => {
+    const disableWord = 'disable';
+    const filler = 'x'.repeat(10000);
+    const oversizedLine = `+{"title":"kill-switch: ${disableWord} anything else stays on","filler":"${filler}","other":"security review passed"}`;
+    expect(names(oversizedLine)).not.toContain('auth_bypass');
+  });
+  it('STILL flags a genuine same-line imperative disable-security co-occurrence within a normal-length line', () => {
+    expect(names('+  // TODO: disable security checks here temporarily')).toContain('auth_bypass');
+  });
+  it('confirms the real PR #8177 context line ("re-disable RLS") was never actually reachable — it is correctly filtered as unchanged context, not as an oversized line', () => {
+    const contextLine = ' DOWN statements if ever needed (drop the policy, re-grant, re-disable RLS, unset search_path).';
+    expect(contextLine.length).toBeLessThan(200);
+    expect(names(contextLine)).not.toContain('auth_bypass');
+  });
+});
+
+// CRIT-001 hardcoded_secret — QF-20260904-728. The SUPABASE_SERVICE_ROLE_KEY sub-pattern
+// had no value-shape constraint (unlike the password/api_key patterns in the same list),
+// so it matched the assignment's variable name alone and always fired on the pervasive
+// test-setup convention `process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key'`, already
+// present unmodified in 10+ shipped test files. Narrowed to require the value look like a
+// real Supabase service-role key: a JWT, always starting with the base64url 'eyJ' prefix
+// (the encoding of the JSON header's opening `{"`) — the same shape convention this
+// codebase's own sibling fix already uses for the identical problem in a different scanner
+// (tests/unit/bridge/venture-conformance-secret-patterns.test.js, QF-20260704-452).
+describe('CRIT-001 hardcoded_secret — SUPABASE_SERVICE_ROLE_KEY value-shape fix (QF-20260904-728)', () => {
+  it('does NOT flag the pervasive test-setup placeholder convention (the witnessed FP, PR #8177/#8180)', () => {
+    expect(names("+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';")).not.toContain('hardcoded_secret');
+  });
+  it('does NOT flag other short placeholder values already used in shipped tests', () => {
+    expect(names("+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key-not-real';")).not.toContain('hardcoded_secret');
+    expect(names("+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-secret';")).not.toContain('hardcoded_secret');
+    expect(names("+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'k';")).not.toContain('hardcoded_secret');
+  });
+  it('STILL flags a genuine JWT-shaped key (the real-secret shape this pattern exists to catch)', () => {
+    expect(names(
+      '+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.abc123def456'
+    )).toContain('hardcoded_secret');
+  });
+  it('STILL flags a genuine key when quoted', () => {
+    expect(names(
+      "+  process.env.SUPABASE_SERVICE_ROLE_KEY = \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.abc123def456\";"
+    )).toContain('hardcoded_secret');
+  });
+  it('STILL flags the existing short JWT-prefix specimen (preserve-stage.test.js\'s own fixture)', () => {
+    expect(names('+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJI')).toContain('hardcoded_secret');
+  });
+});

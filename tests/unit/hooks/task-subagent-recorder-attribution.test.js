@@ -16,7 +16,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 const require = createRequire(import.meta.url);
-const { getActiveSD } = require('../../../scripts/hooks/task-subagent-recorder.cjs');
+const { getActiveSD, buildSubAgentRecord } = require('../../../scripts/hooks/task-subagent-recorder.cjs');
 
 // fake fs whose existsSync/readFileSync match by path suffix (filename)
 function fakeFs(files) {
@@ -85,5 +85,45 @@ describe('getActiveSD — session-scoped attribution (SD-LEO-INFRA-SUB-AGENT-EVI
     process.env.CLAUDE_SESSION_ID = 'sess-A';
     const r = await getActiveSD({ fs: fakeFs({}), createClient: () => fakeClient(null) });
     expect(r).toEqual({ sdId: null, attributionSource: 'none' });
+  });
+});
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E, FR-2/FR-3 — the built record's metadata.session_id.
+ * buildSubAgentRecord() is a pure function of process.env.CLAUDE_SESSION_ID plus its explicit
+ * args, so it is asserted directly with no supabase mocking required.
+ */
+describe('buildSubAgentRecord — metadata.session_id stamp (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E)', () => {
+  const savedEnv = { ...process.env };
+  afterEach(() => { process.env = { ...savedEnv }; });
+
+  const baseArgs = {
+    sdId: 'SD-TEST-001',
+    subagentType: 'TESTING',
+    verdict: 'pass',
+    summary: 'ok',
+    rawOutput: { data: 'ok', truncated: false },
+    invocationId: 'inv-123',
+    toolCallId: 'call-123',
+    attributionSource: 'claim-lookup',
+  };
+
+  it('stamps metadata.session_id exactly when CLAUDE_SESSION_ID is set', () => {
+    process.env.CLAUDE_SESSION_ID = 'sess-fr3-set';
+    const record = buildSubAgentRecord(baseArgs);
+    expect(record.metadata.session_id).toBe('sess-fr3-set');
+  });
+
+  it('stamps metadata.session_id as an explicit null (never an omitted key) when unset', () => {
+    delete process.env.CLAUDE_SESSION_ID;
+    const record = buildSubAgentRecord(baseArgs);
+    expect('session_id' in record.metadata).toBe(true);
+    expect(record.metadata.session_id).toBeNull();
+  });
+
+  it('normalizes an empty-string CLAUDE_SESSION_ID to explicit null, not the empty string', () => {
+    process.env.CLAUDE_SESSION_ID = '';
+    const record = buildSubAgentRecord(baseArgs);
+    expect(record.metadata.session_id).toBeNull();
   });
 });

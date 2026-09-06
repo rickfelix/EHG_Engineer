@@ -41,9 +41,13 @@ const { contractReadVerdict, contractLineCount, singleReadFit } = require('../li
 // fetchAllAdamsStrict (not fetchFreshAdams) so the guard sees stale priors too and classifies
 // fresh-vs-stale itself (fresh => refuse; stale-only => retire). STRICT (FR-6, count-truncation
 // discipline review): a FAILED prior read must REFUSE registration, never read as "no priors".
-const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh, isStatusFreshEligible, ADAM_FRESH_MS, resolveRetiredAdamSeats } = require('../lib/coordinator/adam-identity.cjs');
+const { fetchAllAdamsStrict, decideSingleAdamGuard, isFresh, isFreshAndActive, isStatusFreshEligible, ADAM_FRESH_MS, resolveRetiredAdamSeats } = require('../lib/coordinator/adam-identity.cjs');
+// QF-20260905-201: same-host dead-process proof (ESRCH on the row's own Claude Code pid) so a seat the
+// chairman just closed is retired at once instead of refusing its successor for the 10-min window.
+const { isSeatProcessDead } = require('../lib/coordinator/role-seat-liveness.cjs');
 // FR-4: re-target a retired prior Adam's unread inbound to the new session (comms survive a restart).
 const { drainAdamOutbound } = require('./adam-advisory.cjs');
+const { terminalSessionUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 
 const ADAM_ROLE = 'adam';
 const CONTRACT_FILE = 'CLAUDE_ADAM.md';
@@ -117,7 +121,7 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       message: `Refused: prior-Adam freshness read failed (${priorRead.error}) — cannot verify the singleton is free; not registering (fail-closed).` };
   }
   const priorAdams = priorRead.rows;
-  const decision = decideSingleAdamGuard({ priorAdams, selfSessionId: sessionId, nowMs });
+  const decision = decideSingleAdamGuard({ priorAdams, selfSessionId: sessionId, nowMs, isProcessDead: isSeatProcessDead });
   if (decision.action === 'refuse') {
     // A FRESH prior Adam holds the singleton — do NOT register a 2nd and do NOT clear the prior
     // (the deliberate divergence: never kill a legitimately-restarting Adam mid-canary).
@@ -219,7 +223,40 @@ async function registerAdam(supabase, sessionId, opts = {}) {
     //    simultaneous role='adam' rows with no retry path to converge them.
     //
     // isStatusFreshEligible must classify freshness the SAME way decideSingleAdamGuard just did.
+    //
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-C (FR-3, REVISED after implementation-time measurement,
+    // then AGAIN after F-7, evidence d9d88102-2dfe-49bb-b319-887db2b361bd): this PRD originally
+    // proposed ORing in lib/fleet/genuine-worker.mjs's isKnownWedged here; measured wrong (broke
+    // the baseline "a genuinely STALE prior is still retired" case). A SECOND, deeper defect was
+    // then found by direct end-to-end probing of THIS function: decision.retire can legitimately
+    // contain a session with a STILL-FRESH heartbeat -- decideSingleAdamGuard's FR-2 fix excludes a
+    // heartbeat-fresh-but-tool-STUCK prior from `fresh`, which places it in `retire`, not because
+    // its heartbeat went stale but because its TOOL ACTIVITY did. Re-checking such an entry's
+    // heartbeat here (the freshNow set below) will ALWAYS find it fresh -- that is the exact
+    // defining property of a heartbeating shell -- so it would be skipped from clearing FOREVER,
+    // leaving a confirmed-dead session permanently role-tagged. decision.retireToolStuck (FR-2)
+    // names exactly these entries so they can be re-validated on TOOL ACTIVITY instead of
+    // heartbeat; decision.retireHeartbeatStale keeps the original heartbeat-only re-check, which
+    // is still correct for a prior that was genuinely heartbeat-stale at decision time.
     const freshNow = new Set(current.filter((a) => isStatusFreshEligible(a.status) && isFresh(a.heartbeat_at, nowMs2, ADAM_FRESH_MS)).map((a) => a.session_id));
+    const toolStuckSet = new Set(decision.retireToolStuck || []);
+    // QF-20260905-201: a dead-process entry is re-validated on the PROCESS as of now -- its heartbeat is
+    // frozen fresh by construction, so a heartbeat re-check would skip it forever (same trap as the
+    // tool-stuck half). If the pid is no longer provably dead (cannot happen for a real exit, but the
+    // guard is fail-closed), protect it like a racing restart.
+    const deadProcessSet = new Set(decision.retireDeadProcess || []);
+    const deadProcessStillDead = new Set(
+      (decision.retireDeadProcess || []).filter((sid) => isSeatProcessDead(bySessionId.get(sid))),
+    );
+    // Re-validate each tool-stuck entry on tool activity as of nowMs2: if it has genuinely resumed
+    // activity since the decision (isFreshAndActive now true), protect it like a racing restart;
+    // otherwise it is still confirmed-stuck and must be cleared, regardless of its heartbeat.
+    const toolStuckRacedBack = new Set(
+      (decision.retireToolStuck || []).filter((sid) => {
+        const row = bySessionId.get(sid);
+        return row && isStatusFreshEligible(row.status) && isFreshAndActive(row, nowMs2, ADAM_FRESH_MS);
+      }),
+    );
     for (const sid of decision.retire) {
       // ADVERSARIAL REVIEW (PR #7369, WARNING): restoring isFresh()'s missing arg made this skip
       // reachable for the first time -- it used to be dead code (isFresh always returned false).
@@ -227,7 +264,10 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       // knowingly leaves a second role='adam' row tagged (the deliberate racing-restart protection,
       // not a bug) -- the result and message must say so, not report a plain "Registered" as if
       // nothing else changed. Mirrors the existing retireBlocked/retireFallbackUsed disclosure.
-      if (freshNow.has(sid)) { retireSkippedFresh.push(sid); continue; }
+      const skip = deadProcessSet.has(sid)
+        ? !deadProcessStillDead.has(sid)
+        : (toolStuckSet.has(sid) ? toolStuckRacedBack.has(sid) : freshNow.has(sid));
+      if (skip) { retireSkippedFresh.push(sid); continue; }
       const r = await supabase.rpc('clear_adam_flag', { p_session_id: sid }).then((x) => x, (e) => ({ error: e }));
       if (!(r && r.error)) { retired.push(sid); continue; }
       if (!isMissingFunctionError(r.error)) { retireBlocked = true; continue; } // real error — swept later
@@ -241,11 +281,10 @@ async function registerAdam(supabase, sessionId, opts = {}) {
       // naturally re-stamps status='active', same as every other live session.
       const priorMeta = (bySessionId.get(sid) || {}).metadata || {};
       const { error: mergeErr } = await supabase.from('claude_sessions')
-        .update({
+        .update(terminalSessionUpdate('released', {
           metadata: { ...priorMeta, role: 'adam_retired', non_fleet: true },
           released_at: new Date().toISOString(),
-          status: 'released',
-        }).eq('session_id', sid);
+        })).eq('session_id', sid);
       if (mergeErr) { retireBlocked = true; continue; }
       retired.push(sid);
       retireFallbackUsed.push(sid);
@@ -284,6 +323,7 @@ async function registerAdam(supabase, sessionId, opts = {}) {
   }
 
   return { ok: true, action, session_id: sessionId, role: ADAM_ROLE, non_fleet: true, retired, drained, inherited,
+    retired_dead_process: (decision.retireDeadProcess || []).filter((sid) => retired.includes(sid)),
     retire_fallback_used: retireFallbackUsed.length ? retireFallbackUsed : undefined,
     retire_blocked: retireBlocked || undefined,
     retire_skipped_fresh: retireSkippedFresh.length ? retireSkippedFresh : undefined,

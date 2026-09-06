@@ -40,6 +40,11 @@ import { fetchInboundBacklog, classifyBacklog, partitionByLiveness } from '../li
 import { resolveAdamSessionIds } from '../lib/adam/inbound-backlog-watchdog.js';
 import { TABLE as TASK_LEDGER_TABLE, syncParentRollupStatus, isManualChildStale, parseManualChildMeta } from '../lib/adam/task-ledger.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { seatIdleVerdict } from '../lib/fleet/seat-idle-predicate.mjs';
+import { resolveIdleCtx } from '../lib/fleet/idle-ctx-population.mjs';
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-3: reuse the SAME spin-up-grace constant
+// coordinator-idle-qf-hint.mjs already defines, rather than a second independent literal.
+import { SPIN_UP_GRACE_MS } from './coordinator-idle-qf-hint.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: task_ledger has no archival/
 // retention mechanism (verified) and the ventures stall-scan below has no .limit() either —
 // both are unbounded processing reads (rows iterated for stall detection), so paginate.
@@ -60,6 +65,7 @@ import { isStaleRatification, formatRatificationStaleLine } from '../lib/governa
 // a dozen inbound rows has been filed, not surfaced.
 import { evaluateStandingPriority } from '../lib/adam/standing-priority.js';
 import { runChairmanGatedDecisionRowGuard } from '../lib/chairman/chairman-gated-decision-row-guard.mjs';
+import { runClassifierDenialGuard } from '../lib/chairman/classifier-denial-guard.mjs';
 import { countCompletionReadyParents } from '../lib/fleet/parent-completion.mjs';
 // QF-20260830-590: the required-loops predicate (ADAM_LOOPS/parseArmedSet/loopStatus) lives in
 // ONE place, consumed by both the startup check (point-in-time) and this tick (continuous) so
@@ -82,9 +88,10 @@ const { decideCadence, detectSalientDelta, runCoresFailSoft, computeStateHash, s
 // missed stranded/gated/deferred rows entirely (the 2026-09-02 incident class). Now sourced from
 // the shared belt census.
 const { computeBeltCensus } = require('../lib/fleet/belt-census.cjs');
-// QF-20260829-588: canonical non-fleet predicate (lib/claim/build-forbidden-session.cjs) --
-// role seats (adam/solomon/coordinator) must not count as "idle" fleet workers.
-const { isBuildForbiddenSession } = require('../lib/claim/build-forbidden-session.cjs');
+// QF-20260829-588's canonical non-fleet predicate was here (lib/claim/build-forbidden-session.cjs)
+// -- SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2 migrated the sole call site onto the consolidated
+// seatIdleVerdict (see checkIdleBesideClaimable below); isBuildForbiddenSession itself is
+// unchanged and still the SoT for the ESM claim-validity gate and worker-checkin acquisition path.
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2/FR-3): surface which Claude account the fleet
 // is running under, and detect a genuine account switch across ticks.
 const { getAccountIdentity, detectAccountSwitch, resolveRealConfigPath } = require('../lib/fleet/account-identity.cjs');
@@ -792,10 +799,15 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
     // docblock's "Fail-soft throughout" claim is literally true for every statement in this
     // function, not just the ones after this line.
     const { detectRatificationRegression, detectMarkerMissing } = await import('../lib/chairman/ratification-regression-detector.mjs');
+    // SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-B: contract -> SET of rendered files, and a read pinned
+    // to an immutable source. Replaces this function's inline git archaeology below, so "read the
+    // file as of encode time" has ONE implementation shared with the writer instead of two.
+    const { resolveContractTargets } = await import('../lib/chairman/contract-target-resolver.mjs');
+    const { resolveEncodeCommit, readContractAtCommit } = await import('../lib/chairman/pinned-contract-read.mjs');
 
     const { data, error } = await sb
       .from('chairman_ratifications') // schema-lint-disable-line — chairman-gated migration, not yet applied
-      .select('id, encoded_at, encoded_ref, marker_text')
+      .select('id, encoded_at, encoded_ref, marker_text, target_contracts')
       .not('encoded_at', 'is', null)
       // .limit(999): same bounded-ledger rationale as surfaceStaleRatifications above
       // (count-truncation-diff-lint).
@@ -828,6 +840,12 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
 
     const regressed = [];
     const markerInvalid = []; // QF-20260901-107: pre-existing bad markers, distinct from a true revert
+    // SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-B: rows short at least one NAMED target contract. A THIRD
+    // bucket rather than a flag on the other two, because the remedy differs: markerInvalid is a
+    // writer defect at encode time, a regression is a reverted clause, and this is a ruling only
+    // ever encoded at some of the contracts it named. Informational by construction — it never
+    // reaches `regressed`, because the append-only freeze trigger makes these unrepairable in place.
+    const contractsShort = [];
     for (const row of data || []) {
       const sectionId = row.encoded_ref && row.encoded_ref.section_id;
       const targetFile = sectionId && newerManifest.meta && newerManifest.meta[sectionId] && newerManifest.meta[sectionId].target_file;
@@ -838,21 +856,58 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
       // QF-20260901-107: only when the marker looks missing NOW is it worth the git-archaeology
       // cost of asking whether it was ever there AT ENCODE TIME (distinguishes a writer defect
       // from a real revert; see the detector's own docblock for why a hash comparison is unsound).
-      let encodeTimeFileContent;
-      if (targetFile && row.encoded_at && detectMarkerMissing(liveFileContent, row.marker_text)) {
-        try {
-          const log = (await execFileAsync('git', ['log', '--format=%H', '--before', row.encoded_at, '-n', '1', '--', targetFile], { cwd: repoRoot, timeout: 5000 })).stdout.trim();
-          const atEncodeHash = log.split('\n').filter(Boolean)[0];
-          if (atEncodeHash) {
-            encodeTimeFileContent = (await execFileAsync('git', ['show', `${atEncodeHash}:${targetFile}`], { cwd: repoRoot, timeout: 5000, maxBuffer: 8 * 1024 * 1024 })).stdout;
-          }
-        } catch { /* no commit at/before encoded_at, or git failed -- can't disambiguate, falls through to the normal stage2 verdict */ }
+      // The pin is needed for BOTH the encode-time archaeology and the contract-coverage check,
+      // so resolve it once. resolveEncodeCommit prefers the row's own manifest_hash when it is a
+      // real commit (29 of 53 live rows) and otherwise reconstructs an APPROXIMATE pin from
+      // encoded_at — the same fallback this code used to inline, now shared with the writer.
+      let pin = null;
+      if (targetFile && row.encoded_at) {
+        try { pin = await resolveEncodeCommit({ encoded_ref: row.encoded_ref, encoded_at: row.encoded_at }, { repoRoot, relPath: targetFile }); }
+        catch { /* fail-soft: no pin, both checks below degrade to skipped */ }
       }
-      const result = detectRatificationRegression(row, { newerManifest, olderManifest, liveFileContent, encodeTimeFileContent });
+
+      let encodeTimeFileContent;
+      if (pin && pin.commit && detectMarkerMissing(liveFileContent, row.marker_text)) {
+        try { encodeTimeFileContent = await readContractAtCommit(pin.commit, targetFile, { repoRoot }); }
+        catch { /* absent at that commit — can't disambiguate, falls through to the normal stage2 verdict */ }
+      }
+
+      // CONTRACT COVERAGE — the question neither stage asks: does every contract this ruling NAMES
+      // carry the marker? ANY-MEMBER-SATISFIES per contract, because a clause renders into one
+      // companion rather than all of them. Skipped entirely without a pin (24 of 53 live rows carry
+      // a manifest_hash that is not a git object): unmeasurable is reported as unchecked, never as
+      // a miss, which is what keeps the dry-run count at 21 rather than 45.
+      let contractCoverage;
+      const namedContracts = Array.isArray(row.target_contracts) ? row.target_contracts.filter(Boolean) : [];
+      if (pin && pin.commit && namedContracts.length > 0) {
+        const missing = [];
+        let readAny = false;
+        for (const contract of namedContracts) {
+          let files;
+          try { files = resolveContractTargets(contract, { repoRoot }); } catch { continue; }
+          let found = false, readThis = false;
+          for (const rel of files) {
+            let content;
+            try { content = await readContractAtCommit(pin.commit, rel, { repoRoot }); } catch { continue; }
+            readThis = true; readAny = true;
+            if (content.includes(row.marker_text)) { found = true; break; }
+          }
+          if (readThis && !found) missing.push(contract);
+        }
+        if (readAny) contractCoverage = { checked: true, missing };
+      }
+      const result = detectRatificationRegression(row, { newerManifest, olderManifest, liveFileContent, encodeTimeFileContent, contractCoverage });
       if (result.regressed) regressed.push({ ...row, ...result });
       else if (result.markerInvalid) markerInvalid.push({ ...row, ...result });
+      // Reported ALONGSIDE the other verdicts, not instead of them: a row can be a genuine
+      // regression AND short other contracts, and collapsing the two would hide one of them.
+      if (result.contractsChecked && result.contractsMissing.length > 0) contractsShort.push({ ...row, ...result });
     }
-    return { rows: regressed, count: regressed.length, markerInvalidRows: markerInvalid, markerInvalidCount: markerInvalid.length };
+    return {
+      rows: regressed, count: regressed.length,
+      markerInvalidRows: markerInvalid, markerInvalidCount: markerInvalid.length,
+      contractsShortRows: contractsShort, contractsShortCount: contractsShort.length,
+    };
   } catch (e) {
     return { rows: [], count: 0, error: e && e.message };
   }
@@ -911,6 +966,27 @@ export function computeCronParityMissing(armed, loops = ADAM_LOOPS) {
 // can push last_tool_at PAST released_at, so a last_tool_at-vs-released_at ordering check
 // cannot be trusted to detect a released shell -- any released_at value at all now excludes
 // the seat outright, regardless of last_tool_at.
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-4 AC#3: extracted pure (seats, ctx) core, mirroring how
+// eligibleIdleWorkers (coordinator-idle-qf-hint.mjs) is already pure -- the existing fake
+// Supabase client in adam-quiet-tick-idle-beside-claimable.test.js implements only
+// select/is/in/gte/limit and cannot exercise a ctx-populating fetch, so the pure decision core
+// is exported separately from the DB-fetching wrapper for direct testing (and for the FR-3
+// frozen-population differential harness to call the REAL production predicate).
+// FR-3: this is the ONE consumer (of the three migrated beyond eligibleIdleWorkers) that also
+// adopts qfHolderSessionIds/seatBusySessionIds/spinUpGraceMs -- deliberately scoped here rather
+// than also broadening capacity-inputs.mjs, whose idleNow feeds live belt-verdict/demand-gate
+// actuation (FR-4): this Adam-advisory-only consumer is the lowest-blast-radius place to adopt
+// the richer axes, and capacity-inputs' non-adoption is a stated, deliberate matrix cell, not an
+// oversight (see the FR-3 differential harness's matrix comments).
+export function idleBesideClaimableCount(seats, ctx = {}) {
+  return (seats || []).filter((s) => seatIdleVerdict(s, {
+    nowMs: ctx.nowMs,
+    qfHolderSessionIds: ctx.qfHolderSessionIds,
+    seatBusySessionIds: ctx.seatBusySessionIds,
+    spinUpGraceMs: ctx.spinUpGraceMs,
+  }).idle && !s.released_at).length;
+}
+
 export async function checkIdleBesideClaimable(sb) {
   try {
     // QF-20260829-588: this is the RAW-UNCLAIMED draft count, not the dispatchable-leaf
@@ -925,18 +1001,37 @@ export async function checkIdleBesideClaimable(sb) {
     const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const { data: seats } = await sb
       .from('claude_sessions')
-      .select('session_id, released_at, last_tool_at, metadata')
+      // + created_at (FR-3 spin-up-grace axis) so a freshly-spun-up seat is not counted as idle
+      // capacity before it has had a chance to re-arm.
+      .select('session_id, released_at, last_tool_at, metadata, created_at')
       .is('sd_key', null)
       .in('status', ['active', 'idle'])
       .gte('last_tool_at', cutoff)
       .limit(200);
+    // FR-3: adopt the shared ctx-population resolver's QF-holder/directed-work axes here (the
+    // lowest-blast-radius consumer -- see idleBesideClaimableCount's header comment for why
+    // capacity-inputs.mjs does not also adopt these). A read failure degrades each Set/flag
+    // independently (resolveIdleCtx's own per-query try/catch), never crashing this pass.
+    const { qfHolderSessionIds, seatBusySessionIds } = await resolveIdleCtx(sb, { nowMs: Date.now() });
     // QF-20260829-588: three-limb exclusion -- role seats (adam/solomon/coordinator,
     // metadata.non_fleet=true / role='adam' / is_coordinator=true) are legitimately idle
     // by design, and any seat with released_at set is a released shell, not a genuinely
     // available fleet worker. None of the three ever count as idle fleet-worker capacity.
-    const idleCount = (seats || []).filter(
-      (s) => !isBuildForbiddenSession(s.metadata) && !s.released_at
-    ).length;
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-2 (final consumer): migrated off
+    // isBuildForbiddenSession(s.metadata) onto seatIdleVerdict(s, ctx), which reproduces all
+    // three QF-20260829-588 limbs (non_fleet, role=adam, is_coordinator via the metadata flag)
+    // PLUS adds fixture/probe session-id exclusion (isBuildForbiddenSession is metadata-only,
+    // blind to session_id shape -- so a fixture id like "test-session-..." previously fell
+    // through as idle) and quarantined/parked exclusion -- three INTENDED DELTAS closing the
+    // exact convergence gap this SD exists to fix, not parity gaps. Deliberately NOT passing
+    // coordinatorId (the id-match axis, on top of the metadata-flag axis already covered): that
+    // would route this call through getActiveCoordinatorId's file+DB resolution against a live
+    // pointer file the existing seats-table-shaped test mock cannot safely stand in for, an
+    // avoidable external dependency this consumer's original predicate never had. released_at
+    // stays its own unconditional conjunct: this consumer deliberately excludes ANY released_at
+    // value at all (not a time window), stronger than and semantically distinct from
+    // seatIdleVerdict's time-windowed recently-released axis.
+    const idleCount = idleBesideClaimableCount(seats, { qfHolderSessionIds, seatBusySessionIds, spinUpGraceMs: SPIN_UP_GRACE_MS });
     return idleCount > 0 ? { idleCount, rawUnclaimedCount } : null;
   } catch { return null; }
 }
@@ -1542,6 +1637,20 @@ async function main() {
     } catch (e) {
       console.error(`QUIET_TICK_CHAIRMAN_GATED_STAMP_ERROR=adam guard_failed error="${e && e.message ? e.message : e}"`);
     }
+
+    // QF-20260906-881: sibling probe — ungated migration-apply WAIT verdicts and worker /signal
+    // stuck rows naming a classifier-denied host command, neither covered by the guard above.
+    try {
+      const denialGuard = await runClassifierDenialGuard(sb);
+      if (denialGuard.hits > 0) {
+        console.log(`QUIET_TICK_CLASSIFIER_DENIAL_GUARD=${denialGuard.hits} recorded=${denialGuard.recorded} errors=${denialGuard.errors.length}`);
+      }
+      for (const e of denialGuard.errors) {
+        console.error(`QUIET_TICK_CLASSIFIER_DENIAL_STAMP_ERROR=adam sd_key=${e.sd_key} error="${e.error}"`);
+      }
+    } catch (e) {
+      console.error(`QUIET_TICK_CLASSIFIER_DENIAL_STAMP_ERROR=adam guard_failed error="${e && e.message ? e.message : e}"`);
+    }
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): first-class inbox surfacing —
     // directive/reply-needed rows carry the distinct hard-interrupt token.
     for (const i of inboxSurface.items) {
@@ -1648,6 +1757,24 @@ async function main() {
     for (const r of (regressedRatifications.markerInvalidRows || [])) {
       const sectionId = r.encoded_ref && r.encoded_ref.section_id;
       console.log(`QUIET_TICK_RATIFICATION_MARKER_INVALID=adam id=${r.id} section=${sectionId} — marker_text was never present in the live section content (writer defect at encode time, not a reverted clause); needs the separate chairman-gated data-repair migration, not re-encoding.`);
+    }
+
+    // SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-B: rulings encoded at only SOME of the contracts they
+    // name. Emitted on the same INFORMATIONAL footing as MARKER_INVALID directly above, and for
+    // the same reason: these rows are UNREPAIRABLE in place. The ledger's append-only freeze
+    // trigger permits only the NULL-to-set transition, so re-encoding them is rejected outright,
+    // and a standing alert on rows nobody can action is how a lane stops being read at all.
+    //
+    // EXPECTED VOLUME, measured before this was switched on rather than discovered after: a dry
+    // run over the live ledger put this at 21 rows of 53 (coordinator 15, solomon 14, protocol 5,
+    // adam 3; a row can miss more than one). If the first live run reports roughly that, it is
+    // working as designed and is NOT a new regression — the artifact is committed at
+    // .artifacts/testing/quiet-tick-multi-target-dryrun.json so the number can be checked rather
+    // than remembered. The 24 rows with no derivable commit pin are reported as unchecked, never
+    // as misses, which is what keeps this at 21 instead of 45.
+    for (const r of (regressedRatifications.contractsShortRows || [])) {
+      const sectionId = r.encoded_ref && r.encoded_ref.section_id;
+      console.log(`QUIET_TICK_RATIFICATION_CONTRACT_UNVERIFIED=adam id=${r.id} section=${sectionId} missing=${(r.contractsMissing || []).join(',')} — the ruling names target contracts whose rendered files do not carry marker_text at the encode-time pin. Historical shortfall, NOT a reverted clause: the append-only ledger cannot be re-encoded, so this needs the chairman-gated data-repair path, not a re-run.`);
     }
   }
   return result;

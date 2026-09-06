@@ -7,7 +7,6 @@
 import { Router } from 'express';
 import { dbLoader } from '../config.js';
 import { dashboardState } from '../state.js';
-import { broadcastToClients } from '../websocket.js';
 
 const router = Router();
 
@@ -54,51 +53,11 @@ router.get('/prd/:id', (req, res) => {
   }
 });
 
-// PR Review System
-router.get('/pr-reviews', async (req, res) => {
-  try {
-    const reviews = await dbLoader.loadPRReviews();
-    res.json(reviews || []);
-  } catch (error) {
-    console.error('Error loading PR reviews:', error);
-    res.status(500).json({ error: 'Failed to load PR reviews' });
-  }
-});
-
-router.get('/pr-reviews/metrics', async (req, res) => {
-  try {
-    const metrics = await dbLoader.calculatePRMetrics();
-    res.json(metrics || {
-      totalToday: 0,
-      passRate: 0,
-      avgTime: 0,
-      falsePositiveRate: 0,
-      complianceRate: 0
-    });
-  } catch (error) {
-    console.error('Error calculating PR metrics:', error);
-    res.status(500).json({ error: 'Failed to calculate PR metrics' });
-  }
-});
-
-// GitHub webhook for PR review updates
-router.post('/github/pr-review-webhook', async (req, res) => {
-  try {
-    const review = req.body;
-    console.log('Received PR review webhook:', review.pr_number);
-
-    await dbLoader.savePRReview(review);
-
-    broadcastToClients({
-      type: 'pr_review_update',
-      data: review
-    });
-
-    res.json({ success: true, pr_number: review.pr_number });
-  } catch (error) {
-    console.error('Error processing PR review webhook:', error);
-    res.status(500).json({ error: 'Failed to process webhook' });
-  }
-});
+// PR Review System retired (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-A): pr_reviews had no
+// CREATE TABLE anywhere in the repo's history -- these 3 routes (GET /pr-reviews,
+// GET /pr-reviews/metrics, POST /github/pr-review-webhook) were reachable via
+// app.use('/api', optionalAuth, dashboardRoutes) (effectively public, since optionalAuth
+// does not reject unauthenticated callers) and silently swallowed every query error into
+// an empty/null response. No evidence this feature's database layer was ever built.
 
 export default router;

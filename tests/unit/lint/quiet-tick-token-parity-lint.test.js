@@ -102,10 +102,18 @@ describe('the real PAIRS (regression guard against reintroducing the round-1 fin
     expect(adamPair.missingFromConsumer, `drift reintroduced: ${adamPair.missingFromConsumer.join(', ')}`).toEqual([]);
   });
 
-  it('PAIRS covers both known emitter/consumer pairs', () => {
-    expect(PAIRS).toHaveLength(2);
+  it('michael-quiet-tick.mjs -> michael-startup-check.mjs has 0 missing-from-consumer tokens', () => {
+    // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A: the Michael seat's single quiet-tick loop.
+    const results = checkPairs();
+    const michaelPair = results.find((r) => r.pair.includes('michael-quiet-tick'));
+    expect(michaelPair.missingFromConsumer, `drift reintroduced: ${michaelPair.missingFromConsumer.join(', ')}`).toEqual([]);
+  });
+
+  it('PAIRS covers all three known emitter/consumer pairs', () => {
+    expect(PAIRS).toHaveLength(3);
     expect(PAIRS.some((p) => p.emitter.includes('adam-quiet-tick'))).toBe(true);
     expect(PAIRS.some((p) => p.emitter.includes('coordinator-quiet-tick'))).toBe(true);
+    expect(PAIRS.some((p) => p.emitter.includes('michael-quiet-tick'))).toBe(true);
   });
 });
 

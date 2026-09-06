@@ -357,7 +357,7 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
       // The existence check above already prevents overwrites in normal flow, but a
       // race could land a manual retro between the SELECT and the INSERT. Guard catches it.
       const { isSafeToWriteRetro } = await import('../../lib/retro-clobber-guard.js');
-      const guard = await isSafeToWriteRetro(supabase, sdId);
+      const guard = await isSafeToWriteRetro(supabase, sdId, { intendedType: 'SD_COMPLETION' });
       if (!guard.safe) {
         console.warn(`[ENFORCE] skipped state-transitions orchestrator-completion INSERT for sdId=${sdId} reason=${guard.reason}`);
         return { satisfied: true, created };

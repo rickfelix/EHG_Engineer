@@ -45,11 +45,14 @@ afterAll(() => {
 });
 
 describe('lint-repo-resolution-drift', () => {
+  // QF-20260903-532: runLint() reads ~11k real files off disk; measured 49-59s under this
+  // fleet's real concurrent-session disk load, right at vitest's 60s default with near-zero
+  // margin — a second, environment-driven flake source independent of scanned content.
   it('TS-6: passes clean against the current repo state (no false-flags on allowlisted anchors)', () => {
     const { findings, filesScanned } = runLint();
     expect(filesScanned).toBeGreaterThan(0);
     expect(findings).toEqual([]);
-  });
+  }, 120_000);
 
   describe('TS-5: detects a new violation outside the allowlist', () => {
     it('flags a literal platform-repo string introduced in a new, non-allowlisted file', () => {
@@ -75,7 +78,7 @@ describe('lint-repo-resolution-drift', () => {
   it('does not flag literal platform-repo strings inside tests/** (allowlisted for fixtures/mocks)', () => {
     const { findings } = runLint();
     expect(findings.find((f) => f.file.startsWith('tests/'))).toBeUndefined();
-  });
+  }, 120_000);
 
   describe('QF-20260807-761: the isolation and the vacuity guard', () => {
     it('ORDER-INDEPENDENCE: a TS-5 fixture never reaches the repo scan, in either order', () => {
@@ -89,7 +92,7 @@ describe('lint-repo-resolution-drift', () => {
       expect(fixture.findings.find((f) => f.file === FIXTURE_REL), 'the fixture tree must still be linted').toBeDefined();
       expect(before.findings, 'repo scan before the fixture was not clean').toEqual([]);
       expect(after.findings, 'the fixture leaked into the repo scan — the race is still live').toEqual([]);
-    });
+    }, 180_000); // two real-repo scans (~50-59s measured each)
 
     it('VACUITY GUARD is two-sided: a scan collecting zero files is NOT a clean pass', () => {
       // Preserved and now proven. An empty tree yields findings === [] — indistinguishable from a
@@ -102,6 +105,6 @@ describe('lint-repo-resolution-drift', () => {
       expect(findings, 'an empty scan reports no findings — the trap the guard exists for').toEqual([]);
       expect(filesScanned, 'a scan of nothing must not look like a clean repo').toBe(0);
       expect(runLint().filesScanned, 'the real repo must scan a non-zero file count').toBeGreaterThan(0);
-    });
+    }, 120_000);
   });
 });

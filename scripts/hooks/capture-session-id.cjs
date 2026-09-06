@@ -83,6 +83,59 @@ function logSpawnError(sessionId, ccPid, err, code) {
 const TREE_WALK_TIMEOUT_MS = 6000;
 const SCAN_TIMEOUT_MS = 3000;
 
+// QF-20260906-751: the ROOT CAUSE of the worktree-removal EPERM defect. spawn(...) below used
+// to inherit process.cwd() (whatever worktree the SessionStart hook happened to fire from) with
+// no `cwd` override, so the detached session-tick daemon held that directory open for its whole
+// life (a Windows EPERM on `git worktree remove` even long after the worktree's own work was
+// done). resolveRepoRoot() finds the shared main-repo root (identical from any worktree) via
+// `git rev-parse --git-common-dir` -- the common .git directory's parent -- so the spawned
+// daemon can be pinned there instead of a worktree that may need to be deleted later.
+function resolveRepoRoot(cwd) {
+  try {
+    const commonDir = execSync('git rev-parse --git-common-dir', {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 3000,
+    }).trim();
+    const absCommonDir = path.isAbsolute(commonDir) ? commonDir : path.resolve(cwd, commonDir);
+    return path.dirname(absCommonDir);
+  } catch {
+    // Not a git repo, or git unavailable -- fail open to the hook's own cwd rather than block
+    // SessionStart on a telemetry concern.
+    return cwd;
+  }
+}
+
+// QF-20260906-751: a SessionStart re-fire (compact/resume/clear) for a session that already has
+// a LIVE tick daemon must reuse it, not spawn a second one. Checks the marker session-tick.cjs
+// ITSELF writes (tick-<session_id>.json), at the SAME __dirname-relative location that
+// unmodified script always uses -- deliberately NOT the shared repo root resolveRepoRoot() finds,
+// even though the spawned daemon's cwd is pinned there (see the spawn site below). Moving the
+// MARKER's own location would silently break lib/fleet/claimant-liveness.cjs and its ~15 fleet-
+// coordination callers (stale-session-sweep.cjs, qf-start.js, reconcile-seats.mjs, ...), which
+// read this same marker via a caller-supplied repoRoot that defaults to process.cwd() -- for a
+// worker running from its own worktree, that's the worktree path, matching where this
+// unmodified marker write already lands. This guard therefore only catches a duplicate spawn
+// within the SAME worktree (the common case for repeated /clear); a session that moves across
+// worktrees can still accumulate one daemon per worktree, same as before this fix -- closing
+// that fully would require centralizing the .claude/pids canonical-location resolution across
+// every consumer, out of scope for this quick fix. A dead/stale/malformed marker is treated as
+// "no live daemon" -- this guard only ever SKIPS a spawn, never blocks one, so a bad read fails
+// open to the pre-existing spawn behavior.
+function findLiveTickPid(worktreeRoot, sessionId) {
+  const markerPath = path.join(worktreeRoot, '.claude', 'pids', `tick-${sessionId}.json`);
+  try {
+    const marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+    const pid = Number(marker && marker.tick_pid);
+    if (!Number.isFinite(pid) || pid <= 0) return null;
+    process.kill(pid, 0); // throws ESRCH if not alive; does not actually signal anything
+    return pid;
+  } catch {
+    return null;
+  }
+}
+
 function logDiscoveryEvent(fields) {
   // Structured JSON log on stderr (hook stdout is reserved for env-file exports).
   // Always-on at INFO per PRD FR-3.
@@ -698,31 +751,55 @@ function main() {
         // SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001: spawn errors are default-on logged
         // to .claude/pids/spawn-errors.log + stderr so silent failures surface.
         try {
-          const { spawn } = require('child_process');
-          const tickScript = path.resolve(__dirname, '../session-tick.cjs');
-          if (!fs.existsSync(tickScript)) {
-            logSpawnError(sessionId, ccPid, new Error(`tick script not found at ${tickScript}`), 'ENOENT');
-          } else {
-            const child = spawn(process.execPath, [tickScript], {
-              detached: true,
-              stdio: 'ignore',
-              env: {
-                ...process.env,
-                CLAUDE_SESSION_ID: sessionId,
-                CC_PARENT_PID: String(ccPid),
-              },
-              windowsHide: true,
-            });
-            if (child && typeof child.unref === 'function') child.unref();
-            // child.on('error', ...) captures post-spawn errors (ENOENT/EACCES on
-            // execPath) that the outer try/catch never sees because spawn is async.
-            if (child && typeof child.on === 'function') {
-              child.on('error', (err) => {
-                logSpawnError(sessionId, ccPid, err, err.code || 'SPAWN_ERROR');
-              });
-            }
+          // Two DIFFERENT roots, deliberately: `cwd` pins the daemon PROCESS somewhere that will
+          // never need to be `git worktree remove`d (the shared main-repo root) -- this is the
+          // actual EPERM fix, and it's purely an OS-level cwd handle, independent of any file
+          // path. `worktreeRoot` is where session-tick.cjs (unmodified) actually WRITES its own
+          // marker file (__dirname-relative, i.e. wherever THIS worktree's own checkout sits) --
+          // used only for the duplicate-tick guard read, so this fix carries zero risk to
+          // lib/fleet/claimant-liveness.cjs's own marker-location assumptions (see findLiveTickPid
+          // doc comment above for why moving the marker itself was rejected).
+          const repoRoot = resolveRepoRoot(process.cwd());
+          const worktreeRoot = path.resolve(__dirname, '../..');
+          const livePid = findLiveTickPid(worktreeRoot, sessionId);
+          if (livePid) {
+            // QF-20260906-751: a live daemon for this session already exists (spawned earlier
+            // in this same SessionStart-firing worktree) -- reuse it.
             if (process.env.LEO_TELEMETRY_DEBUG === '1') {
-              console.error(`SessionStart:session-tick: spawned tick_pid=${child.pid}`);
+              console.error(`SessionStart:session-tick: reusing live tick_pid=${livePid}, skipping spawn`);
+            }
+          } else {
+            const { spawn } = require('child_process');
+            const tickScript = path.resolve(__dirname, '../session-tick.cjs');
+            if (!fs.existsSync(tickScript)) {
+              logSpawnError(sessionId, ccPid, new Error(`tick script not found at ${tickScript}`), 'ENOENT');
+            } else {
+              const child = spawn(process.execPath, [tickScript], {
+                // QF-20260906-751: pin the daemon's cwd to the shared repo root, never the
+                // (possibly-temporary) worktree this hook happened to fire from -- this is what
+                // let a `git worktree remove` fail with EPERM long after the worktree's own
+                // work was done, since the daemon held the directory open for its whole life.
+                cwd: repoRoot,
+                detached: true,
+                stdio: 'ignore',
+                env: {
+                  ...process.env,
+                  CLAUDE_SESSION_ID: sessionId,
+                  CC_PARENT_PID: String(ccPid),
+                },
+                windowsHide: true,
+              });
+              if (child && typeof child.unref === 'function') child.unref();
+              // child.on('error', ...) captures post-spawn errors (ENOENT/EACCES on
+              // execPath) that the outer try/catch never sees because spawn is async.
+              if (child && typeof child.on === 'function') {
+                child.on('error', (err) => {
+                  logSpawnError(sessionId, ccPid, err, err.code || 'SPAWN_ERROR');
+                });
+              }
+              if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+                console.error(`SessionStart:session-tick: spawned tick_pid=${child.pid} cwd=${repoRoot}`);
+              }
             }
           }
         } catch (tickErr) {
@@ -754,7 +831,7 @@ function main() {
 }
 
 // SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-5): expose pure helpers for unit tests.
-module.exports = { selectAncestorFromChain, findClaudeCodePid, upsertSessionRow, buildSessionMetadata };
+module.exports = { selectAncestorFromChain, findClaudeCodePid, upsertSessionRow, buildSessionMetadata, resolveRepoRoot, findLiveTickPid };
 
 if (require.main === module) {
   main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));

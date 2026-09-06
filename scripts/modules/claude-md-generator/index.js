@@ -49,6 +49,8 @@ import {
   generateSolomonManual,
   generateSolomonProvenance,
   generateSolomonModelPosture,
+  generateMichael,
+  generateMichaelModelPosture,
   generatePlanManual,
   assertSharedSectionsNotCopied
 } from './file-generators.js';
@@ -234,6 +236,10 @@ class CLAUDEMDGeneratorV3 {
       // gated contract to clear a 73-token cap breach that was wedging every seat's encode; it does
       // NOT go in the MANUAL companion, which disclaims binding content.
       ['CLAUDE_SOLOMON_MODEL_POSTURE.md', (d) => generateSolomonModelPosture(d, this.fileMapping), 'full'],
+      // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4): the Michael role contract and its BINDING
+      // model-posture companion, in the Solomon shape. CLAUDE_MICHAEL.md is on MUST_FIT_SINGLE_READ.
+      ['CLAUDE_MICHAEL.md', (d) => generateMichael(d, this.fileMapping), 'full'],
+      ['CLAUDE_MICHAEL_MODEL_POSTURE.md', (d) => generateMichaelModelPosture(d, this.fileMapping), 'full'],
     ];
     if (this.options.generateDigest) {
       specs.push(
@@ -660,12 +666,52 @@ export const { HARNESS_BYTES_PER_TOKEN } = harnessTokenScale;
 // THROW only for files a shipped SD has actually made fit; WARN for the rest.
 //
 // This is not timidity, it is the difference between a guard and a blockade. CLAUDE_CORE.md
-// (39,750 tokens) and CLAUDE_EXEC.md (37,056) are over cap TODAY and their fixes are separate SDs.
+// (30,677 tokens) and CLAUDE_EXEC.md (39,185) are over cap TODAY and their fixes are separate SDs.
+// Those two figures were previously recorded as 39,750 and 37,056 — transposed and both wrong.
+// Re-measured 2026-09-03 via lib/protocol/contract-read-coverage.cjs singleReadFit against the
+// committed files. Stale numbers in a comment whose whole subject is measurement truth are exactly
+// the drift this guard exists to catch, so they are dated here rather than silently corrected.
 // A guard that throws on every FULL file would fail the very first regeneration after this ships
 // and block the whole family — punishing everyone for a defect nobody has been given the chance
 // to fix yet. Add a file here when its SD lands, not before.
 // CLAUDE_SOLOMON.md added by SD-LEO-INFRA-SOLOMON-ROLE-CONTRACT-001 (FR-6) — that SD landed.
-export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md'];
+// CLAUDE_MICHAEL.md added by SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4) — on the list FROM
+// landing, unlike CLAUDE_ADAM.md, because the contract is authored under a 6,200-word budget the seed
+// one-off enforces (DESIGN evidence 8601cbdd), so it fits with ~5,000 tokens of headroom on day one.
+export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md'];
+
+// ── SD-LEO-ORCH-CAPA-CONTRACT-TRUTH-001-C / FR-1 + FR-2 ─────────────────────────────────────
+// SECOND TIER: "confirmed fit", stricter than the raw cap and DERIVED from the same instrument the
+// exit criteria are measured with, so the two cannot drift apart.
+//
+// WHY A SECOND TIER AT ALL. The cap above and the exit instrument disagree by the width of the
+// predictor's error band, and until now nothing said so out loud. lib/protocol/contract-read-coverage.cjs
+// returns {fits:null, basis:'predicted_marginal'} for any file within SINGLE_READ_MARGIN_TOKENS of the
+// cap, and that band is SYMMETRIC (Math.abs), so fits:true is unreachable above cap-margin = 23,300.
+// A file can therefore sit on MUST_FIT_SINGLE_READ, pass this throw at 25,000, and still be a file the
+// instrument cannot confirm fits. CLAUDE_SOLOMON.md did exactly that: its own SD recorded it at 23,175
+// tokens ("clear of both"), it has since drifted to 24,918, and CI stayed green the whole way.
+//
+// WHY THE THROW BELOW IS LEFT ALONE, and this is the load-bearing part. The obvious repair is to lower
+// the existing cap to 23,300. Measured against the real files, that FLAT change throws on TWO enforced
+// files immediately -- CLAUDE_LEAD.md (24,247, 947 over) and CLAUDE_SOLOMON.md (24,918, 1,618 over) --
+// and regen-on-drift.js has no catch around the generator call, so it exits 1 with no PR and leaves the
+// drift in place: every seat's encode fails. It is also NOT self-healing; trimming Adam and Solomon to
+// 20,000 still throws on LEAD. That outage has already happened once, over a 73-token overage
+// (see file-generators.js "the regen pipeline WEDGED"). So the hard cap keeps its exact behaviour and
+// this tier is additive and opt-in.
+export const SINGLE_READ_CONFIRMED_FIT_TOKENS =
+  SINGLE_READ_TOKEN_CAP - (SINGLE_READ_TOKEN_CAP * harnessTokenScale.HARNESS_TOKEN_MAX_ERROR_FRACTION);
+
+// DELIBERATELY EMPTY ON LANDING. Same discipline as MUST_FIT_SINGLE_READ above: a file joins this list
+// when the SD that makes it fit has landed, never before. CLAUDE_ADAM.md (36,692) and CLAUDE_SOLOMON.md
+// (24,918) are the intended members, and adding them in THIS commit -- before the carve that shrinks
+// them -- would throw on the very next regeneration. That is the wedge, not the fix for it.
+// CLAUDE_LEAD.md and CLAUDE_PLAN.md are deliberately NOT candidates here: LEAD is marginal (24,247) and
+// PLAN is 505 tokens from the same edge, and neither has an SD that has trimmed it. They stay warn-only
+// under this tier, which is the point -- the gate now SAYS it is not enforcing them instead of silently
+// passing them.
+export const MUST_CONFIRM_SINGLE_READ_FIT = [];
 
 /**
  * Fail generation when a file that is REQUIRED to fit no longer does.
@@ -705,13 +751,58 @@ export function assertSingleReadFit(files, opts = {}) {
       'for the pattern) rather than raising the cap.',
     );
   }
+
+  // QF-20260905-908: a plain, unmissable 95%-of-cap warning, scoped to `mustFit` files (the ones
+  // that actually throw at 100%) -- distinct from the CONFIRMED-FIT tier below, which exists for a
+  // different reason (predictor-uncertainty banding) and is silent on plenty of files that are
+  // nonetheless one append away from the wall. CLAUDE_SOLOMON.md drifted from 23,175 to 24,918
+  // tokens (99.7% of cap) while the confirmed-fit warning printed every run and CI stayed green --
+  // proof that an existing warn-only line is not the same as a NAMED, cap-relative headroom figure
+  // that reads as urgent. Evaluated after the hard-cap throw so it can never change whether that
+  // throw fires or what it says; silent below 95%, never blocks generation.
+  const NINETY_FIVE_PERCENT_CAP_FRACTION = 0.95;
+  const nearCap = (files || [])
+    .map(({ name, bytes }) => ({ name, tokens: Math.round((bytes || 0) / bytesPerToken) }))
+    .filter((f) => mustFit.includes(f.name) && f.tokens >= cap * NINETY_FIVE_PERCENT_CAP_FRACTION);
+  for (const f of nearCap) {
+    const headroom = cap - f.tokens;
+    onWarn(`   ⚠ 95% OF SINGLE-READ CAP: ${f.name} ~${f.tokens} tokens, only ${headroom} tokens of headroom left before the ${cap}-token cap throws. The next content append risks tripping assertSingleReadFit fleet-wide -- trim or split now.`);
+  }
+
+  // SECOND TIER, evaluated only AFTER the hard cap has passed, so it can never change whether the
+  // existing throw fires or what it says. Anything at or above the confirmed-fit threshold is a file
+  // the read-coverage instrument cannot report fits:true for -- it is inside the predictor's error
+  // band, which is "cannot tell", not "fits".
+  const {
+    confirmedFitTokens = SINGLE_READ_CONFIRMED_FIT_TOKENS,
+    mustConfirmFit = MUST_CONFIRM_SINGLE_READ_FIT,
+  } = opts;
+  const unconfirmed = (files || [])
+    .map(({ name, bytes }) => ({ name, tokens: Math.round((bytes || 0) / bytesPerToken) }))
+    .filter((f) => f.tokens >= confirmedFitTokens)
+    .map((f) => ({ ...f, overBy: f.tokens - confirmedFitTokens, enforced: mustConfirmFit.includes(f.name) }));
+
+  for (const f of unconfirmed.filter((x) => !x.enforced)) {
+    onWarn(`   ⚠ NOT CONFIRMED TO FIT (warn-only — no SD has trimmed this file yet): ${f.name} ~${f.tokens} tokens, within the predictor's error band above ${Math.round(confirmedFitTokens)}. singleReadFit() reports fits:null for it, which means CANNOT TELL — not fits.`);
+  }
+
+  const unconfirmedEnforced = unconfirmed.filter((x) => x.enforced);
+  if (unconfirmedEnforced.length) {
+    const detail = unconfirmedEnforced.map((f) => `${f.name} ~${f.tokens} tokens (${f.overBy} over ${Math.round(confirmedFitTokens)})`).join('; ');
+    throw new Error(
+      `SINGLE_READ_FIT_UNCONFIRMED: ${detail}. An SD has already trimmed these files to a CONFIRMED fit, ` +
+      'so drifting back into the predictor\'s error band is a regression, not a new debt. The threshold is ' +
+      'derived from the same instrument the exit criteria use (cap minus its measured max error), so ' +
+      'lowering it here to pass would only hide the drift from the check that noticed it.',
+    );
+  }
   return over;
 }
 
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): the complete generated-file
 // set, used to validate --only targets (unknown names fail loud listing these).
 export const KNOWN_GENERATED_FILES = [
-  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_CORE_MANUAL.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_COORDINATOR_MANUAL.md', 'CLAUDE_COORDINATOR_PROVENANCE.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md', 'CLAUDE_SOLOMON_PROVENANCE.md', 'CLAUDE_SOLOMON_MODEL_POSTURE.md',
+  'CLAUDE.md', 'CLAUDE_CORE.md', 'CLAUDE_CORE_MANUAL.md', 'CLAUDE_LEAD.md', 'CLAUDE_LEAD_MANUAL.md', 'CLAUDE_PLAN.md', 'CLAUDE_PLAN_MANUAL.md', 'CLAUDE_EXEC.md', 'CLAUDE_ADAM.md', 'CLAUDE_ADAM_MANUAL.md', 'CLAUDE_ADAM_PROVENANCE.md', 'CLAUDE_COORDINATOR.md', 'CLAUDE_COORDINATOR_MANUAL.md', 'CLAUDE_COORDINATOR_PROVENANCE.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_SOLOMON_MANUAL.md', 'CLAUDE_SOLOMON_PROVENANCE.md', 'CLAUDE_SOLOMON_MODEL_POSTURE.md', 'CLAUDE_MICHAEL.md', 'CLAUDE_MICHAEL_MODEL_POSTURE.md',
   'CLAUDE_DIGEST.md', 'CLAUDE_CORE_DIGEST.md', 'CLAUDE_LEAD_DIGEST.md', 'CLAUDE_PLAN_DIGEST.md', 'CLAUDE_EXEC_DIGEST.md', 'CLAUDE_ADAM_DIGEST.md', 'CLAUDE_COORDINATOR_DIGEST.md', 'CLAUDE_SOLOMON_DIGEST.md',
 ];
 

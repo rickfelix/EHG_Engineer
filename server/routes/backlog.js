@@ -159,7 +159,15 @@ router.get('/backlog-summary/:sd_id', async (req, res) => {
         .eq('id', sd_id)
         .single();
 
-      if (!sdError && sdData?.backlog_summary) {
+      // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-C: sdError previously fell through silently
+      // to the generate-fresh path below, indistinguishable from a legitimate cache-miss
+      // (no summary cached yet). A genuine query error (schema drift, timeout, etc.) is
+      // logged distinctly here so it is never served to a caller as a false "no items
+      // found" -- the request still degrades to generating a fresh summary, but the
+      // real failure is now visible in logs rather than silently swallowed.
+      if (sdError) {
+        console.warn(`⚠️ Could not check cached summary for SD ${sd_id} (falling back to fresh generation): ${sdError.message}`);
+      } else if (sdData?.backlog_summary) {
         console.log(`📚 Returning database-stored summary for SD ${sd_id}`);
         return res.json({
           summary: sdData.backlog_summary,

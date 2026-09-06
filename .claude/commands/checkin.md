@@ -65,6 +65,23 @@ node scripts/worker-checkin.cjs --model sonnet --effort xhigh
 
 ## Act on the result (NEVER stop to ask the human)
 
+**MANDATORY, every single call, regardless of `action`:** the JSON also carries
+`coordinator_messages[]` (push notifications — COACHING/INFO rows, including
+`coordinator_request`/`coordinator_reminder` directives) and `pending_directives[]` (the
+subset still needing explicit action). Read BOTH arrays on every check-in and act on
+anything in them — a directive can land on the SAME call that also resolves `resume` /
+`self_claimed` / etc., and `action` alone never surfaces it. An un-acked row RE-SURFACES on
+every subsequent check-in until genuinely actioned: use
+`node scripts/worker-ack-directive.cjs --id <id> --note "..."` for
+`coordinator_request`/`coordinator_reminder`/`coordinator_directive`/`chairman_directive`, or
+`node scripts/worker-ack-advisory.cjs --id <id> --note "..."` for `supersede` /
+`coordinator_reply` / `completion_nudge` and plain announcements (the directive script
+refuses the latter kinds — see CLAUDE_CORE.md). A directive is not a pause point and does not
+require dropping your current claim; "the JSON contained it" is sufficient delivery — QF-
+20260903-180 measured three genuine unblocking directives sitting `read_at`-stamped /
+`acknowledged_at`-NULL for up to 2h40m on a live seat because this file never named these
+fields, so `action`'s closed lookup table below was read as the whole contract.
+
 | `action` | What the CLI did | What you do next | Then |
 |----------|------------------|------------------|------|
 | `resume` | You already claim `sd` | Run `node scripts/sd-start.js <sd>` to (re)attach the worktree, then continue that SD. | On completion, re-run `/checkin`. |
@@ -117,9 +134,9 @@ node scripts/worker-checkin.cjs
 
 - **Category**: Protocol
 - **Status**: Approved
-- **Version**: 1.1.0
-- **Last Updated**: 2026-06-08
+- **Version**: 1.2.0
+- **Last Updated**: 2026-09-05
 - **Tags**: fleet, worker, checkin, self-claim, recovery
-- **Author**: SD-FDBK-FIX-RECURRING-2ND-OCCURRENCE-001
+- **Author**: SD-FDBK-FIX-RECURRING-2ND-OCCURRENCE-001 (QF-20260903-180: name `coordinator_messages`/`pending_directives` as a mandatory read)
 
 ---

@@ -16,7 +16,7 @@
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import 'dotenv/config';
 import { parseArgs } from 'node:util';
-import { runProgrammaticTask } from '../../lib/programmatic/tool-loop.js';
+import { runProgrammaticTask, resolveProvider } from '../../lib/programmatic/tool-loop.js';
 import { createSupabaseTool, createSupabaseUpsertTool } from '../../lib/programmatic/tools/supabase-tool.js';
 import { createGitTools } from '../../lib/programmatic/tools/git-tool.js';
 
@@ -59,6 +59,14 @@ Quality gate requirements:
 
 NEVER use boilerplate like "EXEC phase quality score: 80%". Reference real files and behaviors.
 
+If git_changed_files or git_diff return an empty result (this happens when the branch is
+already merged into main, so the three-dot diff against main is empty), do NOT invent file
+paths, line counts, or any other concrete detail that did not come from a tool result. Say so
+explicitly in key_learnings and what_needs_improvement, source the rest of the content only from
+the strategic_directives_v2 / sd_phase_handoffs rows, and reflect the missing diff in a
+quality_score below the 70/100 passing threshold — an empty-diff retrospective must not read as
+a normal pass.
+
 Output ONLY valid JSON in your final message:
 {"retrospective_id": "...", "quality_score": N, "sd_id": "..."}`;
 
@@ -69,13 +77,23 @@ Steps:
 2. Query sd_phase_handoffs WHERE sd_id = '${sdId}', select: handoff_type, status, gate_score, created_at — get all handoffs
 3. Call git_changed_files for branch "${branch}" to get list of changed files
 4. Call git_diff for branch "${branch}" to get diff stats
-5. Query retrospectives WHERE sd_id = '${sdId}', select id (check if one exists already)
+5. Query retrospectives WHERE sd_id = '${sdId}' AND retro_type = 'SD_COMPLETION', select id.
+   SCOPE THIS QUERY TO retro_type = 'SD_COMPLETION'. Do NOT look for "any retrospective on this SD".
+   The SD almost always ALSO carries HANDOFF retrospectives, one per phase handoff. Those are separate
+   records with a different purpose and are NEVER the row you create or modify here.
 6. Generate retrospective content:
    - key_learnings: 3+ items, each referencing specific files from changed_files
    - action_items: 2+ items with owner="future-claude", deadline="next-sd", verification fields
    - improvement_areas: 1+ items with specific analysis
    - what_went_well and what_needs_improvement: SD-specific, not boilerplate
-7. ${dryRun ? 'DRY RUN: Do NOT upsert. Return the generated content with dry_run: true and mock quality_score: 75' : 'Upsert into retrospectives table'}
+7. ${dryRun ? 'DRY RUN: Do NOT upsert. Return the generated content with dry_run: true and an honest quality_score computed per the gate rubric above from the actual tool results — never a fixed placeholder score.' : `Write the retrospective:
+   - If step 5 returned NO row: INSERT a new row into retrospectives with retro_type = 'SD_COMPLETION'.
+   - If step 5 returned a row: you may update THAT row, and only that row, by its id.
+   NEVER update a retrospectives row whose retro_type is anything other than 'SD_COMPLETION'.
+   An upsert onto an existing id is an UPDATE: it keeps that row's created_at and overwrites its
+   content. Doing that to a HANDOFF row destroys a phase-handoff retrospective AND leaves the
+   completion retro carrying the handoff's original created_at, which then fails the completion
+   gate's freshness check. If in any doubt, INSERT a new row rather than updating an existing one.`}
 8. Output final JSON result`;
 
 /**
@@ -128,7 +146,14 @@ async function generateFallbackRetrospective(supabaseClient, sdKey, branchName, 
   const retroContent = {
     sd_id: sdKey,
     title: `Retrospective: ${title}`,
-    retro_type: 'sd_completion',
+    // UPPERCASE deliberately. This was 'sd_completion' (lowercase) — the ONLY lowercase retro_type
+    // written anywhere. Every reader compares against the canonical uppercase value: the completion
+    // gate filters .eq('retro_type','SD_COMPLETION'), and a 300-row DB sample contains only uppercase
+    // values (HANDOFF, AUDIT, ARCHITECTURE_DECISION) with no lowercase row at all. A fallback row
+    // written lowercase is therefore invisible to the gate it exists to satisfy — the SD would carry a
+    // completion retrospective and still be told it has none. Latent only because this fallback fires
+    // just on LLM-enrichment failure, which is exactly why it would have been missed.
+    retro_type: 'SD_COMPLETION',
     status: 'PUBLISHED',
     generated_by: 'AUTO_FALLBACK',
     trigger_event: 'LLM_ENRICHMENT_FAILURE_FALLBACK',
@@ -138,7 +163,7 @@ async function generateFallbackRetrospective(supabaseClient, sdKey, branchName, 
       `Completed ${sdType} SD "${title}" through full LEO workflow (${handoffCount} handoffs)`,
       keyChanges.length > 0
         ? `Delivered ${keyChanges.length} key change(s): ${keyChanges.map(kc => kc.change || kc).join('; ').substring(0, 200)}`
-        : `SD scope addressed as defined in description`,
+        : 'SD scope addressed as defined in description',
     ],
     what_needs_improvement: knownIssues.length > 0
       ? knownIssues.slice(0, 2)
@@ -148,7 +173,7 @@ async function generateFallbackRetrospective(supabaseClient, sdKey, branchName, 
       gateScores.length > 0
         ? `Gate scores: ${gateScores.join(', ')}`
         : `SD passed all required gates for ${sdType} workflow`,
-      `Fallback retrospective generated from SD metadata and handoff artifacts when LLM was unavailable`,
+      'Fallback retrospective generated from SD metadata and handoff artifacts when LLM was unavailable',
     ],
     action_items: [
       { action: `Verify ${sdKey} acceptance criteria met post-deployment`, owner: 'future-claude', deadline: 'next-sd', verification: 'Check issue_patterns for recurrence within 30 days' },
@@ -165,11 +190,22 @@ async function generateFallbackRetrospective(supabaseClient, sdKey, branchName, 
     return { retrospective_id: 'dry-run', quality_score: 60, sd_id: sdKey, dry_run: true, fallback: true };
   }
 
-  // Check for existing retrospective
+  // Check for an existing COMPLETION retrospective.
+  //
+  // SCOPED TO retro_type='SD_COMPLETION' DELIBERATELY. Unscoped, this lookup returns the SD's most
+  // recent retrospective of ANY type — in practice the LEAD-TO-PLAN HANDOFF row, because that is
+  // what exists first — and the update below then overwrites it. Measured consequence: the handoff
+  // retrospective's content is destroyed, the row keeps its handoff-era created_at, and it acquires
+  // completion content, so the completion gate (which requires a SD_COMPLETION row created AFTER
+  // LEAD-TO-PLAN acceptance) rejects it as stale while the generators report one already exists.
+  // Three of three SDs reaching LEAD-FINAL acquired that corruption; two were left unable to complete
+  // with their code already merged. The same unscoped-lookup defect exists in this file's LLM prompt
+  // (step 5), fixed alongside this.
   const { data: existing } = await supabaseClient
     .from('retrospectives')
     .select('id')
     .eq('sd_id', sdKey)
+    .eq('retro_type', 'SD_COMPLETION')
     .order('created_at', { ascending: false })
     .limit(1);
 
@@ -204,7 +240,11 @@ try {
 
   const jsonMatch = result.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    console.error('No JSON in retrospective-generator output:', result.substring(0, 300));
+    // QF-20260903-508: name the backend that produced this, not just the symptom -- a silent
+    // provider fallback (Anthropic unavailable -> Google Gemini) can produce output that does
+    // not honour this contract even when the primary reliably does, and without this a worker
+    // reasonably (but wrongly) suspects its own prompt or item instead of the fallback path.
+    console.error(`No JSON in retrospective-generator output (backend: ${resolveProvider()}):`, result.substring(0, 300));
     process.exit(1);
   }
 

@@ -45,6 +45,19 @@ function mockSupabase(row, { readError = null, writeError = null } = {}) {
   return { client, calls };
 }
 
+// SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: stampClaim/stampCompletion now merge via the
+// injectable mergeMetadataKeys() atomic partial-key merge rather than the mock's own update() —
+// this double emulates that merge against `row` and still records into calls.updates so the
+// existing "payload.metadata" assertions keep working. `fail: true` emulates a merge failure.
+function makeMergeFn(row, calls, { fail = false } = {}) {
+  return async (_sdKey, patch) => {
+    if (fail) return { merged: false };
+    row.metadata = { ...(row.metadata || {}), ...patch };
+    calls.updates.push({ table: 'strategic_directives_v2', payload: { metadata: row.metadata } });
+    return { merged: true };
+  };
+}
+
 // ---------- TS-1: rule-text parity pin ----------
 describe('TS-1 rule-text parity: [ROLE] line vs directive step 6', () => {
   const roleSrc = read('scripts/hooks/session-role-orient.cjs');
@@ -86,11 +99,12 @@ describe('TS-2 stampClaim', () => {
   const SD_ID = 'aa4692db-732b-4719-ad79-595a5aa45f8e';
 
   it('appends {session_id, claimed_at} and preserves existing metadata keys', async () => {
-    const { client, calls } = mockSupabase({
-      id: SD_ID,
+    const row = {
+      id: SD_ID, sd_key: 'SD-TEST-KEY-001',
       metadata: { existing_key: 'kept', claim_history: [{ session_id: 'old', claimed_at: '2026-06-01T00:00:00Z' }] }
-    });
-    const entry = await stampClaim(client, 'SD-TEST-KEY-001', 'sess-new');
+    };
+    const { client, calls } = mockSupabase(row);
+    const entry = await stampClaim(client, 'SD-TEST-KEY-001', 'sess-new', undefined, makeMergeFn(row, calls));
     expect(entry).toMatchObject({ session_id: 'sess-new' });
     expect(entry.claimed_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     const md = calls.updates[0].payload.metadata;
@@ -103,8 +117,9 @@ describe('TS-2 stampClaim', () => {
     const full = Array.from({ length: CLAIM_HISTORY_CAP }, (_, i) => ({
       session_id: `s${i}`, claimed_at: '2026-06-01T00:00:00Z'
     }));
-    const { client, calls } = mockSupabase({ id: SD_ID, metadata: { claim_history: full } });
-    await stampClaim(client, SD_ID, 'sess-21');
+    const row = { id: SD_ID, sd_key: SD_ID, metadata: { claim_history: full } };
+    const { client, calls } = mockSupabase(row);
+    await stampClaim(client, SD_ID, 'sess-21', undefined, makeMergeFn(row, calls));
     const md = calls.updates[0].payload.metadata;
     expect(md.claim_history).toHaveLength(CLAIM_HISTORY_CAP);
     expect(md.claim_history[CLAIM_HISTORY_CAP - 1].session_id).toBe('sess-21');
@@ -112,8 +127,9 @@ describe('TS-2 stampClaim', () => {
   });
 
   it('handles null metadata (greenfield row)', async () => {
-    const { client, calls } = mockSupabase({ id: SD_ID, metadata: null });
-    const entry = await stampClaim(client, SD_ID, 'sess-a');
+    const row = { id: SD_ID, sd_key: SD_ID, metadata: null };
+    const { client, calls } = mockSupabase(row);
+    const entry = await stampClaim(client, SD_ID, 'sess-a', undefined, makeMergeFn(row, calls));
     expect(entry).not.toBeNull();
     expect(calls.updates[0].payload.metadata.claim_history).toHaveLength(1);
   });
@@ -128,9 +144,11 @@ describe('TS-3 fail-soft', () => {
   });
 
   it('returns null (not throw) on write error', async () => {
-    const { client } = mockSupabase({ id: 'x', metadata: {} }, { writeError: { message: 'boom' } });
-    await expect(stampClaim(client, 'SD-X', 's')).resolves.toBeNull();
-    await expect(stampCompletion(client, 'SD-X', 's')).resolves.toBeNull();
+    const row = { id: 'x', sd_key: 'SD-X', metadata: {} };
+    const { client, calls } = mockSupabase(row, { writeError: { message: 'boom' } });
+    const failingMerge = makeMergeFn(row, calls, { fail: true });
+    await expect(stampClaim(client, 'SD-X', 's', undefined, failingMerge)).resolves.toBeNull();
+    await expect(stampCompletion(client, 'SD-X', 's', failingMerge)).resolves.toBeNull();
   });
 
   it('returns null on missing args / throwing client', async () => {
@@ -144,8 +162,9 @@ describe('TS-3 fail-soft', () => {
 // ---------- TS-4: completion stamp + ordering pin ----------
 describe('TS-4 stampCompletion + executor ordering', () => {
   it('stamps completed_by_session + completed_stamp_at, preserving metadata', async () => {
-    const { client, calls } = mockSupabase({ id: 'x', metadata: { keep: 1 } });
-    const res = await stampCompletion(client, 'x', 'sess-done');
+    const row = { id: 'x', sd_key: 'x', metadata: { keep: 1 } };
+    const { client, calls } = mockSupabase(row);
+    const res = await stampCompletion(client, 'x', 'sess-done', makeMergeFn(row, calls));
     expect(res.completed_by_session).toBe('sess-done');
     const md = calls.updates[0].payload.metadata;
     expect(md.keep).toBe(1);

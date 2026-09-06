@@ -260,9 +260,26 @@ async function main() {
   }
 }
 
+/**
+ * QF-20260903-834 / FR-4 (SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001): how far back counts
+ * as "recent" for a fulfillment to prove the consumer is still alive. worker_spawn_requests.
+ * expires_at defaults to NOW() + 1 hour (database/migrations/20260426_worker_spawn_requests.sql),
+ * so a live consumer fulfills requests on that order of magnitude; 24h gives a full day of
+ * quiet before treating silence as suspicious, while staying far short of the 12.7-DAY silence
+ * QF-834 measured as unambiguously dead.
+ */
+const RECENT_FULFILLMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 // Export internal helpers for unit testing.
 /**
  * SD-LEO-INFRA-COORDINATOR-REVIVE-NEVER-001 (FR-1, FR-2).
+ * WINDOWED per QF-20260903-834 (SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-4): the
+ * original all-history `everFulfilled === 0` predicate could never detect a queue that
+ * fulfilled requests once, long ago, and has been silently dead ever since — exactly the
+ * measured case (5 fulfillments in one 2026-08-22 burst, then 12.7 days of nothing while 5
+ * pending rows sat past their own expires_at). QF-20260829-649's own ticket specified checking
+ * whether ANY request has fulfilled WITHIN A RECENT WINDOW, or whether the oldest pending row
+ * has passed its expires_at — neither leg was actually implemented; this closes both.
  *
  * Read the queue's own history so the CALLER can tell a live queue from a dead one.
  * Everything here is DERIVED at call time (TR-3) — never hardcoded — so the warning
@@ -274,31 +291,50 @@ async function main() {
  * at 1000 rows, which would silently UNDER-REPORT the stuck population — the same
  * blind-measurement class this SD is about.
  *
- * @returns {Promise<{total:number, pending:number, everFulfilled:number,
- *                    oldestPendingAt:string|null, neverConsumed:boolean}|null>}
+ * @returns {Promise<{total:number, pending:number, everFulfilled:number, recentlyFulfilled:number,
+ *                    oldestPendingAt:string|null, oldestPendingExpired:boolean, neverConsumed:boolean}|null>}
  */
 async function assessQueueHealth(supabase) {
   try {
-    const head = { count: 'exact', head: true };
-    const [{ count: total }, { count: pending }, { count: everFulfilled }] = await Promise.all([
-      supabase.from('worker_spawn_requests').select('*', head),
-      supabase.from('worker_spawn_requests').select('*', head).eq('status', 'pending'),
-      supabase.from('worker_spawn_requests').select('*', head).not('fulfilled_at', 'is', null),
+    const nowMs = Date.now();
+    const recentSinceIso = new Date(nowMs - RECENT_FULFILLMENT_WINDOW_MS).toISOString();
+    // count-truncation-diff-lint: the { count: 'exact', head: true } object is inlined at each
+    // call site (not hoisted to a shared `head` const) so the head-count intent is visible as
+    // literal text on every .select() line, not hidden behind a variable the lint's textual
+    // classifier cannot resolve -- these are HEAD requests (no rows returned), never truncatable.
+    const [{ count: total }, { count: pending }, { count: everFulfilled }, { count: recentlyFulfilled }] = await Promise.all([
+      supabase.from('worker_spawn_requests').select('*', { count: 'exact', head: true }),
+      supabase.from('worker_spawn_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('worker_spawn_requests').select('*', { count: 'exact', head: true }).not('fulfilled_at', 'is', null),
+      supabase.from('worker_spawn_requests').select('*', { count: 'exact', head: true }).gte('fulfilled_at', recentSinceIso),
     ]);
     const { data: oldest } = await supabase
       .from('worker_spawn_requests')
-      .select('requested_at')
+      .select('requested_at, expires_at')
       .eq('status', 'pending')
       .order('requested_at', { ascending: true })
       .limit(1);
+
+    const oldestRow = oldest && oldest[0] ? oldest[0] : null;
+    const oldestExpiresAt = oldestRow ? Date.parse(oldestRow.expires_at) : NaN;
+    // Fail-safe: an unreadable/absent expiry is NOT treated as expired -- mirrors
+    // isExpiredPendingRow's own fail-safe convention above (a TTL we cannot read must
+    // never be the reason we declare the actuator dead).
+    const oldestPendingExpired = oldestRow != null && Number.isFinite(oldestExpiresAt) && oldestExpiresAt <= nowMs;
+    const hasRecentFulfillment = (recentlyFulfilled ?? 0) > 0;
 
     return {
       total: total ?? 0,
       pending: pending ?? 0,
       everFulfilled: everFulfilled ?? 0,
-      oldestPendingAt: oldest && oldest[0] ? oldest[0].requested_at : null,
-      // The whole signal: has this queue EVER delivered? Derived, not asserted.
-      neverConsumed: (total ?? 0) > 0 && (everFulfilled ?? 0) === 0,
+      recentlyFulfilled: recentlyFulfilled ?? 0,
+      oldestPendingAt: oldestRow ? oldestRow.requested_at : null,
+      oldestPendingExpired,
+      // FAIL LOUD only when there IS a pending backlog, no fulfillment has landed within the
+      // recent window, AND the oldest pending row has already passed its own TTL -- proving
+      // the backlog isn't just early-and-waiting. A queue with no pending rows at all has
+      // nothing currently stuck, so it is never flagged dead regardless of fulfillment recency.
+      neverConsumed: (total ?? 0) > 0 && (pending ?? 0) > 0 && !hasRecentFulfillment && oldestPendingExpired,
     };
   } catch {
     // Fail-soft: an unreadable queue must not break revive. Absent health is reported
@@ -331,10 +367,17 @@ function formatQueueWarning(health) {
   const ageDays = health.oldestPendingAt
     ? ((Date.now() - new Date(health.oldestPendingAt).getTime()) / 86400000).toFixed(1)
     : null;
+  // QF-20260903-834 FR-4: `everFulfilled` may be > 0 now that neverConsumed is windowed --
+  // a queue that delivered once, long ago, and has gone silent since is exactly as dead as
+  // one that has never delivered at all, but the message must say which is true.
+  const everFulfilled = health.everFulfilled ?? 0;
+  const fulfillmentLine = everFulfilled > 0
+    ? `  worker_spawn_requests has NOT fulfilled a request recently: ${everFulfilled} of ${health.total} rows have fulfilled_at set historically, but none within the recent window.`
+    : `  worker_spawn_requests has NEVER fulfilled a request: 0 of ${health.total} rows have fulfilled_at set.`;
   const lines = [
     '',
     '  *** THIS REQUEST MAY NEVER BE CONSUMED ***',
-    `  worker_spawn_requests has NEVER fulfilled a request: 0 of ${health.total} rows have fulfilled_at set.`,
+    fulfillmentLine,
     `  pending: ${health.pending} of ${health.total}` + (ageDays ? `, oldest waiting ${ageDays} days.` : '.'),
     '  The row inserted above is real; whether anything reads it is NOT established by this command.',
     '  WHY: scripts/fleet/worker-spawn-executor.cjs is OPERATOR-GATED (its header: "Stage 2, do NOT',

@@ -103,8 +103,29 @@ export function classifyChain(win) {
   return 'needs-review';
 }
 
-function loadOverrides() {
+export function loadOverrides() {
   try { return JSON.parse(fs.readFileSync(OVERRIDES_PATH, 'utf8')); } catch { return {}; }
+}
+
+/**
+ * Resolve a site's final classification against a loaded overrides table. Exported
+ * (SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E) so count-truncation-diff-lint.mjs's diff-scoped BLOCKING
+ * path can honor scripts/audit/count-truncation-overrides.json too -- its own error message
+ * already promised this escape hatch ("Genuine exceptions: add a noted entry to ...json"), but
+ * scanFile() below previously called classifyChain() directly and never consulted overrides at
+ * all, silently breaking that promise for any newly-touched line. One resolver, not two.
+ *
+ * An override without a note is ignored (falls back to auto): a note-less override could
+ * silently drop a needs-review site from the checked-in ledger with no trace. An override with a
+ * `match` content-anchor is ignored when the line no longer contains it — line-number keys drift
+ * as files are edited, and a drifted override must fail SAFE (back to auto-classification), never
+ * re-target a different site.
+ */
+export function resolveClassification(overrides, key, line, auto) {
+  const raw = overrides[key];
+  const anchored = raw && (!raw.match || line.includes(raw.match));
+  const ov = raw && raw.note && anchored ? raw : undefined;
+  return { classification: ov?.classification || auto, exemptionNote: ov?.note };
 }
 
 export function buildInventory({ root = ROOT } = {}) {
@@ -121,25 +142,18 @@ export function buildInventory({ root = ROOT } = {}) {
         if (!/\.select\s*\(/.test(line) || /\/\/|\/\*|^\s*\*/.test(line.slice(0, line.indexOf('.select')))) return;
         const key = `${rel}:${i + 1}`;
         const auto = nonLive ? 'non-live-path' : classifyChain(chainWindow(lines, i));
-        // An override without a note is ignored (falls back to auto): a note-less override
-        // could silently drop a needs-review site from the checked-in ledger with no trace.
-        // An override with a `match` content-anchor is ignored when the line no longer
-        // contains it — line-number keys drift as files are edited, and a drifted override
-        // must fail SAFE (back to auto-classification), never re-target a different site.
         // KNOWN LIMITATION: a cosmetically reformatted overridden line (e.g. re-wrapped, quote
         // style changed) that no longer contains the exact `match` substring falls back to
         // auto-classification with NO distinct signal from "the exemption's justification no
         // longer applies because the code genuinely changed" — both look identical (the site
         // simply re-appears in needs-review), so a reviewer cannot tell drift from regression
         // from this output alone.
-        const raw = overrides[key];
-        const anchored = raw && (!raw.match || line.includes(raw.match));
-        const ov = raw && raw.note && anchored ? raw : undefined;
+        const { classification, exemptionNote } = resolveClassification(overrides, key, line, auto);
         sites.push({
           site: key,
-          classification: ov?.classification || auto,
+          classification,
           auto_classification: auto,
-          ...(ov?.note ? { exemption_note: ov.note } : {}),
+          ...(exemptionNote ? { exemption_note: exemptionNote } : {}),
           snippet: line.trim().slice(0, 160),
         });
       });

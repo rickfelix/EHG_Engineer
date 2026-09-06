@@ -34,6 +34,12 @@ on:
       - 'app/**'
       - 'database/schema-reference-snapshot.json'
       - 'scripts/lint/schema-reference-*'
+      # SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-3): schema-lint-exit.mjs and
+      # schema-lint-escape-budget.mjs do NOT match the schema-reference-* glob above, so without
+      # this line a PR editing the exit decision or the escape-budget check itself would not run
+      # either of them — the two controls most able to disable this gate would be the two it never
+      # saw change.
+      - 'scripts/lint/schema-lint-*'
       - '.github/workflows/schema-reference-lint.yml'
 
 concurrency:
@@ -73,6 +79,37 @@ jobs:
             echo ""
             echo '```'
             cat lint-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $exit_code
+
+      # SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-3): freeze both escape budgets.
+      #
+      # The lint has exactly two escape hatches — the allowlist and the inline
+      # schema-lint-disable-line pragma — and in the final "0 violations" line, a finding SILENCED
+      # by one is indistinguishable from a finding FIXED. Once the whole-tree count reaches zero and
+      # --all becomes blocking (FR-6), the cheapest route past a red build stops being "repair the
+      # reference" and becomes "add one allowlist entry". This step is what notices that.
+      #
+      # Runs with `if: always()` so a red lint above does not skip the budget check — the run where
+      # someone is most tempted to widen an escape is precisely the run where the lint just failed.
+      # Both baselines are recomputed from the merge base at run time, never read from a committed
+      # literal, because a stored count goes stale silently (this SD watched its own pragma baseline
+      # move during LEAD when an unrelated script merely quoted the pragma string).
+      - name: Escape-budget freeze (allowlist + inline pragma)
+        if: always()
+        env:
+          SCHEMA_LINT_BASE: origin/${{ github.base_ref }}
+        run: |
+          node scripts/lint/schema-lint-escape-budget.mjs | tee budget-output.txt
+          exit_code=${PIPESTATUS[0]}
+          {
+            echo "## Schema Lint Escape Budget"
+            echo ""
+            echo "A finding silenced by an escape is not a finding fixed."
+            echo ""
+            echo '```'
+            cat budget-output.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit $exit_code

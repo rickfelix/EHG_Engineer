@@ -55,6 +55,18 @@ tags: [database]
 | application_sync_history | 1 | lib/sync/sync-manager.js | database/schema/002_multi_app_schema.sql |
 | ci_cd_monitoring_config | 1 | api/webhooks/github-ci-status.js | database/migrations/leo-ci-cd-integration.sql |
 
+## RESOLVED (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-A, 2026-09-06)
+
+4 objects from the DEFERRED table above are now resolved as RETIRE -- their consumers were
+deleted, not their schema applied, since none had any live functional dependency:
+
+- ci_cd_failure_resolutions, ci_cd_pipeline_status, ci_cd_monitoring_config -- api/webhooks/github-ci-status.js
+  was deliberately unmounted (server/index.js) and is now deleted entirely, along with the
+  never-applied database/migrations/leo-ci-cd-integration.sql.
+- product_requirements_v3 -- src/agents/story-bootstrap.js's v3-dependent code path is retired
+  (no-ops with a log message instead of querying a phantom table); the never-applied
+  database/schema/010_ehg_backlog_schema.sql v3 definition is left as historical record.
+
 ## RETIRE-CANDIDATES — zero live references (consumers archived/dead; SQL files are legacy designs)
 
 - lifecycle_stage_config (database/backups/20260530_childF_legacy_stage_tables_backup.sql)

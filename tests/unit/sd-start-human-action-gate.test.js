@@ -67,6 +67,26 @@ describe('QF-20260703-295: sd-start.js HELD-SD (requires_human_action) claim gat
     expect(src.slice(idx, idx + 600)).toMatch(/enforceHumanActionGate\(sd, effectiveId\)/);
   });
 
+  it('QF-20260903-179: the existing claimant re-attaching to its own HELD sd is exempt from the gate', () => {
+    const start = src.indexOf('function enforceHumanActionGate');
+    const body = src.slice(start, start + 1200);
+    // Must check claiming_session_id against CLAUDE_SESSION_ID and return BEFORE the
+    // classifier runs -- an owner re-attaching must never be refused. Anchor the exemption
+    // strictly ABOVE the classifier call so a future edit can't reorder it after the fence.
+    const exemptionIdx = body.indexOf('sd?.claiming_session_id === sessionId');
+    const classifierIdx = body.indexOf('classifyAllDispatchIneligibility(sd || {})');
+    expect(exemptionIdx).toBeGreaterThan(-1);
+    expect(classifierIdx).toBeGreaterThan(-1);
+    expect(exemptionIdx).toBeLessThan(classifierIdx);
+    expect(body).toMatch(/process\.env\.CLAUDE_SESSION_ID/);
+  });
+
+  it('QF-20260903-179: getSDDetails selects claiming_session_id, so the exemption above can ever match', () => {
+    const start = src.indexOf('async function getSDDetails');
+    const body = src.slice(start, start + 1000);
+    expect(body).toMatch(/\.select\([^)]*claiming_session_id[^)]*\)/);
+  });
+
   it('regression pin: a HELD sd that is ALSO an orchestrator parent must still be refused', async () => {
     // Guards the exact gap the review-gate found: the FIRST-MATCH classifier returns
     // 'orchestrator_parent' (checked first), NOT 'human_action_required' — so a gate

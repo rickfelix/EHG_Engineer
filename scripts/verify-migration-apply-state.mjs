@@ -25,6 +25,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
+import { MIGRATION_ROOTS } from '../lib/migration-audit-reader.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(__dirname, '..', 'database', 'migrations');
@@ -171,7 +172,12 @@ export const ARTIFACT_RE = /(_DOWN|_rollback|_DEFERRED)\.sql$/i;
 // chairman-gated migration invisible to both this report and the downstream
 // CHAIRMAN_APPLY_VERIFICATION gate for days. Scanning it here does not affect what
 // auto-applies; classifyFiles() (below) also gives it a distinct CEREMONY_PENDING status.
-export const DEFAULT_EXTRA_ROOTS = ['database/functions', 'database/manual-updates', 'supabase/migrations', 'database/chairman-gated'];
+// SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-B: derived from the CANONICAL root list in
+// lib/migration-audit-reader.js rather than repeated as a literal. The verifier's scan set
+// and the reader's comparison key must agree — if a file is scanned under a root the key
+// cannot anchor on, its applied state is unknowable by construction. PRIMARY_ROOT is
+// excluded because it is the scanner's default and these are the EXTRA roots.
+export const DEFAULT_EXTRA_ROOTS = MIGRATION_ROOTS.filter((r) => r !== 'database/migrations');
 
 /** Repo-relative-id prefix identifying a chairman-gated migration (FR-2). */
 const CHAIRMAN_GATED_PREFIX = 'database/chairman-gated/';
@@ -798,7 +804,12 @@ async function main() {
 
   // FR-3: the machine-checkable definition of done. 117 of the 126 gap files sit behind
   // RETIRED_BEFORE and can NEVER turn the gate red, so "every file has a decision" is
-  // invisible to a PASS/GAPS exit for 93% of the corpus. This count is computed over ALL
+  // invisible to a PASS/GAPS exit for 92.9% OF THE GAP SET (117 of 126) — NOT of the
+  // corpus, which is the wording this comment carried until 2026-09-03 and which it
+  // inherited from migration-disposition-ledger.mjs. Against the CORPUS the cutoff
+  // exempts 77.79% (1149 of 1477: 1023 dated before it plus 126 undated), leaving 328
+  // gated. Quoting the gap-set ratio against the corpus overstates the exemption by
+  // ~15 points. Corrected by SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-B. This count is computed over ALL
   // gaps — recent and legacy alike — so completion is provable independently of the marker.
   // The no-module fallback must report the SAME shape as the real path — deduplicated, sorted,
   // and free of empty basenames — or the headline count silently changes meaning depending on
@@ -821,7 +832,13 @@ async function main() {
   };
 
   if (asJson) {
-    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, dispositions, cutoff, recentOnly, droppedLater, files: results }, null, 2));
+    // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D (Option C): excluded[] was already computed above
+    // (line 683) and printed to stderr (line 688-690) but never reached the --json payload,
+    // leaving basename-colliding files invisible to any machine reader. Promoted here as a
+    // first-class array, reusing the SAME {id, twin, verdict} shape the stderr print already
+    // uses -- no new classification logic. See scripts/migration-gap-summary.mjs for the
+    // genuine downstream consumer (not merely a cosmetic payload addition).
+    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, dispositions, excluded, cutoff, recentOnly, droppedLater, files: results }, null, 2));
   } else {
     console.log('MIGRATION APPLY-STATE REPORT (advisory, read-only)');
     console.log(`  ordering: legacy non-dated files first (lexical), then date-prefixed (chronological)`);

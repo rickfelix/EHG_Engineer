@@ -43,15 +43,38 @@
  * The version check is required because the input hash says nothing about
  * whether the VERIFIER'S OWN LOGIC changed since that FAIL was produced — an
  * input-only key would keep replaying a FAIL after the gate itself was fixed.
- * PASS reuse is unaffected and keeps its existing input-only key (a fixed
- * verifier only ever makes PASS more likely, so reusing an old PASS stays
- * safe). Bump the version here whenever a FAIL_REPLAY_GATES gate's rule set
- * changes.
+ * Bump the version here whenever a registered gate's rule set changes.
+ *
+ * EXECUTION-ID SCOPING (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E, coordinator
+ * ruling on signal bc247e78, basis: ratification 6c263823 — "a reused cached
+ * verdict is gate evidence and must carry its run identifier"): both PASS
+ * reuse and FAIL-REPLAY now ALSO require prior.execution_id to match the
+ * current handoff.js execute() invocation's own execution id (minted once
+ * per invocation, threaded via context._verdictCache.executionId). A cached
+ * row with no execution_id (pre-this-SD schema) never matches — absent
+ * provenance is a miss, not a permissive default. This closes the gap where
+ * a PASS/FAIL computed by ONE execution could be silently presented as
+ * evidence for a DIFFERENT one. In-process retry-loop reuse (BaseExecutor
+ * attempt 0..N within a single execute() call) is UNAFFECTED — every attempt
+ * in that loop shares the same minted execution id. Cross-execution reuse
+ * (loadPriorGateResults, reusing a row from an earlier, separate handoff.js
+ * invocation — the case the module's original "177 rejections in 4 days"
+ * motivation actually measured) is the path this forfeits: MEASURED via the
+ * GATE_VERDICT_CACHE coordination_events telemetry, 1342 PASS-reuse hits
+ * were recorded across 444 telemetry rows since 2026-06-11, and because a
+ * rejected-then-retried handoff is by definition two separate execute()
+ * invocations, close to that full population is cross-execution and is
+ * expected to stop hitting under this change — the disclosed cost of the
+ * evidence-integrity guarantee ratification 6c263823 requires.
+ *
+ * CODE_VERSION now also gates PASS reuse (not just FAIL-REPLAY), for every
+ * registered gate, not only the FAIL_REPLAY_GATES set — GATE_CODE_VERSION
+ * below carries an entry for each of the four currently-registered gates.
  */
 
 import crypto from 'node:crypto';
 
-export const GATE_RESULTS_VERSION_HASHED = 2;
+export const GATE_RESULTS_VERSION_HASHED = 3;
 
 /** Union of every SD field evaluated by the registered pure gates
  * (sd-quality-scoring.js JSONB_FIELDS + description/scope/sd_type +
@@ -98,8 +121,17 @@ export const GATE_INPUT_EXTRACTORS = {
   GATE_MECHANISM_CLAIM_VERIFIER: extractMechanismClaimInputs,
 };
 
-/** Per-gate code-version stamp, required for FAIL-REPLAY (see module docblock). */
+/**
+ * Per-gate code-version stamp. Originally required for FAIL-REPLAY only; now gates PASS
+ * reuse too (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E), so every registered gate carries one —
+ * each starts at 1, its current rule set's baseline. Bump whenever that gate's logic changes.
+ */
 export const GATE_CODE_VERSION = {
+  GATE_SD_METRICS_SUFFICIENCY: 1,
+  GATE_SD_QUALITY: 1,
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-A: rule set changed -- 100%-template success_criteria now
+  // blocks (pass conditional, required:true) instead of the prior always-pass/advisory shape.
+  GATE_PLACEHOLDER_CONTENT_DETECTION: 2,
   GATE_MECHANISM_CLAIM_VERIFIER: 1,
 };
 
@@ -135,7 +167,7 @@ export function isCacheAllowed({ noCache, handoffType, env = process.env }) {
  *
  * @param {string} gateName
  * @param {object} context — validation context (ctx.sd etc.)
- * @param {object|null} cacheCfg — context._verdictCache: { enabled, prior: {gateName: priorResult} }
+ * @param {object|null} cacheCfg — context._verdictCache: { enabled, prior: {gateName: priorResult}, executionId }
  * @returns {{ hit: boolean, priorResult?: object, inputHash: string|null }}
  */
 export function probeVerdictCache(gateName, context, cacheCfg) {
@@ -158,25 +190,38 @@ export function probeVerdictCache(gateName, context, cacheCfg) {
   // Never reuse skipped/wait shapes, passed or not.
   if (prior.wait === true || prior.skipReason) return { hit: false, inputHash };
 
+  // EXECUTION-ID SCOPING (see module docblock): a cached verdict is only reusable by the SAME
+  // execution that produced it. Absent provenance on either side is a miss, not a permissive
+  // default — this is what turns "byte-identical inputs" into "byte-identical inputs from a run
+  // that can vouch for itself", per ratification 6c263823.
+  if (!cacheCfg.executionId || !prior.execution_id || prior.execution_id !== cacheCfg.executionId) {
+    return { hit: false, inputHash };
+  }
+
+  // CODE_VERSION now gates PASS reuse too, for every registered gate (previously FAIL-REPLAY
+  // only) — a fixed/changed verifier must re-run at least once before its PASS is trusted again.
+  const codeVersion = GATE_CODE_VERSION[gateName];
+  if (codeVersion != null && prior.code_version !== codeVersion) {
+    return { hit: false, inputHash };
+  }
+
   if (prior.passed === true) {
     return { hit: true, mode: 'pass_reuse', priorResult: prior, inputHash };
   }
 
-  // FAIL-REPLAY: only for gates opted in AND whose code hasn't changed since
-  // the cached FAIL was produced (see GATE_CODE_VERSION / module docblock).
+  // FAIL-REPLAY: only for gates opted in (execution-id + code_version already checked above,
+  // identically to the pass_reuse path).
   if (prior.passed === false && FAIL_REPLAY_GATES.has(gateName)) {
-    const codeVersion = GATE_CODE_VERSION[gateName];
-    if (codeVersion != null && prior.code_version === codeVersion) {
-      return { hit: true, mode: 'fail_replay', priorResult: prior, inputHash };
-    }
+    return { hit: true, mode: 'fail_replay', priorResult: prior, inputHash };
   }
 
   return { hit: false, inputHash };
 }
 
 /**
- * Load the most recent prior gate_results (version >= 2, i.e. hash-bearing)
- * for the same SD + handoff type from sd_phase_handoffs — any status:
+ * Load the most recent prior gate_results (version >= GATE_RESULTS_VERSION_HASHED, i.e.
+ * hash-bearing AND execution-id/code-version-bearing) for the same SD + handoff type from
+ * sd_phase_handoffs — any status:
  * rejected rows are the whole point (retries follow rejections), and
  * recordFailure persists per-gate results as of this SD.
  *

@@ -24,13 +24,24 @@ const row = (id, mins, sender) => ({
 /** Same query-builder double shape as outstanding-signals.test.js, but records eq() presence/absence. */
 function sbDouble(rows) {
   const calls = { eq: [] };
+  // QF-20260906-162 (count-truncation-diff-lint): the receipt-existence-check query now
+  // chains an explicit .limit(20) after .in() — track whether this traversal saw .in() so
+  // the shared .limit() resolves empty receipts instead of the main query's rows.
+  let sawIn = false;
   const builder = {
     select() { return builder; },
     eq(col, val) { calls.eq.push([col, val]); return builder; },
     not() { return builder; },
     is() { return builder; },
     order() { return builder; },
-    limit(n) { return Promise.resolve({ data: rows.slice(0, n), error: null, count: rows.length }); },
+    // QF-20260906-162: the SEPARATE receipt-existence-check query terminates on .in()+.limit(),
+    // never .eq(sender_session,...) — resolving empty here means these pre-existing tests, which
+    // don't care about RECEIVED, are unaffected by it.
+    in() { sawIn = true; return builder; },
+    limit(n) {
+      if (sawIn) { sawIn = false; return Promise.resolve({ data: [], error: null }); }
+      return Promise.resolve({ data: rows.slice(0, n), error: null, count: rows.length });
+    },
   };
   return { client: { from() { return builder; } }, calls };
 }
@@ -39,7 +50,10 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-2: fetchAllOutstandingSignals (coo
   it('does NOT filter by sender_session — genuinely coordinator-wide, unlike the worker-self variant', async () => {
     const { client, calls } = sbDouble([row('a', 40, 'sess-1'), row('b', 10, 'sess-2')]);
     const result = await fetchAllOutstandingSignals(client, { nowMs: NOW });
-    expect(calls.eq).toHaveLength(0); // no sender_session filter applied
+    // QF-20260906-162: the RECEIVED existence-check adds its own .eq('payload->>kind', ...)
+    // call (an orthogonal lookup, not a sender filter) — assert no SENDER_SESSION filter was
+    // applied, rather than asserting .eq() was never called at all.
+    expect(calls.eq.map((c) => c[0])).not.toContain('sender_session');
     expect(result.count).toBe(2);
     // MUTATION: reintroduce an unconditional .eq('sender_session', ...) -> this fails, proving
     // the coordinator-wide path is genuinely different from the worker-self path, not aliased to it.
@@ -48,7 +62,9 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-2: fetchAllOutstandingSignals (coo
   it('the worker-self variant still applies the sender_session filter (no regression from the refactor)', async () => {
     const { client, calls } = sbDouble([row('a', 40, 'sess-1')]);
     await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
-    expect(calls.eq).toEqual([['sender_session', 'sess-1']]);
+    // QF-20260906-162: the sender_session filter is still applied on the MAIN query (first
+    // .eq() call); the second is the orthogonal RECEIVED existence-check's kind filter.
+    expect(calls.eq[0]).toEqual(['sender_session', 'sess-1']);
   });
 
   it('is oldest-first, matching the worker-self ordering guarantee', async () => {

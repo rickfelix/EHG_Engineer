@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   runShipReviewFindingsPopulator,
   fetchLatestMergedPR,
@@ -10,6 +10,16 @@ function makeSupabase(insertImpl = async () => ({ error: null })) {
       return {
         insert(row) {
           return insertImpl(table, row);
+        },
+        // QF-20260903-385: probeRepoColumnExists awaits a .select() on this table to decide
+        // whether the chairman-gated `repo` column exists yet. Returning a 42703 is the honest
+        // stub for "not applied", and it keeps the insert path reachable in a unit test.
+        select() {
+          return {
+            async limit() {
+              return { error: { code: '42703', message: 'column "repo" does not exist' } };
+            },
+          };
         },
       };
     },
@@ -61,10 +71,43 @@ describe('ship-review-findings-populator', () => {
     expect(result.detail).toBe('no sd_key');
   });
 
-  it('skips when SD has no branch', async () => {
-    const result = await runShipReviewFindingsPopulator({ sd_key: 'SD-X-001' }, makeSupabase());
-    expect(result.outcome).toBe('skip');
-    expect(result.detail).toMatch(/no branch/);
+  // QF-20260903-385: this case previously asserted outcome 'skip' for an SD with no branch. That
+  // expectation encoded the DEFECT: strategic_directives_v2 has no branch columns at all and
+  // metadata.branch was absent on 200 of 200 recently completed SDs, so the skip fired every time
+  // and the hook never wrote a reconciliation row in its life. The assertion is updated because
+  // the contract changed deliberately — not to make a red test go green.
+  it('derives candidate branches from sd_key when the SD carries no branch', async () => {
+    const probed = [];
+    const fetcher = (_repo, branch) => { probed.push(branch); return null; };
+    const result = await runShipReviewFindingsPopulator({ sd_key: 'SD-X-001' }, makeSupabase(), { fetcher });
+
+    expect(result.outcome).toBe('no_pr_found');
+    // It must actually PROBE rather than give up: the conventional branch name is tried.
+    expect(probed).toContain('feat/SD-X-001');
+    expect(result.detail).toMatch(/feat\/SD-X-001/);
+  });
+
+  it('stores the merged PR headRefName, not the candidate it guessed with', async () => {
+    const inserts = [];
+    const supabase = makeSupabase(async (table, row) => { inserts.push(row); return { error: null }; });
+    // Real shape: the SD key is …-B but the merged branch carried a suffix (…-B-fr6).
+    const fetcher = (_repo, branch) =>
+      (branch === 'feat/SD-X-001'
+        ? { pr_number: 8127, mergedAt: '2026-09-03T17:21:03Z', headRefName: 'feat/SD-X-001-fr6' }
+        : null);
+
+    const result = await runShipReviewFindingsPopulator({ sd_key: 'SD-X-001' }, supabase, { fetcher });
+
+    expect(result.outcome).toBe('inserted');
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].branch).toBe('feat/SD-X-001-fr6');
+    expect(inserts[0].pr_number).toBe(8127);
+    // Reconciliation rows must stay distinguishable from real ship reviews, and must NOT be able
+    // to satisfy SHIP_REVIEW_FINDINGS_PROOF, which filters on verdict === 'pass'.
+    expect(inserts[0].verdict).toBe('backfill_canonical_join');
+    expect(inserts[0].review_tier).toBe('canonical_join');
+    expect(inserts[0].finding_count).toBe(0);
+    expect(inserts[0].verdict).not.toBe('pass');
   });
 
   it('never throws even when supabase insert errors', async () => {

@@ -15,10 +15,10 @@ import { handleInboundSmsReply } from '../../../../lib/chairman/sms-bridge.js';
 function wellFormedDecision(overrides = {}) {
   return {
     type: 'decision',
-    body: 'Approve the deploy? Reply A or B. Reply DETAILS for the rationale.',
-    options: [{ label: 'A' }, { label: 'B' }],
+    body: 'Approve the deploy? Reply 1 or 2. Reply DETAILS for the rationale.',
+    options: [{ label: 'ship now' }, { label: 'hold until morning' }],
     decisionCount: 1,
-    replyInstruction: 'Reply A or B (or DETAILS)',
+    replyInstruction: 'Reply 1 or 2 (or DETAILS)',
     replyId: 'dec-c-1',
     noReplyConsequence: 'no reply by 5pm ET -> I hold (reversible)',
     ...overrides,
@@ -194,7 +194,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     expect(silentConsole.error).toHaveBeenCalled();
   });
 
-  it('TS-3: the round trip starts from sendChairmanSMS itself — a bare letter reply resolves against what the guard staged', async () => {
+  it('TS-3: the round trip starts from sendChairmanSMS itself — a bare numbered reply resolves against what the guard staged (QF-20260903-523: a letter reply no longer matches by construction)', async () => {
     const sb = makeFakeSupabase({ chairman_decisions: [{ id: 'dec-3', status: 'pending', brief_data: {} }] });
     const sender = { send: vi.fn(async (message) => ({ sid: 'SM-3', recipientPhoneUsed: message.recipientPhone })) };
     const res = await sendChairmanSMS(
@@ -205,7 +205,7 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     expect(res.sent).toBe(true);
 
     const reply = await handleInboundSmsReply(sb, {
-      from: '+15559998888', to: '+15550000000', body: 'B', messageSid: 'SM-in-3', signatureValid: true,
+      from: '+15559998888', to: '+15550000000', body: '2', messageSid: 'SM-in-3', signatureValid: true,
     });
     expect(reply.outcome).toBe('answered');
     expect(reply.resolved).toBe(true);
@@ -346,8 +346,8 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
       wellFormedDecision({
         decisionId: null,
         body: 'Approve the budget change?',
-        options: [{ label: 'A: approve the change' }, { label: 'B: reject the change' }, { label: 'C: defer to next review' }],
-        replyInstruction: 'Reply with the option letter, or DETAILS for more context.',
+        options: [{ label: 'approve the change' }, { label: 'reject the change' }, { label: 'defer to next review' }],
+        replyInstruction: 'Reply 1, 2 or 3, or DETAILS for more context.',
         noReplyConsequence: 'No reply by 5pm ET -> Adam proceeds with the recommendation.',
       }),
       DAYTIME,
@@ -356,10 +356,10 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
     expect(res.sent).toBe(true);
     const sentBody = sender.send.mock.calls[0][0].body;
     expect(sentBody).toContain('Approve the budget change?');
-    expect(sentBody).toContain('A: approve the change');
-    expect(sentBody).toContain('B: reject the change');
-    expect(sentBody).toContain('C: defer to next review');
-    expect(sentBody).toContain('Reply with the option letter, or DETAILS for more context.');
+    expect(sentBody).toContain('approve the change');
+    expect(sentBody).toContain('reject the change');
+    expect(sentBody).toContain('defer to next review');
+    expect(sentBody).toContain('Reply 1, 2 or 3, or DETAILS for more context.');
     expect(sentBody).toContain('No reply by 5pm ET -> Adam proceeds with the recommendation.');
   });
 
@@ -373,8 +373,8 @@ describe('chairman-sms-gate sendChairmanSMS() — FR-3 decision staging guard', 
       wellFormedDecision({
         decisionId: null,
         body: 'Approve?',
-        options: [{ label: 'A: approve the change' }, { label: 'B: reject the change' }],
-        replyInstruction: 'Reply with the option letter, or DETAILS for more context.',
+        options: [{ label: 'approve the change' }, { label: 'reject the change' }],
+        replyInstruction: 'Reply 1 or 2, or DETAILS for more context.',
         noReplyConsequence: 'No reply by 5pm ET -> Adam proceeds with the recommendation.',
       }),
       { ...DAYTIME, maxLength: 40 },

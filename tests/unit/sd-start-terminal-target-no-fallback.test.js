@@ -56,7 +56,10 @@ describe('QF-20260704-825: TARGET_ALREADY_TERMINAL guard precedes auto-fallback'
   });
 
   it('getSDDetails selects completion_date/updated_at/updated_by so the exit message has real data', () => {
-    expect(src).toMatch(/select\('id, sd_key,[^']*completion_date, updated_at, updated_by'\)/);
+    // QF-20260903-179 added claiming_session_id after updated_by (for the human-action-gate
+    // owner exemption) -- match a prefix rather than pinning the exact trailing column so this
+    // assertion doesn't re-break on the next legitimate column addition.
+    expect(src).toMatch(/select\('id, sd_key,[^']*completion_date, updated_at, updated_by/);
   });
 
   it('a genuine claim conflict (owned by another active session) still reaches auto-fallback (regression guard)', () => {

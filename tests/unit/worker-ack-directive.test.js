@@ -51,6 +51,19 @@ describe('ackDirective (QF-20260724-556)', () => {
     expect(sb._updates[0].payload.actioned_by).toBe(WORKER_SESSION);
   });
 
+  // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001 / TS-11: proves the new
+  // periodic_liveness_owner_directive kind is genuinely ackable, not silently
+  // auto-read-and-dropped before this path ever sees it (the defect this SD's FR-1 exists to
+  // close -- confirmed dead-by-construction before the kind was registered in DIRECTIVE_KINDS).
+  it('acknowledges a periodic_liveness_owner_directive row (SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001)', async () => {
+    const row = { id: ROW_ID, payload: { kind: 'periodic_liveness_owner_directive', process_key: 'standard_loop:fleet-retro' }, target_session: WORKER_SESSION, acknowledged_at: null };
+    const sb = stubSupabase(row);
+    const result = await ackDirective(sb, ROW_ID, { sessionId: WORKER_SESSION });
+    expect(result.alreadyAcked).toBe(false);
+    expect(result.kind).toBe('periodic_liveness_owner_directive');
+    expect(sb._updates[0].payload.actioned_at).toBeTruthy();
+  });
+
   it('is idempotent — a second ack on an already-acked row is a no-op', async () => {
     const row = { id: ROW_ID, payload: { kind: 'coordinator_directive' }, target_session: WORKER_SESSION, acknowledged_at: '2026-01-01T00:00:00Z' };
     const sb = stubSupabase(row);

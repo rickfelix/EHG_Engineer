@@ -26,14 +26,24 @@ const RECONCILIATION_MIGRATION_PATHS = [
   path.join(REPO_ROOT, 'database/migrations/20260830_role_drain_sets_add_parent_completion.sql'),
   path.join(REPO_ROOT, 'database/migrations/20260831_role_drain_sets_add_adam_backpressure_exempt.sql'),
   path.join(REPO_ROOT, 'database/migrations/20260901_role_drain_sets_add_reaper_alerts.sql'),
+  // QF-20260903-281: the same six exempt kinds registered for coordinator/solomon/worker —
+  // 20260831 covered role='adam' only, leaving three roles unable to drain a correction.
+  path.join(REPO_ROOT, 'database/migrations/20260903_role_drain_sets_add_exempt_kinds_remaining_roles.sql'),
+  // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001: the new periodic_liveness_owner_directive
+  // DIRECTIVE_KINDS entry, registered for all four roles.
+  path.join(REPO_ROOT, 'database/migrations/20260905_role_drain_sets_add_periodic_liveness_owner_directive.sql'),
+  // QF-20260906-162: the new signal_receipt kind, joining BACKPRESSURE_EXEMPT_KINDS and so
+  // registered for all four roles (mirroring the six pre-existing exempt kinds' precedent).
+  path.join(REPO_ROOT, 'database/migrations/20260906_role_drain_sets_add_signal_receipt.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
   const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   afterEach(() => errorSpy.mockClear());
 
-  it('returns byte-identical results to DRAIN_SETS[role] for all 4 known roles when supabase=null', async () => {
-    for (const role of ['solomon', 'adam', 'coordinator', 'worker']) {
+  it('returns byte-identical results to DRAIN_SETS[role] for all 5 known roles when supabase=null', async () => {
+    // michael: SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A
+    for (const role of ['solomon', 'adam', 'coordinator', 'worker', 'michael']) {
       const result = await resolveRecognizedKinds({ supabase: null, role });
       expect(result).toEqual([...DRAIN_SETS[role]]);
     }
@@ -153,9 +163,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 80 (69 from the original migration DO-block ASSERT + 1 reconciliation: parent_completion, QF-20260830-280 + 6 reconciliation: adam backpressure-exempt kinds, QF-20260831-769 + 4 reconciliation: coordinator reaper alert kinds, SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-B)', () => {
+  it('total seed row count is exactly 106 (102 prior + 4 reconciliation: signal_receipt for all four roles, QF-20260906-162)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(80);
+    expect(matches.length).toBe(106);
   });
 });

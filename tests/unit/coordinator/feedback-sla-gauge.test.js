@@ -19,16 +19,17 @@ describe('computeBreaches (pure)', () => {
     expect(breaches).toEqual([{ category: 'coordinator_review', count: 1, oldestAgeDays: 10 }]);
   });
 
-  it('harness_backlog counts ALL severities, not just high/critical (SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 FR-3)', () => {
-    // Previously restricted to severityIn:['high','critical'], which left ~94% of the live
-    // backlog (medium/low/NULL severity) structurally invisible to breach alarming. Widened so
-    // the medium-severity row below now counts alongside the high-severity one.
+  it('harness_backlog is not an SLA category — no automated consumption route exists to meet a deadline (QF-20260903-333)', () => {
+    // Its only documented route is manual ([MODE: campaign] / `/leo audit`); the auto-refill
+    // promoter reads conversion_ledger, never this category, and hand-promoting from it is a
+    // documented anti-pattern (charter-audit-detectors.mjs). A declared 7-day SLA nothing
+    // automated ever met produced 2471 open rows, oldest 87d, against a 7-day breach alarm.
     const rows = [
       { category: 'harness_backlog', severity: 'medium', created_at: new Date(NOW - 30 * DAY_MS).toISOString() },
       { category: 'harness_backlog', severity: 'high', created_at: new Date(NOW - 8 * DAY_MS).toISOString() },
     ];
     const breaches = computeBreaches(rows, NOW);
-    expect(breaches).toEqual([{ category: 'harness_backlog', count: 2, oldestAgeDays: 30 }]);
+    expect(breaches).toEqual([]);
   });
 
   it('reports the oldest age and full count across multiple stale rows in one category', () => {

@@ -294,36 +294,15 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
   }
 
   // A2: Check for workflow implementation (10 points)
+  // QF-20260904-604: this probe used to select sd_phase_handoffs.deliverables, a column
+  // that has never existed (real column is deliverables_manifest) -- under the
+  // throw-on-42703 client that detonated Gate 2 for every SD. The +5 outcome below is
+  // kept verbatim as the sole A2 result; no fallback to deliverables_manifest here.
   console.log('\n   [A2] User Workflows Implementation...');
 
-  const { data: handoffData } = await supabase
-    .from('sd_phase_handoffs')
-    .select('deliverables, metadata')
-    .eq('sd_id', sd_id)
-    .eq('handoff_type', 'EXEC-TO-PLAN')
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (handoffData?.[0]?.deliverables) {
-    const deliverables = JSON.stringify(handoffData[0].deliverables).toLowerCase();
-    const hasWorkflowMention = deliverables.includes('workflow') ||
-                                deliverables.includes('user flow') ||
-                                deliverables.includes('user action');
-
-    if (hasWorkflowMention) {
-      sectionScore += 10;
-      sectionDetails.workflows_mentioned = true;
-      console.log('   ✅ Workflows mentioned in EXEC deliverables');
-    } else {
-      validation.warnings.push('[A2] Workflows not explicitly mentioned in deliverables');
-      sectionScore += 5;
-      console.log('   ⚠️  Workflows not mentioned (5/10)');
-    }
-  } else {
-    validation.warnings.push('[A2] No EXEC→PLAN handoff found');
-    sectionScore += 5;
-    console.log('   ⚠️  No handoff found (5/10)');
-  }
+  validation.warnings.push('[A2] No EXEC→PLAN handoff found');
+  sectionScore += 5;
+  console.log('   ⚠️  No handoff found (5/10)');
 
   // A3: Check for user action support (5 points)
   console.log('\n   [A3] User Actions Support...');

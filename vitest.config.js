@@ -122,6 +122,30 @@ const SMOKE_INCLUDE = ['**/tests/smoke.test.js'];
 // abolishes. The suite needs no setup — it opens no client.
 const MIGRATION_GATE_INCLUDE = ['**/tests/integration/migration-apply-state-ledger-wiring.test.js'];
 
+// ─── SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B4): same MIGRATION_GATE_INCLUDE precedent ────────
+//
+// tests/integration/bypass-ledger-handoff-join-check-entrypoint.test.js was routed to the gated
+// `db` project purely BY DIRECTORY (DB_INCLUDE's tests/integration/** glob). It opens no client
+// itself -- it spawns scripts/ci/bypass-ledger-handoff-join-check.mjs as a SUBPROCESS pointed at
+// an unreachable URL specifically to force a fast query-failure path, proving the script's
+// isMainModule() entrypoint guard actually fires (the defect it regression-tests: the prior
+// `import.meta.url === \`file://${argv[1]}\`` guard was always false on Windows, so main() never
+// ran and the script silently exited 0). Under the gated db project this test SKIPS on every
+// undesignated target -- exactly the MIGRATION_GATE_INCLUDE precedent's "green-while-unproven"
+// masking this file's own header warns about. Same remedy: a dedicated, ungated project with
+// fake credentials stamped at the PROJECT level (never in the test file's own source, so the
+// pre-commit DB-test guard's literal SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY string scan stays
+// clean) so the subprocess's real dotenv load never overrides them.
+const BYPASS_LEDGER_JOIN_CHECK_GATE_INCLUDE = ['**/tests/integration/bypass-ledger-handoff-join-check-entrypoint.test.js'];
+
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G (FR-5): same precedent as BYPASS_LEDGER_JOIN_CHECK_GATE_INCLUDE
+// immediately above, for the sibling deliverables-provenance-regression-check.mjs entrypoint proof.
+const DELIVERABLES_PROVENANCE_REGRESSION_GATE_INCLUDE = ['**/tests/integration/deliverables-provenance-regression-check-entrypoint.test.js'];
+
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G (FR-1, TESTING finding F-5): same precedent, for
+// handoff-provenance-census.mjs's own entrypoint proof (FR-1 AC#3 "CI-asserted").
+const HANDOFF_PROVENANCE_CENSUS_GATE_INCLUDE = ['**/tests/integration/handoff-provenance-census-entrypoint.test.js'];
+
 // ─── SD-LEO-INFRA-VITEST-TIER-REAL-001: the db gate moved from DISCOVERY to RUNTIME ─────────────
 //
 // QF-20260726-459 Part 1b gated the PROJECT here (include: [] when undesignated), which closed
@@ -340,6 +364,55 @@ export default defineConfig({
             SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
           },
           include: MIGRATION_GATE_INCLUDE,
+          exclude: SHARED_EXCLUDE,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'bypass-ledger-join-check-gate',
+          // NO setupFiles, same rationale as migration-gate: the suite opens no client of its
+          // own -- only the subprocess it spawns sees these vars, inherited from this process
+          // env, and its own dotenv load never overrides already-set vars.
+          env: {
+            SUPABASE_URL: 'https://test.invalid.local',
+            NEXT_PUBLIC_SUPABASE_URL: 'https://test.invalid.local',
+            SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
+          },
+          include: BYPASS_LEDGER_JOIN_CHECK_GATE_INCLUDE,
+          exclude: SHARED_EXCLUDE,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'deliverables-provenance-regression-gate',
+          // NO setupFiles, same rationale as bypass-ledger-join-check-gate: the suite opens
+          // no client of its own -- only the subprocess it spawns sees these vars, inherited
+          // from this process env, and its own dotenv load never overrides already-set vars.
+          env: {
+            SUPABASE_URL: 'https://test.invalid.local',
+            NEXT_PUBLIC_SUPABASE_URL: 'https://test.invalid.local',
+            SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
+          },
+          include: DELIVERABLES_PROVENANCE_REGRESSION_GATE_INCLUDE,
+          exclude: SHARED_EXCLUDE,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'handoff-provenance-census-gate',
+          // NO setupFiles, same rationale as the two sibling gate projects above: the suite
+          // opens no client of its own -- only the subprocess it spawns sees these vars,
+          // inherited from this process env, and its own dotenv load never overrides
+          // already-set vars.
+          env: {
+            SUPABASE_URL: 'https://test.invalid.local',
+            NEXT_PUBLIC_SUPABASE_URL: 'https://test.invalid.local',
+            SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
+          },
+          include: HANDOFF_PROVENANCE_CENSUS_GATE_INCLUDE,
           exclude: SHARED_EXCLUDE,
         },
       },

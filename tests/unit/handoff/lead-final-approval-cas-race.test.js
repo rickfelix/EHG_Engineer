@@ -91,6 +91,7 @@ function makeSharedSupabase(initialSdRow) {
       order() { return builder; },
       limit(n) { ctx.limitN = n; return builder; },
       maybeSingle() { return Promise.resolve(execute(true)); },
+      single() { return Promise.resolve(execute(true)); },
       then(resolve, reject) { return Promise.resolve(execute(false)).then(resolve, reject); },
     };
     return builder;

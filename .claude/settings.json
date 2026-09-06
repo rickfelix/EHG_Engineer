@@ -180,7 +180,7 @@
         ]
       },
       {
-        "matcher": "Task",
+        "matcher": "Task|Agent",
         "hooks": [
           {
             "type": "command",
@@ -256,6 +256,17 @@
         ]
       }
     ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PROJECT_DIR}/scripts/hooks/notification-permission-wait.cjs",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
@@ -313,7 +324,7 @@
         ]
       },
       {
-        "matcher": "Task|Bash|Write|Edit|MultiEdit|AskUserQuestion",
+        "matcher": "Task|Agent|Bash|Write|Edit|MultiEdit|AskUserQuestion",
         "hooks": [
           {
             "type": "command",
@@ -333,7 +344,7 @@
         ]
       },
       {
-        "matcher": "Task",
+        "matcher": "Task|Agent",
         "hooks": [
           {
             "type": "command",
@@ -345,6 +356,11 @@
     ]
   },
   "permissions": {
-    "allow": []
+    "allow": [
+      "Bash(node scripts/:*)",
+      "Bash(git commit:*)",
+      "Bash(git -C:*)",
+      "Bash(cd .worktrees/:*)"
+    ]
   }
 }

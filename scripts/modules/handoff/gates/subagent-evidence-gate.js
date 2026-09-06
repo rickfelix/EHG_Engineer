@@ -32,6 +32,19 @@
 import { execFileSync } from 'node:child_process';
 import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
 import { REQUIRED_SUBAGENTS } from '../required-subagents.js';
+import { gradeProvenance, HANDOFF_TYPE_TO_PHASE } from '../../../../lib/sub-agent-executor/evidence-provenance.js';
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: shared kill-switch for the provenance-grading warnings
+ * below, gating BOTH this gate and activation-invariant-gate.js. Advisory (warn-only) by default,
+ * per CLAUDE_CORE.md's Observe-Only-First policy AND this file's own established rollout
+ * precedent (SUBAGENT_VERDICT_MODE, LEO_DISABLE_STALE_EVIDENCE_CHECK both shipped advisory first)
+ * -- this SD's own text names a real prior incident ("exactly the Gate 2 outage of 03:0xZ") from
+ * shipping a similar check binding on day one, before enough post-cutover evidence existed.
+ */
+export function resolveSubagentEvidenceProvenanceMode(env = process.env) {
+  return (env && env.SUBAGENT_EVIDENCE_PROVENANCE_MODE) === 'block' ? 'block' : 'advisory';
+}
 
 /**
  * Race window (seconds) during which a missing evidence row is treated as a
@@ -433,11 +446,24 @@ export async function validateSubagentEvidence(ctx, supabase) {
     // PAT-LES-83842538ee01 (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-143), FR-3: evaluated_commit_sha
     // projected straight out of metadata (PostgREST `->>` operator) rather than selecting the
     // whole JSONB blob, per TESTING sub-agent's efficiency finding during PLAN.
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: widened to add provenance fields (source,
+    // invocation_id, phase, plus session_id/content_hash projected out of metadata) and the
+    // columns computeContentHash() needs to re-derive a row's hash. Every added name is a real
+    // top-level column or a metadata->>field alias -- lint-safe per schema-reference-extract.mjs,
+    // same pattern already used for evaluated_commit_sha above.
+    // count-truncation-diff-lint: bounded explicitly (limit 500, well under the Supabase 1000
+    // default cap) now that the widened select is flagged as a new needs-review site -- the
+    // underlying query was already unbounded before this SD touched only its column list, so a
+    // real bound is the correct fix rather than an overrides.json suppression. Ordered
+    // newest-first so a truncation (never expected at this per-sd/per-phase scope) would drop the
+    // OLDEST rows, not the latest-per-agent ones the grouping loop below actually needs.
     const { data, error } = await db
       .from('sub_agent_execution_results')
-      .select('sub_agent_code, created_at, verdict, evaluated_commit_sha:metadata->>evaluated_commit_sha')
+      .select('sub_agent_code, created_at, verdict, confidence, critical_issues, warnings, recommendations, detailed_analysis, summary, source, invocation_id, phase, evaluated_commit_sha:metadata->>evaluated_commit_sha, session_id:metadata->>session_id, content_hash:metadata->>content_hash')
       .eq('sd_id', sdUuid)
-      .gte('created_at', phaseStartedAt.toISOString());
+      .gte('created_at', phaseStartedAt.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(500);
     if (error) throw error;
     rows = data || [];
   } catch (e) {
@@ -499,13 +525,24 @@ export async function validateSubagentEvidence(ctx, supabase) {
   // (a row exists; the agent is not mid-write). They block unconditionally, ignoring
   // SUBAGENT_VERDICT_MODE, since there is no verdict for that mode to be lenient about.
   const nonEvidence = [];
+  // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance grading, advisory-only by default (see
+  // resolveSubagentEvidenceProvenanceMode above). Computed for every required agent's latest row
+  // regardless of verdict classification -- a row can be a genuine PASS and still lack provenance.
+  const provenanceAbsent = [];
+  const expectedPhase = HANDOFF_TYPE_TO_PHASE[handoffType];
   for (const r of required) {
     const row = latestByCode.get(norm(r));
     if (!row) continue;
     const klass = classifyVerdict(row.verdict);
-    if (klass === 'nonevidence') nonEvidence.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
-    else if (klass === 'reject') failing.push({ agent: r, verdict: row.verdict, created_at: row.created_at });
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-B (FR-B2): session_id is already fetched into `row`
+    // (child A's widened select) -- attach it here so a bypass-refusal check downstream can
+    // compare the failing evidence's author against the bypassing actor without a second query.
+    if (klass === 'nonevidence') nonEvidence.push({ agent: r, verdict: row.verdict, created_at: row.created_at, session_id: row.session_id ?? null });
+    else if (klass === 'reject') failing.push({ agent: r, verdict: row.verdict, created_at: row.created_at, session_id: row.session_id ?? null });
     else if (klass === 'unknown') unknownVerdicts.push({ agent: r, verdict: row.verdict });
+
+    const grade = gradeProvenance(row, { expectedPhase });
+    if (grade.absent) provenanceAbsent.push({ agent: r, missing_field: grade.missingField });
   }
 
   if (missing.length === 0) {
@@ -602,13 +639,34 @@ export async function validateSubagentEvidence(ctx, supabase) {
         for (const w of staleResult.warnings) console.log(`   ⚠️  ${w}`);
       }
 
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance-ABSENT is advisory by default (see
+      // resolveSubagentEvidenceProvenanceMode) -- surfaced as a warning, never blocking, unless
+      // SUBAGENT_EVIDENCE_PROVENANCE_MODE=block is set.
+      const provenanceMode = resolveSubagentEvidenceProvenanceMode();
+      const provenanceWarnings = provenanceAbsent.map(
+        p => `[ADVISORY] SUBAGENT_EVIDENCE_PROVENANCE_ABSENT: ${p.agent}'s latest evidence is missing ${p.missing_field} — treated as absent provenance, not weak. `
+          + `${provenanceMode === 'block' ? 'Blocking' : 'Non-blocking (advisory)'} per SUBAGENT_EVIDENCE_PROVENANCE_MODE=${provenanceMode}.`
+      );
+      for (const w of provenanceWarnings) console.log(`   ⚠️  ${w}`);
+
+      if (provenanceMode === 'block' && provenanceAbsent.length > 0) {
+        const summary = provenanceAbsent.map(p => `${p.agent}(${p.missing_field})`).join(', ');
+        return buildFailResult({
+          score: 0,
+          max_score: 100,
+          issues: [`SUBAGENT_EVIDENCE_PROVENANCE_ABSENT: ${summary}`],
+          details: { reason: 'SUBAGENT_EVIDENCE_PROVENANCE_ABSENT', provenance_absent: provenanceAbsent, ...verdictDetails, stale: staleResult.stale },
+          remediation: `Re-run ${provenanceAbsent.map(p => p.agent).join(', ')} for SD ${sdKey} so the latest evidence row carries source/invocation_id/session_id/content_hash. ${EVIDENCE_WRITER_CONTRACT}`
+        });
+      }
+
       return {
         passed: true,
         score: 100,
         max_score: 100,
         issues: [],
-        warnings: [...unknownWarnings, ...staleResult.warnings],
-        details: { ...verdictDetails, stale: staleResult.stale }
+        warnings: [...unknownWarnings, ...staleResult.warnings, ...provenanceWarnings],
+        details: { ...verdictDetails, stale: staleResult.stale, provenance_absent: provenanceAbsent }
       };
     }
 
@@ -680,6 +738,181 @@ export async function validateSubagentEvidence(ctx, supabase) {
 }
 
 /**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-F.
+ *
+ * A sub-agent can write a structured CRITICAL finding into `critical_issues`
+ * (with an explicit `id`) naming a handoff it must be resolved before -- and
+ * until this check existed, NOTHING consulted that field. Confirmed instance:
+ * SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-A's VALIDATION row (2026-09-03T09:56:20Z,
+ * phase LEAD) recorded critical_issues[0] = {id:'VAL-A-1', severity:'CRITICAL',
+ * ...}, with conditions[0] reading "VAL-A-1 (CRITICAL) must be resolved before
+ * EXEC-TO-PLAN: ...". The SD reached status=completed with it never resolved,
+ * and no later VALIDATION row for that SD ever ran to clear it.
+ *
+ * DELIBERATELY a SEPARATE check from validateSubagentEvidence above, not a
+ * patch to its per-required-agent loop above: that loop is scoped to
+ * REQUIRED_SUBAGENTS[handoffType] (a VALIDATION row is invisible outside
+ * LEAD-TO-PLAN) and to rows created on/after the CURRENT phase's start (a row
+ * written in an EARLIER phase naming a LATER handoff falls outside that
+ * freshness window by construction) -- both are the wrong shape for a
+ * cross-phase, non-required-agent condition. This check queries the SD's
+ * ENTIRE evidence history instead, keyed only on sd_id.
+ *
+ * RESOLUTION SEMANTICS (no schema column tracks this -- there is no
+ * resolved_at/waived field on sub_agent_execution_results): a CRITICAL entry
+ * (critical_issues[].severity === 'CRITICAL', matched by its `id`, falling
+ * back to `title` if `id` is absent) counts as resolved once the LATEST row
+ * from the SAME normalized sub_agent_code no longer carries that id/title in
+ * ITS OWN critical_issues. Absent a later row entirely, it stays unresolved --
+ * nothing has re-verified it.
+ *
+ * ADVISORY-FIRST (matches this file's own SUBAGENT_VERDICT_MODE / stale-
+ * evidence-check precedent, and acceptance-tier-downgrade-gate.js's
+ * ACCEPTANCE_TIER_DOWNGRADE_GATE_BINDING convention): warns by default; set
+ * UNRESOLVED_CRITICAL_CONDITION_GATE_BINDING=true to actually block. Measured
+ * 2026-09-05 against the whole `sub_agent_execution_results` table: 292
+ * completed SDs already carry at least one critical_issues[] entry with
+ * severity=CRITICAL -- shipping this bound on day one would retroactively
+ * fail all of them at their next handoff, which is exactly the kind of day-one
+ * outage this file's own SUBAGENT_VERDICT_MODE precedent was created to avoid.
+ */
+export function resolveUnresolvedCriticalConditionBinding(env = process.env) {
+  return (env && env.UNRESOLVED_CRITICAL_CONDITION_GATE_BINDING) === 'true';
+}
+
+/**
+ * @param {Object} ctx - handoff validation context ({sd, sdId, handoffType, ...})
+ * @param {Object} supabase
+ * @returns {Promise<Object>} gate result
+ */
+export async function checkUnresolvedCriticalConditions(ctx, supabase) {
+  const db = supabase || ctx.supabase;
+  const sdUuid = ctx.sd?.id || ctx.sdId;
+
+  console.log('\n🔍 GATE: Unresolved Critical Condition (DB-enforced)');
+  console.log('-'.repeat(50));
+
+  if (!db || !sdUuid) {
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      warnings: ['UNRESOLVED_CRITICAL_CONDITION check skipped: Supabase client or SD UUID unavailable'],
+      details: { reason: 'MISSING_CONTEXT' }
+    };
+  }
+
+  let rows;
+  try {
+    const { data, error } = await db
+      .from('sub_agent_execution_results')
+      .select('sub_agent_code, created_at, critical_issues')
+      .eq('sd_id', sdUuid)
+      .order('created_at', { ascending: true })
+      .limit(500);
+    if (error) throw error;
+    rows = data || [];
+  } catch (e) {
+    // Fail OPEN: a query error here must not become a NEW way to block every handoff.
+    return {
+      passed: true,
+      score: 100,
+      max_score: 100,
+      issues: [],
+      warnings: [`UNRESOLVED_CRITICAL_CONDITION check errored (fail-open): ${e?.message || e}`],
+      details: { reason: 'DB_ERROR' }
+    };
+  }
+
+  const norm = s => String(s || '').toUpperCase().replace(/-AGENT$/, '').replace(/-+/g, '_');
+  const criticalKey = (issue) => issue?.id || issue?.title;
+
+  // Every CRITICAL entry ever raised, in write order, grouped by normalized agent.
+  const raisedByAgent = new Map(); // normCode -> [{key, title, created_at}, ...]
+  for (const r of rows) {
+    if (!Array.isArray(r.critical_issues) || r.critical_issues.length === 0) continue;
+    const code = norm(r.sub_agent_code);
+    const list = raisedByAgent.get(code) || [];
+    for (const issue of r.critical_issues) {
+      if (String(issue?.severity || '').toUpperCase() !== 'CRITICAL') continue;
+      const key = criticalKey(issue);
+      if (!key) continue;
+      list.push({ key, title: issue.title, created_at: r.created_at });
+    }
+    raisedByAgent.set(code, list);
+  }
+
+  const unresolved = [];
+  for (const [code, list] of raisedByAgent) {
+    const latestRow = [...rows].reverse().find(r => norm(r.sub_agent_code) === code);
+    const latestKeys = new Set(
+      (Array.isArray(latestRow?.critical_issues) ? latestRow.critical_issues : [])
+        .filter(i => String(i?.severity || '').toUpperCase() === 'CRITICAL')
+        .map(criticalKey)
+        .filter(Boolean)
+    );
+    const seen = new Set();
+    for (const issue of list) {
+      if (seen.has(issue.key) || !latestKeys.has(issue.key)) continue;
+      seen.add(issue.key);
+      unresolved.push({ sub_agent_code: code, id: issue.key, title: issue.title, first_seen: issue.created_at });
+    }
+  }
+
+  if (unresolved.length === 0) {
+    console.log('   ✅ No unresolved CRITICAL sub-agent conditions');
+    return { passed: true, score: 100, max_score: 100, issues: [], warnings: [], details: { unresolved: [] } };
+  }
+
+  const bound = resolveUnresolvedCriticalConditionBinding();
+  const summary = unresolved.map(u => `${u.sub_agent_code}:${u.id} (${u.title})`).join('; ');
+  const details = { reason: 'UNRESOLVED_CRITICAL_CONDITION', unresolved, binding: bound };
+  const remediation = `Resolve the CRITICAL finding(s) and get a fresh sub-agent evidence row from the SAME agent whose critical_issues no longer names it, or explicitly descope it in the PRD/success_criteria with a recorded reason: ${summary}. Advisory by default; set UNRESOLVED_CRITICAL_CONDITION_GATE_BINDING=true to make this gate block.`;
+
+  if (!bound) {
+    console.log(`   ⚠️  UNRESOLVED_CRITICAL_CONDITION (advisory, not blocking): ${summary}`);
+    return {
+      passed: true,
+      score: 60,
+      max_score: 100,
+      issues: [],
+      warnings: [`UNRESOLVED_CRITICAL_CONDITION (advisory, not blocking): ${summary}`],
+      details,
+      remediation
+    };
+  }
+
+  console.log(`   ❌ UNRESOLVED_CRITICAL_CONDITION: ${summary}`);
+  return buildFailResult({
+    score: 0,
+    max_score: 100,
+    issues: [`UNRESOLVED_CRITICAL_CONDITION: ${summary}`],
+    details,
+    remediation
+  });
+}
+
+/**
+ * Factory: create the unresolved-critical-condition gate for registration in
+ * a handoff executor. `required: false` at the factory level AND the
+ * validator's own internal advisory-unless-bound check are deliberately
+ * redundant -- belt-and-suspenders for a gate whose bound mode would
+ * retroactively affect 292 already-completed SDs' worth of historical data.
+ *
+ * @param {Object} supabase
+ * @returns {Object}
+ */
+export function createUnresolvedCriticalConditionGate(supabase) {
+  return {
+    name: 'UNRESOLVED_CRITICAL_CONDITION',
+    validator: async (ctx) => checkUnresolvedCriticalConditions(ctx, supabase),
+    required: false,
+    remediation: 'Resolve any structured CRITICAL sub-agent finding before this handoff, or explicitly descope it with a recorded reason.'
+  };
+}
+
+/**
  * Factory: create the gate definition for registration in a handoff executor.
  *
  * @param {Object} supabase
@@ -705,5 +938,6 @@ export const _internals = {
   REJECT_VERDICTS,
   detectStaleEvidence,
   resolveCurrentHeadSha,
-  staleEvidenceCheckDisabled
+  staleEvidenceCheckDisabled,
+  resolveSubagentEvidenceProvenanceMode
 };

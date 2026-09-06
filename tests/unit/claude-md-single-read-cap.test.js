@@ -72,7 +72,12 @@ describe('FR-4: single-read cap enforcement', () => {
     // (lib/protocol/contract-read-coverage.cjs contractTokenCount), which must clear the marginal
     // band around the cap (SD-LEO-INFRA-CONTRACT-READ-FIT-001), not just the raw 25,000 ceiling —
     // measured 23,175 tokens by that predictor post-restructure, clear of both.
-    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md']);
+    // CLAUDE_MICHAEL.md added by SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-4). It DIVERGES from
+    // the Adam precedent (CLAUDE_ADAM.md is deliberately absent) on purpose: Adam's contract predates
+    // the cap and would throw today, whereas Michael's is authored UNDER a 6,200-word budget that the
+    // seed one-off enforces before --apply (DESIGN evidence 8601cbdd: 25,000 x 2.4177 bytes with a 20%
+    // margin at the worst measured density of 7.77 bytes/word), so it fits from its first generation.
+    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md']);
   });
 
   it('uses the MEASURED bytes-per-token, not a borrowed or estimated one', () => {
@@ -96,6 +101,60 @@ describe('FR-4: single-read cap enforcement', () => {
     expect(() => assertSingleReadFit([{ name: 'X.md' }, { name: 'Y.md', bytes: 0 }])).not.toThrow();
     expect(() => assertSingleReadFit([])).not.toThrow();
     expect(() => assertSingleReadFit(undefined)).not.toThrow();
+  });
+});
+
+// QF-20260905-908: a plain, unmissable 95%-of-cap warning scoped to MUST_FIT_SINGLE_READ files —
+// distinct from the pre-existing CONFIRMED-FIT tier (predictor-uncertainty banding at ~93.2%),
+// which already printed every run for CLAUDE_SOLOMON.md while it drifted from 23,175 to 24,918
+// tokens and CI stayed green the whole way. This is a second, narrower, explicitly cap-relative
+// signal: named file + tokens remaining before the throw.
+describe('QF-20260905-908: 95%-of-cap warning', () => {
+  it('is SILENT for a must-fit file with real headroom (post-split CLAUDE_SOLOMON.md shape)', () => {
+    const warnings = [];
+    assertSingleReadFit(
+      [{ name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(20242) }],
+      { onWarn: (m) => warnings.push(m) },
+    );
+    expect(warnings.join('\n')).not.toMatch(/95% OF SINGLE-READ CAP/);
+  });
+
+  it('FIRES for a must-fit file at exactly 95% of the cap, naming the file and remaining headroom', () => {
+    const warnings = [];
+    assertSingleReadFit(
+      [{ name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(23750) }], // 95% of 25000
+      { onWarn: (m) => warnings.push(m) },
+    );
+    const joined = warnings.join('\n');
+    expect(joined).toMatch(/95% OF SINGLE-READ CAP/);
+    expect(joined).toMatch(/CLAUDE_SOLOMON\.md/);
+    expect(joined).toMatch(/1250 tokens of headroom/);
+  });
+
+  it('FIRES for a must-fit file just under the hard cap (99.7% — the pre-fix CLAUDE_SOLOMON.md shape)', () => {
+    const warnings = [];
+    assertSingleReadFit(
+      [{ name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(24918) }],
+      { onWarn: (m) => warnings.push(m) },
+    );
+    expect(warnings.join('\n')).toMatch(/95% OF SINGLE-READ CAP.*CLAUDE_SOLOMON\.md/s);
+  });
+
+  it('does NOT fire for a file at 95%+ that is NOT on the must-fit enforcement list', () => {
+    // Mirrors the existing "no SD owns this file yet" distinction — the 95% warning is scoped to
+    // files that actually throw at 100%, not every file the generator happens to measure.
+    const warnings = [];
+    assertSingleReadFit(
+      [{ name: 'CLAUDE_CORE.md', bytes: bytesFor(24000) }],
+      { onWarn: (m) => warnings.push(m) },
+    );
+    expect(warnings.join('\n')).not.toMatch(/95% OF SINGLE-READ CAP/);
+  });
+
+  it('never blocks generation and never changes the hard-cap throw', () => {
+    // A file over 100% throws regardless of whether the 95% warning also matched it on the way up.
+    expect(() => assertSingleReadFit([{ name: 'CLAUDE_LEAD.md', bytes: bytesFor(26000) }]))
+      .toThrow(/SINGLE_READ_CAP_EXCEEDED/);
   });
 });
 

@@ -1,0 +1,68 @@
+name: Oracle Hold Orphaned Marker Exit Predicate Check
+
+# SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-6, ratification 49656c8c) — POST-MERGE production
+# alarm. FR-1's archive-aware lookup is the fix; this workflow catches a future regression of the
+# class it fixes: a quick_fixes oracle-hold marker citing a consult row absent from BOTH
+# session_coordination and retention_archive, asserted at zero from the merge commit forward.
+# Mirrors session-liveness-ssot-exit-predicate-check.yml's scaffolding.
+
+on:
+  schedule:
+    # Daily at 10:15 UTC.
+    - cron: '15 10 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    name: Check for an oracle-hold marker citing an orphaned consult row
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Run exit predicate check
+        id: check
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          OUTPUT=$(node scripts/oracle-hold-orphaned-marker-exit-predicate-check.mjs 2>&1)
+          STATUS=$?
+          echo "$OUTPUT"
+          if [ "$STATUS" -ne 0 ]; then
+            echo "violated=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## Oracle Hold Orphaned Marker Exit Predicate Violated"
+              echo ""
+              echo '```'
+              echo "$OUTPUT"
+              echo '```'
+            } > /tmp/issue-body.md
+          else
+            echo "violated=false" >> "$GITHUB_OUTPUT"
+          fi
+          exit "$STATUS"
+        continue-on-error: true
+
+      - name: Open issue on violation
+        if: steps.check.outputs.violated == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Oracle hold orphaned marker violation suspected: $(date -u +%Y-%m-%d)" \
+            --label oracle-hold-orphaned-marker-violation-suspected \
+            --body-file /tmp/issue-body.md
+
+      - name: Fail the job if violated
+        if: steps.check.outputs.violated == 'true'
+        run: exit 1

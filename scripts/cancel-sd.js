@@ -21,6 +21,10 @@
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 import { execFileSync } from 'node:child_process';
 import dotenv from 'dotenv';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { terminalSessionUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 
 dotenv.config();
 
@@ -454,13 +458,12 @@ async function cancelSD(sd, reason) {
   if (claimedSessionId) {
     const { data: releasedRows, error: csErr } = await supabase
       .from('claude_sessions')
-      .update({
-        status: 'released',
+      .update(terminalSessionUpdate('released', {
         sd_key: null,
         worktree_path: null,
         worktree_branch: null,
         released_at: new Date().toISOString(),
-      })
+      }))
       .eq('session_id', claimedSessionId)
       .eq('sd_key', sd.sd_key)  // only release if THIS SD was the active claim
       .select('session_id');

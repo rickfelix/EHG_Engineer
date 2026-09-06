@@ -27,6 +27,7 @@ import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
 
 // SD-LEO-INFRA-HARDENING-001: Import threshold profiles for gate enforcement
 import { THRESHOLD_PROFILES } from '../../sd-type-checker.js';
+import { YELLOW_BAND_WIDTH } from '../../adaptive-threshold-calculator.js';
 
 // SD-LEO-INFRA-HARDENING-001: Gate result schema validation
 import { validateGateResult } from './gate-result-schema.js';
@@ -326,6 +327,12 @@ export class ValidationOrchestrator {
                 gateResult.input_hash = probe.inputHash;
                 const codeVersion = GATE_CODE_VERSION[gate.name];
                 if (codeVersion != null) gateResult.code_version = codeVersion;
+                // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-E: stamp which execution produced this
+                // verdict, so a LATER execution's probeVerdictCache can require a match rather
+                // than trusting a verdict it cannot attribute to a specific run.
+                if (context._verdictCache?.executionId) {
+                  gateResult.execution_id = context._verdictCache.executionId;
+                }
               }
               return { gate, gateResult };
             });
@@ -334,25 +341,56 @@ export class ValidationOrchestrator {
 
       // Process results from this tier
       for (const { gate, gateResult } of tierResults) {
-        results.gateResults[gate.name] = gateResult;
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D1: persist each gate's real declared
+        // requiredness alongside its result. Almost no validator populates `required` on its
+        // own return value (fr-delivery-classifier.js is the sole exception, deliberately
+        // setting it dynamically e.g. false when its own enforcement flag is off) -- without
+        // this merge, every downstream persisted-audit-record consumer
+        // (lead-final-approval/index.js's projectGateResultsForPersistence, and
+        // HandoffRecorder's recordFailure/createArtifact/_recordCompletionActionFailure) reads
+        // `required` as always-undefined/false regardless of the gate's real declaration. The
+        // static value (matching the live blocking predicate at line 383 below exactly) wins
+        // for `required`; any validator-set dynamic value is preserved separately as
+        // `required_effective` so a deliberate warn-only override is never overwritten.
+        const staticRequired = gate.required !== false;
 
         // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Track SKIPPED status
         const isSkipped = isSkippedResult(gateResult);
+        let skipReasonForPersistence;
         if (isSkipped) {
           results.skippedCount++;
           results.skippedGates.push(gate.name);
+          const skipReason = gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE;
+          skipReasonForPersistence = skipReason;
           results.gateStatuses[gate.name] = {
             status: ValidatorStatus.SKIPPED,
-            required: gate.required !== false,
-            skipReason: gateResult.skipReason || SkipReasonCode.NON_APPLICABLE_SD_TYPE,
+            required: staticRequired,
+            skipReason,
             skipDetails: gateResult.skipDetails
           };
         } else {
           results.gateStatuses[gate.name] = {
             status: gateResult.passed ? ValidatorStatus.PASS : ValidatorStatus.FAIL,
-            required: gate.required !== false
+            required: staticRequired
           };
         }
+
+        // SECURITY finding L5 (adversarial review, 2026-09-05): a cache-hit/fail-replay verdict
+        // (see the cache_hit/fail_replay stamping above, before this loop) already carries a
+        // `required` key from a PRIOR run's merge -- treating that as "the validator dynamically
+        // overrode requiredness" is a fabrication, and self-reinforcing across retries (a replayed
+        // verdict's fabricated required_effective would itself get replayed again). Only a
+        // genuinely-fresh validator result (not itself a cache replay) can set required_effective.
+        const isReplayedVerdict = gateResult?.cache_hit === true || gateResult?.fail_replay === true;
+        results.gateResults[gate.name] = (gateResult && typeof gateResult === 'object')
+          ? {
+              ...gateResult,
+              required: staticRequired,
+              ...((!isReplayedVerdict && typeof gateResult.required === 'boolean') ? { required_effective: gateResult.required } : {}),
+              status: results.gateStatuses[gate.name].status,
+              ...(skipReasonForPersistence ? { skip_reason: skipReasonForPersistence } : {}),
+            }
+          : gateResult;
 
         // Backward compat: sum raw scores
         results.totalScore += gateResult.score;
@@ -506,17 +544,57 @@ export class ValidationOrchestrator {
         const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
 
         if (results.normalizedScore < threshold) {
-          results.passed = false;
-          results.failedGate = 'SD_TYPE_THRESHOLD';
-          results.thresholdViolation = {
-            sdType,
-            required: threshold,
-            actual: results.normalizedScore
-          };
-          results.issues.push(
-            `SD type '${sdType}' requires ${threshold}% gate score, got ${results.normalizedScore}%`
-          );
-          console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${results.normalizedScore}%`);
+          // FR-9 (SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-A, coordinator ruling 3e1b027b):
+          // GATE2_IMPLEMENTATION_FIDELITY already grants near-miss tolerance (its own adaptive
+          // YELLOW zone, adaptive-threshold-calculator.js) over this SAME run's gate set.
+          // SD_TYPE_THRESHOLD re-applying a zero-tolerance cut on the identical evidence
+          // double-penalizes the same near-miss (specimen: SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-
+          // ELEVEN-001-A, 907/1100=82.45% vs feature's 85%, GATE2 82% PASSED YELLOW over the
+          // same reduced set). Bounded exactly: feature type only (per-type review, "others
+          // only on their own evidence" -- coordinator ruling), GATE2 must have PASSED in
+          // in-run YELLOW (not GREEN, not RED), and must be a fresh evaluation from THIS
+          // validateGates() call -- a gate-verdict-cache reuse (cache_hit) is explicitly
+          // excluded because a cached verdict may have been computed over a DIFFERENT
+          // reduced gate set than the one that produced this run's normalizedScore.
+          // SEC-003A-01 (SECURITY sub-agent finding, EXEC-TO-PLAN review, post-merge follow-up):
+          // the accept had no floor on results.normalizedScore -- GATE2's own YELLOW zone bounds
+          // ONLY gate2Result.score against ITS threshold, a different quantity than the weighted
+          // normalizedScore across all gates. Without this conjunct, a run with several
+          // required:false advisory gates scoring 0 (a real, non-adversarial shape -- see the
+          // zeroScoreGates warning above) could reach normalizedScore as low as ~8% and still be
+          // accepted, a waiver far beyond the 2.55-point near-miss this mechanism was scoped for.
+          // Reusing YELLOW_BAND_WIDTH (not a new constant) keeps the accept bounded to the same
+          // near-miss tolerance GATE2 itself grants.
+          const gate2Result = results.gateResults?.GATE2_IMPLEMENTATION_FIDELITY;
+          const gate2YellowAccept = sdType === 'feature'
+            && gate2Result?.passed === true
+            && gate2Result?.zone === 'YELLOW'
+            && !gate2Result?.cache_hit
+            && (threshold - results.normalizedScore) <= YELLOW_BAND_WIDTH;
+
+          if (gate2YellowAccept) {
+            results.yellowZoneAccept = {
+              gate: 'SD_TYPE_THRESHOLD',
+              sd_type: sdType,
+              sd_type_threshold_score: results.normalizedScore,
+              sd_type_threshold_required: threshold,
+              gate2_score: gate2Result.score,
+              gate2_zone: gate2Result.zone
+            };
+            console.log(`   🟡 SD-Type Threshold ACCEPTED via GATE2 yellow-zone: ${sdType} scored ${results.normalizedScore}% (requires ${threshold}%), but GATE2_IMPLEMENTATION_FIDELITY PASSED YELLOW (${gate2Result.score}%) over the same reduced set — yellow_zone_accept stamped.`);
+          } else {
+            results.passed = false;
+            results.failedGate = 'SD_TYPE_THRESHOLD';
+            results.thresholdViolation = {
+              sdType,
+              required: threshold,
+              actual: results.normalizedScore
+            };
+            results.issues.push(
+              `SD type '${sdType}' requires ${threshold}% gate score, got ${results.normalizedScore}%`
+            );
+            console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${results.normalizedScore}%`);
+          }
         }
       }
     }
@@ -916,7 +994,11 @@ export class ValidationOrchestrator {
   async buildGatesFromRules(hardcodedGates, handoffType, context = {}) {
     // Orchestrator children use a reduced gate set defined by the executor.
     // Skip database-driven rules to prevent heavy gates from being re-injected.
-    const isOrchestratorChild = context.sd?.metadata?.parent_orchestrator || context.sd?.metadata?.auto_generated;
+    // QF-20260905-678: this predicate must match the executor's OWN child-detection predicate
+    // (executors/exec-to-plan/index.js) verbatim -- a bare parent_sd_id (no metadata flags) is
+    // ALSO sufficient there, but was missing here, so this guard failed to skip for such a child
+    // and re-merged 14 duplicate DB-driven gates on top of its own reduced set.
+    const isOrchestratorChild = context.sd?.metadata?.parent_orchestrator || context.sd?.metadata?.auto_generated || context.sd?.parent_sd_id;
     if (isOrchestratorChild) {
       console.log('   ⏭️  Orchestrator child: skipping database-driven gate rules');
       return hardcodedGates;
@@ -937,6 +1019,12 @@ export class ValidationOrchestrator {
       return acc;
     }, {});
 
+    // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A: read once per buildGatesFromRules() call, not once
+    // per rule closure (8x for gate 4 alone) -- an in-process env mutation between rule closures
+    // would otherwise produce a torn verdict with nothing recording which mode produced it
+    // (SECURITY finding C3, EXEC-TO-PLAN review).
+    const skipGuardBound = process.env.SD_TYPE_SKIP_GUARD_BINDING === 'true';
+
     // Build gates from database rules
     const dbGates = [];
     for (const [gate, rules] of Object.entries(rulesByGate)) {
@@ -952,6 +1040,35 @@ export class ValidationOrchestrator {
 
             // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Check SD type and skip code validation
             // Uses centralized SD-type applicability policy for proper SKIPPED status
+            //
+            // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A: LEAD-FINAL-APPROVAL's gate '4' actually has
+            // EIGHT registered rules (TESTING sub-agent, EXEC-TO-PLAN review), not just the four
+            // strategic-value ones this SD was scoped against: valueDelivered/
+            // patternEffectiveness/executiveValidation/processAdherence (gate-4-strategic-value.js,
+            // aliasing to validateGate4LeadFinal) PLUS planToLeadHandoffExists/
+            // userStoriesComplete/retrospectiveExists/prMergeVerification (additional-validators.js,
+            // all seeded weight:0 -- but ValidationOrchestrator.js:401/1336's separate, OUT-OF-SCOPE
+            // `gate.weight || 1.0` falsy-zero defect gives them effective weight 1.0 anyway, so
+            // exempting gate 4 makes THAT defect load-bearing for the binding decision, not merely
+            // adjacent). All eight check whether value was delivered / process was followed --
+            // meaningful for every sd_type, including infrastructure/orchestrator -- not "code
+            // validation". Must never be swept up by this skip, which exists to exempt genuinely
+            // code-specific validation (TESTING/GITHUB/E2E) for non-code SD types. Without this
+            // exemption, a live specimen (SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001)
+            // completed LEAD-FINAL-APPROVAL at score 97 with gate 4 silently full-scored via
+            // createSkippedResult (100/100, arithmetically identical to a genuine pass) despite
+            // zero real evidence.
+            //
+            // Observe-only rollout (SD_TYPE_SKIP_GUARD_BINDING=true to enforce): 73.7% of the live
+            // fleet (3,626/4,919 non-cancelled SDs) sits in a blanket-skipped sd_type, so
+            // unconditionally exempting gate 4 would immediately start failing/re-scoring a large
+            // share of in-flight SDs -- fix the adjacent weight defect FIRST if this is ever bound,
+            // or prMergeVerification/planToLeadHandoffExists/userStoriesComplete/
+            // retrospectiveExists will hard-block real SDs at an unintended effective weight.
+            // Unbound (default), the skip fires exactly as before -- the only change is a warning
+            // naming what would happen once bound. Bound, gate 4 falls through to the real
+            // validator below instead of returning a fabricated pass.
+            const isStrategicValueGate = String(gate) === '4';
             if (mergedContext.sd_id || mergedContext.sdId) {
               const sdId = mergedContext.sd_id || mergedContext.sdId;
               const { data: sdData } = await this.supabase
@@ -961,13 +1078,20 @@ export class ValidationOrchestrator {
                 .single();
 
               if (sdData && shouldSkipCodeValidation(sdData)) {
-                // Extract validator name from rule for proper policy lookup
-                const validatorName = rule.rule_name?.toUpperCase() ||
-                                     gate.split(':').pop()?.toUpperCase() ||
-                                     'UNKNOWN';
+                if (isStrategicValueGate && skipGuardBound) {
+                  // Exempted: fall through to the real validator below.
+                } else {
+                  if (isStrategicValueGate) {
+                    console.warn(`   [SD_TYPE_SKIP_GUARD observe-only] gate=4 rule=${rule.rule_name} sd_type=${sdData.sd_type} would no longer be silently skipped once SD_TYPE_SKIP_GUARD_BINDING=true is set.`);
+                  }
+                  // Extract validator name from rule for proper policy lookup
+                  const validatorName = rule.rule_name?.toUpperCase() ||
+                                       gate.split(':').pop()?.toUpperCase() ||
+                                       'UNKNOWN';
 
-                // Use policy to get proper skip result with SKIPPED status
-                return createSkippedResult(validatorName, sdData.sd_type, SkipReasonCode.NON_APPLICABLE_SD_TYPE);
+                  // Use policy to get proper skip result with SKIPPED status
+                  return createSkippedResult(validatorName, sdData.sd_type, SkipReasonCode.NON_APPLICABLE_SD_TYPE);
+                }
               }
             }
 
@@ -979,7 +1103,8 @@ export class ValidationOrchestrator {
             ruleName: rule.rule_name,
             criteria: rule.criteria,
             executionOrder: rule.execution_order,
-            fromDatabase: true
+            fromDatabase: true,
+            ...(String(gate) === '4' ? { sdTypeSkipGuardBound: skipGuardBound } : {})
           }
         });
       }
@@ -1202,7 +1327,23 @@ export class ValidationOrchestrator {
 
       // Process results from this tier
       for (const { gate, gateResult } of tierResults) {
-        results.gateResults[gate.name] = gateResult;
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D1: mirrors the same merge applied in
+        // validateGates() above. TESTING/SECURITY finding (adversarial review, 2026-09-05): this
+        // is validateGatesAll(), a SECOND construction site (precheck/dry-run batch mode, used by
+        // HandoffOrchestrator.js's precheck and dry-run paths) -- currently zero live consumers
+        // read `.required` from its output or persist it anywhere, so this had no functional
+        // effect before or after, but leaving it unfixed would be a second place for this exact
+        // bug to resurface the moment anyone starts persisting this path's results.
+        const staticRequiredAll = gate.required !== false;
+        results.gateResults[gate.name] = (gateResult && typeof gateResult === 'object')
+          ? {
+              ...gateResult,
+              required: staticRequiredAll,
+              ...((gateResult.cache_hit !== true && gateResult.fail_replay !== true && typeof gateResult.required === 'boolean')
+                ? { required_effective: gateResult.required }
+                : {}),
+            }
+          : gateResult;
 
         results.totalScore += gateResult.score;
         results.totalMaxScore += gateResult.maxScore;

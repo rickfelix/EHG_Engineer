@@ -1,10 +1,27 @@
 // Tests for the leo_bridge build CONSUMER (SD-LEO-INFRA-AUTO-EXECUTE-LEO-002).
 // TS-1..TS-11 from the prospective testing-agent (row 97f8e272). The keystone TS-1 drives a NESTED
 // tree end-to-end against a mutable mock, so a single-seed (non-tree-walker) implementation fails it.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
+
+// SD-LEO-FIX-STRATEGIC-DIRECTIVES-UPDATED-001: markConsumed() now writes via the atomic
+// mergeMetadataKeys() partial-key merge (a real raw-pg connection) instead of a full-blob
+// .update({metadata:...}) against the injected mock supabase client. Redirect the merge onto
+// whichever MockSB was most recently constructed (tests run sequentially, one MockSB per test).
+let currentMockSb = null;
+vi.mock('../../../../lib/coordinator/safe-metadata-merge.mjs', () => ({
+  mergeMetadataKeys: async (sdKey, patch) => {
+    const rows = (currentMockSb && currentMockSb.tables.strategic_directives_v2) || [];
+    const row = rows.find((r) => r.sd_key === sdKey);
+    if (!row) return { merged: false, sdKey, error: 'not_found' };
+    row.metadata = { ...(row.metadata || {}), ...patch };
+    currentMockSb.updates.push({ table: 'strategic_directives_v2', payload: { metadata: row.metadata }, count: 1 });
+    return { merged: true, sdKey };
+  },
+}));
+
 import {
   runConsume, computeWorkableLeaves, isTreeComplete,
   maybeIdleNudge, tryAdvisoryLock, finalizeConsume, TERMINAL,
@@ -57,7 +74,7 @@ class MockQuery {
   }
 }
 class MockSB {
-  constructor(tables) { this.tables = tables; this.inserts = []; this.updates = []; }
+  constructor(tables) { this.tables = tables; this.inserts = []; this.updates = []; currentMockSb = this; }
   from(name) { return new MockQuery(this, name); }
 }
 

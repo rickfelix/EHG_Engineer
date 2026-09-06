@@ -1,7 +1,6 @@
 /**
  * Integration tests for Dashboard API Routes
- * Tests: GET /status, /state, /sd, /sd/:id, /prd, /prd/:id,
- *        /pr-reviews, /pr-reviews/metrics, /github/pr-review-webhook
+ * Tests: GET /status, /state, /sd, /sd/:id, /prd, /prd/:id
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -61,16 +60,9 @@ const mockSupabase = {
   from: vi.fn(),
 };
 
-const mockLoadPRReviews = vi.fn();
-const mockCalculatePRMetrics = vi.fn();
-const mockSavePRReview = vi.fn();
-
 vi.mock('../../../server/config.js', () => ({
   dbLoader: {
     supabase: mockSupabase,
-    loadPRReviews: mockLoadPRReviews,
-    calculatePRMetrics: mockCalculatePRMetrics,
-    savePRReview: mockSavePRReview,
   },
 }));
 
@@ -241,97 +233,9 @@ describe('Dashboard Routes', () => {
     });
   });
 
-  // --- GET /pr-reviews ---
-  describe('GET /pr-reviews', () => {
-    const handler = findRoute('get', '/pr-reviews');
-
-    it('returns reviews from dbLoader', async () => {
-      const reviews = [{ pr_number: 42 }];
-      mockLoadPRReviews.mockResolvedValue(reviews);
-
-      const req = createMockReq();
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      expect(res.jsonData).toEqual(reviews);
-    });
-
-    it('returns 500 on dbLoader error', async () => {
-      mockLoadPRReviews.mockRejectedValue(new Error('db fail'));
-
-      const req = createMockReq();
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      expect(res.statusCode).toBe(500);
-      expect(res.jsonData).toEqual({ error: 'Failed to load PR reviews' });
-    });
-  });
-
-  // --- GET /pr-reviews/metrics ---
-  describe('GET /pr-reviews/metrics', () => {
-    const handler = findRoute('get', '/pr-reviews/metrics');
-
-    it('returns metrics from dbLoader', async () => {
-      const metrics = { totalToday: 5, passRate: 80 };
-      mockCalculatePRMetrics.mockResolvedValue(metrics);
-
-      const req = createMockReq();
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      expect(res.jsonData).toEqual(metrics);
-    });
-
-    it('returns fallback defaults when dbLoader returns null', async () => {
-      mockCalculatePRMetrics.mockResolvedValue(null);
-
-      const req = createMockReq();
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      expect(res.jsonData).toEqual({
-        totalToday: 0,
-        passRate: 0,
-        avgTime: 0,
-        falsePositiveRate: 0,
-        complianceRate: 0,
-      });
-    });
-  });
-
-  // --- POST /github/pr-review-webhook ---
-  describe('POST /github/pr-review-webhook', () => {
-    const handler = findRoute('post', '/github/pr-review-webhook');
-
-    it('saves review and returns success', async () => {
-      mockSavePRReview.mockResolvedValue();
-
-      const body = { pr_number: 123, status: 'approved' };
-      const req = createMockReq(body);
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      expect(mockSavePRReview).toHaveBeenCalledWith(body);
-      expect(res.jsonData).toEqual({ success: true, pr_number: 123 });
-    });
-
-    it('returns 500 on save failure', async () => {
-      mockSavePRReview.mockRejectedValue(new Error('write error'));
-
-      const req = createMockReq({ pr_number: 999 });
-      const res = createMockRes();
-
-      await handler(req, res);
-
-      expect(res.statusCode).toBe(500);
-      expect(res.jsonData).toEqual({ error: 'Failed to process webhook' });
-    });
-  });
+  // GET /pr-reviews, GET /pr-reviews/metrics, and POST /github/pr-review-webhook were
+  // retired (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-A) -- pr_reviews had no CREATE TABLE
+  // anywhere in the repo's history and these routes silently swallowed every query
+  // error into an empty response. Their tests are removed alongside the routes.
 
 });

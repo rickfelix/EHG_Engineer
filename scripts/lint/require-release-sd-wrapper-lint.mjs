@@ -53,7 +53,14 @@ const ALLOWLIST_PATH = path.resolve(__dirname, 'require-release-sd-wrapper-allow
 
 const SCAN_DIRS = ['scripts', 'lib'];
 const SCAN_EXTENSIONS = new Set(['.mjs', '.cjs', '.js']);
-const EXCLUDE_DIR_SEGMENTS = ['node_modules', '.git', '.worktrees', 'dist', 'build', 'coverage', 'archive', '_deprecated'];
+// QF-20260903-532: 'one-off' added alongside the other non-codebase dirs below. This lint
+// walks the LIVE disk (not git-tracked-only), and scripts/one-off/ is the fleet's established
+// scratch-script dump (426 of 448 untracked files repo-wide at measurement time) that several
+// concurrent sessions write to continuously — a scratch file with a raw, unwrapped
+// rpc('release_sd', ...) call flipped this lint red at random depending on what another
+// session happened to be writing mid-scan. Those files are disposable experiments, never the
+// shipped codebase this lint exists to protect.
+const EXCLUDE_DIR_SEGMENTS = ['node_modules', '.git', '.worktrees', 'dist', 'build', 'coverage', 'archive', '_deprecated', 'one-off'];
 const EXCLUDE_FILE_RE = /(\.test\.|\.spec\.)/i;
 
 // The one sanctioned implementation site -- structurally exempt, never allowlisted.

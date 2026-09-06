@@ -29,15 +29,25 @@ const minsAgo = (m) => new Date(NOW - m * 60_000).toISOString();
  * chain and returned canned rows would pass identically for a read_at-keyed
  * implementation — it would prove the shape of the result and nothing about the query.
  */
-function sbDouble(rows, { count = null, error = null, writes = [] } = {}) {
-  const calls = { eq: [], is: [], not: [], order: [], limit: [], from: [], select: [] };
+function sbDouble(rows, { count = null, error = null, writes = [], receiptRows = [] } = {}) {
+  const calls = { eq: [], is: [], not: [], order: [], limit: [], from: [], select: [], in: [] };
+  // QF-20260906-162 (count-truncation-diff-lint): the receipt-existence-check query now
+  // chains an explicit .limit(20) after .in() (a literal, provable bound). Track whether
+  // THIS chain traversal saw .in() so the shared .limit() resolves the right result —
+  // the main query never calls .in(), so it is unaffected.
+  let sawIn = false;
   const builder = {
     select(sel, o) { calls.select.push([sel, o]); return builder; },
     eq(col, val) { calls.eq.push([col, val]); return builder; },
     is(col, val) { calls.is.push([col, val]); return builder; },
     not(col, op, val) { calls.not.push([col, op, val]); return builder; },
     order(col, o) { calls.order.push([col, o]); return builder; },
-    limit(n) { calls.limit.push(n); return Promise.resolve({ data: rows, error, count: count === null ? rows.length : count }); },
+    in(col, val) { calls.in.push([col, val]); sawIn = true; return builder; },
+    limit(n) {
+      calls.limit.push(n);
+      if (sawIn) { sawIn = false; return Promise.resolve({ data: receiptRows, error: null }); }
+      return Promise.resolve({ data: rows, error, count: count === null ? rows.length : count });
+    },
     update(patch) { writes.push(['update', patch]); return builder; },
     insert(patch) { writes.push(['insert', patch]); return builder; },
   };
@@ -53,7 +63,10 @@ describe('the predicate — acknowledged_at, never read_at', () => {
     const { client, calls } = sbDouble([row('a', 40)]);
     await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
 
-    expect(calls.from).toEqual(['session_coordination']);
+    // QF-20260906-162: a non-empty result also triggers the RECEIVED existence-check query
+    // (a second, separate hit on the same table) — every from() call here is still
+    // session_coordination, just two of them now instead of one.
+    expect(calls.from).toEqual(['session_coordination', 'session_coordination']);
     // THE ack predicate. A read_at-keyed implementation has .is('read_at', null) here and
     // would pass any assertion that only inspected the returned rows.
     expect(calls.is).toContainEqual(['acknowledged_at', null]);
@@ -82,7 +95,9 @@ describe('the predicate — acknowledged_at, never read_at', () => {
     const { client, calls } = sbDouble([row('a', 90)]);
     await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
     expect(calls.order).toContainEqual(['created_at', { ascending: true }]);
-    expect(calls.limit).toEqual([DEFAULT_LIST_CAP]);
+    // QF-20260906-162: the receipt-existence-check also calls .limit() (its own literal
+    // bound, count-truncation-diff-lint) — the main query's cap is still the FIRST call.
+    expect(calls.limit[0]).toBe(DEFAULT_LIST_CAP);
   });
 });
 
@@ -125,6 +140,67 @@ describe('quiet when empty, quiet when it cannot answer', () => {
     expect(await fetchOutstandingSignals(null, 'sess-1')).toBeNull();
     const { client } = sbDouble([row('a', 10)]);
     expect(await fetchOutstandingSignals(client, null)).toBeNull();
+  });
+});
+
+describe('QF-20260906-162: RECEIVED — a signal_receipt row exists', () => {
+  it('reports received:true when a correlated signal_receipt row exists', async () => {
+    const { client, calls } = sbDouble([row('a', 40)], {
+      receiptRows: [{ payload: { kind: 'signal_receipt', correlation_id: 'a' } }],
+    });
+    const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
+    expect(r.signals[0].received).toBe(true);
+    expect(calls.in).toContainEqual(['payload->>correlation_id', ['a']]);
+  });
+
+  it('reports received:false when no correlated receipt exists', async () => {
+    const { client } = sbDouble([row('a', 40)], { receiptRows: [] });
+    const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
+    expect(r.signals[0].received).toBe(false);
+  });
+
+  it('a receipt for a DIFFERENT row never marks this one received (correlation is per-row)', async () => {
+    const { client } = sbDouble([row('a', 40)], {
+      receiptRows: [{ payload: { kind: 'signal_receipt', correlation_id: 'unrelated-row' } }],
+    });
+    const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
+    expect(r.signals[0].received).toBe(false);
+  });
+
+  it('the receipt-existence-check erroring fails soft — the surface still returns, received:false', async () => {
+    // A purpose-built double: the MAIN query (terminates on .limit()) resolves normally; the
+    // SEPARATE receipt-check query (terminates on .in()) rejects. This isolates the specific
+    // try/catch around the receipt lookup in _fetchOutstanding from the function's OUTER
+    // fail-quiet catch — the receipt check failing must not take the whole surface down with
+    // it (an existence-check failure is strictly less severe than the main query failing).
+    let call = 0;
+    const client = {
+      from() {
+        call++;
+        if (call === 1) {
+          // main query
+          return {
+            select: () => ({
+              eq: () => ({
+                not: () => ({
+                  is: () => ({
+                    order: () => ({
+                      limit: () => Promise.resolve({ data: [{ id: 'a', created_at: minsAgo(40), read_at: null, payload: { signal_type: 'feedback' } }], error: null, count: 1 }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        // receipt-existence-check query — the failure surfaces at .limit() (QF-20260906-162
+        // added an explicit literal bound after .in() for count-truncation-diff-lint).
+        return { select: () => ({ eq: () => ({ in: () => ({ limit: () => Promise.reject(new Error('boom')) }) }) }) };
+      },
+    };
+    const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
+    expect(r).not.toBeNull();
+    expect(r.signals[0].received).toBe(false);
   });
 });
 

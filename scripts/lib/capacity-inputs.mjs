@@ -61,7 +61,8 @@ import { countAutoStartableQuickFixes, countClaimableWithVerifyQuickFixes } from
 // counts as "1 claimable leaf"), not the raw-unclaimed extent. Applied IN-MEMORY on the rows this
 // module already fetches — never a second SD-table read or per-child parent fetch.
 import { claimableDbFreeReason, blockerKeysFor } from './claimable-leaves.mjs';
-import { isLiveCountableWorker } from './live-countable-worker.mjs';
+import { RELEASED_WORKER_STATUSES } from './live-countable-worker.mjs';
+import { seatIdleVerdict } from '../../lib/fleet/seat-idle-predicate.mjs';
 // SD-FDBK-FIX-WORKER-ENGAGEMENT-RATIO-001: the engagement gauge's classifier — a standalone
 // module (FR-7) so it has a real test seam, imported here (forecaster side) and independently
 // by scripts/adam-coordinator-health.mjs (KPI-1 side). Never re-derives belt/claim logic itself.
@@ -78,6 +79,31 @@ const { getActiveCoordinatorId } = require('../../lib/coordinator/resolve.cjs');
 // the full reasoning: process_alive_at is currently fleet-broken, so keying the masked-stall detector
 // on it would mostly emit false positives. Read at call time, not at import, so a test can flip it.
 const maskedStallDetectOn = () => process.env.LEO_MASKED_STALL_DETECT === 'on';
+
+// SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D FR-3/FR-4: pure-extracted worker-membership predicate,
+// matching gatherCapacityInputs's own `workers` filter exactly (identity+status ONLY, mirroring
+// isLiveCountableWorker's pre-migration semantics -- sdHolderSessionIds deliberately omitted).
+// Exported so the frozen-population differential harness calls the REAL production predicate
+// rather than a harness-side reimplementation.
+// DISCLOSED DIVERGENCE (EXEC-phase TESTING review, sub_agent_execution_results
+// cf105d66-1f03-4e93-9389-ce22df2f581a): isLiveCountableWorker's old check was
+// `if (md.is_coordinator) return false` -- TRUTHY, so it also caught non-boolean/non-'true'-string
+// truthy values (e.g. the number 1) and, separately, could be defeated by the falsy string
+// "false" (a non-empty string is truthy, but "false" as a literal JS value -- not achievable via
+// `if (md.is_coordinator)` -- is moot; the real gap is numeric/other truthy shapes). The new
+// coordinator-flag axis is a STRICT `=== true || String(...) === 'true'` check, narrower than the
+// old truthy check. Net effect: a session with a non-boolean/non-'true'-string truthy
+// is_coordinator value now counts as idle where it previously did not (idleNow could increase).
+// Verified zero live claude_sessions rows carry a non-boolean is_coordinator value -- latent, not
+// live -- documented rather than special-cased, since matching the old TRUTHY check would
+// re-widen the coordinator-flag axis for every OTHER consumer too.
+export function isCapacityForecastWorker(session, ctx = {}) {
+  return seatIdleVerdict(session, {
+    coordinatorId: ctx.coordinatorId ?? null,
+    nowMs: ctx.nowMs,
+    statusExcludeSet: RELEASED_WORKER_STATUSES,
+  }).idle;
+}
 
 // ── tunables ──
 export const HEARTBEAT_LIVE_MS = 5 * 60 * 1000;   // a session is "live" if it heartbeat within 5 min
@@ -325,6 +351,40 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     const { data: deps } = await sb.from('strategic_directives_v2').select('sd_key,status').in('sd_key', Array.from(depKeys));
     (deps || []).forEach(d => { depStatus[d.sd_key] = d.status; });
   }
+  /*
+   * SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-D (FR-4) — resolve parents the non-terminal fetch cannot see.
+   *
+   * The fetch above filters status NOT IN (completed, cancelled, DEFERRED). A deferred parent is
+   * therefore missing from byId/byKey, and parentLeadPendingVerdict(undefined) returns false by design
+   * (lib/fleet/claim-eligibility.cjs:570-571) — so its children silently count as dispatchable belt.
+   * Bounded and batched, mirroring the depKeys fetch above: refs are Set-deduped, split by shape
+   * (parent_sd_id may hold EITHER a uuid id or an sd_key, since parentLeadPending resolves via
+   * .or(id.eq,sd_key.eq)), and issued as at most TWO .in() reads. A bare .in('id', refs) would both
+   * miss sd_key-shaped refs and error on a non-uuid value.
+   */
+  const extraParents = new Map();
+  {
+    const PARENT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const missing = [...new Set((sds || [])
+      .map(d => d.parent_sd_id)
+      .filter(ref => ref != null && !byId.has(ref) && !byKey.has(ref)))];
+    if (missing.length) {
+      const cols = 'id, sd_key, status, current_phase';
+      const uuidRefs = missing.filter(r => PARENT_UUID_RE.test(String(r)));
+      const keyRefs = missing.filter(r => !PARENT_UUID_RE.test(String(r)));
+      const reads = [];
+      if (uuidRefs.length) reads.push(sb.from('strategic_directives_v2').select(cols).in('id', uuidRefs).limit(500));
+      if (keyRefs.length) reads.push(sb.from('strategic_directives_v2').select(cols).in('sd_key', keyRefs).limit(500));
+      const results = await Promise.all(reads.map(q => Promise.resolve(q).catch(() => ({ data: [] }))));
+      for (const res of results) {
+        for (const p of ((res && res.data) || [])) {
+          if (p.id != null) extraParents.set(p.id, p);
+          if (p.sd_key) extraParents.set(p.sd_key, p);
+        }
+      }
+    }
+  }
+
   const claimable = [];
   const claimsBySession = {};
   let rawUnclaimed = 0;      // every unclaimed non-terminal row, pre-exclusion — the extent the bug measured
@@ -360,8 +420,13 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
     // Parent-LEAD IN-MEMORY: an orchestrator child whose parent has not passed LEAD is not yet
     // dispatchable. Resolve the parent from the already-fetched non-terminal set (by id or sd_key) and
     // apply the shared pure verdict — no per-child DB round-trip. An absent/terminal parent => not pending.
+    //
+    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-D (FR-4): extraParents is consulted because the non-terminal
+    // fetch above EXCLUDES status='deferred', so a DEFERRED parent is absent from byId/byKey and
+    // parentLeadPendingVerdict(undefined) returns false BY DESIGN — the child then counts as claimable.
+    // That is the same fail-open over-count this SD fixed in the check-in gauge, on a second surface.
     if (d.parent_sd_id != null) {
-      const parent = byId.get(d.parent_sd_id) || byKey.get(d.parent_sd_id);
+      const parent = byId.get(d.parent_sd_id) || byKey.get(d.parent_sd_id) || extraParents.get(d.parent_sd_id);
       if (parentLeadPendingVerdict(parent)) { ineligibleExcludes++; continue; }
     }
     claimable.push(d);
@@ -378,7 +443,16 @@ export async function gatherCapacityInputs(sb, { now = Date.now() } = {}) {
   // excluded even when it is not the CURRENTLY-active coordinator id.
   let coordinatorId = null;
   try { coordinatorId = await getActiveCoordinatorId(sb); } catch { coordinatorId = null; }
-  const workers = (sessions || []).filter(s => isLiveCountableWorker(s, coordinatorId));
+  // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-D / FR-2: migrated onto the shared predicate. Identity+status
+  // ONLY, matching isLiveCountableWorker's exact semantics (coordinator-by-id/adam/non_fleet/fixture/
+  // quarantined/parked via the always-applied base axes, plus RELEASED_WORKER_STATUSES via
+  // statusExcludeSet) -- sdHolderSessionIds is deliberately OMITTED here, not migrated. The busy/idle
+  // split just below needs the actual CLAIM ROWS (claimsBySession) for its ETA computation, which a
+  // boolean-only predicate cannot supply, so that split stays a direct lookup rather than a second
+  // seatIdleVerdict call. Per the FR-3 matrix: this consumer does not yet check QF-holder or
+  // directed-work -- unchanged from today, and any change to that is a deliberate FR-3-tracked
+  // broadening proven by the differential harness, not an incidental side effect of this migration.
+  const workers = (sessions || []).filter(s => isCapacityForecastWorker(s, { coordinatorId, nowMs: now }));
 
   // SD-LEO-FEAT-COORDINATOR-CAPACITY-FORECAST-001: compute the genuinely-stalled idle workers via the
   // canonical detector (loop alive + no claim + claimable work waiting, parked workers excluded). The

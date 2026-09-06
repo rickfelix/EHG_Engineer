@@ -109,9 +109,20 @@ export function createPerformanceCriticalGate(supabase) {
         }
 
         // Query PERFORMANCE sub-agent results
+        //
+        // QF-20260903-137: selects `metadata`, NOT `findings`. There is NO `findings` column on
+        // sub_agent_execution_results (nor `results`) — only verdict, critical_issues, warnings and
+        // metadata exist. Selecting it returned Postgres 42703 on EVERY call, so perfError was
+        // ALWAYS truthy and this gate returned skip=true with skipReason 'PERFORMANCE sub-agent not
+        // run' — a false statement, measured against 44 live PERFORMANCE rows. The gate had never
+        // once evaluated a barrel-import or waterfall violation: dead by construction, while its own
+        // skip message blamed a missing sub-agent run. Findings live at metadata.findings.*
+        // (confirmed on live row 3dda18ad; 25 of 44 rows resolve that path — the other 19 are
+        // crash/tombstone rows carrying no findings, which still skip, so this makes the gate live
+        // on ~57% of rows, NOT 100%).
         const { data: perfResults, error: perfError } = await supabase
           .from('sub_agent_execution_results')
-          .select('verdict, findings, critical_issues, warnings')
+          .select('verdict, metadata, critical_issues, warnings')
           .eq('sd_id', sdUuid)
           .eq('sub_agent_code', 'PERFORMANCE')
           .order('created_at', { ascending: false })
@@ -126,7 +137,7 @@ export function createPerformanceCriticalGate(supabase) {
         }
 
         // Check for barrel import violations
-        const barrelFindings = perfResults.findings?.barrel_import_audit || {};
+        const barrelFindings = perfResults.metadata?.findings?.barrel_import_audit || {};
         const newBarrels = barrelFindings.new_barrels || 0;
 
         if (newBarrels > 0) {
@@ -167,7 +178,7 @@ export function createPerformanceCriticalGate(supabase) {
         }
 
         // Check for waterfall violations
-        const waterfallFindings = perfResults.findings?.waterfall_detection || {};
+        const waterfallFindings = perfResults.metadata?.findings?.waterfall_detection || {};
         const waterfallCount = waterfallFindings.waterfall_count || 0;
 
         if (waterfallCount > 0 && enforcementMode === 'REQUIRED' && sdType === 'performance') {

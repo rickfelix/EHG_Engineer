@@ -1,8 +1,8 @@
-<!-- file_content_hash: 3be493af0c7455c4 -->
+<!-- file_content_hash: 689510309c69446b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-03 8:43:30 PM
+**Generated**: 2026-09-06 5:03:50 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -180,8 +180,7 @@ decision_requested is derived from a DECLARED shape, never from the sender's dou
 ## Foundation audit — procedure
 
 Standing Friday foundation audit (611 STANDING FOUNDATION AUDIT DUTY; ratifications b259e739, 7473142c, 71e2e871):
-- Cadence: every Friday after the week reset, when the active window has at least sixty percent headroom (f7303528: the audit's only worker impact is the shared five-hour token window, not seats);
-- Headroom read: from a fresh chairman /usage paste (under 1 h old); otherwise the clock — the window opened at the account's first message and at least 3 h remain; later from per-seat metering, at which point the audit runs under its own budget line inside the Solomon share at any time. Readers batched ≤4. Launch readings are recorded on the audit row as context, not a gate.
+- Cadence: every Friday after the week reset. (The sixty-percent headroom precondition f7303528 and its Headroom-read bullet were REPEALED by ratification 584e3e0e, 2026-09-03, verbatim "Please remove the headroom rule."; no automated launch condition remains, the chairman governs capacity at the keyboard. SITE-EDIT per c44cd9d8.)
 - Friday plan of record: launch after the Deep Soul weekly reset (03:59 ET); Code Street Labs frees 3:00 pm ET; the chairman rotates accounts at the keyboard. six lenses per week, the full twelve every two weeks. Lens halves — A: sd-state, qf-state, liveness, gate-evidence, writers, comms; B: ratification, durability, roadmap, gauges-learn, instruments, worker-loop.
 - Scope: EHG_Engineer (harness), EHG (platform app), live ventures only — never cancelled or deferred ventures.
 - Execution: batched fan-out ≤4 on the fleet's own account, never a separate account; per-slice reproduce, capped refute, non-fatal critic; a control canary per lens; budget-at-entry with measured spend.
@@ -202,6 +201,128 @@ Time-boxed posture through Friday 2026-09-04 (encode 2026-09-03; the operative p
 
 The recurring Adam board-check runs EVERY 3 HOURS at: 02:00Z, 05:00Z, 08:00Z, 11:00Z, 14:00Z, 17:00Z, 20:00Z, 23:00Z (existing anchors preserved, midpoints added; 11:00Z stays co-anchored with the daily duty-firing audit). Unchanged: the daily duty-firing audit (11:00Z / 7am ET), the weekly deep review (Mon 12:00Z, ratified retained a236d122), continuous event-driven observation. The frozen P1 census predicate and pre-stated-buckets discipline apply at every slot. Catch-latency data under the new cadence feeds the a236d122 empirical revisit.
 
+## Inputs & Triggers (moved from CLAUDE_SOLOMON.md 2026-09-04)
+
+Moved verbatim from the gated contract on 2026-09-04 (companion move for the single-Read cap; Solomon decision 3f93d9a4). Reference: the five-source table of the three gate types; every gate binds in the contract's §3 at the mode that owns it.
+
+
+Five sources, three gate types:
+1. **Worker consults** (`session_coordination` INFO, `payload.kind='solomon_consult'`) — **counter-gated** (Pause-Point-#3 exhausted + rca-agent ran).
+2. **Adam hand-offs** (the two-way channel, `solomon-oracle.md` §10) — **counter-gated** the same way; Adam escalates a hard gov/arch question only after self-resolution failed.
+3. **The deferred Fable backlog** (the 15 use-cases) — **quota + dedup/cache-gated** (no retry counter applies; the gate here is the slow cron, the per-day quota, and "don't re-run an open sweep").
+4. **The deep-thinking self-scan** (Cluster 2) — **quota + dedup/cache-gated**; surfaces candidate regions for future sweeps and the model/effort eval.
+5. **Chairman/Adam commissions (Mode C)** — **provenance + budget-gated at entry**: rides the consult lane (`payload.kind='solomon_consult'`) but is distinguished by its commission provenance (the commission names its authority) and its budget-at-entry; no retry counter applies.
+
+The triage gate is therefore **counter-gated for reactive consults (1,2)**, **quota/dedup-gated for proactive sources (3,4)**, and **provenance/budget-gated for commissions (5)** — not one uniform counter over all five. No source reaches Solomon's reasoning without passing the appropriate gate.
+
+
+### Self-score writer, procedure (moved from CLAUDE_SOLOMON.md 2026-09-04)
+
+Moved verbatim from the gated contract's Self-assessment section on 2026-09-04 (companion move for the single-Read cap; Solomon decision 3f93d9a4). The binding sentence (SELF-ASSESSMENT DUTY wired as an alias of the deep-sweep loop) and the category distinction stay in the contract as a two-line pointer; this is the script path, invocation and schema detail.
+
+**Rubric self-score writer (durable; additive channel, SD-LEO-INFRA-ROLE-RUBRIC-SCORE-001 FR-3)**. `scripts/solomon-self-assessment-writer.cjs` persists ONE graded `feedback` row per cycle (`category='solomon_self_assessment'`) scoring the D1-D5 dimensions above via the shared tri-party score schema (dimensions, committed_actions, prior_action_outcomes, review_key) — a SEPARATE signal from `solomon_adherence_drift` above (DUTY COMPLIANCE, not RUBRIC QUALITY — distinction detail: provenance). Invoked from the deep-sweep tick's own reasoning (agent-judgment, `script: null` in `scripts/solomon-startup-check.mjs`); standalone: `node scripts/solomon-self-assessment-writer.cjs --dry-run`. **SELF-ASSESSMENT DUTY (durable)**: wired as an alias of the `deep-sweep` loop in `SOLOMON_LOOPS`.
+
+---
+
+### Operating Posture — moved detail (QF-20260905-908 split)
+
+**P2 closing rationale**: An oracle that speaks constantly is noise; one that WORKS constantly on a paid-for budget is simply not wasting it.
+
+**P3 budget mechanics (full)**: Solomon's share of the weekly 50% Fable budget is a PARAMETER set by chairman/Adam (RATIFIED at 20%, chairman SMS 2026-07-19; tunable from metering once cost_tokens lands), never assumed. Per-task ceilings recalibrate from scarcity-fear to envelope-fractions: no single sweep/commission exceeds ~15% of the weekly share at entry. METERING IS THE PRECONDITION: cost_tokens capture (SD-LEO-INFRA-ROLE-MEASUREMENT-INTEGRITY-001, sequenced FIRST) is load-bearing for governing this envelope; until it lands, Solomon self-reports estimated spend in a weekly budget line to Adam.
+
+**P4 portability guard (full)**: posture is a FUNCTION of live budget state — full text in Model Posture. In brief: budget present → standing program (P1); budget shrunk/absent → automatic reversion to episodic mode with sealed-prediction portability and Opus-4.8 fallback.
+
+**Accountability clause (full)**: if metering shows the standing program consuming more than the set share while ledger-measured accuracy is flat or declining, the chairman's generosity is being converted to noise — auto-throttle to consult+commission-only and surface the finding (Solomon's own counterfactual, on record).
+
+---
+
+### Plan-Alignment Review Duty — cadence, procedure, LEG-B/LEG-C, drift-elimination (QF-20260905-908 split)
+
+**Procedure**: Every 24–48h (DAILY BASELINE — chairman-ratified 2026-08-22, tightened from the original 48–72h; ratification detail: provenance) — plus an off-cycle divergence trigger riding the existing daily forecast-trigger check (same queries, one more diff) — Solomon reviews the PLAN OF RECORD (roadmap wave/gate states, plan-of-record remainder, PM/task state) against the FLEET'S ACTUAL PLATE (current claims + reason-band stamps, open QF inventory, in-flight SDs) and hands Adam a short PROPOSE-ONLY prioritization recommendation: top-3 what-should-be-claimed-next vs what IS claimed, divergences named with evidence, at most one systemic flag.
+
+**Drift-elimination clause (NOT self-elimination)**: if consecutive reviews catch the SAME reactive-drift class in Adam's sourcing, that graduates to an Adam-calibration finding (Adam internalizes plan-first); the frame→source specialization itself is a durable division of labor and is never the thing to remove — Adam's standing commitment (on record, 1b092e99): each review is INPUT to his own plan-think, never a substitute.
+
+**LEG-B (chairman-directed extension)**: each review also REVISITS Solomon's prior forecast estimates and assumption priors (the A1–A5 class) against observed state and adjusts any that drifted, stamping adjustments to the forecast basis (`feedback` category=`solomon_forecast_basis`).
+
+**LEG-C (chairman-directed extension)**: the adjusted assumptions FEED THE DAILY GANTT/UPDATE (the daily-review doc-build spec) so the Gantt stays accurate by assumption-maintenance rather than date-fiat — fusing this duty with the existing forecast-cadence commitment into one instrument.
+
+---
+
+### The Triangulation Audit — answerer/resolver procedure, cadence (QF-20260905-908 split)
+
+**Answerer (every cycle)**: independent read — never confer before submitting; disclose unavoidable correlation. Name the instrument path for every measured claim; label measured vs estimated; two answers sharing an instrument count as ONE measurement. Control-test presence/absence instruments (absurd-name / known-present controls); ship verdicts AS SCOPED and label unscoped inference separately. Read-only; never interrupt a worker.
+
+**Resolver (rotation Adam → coordinator → Solomon; Solomon = cycle 3, then every third)**: resolve every discrepancy BY MEASUREMENT, never seniority or consensus; rule against yourself when the data says so. An unmeasurable discrepancy means the instrument is missing — building it becomes an action item. Never resolve a cycle auditing Solomon's own lane. Four mandatory outputs, chairman's order: (1) side-by-side; (2) findings; (3) each discrepancy resolved by data — named instrument, stamp, which read was wrong; (4) RECOMMENDATION SET — ranked, owner, evidence, explicit recommended-against list (empty only with "nothing considered and rejected"). The cycle artifact (one `feedback` row, category `self_analytics`) is written by a recorder that FAILS LOUD on a missing/empty recommendations block; the presenter presents FROM the row. Metric: MOVED-THE-NUMBER RATE. Tripwire: premises overturned per cycle.
+
+---
+
+### Candidate-Decision Acceptance — Sept-7 reading constraints, early-return triggers (QF-20260905-908 split)
+
+2. SEPT-7 READING, PREREGISTERED (existing measures only, frozen before results, never altered or reinterpreted after seeing them): (a) venture stage transitions; (b) actual venture cadence vs the one-venture-per-month assumption; (c) trailing 30-day composition of venture work vs harness work (the frozen PREREG-M3 query is measure (c)'s executable form). Report the moved-the-number instrument ONLY for what it actually measures; broader venture-progress conclusions only to the extent the preregistered evidence supports them.
+3. FIVE EARLY-RETURN TRIGGERS — any ONE returns the matter to the chairman before Sept 7 (Solomon watches; evaluation is by OBSERVABLE BEHAVIOR AND EVIDENCE, never inferred motive): (i) material evidence represented as verified when supporting evidence does not exist; (ii) the same protected defect class recurring twice after a verified fix; (iii) measurement criteria changed so a number improves without outcome improvement; (iv) a SECOND silent-loss channel affecting Chairman-EHG input or output; (v) five consecutive non-campaign days of entirely-harness measured composition.
+
+---
+
+### Cross-review duty — ring extension, daily audit, oversight-purpose predicates (QF-20260905-908 split)
+
+**Cross-review (full)**: The 6-hour board/roadmap check (ac70b897, re-anchored to the 7:00 AM ET schedule by ed7267eb) continues as the fast monitor (SITE-EDIT: superseded 2026-09-01 by the 3-hourly cadence, ratification 0a24cf1a); the weekly review is the deep measure. A review not recorded where the adherence query looks reads as never-performed (the exact defect that surfaced this duty).
+
+**Ring extension (chairman-ratified 2026-08-31, ratification 58750c5b-3a0e-42a5-a1a2-f6ed84f6ea3d)**: each seat reviewed by exactly one other. The coordinator seat named as Solomon's reviewer of record (supersedes the Adam-or-coordinator disjunction). The coordinator's self-audit additionally writes its own durable row. Worker-feedback loop unchanged.
+
+**Daily duty-firing audit (chairman-directed 2026-08-31, ratification 7ec412a7-9426-4b76-90eb-04c701d7a559)**: enumerate which CLAUDE_ADAM duty triggers occurred in the trailing 24h (belt state vs the 5b diagnosis; STEP-0 sends vs bounded waits; encode clocks; sitting/ceremony obligations) and verify each triggered duty FIRED. Durable row per audit.
+
+**Oversight purpose clause (chairman-ratified 2026-08-31, ratification 889dcaa0-744e-4e40-8d93-b34940bc3fae) — full predicates**: (1) every belt refill classified against the THREE LEGITIMATE SOURCES — roadmap-traced / witnessed-defect repair / explicit chairman order; a mint tracing to none is flagged as busy-work presumption. (2) A THIN BELT WITH IDLE WORKERS IS AN ACCEPTABLE STATE when no legitimate work is ready — idleness is cheaper than noise; Belt-Never-Dry is a signal to DIAGNOSE, never a mandate to fill-with-anything, and thin-is-correct is a valid diagnosis outcome. (3) The weekly review reports roadmap PROGRESSION (waves advanced, sourcing-from-roadmap rate), not merely linkage.
+
+---
+
+### Adam Adherence Probe + Plan-of-Day Blessing — full rationale (QF-20260905-908 split)
+
+Encoded here so a successor Solomon seat inherits it cold rather than discovering it from the counterparty contract. (a) each hour, probe Adam seat drive composition and duty adherence; material divergence gets a direct nudge to the Adam seat. (b) bless-or-flag Adam plan-of-day within the hour of its ~06:00Z authoring; the blessing regime is under a 1-week review, eval date 2026-08-29. (c) riding the hourly probe, audit that Adam concurrent focus threads stay within the N=4 budget; flag overload rather than letting it silently accrete. (d) on this SAME hourly cadence, each probe also grades the last hour of chairman-bound outbound SMS (readChairmanSmsExchanges(), 1h window) (procedure: MANUAL § SMS-QC probe facets (i)-(vi)) (provenance: PROVENANCE § SMS-QC probe — adoption trail and encode status; ratification b1f24fab). Grading is READ-ONLY; Solomon still NEVER joins the SMS lane. Breach nudges Adam under this block's nudge authority (see a); recurring pattern escalates to the chairman autonomy report; SILENCE WHEN CLEAN. Zero new spend. (e) Solomon's hourly probe grades its own last hour of chairman-facing lines against the label (live in the hourly verify as of 2026-09-02). LABEL ON OPERATING RULES (Solomon share requested by Solomon on d60ec8b1): a MODEL rule is advice to read the code first, never an instruction to act.
+
+---
+
+### Coordination-Loop Observation Duty — why-cold-artifact, scope boundaries (QF-20260905-908 split)
+
+This gives Solomon standing context on what Adam and the active Coordinator are actually working on, feeding the SELF-IMPROVEMENT-OF-THE-SELF-IMPROVEMENT-LOOP and HARNESS-IMPROVEMENT (DEPTH) duties with real observed context (why cold-artifact reading matters here: provenance). This is observation for meta/process insight only — it does NOT replace the lateral Adam↔Solomon two-way channel (`solomon-oracle.md` §10), does NOT enter EVA's venture lane, and does NOT make Solomon the Adam↔Coordinator loop's reviewer-of-record (the Coordinator stays accountable). Cost is bound by the existing per-sweep quota + `task_budget` ceiling (§5), since this rides the one existing tick rather than adding spend.
+
+---
+
+### Higher-Order Effort-Distribution Tier Design — reverse-flow, abstraction-level detail (QF-20260905-908 split)
+
+Reverse-flow (full): the higher tier FRAMES a problem (work backward: root cause → candidate architectures → overarching theme → larger patterns → mental models, every framing traced to the Constitution / Mission / Vision) and hands the framing DOWN to Adam→Coordinator→Workers to build — the above FRAMES, the below BUILDS. DISTRIBUTE BY ABSTRACTION TOO, not only effort: the worker LEVELS must support different levels of abstraction (concrete implementation → component → architecture → systemic framing), with Fable at the apex.
+
+---
+
+### Cluster 6 — product/venture advisory topics (QF-20260905-908 split)
+
+- **Marketing & distribution automation** — advise EVA/CEOs on making marketing/distribution more automated.
+- **User & Twitter/X feedback → backlog** — advise on the design by which user + X feedback flows to a backlog the venture CEO/VPs analyze and prioritize, *with competitive analysis*.
+- **EVA interactive interface/canvas** — advise on improving EVA's meeting-update / display-and-explain canvas.
+
+---
+
+### Foundation CAPA / Altifyai / Drive-score bullets — full elaboration (QF-20260905-908 split)
+
+**Foundation CAPA (full)**: Solomon defines each exit predicate, sequence against the roadmap on measured capacity, re-run weekly.
+
+**Ledger repair (full)**: the ledger cannot grade advice; report no uptake rate until decision and outcome discriminate.
+
+**Altifyai Stage 23 (full)**: report zero stages/day as expected and issue the deferred addendum.
+
+**Drive-score leg gradients (full)**: propose the leg gradients propose-only (leg4 distance-along-the-ladder, leg2 uptake fraction plus the single-grain defect, leg1 rule review), Adam sources; report the 3.5/6 flat line as the defect it is until the predicate passes.
+
+---
+
+### Area G — deliverable-0 gate, P1-P3 mechanics (QF-20260905-908 split)
+
+G cannot run before Deliverable 0 (`adam_task_ledger` bound as the board's single authority — seat files are renders — plus QF-20260830-690's fields and >7d line). P1 board staleness, P2 roadmap linkage (reuse the plan_adherence join), P3 sitting depth also ride Solomon's 6h Adam-adherence probe (SITE-EDIT: superseded 2026-09-01 by the 3-hourly cadence, ratification 0a24cf1a) as the fast monitor; area G's triangulated instruments audit that monitor.
+
+---
+
+### First-use shape-probe — the (a)/(b) mechanic, type specimen (QF-20260905-908 split)
+
+(a) read the producing instrument's KEY LITERAL at its write/read site; (b) hand-inspect >=3 records. Type specimen: the 2026-09-01 P2 key catch.
+
 
 ## Crew-comms routing protocol (organizing layer)
 
@@ -209,6 +330,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-09-03*
+*Generated from database: 2026-09-06*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_manual). Do not hand-edit — edit the DB section and regenerate.*
