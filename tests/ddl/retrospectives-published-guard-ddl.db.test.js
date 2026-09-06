@@ -111,7 +111,12 @@ BEGIN
 END; $f$;
 CREATE TRIGGER validate_retrospective_quality_trigger BEFORE UPDATE ON public.retrospectives
   FOR EACH ROW EXECUTE FUNCTION public._stub_auto_validate_retrospective_quality();
+`;
 
+// trg_retrospectives_audit() is only CREATEd by the migration itself (it re-declares the live
+// function) -- binding a trigger to it inside STUB_SCHEMA, BEFORE the migration runs, would fail
+// with "function does not exist". This binding must run AFTER applyMigration().
+const POST_MIGRATION_STUB = `
 CREATE TRIGGER trg_retrospectives_audit_trigger AFTER INSERT OR DELETE OR UPDATE ON public.retrospectives
   FOR EACH ROW EXECUTE FUNCTION public.trg_retrospectives_audit();
 `;
@@ -158,6 +163,7 @@ beforeAll(async () => {
   await client.connect();
   await client.query(STUB_SCHEMA);
   await applyMigration();
+  await client.query(POST_MIGRATION_STUB);
 }, 120_000);
 
 afterAll(async () => {
@@ -210,12 +216,24 @@ describe('retrospectives_published_guard DDL (ephemeral tier)', () => {
   });
 
   it('TS-2c: the actor stamp reflects app.retro_writer_actor when the caller sets it', async () => {
+    // SET LOCAL only scopes to the current transaction -- issuing it as a standalone
+    // client.query() call with no surrounding BEGIN/COMMIT has no transaction to be local TO, so
+    // Postgres discards it at that statement's own implicit commit and the next UPDATE would see
+    // current_setting(...)=NULL again. Wrap explicitly as separate calls on the SAME client/session
+    // (pg's extended query protocol, used whenever params are passed, does not support multiple
+    // statements in one query() call, so BEGIN/SET LOCAL/UPDATE/COMMIT must be issued separately).
     const id = await seedPublishedCompletion();
-    await client.query("SET LOCAL app.retro_writer_actor = 'retro_sub_agent'");
-    const result = await attempt(
-      "UPDATE public.retrospectives SET description = 'y', retro_write_token = 'retro_sub_agent' WHERE id = $1",
-      [id],
-    );
+    await client.query('BEGIN');
+    let result;
+    try {
+      await client.query("SET LOCAL app.retro_writer_actor = 'retro_sub_agent'");
+      result = await attempt(
+        "UPDATE public.retrospectives SET description = 'y', retro_write_token = 'retro_sub_agent' WHERE id = $1",
+        [id],
+      );
+    } finally {
+      await client.query(result?.ok ? 'COMMIT' : 'ROLLBACK');
+    }
     expect(result.ok).toBe(true);
     const audit = await newestAudit(id);
     expect(audit.changed_by).toBe('retro_sub_agent');
@@ -250,6 +268,25 @@ describe('retrospectives_published_guard DDL (ephemeral tier)', () => {
     const after = await readRetro(id);
     expect(after.learning_extracted_at).not.toBeNull(); // sibling ran
     expect(after.quality_score).toBe(160); // sibling ran: 16 * 10, guard did not refuse or corrupt it
+  });
+
+  it('TS-F4: refuses a bare demotion (status change alone, no content change) on a PUBLISHED SD_COMPLETION row without a token', async () => {
+    // testing-agent finding F-4 (EXEC evidence b60f5de1): without status/retro_type in the
+    // protected set, a two-statement "demote to DRAFT, rewrite freely, re-publish" sequence would
+    // bypass the guard entirely -- this pins the FIRST statement of that sequence being refused.
+    const id = await seedPublishedCompletion();
+    const result = await attempt("UPDATE public.retrospectives SET status = 'DRAFT' WHERE id = $1", [id]);
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('RPGD1');
+  });
+
+  it('TS-F4b: the same demotion succeeds with a valid retro_write_token', async () => {
+    const id = await seedPublishedCompletion();
+    const result = await attempt(
+      "UPDATE public.retrospectives SET status = 'DRAFT', retro_write_token = 'restore_from_audit' WHERE id = $1",
+      [id],
+    );
+    expect(result.ok).toBe(true);
   });
 
   it('a DRAFT (non-PUBLISHED) SD_COMPLETION row is never guarded, token or not', async () => {

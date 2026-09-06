@@ -91,7 +91,7 @@ describe('retrospectives table writer census (source-scan, not literal-match-onl
     expect(staleInAllowlist, 'KNOWN_WRITERS entries no longer performing a write (remove or re-verify)').toEqual([]);
   });
 
-  it('the 8 isSafeToWriteRetro wire-in sites (guard coverage) are a subset of KNOWN_WRITERS (drift alarm, not the guard test itself)', () => {
+  it('the 7 isSafeToWriteRetro wire-in FILES (8 call sites -- orchestrator-completion-guardian.js wires both INSERT and UPDATE) are a subset of KNOWN_WRITERS (drift alarm, not the guard test itself)', () => {
     const guardSites = [
       'scripts/modules/handoff/retrospective-enricher.js',
       'scripts/modules/handoff/executors/exec-to-plan/retrospective.js',

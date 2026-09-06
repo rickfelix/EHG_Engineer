@@ -8,6 +8,20 @@
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE.
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
+--
+-- APPLY HELD BY PACKET TERMS (testing-agent finding F-3, EXEC evidence b60f5de1-1237-47c2-8c82-
+-- 7586580cee2f): registering an identity in retro_canonical_writer_policy() does not make a caller
+-- SET retro_write_token. As of this SD, ONLY scripts/one-off/restore-retro-from-audit.mjs (FR-0)
+-- actually sets it. None of the other 7 registered identities' real call sites
+-- (scripts/modules/handoff/retrospective-enricher.js, .../executors/{exec-to-plan,lead-to-plan,
+-- plan-to-exec}/retrospective.js, .../executors/plan-to-lead/state-transitions.js,
+-- .../orchestrator-completion-guardian.js, lib/sub-agents/retro/db-operations.js) have been wired
+-- to set the token yet. Applying this migration BEFORE that wiring lands would refuse every one of
+-- them the next time they touch a PUBLISHED SD_COMPLETION row -- mirroring the exact "approved
+-- today, applies only after N writers wired" hold already used by
+-- 20260824_strategic_directives_canonical_writer_choke.sql. Do not apply until each of those 7
+-- sites sets retro_write_token in its own UPDATE statement (a follow-up SD/QF), and that wiring is
+-- verified live, not merely reviewed.
 -- Per the SD's TR-1, ZERO live DDL apply occurs during its EXEC phase. Everything in this file was
 -- proven against an EPHEMERAL vanilla PostgreSQL 16 with a hand-stubbed narrow schema
 -- (tests/ddl/retrospectives-published-guard-ddl.db.test.js), never against the real table.
@@ -158,7 +172,15 @@ BEGIN
       OR NEW.bmad_insights                         IS DISTINCT FROM OLD.bmad_insights
       OR NEW.business_value_delivered              IS DISTINCT FROM OLD.business_value_delivered
       OR NEW.customer_impact                       IS DISTINCT FROM OLD.customer_impact
-      OR NEW.performance_impact                    IS DISTINCT FROM OLD.performance_impact;
+      OR NEW.performance_impact                    IS DISTINCT FROM OLD.performance_impact
+      -- testing-agent finding F-4 (EXEC evidence b60f5de1): without this, a two-statement
+      -- "demote to DRAFT, then rewrite freely, then re-publish" sequence would bypass the guard
+      -- entirely, since neither statement alone would have OLD.status/OLD.retro_type still
+      -- PUBLISHED/SD_COMPLETION at evaluation time for the SECOND (rewrite) statement. Gating the
+      -- demotion itself closes that: changing AWAY FROM the protected state on an already-protected
+      -- row requires the same token as changing the content itself.
+      OR NEW.status                                IS DISTINCT FROM OLD.status
+      OR NEW.retro_type                            IS DISTINCT FROM OLD.retro_type;
 
     IF v_protected_changed THEN
       IF NEW.retro_write_token IS NULL THEN

@@ -93,7 +93,19 @@ export async function restoreRetroFromAudit(supabase, retrospectiveId, auditRowI
     patch.metadata = { ...(current.metadata || {}), integrity_disclosure: disclosure };
   }
 
-  const { error: e3 } = await supabase.from('retrospectives').update(patch).eq('id', retrospectiveId);
+  // FR-1's chairman-gated trigger (once applied) refuses a content-column UPDATE on a PUBLISHED
+  // SD_COMPLETION row without this token matching a registered identity -- 'restore_from_audit' is
+  // registered in retro_canonical_writer_policy() for exactly this script (testing-agent finding
+  // F-3, EXEC evidence b60f5de1: without it, this script would itself be refused the moment FR-1
+  // goes live). PRE-APPLY, retro_write_token does not exist as a column yet -- PostgREST rejects an
+  // unknown column (PGRST204/42703), so attempt WITH it first and fail-soft to WITHOUT it, matching
+  // the same convention lib/operator/cash-burn-substrate.js already uses for a chairman-gated column
+  // that hasn't landed yet.
+  const patchWithToken = { ...patch, retro_write_token: 'restore_from_audit' };
+  let { error: e3 } = await supabase.from('retrospectives').update(patchWithToken).eq('id', retrospectiveId);
+  if (e3 && (e3.code === 'PGRST204' || e3.code === '42703')) {
+    ({ error: e3 } = await supabase.from('retrospectives').update(patch).eq('id', retrospectiveId));
+  }
   if (e3) throw new Error(`restore write failed: ${e3.message}`);
 
   return { wrote: true, retrospectiveId, auditRowId, restoredColumns: Object.keys(patch) };
