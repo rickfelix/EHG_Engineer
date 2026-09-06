@@ -78,17 +78,23 @@ describe('[TS-9] leg4 re-scored against the historical sample', () => {
     }
   });
 
-  it('the recorded non-TIGHT historical days (leg4_capacity=0) reproduce byte-identically regardless of WHICH non-healthy verdict occurred', () => {
-    // The fixture records only the binary score, not which of the 3 non-healthy ladder states
-    // produced it. Scoring is identical across all three (HEALTHY_VERDICTS=['TIGHT']), so this
-    // asserts that unchanged equivalence -- not a claim about a specific historical verdict this
-    // fixture has no record of.
+  it('re-scoring the historical non-TIGHT days (leg4_capacity=0) under the ratified table diverges by verdict — this divergence IS the fix', () => {
+    // The fixture records only the OLD binary score, not which of the 3 non-healthy ladder states
+    // produced it — under the old rule all three were byte-identical at 0, which is the exact
+    // defect be6e9d73 (under ffebbd68) corrects: nine of the last ten historical rows read 0
+    // despite a graduated ladder existing underneath. DEFICIT-URGENT alone still reproduces the
+    // historical zero; DEFICIT and SURPLUS now diverge from it.
     const nonTightDays = HISTORICAL.filter((r) => r.leg4_capacity === 0);
     expect(nonTightDays.length).toBeGreaterThan(0);
+    const rescored = {};
     for (const standIn of ['DEFICIT-URGENT', 'DEFICIT', 'SURPLUS']) {
       const r = scoreLeg4({ computeVerdict: () => ({ verdict: standIn, beltDepth: 0, demandSoon: 0, deficit: 0 }), persist });
-      expect(r.points.value).toBe(0);
+      rescored[standIn] = r.points.value;
       expect(r.ladder_distance.value).toBeLessThan(0); // every non-TIGHT state is off the ladder's zero point
     }
+    expect(rescored['DEFICIT-URGENT']).toBe(0); // still matches the historical zero, byte-identically
+    expect(rescored.DEFICIT).toBeGreaterThan(0); // diverges — the gradient this SD introduces
+    expect(rescored.SURPLUS).toBeGreaterThan(0); // diverges — the gradient this SD introduces
+    expect(rescored.DEFICIT).toBe(rescored.SURPLUS); // ratified: they earn the SAME non-zero value
   });
 });
