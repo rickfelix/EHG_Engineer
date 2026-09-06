@@ -4426,7 +4426,8 @@ async function main() {
     const cpbRepoRoot = path.resolve(__dirname, '..');
     const cpbUsed = countActiveWorktrees(cpbRepoRoot);
     const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
-    const cpbCoordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
+    let cpbCoordinatorId = null;
+    try { cpbCoordinatorId = await getActiveCoordinatorId(supabase); } catch { /* fail-soft: null coordinatorId still lets the tick run */ }
     const { liveFleetSessions } = require('../lib/fleet/live-fleet-sessions.cjs');
     const cpbSeats = await liveFleetSessions(supabase, { coordinatorId: cpbCoordinatorId });
     const cpbOutcome = await cappedPoolBroadcast.tick(supabase, {
