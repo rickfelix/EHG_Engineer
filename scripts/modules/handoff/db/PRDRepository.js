@@ -10,6 +10,8 @@
  * - All lookups now use sd_id as the canonical column
  */
 
+import { safeCount } from '../../../../lib/db/safe-query.mjs';
+
 export class PRDRepository {
   constructor(supabase) {
     if (!supabase) {
@@ -129,18 +131,24 @@ export class PRDRepository {
    */
   async existsForSd(sdId) {
     // Check sd_id (canonical)
-    const { count: count1 } = await this.supabase
-      .from('product_requirements_v2')
-      .select('id', { count: 'exact', head: true })
-      .eq('sd_id', sdId);
+    const count1 = await safeCount(
+      this.supabase
+        .from('product_requirements_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('sd_id', sdId),
+      { site: 'PRDRepository:exists_for_sd:sd_id' }
+    );
 
     if (count1 > 0) return true;
 
     // Fallback: check directive_id (legacy)
-    const { count: count2 } = await this.supabase
-      .from('product_requirements_v2')
-      .select('id', { count: 'exact', head: true })
-      .eq('directive_id', sdId);
+    const count2 = await safeCount(
+      this.supabase
+        .from('product_requirements_v2')
+        .select('id', { count: 'exact', head: true })
+        .eq('directive_id', sdId),
+      { site: 'PRDRepository:exists_for_sd:directive_id' }
+    );
 
     return count2 > 0;
   }

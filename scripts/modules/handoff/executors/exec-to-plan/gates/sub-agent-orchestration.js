@@ -6,6 +6,7 @@
  */
 
 import { fetchAllPaginated } from '../../../../../../lib/db/fetch-all-paginated.mjs';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 // External validators (will be lazy loaded)
 let orchestrate;
@@ -33,11 +34,14 @@ export function createSubAgentOrchestrationGate(supabase) {
       const sdType = (ctx.sd?.sd_type || '').toLowerCase();
 
       // Query database for SD type validation profile
-      const { data: validationProfile } = await supabase
-        .from('sd_type_validation_profiles')
-        .select('requires_sub_agents')
-        .eq('sd_type', sdType)
-        .single();
+      const validationProfile = await safeQuery(
+        supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_sub_agents')
+          .eq('sd_type', sdType)
+          .single(),
+        { site: 'sub-agent-orchestration:validation_profile' }
+      );
 
       // Check if sub-agents are NOT required for this SD type
       const skipSubAgents = validationProfile?.requires_sub_agents === false;
@@ -100,14 +104,17 @@ export function createSubAgentOrchestrationGate(supabase) {
       const securityBaseline = await getSecurityBaseline(supabase);
 
       // Check for existing PASS or CONDITIONAL_PASS TESTING result before orchestration
-      const { data: existingTestingPass } = await supabase
-        .from('sub_agent_execution_results')
-        .select('verdict, created_at, detailed_analysis')
-        .eq('sd_id', ctx.sdId)
-        .eq('sub_agent_code', 'TESTING')
-        .in('verdict', ['PASS', 'CONDITIONAL_PASS'])
-        .order('created_at', { ascending: false })
-        .limit(1);
+      const existingTestingPass = await safeQuery(
+        supabase
+          .from('sub_agent_execution_results')
+          .select('verdict, created_at, detailed_analysis')
+          .eq('sd_id', ctx.sdId)
+          .eq('sub_agent_code', 'TESTING')
+          .in('verdict', ['PASS', 'CONDITIONAL_PASS'])
+          .order('created_at', { ascending: false })
+          .limit(1),
+        { site: 'sub-agent-orchestration:existing_testing_pass' }
+      );
 
       // If we have a recent PASS/CONDITIONAL_PASS result, skip orchestration for TESTING
       if (existingTestingPass && existingTestingPass.length > 0) {

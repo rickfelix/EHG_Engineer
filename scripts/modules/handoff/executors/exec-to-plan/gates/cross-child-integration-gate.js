@@ -9,6 +9,8 @@
  * Evidence: S17-to-S19 column mismatch incident (lifecycle_stage vs stage_number)
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 const GATE_NAME = 'CROSS_CHILD_INTEGRATION';
 
 // Regex patterns for extracting table/column references from free-text manifests
@@ -210,10 +212,13 @@ export function createCrossChildIntegrationGate(supabase) {
       const { sd } = ctx;
 
       // Only run for orchestrators (has children)
-      const { data: children } = await supabase
-        .from('strategic_directives_v2')
-        .select('id, sd_key, title')
-        .eq('parent_sd_id', sd.id || sd.sd_key);
+      const children = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_key, title')
+          .eq('parent_sd_id', sd.id || sd.sd_key),
+        { site: 'cross-child-integration-gate:children' }
+      );
 
       if (!children || children.length === 0) {
         return {
@@ -228,11 +233,14 @@ export function createCrossChildIntegrationGate(supabase) {
 
       // Fetch child deliverables_manifest from EXEC-TO-PLAN handoffs
       const childIds = children.map(c => c.id);
-      const { data: handoffs } = await supabase
-        .from('sd_phase_handoffs')
-        .select('sd_id, deliverables_manifest, handoff_type')
-        .in('sd_id', childIds)
-        .eq('status', 'accepted');
+      const handoffs = await safeQuery(
+        supabase
+          .from('sd_phase_handoffs')
+          .select('sd_id, deliverables_manifest, handoff_type')
+          .in('sd_id', childIds)
+          .eq('status', 'accepted'),
+        { site: 'cross-child-integration-gate:handoffs' }
+      );
 
       // Build manifest per child
       const manifestsByChild = new Map();

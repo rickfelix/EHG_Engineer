@@ -27,6 +27,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { evaluateTrigger } from '../../../../activation-invariant/trigger-evaluator.js';
 import { gradeProvenance, PRODUCER_ALLOWLIST } from '../../../../../../lib/sub-agent-executor/evidence-provenance.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 import { resolveSubagentEvidenceProvenanceMode } from '../../../gates/subagent-evidence-gate.js';
 
 const GATE_NAME = 'GATE_ACTIVATION_INVARIANT';
@@ -100,12 +101,15 @@ async function loadPRD({ supabase, prdRepo, sdId }) {
     if (prd) return prd;
   }
   if (!supabase) return null;
-  const { data } = await supabase
-    .from('product_requirements_v2')
-    .select('id, sd_id, activation_test_id')
-    .eq('sd_id', sdId)
-    .limit(1)
-    .maybeSingle();
+  const data = await safeQuery(
+    supabase
+      .from('product_requirements_v2')
+      .select('id, sd_id, activation_test_id')
+      .eq('sd_id', sdId)
+      .limit(1)
+      .maybeSingle(),
+    { site: 'activation-invariant-gate:prd_lookup' }
+  );
   return data || null;
 }
 
@@ -119,15 +123,18 @@ async function loadTestingEvidence({ supabase, sdId }) {
   const cutoff = new Date(Date.now() - EVIDENCE_FRESHNESS_MS).toISOString();
   // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: widened to add source, invocation_id, and the columns
   // computeContentHash() needs to re-derive a row's content hash for provenance grading.
-  const { data } = await supabase
-    .from('sub_agent_execution_results')
-    .select('id, verdict, confidence, metadata, created_at, phase, source, invocation_id, critical_issues, warnings, recommendations, detailed_analysis, summary')
-    .eq('sd_id', sdId)
-    .eq('sub_agent_code', 'TESTING')
-    .gte('created_at', cutoff)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const data = await safeQuery(
+    supabase
+      .from('sub_agent_execution_results')
+      .select('id, verdict, confidence, metadata, created_at, phase, source, invocation_id, critical_issues, warnings, recommendations, detailed_analysis, summary')
+      .eq('sd_id', sdId)
+      .eq('sub_agent_code', 'TESTING')
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    { site: 'activation-invariant-gate:testing_evidence' }
+  );
   return data || null;
 }
 
