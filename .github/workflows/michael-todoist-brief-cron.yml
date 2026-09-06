@@ -1,0 +1,59 @@
+name: "Michael todoist-brief (durable cron)"
+
+# SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D (FR-7) — spec docs/michael/02-SPEC.md §5 todoist-brief.
+#
+# Every 15 minutes inside the 04:45-05:30 ET window, no Claude session, NO GOOGLE CREDENTIAL AND NO
+# ENCRYPTION KEY (ratification 0daf3bd8): scripts/michael/todoist-brief.mjs --apply snapshots the
+# chairman's due-or-overdue Todoist tasks into michael_todoist_snapshot, grades what carries an Est:
+# line, and applies only auto_apply label / reschedule rules. The script itself is inert outside the
+# window, before the chairman applies database/migrations/20260906_michael_tables.sql, and while an
+# earlier fire of the same ET date is in flight or already ok (lib/michael/feeder.mjs).
+#
+# Secrets: the already-provisioned SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY plus TODOIST_API_TOKEN
+# (already provisioned for the Todoist sync workflows). tests/unit/cron/michael-todoist-brief-wiring.test.js
+# pins that the set of secrets referenced here is EXACTLY those three and that no Google, OAuth or
+# encryption token appears in this file.
+#
+# Cron pair with the ET window in the trailing comment (chairman-morning-brief-cron.yml shape): GitHub
+# cron is UTC, so the two lines cover EDT and EST; the in-script window gate makes the extra UTC fires inert.
+
+on:
+  schedule:
+    - cron: '*/15 8-9 * * *'    # 04:00-05:45 EDT (summer) — window 04:45-05:30 ET
+    - cron: '*/15 9-10 * * *'   # 04:00-05:45 EST (winter) — window 04:45-05:30 ET
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  michael-todoist-brief-apply:
+    name: Michael todoist-brief feeder (snapshot, grade, auto_apply rules)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run todoist-brief (dry-run is the default; --apply executes)
+        run: node scripts/michael/todoist-brief.mjs --apply
