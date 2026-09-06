@@ -269,6 +269,73 @@ describe('createAcceptanceArtifactGate', () => {
     expect(result.warnings[0]).toMatch(/lookup failed/);
     expect(result.warnings[0]).not.toMatch(/Cannot read propert/);
   });
+
+  it('SECURITY SEC-1: a numeric_threshold refusal never echoes the resolved row VALUE, only the declared threshold', async () => {
+    const supabase = mockSupabase({ rows: [FIXTURE_D_ROW] });
+    const gate = createAcceptanceArtifactGate(supabase);
+    const result = await gate.validator({ sd: FIXTURE_B_SD });
+    expect(result.details.reason_code).toBe('ARTIFACT_UNSATISFIED');
+    expect(result.warnings[0]).not.toContain(String(FIXTURE_D_ROW.pass_rate));
+    expect(result.warnings[0]).toContain(String(FIXTURE_B_SD.metadata.acceptance_artifact.satisfied.value));
+  });
+
+  it('SECURITY SEC-3: an ANSI-escape-laden declared table name is neutralized in the warning, never rendered raw', async () => {
+    const ESC = String.fromCharCode(27);
+    const evilTable = ESC + '[32m FORGED PASS ' + ESC + '[0m';
+    const evilSd = { id: 'sd-ansi', metadata: { acceptance_artifact: { table: evilTable, match: { id: 'x' }, satisfied: { kind: 'row_exists' } } } };
+    const supabase = { from() { throw new Error('should never be queried'); } };
+    const gate = createAcceptanceArtifactGate(supabase);
+    const result = await gate.validator({ sd: evilSd });
+    expect(result.passed).toBe(true);
+    expect(result.details.reason_code).toBe('DECLARATION_INVALID');
+    // JSON.stringify escapes the raw ESC control byte into a printable sequence --
+    // the literal control character must never reach the warning text.
+    expect(result.warnings[0]).not.toContain(ESC);
+  });
+
+  it('SECURITY SEC-3: an oversized declared table name is truncated in the warning', async () => {
+    const evilSd = { id: 'sd-huge', metadata: { acceptance_artifact: { table: 'x'.repeat(5000), match: { id: 'x' }, satisfied: { kind: 'row_exists' } } } };
+    const gate = createAcceptanceArtifactGate({ from() { throw new Error('should never be queried'); } });
+    const result = await gate.validator({ sd: evilSd });
+    expect(result.warnings[0].length).toBeLessThan(500);
+  });
+
+  it('SECURITY SEC-6: a getter-backed match value cannot answer differently between validation and the query (snapshot defeats the swap)', async () => {
+    let reads = 0;
+    const shiftySd = {
+      id: 'sd-shifty',
+      metadata: {
+        acceptance_artifact: {
+          table: 'venture_artifacts',
+          get match() {
+            // A getter re-evaluated on every access would answer 'SAFE' the first time
+            // (validation) and something else the second time (the query) without a snapshot.
+            reads += 1;
+            return { venture_id: reads === 1 ? 'SAFE' : 'SWAPPED' };
+          },
+          satisfied: { kind: 'row_exists' },
+        },
+      },
+    };
+    const calls = {};
+    const supabase = mockSupabase({ rows: [FIXTURE_A_ROW] }, calls);
+    const gate = createAcceptanceArtifactGate(supabase);
+    await gate.validator({ sd: shiftySd });
+    // The JSON round-trip in snapshotDeclaration() reads the getter exactly once; every
+    // subsequent read (validateDeclaration, the query builder) sees the same plain-data value.
+    expect(calls.match).toEqual({ venture_id: 'SAFE' });
+  });
+
+  it('SECURITY SEC-6: a declaration that cannot be serialized (e.g. a BigInt field) is DECLARATION_INVALID, never queried', async () => {
+    const unserializableSd = { id: 'sd-bigint', metadata: { acceptance_artifact: { table: 'venture_artifacts', match: { venture_id: 1n }, satisfied: { kind: 'row_exists' } } } };
+    let queried = false;
+    const supabase = { from() { queried = true; return chainable({ data: [], error: null }, {}); } };
+    const gate = createAcceptanceArtifactGate(supabase);
+    const result = await gate.validator({ sd: unserializableSd });
+    expect(result.passed).toBe(true);
+    expect(result.details.reason_code).toBe('DECLARATION_INVALID');
+    expect(queried).toBe(false);
+  });
 });
 
 describe('isBindingEnabled', () => {

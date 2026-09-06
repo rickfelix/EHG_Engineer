@@ -63,6 +63,44 @@
  * typo, never evidence of an unmet criterion. A DB/IO error during resolution fails OPEN (passes
  * with a warning) for the same reason acceptance-tier-downgrade-gate.js's own loaders do: an
  * infra blip on a required gate must never masquerade as passed:false/score:0.
+ *
+ * SECURITY (EXEC-TO-PLAN review, independent adversarial pass): confirmed clean by measurement,
+ * not inspection — supabase-js's .match() serializes through URLSearchParams (percent-encodes,
+ * never string-concatenates), so a hostile match VALUE cannot inject a PostgREST filter or reach
+ * SQL text; a 48-case suite (6 flag values × 8 hostile declarations) confirmed isBindingEnabled()
+ * gates every blocking path with nothing escaping as an unguarded throw.
+ *
+ * TWO REAL FINDINGS FROM THAT REVIEW, FIXED HERE: (1) the numeric_threshold refusal detail used
+ * to echo the resolved row's raw column value into warnings[] — a service-role read of a table an
+ * RLS policy would otherwise deny entirely (uat_test_runs has no anon/authenticated SELECT policy
+ * at all) is an oracle even in observe-only mode, since BINDING only gates blocking, not this data
+ * flow. Fixed: the detail message now names only the operator-supplied threshold, never the
+ * resolved value. (2) unbounded, un-escaped interpolation of declaration fields (table, column
+ * names, satisfied.kind/field) into warning/issue strings was a log/console injection vector (a
+ * declared table value containing ANSI escape codes rendered a forged "PASS" line in this gate's
+ * own console output) and an unbounded-length persistence risk. Fixed with safeLabel(), which
+ * JSON-stringifies and truncates every interpolated declaration field.
+ *
+ * ALSO FIXED: the entire declaration is snapshotted via a JSON round-trip (snapshotDeclaration())
+ * the moment it is read from ctx.sd, before validateDeclaration() or the query builder touch it a
+ * second time — closes a theoretical TOCTOU window where a getter-backed property could answer
+ * differently between the validation read and the query read (unreachable today, since a real
+ * declaration is always plain JSON off a jsonb column, but a JSON round-trip is also the correct
+ * definition of "what this gate is willing to trust" regardless).
+ *
+ * KNOWN, DEFERRED (documented, not silently dropped — do not "fix" without a dedicated SD):
+ *   (a) `match` is not scoped to the declaring SD's own venture_id/sd_id. A declaration can name
+ *       any row on an allowlisted table system-wide (e.g. `venture_artifacts` matched only on
+ *       `is_current:true` resolved across all ventures). Zero live impact today (0/6,141 SDs
+ *       declare the pointer at all), but this MUST be closed (require the match to include the
+ *       declaring SD's own identity, or a server-side join) before ACCEPTANCE_ARTIFACT_GATE_BINDING
+ *       is ever flipped, or a declaration on one SD could read/leak facts about an unrelated one.
+ *   (b) hasProvenance() is a PRESENCE check (non-null source / a present evidence_hash), not a
+ *       PRODUCER-INDEPENDENCE check — it does not verify the evidence was authored by a party
+ *       other than the one being gated, and does not verify a hash against content. Do not read
+ *       ARTIFACT_PROVENANCE_ABSENT as satisfying the chairman-ratified gate-evidence-provenance
+ *       rule; it does not, by design, for tables that structurally cannot carry that contract (see
+ *       the PROVENANCE section above). A stronger provenance model for these tables is future work.
  */
 
 import { REASON_CODES, parseSelfReportedVerdict } from '../../../../../../lib/eva/reality-gates.js';
@@ -128,6 +166,37 @@ function errorMessage(err) {
   return err && typeof err === 'object' && typeof err.message === 'string' ? err.message : String(err);
 }
 
+// SECURITY (EXEC-TO-PLAN review, SEC-3): an operator-controlled declaration field (table, a
+// match/order_by column name, satisfied.kind/field) used to be interpolated RAW into
+// warnings/issues strings that reach console output and sd_phase_handoffs. A declared value
+// containing ANSI escape codes rendered a forged "PASS" line in this gate's own console output;
+// an unbounded-length value would persist without limit. safeLabel() JSON-stringifies (escapes
+// control characters, quotes the value unambiguously) and truncates every such interpolation.
+function safeLabel(value) {
+  let text;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    text = String(value);
+  }
+  if (text === undefined) text = String(value);
+  return text.length > 120 ? `${text.slice(0, 120)}…` : text;
+}
+
+// SECURITY (EXEC-TO-PLAN review, SEC-6): a getter-backed property on `match` (or elsewhere in
+// the declaration) could in principle answer differently between validateDeclaration's read and
+// the query builder's read -- unreachable today (a real declaration is always plain JSON off a
+// jsonb column) but a JSON round-trip is also the correct definition of "what this gate trusts":
+// only plain data that would survive a genuine DB round-trip, never a live object with behavior.
+// Returns null (never throws) for a declaration that cannot be serialized at all.
+function snapshotDeclaration(declaration) {
+  try {
+    return JSON.parse(JSON.stringify(declaration));
+  } catch {
+    return null;
+  }
+}
+
 // TESTING (PLAN-TO-EXEC review, F1/F2): a plain-object `[key]` lookup resolves inherited
 // Object.prototype members ('constructor', 'toString', '__proto__', 'hasOwnProperty',
 // 'valueOf') as truthy even though they are not real entries — a declared table:'constructor'
@@ -153,13 +222,13 @@ export function validateDeclaration(declaration) {
   const { table, match, order_by: orderBy, satisfied } = declaration;
 
   const tableConfig = ownLookup(TABLE_CONFIG, table);
-  if (!tableConfig) return { valid: false, reason: `table "${String(table)}" is not in the allowlist (${Object.keys(TABLE_CONFIG).join(', ')})` };
+  if (!tableConfig) return { valid: false, reason: `table ${safeLabel(table)} is not in the allowlist (${Object.keys(TABLE_CONFIG).join(', ')})` };
 
   if (!match || typeof match !== 'object' || Array.isArray(match) || Object.keys(match).length === 0) {
     return { valid: false, reason: 'match must be a non-empty object' };
   }
   for (const [col, val] of Object.entries(match)) {
-    if (!tableConfig.matchColumns.includes(col)) return { valid: false, reason: `match column "${col}" is not allowlisted for ${table}` };
+    if (!tableConfig.matchColumns.includes(col)) return { valid: false, reason: `match column ${safeLabel(col)} is not allowlisted for ${table}` };
     // F4: null is deliberately NOT accepted as a scalar -- PostgREST's `.match()` serializes a
     // value as `eq.<value>`, which can never match a genuine SQL NULL (that needs `is.null`), so
     // a null match value can only ever resolve zero rows and silently manufacture a false
@@ -170,7 +239,7 @@ export function validateDeclaration(declaration) {
 
   if (orderBy !== undefined) {
     if (!orderBy || typeof orderBy !== 'object' || typeof orderBy.column !== 'string') return { valid: false, reason: 'order_by.column must be a string' };
-    if (!tableConfig.selectColumns.includes(orderBy.column)) return { valid: false, reason: `order_by.column "${orderBy.column}" is not selectable for ${table}` };
+    if (!tableConfig.selectColumns.includes(orderBy.column)) return { valid: false, reason: `order_by.column ${safeLabel(orderBy.column)} is not selectable for ${table}` };
     // F3: `desc` must be explicit when order_by is provided at all -- an omitted `desc` used to
     // silently mean "ascending" (oldest row) instead of the documented "most recent" default,
     // and a truthy non-boolean ('false' the string) would have selected the wrong direction too.
@@ -179,7 +248,7 @@ export function validateDeclaration(declaration) {
 
   if (!satisfied || typeof satisfied !== 'object') return { valid: false, reason: 'satisfied must be an object' };
   if (!['self_reported_verdict', 'numeric_threshold', 'row_exists'].includes(satisfied.kind)) {
-    return { valid: false, reason: `satisfied.kind "${satisfied.kind}" is not one of self_reported_verdict|numeric_threshold|row_exists` };
+    return { valid: false, reason: `satisfied.kind ${safeLabel(satisfied.kind)} is not one of self_reported_verdict|numeric_threshold|row_exists` };
   }
   if (satisfied.kind !== 'row_exists') {
     // satisfied.kind is, by this point, guaranteed to be one of the 3 literal enum strings
@@ -187,11 +256,11 @@ export function validateDeclaration(declaration) {
     // ownLookup's prototype-pollution risk -- none of the 3 collide with Object.prototype.
     const allowedFields = tableConfig.satisfiedFieldsByKind[satisfied.kind] || [];
     if (!allowedFields.includes(satisfied.field)) {
-      return { valid: false, reason: `satisfied.field "${satisfied.field}" is not allowlisted for satisfied.kind="${satisfied.kind}" on ${table} (allowed: ${allowedFields.join(', ') || 'none'})` };
+      return { valid: false, reason: `satisfied.field ${safeLabel(satisfied.field)} is not allowlisted for satisfied.kind="${satisfied.kind}" on ${table} (allowed: ${allowedFields.join(', ') || 'none'})` };
     }
   }
   if (satisfied.kind === 'numeric_threshold') {
-    if (!ownLookup(NUMERIC_OPS, satisfied.op)) return { valid: false, reason: `satisfied.op "${String(satisfied.op)}" is not one of ${Object.keys(NUMERIC_OPS).join(', ')}` };
+    if (!ownLookup(NUMERIC_OPS, satisfied.op)) return { valid: false, reason: `satisfied.op ${safeLabel(satisfied.op)} is not one of ${Object.keys(NUMERIC_OPS).join(', ')}` };
     if (typeof satisfied.value !== 'number') return { valid: false, reason: 'satisfied.value must be a number for numeric_threshold' };
   }
 
@@ -218,7 +287,13 @@ export function evaluateSatisfied(row, satisfied) {
   const raw = row[satisfied.field];
   if (typeof raw !== 'number') return { satisfied: false, detail: `field "${satisfied.field}" is not numeric on the resolved row` };
   const op = ownLookup(NUMERIC_OPS, satisfied.op);
-  return { satisfied: op(raw, satisfied.value), detail: `${raw} ${satisfied.op} ${satisfied.value}` };
+  // SECURITY (EXEC-TO-PLAN review, SEC-1): never echo the RESOLVED value -- uat_test_runs has no
+  // anon/authenticated SELECT policy at all, so surfacing its actual column value into a warning
+  // (readable by anyone who can view this SD, even in observe-only mode) is a service-role-backed
+  // read oracle over a table the caller could not otherwise query at all. The operator-supplied
+  // threshold (satisfied.value) is not secret -- it's the declaration itself -- so naming that
+  // is fine; the row's own value is not.
+  return { satisfied: op(raw, satisfied.value), detail: `${satisfied.op} ${satisfied.value}: not satisfied` };
 }
 
 function passResult(warnings = [], details = {}) {
@@ -242,10 +317,19 @@ export function createAcceptanceArtifactGate(supabase) {
       console.log('\n📎 GATE: Acceptance-Artifact');
       console.log('-'.repeat(50));
 
-      const declaration = ctx?.sd?.metadata?.acceptance_artifact;
-      if (!declaration) {
+      const rawDeclaration = ctx?.sd?.metadata?.acceptance_artifact;
+      if (!rawDeclaration) {
         console.log('   ℹ️  No metadata.acceptance_artifact declared — gate not applicable');
         return passResult([], { declared: false });
+      }
+
+      // SECURITY (EXEC-TO-PLAN review, SEC-6): snapshot via a JSON round-trip BEFORE validation
+      // or query-building ever reads it, so a getter-backed property cannot answer differently
+      // between the two reads. A declaration that cannot even be serialized is DECLARATION_INVALID.
+      const declaration = snapshotDeclaration(rawDeclaration);
+      if (!declaration) {
+        console.log('   ⚠️  metadata.acceptance_artifact could not be serialized — treating as not evaluable');
+        return passResult(['Acceptance-artifact declaration could not be serialized to plain JSON — a malformed declaration is not evidence of an unmet criterion.'], { declared: true, reason_code: DECLARATION_INVALID });
       }
 
       // TESTING (PLAN-TO-EXEC review, F2): the whole body below — not just the DB query — is
@@ -279,7 +363,7 @@ export function createAcceptanceArtifactGate(supabase) {
         }
 
         if (rows.length === 0) {
-          const message = `${GATE_NAME}: declared pointer (table=${table}, match=${JSON.stringify(match)}) resolved to zero rows.`;
+          const message = `${GATE_NAME}: declared pointer (table=${table}, match=${safeLabel(match)}) resolved to zero rows.`;
           console.log(bound ? `   ❌ ${message}` : `   ⚠️  ${message} (observe-only)`);
           return refuseResult(message, REASON_CODES.ARTIFACT_MISSING, { declared: true, table }, bound);
         }
