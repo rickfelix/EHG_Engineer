@@ -9,7 +9,7 @@
  */
 
 import BaseExecutor from '../BaseExecutor.js';
-import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
+import { safeQuery, safeCount } from '../../../../../lib/db/safe-query.mjs';
 import ResultBuilder from '../../ResultBuilder.js';
 import { runPreflightRetroCheck } from '../../retro-filters.js';
 import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
@@ -460,11 +460,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
         //   (3) SD legitimately stuck in draft for some other reason → manual triage
         let silentFailureDetected = false;
         try {
-          const { data: completedHandoffs } = await this.supabase
-            .from('sd_phase_handoffs')
-            .select('handoff_type')
-            .eq('sd_id', sd.id)
-            .eq('status', 'accepted');
+          const completedHandoffs = await safeQuery(
+            this.supabase
+              .from('sd_phase_handoffs')
+              .select('handoff_type')
+              .eq('sd_id', sd.id)
+              .eq('status', 'accepted'),
+            { site: 'lead-final-approval/index:diagnose_missing_handoffs' }
+          );
 
           const completedTypes = new Set((completedHandoffs || []).map(h => h.handoff_type));
           missingHandoffs = requiredHandoffs.filter(h => !completedTypes.has(h));
@@ -690,14 +693,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     let canonicalHandoffId = null;
     try {
       const { HANDOFF_SYSTEM_TAG } = await import('../../recording/HandoffRecorder.js');
-      const { data: existingLfa } = await this.supabase
-        .from('sd_phase_handoffs')
-        .select('id')
-        .eq('sd_id', sd.id)
-        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
-        .eq('status', 'accepted')
-        .limit(1)
-        .maybeSingle();
+      const existingLfa = await safeQuery(
+        this.supabase
+          .from('sd_phase_handoffs')
+          .select('id')
+          .eq('sd_id', sd.id)
+          .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+          .eq('status', 'accepted')
+          .limit(1)
+          .maybeSingle(),
+        { site: 'lead-final-approval/index:canonical_lfa_idempotency_check' }
+      );
       if (!existingLfa) {
         // F1: surface genuine retro known-issues instead of the hardcoded placeholder.
         // extractRetroKnownIssues never throws (fail-open) -- see retro-known-issues.js.
@@ -1081,10 +1087,13 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // run — so THIS is where the orchestrator completion hook (chaining, learn queue)
     // fires; the old direct-complete paths that used to fire it no longer complete.
     try {
-      const { count: childCount } = await this.supabase
-        .from('strategic_directives_v2')
-        .select('id', { count: 'exact', head: true })
-        .eq('parent_sd_id', sd.id);
+      const childCount = await safeCount(
+        this.supabase
+          .from('strategic_directives_v2')
+          .select('id', { count: 'exact', head: true })
+          .eq('parent_sd_id', sd.id),
+        { site: 'lead-final-approval/index:orchestrator_child_count' }
+      );
       if (childCount > 0) {
         const { executeOrchestratorCompletionHook } = await import('../../orchestrator-completion-hook.js');
         const hookResult = await executeOrchestratorCompletionHook(
@@ -1264,14 +1273,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
    */
   async _reconcileCanonicalLfaRow(sd, gateResults) {
     try {
-      const { data: existingLfa } = await this.supabase
-        .from('sd_phase_handoffs')
-        .select('id')
-        .eq('sd_id', sd.id)
-        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
-        .eq('status', 'accepted')
-        .limit(1)
-        .maybeSingle();
+      const existingLfa = await safeQuery(
+        this.supabase
+          .from('sd_phase_handoffs')
+          .select('id')
+          .eq('sd_id', sd.id)
+          .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+          .eq('status', 'accepted')
+          .limit(1)
+          .maybeSingle(),
+        { site: 'lead-final-approval/index:reconcile_lfa_idempotency_check', tolerate: 'NON-FATAL per method docstring — a reconcile-write failure must NOT turn a passing verification into a rejection' }
+      );
       if (existingLfa) {
         console.log(`   ℹ️  Canonical accepted LFA row already present (${existingLfa.id}) — no reconcile needed`);
         return;
@@ -1284,14 +1296,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       // DIFFERENT, earlier invocation's completion), so validation_passed/bypass are COPIED
       // from the sibling leo_handoff_executions row (already correctly stamped by
       // HandoffRecorder via deriveBypassAwareRecordFields) rather than hardcoded/re-derived.
-      const { data: lheRows } = await this.supabase
-        .from('leo_handoff_executions')
-        .select('id, validation_score, validation_passed, validation_details')
-        .eq('sd_id', sd.id)
-        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
-        .eq('status', 'accepted')
-        .order('created_at', { ascending: false })
-        .limit(1);
+      const lheRows = await safeQuery(
+        this.supabase
+          .from('leo_handoff_executions')
+          .select('id, validation_score, validation_passed, validation_details')
+          .eq('sd_id', sd.id)
+          .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+          .eq('status', 'accepted')
+          .order('created_at', { ascending: false })
+          .limit(1),
+        { site: 'lead-final-approval/index:reconcile_lfa_source_row', tolerate: 'NON-FATAL per method docstring — a reconcile-write failure must NOT turn a passing verification into a rejection' }
+      );
       const srcRow = lheRows && lheRows[0] ? lheRows[0] : null;
       const srcId = srcRow ? srcRow.id : null;
       const srcScoreMeasured = !!((srcRow && srcRow.validation_score != null)
@@ -1358,14 +1373,17 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
     try {
       // Record heal_invoked in the most recent LEAD-FINAL-APPROVAL handoff metadata
-      const { data: handoff } = await this.supabase
-        .from('sd_phase_handoffs')
-        .select('id, metadata')
-        .eq('sd_id', sd.id)
-        .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const handoff = await safeQuery(
+        this.supabase
+          .from('sd_phase_handoffs')
+          .select('id, metadata')
+          .eq('sd_id', sd.id)
+          .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        { site: 'lead-final-approval/index:heal_check_handoff_lookup', tolerate: 'Never blocks completion per method docstring' }
+      );
 
       if (handoff) {
         const metadata = handoff.metadata || {};

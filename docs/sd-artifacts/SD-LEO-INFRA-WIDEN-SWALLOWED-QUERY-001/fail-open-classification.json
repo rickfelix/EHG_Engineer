@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:23:53.656Z",
+  "generated_at": "2026-09-06T18:31:07.154Z",
   "counts": {
-    "has_catch": 72
+    "has_catch": 66
   },
   "results": [
     {
@@ -184,48 +184,6 @@
       "line": 258,
       "kind": "data",
       "snippet": "const { data: handoffs } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/index.js",
-      "line": 463,
-      "kind": "data",
-      "snippet": "const { data: completedHandoffs } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/index.js",
-      "line": 693,
-      "kind": "data",
-      "snippet": "const { data: existingLfa } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/index.js",
-      "line": 1084,
-      "kind": "count",
-      "snippet": "const { count: childCount } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/index.js",
-      "line": 1267,
-      "kind": "data",
-      "snippet": "const { data: existingLfa } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/index.js",
-      "line": 1287,
-      "kind": "data",
-      "snippet": "const { data: lheRows } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/index.js",
-      "line": 1361,
-      "kind": "data",
-      "snippet": "const { data: handoff } = await this.supabase",
       "classification": "has_catch"
     },
     {
