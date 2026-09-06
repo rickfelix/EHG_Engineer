@@ -21,7 +21,7 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { createMichaelClient, parseArgs, readRows, writeRows, refusal, emit } from '../../lib/michael/db.mjs';
 import { runFeeder, exitCodeFor, gracefulExit } from '../../lib/michael/feeder.mjs';
 import { assertHostVenue } from '../../lib/integrations/google/chairman-oauth.js';
-import { listThreads, getThreadMeta, listLabels, THREADS_MAX_RESULTS } from '../../lib/michael/gmail-client.mjs';
+import { listThreads, getThreadMeta, listLabels, THREADS_MAX_RESULTS, FORBIDDEN_LABELS } from '../../lib/michael/gmail-client.mjs';
 import { matchGmailRule } from '../../lib/michael/rules-match.mjs';
 
 export const FEEDER = 'gmail-triage';
@@ -55,22 +55,42 @@ export function itemRow({ etDate, meta, rule, match }) {
   return {
     et_date: etDate,
     thread_id: String(meta.threadId),
-    class: match ? (match.class || rule.rule_key || null) : null,
+    class: match ? (match.class || null) : null,
     rule_key: match ? rule.rule_key : null,
     action_intent: match ? intentFor(rule, match) : null,
     last_message_id: meta.lastMessageId || null,
   };
 }
 
-/** Pure: first active gmail rule (row order) that matches, skipping rules whose class is missing from Gmail. */
-export function firstMatch(rules, thread, missingClasses = new Set()) {
+/**
+ * Pure: is a rule usable this morning? Unusable when its class is a configured class whose label is
+ * missing from Gmail, or when its label-verb intent names a label that is not in Gmail or is forbidden
+ * (adversarial review of PR 8372): such an intent would be a 400 at modify time instead of a degrade here.
+ */
+export function ruleUsable(rule, match, { missingClasses = new Set(), gmailIds = null } = {}) {
+  if (match && match.class && missingClasses.has(match.class)) return false;
+  if (rule && rule.auto_apply === true && rule.auto_apply_verb === 'label') {
+    const labelId = match && match.action && match.action.label_id ? String(match.action.label_id) : null;
+    if (!labelId) return false;
+    if (FORBIDDEN_LABELS.includes(labelId.toUpperCase())) return false;
+    if (gmailIds && !gmailIds.has(labelId)) return false;
+  }
+  return true;
+}
+
+/**
+ * Pure: first USABLE active gmail rule (row order) that matches; an unusable matching rule is skipped and
+ * later rules are still tried. Returns { rule, match, skipped } (skipped = unusable rules passed over) or null.
+ */
+export function firstMatch(rules, thread, usability = {}) {
+  let skipped = 0;
   for (const rule of rules) {
     const m = matchGmailRule(rule, thread);
     if (!m) continue;
-    if (m.class && missingClasses.has(m.class)) return { skipped: true, rule, match: m };
-    return { rule, match: m };
+    if (!ruleUsable(rule, m, usability instanceof Set ? { missingClasses: usability } : usability)) { skipped += 1; continue; }
+    return { rule, match: m, skipped };
   }
-  return null;
+  return skipped ? { rule: null, match: null, skipped } : null;
 }
 
 /** The feeder. deps: { sb, argv, now, auth, gmail (factory), env }. Never throws. */
@@ -101,7 +121,9 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
       const missing = configured.rows.filter((r) => r.class && !gmailIds.has(r.label_id));
       counts.missing_labels = missing.map((r) => r.label_id);
       const missingClasses = new Set(missing.map((r) => r.class));
-      const keepNames = configured.rows.filter((r) => r.keep_in_inbox === true && gmailIds.has(r.label_id)).map((r) => labels.labels.find((l) => l.id === r.label_id)?.name || r.name);
+      const keepIds = new Set(configured.rows.filter((r) => r.keep_in_inbox === true && gmailIds.has(r.label_id)).map((r) => r.label_id));
+      const keepNames = [...keepIds].map((id) => labels.labels.find((l) => l.id === id)?.name).filter(Boolean);
+      counts.keep_in_inbox_skipped = 0;
       const seenAt = now.toISOString();
       const labelRows = labels.labels.map((l) => ({ label_id: l.id, name: l.name, last_seen_in_gmail_at: seenAt }));
       if (apply && labelRows.length) {
@@ -125,14 +147,17 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
 
       // 4. metadata + rules-first matching
       const rows = [];
+      const usability = { missingClasses, gmailIds };
       for (const threadId of ids) {
         const m = await getThreadMeta({ threadId }, deps);
         if (!m.ok) { counts.meta_failed += 1; continue; }
-        const hit = firstMatch(rules.rows, m.meta, missingClasses);
-        if (hit && hit.skipped) { counts.skipped_class += 1; rows.push(itemRow({ etDate, meta: m.meta, rule: null, match: null })); counts.unmatched += 1; continue; }
-        const row = itemRow({ etDate, meta: m.meta, rule: hit ? hit.rule : null, match: hit ? hit.match : null });
+        // keep_in_inbox is a data rule, not a query-text rule: a thread carrying such a label is never triaged
+        if ((m.meta.labelIds || []).some((l) => keepIds.has(l))) { counts.keep_in_inbox_skipped += 1; continue; }
+        const hit = firstMatch(rules.rows, m.meta, usability);
+        if (hit && hit.skipped) counts.skipped_class += hit.skipped;
+        const row = itemRow({ etDate, meta: m.meta, rule: hit && hit.rule ? hit.rule : null, match: hit && hit.match ? hit.match : null });
         if (row.class === FLEET_CLASS) counts.fleet += 1;
-        if (hit) counts.matched += 1; else counts.unmatched += 1;
+        if (hit && hit.rule) counts.matched += 1; else counts.unmatched += 1;
         if (row.action_intent) counts.intents += 1;
         rows.push(row);
       }
@@ -144,7 +169,9 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
         let updates = 0;
         for (const row of rows) {
           const patch = Object.fromEntries(ITEM_UPDATE_KEYS.map((k) => [k, row[k]]));
-          const u = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update(patch).eq('et_date', etDate).eq('thread_id', row.thread_id).is('action_taken_at', null));
+          // A retry (degraded runs re-arm every 15 min) must never reset a class the seat wrote: verified_by is
+          // the seat's stamp (classify-apply allow-list), so the guard is action_taken_at IS NULL AND verified_by IS NULL.
+          const u = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update(patch).eq('et_date', etDate).eq('thread_id', row.thread_id).is('action_taken_at', null).is('verified_by', null));
           if (!u.ok) return { status: 'failed', counts: { ...counts, error_code: u.refusal, phase: 'items', updates } };
           updates += 1;
         }

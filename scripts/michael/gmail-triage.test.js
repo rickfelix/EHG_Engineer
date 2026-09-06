@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { stubClient } from '../../lib/michael/db.test.js';
-import { runGmailTriage, inboxQueries, intentFor, itemRow, firstMatch, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
+import { runGmailTriage, inboxQueries, intentFor, itemRow, firstMatch, ruleUsable, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
 
 // 05:00 ET on 2026-09-06 (EDT) -> 09:00Z (inside 04:30-05:30); 02:00 ET -> 06:00Z.
 const NOW = new Date('2026-09-06T09:00:00.000Z');
@@ -74,8 +74,17 @@ describe('pure helpers', () => {
     expect(row).toEqual({ et_date: '2026-09-06', thread_id: 't1', class: 'newsletter', rule_key: 'gmail/exelon-digest', action_intent: 'archive', last_message_id: 'm1' });
     expect(Object.keys(row)).toEqual([...ITEM_KEYS]);
     expect(itemRow({ etDate: '2026-09-06', meta: { threadId: 't4', lastMessageId: null }, rule: null, match: null })).toEqual({ et_date: '2026-09-06', thread_id: 't4', class: null, rule_key: null, action_intent: null, last_message_id: null });
-    expect(firstMatch(RULES, meta, new Set(['newsletter']))).toMatchObject({ skipped: true });
+    // an unusable matching rule is skipped and LATER rules are still tried (spec skips the rule, not the thread)
+    expect(firstMatch(RULES, meta, new Set(['newsletter']))).toEqual({ rule: null, match: null, skipped: 1 });
+    const both = { threadId: 'b', from: 'alerts@exelon.com', subject: 'Your receipt', lastMessageId: 'm' };
+    expect(firstMatch(RULES, both, { missingClasses: new Set(['newsletter']), gmailIds: new Set(['L_receipts']) })).toMatchObject({ rule: { rule_key: 'gmail/receipts' }, skipped: 1 });
     expect(firstMatch(RULES, { threadId: 'x', from: 'nobody', subject: 'nothing' })).toBe(null);
+    // a label-verb rule whose label id is absent from Gmail or forbidden is unusable
+    expect(ruleUsable(RULES[1], { action: { label_id: 'L_receipts' } }, { gmailIds: new Set(['L_receipts']) })).toBe(true);
+    expect(ruleUsable(RULES[1], { action: { label_id: 'L_receipts' } }, { gmailIds: new Set(['L_other']) })).toBe(false);
+    expect(ruleUsable(RULES[1], { action: { label_id: 'TRASH' } }, { gmailIds: new Set(['TRASH']) })).toBe(false);
+    expect(ruleUsable(RULES[1], { action: {} }, {})).toBe(false);
+    expect(ruleUsable(RULES[0], { action: { verb: 'archive' } }, { gmailIds: new Set() })).toBe(true);
   });
 });
 
@@ -132,8 +141,9 @@ describe('runGmailTriage', () => {
     expect(updates).toHaveLength(5);
     for (const u of updates) {
       expect(Object.keys(u.ops[0].args[0])).toEqual([...ITEM_UPDATE_KEYS]);
-      expect(u.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is']);
+      expect(u.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is']);
       expect(u.ops[3].args).toEqual(['action_taken_at', null]);
+      expect(u.ops[4].args).toEqual(['verified_by', null]);
     }
     expect(dbCalls.filter((c) => c.table === 'michael_feeder_runs').map((c) => c.kind)).toEqual(['select', 'insert', 'update']);
   });
@@ -144,6 +154,17 @@ describe('runGmailTriage', () => {
     const byId = Object.fromEntries(r.preview.map((x) => [x.thread_id, x]));
     expect(byId.t1).toMatchObject({ class: null, rule_key: null, action_intent: null });
     expect(byId.t2).toMatchObject({ class: 'receipt', action_intent: 'label:L_receipts' });
+  });
+  it('keep_in_inbox threads are skipped by labelIds even when the sweep query returns them; an intent to a label absent from Gmail is never staged', async () => {
+    const threads = { ...THREADS, k1: { from: 'alerts@exelon.com', subject: 'digest', lastMessageId: 'mk' } };
+    const labelsOf = { k1: ['INBOX', 'L_keep'] };
+    const factory = ({ calls = [] } = {}) => async (auth) => { calls.push(['factory', auth]); return { users: { labels: { list: async () => ({ data: { labels: [{ id: 'L_keep', name: 'Keep Me', type: 'user' }] } }) }, threads: { list: async (args) => ({ data: { threads: (args.q.startsWith('in:inbox newer') ? ['t2'] : ['k1']).map((id) => ({ id })) } }), get: async (args) => ({ data: { id: args.id, messages: [{ id: threads[args.id].lastMessageId, labelIds: labelsOf[args.id] || ['INBOX'], payload: { headers: [{ name: 'From', value: threads[args.id].from }, { name: 'Subject', value: threads[args.id].subject }] } }] } }) } } }; };
+    const { sb } = db({ labels: [{ label_id: 'L_keep', name: 'Keep Me', class: null, keep_in_inbox: true }] });
+    const r = await runGmailTriage({ sb, argv: [], now: NOW, auth: 'AUTH', gmail: factory(), env });
+    expect(r.counts).toMatchObject({ keep_in_inbox_skipped: 1, threads_seen: 2, skipped_class: 1, unmatched: 1, intents: 0 });
+    expect(r.preview.map((x) => x.thread_id)).toEqual(['t2']);
+    // L_receipts is not in Gmail this morning, so the receipts rule is unusable and t2 is queued instead of carrying label:L_receipts
+    expect(r.preview[0]).toMatchObject({ class: null, action_intent: null });
   });
   it('labels.list failing is failed; a thread metadata failure is counted and degrades; a full page marks truncated_query', async () => {
     const err = Object.assign(new Error('rate limited'), { code: 429 });
