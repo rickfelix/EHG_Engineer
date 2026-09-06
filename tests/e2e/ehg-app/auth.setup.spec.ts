@@ -6,9 +6,28 @@
  */
 import { test as setup, expect } from '@playwright/test';
 import dotenv from 'dotenv';
+import { execFileSync } from 'child_process';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-dotenv.config({ path: '.env.test' });
+
+// SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1): .env.test is gitignored and lives ONLY at the
+// main repo root -- a relative './.env.test' resolves against process.cwd(), which in a
+// worktree checkout (e.g. .worktrees/<SD>/) never contains a copy. Resolve it via git's own
+// --git-common-dir (works from any linked worktree, not just the main one) so credentials are
+// found regardless of which checkout the suite runs from; falls back to the plain relative
+// path (today's behavior) if git resolution fails for any reason.
+function resolveEnvTestPath() {
+  try {
+    const commonDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    if (commonDir) {
+      const candidate = join(dirname(commonDir), '.env.test');
+      if (existsSync(candidate)) return candidate;
+    }
+  } catch { /* not a git repo, git absent, or resolution failed -- fall through */ }
+  return '.env.test';
+}
+dotenv.config({ path: resolveEnvTestPath() });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,7 +55,16 @@ const authFile = join(__dirname, '.auth', 'user.json');
 // than claim an unverified pass.
 const EMAIL_SELECTORS = ['#signin-email', 'input[type="email"]', 'input[name="email"]', '[data-testid="email-input"]'];
 const PASSWORD_SELECTORS = ['#signin-password', 'input[type="password"]', 'input[name="password"]', '[data-testid="password-input"]'];
-const SIGNIN_SELECTORS = ['button:has-text("Sign In")', 'button:has-text("Log In")', 'button:has-text("Login")', 'button[type="submit"]', '[data-testid="signin-button"]'];
+// SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1, root cause): 'button:has-text("Sign In")' is
+// TAG-based, not ROLE-based -- on this page it matches BOTH the (no-op) Radix TabsTrigger tab
+// labeled "Sign In" AND the real submit button, and .first() picked the tab (a genuine DOM-order
+// coincidence, not a selector typo). The tab click is a silent no-op: no request, no error, no
+// navigation -- exactly the "still on /login with no error element visible" symptom this
+// produced. RCA-verified live: 'form button[type="submit"]' resolves to exactly 1 element (the
+// real submit button) and a click through it lands a genuine 200 auth response. Form-scoped and
+// type-scoped selectors now come FIRST; the ambiguous text-based selectors stay only as a
+// last-resort fallback for a login form whose markup has drifted further.
+const SIGNIN_SELECTORS = ['form button[type="submit"]', 'button[type="submit"]', '[data-testid="signin-button"]', 'button:has-text("Sign In")', 'button:has-text("Log In")', 'button:has-text("Login")'];
 const ERROR_SELECTOR = '[role="alert"], .destructive, [class*="toast"]';
 
 async function firstMatching(page, selectors) {

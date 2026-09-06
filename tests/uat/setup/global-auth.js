@@ -100,12 +100,17 @@ async function globalSetup() {
     await passwordField.fill(password);
 
     // Find and click sign in button
+    // SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1, same root cause as tests/e2e/ehg-app/
+    // auth.setup.spec.ts): 'button:has-text("Sign In")' is TAG-based and also matches a
+    // Radix TabsTrigger tab labeled "Sign In" that precedes the real submit button in DOM
+    // order -- .first() picked the no-op tab. Form/type-scoped selectors now come first.
     const signInSelectors = [
+      'form button[type="submit"]',
+      'button[type="submit"]',
+      '[data-testid="signin-button"]',
       'button:has-text("Sign In")',
       'button:has-text("Log In")',
-      'button:has-text("Login")',
-      'button[type="submit"]',
-      '[data-testid="signin-button"]'
+      'button:has-text("Login")'
     ];
 
     let signInButton = null;
