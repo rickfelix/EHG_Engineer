@@ -1672,10 +1672,12 @@ const { dispatchToWorker } = require('../lib/coordinator/dispatch.cjs');
 const { PAYLOAD_KINDS: DASH_PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
 
 /**
- * QF-20260906-162: WRITE SITE — called by the coordinator inbox core (printInbox, below) at
- * the moment it enumerates a batch of signal rows. For each row carrying
- * payload.signal_type='stuck' AND payload.severity='high', writes ONE kind=signal_receipt
- * row back to the original sender via dispatchToWorker (which carries the shared
+ * QF-20260906-162, widened by SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-1:
+ * WRITE SITE — called by the coordinator inbox core (printInbox, below) at the moment it
+ * enumerates a batch of signal rows. Writes ONE kind=signal_receipt row per signal in the batch,
+ * regardless of signal_type/severity (originally scoped to stuck+high only; QF-724's FIX SD
+ * confirmed a duplicate is already merged for that narrow slice, so this widens rather than
+ * re-implements it), back to the original sender via dispatchToWorker (which carries the shared
  * backpressure/target-role guards — signal_receipt is registered exempt from the former in
  * lib/coordinator/dispatch.cjs). A RECEIPT, never an ack: never sets acknowledged_at/
  * answered_at on the original signal row — that stays coordinator-ack-signal.cjs's job
@@ -1683,6 +1685,12 @@ const { PAYLOAD_KINDS: DASH_PAYLOAD_KINDS } = require('../lib/fleet/worker-statu
  * payload.correlation_id) before writing, so re-enumerating the same still-unacknowledged
  * row on a later render never double-writes. Fail-soft throughout — a receipt-write failure
  * must never break the coordinator's own inbox render.
+ *
+ * The disposition line (rendered into Subject, since coordination-inbox.cjs's render is
+ * Subject/Details only, no generic payload-field render) is derived from fields
+ * signal-router.cjs already stamps on the row: routed_to_feedback_id -> 'routed:harness_backlog'
+ * (promoted); routed_to_coordinator -> 'needs-decision:coordinator' (lone-routed for coordinator
+ * attention); otherwise 'queued'.
  *
  * Extracted as its own exported, injectable-client function (unlike printInbox itself, which
  * has no injectable client) specifically so this write path is directly unit-testable.
@@ -1692,42 +1700,58 @@ const { PAYLOAD_KINDS: DASH_PAYLOAD_KINDS } = require('../lib/fleet/worker-statu
  * @param {Array<{id:string, sender_session:string, payload:object}>} signals - the enumerated batch
  * @returns {Promise<{written:number, skipped:number}>}
  */
+function signalReceiptDisposition(signal) {
+  const p = signal?.payload || {};
+  if (p.routed_to_feedback_id) return 'routed:harness_backlog';
+  if (p.routed_to_coordinator) return 'needs-decision:coordinator';
+  return 'queued';
+}
+
 async function writeSignalReceipts(supabase, coordinatorId, signals) {
-  const highStuckSignals = (signals || []).filter((s) => s.payload?.signal_type === 'stuck' && s.payload?.severity === 'high');
+  const batch = signals || [];
   let written = 0;
   let skipped = 0;
-  if (highStuckSignals.length === 0) return { written, skipped };
+  if (batch.length === 0) return { written, skipped };
 
   const runId = crypto.randomUUID();
   let existingReceiptCorrelationIds = new Set();
   try {
-    // Explicit literal bound (count-truncation-diff-lint): highStuckSignals is drawn from
-    // printInbox()'s own .limit(20) batch, so 50 is generous headroom even allowing for a
-    // rare duplicate receipt row per correlation_id — never a truncation risk in practice.
-    const { data: existingReceipts } = await supabase
+    // FR-1 (TST-P6): the existence-check bound MUST be derived from the enumerated batch's own
+    // length, never a fixed literal — the old .limit(50) was justified only by the stuck+high
+    // filter's 1-2-row premise, which this widening removes. batch.length + headroom covers a
+    // rare duplicate receipt row per correlation_id without becoming a truncation risk as the
+    // batch grows toward printInbox()'s own .limit(20) cap (count-truncation-diff-lint).
+    const { data: existingReceipts, error: existingReceiptsError } = await supabase
       .from('session_coordination')
       .select('payload')
       .eq('payload->>kind', DASH_PAYLOAD_KINDS.SIGNAL_RECEIPT)
-      .in('payload->>correlation_id', highStuckSignals.map((s) => s.id))
-      .limit(50);
+      .in('payload->>correlation_id', batch.map((s) => s.id))
+      .limit(batch.length + 50);
+    // Round-2 post-merge review (PR #8356): supabase-js/postgrest-js return a query failure as
+    // {data: null, error}, they do not throw -- discarding `error` here left the catch below
+    // (and its fail-soft contract) unreachable on a genuine PostgREST failure, silently treating
+    // "the lookup failed" as "no existing receipts" and writing duplicates for the whole batch.
+    if (existingReceiptsError) throw existingReceiptsError;
     existingReceiptCorrelationIds = new Set((existingReceipts || []).map((r) => r.payload?.correlation_id));
   } catch { /* fail-soft: an existence-check failure risks a duplicate receipt, never a lost inbox render */ }
 
-  for (const s of highStuckSignals) {
+  for (const s of batch) {
     if (existingReceiptCorrelationIds.has(s.id)) { skipped++; continue; }
     if (!s.sender_session) { skipped++; continue; } // no target to receipt back to
+    const disposition = signalReceiptDisposition(s);
     try {
       await dispatchToWorker(supabase, {
         message_type: 'INFO',
         target_session: s.sender_session,
         sender_session: coordinatorId,
-        subject: '[SIGNAL_RECEIPT] coordinator inbox has seen this stuck/high signal',
+        subject: `[SIGNAL_RECEIPT] ${disposition}`,
         payload: {
           kind: DASH_PAYLOAD_KINDS.SIGNAL_RECEIPT,
           producer: coordinatorId,
           run_id: runId,
           enumerated_row_id: s.id,
           correlation_id: s.id,
+          receipt: disposition,
         },
       });
       written++;

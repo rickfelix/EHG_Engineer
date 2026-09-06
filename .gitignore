@@ -379,6 +379,7 @@ docs/michael/generated/
 .claude/active-michael.json
 .claude/fleet-dashboard-state.json
 .claude/worktree-reaper-state.json
+.claude/capped-pool-broadcast-state.json
 .claude/retry-state-*.json.tmp-*
 
 # SD-LEO-INFRA-CLAIM-GUARD-BRANCH-DERIVED-001 FR-2: per-worktree coordinator reuse marker.

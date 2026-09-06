@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { GAUGE_REGISTRY } from '../../../lib/governance/gauge-registry.js';
 import {
   selectEnabledEntries, tripsThreshold, buildFindingRow,
-  shapeRelayDropResult, shapeStaleTreeResult,
+  shapeRelayDropResult, shapeStaleTreeResult, shapeUnreceiptedOverdueResult,
   staleSelfScoreDetector, DEFAULT_SELF_SCORE_STALE_HOURS,
   buildPlanDriftAdvisoryRows, pushPlanDriftAdvisory,
 } from '../../../scripts/gauge-runner.mjs';
@@ -21,14 +21,14 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 29 seed entries (28 prior + agent-tool-hook-liveness, SD-LEO-INFRA-RESTORE-AGENT-TOOL-001 FR-4)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(29);
+  it('exports exactly 30 seed entries (29 prior + unreceipted-signals-overdue, SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-5(d))', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(30);
   });
 
-  it('26 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('27 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(26);
+    expect(live).toHaveLength(27);
     expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
   });
 
@@ -102,9 +102,9 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 26 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 27 enabled entries', () => {
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(26);
+    expect(selected).toHaveLength(27);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'agent-tool-hook-liveness',
@@ -130,6 +130,7 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       'solomon-dispatched-sd',
       'stale-tree',
       'unranked-claimable-leaves',
+      'unreceipted-signals-overdue',
       'venture-capture-completeness',
       'wind-down-recurrence',
     ]);
@@ -275,6 +276,29 @@ describe('shapeStaleTreeResult (stale-tree resolver shaping)', () => {
 
   it('handles a missing/undefined result without throwing (fails toward count:1, not a silent 0)', () => {
     expect(shapeStaleTreeResult(undefined)).toMatchObject({ count: 1 });
+  });
+});
+
+describe('shapeUnreceiptedOverdueResult (unreceipted-signals-overdue resolver shaping, SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-5(d))', () => {
+  it('reports count:0, status:ok for a real zero reading', () => {
+    expect(shapeUnreceiptedOverdueResult(0)).toEqual({ count: 0, status: 'ok', unreceipted: 0 });
+  });
+
+  it('reports count:N, status:ok for a real non-zero reading', () => {
+    expect(shapeUnreceiptedOverdueResult(3)).toEqual({ count: 3, status: 'ok', unreceipted: 3 });
+  });
+
+  it('NEVER shapes "unknown" into a false-pass count:0 -- it trips the generic tripWhen convention', () => {
+    const shaped = shapeUnreceiptedOverdueResult('unknown');
+    expect(shaped.count).toBe(1);
+    expect(shaped.status).toBe('unknown');
+    expect(shaped.unreceipted).toBe('unknown');
+    expect(tripsThreshold(GAUGE_REGISTRY.find((e) => e.id === 'unreceipted-signals-overdue'), shaped)).toBe(true);
+  });
+
+  it('a real zero reading does not trip the registered threshold', () => {
+    const shaped = shapeUnreceiptedOverdueResult(0);
+    expect(tripsThreshold(GAUGE_REGISTRY.find((e) => e.id === 'unreceipted-signals-overdue'), shaped)).toBe(false);
   });
 });
 

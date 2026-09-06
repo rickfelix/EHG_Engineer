@@ -121,11 +121,19 @@ describe('ages, totals and truncation honesty', () => {
 });
 
 describe('quiet when empty, quiet when it cannot answer', () => {
-  it('nothing outstanding returns null — absence, not an empty stub', async () => {
-    // Asserted as absence: this runs once per loop pass per seat, and a permanent
-    // "0 outstanding" line is one workers learn to skim past.
+  // CORRECTED (adversarial post-merge review, PR #8356, WARNING finding): this used to assert a
+  // bare `null` for "nothing outstanding", identical to what a genuine query ERROR also returns.
+  // countUnreceiptedOverdue(null) reports 'unknown' unconditionally, which tripped the
+  // unreceipted-signals-overdue gauge (SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001
+  // FR-5(d)) on the HEALTHIEST possible fleet state. A genuinely empty result is now a real,
+  // still-falsy-for-count object (count:0/signals:[]) so a caller CAN distinguish "verified zero"
+  // from "unknown" while formatOutstandingWarning's own `!result.count` check still suppresses the
+  // rendered line the same as before -- the "skim past a permanent 0-line" guarantee is unchanged.
+  it('nothing outstanding returns a real, empty-shaped result — never bare null (null means genuinely unknown)', async () => {
     const { client } = sbDouble([]);
-    expect(await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW })).toBeNull();
+    const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
+    expect(r).not.toBeNull();
+    expect(r).toEqual({ count: 0, shown: 0, oldest_age_minutes: null, signals: [], received_check_reliable: true });
   });
 
   it('a query error FAILS QUIET, not closed', async () => {
@@ -202,6 +210,41 @@ describe('QF-20260906-162: RECEIVED — a signal_receipt row exists', () => {
     expect(r).not.toBeNull();
     expect(r.signals[0].received).toBe(false);
   });
+
+  // WARNING (adversarial post-merge review, PR #8356): supabase-js/postgrest-js return a query
+  // failure as `{data: null, error}` — they do NOT throw/reject. The test above only covers the
+  // reject() path; this covers the resolve-with-error path, which the prior code's
+  // `const { data: receipts } = await ...` silently discarded, leaving received_check_reliable
+  // true on a genuine failure (a false-pass — countUnreceiptedOverdue would then trust a hard
+  // number instead of reporting 'unknown').
+  it('the receipt-existence-check RESOLVING with {data:null,error} (not throwing) is still treated as unreliable', async () => {
+    let call = 0;
+    const client = {
+      from() {
+        call++;
+        if (call === 1) {
+          return {
+            select: () => ({
+              eq: () => ({
+                not: () => ({
+                  is: () => ({
+                    order: () => ({
+                      limit: () => Promise.resolve({ data: [{ id: 'a', created_at: minsAgo(40), read_at: null, payload: { signal_type: 'feedback' } }], error: null, count: 1 }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        return { select: () => ({ eq: () => ({ in: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'relation does not exist' } }) }) }) }) };
+      },
+    };
+    const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
+    expect(r).not.toBeNull();
+    expect(r.received_check_reliable).toBe(false);
+    expect(r.signals[0].received).toBe(false);
+  });
 });
 
 describe('READ-ONLY — the surface must not drain what it reports', () => {
@@ -263,7 +306,50 @@ describe('WIRING — the worker can actually see it', () => {
     expect(step).toMatch(/ctx\.base\.outstanding_signals_warning\s*=/);
   });
 
-  it('is attached CONDITIONALLY, so an empty result adds no key', () => {
-    expect(step).toMatch(/if \(outstanding\)/);
+  // CORRECTED (adversarial post-merge review, PR #8356): this used to regex-match
+  // `if (outstanding)` alone, which stayed green even after fetchOutstandingSignals started
+  // returning a real (truthy) empty-shaped object for "genuinely zero outstanding" — the
+  // structural check kept passing while the guarantee it names ("an empty result adds no key")
+  // was silently broken. A source-text match can prove wiring exists; it cannot prove the
+  // condition is still CORRECT after an upstream contract change. See the real behavioral test
+  // below (roll-call step actually run) for that half.
+  it('is attached conditionally on actual content, not bare truthiness (source-text half)', () => {
+    expect(step).toMatch(/if \(outstanding && outstanding\.count/);
+  });
+});
+
+describe('BEHAVIOR — the roll-call step actually suppresses the empty-shaped result', () => {
+  const rollCallStep = require(path.join(REPO, 'lib/checkin/steps/roll-call.cjs'));
+
+  async function runStep({ outstanding, formatOutstandingWarningReturn = null }) {
+    const ctx = {
+      sb: {}, sessionId: 'sess-1', coordinatorId: 'coord-1', sessionRole: 'worker', callsign: 'X', mySd: null, sessionMetadata: null,
+      helpers: {
+        registerRollCall: async () => ({ id: 'rc-1' }),
+        surfaceCoordinatorMessages: async () => [],
+        fetchOutstandingSignals: async () => outstanding,
+        formatOutstandingWarning: () => formatOutstandingWarningReturn,
+      },
+    };
+    await rollCallStep.run(ctx);
+    return ctx;
+  }
+
+  it('a genuinely empty (real, truthy) result from fetchOutstandingSignals attaches NO key to ctx.base', async () => {
+    const ctx = await runStep({ outstanding: { count: 0, shown: 0, oldest_age_minutes: null, signals: [], received_check_reliable: true } });
+    expect(ctx.base.outstanding_signals).toBeUndefined();
+    expect(ctx.base.outstanding_signals_warning).toBeUndefined();
+  });
+
+  it('null (a genuine fetch failure) also attaches no key', async () => {
+    const ctx = await runStep({ outstanding: null });
+    expect(ctx.base.outstanding_signals).toBeUndefined();
+  });
+
+  it('a genuinely non-empty result DOES attach the key', async () => {
+    const real = { count: 1, shown: 1, oldest_age_minutes: 45, signals: [{ id: 'a' }], received_check_reliable: true };
+    const ctx = await runStep({ outstanding: real, formatOutstandingWarningReturn: '⚠ 1 signal(s) you sent are still UNANSWERED' });
+    expect(ctx.base.outstanding_signals).toBe(real);
+    expect(ctx.base.outstanding_signals_warning).toBe('⚠ 1 signal(s) you sent are still UNANSWERED');
   });
 });
