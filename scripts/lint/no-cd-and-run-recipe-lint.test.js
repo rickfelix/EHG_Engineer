@@ -54,4 +54,23 @@ describe('findCdAndRunViolations', () => {
     const md = '```json\n{ "cd": "value" }\n```';
     expect(findCdAndRunViolations(md)).toEqual([]);
   });
+
+  // Adversarial review (post-merge) finding: FENCE_RE required a literal `\n` right after the
+  // tag, so a CRLF-encoded fence (`\r\n`) never matched at all -- the whole block silently
+  // skipped. `.claude/commands/document.md`/`learn.md`/`leo.md` are stored CRLF today (confirmed
+  // via `git ls-files --eol`), so this was not a hypothetical.
+  it('flags cd-and-run in a CRLF-encoded ```bash fence', () => {
+    const md = '```bash\r\ncd .worktrees/SD-X\r\nnpm test\r\n```';
+    expect(findCdAndRunViolations(md).length).toBeGreaterThan(0);
+  });
+
+  it('flags cd-and-run in a CRLF-encoded untagged fence', () => {
+    const md = '```\r\ncd .worktrees/SD-X\r\nnpm test\r\n```';
+    expect(findCdAndRunViolations(md).length).toBeGreaterThan(0);
+  });
+
+  it('allows a bare cd with nothing else in a CRLF-encoded block (non-regression)', () => {
+    const md = '```bash\r\ncd .worktrees/SD-X\r\n```';
+    expect(findCdAndRunViolations(md)).toEqual([]);
+  });
 });
