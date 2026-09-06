@@ -25,7 +25,9 @@ import {
   isTableAbsentError,
   TABLE_ABSENT_CODES,
 } from '../../scripts/lib/capacity-verdict-store.mjs';
-import { VERDICTS, HEALTHY_VERDICTS, scoreLeg4 } from '../../lib/drive-loop/score/leg4-capacity.js';
+import {
+  VERDICTS, EARNING_POINTS, LEG_POINTS, scoreLeg4,
+} from '../../lib/drive-loop/score/leg4-capacity.js';
 
 /** Minimal supabase double. `fail` makes the insert return a PostgREST-shaped error. */
 const client = ({ fail = null, captured = {} } = {}) => ({
@@ -143,13 +145,15 @@ describe('TS-5 — POSITIVE CONTROL: a good write actually writes', () => {
 });
 
 describe('TS-3 — the two-sided rule is the reader\'s, and the writer does not soften it', () => {
-  it('SURPLUS is persisted but is NOT healthy', async () => {
-    // The writer records what happened; it does not grade. HEALTHY_VERDICTS is TIGHT alone, because
-    // reading SURPLUS as good would score a starved belt as healthy. A writer that filtered SURPLUS
-    // out to "keep the data clean" would erase the flooded half of a bidirectional gauge.
+  it('SURPLUS is persisted but does not earn full points', async () => {
+    // The writer records what happened; it does not grade. Ratified be6e9d73 (under ffebbd68):
+    // TIGHT alone earns the full LEG_POINTS, because reading SURPLUS as good would score a
+    // flooded belt the same as a healthy one. A writer that filtered SURPLUS out to "keep the
+    // data clean" would erase the flooded half of a bidirectional gauge.
     const persist = makeCapacityVerdictPersist(client());
     await expect(persist({ ...ROW, verdict: 'SURPLUS' })).resolves.toMatchObject({ verdict: 'SURPLUS' });
-    expect(HEALTHY_VERDICTS).toEqual(['TIGHT']);
+    expect(EARNING_POINTS.SURPLUS).toBeLessThan(LEG_POINTS);
+    expect(EARNING_POINTS.TIGHT).toBe(LEG_POINTS);
   });
 });
 
