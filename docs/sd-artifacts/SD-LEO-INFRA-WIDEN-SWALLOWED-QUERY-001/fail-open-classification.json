@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T19:01:25.684Z",
+  "generated_at": "2026-09-06T19:04:52.981Z",
   "counts": {
-    "has_catch": 45
+    "has_catch": 42
   },
   "results": [
     {
@@ -51,27 +51,6 @@
       "line": 261,
       "kind": "data",
       "snippet": "const { data: existing } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js",
-      "line": 187,
-      "kind": "data",
-      "snippet": "const { data: prd } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js",
-      "line": 203,
-      "kind": "data",
-      "snippet": "const { data: newDeliverables } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js",
-      "line": 253,
-      "kind": "data",
-      "snippet": "const { data: sd } = await supabase",
       "classification": "has_catch"
     },
     {

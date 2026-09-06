@@ -16,6 +16,7 @@ import {
   buildSemanticResult,
   buildSkipResult
 } from '../../../validation/semantic-gate-utils.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'DELIVERABLES_COMPLETENESS';
 
@@ -184,11 +185,14 @@ export function createDeliverablesCompletenessGate(supabase) {
             // Resolve SD text key for PRD lookup (sdId may be text key or UUID)
             const sdTextKey = ctx.sd?.id || sdId;
 
-            const { data: prd } = await supabase
-              .from('product_requirements_v2')
-              .select('*')
-              .eq('directive_id', sdTextKey)
-              .single();
+            const prd = await safeQuery(
+              supabase
+                .from('product_requirements_v2')
+                .select('*')
+                .eq('directive_id', sdTextKey)
+                .single(),
+              { site: 'deliverables-completeness:jit_prd_lookup' }
+            );
 
             if (prd) {
               console.log('   📄 Found PRD — extracting deliverables via JIT');
@@ -200,10 +204,13 @@ export function createDeliverablesCompletenessGate(supabase) {
                 jitExtracted = true;
 
                 // Re-query now that deliverables are populated
-                const { data: newDeliverables } = await supabase
-                  .from('sd_scope_deliverables')
-                  .select('id, deliverable_name, completion_status, metadata, created_by, completed_at') // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
-                  .eq('sd_id', sdId);
+                const newDeliverables = await safeQuery(
+                  supabase
+                    .from('sd_scope_deliverables')
+                    .select('id, deliverable_name, completion_status, metadata, created_by, completed_at') // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
+                    .eq('sd_id', sdId),
+                  { site: 'deliverables-completeness:jit_reconcile_recheck' }
+                );
 
                 if (newDeliverables && newDeliverables.length > 0) {
                   // Reconcile JIT-extracted deliverables before scoring
@@ -250,11 +257,14 @@ export function createDeliverablesCompletenessGate(supabase) {
           if (!jitExtracted) {
             try {
               const sdTextKey = ctx.sd?.id || sdId;
-              const { data: sd } = await supabase
-                .from('strategic_directives_v2')
-                .select('success_criteria, success_metrics')
-                .eq('id', sdTextKey)
-                .single();
+              const sd = await safeQuery(
+                supabase
+                  .from('strategic_directives_v2')
+                  .select('success_criteria, success_metrics')
+                  .eq('id', sdTextKey)
+                  .single(),
+                { site: 'deliverables-completeness:success_criteria_fallback' }
+              );
 
               const criteria = sd?.success_criteria || sd?.success_metrics || [];
               if (Array.isArray(criteria) && criteria.length > 0) {
