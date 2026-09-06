@@ -3,8 +3,9 @@
 // handling). SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-B (FR-6).
 //
 // DRY-RUN BY DEFAULT (scripts/retention-enforce.js shape); --apply executes. Nulls rendered_html and
-// brief_md on michael_brief_runs, summary and needs_you_reason on michael_gmail_triage_items, and
-// DELETES michael_calendar_day rows, all STRICTLY older than the cutoff (et_date < today_ET - days).
+// brief_md on michael_brief_runs, summary and needs_you_reason on michael_gmail_triage_items, log_md
+// on michael_feeder_runs, and DELETES michael_calendar_day rows, all STRICTLY older than the cutoff
+// (et_date < today_ET - days).
 // Rules, closures, dispositions, counts and every non-prose column are never touched.
 //
 // WHY NOT retention-enforce.js: its archive-before-delete would copy personal calendar rows into
@@ -23,9 +24,11 @@ export const RETENTION_TARGETS = Object.freeze([
   { table: 'michael_brief_runs', action: 'null', columns: ['rendered_html', 'brief_md'] },
   { table: 'michael_gmail_triage_items', action: 'null', columns: ['summary', 'needs_you_reason'] },
   { table: 'michael_calendar_day', action: 'delete', columns: [] },
+  // SEC-M3: feeder logs are prose too; counts and ids on the same row are kept.
+  { table: 'michael_feeder_runs', action: 'null', columns: ['log_md'] },
 ]);
 /** Never touched by retention (spec §2: rules, closures, dispositions and counts are kept). */
-export const NEVER_TOUCHED = Object.freeze(['michael_rules', 'michael_closures', 'michael_feedback_ledger', 'michael_feeder_runs', 'michael_gmail_labels', 'michael_todoist_snapshot', 'michael_credentials', 'michael_staged_items']);
+export const NEVER_TOUCHED = Object.freeze(['michael_rules', 'michael_closures', 'michael_feedback_ledger', 'michael_gmail_labels', 'michael_todoist_snapshot', 'michael_credentials', 'michael_staged_items']);
 
 /** Pure: the ET calendar date `days` before today's ET date (YYYY-MM-DD). Rows with et_date < cutoff are eligible. */
 export function cutoffEtDate(now = new Date(), days = DEFAULT_DAYS) {

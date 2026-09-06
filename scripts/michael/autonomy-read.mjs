@@ -97,8 +97,15 @@ export async function runAutonomyRead({ sb, argv = [], now = new Date() } = {}) 
   const rulesR = await readRows(sb, 'michael_rules', (q) => q.eq('status', 'active'));
   if (rulesR.tables_absent) return { ok: true, tables_absent: true, threshold: DEFAULT_THRESHOLD, proposals: [], revocations: [], streaks: {} };
   const ledgerR = await readRows(sb, 'michael_feedback_ledger', (q) => q.order('et_date', { ascending: false }), { select: 'et_date,dispositions' });
-  const triageR = await readRows(sb, 'michael_gmail_triage_items', (q) => q.not('reopened_at', 'is', null), { select: 'et_date,thread_id,rule_key,action_intent,action_taken_at,reopened_at' });
-  const snapR = await readRows(sb, 'michael_todoist_snapshot', (q) => q.not('moved_back_at', 'is', null), { select: 'et_date,task_id,rule_key,moved_back_at' });
+  // SEC-M4: revocation reads are scoped to the active rule keys and ordered newest-first, so the
+  // bounded read is deterministic — a rule that should be revoked cannot fall outside the window.
+  const activeKeys = rulesR.rows.map((r) => r.rule_key);
+  const triageR = activeKeys.length
+    ? await readRows(sb, 'michael_gmail_triage_items', (q) => q.in('rule_key', activeKeys).not('reopened_at', 'is', null).order('reopened_at', { ascending: false }), { select: 'et_date,thread_id,rule_key,action_intent,action_taken_at,reopened_at' })
+    : { rows: [], tables_absent: false };
+  const snapR = activeKeys.length
+    ? await readRows(sb, 'michael_todoist_snapshot', (q) => q.in('rule_key', activeKeys).not('moved_back_at', 'is', null).order('moved_back_at', { ascending: false }), { select: 'et_date,task_id,rule_key,moved_back_at' })
+    : { rows: [], tables_absent: false };
   const errors = [rulesR, ledgerR, triageR, snapR].map((r) => r.error).filter(Boolean);
   const result = evaluateAutonomy({ rules: rulesR.rows, ledger: ledgerR.rows, triage: triageR.rows, snapshot: snapR.rows, argThreshold: a.threshold ?? null, ruleFilter });
   let staged = [];

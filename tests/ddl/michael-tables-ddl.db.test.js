@@ -158,11 +158,23 @@ describe('apply: eleven tables, service-role-only, verify block runs', () => {
     await expect(client.query(
       "UPDATE public.michael_rules SET auto_apply = true, auto_apply_verb = 'complete', auto_apply_since = now() WHERE rule_key = 'k1' AND status = 'active'",
     )).rejects.toMatchObject({ code: '23514' });
+    // SEC-M1: verb + since alone are not enough — the row must carry a verifier subject_hash.
+    await expect(client.query(
+      "UPDATE public.michael_rules SET auto_apply = true, auto_apply_verb = 'archive', auto_apply_since = now() WHERE rule_key = 'k1' AND status = 'active'",
+    )).rejects.toMatchObject({ code: '23514' });
     const { rows: upd } = await client.query(
-      "UPDATE public.michael_rules SET auto_apply = true, auto_apply_verb = 'archive', auto_apply_since = now() WHERE rule_key = 'k1' AND status = 'active' RETURNING updated_at > created_at AS bumped",
+      "UPDATE public.michael_rules SET auto_apply = true, auto_apply_verb = 'archive', auto_apply_since = now(), provenance = provenance || $1::jsonb WHERE rule_key = 'k1' AND status = 'active' RETURNING updated_at > created_at AS bumped",
+      [JSON.stringify({ verifier: { producer: 'opus-verifier', subject_hash: 'a'.repeat(64) } })],
     );
     expect(upd[0].bumped).toBe(true);
     await client.query("DELETE FROM public.michael_rules WHERE rule_key = 'k1'");
+  });
+
+  it('SEC-M5: the verify block goes RED when a table is exposed (it can fail, not only pass)', async () => {
+    await client.query('GRANT SELECT ON public.michael_staged_items TO anon');
+    await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toMatchObject({ message: expect.stringMatching(/anon can SELECT|non-service table grant/) });
+    await client.query('REVOKE ALL ON public.michael_staged_items FROM anon');
+    await expect(client.query(VERIFY_BLOCK_SQL)).resolves.toBeDefined();
   });
 
   it('a second apply is a no-op (idempotent DDL) and the verify block still passes', async () => {
