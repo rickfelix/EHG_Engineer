@@ -14,7 +14,7 @@ describe('checkCompleteness', () => {
       registryKeys: ['a', 'b', 'c'],
       allowlist: ['d'],
     });
-    expect(result).toEqual({ ok: true, missing: [], staleAllowlist: [] });
+    expect(result).toEqual({ ok: true, missing: [], staleAllowlist: [], orphaned: [] });
   });
 
   it('TS-6b: passes with an empty allowlist once every spec step is registered', () => {
@@ -23,7 +23,18 @@ describe('checkCompleteness', () => {
       registryKeys: ['a', 'b', 'c', 'd'],
       allowlist: [],
     });
-    expect(result).toEqual({ ok: true, missing: [], staleAllowlist: [] });
+    expect(result).toEqual({ ok: true, missing: [], staleAllowlist: [], orphaned: [] });
+  });
+
+  it('reports (non-blocking) a registered key with no matching spec step_id as orphaned', () => {
+    const result = checkCompleteness({
+      specStepIds: ['a', 'b'],
+      registryKeys: ['a', 'b', 'retired-step'],
+      allowlist: [],
+    });
+    // Non-blocking: an orphaned registration does not fail the hard gate.
+    expect(result.ok).toBe(true);
+    expect(result.orphaned).toEqual(['retired-step']);
   });
 
   it('fails when a spec step has no override and is not on the allowlist', () => {

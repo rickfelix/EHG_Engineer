@@ -46,18 +46,26 @@ export const ALLOWLIST = Object.freeze([]);
 /**
  * Pure logic, DB-free and browser-free -- unit-testable without live credentials.
  * @param {{specStepIds: string[], registryKeys: string[], allowlist?: string[]}} input
- * @returns {{ok: boolean, missing: string[], staleAllowlist: string[]}}
+ * @returns {{ok: boolean, missing: string[], staleAllowlist: string[], orphaned: string[]}}
  */
 export function checkCompleteness({ specStepIds, registryKeys, allowlist = [] }) {
   const registrySet = new Set(registryKeys);
+  const specSet = new Set(specStepIds);
   const allowSet = new Set(allowlist);
 
   const missing = specStepIds.filter((id) => !registrySet.has(id) && !allowSet.has(id));
   // Disjointness: an allowlist entry that IS registered is stale and must be removed --
   // otherwise it permanently masks whether that step is genuinely covered.
   const staleAllowlist = allowlist.filter((id) => registrySet.has(id));
+  // EXEC-TO-PLAN TESTING finding (evidence 4960b7aa): the exhaustive assertion this check
+  // replaced also incidentally caught a dead registration (a key with no matching spec
+  // step_id, e.g. after a Stage-15 regeneration retires a journey step); the one-directional
+  // `missing` check above does not. Reported for visibility -- NOT included in `ok`, since a
+  // stale-but-harmless registration is a cleanup item, not the fail-closed condition this
+  // check exists to enforce (an UNMAPPED authenticated step reaching :689 unguarded).
+  const orphaned = registryKeys.filter((key) => !specSet.has(key));
 
-  return { ok: missing.length === 0 && staleAllowlist.length === 0, missing, staleAllowlist };
+  return { ok: missing.length === 0 && staleAllowlist.length === 0, missing, staleAllowlist, orphaned };
 }
 
 async function main() {
@@ -86,6 +94,9 @@ async function main() {
   }
   if (result.staleAllowlist.length > 0) {
     console.error(`::error::altifyai-registry-completeness-check: STALE ALLOWLIST -- ${JSON.stringify(result.staleAllowlist)} already has a registered override; remove from ALLOWLIST.`);
+  }
+  if (result.orphaned.length > 0) {
+    console.warn(`::warning::altifyai-registry-completeness-check: ${result.orphaned.length} registered override(s) have no matching spec step_id (dead registration, non-blocking): ${JSON.stringify(result.orphaned)}`);
   }
 
   if (!result.ok) {

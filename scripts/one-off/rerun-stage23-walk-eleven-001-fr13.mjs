@@ -21,6 +21,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { runVentureJourneyWalk } from '../../lib/apa/journey-walk-orchestrator.js';
+import { mergeMetadataKeys } from '../../lib/coordinator/safe-metadata-merge.mjs';
 import { fetchCurrentJourneyArtifact } from '../../lib/eva/lifecycle-sd-bridge.js';
 import { deriveJourneySteps } from '../../lib/eva/bridge/orchestrator-journey-steps.js';
 import { ALTIFYAI_VENTURE_ID } from '../altifyai-registry-completeness-check.mjs';
@@ -91,32 +92,29 @@ async function main() {
 
   console.log('Walk result:', JSON.stringify(result, null, 2));
 
-  const { data: reread, error: rereadErr } = await supabase
-    .from('strategic_directives_v2')
-    .select('metadata')
-    .eq('id', eleven001.id)
-    .single();
-  const stampedRunId = reread?.metadata?.journey_walk_result?.testRunId ?? result.testRunId ?? null;
+  const stampedRunId = result.testRunId ?? null;
 
-  const { error: updErr } = await supabase
-    .from('strategic_directives_v2')
-    .update({
-      metadata: {
-        ...(reread?.metadata || eleven001.metadata),
-        stage23_walk_run_id: stampedRunId,
-        stage23_walk_rerun_note: {
-          recorded_by: 'scripts/one-off/rerun-stage23-walk-eleven-001-fr13.mjs',
-          recorded_at: new Date().toISOString(),
-          status: result.status,
-          pass_rate: result.passRate,
-          broken_at_step: result.brokenAtStep,
-          disclosure: 'Post-hoc validation exercise (SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 FR-13). SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-ELEVEN-001 was already status=completed before this run -- this PASS/FAIL verdict belongs to this walk record, not to that SD\'s completion.',
-        },
-      },
-    })
-    .eq('id', eleven001.id);
-  if (updErr) {
-    console.error('::error::failed to write stage23_walk_run_id:', updErr.message);
+  // EXEC-TO-PLAN TESTING finding (evidence 4960b7aa): the original version of this write did a
+  // full-blob read-spread-write (`.update({ metadata: {...spread, ...patch} })`), the exact
+  // read-then-write TOCTOU anti-pattern lib/coordinator/safe-metadata-merge.mjs exists to
+  // eliminate -- runVentureJourneyWalk's OWN write path (journey-walk-orchestrator.js's
+  // stampJourneyWalkResult) already avoids it one file over. Uses the same atomic JSONB `||`
+  // merge here: only the two keys below are touched, regardless of what else concurrently
+  // changed on this row (including runVentureJourneyWalk's own journey_walk_result write,
+  // which lands via its own atomic merge and is never read or re-spread by this script).
+  const { merged, error: mergeError } = await mergeMetadataKeys(ELEVEN_001_KEY, {
+    stage23_walk_run_id: stampedRunId,
+    stage23_walk_rerun_note: {
+      recorded_by: 'scripts/one-off/rerun-stage23-walk-eleven-001-fr13.mjs',
+      recorded_at: new Date().toISOString(),
+      status: result.status,
+      pass_rate: result.passRate,
+      broken_at_step: result.brokenAtStep,
+      disclosure: 'Post-hoc validation exercise (SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 FR-13). SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-ELEVEN-001 was already status=completed before this run -- this PASS/FAIL verdict belongs to this walk record, not to that SD\'s completion.',
+    },
+  }, { writer: 'rerun-stage23-walk-eleven-001-fr13', reason: 'SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 FR-13 walk re-run handoff' });
+  if (!merged) {
+    console.error('::error::failed to write stage23_walk_run_id:', mergeError);
     process.exitCode = 1;
     return;
   }
