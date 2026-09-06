@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-06](#2026-09-06)
+  - [Infrastructure](#infrastructure)
 - [2026-09-05](#2026-09-05)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -180,6 +182,19 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-06
+
+### Infrastructure
+
+- **All eleven remaining stage-23 walker step overrides registered for AltifyAI, plus a hard CI registry-completeness gate — the fourteen-journey acceptance walk is now reachable** - SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001
+  - `lib/apa/venture-step-executors.js`'s `:689` throw ("authenticated, but no verified UI mapping") fired unconditionally for any of the eleven AltifyAI journey steps whose UI surfaces had just shipped across five sibling venture SDs (`SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-ELEVEN-001-A..E`) — the ratified stage-23 acceptance (a passing walk) was unreachable by construction without this harness-side registration. All eleven now have hand-verified `stepOverride`s (list, multi-upload, batch-generate, edit, copy, delete, approve/needs-review, export CSV/JSON, keywords, suggestions), via a new shared `buildAltifyaiSurfaceOverride` factory that centralizes the existing SEC-003 origin-equality check across all of them.
+  - LEAD-phase risk assessment found the sibling `-E` child completed 8 minutes *after* this PRD was first drafted — the originally-scoped phased/blocked build structure was stale before it was ever used; all eleven overrides shipped in one pass instead.
+  - PLAN-phase adversarial review (4 rounds) rejected the original FR-12 design (a vitest `db`-project test) after live measurement showed it could never gate CI — no non-production Supabase ref is designated, and the only workflow that runs that project marks it informational-only. `scripts/altifyai-registry-completeness-check.mjs` instead reuses the existing, already-real-secrets, hard-gating `altifyai-uat-drift-check-cron.yml` daily cron.
+  - The delete override (`stp-fc2f`) was redesigned non-destructive during PLAN review: it exercises the app's real 2-step confirm-before-destroy dialog and cancels it, never firing the actual delete request — removing a walk-ordering contradiction and a fixture-creation problem the original design had no safe answer for.
+  - EXEC-phase live re-verification of the pre-existing `stp-e3e6` override found the venture's generation flow now fails *earlier* than previously documented (upload-to-status-success latency, not just the known ~121s backend 500) — the same pre-existing, out-of-scope defect, independently reproduced via network capture, not a regression from this SD. Four new overrides (edit/copy/approve/suggestions) that depend on that flow honestly report the same measured condition rather than fabricating a pass; a real live-verification pass of all eleven overrides confirmed zero unexpected failures.
+  - Post-implementation TESTING and SECURITY sub-agent passes each found and closed one real, durable defect before merge: a clipboard-permission gap that would have surfaced only once the generation flow is eventually fixed, and a stale one-time-write pattern in the walk-rerun script replaced with the shared atomic metadata-merge helper.
+  - A live re-run of the canonical walk (via a new one-off script, since no reusable "stage-23 walk runner" CLI exists) recorded a measured improvement over the previously-accepted run: pass rate rose from 7.14% (broken at position 2) to 14.3% (broken at position 3, the pre-existing generation defect) — written to `SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-ELEVEN-001.metadata.stage23_walk_run_id` as a disclosed post-hoc validation, not a completion gate.
 
 ## 2026-09-05
 
