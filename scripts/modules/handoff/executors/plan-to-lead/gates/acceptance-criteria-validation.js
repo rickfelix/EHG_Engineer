@@ -9,6 +9,8 @@
  * BLOCKING gate — score >= 60 AND no story scores 0.
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 export function createAcceptanceCriteriaValidationGate(supabase) {
   return {
     name: 'ACCEPTANCE_CRITERIA_VALIDATION',
@@ -21,10 +23,13 @@ export function createAcceptanceCriteriaValidationGate(supabase) {
       const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
 
       // ORCHESTRATOR BYPASS
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'acceptance-criteria-validation:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Parent orchestrator SD (${childSDs.length} children) — bypassing`);
@@ -36,11 +41,14 @@ export function createAcceptanceCriteriaValidationGate(supabase) {
       }
 
       // SD TYPE CHECK — does this type require user stories?
-      const { data: profile } = await supabase
-        .from('sd_type_validation_profiles')
-        .select('requires_user_stories')
-        .eq('sd_type', sdType)
-        .single();
+      const profile = await safeQuery(
+        supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_user_stories')
+          .eq('sd_type', sdType)
+          .single(),
+        { site: 'acceptance-criteria-validation:sd_type_profile' }
+      );
 
       const storiesRequired = profile?.requires_user_stories ?? true;
       if (!storiesRequired) {
@@ -83,10 +91,13 @@ export function createAcceptanceCriteriaValidationGate(supabase) {
       // column, so the IN-filter always returned zero rows and EVERY validated story scored the
       // 70 "no test mapping" default regardless of real coverage. Use the real FK column.
       const storyIds = stories.map(s => s.id);
-      const { data: testMappings } = await supabase
-        .from('story_test_mappings')
-        .select('user_story_id')
-        .in('user_story_id', storyIds);
+      const testMappings = await safeQuery(
+        supabase
+          .from('story_test_mappings')
+          .select('user_story_id')
+          .in('user_story_id', storyIds),
+        { site: 'acceptance-criteria-validation:test_mappings' }
+      );
 
       const storiesWithTests = new Set((testMappings || []).map(m => m.user_story_id));
 

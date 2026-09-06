@@ -6,6 +6,8 @@
  * Gate 4: Workflow ROI & Pattern Effectiveness
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 /**
  * Create the GATE3_TRACEABILITY gate validator
  *
@@ -32,13 +34,16 @@ export function createTraceabilityGate(supabase) {
         const execToPlan = handoffHistory.find(h => h.handoff_type === 'EXEC-TO-PLAN');
         gate2Results = execToPlan?.metadata?.gate2_validation || null;
       } else {
-        const { data: execToPlanHandoff } = await supabase
-          .from('sd_phase_handoffs')
-          .select('metadata')
-          .eq('sd_id', sdUuid)
-          .eq('handoff_type', 'EXEC-TO-PLAN')
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const execToPlanHandoff = await safeQuery(
+          supabase
+            .from('sd_phase_handoffs')
+            .select('metadata')
+            .eq('sd_id', sdUuid)
+            .eq('handoff_type', 'EXEC-TO-PLAN')
+            .order('created_at', { ascending: false })
+            .limit(1),
+          { site: 'traceability-gates:gate2_exec_to_plan_handoff' }
+        );
         gate2Results = execToPlanHandoff?.[0]?.metadata?.gate2_validation || null;
       }
 
@@ -83,20 +88,26 @@ export function createWorkflowROIGate(supabase) {
           gate3: ctx._gate3Results || null
         };
       } else {
-        const { data: planToExecHandoff } = await supabase
-          .from('sd_phase_handoffs')
-          .select('metadata')
-          .eq('sd_id', sdUuid)
-          .eq('handoff_type', 'PLAN-TO-EXEC')
-          .order('created_at', { ascending: false })
-          .limit(1);
-        const { data: execToPlanHandoff } = await supabase
-          .from('sd_phase_handoffs')
-          .select('metadata')
-          .eq('sd_id', sdUuid)
-          .eq('handoff_type', 'EXEC-TO-PLAN')
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const planToExecHandoff = await safeQuery(
+          supabase
+            .from('sd_phase_handoffs')
+            .select('metadata')
+            .eq('sd_id', sdUuid)
+            .eq('handoff_type', 'PLAN-TO-EXEC')
+            .order('created_at', { ascending: false })
+            .limit(1),
+          { site: 'traceability-gates:gate4_plan_to_exec_handoff' }
+        );
+        const execToPlanHandoff = await safeQuery(
+          supabase
+            .from('sd_phase_handoffs')
+            .select('metadata')
+            .eq('sd_id', sdUuid)
+            .eq('handoff_type', 'EXEC-TO-PLAN')
+            .order('created_at', { ascending: false })
+            .limit(1),
+          { site: 'traceability-gates:gate4_exec_to_plan_handoff' }
+        );
         allGateResults = {
           gate1: planToExecHandoff?.[0]?.metadata?.gate1_validation || null,
           gate2: execToPlanHandoff?.[0]?.metadata?.gate2_validation || null,
