@@ -13,6 +13,7 @@ import {
   parseArgs,
   ALARM_TASKS,
   HIDDEN_LAUNCHER_REL_PATH,
+  TASK_NAME_ILLEGAL_CHARS,
 } from '../../../scripts/setup-alarm-cron-tasks.mjs';
 
 describe('ALARM_TASKS', () => {
@@ -22,6 +23,15 @@ describe('ALARM_TASKS', () => {
     const wrappers = new Set(ALARM_TASKS.map((t) => t.wrapperRelPath));
     expect(names.size).toBe(3);
     expect(wrappers.size).toBe(3);
+  });
+
+  it('QF-20260906-961: no task name carries a Task-Scheduler-illegal filename character (the colon broke every /Create on 2026-09-06)', () => {
+    expect(TASK_NAME_ILLEGAL_CHARS).toContain(':');
+    for (const t of ALARM_TASKS) {
+      for (const ch of TASK_NAME_ILLEGAL_CHARS) {
+        expect(t.taskName, `${t.taskName} contains illegal ${JSON.stringify(ch)}`).not.toContain(ch);
+      }
+    }
   });
 
   it('every task has a valid HH:MM startTime and a positive interval', () => {

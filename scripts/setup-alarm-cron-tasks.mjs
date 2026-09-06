@@ -48,23 +48,32 @@ export const HIDDEN_LAUNCHER_REL_PATH = path.join('scripts', 'cron', 'run-hidden
  * (left unmodified as the off-host fallback). Intervals/offsets mirror each cron's own workflow
  * file exactly, so the host and Actions triggers fire on the same nominal schedule.
  */
+/**
+ * QF-20260906-961: Task Scheduler persists every task as a file under System32Tasks, so a task
+ * name may not contain a filename-illegal character. The original names carried a colon
+ * ('EHG LEO Alarm: ...'), which made schtasks /Create fail with 'The parameter is incorrect' and
+ * /Query with 'The filename, directory name, or volume label syntax is incorrect' on the
+ * chairman's elevated run (2026-09-06). Names now use ' - ' like the sibling liveness tasks.
+ */
+export const TASK_NAME_ILLEGAL_CHARS = Object.freeze(['\\', '/', ':', '*', '?', '"', '<', '>', '|']);
+
 export const ALARM_TASKS = Object.freeze([
   {
-    taskName: 'EHG LEO Alarm: Fleet-Down Alert',
+    taskName: 'EHG LEO Alarm - Fleet-Down Alert',
     script: 'scripts/fleet-down-alert.mjs',
     wrapperRelPath: path.join('scripts', 'cron', 'fleet-down-alert-task.cmd'),
     intervalMinutes: 15,
     startTime: '00:11', // .github/workflows/fleet-down-alert-cron.yml: '11,26,41,56 * * * *'
   },
   {
-    taskName: 'EHG LEO Alarm: Fleet-Worker Pulse',
+    taskName: 'EHG LEO Alarm - Fleet-Worker Pulse',
     script: 'scripts/fleet-worker-pulse.mjs',
     wrapperRelPath: path.join('scripts', 'cron', 'fleet-worker-pulse-task.cmd'),
     intervalMinutes: 15,
     startTime: '00:07', // .github/workflows/fleet-worker-pulse-cron.yml: '7,22,37,52 * * * *'
   },
   {
-    taskName: 'EHG LEO Alarm: Periodic Liveness Watcher (timestamp classes)',
+    taskName: 'EHG LEO Alarm - Periodic Liveness Watcher (timestamp classes)',
     script: 'scripts/periodic-liveness-watcher.mjs',
     wrapperRelPath: path.join('scripts', 'cron', 'periodic-liveness-watcher-timestamp-task.cmd'),
     intervalMinutes: 15,
