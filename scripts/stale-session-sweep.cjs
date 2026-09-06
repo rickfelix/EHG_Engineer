@@ -4417,6 +4417,34 @@ async function main() {
     console.log('');
   }
 
+  // SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-2 — capped-pool broadcast.
+  // Wrapped so any failure NEVER aborts the sweep's claim-cleanup work, same contract as the
+  // reaper tick above.
+  try {
+    const cappedPoolBroadcast = require('../lib/coordinator/capped-pool-broadcast.cjs');
+    const { countActiveWorktrees, MAX_WORKTREE_COUNT } = await import('../lib/worktree-quota.js');
+    const cpbRepoRoot = path.resolve(__dirname, '..');
+    const cpbUsed = countActiveWorktrees(cpbRepoRoot);
+    const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+    const cpbCoordinatorId = await getActiveCoordinatorId(supabase).catch(() => null);
+    const { liveFleetSessions } = require('../lib/fleet/live-fleet-sessions.cjs');
+    const cpbSeats = await liveFleetSessions(supabase, { coordinatorId: cpbCoordinatorId });
+    const cpbOutcome = await cappedPoolBroadcast.tick(supabase, {
+      repoRoot: cpbRepoRoot,
+      coordinatorId: cpbCoordinatorId,
+      used: cpbUsed,
+      cap: MAX_WORKTREE_COUNT,
+      seats: cpbSeats,
+    });
+    if (cpbOutcome.action !== 'none') {
+      console.log('  capped_pool_broadcast action=' + cpbOutcome.action + ' written=' + cpbOutcome.written + ' skipped=' + cpbOutcome.skipped);
+      console.log('');
+    }
+  } catch (cpbErr) {
+    console.log('CAPPED POOL BROADCAST TICK: ' + (cpbErr && cpbErr.message ? cpbErr.message : 'unknown'));
+    console.log('');
+  }
+
   // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001 — flip loop_state to `exited` on
   // sessions that just got released by this sweep cycle. Best-effort: failure
   // does not roll back the release. Single bulk UPDATE rather than threading
