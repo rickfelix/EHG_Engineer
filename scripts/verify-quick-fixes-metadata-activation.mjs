@@ -116,6 +116,7 @@ export async function resolveActivationState(deps = {}) {
     return capturedResult;
   };
 
+  let result;
   try {
     if (insertScratchQfFn) {
       try {
@@ -126,29 +127,42 @@ export async function resolveActivationState(deps = {}) {
         // silently, so the CAS-guarded UPDATE that followed matched 0 rows and got
         // misclassified as REGRESSED ("a real defect in the chain") -- an insert failure
         // is an environmental/setup problem, never a chain defect.
-        return { state: 'INDETERMINATE', exitCode: EXIT_CODES.INDETERMINATE, detail: `scratch QF insert failed: ${err && err.message} -- environmental/setup problem, not a code defect.` };
+        result = { state: 'INDETERMINATE', exitCode: EXIT_CODES.INDETERMINATE, detail: `scratch QF insert failed: ${err && err.message} -- environmental/setup problem, not a code defect.` };
+        return result;
       }
     }
     const entry = await stampClaimFn({}, qfId, sessionId, 'verify-activation-probe', null, { mergeQfMetadataFn: wrappedMergeFn });
 
     if (entry && capturedResult && capturedResult.merged) {
       const hasPickReason = Object.prototype.hasOwnProperty.call(entry, 'pick_reason');
-      if (hasPickReason) {
-        return { state: 'ACTIVATED', exitCode: EXIT_CODES.ACTIVATED, detail: `real pick_reason-bearing claim_history entry written and returned for ${qfId}.` };
-      }
-      return { state: 'REGRESSED', exitCode: EXIT_CODES.REGRESSED, detail: 'merge reported success but the returned entry has no pick_reason -- a real defect in the write path.' };
+      result = hasPickReason
+        ? { state: 'ACTIVATED', exitCode: EXIT_CODES.ACTIVATED, detail: `real pick_reason-bearing claim_history entry written and returned for ${qfId}.` }
+        : { state: 'REGRESSED', exitCode: EXIT_CODES.REGRESSED, detail: 'merge reported success but the returned entry has no pick_reason -- a real defect in the write path.' };
+      return result;
     }
 
     const reason = capturedResult && capturedResult.reason;
     if (reason === 'connect_failed' || !reason) {
-      return { state: 'INDETERMINATE', exitCode: EXIT_CODES.INDETERMINATE, detail: `merge could not reach a definite answer (reason=${reason || 'unknown'}) -- environmental/transient, not a code defect.` };
+      result = { state: 'INDETERMINATE', exitCode: EXIT_CODES.INDETERMINATE, detail: `merge could not reach a definite answer (reason=${reason || 'unknown'}) -- environmental/transient, not a code defect.` };
+      return result;
     }
     // column_absent should be impossible here (we just confirmed presence) -- if it still
     // occurs, that itself is a real (if surprising) defect: treat as REGRESSED, not swallowed.
-    return { state: 'REGRESSED', exitCode: EXIT_CODES.REGRESSED, detail: `merge returned a definite failure reason=${reason} -- a real defect in the chain.` };
+    result = { state: 'REGRESSED', exitCode: EXIT_CODES.REGRESSED, detail: `merge returned a definite failure reason=${reason} -- a real defect in the chain.` };
+    return result;
   } finally {
+    // SECURITY FINDING SEC-F2 (evidence d0d0aaa7, now resolved): supabase-js .delete()
+    // resolves with {error} instead of throwing, so a bare empty catch here could never
+    // surface a server-side cleanup refusal (RLS/constraint) -- an orphaned production row
+    // must never be silent. realDeleteScratchQf now throws on {error}, and that failure is
+    // surfaced in result.detail (the verdict/state/exitCode are left unchanged: cleanup
+    // failing does not itself mean the chain is broken).
     if (deleteScratchQfFn) {
-      try { await deleteScratchQfFn(qfId, sessionId); } catch { /* best-effort cleanup */ }
+      try {
+        await deleteScratchQfFn(qfId, sessionId);
+      } catch (err) {
+        if (result) result.detail += ` [CLEANUP FAILED: scratch row ${qfId} may be orphaned -- ${err && err.message}]`;
+      }
     }
   }
 }
@@ -180,7 +194,8 @@ async function realInsertScratchQf(supabase, qfId, sessionId) {
   if (error) throw new Error(`insert failed: ${error.message}`);
 }
 async function realDeleteScratchQf(supabase, qfId) {
-  await supabase.from('quick_fixes').delete().eq('id', qfId);
+  const { error } = await supabase.from('quick_fixes').delete().eq('id', qfId);
+  if (error) throw new Error(`delete failed: ${error.message}`);
 }
 
 async function run() {

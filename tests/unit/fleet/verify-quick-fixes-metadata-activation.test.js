@@ -151,6 +151,21 @@ describe('resolveActivationState', () => {
     expect(deleteCalled).toBe(true);
   });
 
+  it('SEC-F2: a cleanup (delete) failure is surfaced in result.detail, verdict/state left unchanged', async () => {
+    const result = await resolveActivationState({
+      dbClientFactory: fakePresentDb,
+      mergeQfMetadataFn: async () => ({ merged: true }),
+      stampClaimFn: async (_supabase, qfId, sessionId, _id, _m, opts) => {
+        const merged = await opts.mergeQfMetadataFn(qfId, sessionId, {});
+        return merged.merged ? { session_id: sessionId, claimed_at: 'x', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } } : null;
+      },
+      deleteScratchQfFn: async () => { throw new Error('delete failed: RLS denied'); },
+    });
+    expect(result.state).toBe('ACTIVATED'); // verdict unchanged by a cleanup failure
+    expect(result.detail).toMatch(/CLEANUP FAILED/);
+    expect(result.detail).toMatch(/RLS denied/);
+  });
+
   it('cleans up (calls deleteScratchQfFn) even when stampClaimFn throws', async () => {
     let deleted = false;
     await expect(resolveActivationState({
