@@ -97,6 +97,7 @@ const require = createRequire(import.meta.url);
 const { planRelayDrops } = require('../lib/coordinator/relay-drop-gauge.cjs');
 const { fetchAllAdams } = require('../lib/coordinator/adam-identity.cjs');
 const { fetchAllSolomons } = require('../lib/coordinator/solomon-identity.cjs');
+const { fetchAllOutstandingSignals, countUnreceiptedOverdue } = require('../lib/fleet/outstanding-signals.cjs');
 
 const JSON_MODE = process.argv.includes('--json');
 const MAX_DETECTORS_PER_RUN = 50; // budget-bound: far above the current 3-entry registry, a backstop against runaway growth
@@ -112,6 +113,21 @@ const HEARTBEAT_DIMENSION = 'gauge_runner_heartbeat';
  */
 export function shapeRelayDropResult(result) {
   return { ...result, count: result?.enabled ? (result.flagged || 0) : 0 };
+}
+
+/**
+ * SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-5(d) (ratification 49656c8c's
+ * preventive-exit-predicate). countUnreceiptedOverdue() returns a number OR the literal string
+ * 'unknown' (NEVER a false-pass 0 on a lookup failure — see its own docblock). This shaping
+ * function maps 'unknown' to count:1 (so the generic tripWhen convention `(result.count||0)>0`
+ * trips correctly without a bespoke threshold function) while preserving status:'unknown' so a
+ * human reading the trip detail sees WHY it tripped — an unverified read, not a real backlog.
+ * @param {number|'unknown'} rawCount
+ * @returns {{count:number, status:'ok'|'unknown', unreceipted:number|'unknown'}}
+ */
+export function shapeUnreceiptedOverdueResult(rawCount) {
+  if (rawCount === 'unknown') return { count: 1, status: 'unknown', unreceipted: 'unknown' };
+  return { count: rawCount, status: 'ok', unreceipted: rawCount };
 }
 
 /**
@@ -183,6 +199,12 @@ function buildDetectorResolvers(supabase) {
       return countUnrankedClaimableLeaves(claimable, Date.now());
     },
     'relay-drop': async () => shapeRelayDropResult(await planRelayDrops(supabase)),
+    // SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-5(d): coordinator-wide
+    // (no sessionId scoping), mirroring the coordinator-facing formatCoordinatorOverdueWarning
+    // call site in scripts/fleet-dashboard.cjs.
+    'unreceipted-signals-overdue': async () => shapeUnreceiptedOverdueResult(
+      countUnreceiptedOverdue(await fetchAllOutstandingSignals(supabase))
+    ),
     // SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 (FR-2): QF-scoped only, see lib/fleet/off-canonical-
     // mint-gauge.js docblock for why SDs are out of scope.
     'off-canonical-qf-mint': async () => scanOpenQfsForOffCanonicalMints(supabase),
