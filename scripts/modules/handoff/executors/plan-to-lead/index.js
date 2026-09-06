@@ -7,6 +7,7 @@
  */
 
 import BaseExecutor from '../BaseExecutor.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 import ResultBuilder from '../../ResultBuilder.js';
 import { isInfrastructureSDSync } from '../../../sd-type-checker.js';
 import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
@@ -389,10 +390,13 @@ export class PlanToLeadExecutor extends BaseExecutor {
       // argument (sd_key or UUID depending on caller); parent_sd_id stores the UUID. Use
       // sd?.id || sdId, matching the defensive idiom already used at lines 431/453/480 in
       // this same file — without it, an sd_key-form invocation always finds zero children.
-      const { data: queriedChildren } = await this.supabase
-        .from('strategic_directives_v2')
-        .select('id, title, status')
-        .eq('parent_sd_id', sd?.id || sdId);
+      const queriedChildren = await safeQuery(
+        this.supabase
+          .from('strategic_directives_v2')
+          .select('id, title, status')
+          .eq('parent_sd_id', sd?.id || sdId),
+        { site: 'plan-to-lead/index:queried_children' }
+      );
 
       children = queriedChildren || [];
       isOrchestrator = children.length > 0;
@@ -473,11 +477,14 @@ export class PlanToLeadExecutor extends BaseExecutor {
       const sdType = (sd.sd_type || '').toLowerCase();
       let requiresPrd = true;
       if (sdType && this.supabase) {
-        const { data: profile } = await this.supabase
-          .from('sd_type_validation_profiles')
-          .select('requires_prd')
-          .eq('sd_type', sdType)
-          .single();
+        const profile = await safeQuery(
+          this.supabase
+            .from('sd_type_validation_profiles')
+            .select('requires_prd')
+            .eq('sd_type', sdType)
+            .single(),
+          { site: 'plan-to-lead/index:requires_prd_profile' }
+        );
         if (profile && profile.requires_prd === false) {
           requiresPrd = false;
         }

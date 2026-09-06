@@ -22,6 +22,7 @@ import { getFilteredRetrospective } from './retro-filters.js';
 import { routeOrchestratorToLeadFinal } from './lib/orchestrator-terminal-guard.js';
 import { buildRetrospectiveContent } from '../../../lib/quality/build-retrospective-content.js';
 import { resolvePatternSuccessUpdate } from '../../../lib/quality/resolve-pattern-success-update.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -571,6 +572,11 @@ export class OrchestratorCompletionGuardian {
    */
   async createPRD() {
     // Load child PRDs for aggregation
+    // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001: intentionally left as a bare destructure and
+    // allowlisted below (not routed through safeQuery) -- _childPrds is never referenced
+    // anywhere in this method, so throwing on failure would introduce a new blocking failure
+    // mode for a query whose result is entirely unused. Removing the dead query itself is
+    // out of this SD's scope.
     const { data: _childPrds } = await supabase
       .from('product_requirements_v2')
       .select('title, executive_summary')
@@ -620,12 +626,15 @@ export class OrchestratorCompletionGuardian {
     // .limit(500) makes this provably bounded (count-truncation-diff-lint) rather than
     // relying only on .in('sd_id', ...)'s cardinality: the row count can never exceed
     // this orchestrator's child count, which is never remotely close to 500 in practice.
-    const { data: childRetros } = await supabase
-      .from('retrospectives')
-      .select('sd_id, key_learnings, what_went_well, what_needs_improvement, action_items')
-      .in('sd_id', this.childData.map(c => c.id))
-      .eq('retro_type', 'SD_COMPLETION')
-      .limit(500);
+    const childRetros = await safeQuery(
+      supabase
+        .from('retrospectives')
+        .select('sd_id, key_learnings, what_went_well, what_needs_improvement, action_items')
+        .in('sd_id', this.childData.map(c => c.id))
+        .eq('retro_type', 'SD_COMPLETION')
+        .limit(500),
+      { site: 'orchestrator-completion-guardian:child_retros' }
+    );
 
     // Aggregation (dedupe + labeled fallbacks) is a pure function, unit-tested directly
     // in lib/quality/build-retrospective-content.test.js -- see that file for coverage

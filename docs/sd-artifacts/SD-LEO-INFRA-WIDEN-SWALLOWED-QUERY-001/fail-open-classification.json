@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T13:29:58.139Z",
+  "generated_at": "2026-09-06T13:50:49.905Z",
   "counts": {
-    "no_catch": 65,
+    "no_catch": 49,
     "has_catch": 115
   },
   "results": [
@@ -615,20 +615,6 @@
       "classification": "no_catch"
     },
     {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/failure-chain-ordering.js",
-      "line": 88,
-      "kind": "data",
-      "snippet": "const { data: childSDs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/failure-chain-ordering.js",
-      "line": 128,
-      "kind": "data",
-      "snippet": "const { data: archPlan } = await supabase",
-      "classification": "no_catch"
-    },
-    {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
       "line": 197,
       "kind": "data",
@@ -797,39 +783,11 @@
       "classification": "has_catch"
     },
     {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/smoke-test-evidence.js",
-      "line": 83,
-      "kind": "data",
-      "snippet": "const { data: childSDs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/smoke-test-evidence.js",
-      "line": 123,
-      "kind": "data",
-      "snippet": "const { data: archPlan } = await supabase",
-      "classification": "no_catch"
-    },
-    {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/sub-agent-orchestration.js",
       "line": 27,
       "kind": "data",
       "snippet": "const { data: validationProfile } = await supabase",
       "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-achievement.js",
-      "line": 86,
-      "kind": "data",
-      "snippet": "const { data: childSDs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-achievement.js",
-      "line": 101,
-      "kind": "data",
-      "snippet": "const { data: profile } = await supabase",
-      "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js",
@@ -882,24 +840,10 @@
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/index.js",
-      "line": 130,
+      "line": 131,
       "kind": "data",
       "snippet": "const { data: plan } = await supabase",
       "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/index.js",
-      "line": 392,
-      "kind": "data",
-      "snippet": "const { data: queriedChildren } = await this.supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/index.js",
-      "line": 476,
-      "kind": "data",
-      "snippet": "const { data: profile } = await this.supabase",
-      "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/plan-verification.js",
@@ -1014,20 +958,6 @@
       "classification": "has_catch"
     },
     {
-      "file": "scripts/modules/handoff/gates/scope-completion-gate.js",
-      "line": 321,
-      "kind": "data",
-      "snippet": "const { data: sd } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/gates/scope-completion-gate.js",
-      "line": 377,
-      "kind": "data",
-      "snippet": "const { data: archPlan } = await supabase",
-      "classification": "no_catch"
-    },
-    {
       "file": "scripts/modules/handoff/gates/subagent-evidence-gate.js",
       "line": 241,
       "kind": "data",
@@ -1047,20 +977,6 @@
       "kind": "data",
       "snippet": "const { data } = await this.supabase",
       "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-guardian.js",
-      "line": 574,
-      "kind": "data",
-      "snippet": "const { data: _childPrds } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-guardian.js",
-      "line": 623,
-      "kind": "data",
-      "snippet": "const { data: childRetros } = await supabase",
-      "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
@@ -1189,20 +1105,6 @@
       "classification": "has_catch"
     },
     {
-      "file": "scripts/modules/handoff/retro-filters.js",
-      "line": 64,
-      "kind": "data",
-      "snippet": "const { data: canonical } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/retro-filters.js",
-      "line": 87,
-      "kind": "data",
-      "snippet": "const { data: handoff } = await supabase",
-      "classification": "no_catch"
-    },
-    {
       "file": "scripts/modules/handoff/retrospective-enricher.js",
       "line": 452,
       "kind": "data",
@@ -1228,20 +1130,6 @@
       "line": 675,
       "kind": "data",
       "snippet": "const { data } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/validators/wireframe-qa-validator.js",
-      "line": 80,
-      "kind": "data",
-      "snippet": "const { data: handoffs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/validators/wireframe-qa-validator.js",
-      "line": 95,
-      "kind": "data",
-      "snippet": "const { data: deliverables } = await supabase",
       "classification": "no_catch"
     },
     {

@@ -8,6 +8,8 @@
  * BLOCKING gate — score >= 70 AND no metric has empty actual value.
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 /**
  * Detect if a value is an explicit "not applicable" marker.
  * Matches: "N/A", "n/a", "NA", "Not applicable", "not measured", "deferred"
@@ -83,10 +85,13 @@ export function createSuccessMetricsAchievementGate(supabase) {
       const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
 
       // ORCHESTRATOR BYPASS
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'success-metrics-achievement:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Parent orchestrator SD (${childSDs.length} children) — bypassing`);
@@ -98,11 +103,14 @@ export function createSuccessMetricsAchievementGate(supabase) {
       }
 
       // SD TYPE CHECK — does this type require metrics?
-      const { data: profile } = await supabase
-        .from('sd_type_validation_profiles')
-        .select('requires_user_stories, description')
-        .eq('sd_type', sdType)
-        .single();
+      const profile = await safeQuery(
+        supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_user_stories, description')
+          .eq('sd_type', sdType)
+          .single(),
+        { site: 'success-metrics-achievement:sd_type_profile' }
+      );
 
       // Types without user stories typically don't have success metrics either
       // (infrastructure, documentation, etc.)

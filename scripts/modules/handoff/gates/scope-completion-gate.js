@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
 import { isParentOrchestrator } from '../../../../lib/handoff/parent-detection.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 // Observe-only witness rung (SD-LEO-INFRA-INDEPENDENT-GATE-WITNESS-001-D)
 import { withObserveOnlyWitness } from '../../../../lib/eva/observe-gate-witness.js';
 
@@ -318,11 +319,14 @@ export async function validateScopeCompletion(sdKey) {
   //    `target_application` added for SD-MAN-INFRA-COMPLETION-PROBES-CROSS-001 (FR-6) —
   //    without it, resolveProjectRoot can never tell this is a venture SD and always
   //    falls back to LEGACY_PROJECT_ROOT (EHG_Engineer's own worktree).
-  const { data: sd } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, metadata, scope_slice, parent_sd_id, target_application')
-    .eq('sd_key', sdKey)
-    .single();
+  const sd = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('id, metadata, scope_slice, parent_sd_id, target_application')
+      .eq('sd_key', sdKey)
+      .single(),
+    { site: 'scope-completion-gate:sd' }
+  );
 
   // Parent-orchestrator soft-pass (SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001 FR-3):
   // parents delegate implementation to children — their own branch never holds
@@ -374,11 +378,14 @@ export async function validateScopeCompletion(sdKey) {
   }
 
   // 2. Fetch the architecture plan content
-  const { data: archPlan } = await supabase
-    .from('eva_architecture_plans')
-    .select('content')
-    .eq('plan_key', archKey)
-    .single();
+  const archPlan = await safeQuery(
+    supabase
+      .from('eva_architecture_plans')
+      .select('content')
+      .eq('plan_key', archKey)
+      .single(),
+    { site: 'scope-completion-gate:arch_plan' }
+  );
 
   if (!archPlan?.content) {
     console.log(`   ⚠️  Architecture plan ${archKey} not found or empty — skipping`);
