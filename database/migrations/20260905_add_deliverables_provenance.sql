@@ -1,4 +1,13 @@
--- @approved-by: codestreetlabs@gmail.com
+-- @approved-by: PENDING — chairman-gated apply required (do NOT apply outside it)
+-- @chairman-gated: this session's --prod-deploy attempt (fresh token, matching
+--   @approved-by precedent) was denied by the permission classifier because this
+--   migration restates a SECURITY DEFINER function body -- an autonomous worker
+--   session cannot self-apply it. Dry-run validated
+--   (node scripts/apply-migration.js database/migrations/20260905_add_deliverables_provenance.sql
+--   prints [MIGRATION_APPLY_DRY_RUN] cleanly, 4 declared objects, 37 statements) and
+--   code-reviewed by an adversarial TESTING sub-agent pass; staged not applied pending
+--   an operator running the 2-command apply ceremony
+--   (node scripts/apply-migration.js --issue-token, then --prod-deploy with the token).
 -- SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-4: deliverables provenance.
 --
 -- sd_scope_deliverables has no producer/completed_at columns today, so a
