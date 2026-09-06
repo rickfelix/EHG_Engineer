@@ -36,7 +36,28 @@ export const STALE_HOURS = 36;
 export const DEDUPE_DAYS = 7;
 export const TASK_LABELS = Object.freeze(['captured', 'from-google-tasks']);
 export const TITLE_MAX = 200;
+export const TODOIST_MAX_PAGES = 10;
 export const ROUTE_KEYS = Object.freeze(['dedupe_key', 'dedupe_sha256', 'title', 'source_file_id', 'reason']);
+
+/** Pure: a code-shaped error field for the run row — never an arbitrary API message fragment. */
+export function errCode(error) {
+  const head = String(error || '').split(':')[0].trim();
+  return /^[A-Z][A-Z0-9_]{1,40}$|^\d{3}$/.test(head) ? head : 'API_ERROR';
+}
+
+/** Fetch every page of Todoist tasks carrying a label (bounded at TODOIST_MAX_PAGES); never returns a partial page silently. */
+export async function fetchLabeledTasks(client, label) {
+  const tasks = [];
+  let cursor = null;
+  for (let page = 0; page < TODOIST_MAX_PAGES; page += 1) {
+    const res = await client.getTasks(cursor ? { label, cursor } : { label });
+    const batch = Array.isArray(res) ? res : (res && Array.isArray(res.results) ? res.results : []);
+    tasks.push(...batch);
+    cursor = res && !Array.isArray(res) && res.nextCursor ? res.nextCursor : null;
+    if (!cursor) return { tasks, complete: true, pages: page + 1 };
+  }
+  return { tasks, complete: false, pages: TODOIST_MAX_PAGES };
+}
 export const CLEANUP_KEYS = Object.freeze(['dedupe_key', 'dedupe_sha256', 'item_ids', 'count']);
 
 /** Pure: normalise task text for dedupe (case, whitespace, punctuation). */
@@ -126,23 +147,29 @@ export async function runTasksClassifier({ sb, argv = [], now = new Date(), auth
 
       // 1. the folder: current-tasks.json (fresh) and no unconsumed cleanup-pending.json
       const files = await listDriveFiles({ folderId }, gdeps);
-      if (!files.ok) return { status: 'failed', counts: { ...counts, error_code: files.error.split(':')[0], phase: 'drive' } };
+      if (!files.ok) return { status: 'failed', counts: { ...counts, error_code: errCode(files.error), phase: 'drive' } };
       const tasksFile = files.files.find((f) => f.name === TASKS_FILE);
       if (!tasksFile) return { status: 'skipped', counts: { ...counts, reason: 'file_missing' } };
       counts.file_modified = tasksFile.modifiedTime || null;
       counts.file_age_hours = Math.round(ageHours(tasksFile.modifiedTime, now) * 10) / 10;
       if (ageHours(tasksFile.modifiedTime, now) > STALE_HOURS) return { status: 'skipped', counts: { ...counts, reason: 'stale' } };
+      // A cleanup-pending.json in Drive is foreign in v1 (this feeder never writes one): the first fire that
+      // sees a new one skips once and records its modifiedTime as the marker, so the next fire proceeds
+      // (adversarial review of PR 8373: a marker only an ok run could write was unreachable). Re-creation is
+      // prevented by the bridged-id ledger below, not by this guard.
       const cleanup = files.files.find((f) => f.name === CLEANUP_FILE);
       if (cleanup) {
-        const lastOk = await readRows(sb, 'michael_feeder_runs', (q) => q.eq('feeder', FEEDER).eq('status', 'ok').order('started_at', { ascending: false }), { select: 'counts' });
-        if (lastOk.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'marker' } };
-        const marker = lastOk.rows[0] && lastOk.rows[0].counts ? lastOk.rows[0].counts.cleanup_marker : null;
-        if (!marker || String(cleanup.modifiedTime || '') > String(marker)) return { status: 'skipped', counts: { ...counts, reason: 'cleanup_pending', cleanup_modified: cleanup.modifiedTime || null } };
+        const recent = await readRows(sb, 'michael_feeder_runs', (q) => q.eq('feeder', FEEDER).order('started_at', { ascending: false }), { select: 'counts' });
+        if (recent.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'marker' } };
+        const marker = (recent.rows.find((r) => r && r.counts && r.counts.cleanup_marker) || { counts: {} }).counts.cleanup_marker || null;
+        const modified = String(cleanup.modifiedTime || '');
+        if (!marker || modified > String(marker)) return { status: 'skipped', counts: { ...counts, reason: 'cleanup_pending', cleanup_modified: cleanup.modifiedTime || null, cleanup_marker: modified || null } };
+        counts.cleanup_marker = marker;
       }
 
       // 2. items
       const text = await readDriveFileText({ fileId: tasksFile.id, folderId }, gdeps);
-      if (!text.ok) return { status: 'failed', counts: { ...counts, error_code: text.error.split(':')[0], phase: 'read' } };
+      if (!text.ok) return { status: 'failed', counts: { ...counts, error_code: errCode(text.error), phase: 'read' } };
       const items = parseItems(text.text);
       if (!items) return { status: 'failed', counts: { ...counts, error_code: 'FILE_UNPARSEABLE', phase: 'parse' } };
       counts.items = items.length;
@@ -157,26 +184,37 @@ export async function runTasksClassifier({ sb, argv = [], now = new Date(), auth
       }
       counts.routed = routed.length; counts.unrouted = unrouted.length;
 
-      // 4. dedupe against Todoist (7 days, both labels); without it nothing is created (never duplicate)
+      // 4. dedupe: (a) every Google item id this feeder already bridged (tasks_cleanup rows, open or
+      // dispositioned) — v1 never drains current-tasks.json, so the file re-presents items for days and the
+      // 7-day active-task window alone would re-create them; (b) Todoist tasks with both labels created
+      // in the last 7 days, ALL pages. Without (b) nothing is created (never duplicate).
+      const bridged = new Set();
+      if (routed.length) {
+        const ledger = await readRows(sb, 'michael_staged_items', (q) => q.eq('kind', 'tasks_cleanup').order('staged_at', { ascending: false }), { select: 'payload' });
+        if (ledger.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'ledger' } };
+        for (const r of ledger.rows) for (const id of (r && r.payload && Array.isArray(r.payload.item_ids) ? r.payload.item_ids : [])) bridged.add(String(id));
+      }
       let existing = null;
       if (routed.length) {
         try {
           const client = todoist || await defaultTodoist();
-          const res = await client.getTasks({ label: TASK_LABELS[0] });
-          const tasks = Array.isArray(res) ? res : (res && Array.isArray(res.results) ? res.results : []);
+          const fetched = await fetchLabeledTasks(client, TASK_LABELS[0]);
+          if (!fetched.complete) throw Object.assign(new Error('todoist page bound exceeded'), { code: 'TODOIST_PAGES_EXCEEDED' });
           const floor = now.getTime() - DEDUPE_DAYS * 24 * 3600000;
-          existing = new Set(tasks.filter((t) => Array.isArray(t.labels) && TASK_LABELS.every((l) => t.labels.includes(l)) && (!t.addedAt || Date.parse(t.addedAt) >= floor)).map((t) => normalizeContent(t.content)));
-          counts.todoist_recent = existing.size;
+          existing = new Set(fetched.tasks.filter((t) => t && Array.isArray(t.labels) && TASK_LABELS.every((l) => t.labels.includes(l)) && (!t.addedAt || Date.parse(t.addedAt) >= floor)).map((t) => normalizeContent(t.content)));
+          counts.todoist_recent = existing.size; counts.todoist_pages = fetched.pages;
         } catch (e) {
           counts.dedupe_error = (e && e.code) || 'TODOIST_UNAVAILABLE';
         }
       }
+      counts.already_bridged = 0;
 
       // 5. create (apply only) — a failed dedupe read creates nothing
       const consumed = [];
       if (routed.length && existing) {
         const client = todoist || await defaultTodoist();
         for (const { item, route } of routed) {
+          if (bridged.has(item.id)) { counts.already_bridged += 1; continue; }
           if (existing.has(normalizeContent(item.title))) { counts.duplicates += 1; consumed.push(item.id); continue; }
           if (!apply) { consumed.push(item.id); continue; }
           try {
@@ -196,10 +234,10 @@ export async function runTasksClassifier({ sb, argv = [], now = new Date(), auth
       if (sc.error) return { status: 'failed', counts: { ...counts, error_code: 'STAGE_FAILED', phase: 'stage' } };
       counts.staged_cleanup = sc.inserted; counts.stage_dupes_skipped += sc.skipped;
       counts.cleanup_staged = consumed.length > 0; counts.cleanup_written_to_drive = false;
-      counts.cleanup_marker = cleanup ? (cleanup.modifiedTime || null) : (counts.cleanup_marker ?? null);
+      if (!cleanup) counts.cleanup_marker = counts.cleanup_marker ?? null;
 
       const degraded = counts.create_failed > 0 || (routed.length > 0 && !existing);
-      return { status: degraded ? 'degraded' : 'ok', counts, preview: apply ? undefined : { task_route: routes, tasks_cleanup: cleanups, would_create: existing ? routed.filter(({ item }) => !existing.has(normalizeContent(item.title))).map(({ item, route }) => ({ id: item.id, bucket: route.bucket, project_id: route.project_id })) : [] } };
+      return { status: degraded ? 'degraded' : 'ok', counts, preview: apply ? undefined : { task_route: routes, tasks_cleanup: cleanups, would_create: existing ? routed.filter(({ item }) => !bridged.has(item.id) && !existing.has(normalizeContent(item.title))).map(({ item, route }) => ({ id: item.id, bucket: route.bucket, project_id: route.project_id })) : [] } };
     },
   }, { sb, env, now });
 }

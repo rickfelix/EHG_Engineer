@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { stubClient } from '../../lib/michael/db.test.js';
-import { runTasksClassifier, normalizeContent, parseItems, ageHours, routeItem, routePayload, cleanupPayload, ROUTE_KEYS, CLEANUP_KEYS, TASK_LABELS, TITLE_MAX } from './tasks-classifier.mjs';
+import { runTasksClassifier, normalizeContent, parseItems, ageHours, routeItem, routePayload, cleanupPayload, errCode, fetchLabeledTasks, ROUTE_KEYS, CLEANUP_KEYS, TASK_LABELS, TITLE_MAX, TODOIST_MAX_PAGES } from './tasks-classifier.mjs';
 
 // 04:00 ET on 2026-09-06 (EDT) -> 08:00Z (inside 03:45-04:30); 02:00 ET -> 06:00Z.
 const NOW = new Date('2026-09-06T08:00:00.000Z');
@@ -22,21 +22,34 @@ function driveFactory({ files = [{ id: 'F_TASKS', name: 'current-tasks.json', pa
     } };
   };
 }
-function todoistClient({ tasks = [], rejectAdd = null } = {}, calls = []) {
+function todoistClient({ tasks = [], rejectAdd = null, pageSize = 0 } = {}, calls = []) {
   return {
-    getTasks: async (args) => { calls.push(['getTasks', args]); return { results: tasks }; },
+    getTasks: async (args) => {
+      calls.push(['getTasks', args]);
+      if (!pageSize) return { results: tasks };
+      const start = args.cursor ? Number(args.cursor) : 0;
+      const page = tasks.slice(start, start + pageSize);
+      return { results: page, nextCursor: start + pageSize < tasks.length ? String(start + pageSize) : null };
+    },
     addTask: async (args) => { calls.push(['addTask', args]); if (rejectAdd && rejectAdd.has(args.content)) throw new Error('todoist 500'); return { id: `T_${calls.length}` }; },
   };
 }
-function db({ runs = [], okRuns = [], rules = RULES, open = {}, absent = false } = {}) {
+function db({ runs = [], okRuns = [], rules = RULES, open = {}, ledger = [], absent = false } = {}) {
   const calls = [];
   const sb = stubClient((table, ops) => {
     calls.push({ table, kind: ops[0].op, ops });
     if (absent) return MISSING;
     if (ops[0].op !== 'select') return { data: null, error: null };
-    if (table === 'michael_feeder_runs') return { data: ops.some((o) => o.op === 'eq' && o.args[0] === 'status') ? okRuns : runs, error: null };
+    // the marker read is the feeder-scoped, status-free, started_at-ordered read; the harness read is date-scoped
+    if (table === 'michael_feeder_runs') return { data: ops.some((o) => o.op === 'eq' && o.args[0] === 'feeder') ? okRuns : runs, error: null };
     if (table === 'michael_rules') return { data: rules, error: null };
-    if (table === 'michael_staged_items') { const k = ops.find((o) => o.op === 'eq' && o.args[0] === 'kind'); return { data: (open[k ? k.args[1] : ''] || []).map((payload) => ({ payload })), error: null }; }
+    if (table === 'michael_staged_items') {
+      const k = ops.find((o) => o.op === 'eq' && o.args[0] === 'kind');
+      const kind = k ? k.args[1] : '';
+      // the bridged-id ledger read has no dispositioned_at filter; the stage dedupe read does
+      if (kind === 'tasks_cleanup' && !ops.some((o) => o.op === 'is')) return { data: ledger.map((payload) => ({ payload })), error: null };
+      return { data: (open[kind] || []).map((payload) => ({ payload })), error: null };
+    }
     return { data: [], error: null };
   });
   return { sb, calls };
@@ -66,6 +79,19 @@ describe('pure helpers', () => {
     const c = cleanupPayload('2026-09-06', 'F_TASKS', FRESH, ['g2', 'g1']);
     expect(Object.keys(c)).toEqual([...CLEANUP_KEYS]);
     expect(c).toMatchObject({ dedupe_key: `2026-09-06:cleanup:F_TASKS:${FRESH}`, item_ids: ['g1', 'g2'], count: 2 });
+    expect(errCode('404: File not found')).toBe('404');
+    expect(errCode('FILE_OUTSIDE_CONFIGURED_FOLDER')).toBe('FILE_OUTSIDE_CONFIGURED_FOLDER');
+    expect(errCode('File not found: current-tasks.json')).toBe('API_ERROR');
+  });
+  it('fetchLabeledTasks follows nextCursor across pages and reports an exceeded page bound', async () => {
+    const tasks = Array.from({ length: 120 }, (_, i) => ({ content: `t${i}`, labels: [] }));
+    const calls = [];
+    const r = await fetchLabeledTasks(todoistClient({ tasks, pageSize: 50 }, calls), 'captured');
+    expect(r).toMatchObject({ complete: true, pages: 3 });
+    expect(r.tasks).toHaveLength(120);
+    expect(calls.map((c) => c[1])).toEqual([{ label: 'captured' }, { label: 'captured', cursor: '50' }, { label: 'captured', cursor: '100' }]);
+    const huge = Array.from({ length: 50 * (TODOIST_MAX_PAGES + 1) }, (_, i) => ({ content: `h${i}`, labels: [] }));
+    expect(await fetchLabeledTasks(todoistClient({ tasks: huge, pageSize: 50 }), 'captured')).toMatchObject({ complete: false, pages: TODOIST_MAX_PAGES });
   });
 });
 
@@ -96,8 +122,15 @@ describe('runTasksClassifier', () => {
     const tcalls = [];
     expect(await runTasksClassifier({ sb: db().sb, argv: ['--apply'], now: NOW, auth: 'AUTH', drive: driveFactory({ files }), todoist: todoistClient({}, tcalls), env })).toMatchObject({ status: 'skipped', counts: { reason: 'cleanup_pending' } });
     expect(tcalls).toEqual([]);
-    const consumed = db({ okRuns: [{ counts: { cleanup_marker: '2026-09-05T20:00:00.000Z' } }] });
-    expect((await runTasksClassifier({ sb: consumed.sb, argv: [], now: NOW, auth: 'AUTH', drive: driveFactory({ files }), todoist: todoistClient(), env })).status).toBe('ok');
+    // the skipped run records the file's modifiedTime as the marker, so the very next fire proceeds
+    const skipped = await runTasksClassifier({ sb: db().sb, argv: ['--apply'], now: NOW, auth: 'AUTH', drive: driveFactory({ files }), todoist: todoistClient(), env });
+    expect(skipped.counts.cleanup_marker).toBe('2026-09-05T20:00:00.000Z');
+    const consumed = db({ okRuns: [{ counts: { reason: 'cleanup_pending', cleanup_marker: '2026-09-05T20:00:00.000Z' } }, { counts: {} }] });
+    const next = await runTasksClassifier({ sb: consumed.sb, argv: [], now: NOW, auth: 'AUTH', drive: driveFactory({ files }), todoist: todoistClient(), env });
+    expect(next).toMatchObject({ status: 'ok', counts: { cleanup_marker: '2026-09-05T20:00:00.000Z' } });
+    // a NEWER cleanup file trips the guard again
+    const newer = files.map((f) => (f.name === 'cleanup-pending.json' ? { ...f, modifiedTime: '2026-09-06T01:00:00.000Z' } : f));
+    expect((await runTasksClassifier({ sb: consumed.sb, argv: [], now: NOW, auth: 'AUTH', drive: driveFactory({ files: newer }), todoist: todoistClient(), env })).counts).toMatchObject({ reason: 'cleanup_pending' });
   });
   it('TS-9 dry run: routes by bucket, previews creations and stagings, calls no addTask and writes nothing', async () => {
     const tcalls = [];
@@ -124,8 +157,14 @@ describe('runTasksClassifier', () => {
     expect(inserts[1].ops[0].args[0][0]).toMatchObject({ kind: 'tasks_cleanup', payload: { item_ids: ['g1', 'g2', 'g3'], count: 3 } });
     expect(dcalls.filter((c) => c[0] === 'files.get' && c[1].alt === 'media')).toHaveLength(1);
     expect(dcalls.some((c) => /create|update/.test(c[0]))).toBe(false);
-    const opens = dbCalls.filter((c) => c.table === 'michael_staged_items' && c.kind === 'select');
+    const reads = dbCalls.filter((c) => c.table === 'michael_staged_items' && c.kind === 'select');
+    const opens = reads.filter((c) => c.ops.some((o) => o.op === 'is'));
+    expect(opens).toHaveLength(2);
     for (const o of opens) expect(o.ops.map((x) => x.op)).toEqual(['select', 'limit', 'eq', 'is']);
+    // the bridged-id ledger read covers open AND dispositioned tasks_cleanup rows
+    const ledgerReads = reads.filter((c) => !c.ops.some((o) => o.op === 'is'));
+    expect(ledgerReads).toHaveLength(1);
+    expect(ledgerReads[0].ops.map((x) => x.op)).toEqual(['select', 'limit', 'eq', 'order']);
   });
   it('TS-19: a second fire stages zero duplicates for dedupe_keys already open', async () => {
     const { sb, calls: dbCalls } = db({ open: { task_route: [{ dedupe_key: '2026-09-06:g4' }], tasks_cleanup: [{ dedupe_key: `2026-09-06:cleanup:F_TASKS:${FRESH}` }] } });
@@ -134,6 +173,21 @@ describe('runTasksClassifier', () => {
     const inserts = dbCalls.filter((c) => c.table === 'michael_staged_items' && c.kind === 'insert');
     expect(inserts).toHaveLength(1);
     expect(inserts[0].ops[0].args[0].map((x) => x.payload.dedupe_key)).toEqual(['2026-09-06:g5']);
+  });
+  it('an item this feeder already bridged (tasks_cleanup ledger) is never re-created, even after its Todoist twin was completed or aged past 7 days', async () => {
+    const tcalls = [];
+    const { sb } = db({ ledger: [{ dedupe_key: '2026-09-04:cleanup:F_TASKS:x', item_ids: ['g1', 'g3'], count: 2 }] });
+    const r = await runTasksClassifier({ sb, argv: ['--apply'], now: NOW, auth: 'AUTH', drive: driveFactory(), todoist: todoistClient({ tasks: [] }, tcalls), env });
+    expect(tcalls.filter((c) => c[0] === 'addTask').map((c) => c[1].content)).toEqual(['Cover the night shift']);
+    expect(r.counts).toMatchObject({ already_bridged: 2, created: 1, duplicates: 0 });
+  });
+  it('the Todoist dedupe follows every page: a twin on page 2 is still a duplicate', async () => {
+    const tcalls = [];
+    const filler = Array.from({ length: 50 }, (_, i) => ({ content: `other ${i}`, labels: ['captured', 'from-google-tasks'], addedAt: '2026-09-05T12:00:00.000Z' }));
+    const tasks = [...filler, { content: 'book the dentist', labels: ['captured', 'from-google-tasks'], addedAt: '2026-09-05T12:00:00.000Z' }];
+    const r = await runTasksClassifier({ sb: db().sb, argv: ['--apply'], now: NOW, auth: 'AUTH', drive: driveFactory(), todoist: todoistClient({ tasks, pageSize: 50 }, tcalls), env });
+    expect(r.counts).toMatchObject({ todoist_pages: 2, duplicates: 1, created: 2 });
+    expect(tcalls.filter((c) => c[0] === 'addTask').map((c) => c[1].content)).not.toContain('Book the dentist');
   });
   it('a failing addTask is counted and degrades; an unreachable Todoist dedupe creates nothing and degrades; an unparseable file fails', async () => {
     const tcalls = [];

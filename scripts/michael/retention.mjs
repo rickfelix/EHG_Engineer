@@ -30,7 +30,7 @@ export const RETENTION_TARGETS = Object.freeze([
   // Child D (FR-6, SECURITY F-7 / RISK DA1): staged payloads can carry task prose; once DISPOSITIONED and
   // older than the cutoff the payload is emptied to {} (kind, disposition and timestamps stay for the
   // ledger). Undispositioned rows persist until dispositioned — deliberate, stated in TR-4.
-  { table: 'michael_staged_items', action: 'empty_payload', columns: ['payload'], dateColumn: 'dispositioned_at' },
+  { table: 'michael_staged_items', action: 'empty_payload', columns: ['payload'], dateColumn: 'dispositioned_at', kinds: ['task_route', 'tasks_cleanup'] },
 ]);
 /** Never touched by retention (spec §2: rules, closures, dispositions and counts are kept). */
 export const NEVER_TOUCHED = Object.freeze(['michael_rules', 'michael_closures', 'michael_feedback_ledger', 'michael_gmail_labels', 'michael_todoist_snapshot', 'michael_credentials']);
@@ -54,7 +54,7 @@ async function countEligible(sb, target, cutoff) {
     const col = target.dateColumn || 'et_date';
     let q = sb.from(target.table).select('id', { count: 'exact', head: true }).lt(col, cutoffFor(target, cutoff));
     if (target.action === 'null') q = q.or(target.columns.map((c) => `${c}.not.is.null`).join(','));
-    if (target.action === 'empty_payload') q = q.neq('payload', '{}');
+    if (target.action === 'empty_payload') q = q.in('kind', target.kinds).neq('payload', '{}');
     const { count, error } = await q;
     if (error) return isMissingRelation(error) ? { count: null, tables_absent: true } : { count: null, error: `${target.table}: ${error.message || error.code}` };
     if (count === null || count === undefined) return { count: null, tables_absent: true };
@@ -86,7 +86,7 @@ export async function runRetention({ sb, argv = [], now = new Date() } = {}) {
       const w = target.action === 'delete'
         ? await writeRows(sb, target.table, (t) => t.delete().lt(col, cutoffFor(target, cutoff)))
         : target.action === 'empty_payload'
-          ? await writeRows(sb, target.table, (t) => t.update({ payload: {} }).lt(col, cutoffFor(target, cutoff)).neq('payload', '{}'))
+          ? await writeRows(sb, target.table, (t) => t.update({ payload: {} }).lt(col, cutoffFor(target, cutoff)).in('kind', target.kinds).neq('payload', '{}'))
           : await writeRows(sb, target.table, (t) => t.update(Object.fromEntries(target.columns.map((c) => [c, null]))).lt(col, cutoffFor(target, cutoff)).or(target.columns.map((c) => `${c}.not.is.null`).join(',')));
       if (!w.ok) { entry.error = w.error; anyError = true; } else entry.applied = c.count;
     }

@@ -93,11 +93,13 @@ describe('runRetention', () => {
     const sb = stub({ counts: { michael_staged_items: 3 } });
     await runRetention({ sb, argv: ['--apply'], now: NOW });
     const w = sb.writes.find((x) => x.table === 'michael_staged_items');
-    expect(w.ops.map((o) => o.op)).toEqual(['update', 'lt', 'neq']);
+    expect(w.ops.map((o) => o.op)).toEqual(['update', 'lt', 'in', 'neq']);
     expect(w.ops[0].args[0]).toEqual({ payload: {} });
     // the filter is on dispositioned_at (an instant), so a NULL dispositioned_at never matches lt()
     expect(w.ops[1].args).toEqual(['dispositioned_at', '2026-08-07T00:00:00.000Z']);
-    expect(w.ops[2].args).toEqual(['payload', '{}']);
+    // only the two task kinds: rulings, proposals, captures and rule edits keep their payload as evidence
+    expect(w.ops[2].args).toEqual(['kind', ['task_route', 'tasks_cleanup']]);
+    expect(w.ops[3].args).toEqual(['payload', '{}']);
     expect(JSON.stringify(w.ops)).not.toContain('et_date');
   });
   it('the stamp attempt increments from the newest retention row of the same ET day', async () => {
