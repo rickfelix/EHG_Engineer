@@ -211,6 +211,11 @@ export async function main(argv = process.argv, deps = {}) {
   try { plan = buildPlan({ repoRoot, withModify: args.withModify }); } catch (err) { logger.error(`${tag} ${err.message}`); return { exitCode: 2, action: 'invalid_plan' }; }
 
   if (args.dryRun) {
+    // the three read-only checks run in dry-run too, so a refusal or a demotion is previewable before any register
+    if (!fsx.existsSync(plan[0].hiddenLauncherPath)) logger.error(`${tag} DRY RUN — would REFUSE: hidden-window launcher missing at ${plan[0].hiddenLauncherPath}`);
+    const dryMissing = plan.map((p) => scriptFileOf(p, repoRoot)).filter((f) => !fsx.existsSync(f));
+    if (dryMissing.length) logger.error(`${tag} DRY RUN — would REFUSE: feeder script(s) missing: ${dryMissing.join(', ')}`);
+    for (const p of plan) if (p.promotable && !args.withModify && wrapperPromoted(p.wrapperPath, fsx)) logger.warn(`${tag} DRY RUN — '${p.taskName}' is currently PROMOTED; this register without --with-modify would DEMOTE it to the shadow phase.`);
     logger.log(`${tag} DRY RUN — preconditions: host awake (no wake-from-sleep is configured) and on mains power (DisallowStartIfOnBatteries); no /RU /NP (denied unelevated on this host).`);
     for (const p of plan) {
       logger.log(`${tag} DRY RUN — wrapper ${p.wrapperPath}:`);
@@ -253,6 +258,7 @@ export async function main(argv = process.argv, deps = {}) {
       allOk = false; continue;
     }
     try { fsx.renameSync(staged, p.wrapperPath); } catch (err) {
+      try { fsx.unlinkSync(staged); } catch { /* best effort */ }
       logger.error(`${tag} task '${p.taskName}' registered but the wrapper swap failed (${err.message}); the task runs the PREVIOUS wrapper until a re-run succeeds`);
       allOk = false; continue;
     }

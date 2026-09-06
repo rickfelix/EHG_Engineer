@@ -96,6 +96,12 @@ describe('main (injected deps, no host mutation)', () => {
     expect(logs.join('\n')).toMatch(/awake/); expect(logs.join('\n')).toMatch(/mains power/); expect(logs.join('\n')).toMatch(/no \/RU \/NP/);
     for (const l of logs.filter((x) => /would run: schtasks/.test(x))) expect(l).not.toMatch(/\/RU |\/NP /);
     expect(calls).toEqual([]); expect(writes).toEqual([]);
+    // dry-run previews the read-only preflight: a missing feeder and a pending demotion are shown, nothing mutated
+    const classifier = path.join(REPO, 'scripts', 'michael', 'tasks-classifier.mjs');
+    const pre = deps({ exists: (p) => p !== classifier, files: { [GMAIL_WRAPPER]: 'call node scripts/michael/gmail-triage.mjs --apply --modify\r\n' } });
+    expect(await main(['node', 'x', '--dry-run'], pre.d)).toMatchObject({ exitCode: 0, action: 'dry_run_register' });
+    expect(pre.errors.join('\n')).toMatch(/would REFUSE: feeder script\(s\) missing/); expect(pre.warns.join('\n')).toMatch(/would DEMOTE/);
+    expect(pre.calls).toEqual([]); expect(pre.writes).toEqual([]);
   });
   it('register writes the three wrappers and runs three /Create calls; --with-modify promotes only gmail-triage', async () => {
     const { d, calls, writes } = deps();
@@ -141,6 +147,8 @@ describe('main (injected deps, no host mutation)', () => {
     const swap = deps({ renameFails: true });
     expect(await main(['node', 'x'], swap.d)).toMatchObject({ exitCode: 1 });
     expect(swap.errors.join('\n')).toMatch(/runs the PREVIOUS wrapper/);
+    // the staged file never lingers (it embeds the host-absolute repo root): removed on a failed rename too
+    expect(swap.unlinks.map((p) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new']);
   });
   it('--status queries each task; --remove deletes each; --verify reads the split <Command>/<Arguments> XML and reports the shadow phase', async () => {
     const s = deps({ schtasks: () => ({ ok: true, stdout: 'TaskName: x' }) });
