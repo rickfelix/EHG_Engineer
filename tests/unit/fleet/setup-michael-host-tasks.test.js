@@ -81,7 +81,7 @@ describe('main (injected deps, no host mutation)', () => {
     expect(r.plan.map((p) => p.script)).toEqual(['scripts/michael/tasks-classifier.mjs --apply', 'scripts/michael/calendar-read.mjs --apply', 'scripts/michael/gmail-triage.mjs --apply']);
     expect(logs.filter((l) => /would run: schtasks \/Create/.test(l))).toHaveLength(3);
     expect(logs.join('\n')).toMatch(/awake/); expect(logs.join('\n')).toMatch(/mains power/); expect(logs.join('\n')).toMatch(/no \/RU \/NP/);
-    expect(logs.join('\n')).not.toMatch(/\/RU |\/NP /);
+    for (const l of logs.filter((x) => /would run: schtasks/.test(x))) expect(l).not.toMatch(/\/RU |\/NP /);
     expect(calls).toEqual([]); expect(writes).toEqual([]);
   });
   it('register writes the three wrappers and runs three /Create calls; --with-modify promotes only gmail-triage', async () => {
