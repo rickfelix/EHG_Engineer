@@ -14,6 +14,14 @@ name: AltifyAI UAT Drift Check
 #     fails OPEN with a warning if no cross-repo token is configured, same
 #     policy as .github/workflows/design-prompts-cross-repo.yml, since this
 #     is an advisory drift guard, not a security gate.
+#  3. scripts/altifyai-registry-completeness-check.mjs (SD-LEO-INFRA-STAGE23-
+#     WALKER-ELEVEN-OVERRIDES-001 FR-12): confirms every step_id in the live
+#     fourteen-journey specification has a registered venture-step-executors.js
+#     stepOverride or is on a dated, shrinking allowlist. HARD gate (no
+#     continue-on-error), same as step 1 -- the vitest 'db' project cannot host
+#     this check (no designated non-prod ref; unit-tier.yml runs it
+#     informational-only), so it lives here instead, reusing this workflow's
+#     already-real Supabase secrets.
 
 on:
   schedule:
@@ -46,6 +54,9 @@ jobs:
 
       - name: FR-7 fixture drift (venture-hosting-standard.md source material)
         run: npm run altifyai:fr7-fixture-drift
+
+      - name: FR-12 registry completeness gate (stage-23 walker step overrides)
+        run: npm run altifyai:registry-completeness-check
 
       - name: TS-7 secret-name drift (keystrokes doc + altifyai deploy.yml)
         env:

@@ -573,6 +573,7 @@ scratchpad/
 .artifacts/testing-agent-llm-canary/
 .artifacts/testing-c1/
 .artifacts/testing-scratch/
+.artifacts/testing-stage23/
 .artifacts/testing-tmp/
 .artifacts/tmp-alpha2/
 .artifacts/val-drive-forcing/
