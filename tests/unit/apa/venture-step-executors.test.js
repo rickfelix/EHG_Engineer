@@ -20,6 +20,7 @@ import {
 } from '../../../lib/apa/venture-step-executors.js';
 import * as imapCodeFetcher from '../../../lib/apa/imap-code-fetcher.js';
 import * as clerkTesting from '@clerk/testing/playwright';
+import fs from 'node:fs';
 
 // QF-20260902-512: neither existing test in this file ever reaches the code-challenge branch
 // (none makes the code input locator visible), so this mock is inert for them -- only the new
@@ -1065,6 +1066,41 @@ describe('buildStepExecutor() — ALTIFYAI stp-e3e6/stp-6219 overrides (QF-20260
       expect(result.matchedSelector).toBe(ALT_TEXT_DISPLAY);
       expect(result.renderedStateSummary).toMatch(/A golden retriever/);
       expect(page.calls.click).toContain(`setInputFiles:${FILE_INPUT}`);
+    });
+
+    // QF-20260905-241: the temp upload PNG must not be unlinked until AFTER the status-success
+    // poll resolves -- deleting it in a `finally` immediately after setInputFiles() (as this
+    // function used to) raced the page's own async upload read, which on the live app sometimes
+    // lost the race and failed client-side with net::ERR_FILE_NOT_FOUND before any request ever
+    // reached the server. This asserts the ordering invariant directly: at the moment the FIRST
+    // status-success check runs, the file must still be on disk (unlink not yet called).
+    it('does not unlink the temp upload file before the status-success poll has even started (QF-20260905-241)', async () => {
+      const unlinkSpy = vi.spyOn(fs, 'unlinkSync');
+      const unlinkCallCountAtFirstPoll = [];
+      const executor = buildStepExecutor(e3e6Step, 'ALTIFYAI');
+      const page = makeMockPage({
+        locatorCounts: { [FILE_INPUT]: 1 },
+        waitForVisible: { [STATUS_SUCCESS]: true, [ALT_TEXT_DISPLAY]: true, [STATE_LOADING]: false },
+        locatorTexts: { [ALT_TEXT_DISPLAY]: 'A golden retriever sitting in a park.' },
+      });
+      const originalLocator = page.locator.bind(page);
+      page.locator = (selector) => {
+        const loc = originalLocator(selector);
+        if (selector === STATUS_SUCCESS) {
+          const originalIsVisible = loc.isVisible.bind(loc);
+          loc.isVisible = async () => {
+            unlinkCallCountAtFirstPoll.push(unlinkSpy.mock.calls.length);
+            return originalIsVisible();
+          };
+        }
+        return loc;
+      };
+
+      await executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true });
+
+      expect(unlinkCallCountAtFirstPoll[0]).toBe(0); // file still on disk when the poll first checks
+      expect(unlinkSpy).toHaveBeenCalledTimes(1); // and it IS eventually cleaned up, just afterward
+      unlinkSpy.mockRestore();
     });
 
     it('throws a measured GENERATION_DID_NOT_RESOLVE (never a fabricated pass) when the backend surfaces its own error state', async () => {
