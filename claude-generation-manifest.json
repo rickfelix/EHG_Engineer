@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-06T14:21:40.392Z",
-  "git_commit": "634e9b58",
+  "generated_at": "2026-09-06T15:10:12.889Z",
+  "git_commit": "20a388b3",
   "db_snapshot_hash": "75c730afb94b407a",
   "files": {
     "CLAUDE.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 57320,
-      "bytes": 57630,
-      "estimated_tokens": 14330,
-      "content_hash": "9583e33b270a9582",
+      "chars": 55918,
+      "bytes": 56228,
+      "estimated_tokens": 13980,
+      "content_hash": "d2ccb0f1574f1614",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\encode-1afdeaac-20260906\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
@@ -229,7 +229,7 @@
     }
   },
   "section_digests": {
-    "global": "d277c1e2d5e1ee53",
+    "global": "bafe05a2449dff32",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -486,7 +486,7 @@
       "601": "94577f32f502761d",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
-      "605": "44f6a9dcd7aeb5fb",
+      "605": "65b61fdd3a17b10d",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
