@@ -896,7 +896,12 @@ export class BaseExecutor {
       // Step 4: Execute type-specific logic
       let step4Span;
       try { step4Span = startSpan('step.executeSpecific', { span_type: 'phase', step_name: 'executeSpecific', sd_key: sdId }, traceCtx, rootSpan); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
-      const executionResult = await this.executeSpecific(sdId, sd, options, gateResults);
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-2/FR-3: bypassInfo is already fully resolved by
+      // this point (set at line 362 or 755, both before this call) but was never threaded into
+      // executeSpecific -- passed as a named object (not a positional arg) per TESTING sub-agent
+      // recommendation, so a future accidental capture of an extra positional argument elsewhere
+      // is self-evident rather than silently wrong.
+      const executionResult = await this.executeSpecific(sdId, sd, options, gateResults, { bypassInfo });
       try { endSpan(step4Span, { result: executionResult.success ? 'pass' : 'fail' }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
       if (!executionResult.success) {
         try { endSpan(rootSpan, { result: 'exec_failed' }); persist(traceCtx, { supabase: this.supabase }); } catch (e) { console.debug('[BaseExecutor] telemetry suppressed:', e?.message || e); }
@@ -1033,9 +1038,13 @@ export class BaseExecutor {
    * @param {object} sd - SD record
    * @param {object} options - Options
    * @param {object} gateResults - Results from gate validation
+   * @param {{bypassInfo: object|null}} [_execContext] - SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G:
+   *   bypassInfo, already resolved earlier in execute(), for a subclass that must persist its own
+   *   accepted-row write before returning (e.g. lead-final-approval). Optional -- subclasses that
+   *   don't need it can ignore this parameter entirely.
    * @returns {Promise<object>} Execution result
    */
-  async executeSpecific(_sdId, _sd, _options, _gateResults) {
+  async executeSpecific(_sdId, _sd, _options, _gateResults, _execContext) {
     throw new Error('Subclass must implement executeSpecific()');
   }
 

@@ -243,7 +243,7 @@ async function syncDeliverables(sdId, options = {}) {
   // Get deliverables for this SD
   const { data: deliverables, error: delError } = await supabase
     .from('sd_scope_deliverables')
-    .select('id, deliverable_name, deliverable_type, completion_status')
+    .select('id, deliverable_name, deliverable_type, completion_status, metadata')
     .eq('sd_id', sdUuid)
     .neq('completion_status', 'completed');
 
@@ -311,7 +311,8 @@ async function syncDeliverables(sdId, options = {}) {
             name: match.deliverable.deliverable_name,
             commitHash: commit.hash,
             commitMessage: commit.message,
-            confidence: match.confidence
+            confidence: match.confidence,
+            existingMetadata: match.deliverable.metadata || {}
           });
         }
       }
@@ -341,11 +342,18 @@ async function syncDeliverables(sdId, options = {}) {
         verified_at: new Date().toISOString(),
         completion_evidence: `Git commit ${update.commitHash.substring(0, 7)}: ${update.commitMessage}`,
         completion_notes: `Auto-matched from git history with ${update.confidence}% confidence`,
+        // SEC-G7/SEC-G4 (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-4 SECURITY findings): this
+        // previously REPLACED metadata wholesale, clobbering anything already there; now
+        // merges. Also stamps producer, or the new sd_scope_deliverables completed_at trigger
+        // stamps completed_at with no producer, misclassifying this legitimate git-sync
+        // automation as an unprovenanced hand-typed UPDATE.
         metadata: {
+          ...update.existingMetadata,
           auto_completed: true,
           matched_by: 'git_sync',
           commit_hash: update.commitHash,
-          confidence: update.confidence
+          confidence: update.confidence,
+          producer: 'git_sync'
         }
       })
       .eq('id', deliverableId);

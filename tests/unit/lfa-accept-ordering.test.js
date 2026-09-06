@@ -45,7 +45,13 @@ describe('LFA canonical write ordering (source-contract pin)', () => {
   });
 
   it('coerces to_phase APPROVAL->LEAD (CHECK-safe) and uses the allowlisted system tag', () => {
-    const block = SRC.slice(SRC.indexOf('canonical_pre_completion_write') - 3000, SRC.indexOf('canonical_pre_completion_write'));
+    // Bounded by the SAME two markers the other tests in this file already trust as the
+    // canonical-pre-completion-write section's boundaries (canonicalIdx < completedIdx, above) --
+    // not a fixed byte offset. A fixed lookback broke here once (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G
+    // FR-2/FR-3 pulled metadata construction into its own canonicalMetadata variable ahead of the
+    // insert call, moving to_phase/HANDOFF_SYSTEM_TAG from "before" the marker to "after" it --
+    // a source-order change with no behavior change this test should never have been sensitive to).
+    const block = SRC.slice(SRC.indexOf('canonical_pre_completion_write'), SRC.indexOf('progress_percentage: 100'));
     expect(block).toContain("to_phase: 'LEAD'");
     expect(block).toContain('HANDOFF_SYSTEM_TAG');
   });

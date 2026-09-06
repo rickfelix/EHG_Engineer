@@ -1,0 +1,72 @@
+# SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G (FR-5)
+#
+# Scheduled, non-blocking census: going-forward regression watchdog for this SD's two
+# provenance fixes (FR-2/FR-3 handoff score_source, FR-4 deliverables producer). Observe-Only-First
+# for a brand-new predicate (CLAUDE_CORE.md) -- this reports, it does not gate merges. Modeled on
+# bypass-ledger-join-check.yml's cron shape.
+
+name: Deliverables Provenance Regression Check
+
+on:
+  schedule:
+    # Daily. This is a low-frequency audit signal, not a real-time gate.
+    - cron: '0 7 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deliverables-provenance-regression-check
+  cancel-in-progress: false
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install minimal deps
+        run: npm ci --ignore-scripts --prefer-offline --no-audit
+
+      # Regression proof for the census script's own entrypoint guard (isMainModule()) --
+      # a prior sibling script (bypass-ledger-handoff-join-check.mjs) shipped with a guard
+      # that was silently dead on Windows. This IS blocking: a broken entrypoint makes the
+      # census step below worthless, not merely advisory. Runs in the dedicated
+      # 'deliverables-provenance-regression-gate' vitest project (vitest.config.js), which
+      # stamps fake Supabase credentials at the project level so the runtime db-tier gate
+      # (tests/setup.db.js) never loads and never skips it.
+      - name: Verify census entrypoint fires
+        run: npx vitest run tests/integration/deliverables-provenance-regression-check-entrypoint.test.js --project deliverables-provenance-regression-gate
+
+      - name: Run census
+        id: run
+        # Non-blocking by design: `|| true` so a finding does not fail the build during the
+        # calibration window. The job summary still surfaces it.
+        run: node scripts/ci/deliverables-provenance-regression-check.mjs | tee census.json || true
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## Deliverables Provenance Regression Check — $(date -u +%Y-%m-%dT%H:%MZ)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          # `tee` creates census.json even on zero output, so a plain `cat || fallback`
+          # never reaches the fallback (cat on an empty file still exits 0). Check for
+          # actual content first.
+          if [ -s census.json ]; then
+            cat census.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '{"status":"error","note":"no output captured"}' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
