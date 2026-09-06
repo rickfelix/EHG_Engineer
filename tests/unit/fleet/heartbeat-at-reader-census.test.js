@@ -30,7 +30,8 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const SCAN_EXTS = ['.js', '.mjs', '.cjs'];
 const TEST_FILE_RE = /\.(test|spec)\.[cm]?js$/;
 
-// The 57 production files measured to reference heartbeat_at under this FR's scope, 2026-09-06.
+// The 61 production files measured to reference heartbeat_at under this FR's scope, 2026-09-06
+// (57 at initial FR-7 authoring + 4 added post-adversarial-review, see scanCandidates above).
 // Not individually classified decision-vs-telemetry (that per-file audit is future work this
 // census enables, not a prerequisite for it) -- this is a DRIFT-DETECTION baseline: it fails
 // loudly on any NEW reader, which is the preventive contract FR-7 exists to provide. Two entries
@@ -99,6 +100,14 @@ const ALLOWED_READERS = new Set([
   // glob-only matcher. Its heartbeat_at reads are outside the five named scope buckets by
   // filename alone, which is exactly why this file adds it as a literal path.
   'scripts/session-tick.cjs',
+  // Added post-adversarial-review (deep-tier /ship gate): scripts/lib/ is now recursively
+  // scanned (see scanCandidates' doc comment) and these two fleet-*.mjs scripts are named
+  // explicitly -- both are real heartbeat_at liveness readers this SD's own FR-6 wired
+  // stampLastFired() into, previously invisible to this census.
+  'scripts/lib/capacity-inputs.mjs',
+  'scripts/lib/engagement-buckets.mjs',
+  'scripts/fleet-down-alert.mjs',
+  'scripts/fleet-worker-pulse.mjs',
 ]);
 
 function walk(dir, out) {
@@ -119,10 +128,22 @@ function walk(dir, out) {
   }
 }
 
-/** All candidate files in FR-7's scope, recursive, .js/.mjs/.cjs, production files only. */
+/**
+ * All candidate files in FR-7's scope, recursive, .js/.mjs/.cjs, production files only.
+ *
+ * Adversarial review finding (deep-tier /ship gate, pre-merge): FR-7's literal wording
+ * ("scripts/adam-*, scripts/coordinator-*") made the census structurally blind to
+ * scripts/lib/engagement-buckets.mjs (FR-2's own target -- lives under a DIFFERENT scripts/lib/
+ * directory, not any of the three recursively-scanned lib/ roots) and to
+ * scripts/fleet-down-alert.mjs / scripts/fleet-worker-pulse.mjs (both real heartbeat_at readers,
+ * both just wired with FR-6's own stampLastFired() calls by this same SD) -- a preventive census
+ * that cannot see the very files its own SD touches defeats its purpose. scripts/lib/ is now
+ * recursively scanned alongside the three lib/ roots, and the two fleet-*.mjs scripts are named
+ * explicitly, matching the existing scripts/session-tick.cjs precedent.
+ */
 function scanCandidates() {
   const files = [];
-  for (const dir of ['lib/adam', 'lib/coordinator', 'lib/fleet']) {
+  for (const dir of ['lib/adam', 'lib/coordinator', 'lib/fleet', 'scripts/lib']) {
     walk(path.join(REPO_ROOT, dir), files);
   }
   const scriptsDir = path.join(REPO_ROOT, 'scripts');
@@ -130,7 +151,11 @@ function scanCandidates() {
     if (e.isDirectory()) continue;
     if (/^(adam|coordinator)-.+\.(js|mjs|cjs)$/.test(e.name)) files.push(path.join(scriptsDir, e.name));
   }
-  files.push(path.join(scriptsDir, 'session-tick.cjs')); // named explicitly, see ALLOWED_READERS comment
+  // Named explicitly (each documented above / at ALLOWED_READERS): none match the
+  // scripts/adam-*|coordinator-* glob or a recursively-scanned lib/ root by path alone.
+  for (const rel of ['session-tick.cjs', 'fleet-down-alert.mjs', 'fleet-worker-pulse.mjs']) {
+    files.push(path.join(scriptsDir, rel));
+  }
   return [...new Set(files)].filter((f) => {
     try { readFileSync(f); return true; } catch { return false; }
   });
