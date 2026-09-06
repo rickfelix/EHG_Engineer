@@ -500,6 +500,7 @@ scripts/ops/LLM-COST-ALERT.txt
 # generalized from a single eva-watcher-only line, which left every other registrar's wrapper untracked
 # AND unignored)
 scripts/cron/*-task.cmd
+scripts/cron/*-task.cmd.new
 
 # SD-LEO-INFRA-FLEET-HIBERNATION-MECHANISM-001 quiet-tick runtime last-state files
 .coord-quiet-tick-last.json
