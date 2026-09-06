@@ -1170,3 +1170,20 @@ regardless of tier the next time the pending-migration detector runs, defeating 
 code path is fail-soft on the column's absence either way (`mergeQfMetadataKeys` catches Postgres
 `42703` and returns `{merged:false, reason:'column_absent'}`), so claim provenance simply does not
 land on the QF side until this is applied — no claim ever fails because of it.
+
+**Confirming activation after apply** (SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-F, Child F): run
+
+```
+node scripts/verify-quick-fixes-metadata-activation.mjs
+```
+
+immediately after applying the migration above. It reports one of four states: `NOT_YET_APPLIED`
+(the expected result before you run the apply command), `ACTIVATED` (the column exists and a live,
+disposable-row self-claim through the real `stampClaim()`/`mergeQfMetadataKeys()` chain wrote AND
+was independently read back — the migration and the chain are both genuinely live), `REGRESSED`
+(the column exists but the chain itself is broken — a real defect, file it), or `INDETERMINATE`
+(a connection/environmental problem prevented a definite answer — retry, this is not itself a
+defect). It also wired `product_requirements_v2.activation_test_id` on Child E's PRD to this
+script's path, as a documentary record of what verifies the chain — that record is a documentary
+repair, not a live re-check: Child E is already `status=completed`, so no gate re-evaluates it
+against a fresh run of this script.
