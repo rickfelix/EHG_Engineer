@@ -1,0 +1,53 @@
+name: "Michael retention (durable cron)"
+
+# SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-B (FR-6) — spec docs/michael/02-SPEC.md §2 data handling.
+#
+# Weekly, no Claude session, NO USER CREDENTIAL AND NO ENCRYPTION KEY (ratification 0daf3bd8):
+# scripts/michael/retention.mjs --apply nulls rendered_html/brief_md (michael_brief_runs) and
+# summary/needs_you_reason (michael_gmail_triage_items) and deletes michael_calendar_day rows that
+# are strictly older than 30 ET days. Rules, closures, dispositions and counts are never touched.
+# Every run stamps a michael_feeder_runs row (feeder=retention, venue=gha) as the liveness signal.
+#
+# Mirrors retention-enforce-cron.yml: only the already-provisioned SUPABASE_URL and
+# SUPABASE_SERVICE_ROLE_KEY secrets. tests/unit/cron/michael-retention-wiring.test.js pins that the
+# set of secrets referenced here is EXACTLY those two. Inert (exit 0) until the chairman applies
+# database/migrations/20260906_michael_tables.sql.
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  michael-retention-apply:
+    name: Weekly Michael prose retention (null in place, delete old calendar rows)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Apply Michael retention (dry-run is the default; --apply executes)
+        run: node scripts/michael/retention.mjs --apply
