@@ -55,8 +55,12 @@ describe('isCandidateFile', () => {
 });
 
 describe('listCandidateFiles', () => {
+  // lstatSync stubbed as "not a symlink" for every fake path -- these entries are not backed by
+  // real files on disk, so the real fs.lstatSync would ENOENT on them (which the symlink-rejection
+  // guard, correctly, treats as "exclude"). A dedicated symlink-rejection test below injects a
+  // real lstatSync-shaped stub to exercise the actual rejection path.
   function fakeDir(entries) {
-    return { readdirSync: () => entries };
+    return { readdirSync: () => entries, lstatSync: () => ({ isSymbolicLink: () => false }) };
   }
 
   it('returns only files matching the given seat', () => {
@@ -87,6 +91,27 @@ describe('listCandidateFiles', () => {
 
   it('returns an empty array when no candidates exist for a seat (unstaffed role, silent no-op precondition)', () => {
     const files = listCandidateFiles('/fake/.claude', 'michael', fakeDir(['adam-session-state-d1140357.md']));
+    expect(files).toEqual([]);
+  });
+
+  // EXEC-TO-PLAN SECURITY evidence (2026-09-06): a symlink named to match a candidate pattern
+  // would otherwise have its target's content durably persisted. lstatSync inspects the link
+  // itself (never follows it) so a symlinked candidate is silently excluded, same fail-soft
+  // posture as an unreadable file.
+  it('rejects a candidate that is a symlink, even though its name matches', () => {
+    const files = listCandidateFiles('/fake/.claude', 'adam', {
+      readdirSync: () => ['adam-session-state-real.md', 'adam-session-state-symlinked.md'],
+      lstatSync: (p) => ({ isSymbolicLink: () => p.includes('symlinked') }),
+    });
+    expect(files).toHaveLength(1);
+    expect(files[0]).toContain('adam-session-state-real.md');
+  });
+
+  it('excludes (fail-soft) a candidate whose lstat throws, rather than including it unverified', () => {
+    const files = listCandidateFiles('/fake/.claude', 'adam', {
+      readdirSync: () => ['adam-session-state-gone.md'],
+      lstatSync: () => { throw new Error('ENOENT'); },
+    });
     expect(files).toEqual([]);
   });
 });

@@ -60,6 +60,16 @@ describe('read-side staleness check has NO claude_sessions/local-file dependency
   it('queries role_seat_checkpoints only', () => {
     expect(code).toMatch(/\.from\(['"]role_seat_checkpoints['"]\)/);
   });
+
+  // EXEC-TO-PLAN TESTING evidence (2026-09-06): `import.meta.url === \`file://${process.argv[1]}\``
+  // never matches on Windows (process.argv[1] is a bare drive path, not a file:// URL), so the
+  // script's main() silently never ran and the check exited 0 with no output -- exactly the
+  // false-pass-0 this file's own docblock claims to prevent. Fixed via the repo's own
+  // lib/utils/is-main-module.js helper; this guards the regression.
+  it('uses the cross-platform isMainModule guard, not the Windows-broken file:// string comparison', () => {
+    expect(code).toMatch(/isMainModule\(import\.meta\.url\)/);
+    expect(code).not.toMatch(/import\.meta\.url === `file:\/\/\$\{process\.argv\[1\]\}`/);
+  });
 });
 
 describe('write side has NO GHA workflow of its own (TR-2)', () => {

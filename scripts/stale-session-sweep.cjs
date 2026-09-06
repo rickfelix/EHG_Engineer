@@ -4478,14 +4478,25 @@ async function main() {
     const { SEAT_NAMES } = require('../lib/fleet/seat-checkpoint-registry.cjs');
     const { mirrorSeat } = require('../lib/fleet/seat-checkpoint-mirror.cjs');
     const claudeDir = path.resolve(__dirname, '..', '.claude');
+    let noCandidateCount = 0;
     for (const seatName of SEAT_NAMES) {
       const outcome = await mirrorSeat(supabase, claudeDir, seatName);
       if (outcome.action === 'error') {
         console.log('  seat_checkpoint_mirror[' + seatName + ']: ' + outcome.reason);
       } else if (outcome.action === 'skipped') {
         console.log('  seat_checkpoint_mirror[' + seatName + ']: skipped (' + outcome.reason + ')');
+      } else if (outcome.action === 'no_candidate') {
+        noCandidateCount += 1;
       }
-      // 'inserted' / 'refreshed' / 'no_candidate' are the expected quiet outcomes -- no log noise.
+      // 'inserted' / 'refreshed' are the expected quiet outcomes -- no log noise.
+    }
+    // EXEC-TO-PLAN TESTING evidence (2026-09-06): on a GHA hosted-runner leg of this same sweep,
+    // .claude/*.md is gitignored/absent, so EVERY seat silently resolves no_candidate every tick --
+    // an invisible all-no-op state indistinguishable from "nothing to mirror right now" without
+    // this line. One line, only in the all-4 case, keeps the normal (host-local, ≥1 seat mirrored)
+    // tick quiet per the existing no-log-noise convention above.
+    if (noCandidateCount === SEAT_NAMES.length) {
+      console.log('  seat_checkpoint_mirror: 0/' + SEAT_NAMES.length + ' seats had a local candidate file this tick (expected on a hosted runner; unexpected on the host-local leg)');
     }
   } catch (seatCkErr) {
     console.log('SEAT CHECKPOINT MIRROR TICK: ' + (seatCkErr && seatCkErr.message ? seatCkErr.message : 'unknown'));

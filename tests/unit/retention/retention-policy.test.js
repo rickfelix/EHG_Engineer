@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 22 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 23 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -109,7 +109,26 @@ describe('policy registry (TS-1)', () => {
       // creative_asset<->marketing_content_variant scoring link has no service purpose once it
       // ages out. Keyed on created_at, DATABASE-stamped (DEFAULT now(), never client-supplied).
       creative_asset_variant_scores: 'created_at',
+      // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A (EXEC-TO-PLAN SECURITY evidence, 2026-09-06):
+      // role_seat_checkpoints inserts a full copy of a role seat's memory file on every content
+      // change on a 5-minute cadence, no unique constraint, no prior cap -- the same unbounded-
+      // growth class every other trend/staging table above got a reaper for. Keyed on
+      // last_verified_at, NOT created_at: a stable/unchanged seat's row keeps created_at frozen
+      // at first insert forever while last_verified_at refreshes every tick, so created_at would
+      // let retention delete a seat's only LIVE checkpoint once it aged past 90 days (a real
+      // defect a second SECURITY pass caught in this exact entry). See policies.js entry comment.
+      role_seat_checkpoints: 'last_verified_at',
     });
+  });
+
+  // Regression guard (EXEC-TO-PLAN SECURITY evidence, 2026-09-06): a second review pass caught
+  // that this entry originally keyed on created_at, which a stable/unchanged seat's row never
+  // advances (only last_verified_at refreshes on an unchanged-content tick) -- that would have let
+  // retention delete a seat's only LIVE checkpoint once created_at aged past 90 days.
+  it('role_seat_checkpoints is keyed on last_verified_at, never created_at (dedup freezes created_at on an unchanged-content row)', () => {
+    const p = RETENTION_POLICIES.find((x) => x.table === 'role_seat_checkpoints');
+    expect(p).toBeDefined();
+    expect(p.timestampColumn).toBe('last_verified_at');
   });
 
   it('eva_scheduler_metrics policy uses the safe defaults (SD-REFILL-00LHUVME)', () => {

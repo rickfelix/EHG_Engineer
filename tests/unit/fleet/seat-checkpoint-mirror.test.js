@@ -15,6 +15,7 @@ const {
   readStableFile,
   writeSeatCheckpoint,
   mirrorSeat,
+  MAX_CONTENT_BYTES,
 } = require('../../../lib/fleet/seat-checkpoint-mirror.cjs');
 
 /** Minimal Supabase double: role_seat_checkpoints select/insert/update only. */
@@ -99,6 +100,23 @@ describe('readStableFile', () => {
     const result = await readStableFile(path.join(tmpDir, 'nope.md'), 1);
     expect(result).toEqual({ content: null, torn: false });
   });
+
+  // EXEC-TO-PLAN SECURITY evidence (2026-09-06): a runaway file must be skipped before either
+  // read, not read twice into memory and pushed through PostgREST as one oversized row.
+  it('rejects a file larger than MAX_CONTENT_BYTES as oversize, without reading its content', async () => {
+    const f = path.join(tmpDir, 'huge.md');
+    fs.writeFileSync(f, Buffer.alloc(MAX_CONTENT_BYTES + 1));
+    const result = await readStableFile(f, 1);
+    expect(result).toEqual({ content: null, torn: false, oversize: true });
+  });
+
+  it('accepts a file exactly at the MAX_CONTENT_BYTES boundary (strictly-greater-than, not >=)', async () => {
+    const f = path.join(tmpDir, 'exact.md');
+    fs.writeFileSync(f, Buffer.alloc(MAX_CONTENT_BYTES, 'x'));
+    const result = await readStableFile(f, 1);
+    expect(result.oversize).toBeUndefined();
+    expect(result.content).toHaveLength(MAX_CONTENT_BYTES);
+  });
 });
 
 describe('writeSeatCheckpoint', () => {
@@ -172,5 +190,13 @@ describe('mirrorSeat', () => {
     const { supabase } = stubSupabase({ latest: null });
     const result = await mirrorSeat(supabase, path.join(tmpDir, 'does-not-exist'), 'adam');
     expect(result.action).toBe('no_candidate');
+  });
+
+  it('skips (never writes) an oversize candidate file', async () => {
+    fs.writeFileSync(path.join(tmpDir, 'adam-session-state-huge.md'), Buffer.alloc(MAX_CONTENT_BYTES + 1));
+    const { supabase, inserted } = stubSupabase({ latest: null });
+    const result = await mirrorSeat(supabase, tmpDir, 'adam');
+    expect(result).toEqual({ action: 'skipped', reason: 'oversize' });
+    expect(inserted).toHaveLength(0);
   });
 });

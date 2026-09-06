@@ -21,6 +21,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const require = createRequire(import.meta.url);
 const { SEAT_NAMES } = require('../lib/fleet/seat-checkpoint-registry.cjs');
@@ -62,20 +63,26 @@ export function evaluateAllSeats(newestBySeat, nowMs = Date.now()) {
 /**
  * Fetch the newest last_verified_at per seat_name from role_seat_checkpoints.
  * Throws on any query error -- callers MUST treat a throw as a hard failure, never a false 0.
+ *
+ * One bounded (`.limit(1)`) query PER fixed seat_name, not a single unbounded global-order select.
+ * EXEC-TO-PLAN TESTING evidence (2026-09-06): a single `.order().select()` with no `.limit()` is
+ * only "correct by luck" today (4 rows always sort into PostgREST's default max-rows window) and
+ * would silently truncate once the table grows past that cap. SEAT_NAMES is fixed and small (4
+ * values), so per-seat queries stay cheap and are correct regardless of total table size.
  * @param {object} supabase - service-role client
  * @returns {Promise<Record<string,string|undefined>>}
  */
 export async function fetchNewestVerifiedPerSeat(supabase) {
-  const { data, error } = await supabase
-    .from('role_seat_checkpoints')
-    .select('seat_name, last_verified_at')
-    .order('last_verified_at', { ascending: false });
-  if (error) throw new Error(`role_seat_checkpoints query failed: ${error.message}`);
   const newestBySeat = {};
-  for (const row of data || []) {
-    if (!row || !row.seat_name) continue;
-    // First row per seat_name wins (query is ordered last_verified_at DESC).
-    if (!(row.seat_name in newestBySeat)) newestBySeat[row.seat_name] = row.last_verified_at;
+  for (const seatName of SEAT_NAMES) {
+    const { data, error } = await supabase
+      .from('role_seat_checkpoints')
+      .select('last_verified_at')
+      .eq('seat_name', seatName)
+      .order('last_verified_at', { ascending: false })
+      .limit(1);
+    if (error) throw new Error(`role_seat_checkpoints query failed (seat_name=${seatName}): ${error.message}`);
+    if (data && data.length > 0) newestBySeat[seatName] = data[0].last_verified_at;
   }
   return newestBySeat;
 }
@@ -106,6 +113,6 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main();
 }

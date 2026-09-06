@@ -79,11 +79,24 @@ describe('evaluateAllSeats', () => {
 });
 
 describe('fetchNewestVerifiedPerSeat', () => {
+  // One bounded per-seat_name query, not a single global-order select (TESTING evidence: the
+  // latter is only "correct by luck" and silently truncates once the table outgrows PostgREST's
+  // default max-rows). This stub exercises the real per-seat .eq().order().limit(1) shape.
   function stubSupabase(rows, error = null) {
     return {
       from: () => ({
         select: () => ({
-          order: () => Promise.resolve({ data: rows, error }),
+          eq: (_field, seatName) => ({
+            order: () => ({
+              limit: () => {
+                if (error) return Promise.resolve({ data: null, error });
+                const matched = rows
+                  .filter((r) => r.seat_name === seatName)
+                  .sort((a, b) => (a.last_verified_at < b.last_verified_at ? 1 : -1));
+                return Promise.resolve({ data: matched.slice(0, 1), error: null });
+              },
+            }),
+          }),
         }),
       }),
     };
@@ -102,6 +115,19 @@ describe('fetchNewestVerifiedPerSeat', () => {
   it('returns an empty object (never a throw) when the table has zero rows', async () => {
     const result = await fetchNewestVerifiedPerSeat(stubSupabase([]));
     expect(result).toEqual({});
+  });
+
+  // Regression guard for the "correct by luck" finding: a single unbounded global-order select
+  // would silently drop a seat's row once total row count exceeded PostgREST's default max-rows.
+  // A bounded per-seat_name query is correct regardless of how many rows any OTHER seat has.
+  it('finds a seat\'s newest row even when a different seat has hundreds of older rows', async () => {
+    const noise = Array.from({ length: 500 }, (_, i) => ({
+      seat_name: 'adam',
+      last_verified_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString(),
+    }));
+    const rows = [...noise, { seat_name: 'michael', last_verified_at: '2026-09-06T11:00:00Z' }];
+    const result = await fetchNewestVerifiedPerSeat(stubSupabase(rows));
+    expect(result.michael).toBe('2026-09-06T11:00:00Z');
   });
 
   // TS-3: THIS IS THE CORE FIX. An unreachable table / query error MUST throw, never resolve to
