@@ -6,7 +6,8 @@
 // brief_md on michael_brief_runs, summary and needs_you_reason on michael_gmail_triage_items, log_md
 // on michael_feeder_runs, and DELETES michael_calendar_day rows, all STRICTLY older than the cutoff
 // (et_date < today_ET - days).
-// Rules, closures, dispositions, counts and every non-prose column are never touched.
+// Staged payloads are emptied once dispositioned and older than the cutoff (child D). Rules, closures,
+// dispositions, counts and every non-prose column are never touched.
 //
 // WHY NOT retention-enforce.js: its archive-before-delete would copy personal calendar rows into
 // retention_archive indefinitely, contradicting spec §2; prose is nulled in place instead.
@@ -26,9 +27,13 @@ export const RETENTION_TARGETS = Object.freeze([
   { table: 'michael_calendar_day', action: 'delete', columns: [] },
   // SEC-M3: feeder logs are prose too; counts and ids on the same row are kept.
   { table: 'michael_feeder_runs', action: 'null', columns: ['log_md'] },
+  // Child D (FR-6, SECURITY F-7 / RISK DA1): staged payloads can carry task prose; once DISPOSITIONED and
+  // older than the cutoff the payload is emptied to {} (kind, disposition and timestamps stay for the
+  // ledger). Undispositioned rows persist until dispositioned — deliberate, stated in TR-4.
+  { table: 'michael_staged_items', action: 'empty_payload', columns: ['payload'], dateColumn: 'dispositioned_at' },
 ]);
 /** Never touched by retention (spec §2: rules, closures, dispositions and counts are kept). */
-export const NEVER_TOUCHED = Object.freeze(['michael_rules', 'michael_closures', 'michael_feedback_ledger', 'michael_gmail_labels', 'michael_todoist_snapshot', 'michael_credentials', 'michael_staged_items']);
+export const NEVER_TOUCHED = Object.freeze(['michael_rules', 'michael_closures', 'michael_feedback_ledger', 'michael_gmail_labels', 'michael_todoist_snapshot', 'michael_credentials']);
 
 /** Pure: the ET calendar date `days` before today's ET date (YYYY-MM-DD). Rows with et_date < cutoff are eligible. */
 export function cutoffEtDate(now = new Date(), days = DEFAULT_DAYS) {
@@ -38,11 +43,18 @@ export function cutoffEtDate(now = new Date(), days = DEFAULT_DAYS) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Pure: the cutoff for a target — an ET date for et_date tables, an ISO instant (midnight UTC of that date) for timestamp columns. */
+export function cutoffFor(target, cutoff) {
+  return target.dateColumn ? `${cutoff}T00:00:00.000Z` : cutoff;
+}
+
 /** Bounded eligibility count via count:'exact' (never a row fetch). */
 async function countEligible(sb, target, cutoff) {
   try {
-    let q = sb.from(target.table).select('id', { count: 'exact', head: true }).lt('et_date', cutoff);
+    const col = target.dateColumn || 'et_date';
+    let q = sb.from(target.table).select('id', { count: 'exact', head: true }).lt(col, cutoffFor(target, cutoff));
     if (target.action === 'null') q = q.or(target.columns.map((c) => `${c}.not.is.null`).join(','));
+    if (target.action === 'empty_payload') q = q.neq('payload', '{}');
     const { count, error } = await q;
     if (error) return isMissingRelation(error) ? { count: null, tables_absent: true } : { count: null, error: `${target.table}: ${error.message || error.code}` };
     if (count === null || count === undefined) return { count: null, tables_absent: true };
@@ -70,9 +82,12 @@ export async function runRetention({ sb, argv = [], now = new Date() } = {}) {
     const entry = { table: target.table, action: target.action, columns: target.columns, eligible: c.count, error: c.error || null };
     if (c.error) anyError = true;
     if (apply && !c.error && c.count > 0) {
+      const col = target.dateColumn || 'et_date';
       const w = target.action === 'delete'
-        ? await writeRows(sb, target.table, (t) => t.delete().lt('et_date', cutoff))
-        : await writeRows(sb, target.table, (t) => t.update(Object.fromEntries(target.columns.map((col) => [col, null]))).lt('et_date', cutoff).or(target.columns.map((col) => `${col}.not.is.null`).join(',')));
+        ? await writeRows(sb, target.table, (t) => t.delete().lt(col, cutoffFor(target, cutoff)))
+        : target.action === 'empty_payload'
+          ? await writeRows(sb, target.table, (t) => t.update({ payload: {} }).lt(col, cutoffFor(target, cutoff)).neq('payload', '{}'))
+          : await writeRows(sb, target.table, (t) => t.update(Object.fromEntries(target.columns.map((c) => [c, null]))).lt(col, cutoffFor(target, cutoff)).or(target.columns.map((c) => `${c}.not.is.null`).join(',')));
       if (!w.ok) { entry.error = w.error; anyError = true; } else entry.applied = c.count;
     }
     perTable.push(entry);

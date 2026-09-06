@@ -51,10 +51,10 @@ describe('cutoffEtDate', () => {
 
 describe('runRetention', () => {
   it('dry run: counts eligible rows per target with a STRICT lt(cutoff), writes no table, and still stamps feeder_runs (venue gha)', async () => {
-    const sb = stub({ counts: { michael_brief_runs: 4, michael_gmail_triage_items: 9, michael_calendar_day: 12, michael_feeder_runs: 5 } });
+    const sb = stub({ counts: { michael_brief_runs: 4, michael_gmail_triage_items: 9, michael_calendar_day: 12, michael_feeder_runs: 5, michael_staged_items: 2 } });
     const r = await runRetention({ sb, argv: [], now: NOW });
     expect(r).toMatchObject({ ok: true, tables_absent: false, mode: 'dry_run', days: 30, cutoff: '2026-08-07', stamped: true, attempt: 1 });
-    expect(r.per_table.map((t) => [t.table, t.eligible])).toEqual([['michael_brief_runs', 4], ['michael_gmail_triage_items', 9], ['michael_calendar_day', 12], ['michael_feeder_runs', 5]]);
+    expect(r.per_table.map((t) => [t.table, t.eligible])).toEqual([['michael_brief_runs', 4], ['michael_gmail_triage_items', 9], ['michael_calendar_day', 12], ['michael_feeder_runs', 5], ['michael_staged_items', 2]]);
     const mutated = sb.writes.map((w) => w.table);
     expect(mutated).toEqual(['michael_feeder_runs']);
     const stamp = sb.writes[0].ops[0].args[0];
@@ -82,12 +82,23 @@ describe('runRetention', () => {
     expect(r.per_table[1].applied).toBeUndefined();
     expect(r.per_table[3].applied).toBe(1);
   });
-  it('never touches rules, closures, the ledger, snapshots, labels, credentials or staged items', async () => {
+  it('never touches rules, closures, the ledger, snapshots, labels or credentials', async () => {
     const sb = stub({ counts: { michael_brief_runs: 1, michael_gmail_triage_items: 1, michael_calendar_day: 1 } });
     await runRetention({ sb, argv: ['--apply'], now: NOW });
     const touched = new Set(sb.froms);
     for (const t of NEVER_TOUCHED) expect(touched.has(t), t).toBe(false);
-    expect(RETENTION_TARGETS.map((t) => t.table)).toEqual(['michael_brief_runs', 'michael_gmail_triage_items', 'michael_calendar_day', 'michael_feeder_runs']);
+    expect(RETENTION_TARGETS.map((t) => t.table)).toEqual(['michael_brief_runs', 'michael_gmail_triage_items', 'michael_calendar_day', 'michael_feeder_runs', 'michael_staged_items']);
+  });
+  it('child D: empties the payload of DISPOSITIONED staged rows strictly older than the cutoff instant and leaves undispositioned rows untouched (TS-19)', async () => {
+    const sb = stub({ counts: { michael_staged_items: 3 } });
+    await runRetention({ sb, argv: ['--apply'], now: NOW });
+    const w = sb.writes.find((x) => x.table === 'michael_staged_items');
+    expect(w.ops.map((o) => o.op)).toEqual(['update', 'lt', 'neq']);
+    expect(w.ops[0].args[0]).toEqual({ payload: {} });
+    // the filter is on dispositioned_at (an instant), so a NULL dispositioned_at never matches lt()
+    expect(w.ops[1].args).toEqual(['dispositioned_at', '2026-08-07T00:00:00.000Z']);
+    expect(w.ops[2].args).toEqual(['payload', '{}']);
+    expect(JSON.stringify(w.ops)).not.toContain('et_date');
   });
   it('the stamp attempt increments from the newest retention row of the same ET day', async () => {
     const sb = stub({ tables: { michael_feeder_runs: [{ attempt: 3 }] } });
