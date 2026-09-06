@@ -112,6 +112,14 @@ If the user asks a general retrospective question without an SD context (e.g., "
 - `duplicate retrospective` warnings → STOP, invoke retro agent
 - `trigger function` errors → STOP, invoke retro agent
 - ANY retrospective INSERT/UPDATE failure → STOP, invoke retro agent
+- `isSafeToWriteRetro` refusal (the canonical write path reporting `skipped: true`) → STOP. This is a
+  deliberate, database-provenance-aware refusal, never a signal to fall back to a raw write against
+  the retrospectives table (SD-LEO-INFRA-RETRO-PUBLISHED-GUARD-001 -- a sub-agent that bypassed
+  exactly this refusal overwrote a PUBLISHED, quality_score=100 completion retrospective)
+- a classifier block (refusing to copy a one-off write script into `scripts/one-off`) → `/signal` the
+  coordinator, never a reason to relocate or rewrite the script
+- running that same blocked script from the scratchpad, or via `NODE_PATH`, is THE SAME VIOLATION as
+  the classifier block itself -- not a workaround around it
 
 **Protocol**:
 1. Detect retrospective error
@@ -128,6 +136,7 @@ If the user asks a general retrospective question without an SD context (e.g., "
 ❌ **Adding placeholder items** to meet array length requirements
 ❌ **Skipping required fields** (what_went_well, key_learnings, etc.)
 ❌ **Bypassing database triggers** with direct SQL
+❌ **Writing directly to `retrospectives` after an `isSafeToWriteRetro` refusal**, from the scratchpad, via `NODE_PATH`, or any other path that avoids the canonical writer -- `/signal` the coordinator instead
 ❌ **Creating markdown retrospectives** instead of database entries
 ❌ **Using generic template content** to meet quantity requirements
 ❌ **Proceeding without SD validation** (SD must exist first)
