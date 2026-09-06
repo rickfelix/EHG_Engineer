@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-06T19:47:38.034Z",
-  "git_commit": "c689c23c",
+  "generated_at": "2026-09-06T23:11:02.315Z",
+  "git_commit": "cff84459",
   "db_snapshot_hash": "75c730afb94b407a",
   "files": {
     "CLAUDE.md": {
@@ -149,10 +149,10 @@
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 19101,
-      "bytes": 19177,
-      "estimated_tokens": 4776,
-      "content_hash": "1144b70c50d79257",
+      "chars": 20611,
+      "bytes": 20689,
+      "estimated_tokens": 5153,
+      "content_hash": "e62d02cfe53047b9",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260906-360\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
@@ -229,7 +229,7 @@
     }
   },
   "section_digests": {
-    "global": "30741fdcc86e33f1",
+    "global": "0c7770a1aedf053b",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -513,7 +513,7 @@
       "655": "59137a758bb13a65",
       "656": "d2ccb43f1edf9602",
       "657": "11c9181c9e30ef9c",
-      "658": "5dc3f895b6fd2f34",
+      "658": "8b4d4c124bbfb164",
       "659": "f07759022446ffb1"
     },
     "meta": {
