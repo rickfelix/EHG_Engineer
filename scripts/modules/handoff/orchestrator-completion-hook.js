@@ -508,11 +508,14 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
     const childIds = (children || []).map(c => c.id);
     let subAgentResults = [];
     if (childIds.length > 0) {
-      const { data: saData } = await supabase
-        .from('sub_agent_execution_results')
-        .select('sd_id, sub_agent_type, verdict') // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
-        .in('sd_id', childIds)
-        .eq('sub_agent_type', 'TESTING');
+      const saData = await safeQuery(
+        supabase
+          .from('sub_agent_execution_results')
+          .select('sd_id, sub_agent_type, verdict') // schema-lint-disable-line -- pre-existing-on-main legacy reference; untouched by FR-6 batch 6
+          .in('sd_id', childIds)
+          .eq('sub_agent_type', 'TESTING'),
+        { site: 'orchestrator-completion-hook:completeness_audit_subagent_results', tolerate: 'ADVISORY audit only (never blocks completion, per FR-6 comment) — a failure here must not abort processing the remaining children; per-child metadata.testing_evidence is a fallback source anyway' }
+      );
       subAgentResults = saData || [];
     }
 
@@ -662,11 +665,14 @@ export async function runCompletenessAudit(supabase, orchestratorId, options = {
 export async function storeCompletenessAudit(supabase, orchestratorId, auditResult) {
   try {
     // Read current metadata
-    const { data: sd } = await supabase
-      .from('strategic_directives_v2')
-      .select('metadata')
-      .eq('id', orchestratorId)
-      .single();
+    const sd = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('metadata')
+        .eq('id', orchestratorId)
+        .single(),
+      { site: 'orchestrator-completion-hook:store_audit_read_metadata' }
+    );
 
     const currentMetadata = sd?.metadata || {};
     const existingAudit = currentMetadata.completion_audit;
@@ -840,11 +846,14 @@ export async function executeOrchestratorCompletionHook(
   // claiming_session_id isn't cleared until after LEAD-FINAL-APPROVAL returns.
   const callerSessionId = options.callerSessionId || null;
   try {
-    const { data: claimedChildren } = await supabase
-      .from('strategic_directives_v2')
-      .select('sd_key, claiming_session_id')
-      .eq('parent_sd_id', orchestratorId)
-      .not('claiming_session_id', 'is', null);
+    const claimedChildren = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('sd_key, claiming_session_id')
+        .eq('parent_sd_id', orchestratorId)
+        .not('claiming_session_id', 'is', null),
+      { site: 'orchestrator-completion-hook:active_claim_guard_children', tolerate: 'Non-blocking advisory guard (see catch comment below) — a query failure must fall through to completion, not pause it' }
+    );
 
     if (claimedChildren && claimedChildren.length > 0) {
       // Check if any claims are from active sessions (heartbeat < 5min)
@@ -854,11 +863,14 @@ export async function executeOrchestratorCompletionHook(
         if (callerSessionId && child.claiming_session_id === callerSessionId) {
           continue; // Skip — this is the session completing the last child
         }
-        const { data: claimer } = await supabase
-          .from('v_active_sessions')
-          .select('heartbeat_age_seconds')
-          .eq('session_id', child.claiming_session_id)
-          .maybeSingle();
+        const claimer = await safeQuery(
+          supabase
+            .from('v_active_sessions')
+            .select('heartbeat_age_seconds')
+            .eq('session_id', child.claiming_session_id)
+            .maybeSingle(),
+          { site: 'orchestrator-completion-hook:active_claim_guard_claimer', tolerate: 'Non-blocking advisory guard (see catch comment below) — a query failure must fall through to completion, not pause it' }
+        );
         if (claimer && (claimer.heartbeat_age_seconds || 0) < 300) {
           activeClaimChildren.push(child.sd_key);
         }
@@ -933,11 +945,14 @@ export async function executeOrchestratorCompletionHook(
   console.log('\n   🔄 Running pipeline flow verification...');
   try {
     // Get orchestrator details to check if code-producing
-    const { data: orchSD } = await supabase
-      .from('strategic_directives_v2')
-      .select('sd_type')
-      .eq('id', orchestratorId)
-      .single();
+    const orchSD = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('sd_type')
+        .eq('id', orchestratorId)
+        .single(),
+      { site: 'orchestrator-completion-hook:pipeline_flow_orch_sd_type', tolerate: 'catch below treats pipeline-flow-verification failure as advisory (never blocks completion)' }
+    );
 
     if (orchSD && requiresPipelineFlowVerification(orchSD.sd_type)) {
       const pipelineReport = await verifyPipelineFlow({
@@ -976,11 +991,14 @@ export async function executeOrchestratorCompletionHook(
   console.log('\n   🔍 Running post-completion gap analysis...');
   try {
     // Get completed children to analyze
-    const { data: completedChildren } = await supabase
-      .from('strategic_directives_v2')
-      .select('sd_key')
-      .eq('parent_sd_id', orchestratorId)
-      .eq('status', 'completed');
+    const completedChildren = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('sd_key')
+        .eq('parent_sd_id', orchestratorId)
+        .eq('status', 'completed'),
+      { site: 'orchestrator-completion-hook:gap_analysis_completed_children', tolerate: 'Non-blocking gap analysis (see comment above) — never blocks completion' }
+    );
 
     if (completedChildren && completedChildren.length > 0) {
       const gapResults = [];
@@ -1076,14 +1094,17 @@ export async function executeOrchestratorCompletionHook(
     try {
       const { getTerminalId } = await import('../../../lib/terminal-identity.js');
       const termId = getTerminalId();
-      const { data: sessionData } = await supabase
-        .from('claude_sessions')
-        .select('session_id')
-        .eq('terminal_id', termId)
-        .in('status', ['active', 'idle'])
-        .order('heartbeat_at', { ascending: false })
-        .limit(1)
-        .single();
+      const sessionData = await safeQuery(
+        supabase
+          .from('claude_sessions')
+          .select('session_id')
+          .eq('terminal_id', termId)
+          .in('status', ['active', 'idle'])
+          .order('heartbeat_at', { ascending: false })
+          .limit(1)
+          .single(),
+        { site: 'orchestrator-completion-hook:resolve_session_for_claim_swap' }
+      );
       sessionId = sessionData?.session_id;
     } catch (e) {
       console.debug('[OrchestratorCompletionHook] session resolve suppressed:', e?.message || e);
@@ -1092,11 +1113,14 @@ export async function executeOrchestratorCompletionHook(
     // Resolve sd_key for the completed orchestrator
     let completedSdKey = null;
     try {
-      const { data: sdData } = await supabase
-        .from('strategic_directives_v2')
-        .select('sd_key')
-        .eq('id', orchestratorId)
-        .single();
+      const sdData = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('sd_key')
+          .eq('id', orchestratorId)
+          .single(),
+        { site: 'orchestrator-completion-hook:resolve_completed_sd_key' }
+      );
       completedSdKey = sdData?.sd_key;
     } catch {
       // Non-fatal
