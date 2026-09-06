@@ -1,0 +1,619 @@
+{
+  "id": "PRD-SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C",
+  "directive_id": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C",
+  "title": "Michael C: Google chairman OAuth module, consent flow, michael_credentials writer, gmail client, requireAuth on /api/michael/*",
+  "version": "1.0",
+  "status": "approved",
+  "category": "technical",
+  "priority": "high",
+  "executive_summary": "Child C gives Michael one chairman-user Google grant: a host-only OAuth module storing AES-256-GCM ciphertext in michael_credentials under a MICHAEL_ENCRYPTION_KEY that is never auto-generated, a one-command consent flow, the Gmail modify client child B deferred, and requireAuth on /api/michael/*.",
+  "business_context": null,
+  "technical_context": null,
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "priority": "CRITICAL",
+      "description": "Append module.exports.CredentialEncryption = CredentialEncryption after the existing singleton export (lib/security/encryption.cjs:247). The default export and every existing consumer (lib/operator/cash-sources/token-vault.js:21, lib/integrations/youtube/oauth-manager.js:24, lib/cleanup/credentials.js:14) are byte-for-byte unchanged in behavior. VALIDATION b4ed3c2c measured that the ESM namespace then exposes CredentialEncryption, default and module.exports, and that encrypt/decrypt both route through this.getMasterKey so an instance override binds the key source without duplicating any AES-GCM or PBKDF2 code.",
+      "requirement": "lib/security/encryption.cjs additionally exports the CredentialEncryption class",
+      "acceptance_criteria": [
+        "import { CredentialEncryption } from '../../security/encryption.cjs' resolves to the class in an ESM module and the default import is still the singleton",
+        "lib/integrations/youtube/oauth-manager.test.js and lib/security tests stay green with no change",
+        "The diff to encryption.cjs is one appended export line plus its comment"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "priority": "CRITICAL",
+      "description": "Export class HostKeyEncryption extends CredentialEncryption whose getMasterKey() reads process.env.MICHAEL_ENCRYPTION_KEY, accepts exactly 64 hex characters, returns Buffer.from(hex,'hex'), and otherwise throws an Error with code MICHAEL_ENCRYPTION_KEY_MISSING (absent) or MICHAEL_ENCRYPTION_KEY_INVALID (wrong shape). It never calls the inherited self-generating method and never touches .leo-keys. Export keyFingerprint(keyBuffer) = sha256(raw key bytes).hex.slice(0,16). Export assertHostVenue() that throws code HOST_VENUE_REQUIRED when process.env.GITHUB_ACTIONS === 'true' or process.env.CI === 'true', called before any decrypt and before the consent flow. Constants: SCOPES = ['https://www.googleapis.com/auth/gmail.modify','https://www.googleapis.com/auth/calendar.readonly','https://www.googleapis.com/auth/drive.readonly'] (youtube deferred to v1.1 per spec section 4), REDIRECT_PORT 3456, REDIRECT_URI http://localhost:3456/oauth2callback, CREDENTIAL_IDENTIFIER 'google_chairman_oauth', TOKEN_VAULT_APP_ID 'michael-google-chairman-oauth' (an operational label, not a domain separator, per oauth-manager.js:34-40). createOAuth2Client() mirrors oauth-manager.js:47-59 on GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET from the host .env. Nothing runs at import time.",
+      "requirement": "lib/integrations/google/chairman-oauth.js binds the master key to MICHAEL_ENCRYPTION_KEY only and stamps a key fingerprint",
+      "acceptance_criteria": [
+        "With MICHAEL_ENCRYPTION_KEY unset, getStoredTokens/storeTokens/runConsentFlow reject with code MICHAEL_ENCRYPTION_KEY_MISSING and no Supabase write occurs (unit test with an injected client spy)",
+        "With a 63-char or non-hex value the code is MICHAEL_ENCRYPTION_KEY_INVALID; with a 64-hex value keyFingerprint equals the first 16 hex of sha256 over the 32 raw key bytes",
+        "GITHUB_ACTIONS=true makes assertHostVenue throw HOST_VENUE_REQUIRED before any decrypt (unit test)",
+        "grep of .github/workflows for MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET returns nothing"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "priority": "CRITICAL",
+      "description": "getStoredTokens({ sb, enc }) reads the row identifier=google_chairman_oauth selecting encrypted_blob, encryption_metadata, key_fingerprint, expires_at, last_error via readRows from lib/michael/db.mjs; returns null when no row or no blob (tables_absent surfaces as a refusal object, never a throw); compares key_fingerprint to keyFingerprint(current key) and returns { error:'KEY_FINGERPRINT_MISMATCH' } BEFORE attempting decrypt when they differ; on a genuine decrypt failure logs a warning and returns null (oauth-manager.js:83-88 contract). storeTokens(tokens, { sb, enc }) encrypts the whole token object with enc.encrypt(tokens, TOKEN_VAULT_APP_ID) and upserts by identifier: encrypted_blob = encrypted, encryption_metadata = metadata, key_fingerprint, scopes = SCOPES, expires_at = new Date(tokens.expiry_date) or null, last_refreshed_at = now, last_error = null; throws on a failed persist (oauth-manager.js:123 rationale F8). No property of the token object is ever written as a column. getAuthenticatedClient({ sb, enc, forceReauth }) sets credentials, refreshes when expiry_date has passed, stores the refreshed credentials; when the refresh fails with invalid_grant it updates last_error='invalid_grant' on the row (leaving the blob) and rethrows, so the spec section 9 predicate michael_credentials.last_error = 'invalid_grant' or expires_at < now() + 48h is satisfiable by child G without further writes.",
+      "requirement": "chairman-oauth.js reads and writes michael_credentials as ciphertext only, with the gauge predicates written by the module",
+      "acceptance_criteria": [
+        "Unit test: the upsert payload contains encrypted_blob, encryption_metadata, key_fingerprint, scopes, expires_at, last_refreshed_at and last_error:null and contains no key named access_token, refresh_token, id_token or expiry_date; the serialized payload does not contain the fixture token strings",
+        "Unit test: a stored row whose key_fingerprint differs from the current key returns KEY_FINGERPRINT_MISMATCH and enc.decrypt is never called",
+        "Unit test: a refresh rejecting with an invalid_grant error leaves last_error='invalid_grant' on the row and the call rejects; a successful refresh writes a new expires_at and last_refreshed_at",
+        "Storage uses the real encryption.cjs AES-256-GCM path in at least one test (algorithm pin aes-256-gcm), mirroring oauth-manager.test.js:56-70"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "priority": "HIGH",
+      "description": "CLI in the scripts/michael verb shape (lib/utils/is-main-module.js guard, parseArgs/refusal/emit from lib/michael/db.mjs): default action runs runConsentFlow (generateAuthUrl with access_type offline, scope SCOPES, prompt consent; opens the browser per platform; http.createServer on 3456 resolving on ?code= and rejecting on ?error=; 5-minute timeout; getToken then storeTokens) exactly in the oauth-manager.js:166-230 shape. Pre-flight order before generating the auth URL: assertHostVenue (HOST_VENUE_REQUIRED), MICHAEL_ENCRYPTION_KEY present and valid (MICHAEL_ENCRYPTION_KEY_MISSING / _INVALID), GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET present (GOOGLE_CLIENT_MISSING), then a readRows probe of michael_credentials that refuses TABLES_ABSENT when the -B migration is not applied (VALIDATION condition 2: a consent completed into an unrecordable store burns a chairman grant). --status prints identifier, scopes, expires_at, last_refreshed_at, last_error, key_fingerprint and hours_to_expiry, never encrypted_blob or encryption_metadata; --json emits one JSON object; every refusal exits 2 with a code, success exits 0. The header comment states the runbook: re-consent under the seven-day posture (D4, 8e6ac764) is `node scripts/michael/google-consent.mjs` on the chairman's host, and names the Task Scheduler precedent for child D (scripts/setup-alarm-cron-tasks.mjs + scripts/cron/run-hidden.vbs; spec line 105's two paths do not exist).",
+      "requirement": "scripts/michael/google-consent.mjs is the one-command host re-consent runbook and refuses before the browser opens when it cannot record",
+      "acceptance_criteria": [
+        "MICHAEL_ENCRYPTION_KEY= node scripts/michael/google-consent.mjs --status --json exits 2 with code MICHAEL_ENCRYPTION_KEY_MISSING and opens no browser",
+        "GITHUB_ACTIONS=true node scripts/michael/google-consent.mjs --json exits 2 with code HOST_VENUE_REQUIRED before any Google call",
+        "With the table unapplied, the default action exits 2 with code TABLES_ABSENT before generateAuthUrl is called (unit test with injected sb returning 42P01)",
+        "--status output contains no encrypted_blob or encryption_metadata key (unit test on the pure render function)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "priority": "HIGH",
+      "description": "Export async function modifyThread({ threadId, addLabelIds = [], removeLabelIds = [] }, { auth, gmailFactory } = {}) that lazily obtains the chairman OAuth client (getAuthenticatedClient) and calls google.gmail({ version:'v1', auth }).users.threads.modify({ userId:'me', id: threadId, requestBody: { addLabelIds, removeLabelIds } }), returning { ok:true, modified: { id, labelIds } } on success and { ok:false, error: message } on any auth or API failure (never throws). The module imports only static dependencies; it reads no env and builds no client at import (VALIDATION condition 3: scripts/michael/gmail-act.mjs:30-39 re-throws non-module-not-found import errors, turning an import-time throw into exit 1 instead of the designed exit-2 refusal). The contract is exactly the one gmail-act.mjs:5-8 and :66-68 already consume.",
+      "requirement": "lib/michael/gmail-client.mjs lands the Gmail API leg child B deferred, with zero work at import time",
+      "acceptance_criteria": [
+        "node scripts/michael/gmail-act.mjs --thread smoke --archive --dry-run --json prints dry_run:true with would_call and no longer refuses GMAIL_CLIENT_ABSENT",
+        "Unit test: modifyThread with an injected gmail factory calls users.threads.modify with userId 'me', id, and requestBody { addLabelIds, removeLabelIds } and returns { ok:true, modified }",
+        "Unit test: a rejecting factory yields { ok:false, error } and does not throw; importing the module with no env set does not throw"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "priority": "HIGH",
+      "description": "server/routes/michael.js exports an express Router with GET /oauth/status that selects identifier, scopes, expires_at, last_refreshed_at, last_error, key_fingerprint from michael_credentials (service-role client, the server/routes/protocol-lint.js:27-31 getSupabase shape), adds hours_to_expiry, and returns 404 { code:'NO_CREDENTIAL' } when the row is absent and 503 { code:'TABLES_ABSENT' } when the relation is missing (PGRST205 / 42P01). It never selects encrypted_blob or encryption_metadata and never decrypts. server/index.js imports the router and mounts app.use('/api/michael', requireAuth, michaelRoutes) inside the requireAuth block (server/index.js:243-270), before the /api optionalAuth mount at line 272 (VALIDATION condition 4: the repo mount audit inspects mutating methods only, so a GET-only route under optionalAuth would pass silently). Child E extends this file with the brief routes; child C creates it.",
+      "requirement": "GET /api/michael/* is mounted behind requireAuth and returns no token material",
+      "acceptance_criteria": [
+        "grep -n \"'/api/michael'\" server/index.js shows exactly one mount and the same line contains requireAuth",
+        "server/routes/michael.test.js asserts the /oauth/status payload has no encrypted_blob or encryption_metadata key, the 404 and 503 shapes, and reads the server/index.js source to assert the /api/michael mount line contains requireAuth (the mount-table assertion the repo lacked)",
+        "server/middleware/auth.test.js stays green; requireAuth is imported, not re-implemented"
+      ]
+    },
+    {
+      "id": "FR-7",
+      "priority": "CRITICAL",
+      "description": "The child ships zero DDL: michael_credentials with key_fingerprint is declared in database/migrations/20260906_michael_tables.sql:292-310 (child B, chairman-gated, unapplied live at PLAN time) and tests/unit/migrations/michael-tables-migration-shape.test.js pins its shape. Before EXEC-TO-PLAN the SECURITY sub-agent is invoked on the EXEC diff and writes a sub_agent_execution_results row (sub_agent_code SECURITY, phase EXEC) through the canonical executor so metadata carries content_hash, session_id, sub_agent_version and evaluated_commit_sha (ratification 6c263823: producer, run id, content hash). The SECURITY review scope explicitly names: no plaintext token column, key never auto-generated, GHA venue refusal, fingerprint compared before decrypt, /api/michael mount under requireAuth, no secret in logs or test fixtures.",
+      "requirement": "SECURITY sub-agent evidence row with provenance before EXEC-TO-PLAN, and no migration in this child",
+      "acceptance_criteria": [
+        "sub_agent_execution_results has a SECURITY row for this SD with phase EXEC and metadata.content_hash, metadata.session_id and metadata.evaluated_commit_sha non-null, created before the EXEC-TO-PLAN handoff row",
+        "git diff --stat against main shows no file under database/migrations/",
+        "The PR body states the ≤100 LOC target is exceeded with justification: five greenfield files plus tests, per the tiered PR size rule (max 400 LOC non-test)"
+      ]
+    }
+  ],
+  "non_functional_requirements": [],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "rationale": "VALIDATION b4ed3c2c measured encryption.cjs generating a different throwaway key on a missing key file and failing GCM authentication on read-back; a consent from a worktree or GHA would encrypt the chairman's refresh token unrecoverably while reporting success. Spec section 4 venue paragraph: the master key lives in the host .env and nowhere else.",
+      "requirement": "Key source: MICHAEL_ENCRYPTION_KEY (64 hex = 32 bytes) from the host .env is the only master key; the module never falls back to .leo-keys and never generates a key"
+    },
+    {
+      "id": "TR-2",
+      "rationale": "The -B migration is chairman-gated and unapplied; the Supabase client factory throws on schema drift (VALIDATION condition 2). The consent script must refuse before the browser opens.",
+      "requirement": "Every michael_credentials read and write goes through lib/michael/db.mjs readRows/writeRows so a missing relation surfaces as TABLES_ABSENT, not a throw"
+    },
+    {
+      "id": "TR-3",
+      "rationale": "Ratification ff4ef5b4 / 0daf3bd8: credentialed feeders run on Windows Task Scheduler on the host; GHA holds no user credential and no encryption key. The guard makes the venue a code invariant, not a workflow convention.",
+      "requirement": "Host-venue guard: any process with GITHUB_ACTIONS=true or CI=true is refused before decrypt and before consent"
+    },
+    {
+      "id": "TR-4",
+      "rationale": "encryption.cjs decrypt ignores its metadata argument, so a wrong key is indistinguishable from corruption (Explore gap 3). The fingerprint leaks nothing about the key and makes a rotated or wrong host key diagnosable in one line.",
+      "requirement": "Fingerprint: first 16 hex of sha256 over the raw key bytes, stamped on every write and compared on every read before decrypt; mismatch is a named refusal"
+    },
+    {
+      "id": "TR-5",
+      "rationale": "gmail-act.mjs's lazy loader re-throws anything that is not module-not-found, so an import-time throw becomes exit 1 rather than the designed exit-2 refusal.",
+      "requirement": "Import-time purity for lib/michael/gmail-client.mjs and chairman-oauth.js: no env read, no client construction, no network at module load"
+    },
+    {
+      "id": "TR-6",
+      "rationale": "vitest.config.js:288-303 collects **/*.test.js only; the .mjs includes are anchored to two unrelated folders. The oauth-manager.test.js algorithm-pin rationale (a random-nonce fake satisfies every other assertion) applies here.",
+      "requirement": "Tests are *.test.js (not .test.mjs) under lib/integrations/google/, lib/michael/ and server/routes/ so the vitest unit project collects them; they inject sb/enc/gmail factories and use real AES-256-GCM in at least one case"
+    },
+    {
+      "id": "TR-7",
+      "rationale": "VALIDATION coordination note; a shared port cannot serve two callbacks at once, and cross-writing storage would let one flow clobber the other's grant.",
+      "requirement": "The YouTube module and the chairman module share GOOGLE_CLIENT_ID and port 3456 but keep separate storage (eva_sync_state vs michael_credentials) and separate app ids; the two consent flows are never run concurrently"
+    }
+  ],
+  "system_architecture": "{\"overview\":\"A thin generalization of the YouTube OAuth manager into a host-only Google chairman-grant module. The module owns the key source (env-bound HostKeyEncryption), the venue guard, the ciphertext-only storage in michael_credentials, and token refresh with gauge predicates written as columns. Two consumers sit on top: the consent CLI (the re-consent runbook) and the Gmail modify client that child B's gmail-act verb already lazily imports. A read-only status route exposes non-secret columns behind requireAuth for child G's gauge and child H's dashboard.\",\"components\":[{\"name\":\"lib/security/encryption.cjs (one-line change)\",\"responsibility\":\"Also export the CredentialEncryption class so a subclass can bind its own getMasterKey; singleton default unchanged\",\"technology\":\"Node crypto AES-256-GCM + PBKDF2-SHA256 (existing)\"},{\"name\":\"lib/integrations/google/chairman-oauth.js\",\"responsibility\":\"HostKeyEncryption (MICHAEL_ENCRYPTION_KEY only, fingerprint), assertHostVenue, createOAuth2Client, getStoredTokens, storeTokens, getAuthenticatedClient (refresh + invalid_grant -> last_error), runConsentFlow; all with injectable { sb, enc }\",\"technology\":\"ESM, google-auth-library OAuth2Client ^10.5.0, lib/michael/db.mjs readRows/writeRows\"},{\"name\":\"scripts/michael/google-consent.mjs\",\"responsibility\":\"One-command host re-consent; pre-flights venue, key, client id, and table presence before opening the browser; --status renders non-secret columns\",\"technology\":\"ESM CLI in the scripts/michael verb shape (parseArgs/refusal/emit)\"},{\"name\":\"lib/michael/gmail-client.mjs\",\"responsibility\":\"modifyThread over gmail.users.threads.modify with the chairman client; { ok, modified } / { ok:false, error }; import-time pure\",\"technology\":\"googleapis ^171.4.0 gmail v1\"},{\"name\":\"server/routes/michael.js + server/index.js mount\",\"responsibility\":\"GET /api/michael/oauth/status (non-secret columns + hours_to_expiry) mounted behind requireAuth in the requireAuth block\",\"technology\":\"Express Router, service-role Supabase client, server/middleware/auth.js requireAuth\"}],\"data_flow\":\"Consent: google-consent.mjs -> assertHostVenue -> key/env/table pre-flights -> generateAuthUrl (gmail.modify, calendar.readonly, drive.readonly) -> browser -> localhost:3456/oauth2callback -> getToken -> storeTokens: enc.encrypt(tokens) -> upsert michael_credentials {encrypted_blob, encryption_metadata, key_fingerprint, scopes, expires_at, last_refreshed_at, last_error:null}. Use: gmail-client.modifyThread -> getAuthenticatedClient -> getStoredTokens: readRows -> fingerprint compare -> enc.decrypt -> setCredentials -> refresh if expired (success: storeTokens; invalid_grant: last_error='invalid_grant' then rethrow) -> gmail.users.threads.modify -> { ok, modified } -> gmail-act records michael_gmail_triage_items. Observe: GET /api/michael/oauth/status (requireAuth) -> select non-secret columns -> hours_to_expiry; child G's michael-oauth-health reads last_error and expires_at directly from the table.\",\"integration_points\":[\"scripts/michael/gmail-act.mjs lazy import of lib/michael/gmail-client.mjs (contract fixed by child B)\",\"database/migrations/20260906_michael_tables.sql michael_credentials (child B, chairman-applied; no DDL here)\",\"lib/michael/db.mjs readRows/writeRows/refusal/emit/parseArgs (TABLES_ABSENT contract)\",\"server/middleware/auth.js requireAuth and the server/index.js requireAuth mount block\",\"Spec section 9 michael-oauth-health predicate (child G registers the gauge; this child writes last_error and expires_at)\",\"Host .env: MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (never GHA secrets)\"]}",
+  "data_model": {},
+  "api_specifications": [
+    {
+      "auth": "requireAuth",
+      "path": "/api/michael/oauth/status",
+      "errors": "404 NO_CREDENTIAL, 503 TABLES_ABSENT",
+      "method": "GET",
+      "response": "identifier, scopes, expires_at, last_refreshed_at, last_error, key_fingerprint, hours_to_expiry; never encrypted_blob/encryption_metadata"
+    }
+  ],
+  "ui_ux_requirements": [],
+  "implementation_approach": "{\"phases\":[{\"phase\":\"Phase 1\",\"description\":\"Class export and the chairman OAuth module with its tests (real AES-GCM, injected sb, fingerprint, venue guard, invalid_grant)\",\"deliverables\":[\"lib/security/encryption.cjs export line\",\"lib/integrations/google/chairman-oauth.js\",\"lib/integrations/google/chairman-oauth.test.js\"]},{\"phase\":\"Phase 2\",\"description\":\"Consent CLI and Gmail client on top of the module, with refusal-order and mapping tests; gmail-act dry-run smoke\",\"deliverables\":[\"scripts/michael/google-consent.mjs\",\"lib/michael/gmail-client.mjs\",\"lib/michael/gmail-client.test.js\",\"scripts/michael/google-consent.test.js\"]},{\"phase\":\"Phase 3\",\"description\":\"Status route and requireAuth mount with the mount-table test; SECURITY sub-agent on the diff; PR with LOC justification\",\"deliverables\":[\"server/routes/michael.js\",\"server/routes/michael.test.js\",\"server/index.js mount line\",\"SECURITY evidence row with provenance\"]}],\"technical_decisions\":[\"Export the class from encryption.cjs and subclass getMasterKey rather than adding env precedence to the singleton: existing consumers keep .leo-keys semantics untouched and the Michael key source is explicit in one place\",\"Refuse rather than generate when the key is absent: VALIDATION measured that self-generation produces an unrecoverable blob while reporting success\",\"Store the whole token object as one ciphertext (oauth-manager.js precedent) and expose only derived, non-secret columns (expires_at, last_error, fingerprint) for the gauge and the route\",\"Use lib/michael/db.mjs readRows/writeRows so TABLES_ABSENT is a refusal, matching every other Michael verb while the -B migration waits for the chairman\",\"Venue guard on GITHUB_ACTIONS/CI in code, not workflow convention, so the ratification ff4ef5b4 invariant survives future workflow edits\",\"No migration in this child; key_fingerprint already exists in the -B migration. The chairman applies -B; this child never applies DDL\",\"youtube scope deferred to v1.1 per spec section 4; the YouTube module keeps its own storage\"]}",
+  "technology_stack": [
+    "Node ESM",
+    "google-auth-library ^10.5.0",
+    "googleapis ^171.4.0",
+    "lib/security/encryption.cjs AES-256-GCM",
+    "Express",
+    "vitest"
+  ],
+  "dependencies": [
+    "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-B (michael_credentials migration, chairman-applied)"
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "then": "each rejects with code MICHAEL_ENCRYPTION_KEY_MISSING and the write spies were never called",
+      "when": "storeTokens, getStoredTokens and runConsentFlow are called",
+      "given": "MICHAEL_ENCRYPTION_KEY is unset and an injected Supabase client with write spies",
+      "scenario": "Refuse without the host key",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-2",
+      "then": "the upsert payload has encrypted_blob (base64 string), encryption_metadata.algorithm aes-256-gcm, key_fingerprint = sha256(key).slice(0,16), scopes, expires_at, last_refreshed_at, last_error null; its serialization contains neither fixture token string nor any access_token/refresh_token/id_token key",
+      "when": "storeTokens runs with the real encryption.cjs path",
+      "given": "a 64-hex MICHAEL_ENCRYPTION_KEY and a token fixture with ya29./1// prefixed values",
+      "scenario": "Ciphertext-only write with fingerprint",
+      "test_type": "security"
+    },
+    {
+      "id": "TS-3",
+      "then": "the result is { error:'KEY_FINGERPRINT_MISMATCH' } and enc.decrypt was not called",
+      "when": "getStoredTokens runs with an enc spy",
+      "given": "a stored row with key_fingerprint 'deadbeefdeadbeef' and a different current key",
+      "scenario": "Fingerprint mismatch refuses before decrypt",
+      "test_type": "security"
+    },
+    {
+      "id": "TS-4",
+      "then": "the row update sets last_error='invalid_grant', the blob is untouched, and the call rejects",
+      "when": "getAuthenticatedClient runs",
+      "given": "a stored expired token and an OAuth2 client whose refreshAccessToken rejects with an error containing invalid_grant",
+      "scenario": "invalid_grant is recorded for the gauge",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-5",
+      "then": "storeTokens is called with the refreshed credentials and the row gets a new expires_at and last_refreshed_at and last_error null",
+      "when": "getAuthenticatedClient runs",
+      "given": "a stored token with expiry_date in the past and a client whose refresh resolves with a new expiry_date",
+      "scenario": "Refresh success updates expiry",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-6",
+      "then": "code HOST_VENUE_REQUIRED before any decrypt, browser open or Google call",
+      "when": "assertHostVenue, getStoredTokens or the consent CLI runs",
+      "given": "GITHUB_ACTIONS=true",
+      "scenario": "GHA venue refusal",
+      "test_type": "security"
+    },
+    {
+      "id": "TS-7",
+      "then": "exit 2 with code TABLES_ABSENT and generateAuthUrl was never called",
+      "when": "google-consent.mjs default action runs",
+      "given": "an injected client returning 42P01 for michael_credentials and a generateAuthUrl spy",
+      "scenario": "Consent refuses when the table is unapplied",
+      "test_type": "integration"
+    },
+    {
+      "id": "TS-8",
+      "then": "the first call hits users.threads.modify with userId 'me', id 't1', requestBody { addLabelIds:['L'], removeLabelIds:['INBOX'] } and returns { ok:true, modified }; the second returns { ok:false, error } without throwing; importing the module with no env does not throw",
+      "when": "modifyThread({ threadId:'t1', addLabelIds:['L'], removeLabelIds:['INBOX'] }) runs, then again with a rejecting factory",
+      "given": "an injected gmail factory recording calls",
+      "scenario": "Gmail modify mapping and failure shape",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-9",
+      "then": "the payload has no encrypted_blob or encryption_metadata key and includes hours_to_expiry; the /api/michael mount line contains requireAuth; absent row yields 404 NO_CREDENTIAL; missing relation yields 503 TABLES_ABSENT",
+      "when": "GET /oauth/status handler runs and the test reads the mount table",
+      "given": "a row with an encrypted_blob and the server/index.js source",
+      "scenario": "Status route never leaks and the mount is guarded",
+      "test_type": "security"
+    },
+    {
+      "id": "TS-10",
+      "then": "all green; the default import is still the singleton and token-vault behavior is unchanged",
+      "when": "lib/integrations/youtube/oauth-manager.test.js and lib/security tests run",
+      "given": "the one-line export addition to encryption.cjs",
+      "scenario": "Existing consumers unchanged",
+      "test_type": "unit"
+    }
+  ],
+  "acceptance_criteria": [
+    "No plaintext token is ever written to michael_credentials: every write carries encrypted_blob and encryption_metadata, no token property becomes a column, and a unit test with real AES-256-GCM proves the fixture strings are absent from the payload",
+    "The master key comes only from MICHAEL_ENCRYPTION_KEY: missing or malformed values are named refusals, no key is ever generated, and key_fingerprint is stamped on write and compared before decrypt with KEY_FINGERPRINT_MISMATCH on difference",
+    "GITHUB_ACTIONS=true or CI=true refuses with HOST_VENUE_REQUIRED before any decrypt or consent, and no workflow references MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET",
+    "node scripts/michael/google-consent.mjs is the whole re-consent runbook; it refuses TABLES_ABSENT before opening the browser while the -B migration is unapplied; --status shows non-secret columns only",
+    "gmail-act --dry-run no longer refuses GMAIL_CLIENT_ABSENT; modifyThread maps to gmail.users.threads.modify and returns { ok, modified } or { ok:false, error }",
+    "server/index.js mounts /api/michael with requireAuth on the same line, proven by a test that reads the mount table; /oauth/status returns no blob fields",
+    "A SECURITY sub_agent_execution_results row with content_hash, session_id and evaluated_commit_sha exists for phase EXEC before EXEC-TO-PLAN; the diff contains no migration"
+  ],
+  "performance_requirements": {},
+  "plan_checklist": [
+    {
+      "text": "PRD created and saved",
+      "checked": true
+    },
+    {
+      "text": "SD requirements mapped to technical specs",
+      "checked": true
+    },
+    {
+      "text": "Technical architecture defined",
+      "checked": true
+    },
+    {
+      "text": "Implementation approach documented",
+      "checked": true
+    },
+    {
+      "text": "Test scenarios defined",
+      "checked": true
+    },
+    {
+      "text": "Acceptance criteria established",
+      "checked": true
+    },
+    {
+      "text": "Integration & operationalization documented",
+      "checked": true
+    }
+  ],
+  "exec_checklist": [
+    {
+      "text": "Development environment setup",
+      "checked": false
+    },
+    {
+      "text": "Core functionality implemented",
+      "checked": false
+    },
+    {
+      "text": "Unit tests written",
+      "checked": false
+    },
+    {
+      "text": "Integration tests completed",
+      "checked": false
+    },
+    {
+      "text": "Code review completed",
+      "checked": false
+    },
+    {
+      "text": "Documentation updated",
+      "checked": false
+    }
+  ],
+  "validation_checklist": [
+    {
+      "text": "All acceptance criteria met",
+      "checked": false
+    },
+    {
+      "text": "Performance requirements validated",
+      "checked": false
+    },
+    {
+      "text": "Security review completed",
+      "checked": false
+    },
+    {
+      "text": "User acceptance testing passed",
+      "checked": false
+    },
+    {
+      "text": "Deployment readiness confirmed",
+      "checked": false
+    }
+  ],
+  "progress": 0,
+  "phase": "planning",
+  "phase_progress": {},
+  "risks": [
+    {
+      "risk": "A consent completed while michael_credentials is unapplied would burn a chairman grant with nothing persisted",
+      "impact": "HIGH",
+      "mitigation": "google-consent.mjs pre-flights the table via readRows and refuses TABLES_ABSENT before generateAuthUrl; unit test TS-7 pins the order",
+      "probability": "MEDIUM",
+      "rollback_plan": "Re-run the consent after the chairman applies the -B migration; Google issues a fresh refresh token on prompt=consent"
+    },
+    {
+      "risk": "The seven-day refresh-token expiry (Testing-status consent screen) makes the grant lapse silently",
+      "impact": "MEDIUM",
+      "mitigation": "expires_at and last_error are written by the module on every refresh so child G's michael-oauth-health trips on invalid_grant or <48h; the runbook is one host command",
+      "probability": "HIGH",
+      "rollback_plan": "Run node scripts/michael/google-consent.mjs on the host; feeders treat invalid_grant as status failed until then"
+    },
+    {
+      "risk": "A wrong or rotated MICHAEL_ENCRYPTION_KEY on the host renders the blob unreadable and looks like corruption",
+      "impact": "MEDIUM",
+      "mitigation": "key_fingerprint compared before decrypt yields KEY_FINGERPRINT_MISMATCH naming the cause; --status prints the stored fingerprint",
+      "probability": "LOW",
+      "rollback_plan": "Restore the original key in the host .env, or re-consent under the new key (storeTokens overwrites the row)"
+    },
+    {
+      "risk": "Port 3456 collision with the YouTube consent flow or a stale listener",
+      "impact": "LOW",
+      "mitigation": "Documented as never-concurrent (TR-7); the callback server closes on the first code/error and times out at 5 minutes",
+      "probability": "LOW",
+      "rollback_plan": "Kill the stale listener and re-run the consent"
+    },
+    {
+      "risk": "The requireAuth mount regresses to optionalAuth or is dropped in a later edit and the repo audit does not notice a GET-only route",
+      "impact": "HIGH",
+      "mitigation": "server/routes/michael.test.js reads server/index.js and asserts the /api/michael mount line contains requireAuth",
+      "probability": "LOW",
+      "rollback_plan": "Revert the mount line; the route file itself never decrypts so exposure is limited to non-secret columns"
+    }
+  ],
+  "constraints": [
+    "No DDL in this child",
+    "No credential or key in GHA secrets",
+    "Host venue only for decrypt"
+  ],
+  "assumptions": [
+    "Chairman applies the -B migration before the first consent",
+    "GOOGLE_CLIENT_ID/SECRET already in the host .env"
+  ],
+  "stakeholders": [
+    {
+      "name": "Chairman (Solo Entrepreneur)",
+      "needs": [
+        "One-command re-consent",
+        "No plaintext token at rest"
+      ],
+      "persona_id": "chairman",
+      "pain_points": [
+        "Seven-day re-consent"
+      ],
+      "success_criteria": [
+        "Consent works on the host; gauge warns before lapse"
+      ]
+    }
+  ],
+  "approved_by": null,
+  "approval_date": null,
+  "planned_start": null,
+  "planned_end": null,
+  "actual_start": null,
+  "actual_end": null,
+  "created_at": "2026-09-06T12:12:21.236873",
+  "updated_at": "2026-09-06T12:12:21.236873",
+  "created_by": "PLAN",
+  "updated_by": null,
+  "metadata": {
+    "seat": "Bravo 85c82b18",
+    "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C",
+    "created_via": "inline_prd_generation",
+    "explore_evidence": "5552dc0f-4eda-402e-b4bd-0506bda40d91",
+    "validation_evidence": "b4ed3c2c-4a20-4e6f-9bb7-1d9ab532e887",
+    "integration_operationalization": {
+      "consumers": [
+        {
+          "name": "Chairman (host terminal)",
+          "frequency": "Once, then roughly every seven days under the D4 posture",
+          "interaction": "Runs node scripts/michael/google-consent.mjs once and again on re-consent; reads --status"
+        },
+        {
+          "name": "scripts/michael/gmail-act.mjs (child B verb) and child D host feeders",
+          "frequency": "Nightly and per ruling",
+          "interaction": "Import lib/michael/gmail-client.mjs / chairman-oauth.js to act on the mailbox and calendar from Task Scheduler on the host"
+        },
+        {
+          "name": "Child G michael-oauth-health gauge and child H dashboard",
+          "frequency": "Every gauge tick / page load",
+          "interaction": "Read last_error/expires_at from the table and GET /api/michael/oauth/status"
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "database/migrations/20260906_michael_tables.sql (child B)",
+          "type": "upstream",
+          "contract": "michael_credentials columns encrypted_blob, encryption_metadata, key_fingerprint, scopes, expires_at, last_refreshed_at, last_error, unique identifier",
+          "failure_handling": "readRows surfaces TABLES_ABSENT; consent refuses before the browser; route returns 503"
+        },
+        {
+          "name": "Google OAuth 2.0 (accounts.google.com, gmail v1)",
+          "type": "upstream",
+          "contract": "offline access_type with prompt=consent; refresh via OAuth2Client.refreshAccessToken",
+          "failure_handling": "invalid_grant recorded as last_error and rethrown; API errors returned as { ok:false, error }"
+        },
+        {
+          "name": "server/middleware/auth.js requireAuth",
+          "type": "upstream",
+          "contract": "internal key or Bearer JWT; 401 otherwise",
+          "failure_handling": "Unauthenticated calls never reach the route"
+        }
+      ],
+      "data_contracts": [
+        {
+          "schema": "encrypted_blob text (base64 salt||iv||tag||ciphertext), encryption_metadata jsonb {appId, algorithm, timestamp, version}, key_fingerprint text(16 hex), scopes text[], expires_at timestamptz, last_refreshed_at timestamptz, last_error text",
+          "validation": "Unit tests assert the write payload shape and the absence of token properties",
+          "versioning": "encryption_metadata.version v1; a new key is signaled by key_fingerprint",
+          "contract_name": "michael_credentials row (identifier google_chairman_oauth)"
+        },
+        {
+          "schema": "{ ok: boolean, modified?: { id, labelIds }, error?: string }",
+          "validation": "gmail-act.mjs consumes ok/modified/error exactly",
+          "versioning": "Fixed by child B; additive only",
+          "contract_name": "modifyThread result"
+        }
+      ],
+      "runtime_config": {
+        "feature_flags": [
+          "None; venue is decided by GITHUB_ACTIONS/CI presence"
+        ],
+        "environment_variables": [
+          "MICHAEL_ENCRYPTION_KEY (host .env only, 64 hex)",
+          "GOOGLE_CLIENT_ID (host .env only)",
+          "GOOGLE_CLIENT_SECRET (host .env only)",
+          "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (existing)"
+        ],
+        "deployment_considerations": "Host only. Nothing is added to GHA secrets. The chairman generates the key once (node -e randomBytes(32) hex) and places it in the host .env; the consent runs on the host with a browser."
+      },
+      "observability_rollout": {
+        "alerts": [
+          "michael-oauth-health (child G): last_error = 'invalid_grant' or expires_at < now() + 48h"
+        ],
+        "monitoring": [
+          "michael_credentials.expires_at and last_error (child G gauge source)",
+          "GET /api/michael/oauth/status hours_to_expiry"
+        ],
+        "rollback_trigger": "Any plaintext token observed in the table, or the mount audit finding /api/michael outside requireAuth",
+        "rollout_strategy": "Land the code; the chairman applies the -B migration and runs the consent once; feeders in child D consume",
+        "rollback_procedure": "Revert the PR; delete the michael_credentials row; revoke the grant at myaccount.google.com/permissions"
+      }
+    }
+  },
+  "content": "# Product Requirements Document\n\n## Strategic Directive\nSD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C\n\n## Title\nMichael C: Google chairman OAuth module, consent flow, michael_credentials writer, gmail client, requireAuth on /api/michael/*\n\n## Status\nPlanning\n\n## Executive Summary\nChild C gives Michael one chairman-user Google grant: a host-only OAuth module storing AES-256-GCM ciphertext in michael_credentials under a MICHAEL_ENCRYPTION_KEY that is never auto-generated, a one-command consent flow, the Gmail modify client child B deferred, and requireAuth on /api/michael/*.\n\n## Functional Requirements\n### FR-1: lib/security/encryption.cjs additionally exports the CredentialEncryption class\nAppend module.exports.CredentialEncryption = CredentialEncryption after the existing singleton export (lib/security/encryption.cjs:247). The default export and every existing consumer (lib/operator/cash-sources/token-vault.js:21, lib/integrations/youtube/oauth-manager.js:24, lib/cleanup/credentials.js:14) are byte-for-byte unchanged in behavior. VALIDATION b4ed3c2c measured that the ESM namespace then exposes CredentialEncryption, default and module.exports, and that encrypt/decrypt both route through this.getMasterKey so an instance override binds the key source without duplicating any AES-GCM or PBKDF2 code.\n\nAcceptance:\n- import { CredentialEncryption } from '../../security/encryption.cjs' resolves to the class in an ESM module and the default import is still the singleton\n- lib/integrations/youtube/oauth-manager.test.js and lib/security tests stay green with no change\n- The diff to encryption.cjs is one appended export line plus its comment\n\n### FR-2: lib/integrations/google/chairman-oauth.js binds the master key to MICHAEL_ENCRYPTION_KEY only and stamps a key fingerprint\nExport class HostKeyEncryption extends CredentialEncryption whose getMasterKey() reads process.env.MICHAEL_ENCRYPTION_KEY, accepts exactly 64 hex characters, returns Buffer.from(hex,'hex'), and otherwise throws an Error with code MICHAEL_ENCRYPTION_KEY_MISSING (absent) or MICHAEL_ENCRYPTION_KEY_INVALID (wrong shape). It never calls the inherited self-generating method and never touches .leo-keys. Export keyFingerprint(keyBuffer) = sha256(raw key bytes).hex.slice(0,16). Export assertHostVenue() that throws code HOST_VENUE_REQUIRED when process.env.GITHUB_ACTIONS === 'true' or process.env.CI === 'true', called before any decrypt and before the consent flow. Constants: SCOPES = ['https://www.googleapis.com/auth/gmail.modify','https://www.googleapis.com/auth/calendar.readonly','https://www.googleapis.com/auth/drive.readonly'] (youtube deferred to v1.1 per spec section 4), REDIRECT_PORT 3456, REDIRECT_URI http://localhost:3456/oauth2callback, CREDENTIAL_IDENTIFIER 'google_chairman_oauth', TOKEN_VAULT_APP_ID 'michael-google-chairman-oauth' (an operational label, not a domain separator, per oauth-manager.js:34-40). createOAuth2Client() mirrors oauth-manager.js:47-59 on GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET from the host .env. Nothing runs at import time.\n\nAcceptance:\n- With MICHAEL_ENCRYPTION_KEY unset, getStoredTokens/storeTokens/runConsentFlow reject with code MICHAEL_ENCRYPTION_KEY_MISSING and no Supabase write occurs (unit test with an injected client spy)\n- With a 63-char or non-hex value the code is MICHAEL_ENCRYPTION_KEY_INVALID; with a 64-hex value keyFingerprint equals the first 16 hex of sha256 over the 32 raw key bytes\n- GITHUB_ACTIONS=true makes assertHostVenue throw HOST_VENUE_REQUIRED before any decrypt (unit test)\n- grep of .github/workflows for MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET returns nothing\n\n### FR-3: chairman-oauth.js reads and writes michael_credentials as ciphertext only, with the gauge predicates written by the module\ngetStoredTokens({ sb, enc }) reads the row identifier=google_chairman_oauth selecting encrypted_blob, encryption_metadata, key_fingerprint, expires_at, last_error via readRows from lib/michael/db.mjs; returns null when no row or no blob (tables_absent surfaces as a refusal object, never a throw); compares key_fingerprint to keyFingerprint(current key) and returns { error:'KEY_FINGERPRINT_MISMATCH' } BEFORE attempting decrypt when they differ; on a genuine decrypt failure logs a warning and returns null (oauth-manager.js:83-88 contract). storeTokens(tokens, { sb, enc }) encrypts the whole token object with enc.encrypt(tokens, TOKEN_VAULT_APP_ID) and upserts by identifier: encrypted_blob = encrypted, encryption_metadata = metadata, key_fingerprint, scopes = SCOPES, expires_at = new Date(tokens.expiry_date) or null, last_refreshed_at = now, last_error = null; throws on a failed persist (oauth-manager.js:123 rationale F8). No property of the token object is ever written as a column. getAuthenticatedClient({ sb, enc, forceReauth }) sets credentials, refreshes when expiry_date has passed, stores the refreshed credentials; when the refresh fails with invalid_grant it updates last_error='invalid_grant' on the row (leaving the blob) and rethrows, so the spec section 9 predicate michael_credentials.last_error = 'invalid_grant' or expires_at < now() + 48h is satisfiable by child G without further writes.\n\nAcceptance:\n- Unit test: the upsert payload contains encrypted_blob, encryption_metadata, key_fingerprint, scopes, expires_at, last_refreshed_at and last_error:null and contains no key named access_token, refresh_token, id_token or expiry_date; the serialized payload does not contain the fixture token strings\n- Unit test: a stored row whose key_fingerprint differs from the current key returns KEY_FINGERPRINT_MISMATCH and enc.decrypt is never called\n- Unit test: a refresh rejecting with an invalid_grant error leaves last_error='invalid_grant' on the row and the call rejects; a successful refresh writes a new expires_at and last_refreshed_at\n- Storage uses the real encryption.cjs AES-256-GCM path in at least one test (algorithm pin aes-256-gcm), mirroring oauth-manager.test.js:56-70\n\n### FR-4: scripts/michael/google-consent.mjs is the one-command host re-consent runbook and refuses before the browser opens when it cannot record\nCLI in the scripts/michael verb shape (lib/utils/is-main-module.js guard, parseArgs/refusal/emit from lib/michael/db.mjs): default action runs runConsentFlow (generateAuthUrl with access_type offline, scope SCOPES, prompt consent; opens the browser per platform; http.createServer on 3456 resolving on ?code= and rejecting on ?error=; 5-minute timeout; getToken then storeTokens) exactly in the oauth-manager.js:166-230 shape. Pre-flight order before generating the auth URL: assertHostVenue (HOST_VENUE_REQUIRED), MICHAEL_ENCRYPTION_KEY present and valid (MICHAEL_ENCRYPTION_KEY_MISSING / _INVALID), GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET present (GOOGLE_CLIENT_MISSING), then a readRows probe of michael_credentials that refuses TABLES_ABSENT when the -B migration is not applied (VALIDATION condition 2: a consent completed into an unrecordable store burns a chairman grant). --status prints identifier, scopes, expires_at, last_refreshed_at, last_error, key_fingerprint and hours_to_expiry, never encrypted_blob or encryption_metadata; --json emits one JSON object; every refusal exits 2 with a code, success exits 0. The header comment states the runbook: re-consent under the seven-day posture (D4, 8e6ac764) is `node scripts/michael/google-consent.mjs` on the chairman's host, and names the Task Scheduler precedent for child D (scripts/setup-alarm-cron-tasks.mjs + scripts/cron/run-hidden.vbs; spec line 105's two paths do not exist).\n\nAcceptance:\n- MICHAEL_ENCRYPTION_KEY= node scripts/michael/google-consent.mjs --status --json exits 2 with code MICHAEL_ENCRYPTION_KEY_MISSING and opens no browser\n- GITHUB_ACTIONS=true node scripts/michael/google-consent.mjs --json exits 2 with code HOST_VENUE_REQUIRED before any Google call\n- With the table unapplied, the default action exits 2 with code TABLES_ABSENT before generateAuthUrl is called (unit test with injected sb returning 42P01)\n- --status output contains no encrypted_blob or encryption_metadata key (unit test on the pure render function)\n\n### FR-5: lib/michael/gmail-client.mjs lands the Gmail API leg child B deferred, with zero work at import time\nExport async function modifyThread({ threadId, addLabelIds = [], removeLabelIds = [] }, { auth, gmailFactory } = {}) that lazily obtains the chairman OAuth client (getAuthenticatedClient) and calls google.gmail({ version:'v1', auth }).users.threads.modify({ userId:'me', id: threadId, requestBody: { addLabelIds, removeLabelIds } }), returning { ok:true, modified: { id, labelIds } } on success and { ok:false, error: message } on any auth or API failure (never throws). The module imports only static dependencies; it reads no env and builds no client at import (VALIDATION condition 3: scripts/michael/gmail-act.mjs:30-39 re-throws non-module-not-found import errors, turning an import-time throw into exit 1 instead of the designed exit-2 refusal). The contract is exactly the one gmail-act.mjs:5-8 and :66-68 already consume.\n\nAcceptance:\n- node scripts/michael/gmail-act.mjs --thread smoke --archive --dry-run --json prints dry_run:true with would_call and no longer refuses GMAIL_CLIENT_ABSENT\n- Unit test: modifyThread with an injected gmail factory calls users.threads.modify with userId 'me', id, and requestBody { addLabelIds, removeLabelIds } and returns { ok:true, modified }\n- Unit test: a rejecting factory yields { ok:false, error } and does not throw; importing the module with no env set does not throw\n\n### FR-6: GET /api/michael/* is mounted behind requireAuth and returns no token material\nserver/routes/michael.js exports an express Router with GET /oauth/status that selects identifier, scopes, expires_at, last_refreshed_at, last_error, key_fingerprint from michael_credentials (service-role client, the server/routes/protocol-lint.js:27-31 getSupabase shape), adds hours_to_expiry, and returns 404 { code:'NO_CREDENTIAL' } when the row is absent and 503 { code:'TABLES_ABSENT' } when the relation is missing (PGRST205 / 42P01). It never selects encrypted_blob or encryption_metadata and never decrypts. server/index.js imports the router and mounts app.use('/api/michael', requireAuth, michaelRoutes) inside the requireAuth block (server/index.js:243-270), before the /api optionalAuth mount at line 272 (VALIDATION condition 4: the repo mount audit inspects mutating methods only, so a GET-only route under optionalAuth would pass silently). Child E extends this file with the brief routes; child C creates it.\n\nAcceptance:\n- grep -n \"'/api/michael'\" server/index.js shows exactly one mount and the same line contains requireAuth\n- server/routes/michael.test.js asserts the /oauth/status payload has no encrypted_blob or encryption_metadata key, the 404 and 503 shapes, and reads the server/index.js source to assert the /api/michael mount line contains requireAuth (the mount-table assertion the repo lacked)\n- server/middleware/auth.test.js stays green; requireAuth is imported, not re-implemented\n\n### FR-7: SECURITY sub-agent evidence row with provenance before EXEC-TO-PLAN, and no migration in this child\nThe child ships zero DDL: michael_credentials with key_fingerprint is declared in database/migrations/20260906_michael_tables.sql:292-310 (child B, chairman-gated, unapplied live at PLAN time) and tests/unit/migrations/michael-tables-migration-shape.test.js pins its shape. Before EXEC-TO-PLAN the SECURITY sub-agent is invoked on the EXEC diff and writes a sub_agent_execution_results row (sub_agent_code SECURITY, phase EXEC) through the canonical executor so metadata carries content_hash, session_id, sub_agent_version and evaluated_commit_sha (ratification 6c263823: producer, run id, content hash). The SECURITY review scope explicitly names: no plaintext token column, key never auto-generated, GHA venue refusal, fingerprint compared before decrypt, /api/michael mount under requireAuth, no secret in logs or test fixtures.\n\nAcceptance:\n- sub_agent_execution_results has a SECURITY row for this SD with phase EXEC and metadata.content_hash, metadata.session_id and metadata.evaluated_commit_sha non-null, created before the EXEC-TO-PLAN handoff row\n- git diff --stat against main shows no file under database/migrations/\n- The PR body states the ≤100 LOC target is exceeded with justification: five greenfield files plus tests, per the tiered PR size rule (max 400 LOC non-test)\n\n## Technical Requirements\n- **TR-1** Key source: MICHAEL_ENCRYPTION_KEY (64 hex = 32 bytes) from the host .env is the only master key; the module never falls back to .leo-keys and never generates a key — VALIDATION b4ed3c2c measured encryption.cjs generating a different throwaway key on a missing key file and failing GCM authentication on read-back; a consent from a worktree or GHA would encrypt the chairman's refresh token unrecoverably while reporting success. Spec section 4 venue paragraph: the master key lives in the host .env and nowhere else.\n- **TR-2** Every michael_credentials read and write goes through lib/michael/db.mjs readRows/writeRows so a missing relation surfaces as TABLES_ABSENT, not a throw — The -B migration is chairman-gated and unapplied; the Supabase client factory throws on schema drift (VALIDATION condition 2). The consent script must refuse before the browser opens.\n- **TR-3** Host-venue guard: any process with GITHUB_ACTIONS=true or CI=true is refused before decrypt and before consent — Ratification ff4ef5b4 / 0daf3bd8: credentialed feeders run on Windows Task Scheduler on the host; GHA holds no user credential and no encryption key. The guard makes the venue a code invariant, not a workflow convention.\n- **TR-4** Fingerprint: first 16 hex of sha256 over the raw key bytes, stamped on every write and compared on every read before decrypt; mismatch is a named refusal — encryption.cjs decrypt ignores its metadata argument, so a wrong key is indistinguishable from corruption (Explore gap 3). The fingerprint leaks nothing about the key and makes a rotated or wrong host key diagnosable in one line.\n- **TR-5** Import-time purity for lib/michael/gmail-client.mjs and chairman-oauth.js: no env read, no client construction, no network at module load — gmail-act.mjs's lazy loader re-throws anything that is not module-not-found, so an import-time throw becomes exit 1 rather than the designed exit-2 refusal.\n- **TR-6** Tests are *.test.js (not .test.mjs) under lib/integrations/google/, lib/michael/ and server/routes/ so the vitest unit project collects them; they inject sb/enc/gmail factories and use real AES-256-GCM in at least one case — vitest.config.js:288-303 collects **/*.test.js only; the .mjs includes are anchored to two unrelated folders. The oauth-manager.test.js algorithm-pin rationale (a random-nonce fake satisfies every other assertion) applies here.\n- **TR-7** The YouTube module and the chairman module share GOOGLE_CLIENT_ID and port 3456 but keep separate storage (eva_sync_state vs michael_credentials) and separate app ids; the two consent flows are never run concurrently — VALIDATION coordination note; a shared port cannot serve two callbacks at once, and cross-writing storage would let one flow clobber the other's grant.\n\n## Architecture\nA thin generalization of the YouTube OAuth manager into a host-only Google chairman-grant module. The module owns the key source (env-bound HostKeyEncryption), the venue guard, the ciphertext-only storage in michael_credentials, and token refresh with gauge predicates written as columns. Two consumers sit on top: the consent CLI (the re-consent runbook) and the Gmail modify client that child B's gmail-act verb already lazily imports. A read-only status route exposes non-secret columns behind requireAuth for child G's gauge and child H's dashboard.\n\nData flow: Consent: google-consent.mjs -> assertHostVenue -> key/env/table pre-flights -> generateAuthUrl (gmail.modify, calendar.readonly, drive.readonly) -> browser -> localhost:3456/oauth2callback -> getToken -> storeTokens: enc.encrypt(tokens) -> upsert michael_credentials {encrypted_blob, encryption_metadata, key_fingerprint, scopes, expires_at, last_refreshed_at, last_error:null}. Use: gmail-client.modifyThread -> getAuthenticatedClient -> getStoredTokens: readRows -> fingerprint compare -> enc.decrypt -> setCredentials -> refresh if expired (success: storeTokens; invalid_grant: last_error='invalid_grant' then rethrow) -> gmail.users.threads.modify -> { ok, modified } -> gmail-act records michael_gmail_triage_items. Observe: GET /api/michael/oauth/status (requireAuth) -> select non-secret columns -> hours_to_expiry; child G's michael-oauth-health reads last_error and expires_at directly from the table.\n\n## Test Scenarios\n- **TS-1** (unit) Refuse without the host key: given MICHAEL_ENCRYPTION_KEY is unset and an injected Supabase client with write spies; when storeTokens, getStoredTokens and runConsentFlow are called; then each rejects with code MICHAEL_ENCRYPTION_KEY_MISSING and the write spies were never called\n- **TS-2** (security) Ciphertext-only write with fingerprint: given a 64-hex MICHAEL_ENCRYPTION_KEY and a token fixture with ya29./1// prefixed values; when storeTokens runs with the real encryption.cjs path; then the upsert payload has encrypted_blob (base64 string), encryption_metadata.algorithm aes-256-gcm, key_fingerprint = sha256(key).slice(0,16), scopes, expires_at, last_refreshed_at, last_error null; its serialization contains neither fixture token string nor any access_token/refresh_token/id_token key\n- **TS-3** (security) Fingerprint mismatch refuses before decrypt: given a stored row with key_fingerprint 'deadbeefdeadbeef' and a different current key; when getStoredTokens runs with an enc spy; then the result is { error:'KEY_FINGERPRINT_MISMATCH' } and enc.decrypt was not called\n- **TS-4** (unit) invalid_grant is recorded for the gauge: given a stored expired token and an OAuth2 client whose refreshAccessToken rejects with an error containing invalid_grant; when getAuthenticatedClient runs; then the row update sets last_error='invalid_grant', the blob is untouched, and the call rejects\n- **TS-5** (unit) Refresh success updates expiry: given a stored token with expiry_date in the past and a client whose refresh resolves with a new expiry_date; when getAuthenticatedClient runs; then storeTokens is called with the refreshed credentials and the row gets a new expires_at and last_refreshed_at and last_error null\n- **TS-6** (security) GHA venue refusal: given GITHUB_ACTIONS=true; when assertHostVenue, getStoredTokens or the consent CLI runs; then code HOST_VENUE_REQUIRED before any decrypt, browser open or Google call\n- **TS-7** (integration) Consent refuses when the table is unapplied: given an injected client returning 42P01 for michael_credentials and a generateAuthUrl spy; when google-consent.mjs default action runs; then exit 2 with code TABLES_ABSENT and generateAuthUrl was never called\n- **TS-8** (unit) Gmail modify mapping and failure shape: given an injected gmail factory recording calls; when modifyThread({ threadId:'t1', addLabelIds:['L'], removeLabelIds:['INBOX'] }) runs, then again with a rejecting factory; then the first call hits users.threads.modify with userId 'me', id 't1', requestBody { addLabelIds:['L'], removeLabelIds:['INBOX'] } and returns { ok:true, modified }; the second returns { ok:false, error } without throwing; importing the module with no env does not throw\n- **TS-9** (security) Status route never leaks and the mount is guarded: given a row with an encrypted_blob and the server/index.js source; when GET /oauth/status handler runs and the test reads the mount table; then the payload has no encrypted_blob or encryption_metadata key and includes hours_to_expiry; the /api/michael mount line contains requireAuth; absent row yields 404 NO_CREDENTIAL; missing relation yields 503 TABLES_ABSENT\n- **TS-10** (unit) Existing consumers unchanged: given the one-line export addition to encryption.cjs; when lib/integrations/youtube/oauth-manager.test.js and lib/security tests run; then all green; the default import is still the singleton and token-vault behavior is unchanged\n\n## Acceptance Criteria\n- No plaintext token is ever written to michael_credentials: every write carries encrypted_blob and encryption_metadata, no token property becomes a column, and a unit test with real AES-256-GCM proves the fixture strings are absent from the payload\n- The master key comes only from MICHAEL_ENCRYPTION_KEY: missing or malformed values are named refusals, no key is ever generated, and key_fingerprint is stamped on write and compared before decrypt with KEY_FINGERPRINT_MISMATCH on difference\n- GITHUB_ACTIONS=true or CI=true refuses with HOST_VENUE_REQUIRED before any decrypt or consent, and no workflow references MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET\n- node scripts/michael/google-consent.mjs is the whole re-consent runbook; it refuses TABLES_ABSENT before opening the browser while the -B migration is unapplied; --status shows non-secret columns only\n- gmail-act --dry-run no longer refuses GMAIL_CLIENT_ABSENT; modifyThread maps to gmail.users.threads.modify and returns { ok, modified } or { ok:false, error }\n- server/index.js mounts /api/michael with requireAuth on the same line, proven by a test that reads the mount table; /oauth/status returns no blob fields\n- A SECURITY sub_agent_execution_results row with content_hash, session_id and evaluated_commit_sha exists for phase EXEC before EXEC-TO-PLAN; the diff contains no migration\n\n## Risks\n- A consent completed while michael_credentials is unapplied would burn a chairman grant with nothing persisted (MEDIUM/HIGH): google-consent.mjs pre-flights the table via readRows and refuses TABLES_ABSENT before generateAuthUrl; unit test TS-7 pins the order; rollback: Re-run the consent after the chairman applies the -B migration; Google issues a fresh refresh token on prompt=consent\n- The seven-day refresh-token expiry (Testing-status consent screen) makes the grant lapse silently (HIGH/MEDIUM): expires_at and last_error are written by the module on every refresh so child G's michael-oauth-health trips on invalid_grant or <48h; the runbook is one host command; rollback: Run node scripts/michael/google-consent.mjs on the host; feeders treat invalid_grant as status failed until then\n- A wrong or rotated MICHAEL_ENCRYPTION_KEY on the host renders the blob unreadable and looks like corruption (LOW/MEDIUM): key_fingerprint compared before decrypt yields KEY_FINGERPRINT_MISMATCH naming the cause; --status prints the stored fingerprint; rollback: Restore the original key in the host .env, or re-consent under the new key (storeTokens overwrites the row)\n- Port 3456 collision with the YouTube consent flow or a stale listener (LOW/LOW): Documented as never-concurrent (TR-7); the callback server closes on the first code/error and times out at 5 minutes; rollback: Kill the stale listener and re-run the consent\n- The requireAuth mount regresses to optionalAuth or is dropped in a later edit and the repo audit does not notice a GET-only route (LOW/HIGH): server/routes/michael.test.js reads server/index.js and asserts the /api/michael mount line contains requireAuth; rollback: Revert the mount line; the route file itself never decrypts so exposure is limited to non-secret columns\n",
+  "evidence_appendix": null,
+  "backlog_items": [],
+  "sd_id": "591400cf-7b88-4974-832a-6043e4f59152",
+  "planning_section": {
+    "quality_gates": [],
+    "risk_analysis": {},
+    "success_metrics": [],
+    "timeline_breakdown": {},
+    "implementation_steps": [],
+    "reasoning_depth_used": "standard",
+    "resource_requirements": {}
+  },
+  "reasoning_analysis": {},
+  "complexity_analysis": {},
+  "reasoning_depth": "standard",
+  "confidence_score": null,
+  "research_confidence_score": null,
+  "exploration_summary": {
+    "files_read": [
+      "lib/integrations/youtube/oauth-manager.js",
+      "lib/integrations/youtube/oauth-manager.test.js",
+      "lib/security/encryption.cjs",
+      "lib/operator/cash-sources/token-vault.js",
+      "lib/michael/db.mjs",
+      "scripts/michael/gmail-act.mjs",
+      "server/middleware/auth.js",
+      "server/index.js",
+      "server/routes/protocol-lint.js",
+      "server/routes/fleet-sessions.test.js",
+      "database/migrations/20260906_michael_tables.sql",
+      "docs/michael/02-SPEC.md",
+      "vitest.config.js",
+      "scripts/setup-alarm-cron-tasks.mjs",
+      "package.json"
+    ],
+    "key_decisions": [
+      "Export the class and subclass getMasterKey to MICHAEL_ENCRYPTION_KEY; never generate",
+      "Fingerprint compared before decrypt",
+      "Venue guard in code",
+      "No DDL in this child",
+      "Status route reads non-secret columns only and is tested against the mount table"
+    ],
+    "exploration_date": "2026-09-06T12:00:00.000Z",
+    "patterns_identified": [
+      "Singleton export of encryption.cjs with repo-relative .leo-keys and self-generation on read failure",
+      "oauth-manager.js: encrypt whole token object, throw on failed persist, fail-soft to null on decrypt failure",
+      "lib/michael/db.mjs TABLES_ABSENT refusal contract used by every Michael verb",
+      "requireAuth mount block in server/index.js with no mount-guard test precedent",
+      "vitest unit project collects **/*.test.js only"
+    ]
+  },
+  "document_type": "prd",
+  "integration_operationalization": {
+    "consumers": [
+      {
+        "name": "Chairman (host terminal)",
+        "frequency": "Once, then roughly every seven days under the D4 posture",
+        "interaction": "Runs node scripts/michael/google-consent.mjs once and again on re-consent; reads --status"
+      },
+      {
+        "name": "scripts/michael/gmail-act.mjs (child B verb) and child D host feeders",
+        "frequency": "Nightly and per ruling",
+        "interaction": "Import lib/michael/gmail-client.mjs / chairman-oauth.js to act on the mailbox and calendar from Task Scheduler on the host"
+      },
+      {
+        "name": "Child G michael-oauth-health gauge and child H dashboard",
+        "frequency": "Every gauge tick / page load",
+        "interaction": "Read last_error/expires_at from the table and GET /api/michael/oauth/status"
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "database/migrations/20260906_michael_tables.sql (child B)",
+        "type": "upstream",
+        "contract": "michael_credentials columns encrypted_blob, encryption_metadata, key_fingerprint, scopes, expires_at, last_refreshed_at, last_error, unique identifier",
+        "failure_handling": "readRows surfaces TABLES_ABSENT; consent refuses before the browser; route returns 503"
+      },
+      {
+        "name": "Google OAuth 2.0 (accounts.google.com, gmail v1)",
+        "type": "upstream",
+        "contract": "offline access_type with prompt=consent; refresh via OAuth2Client.refreshAccessToken",
+        "failure_handling": "invalid_grant recorded as last_error and rethrown; API errors returned as { ok:false, error }"
+      },
+      {
+        "name": "server/middleware/auth.js requireAuth",
+        "type": "upstream",
+        "contract": "internal key or Bearer JWT; 401 otherwise",
+        "failure_handling": "Unauthenticated calls never reach the route"
+      }
+    ],
+    "data_contracts": [
+      {
+        "schema": "encrypted_blob text (base64 salt||iv||tag||ciphertext), encryption_metadata jsonb {appId, algorithm, timestamp, version}, key_fingerprint text(16 hex), scopes text[], expires_at timestamptz, last_refreshed_at timestamptz, last_error text",
+        "validation": "Unit tests assert the write payload shape and the absence of token properties",
+        "versioning": "encryption_metadata.version v1; a new key is signaled by key_fingerprint",
+        "contract_name": "michael_credentials row (identifier google_chairman_oauth)"
+      },
+      {
+        "schema": "{ ok: boolean, modified?: { id, labelIds }, error?: string }",
+        "validation": "gmail-act.mjs consumes ok/modified/error exactly",
+        "versioning": "Fixed by child B; additive only",
+        "contract_name": "modifyThread result"
+      }
+    ],
+    "runtime_config": {
+      "feature_flags": [
+        "None; venue is decided by GITHUB_ACTIONS/CI presence"
+      ],
+      "environment_variables": [
+        "MICHAEL_ENCRYPTION_KEY (host .env only, 64 hex)",
+        "GOOGLE_CLIENT_ID (host .env only)",
+        "GOOGLE_CLIENT_SECRET (host .env only)",
+        "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (existing)"
+      ],
+      "deployment_considerations": "Host only. Nothing is added to GHA secrets. The chairman generates the key once (node -e randomBytes(32) hex) and places it in the host .env; the consent runs on the host with a browser."
+    },
+    "observability_rollout": {
+      "alerts": [
+        "michael-oauth-health (child G): last_error = 'invalid_grant' or expires_at < now() + 48h"
+      ],
+      "monitoring": [
+        "michael_credentials.expires_at and last_error (child G gauge source)",
+        "GET /api/michael/oauth/status hours_to_expiry"
+      ],
+      "rollback_trigger": "Any plaintext token observed in the table, or the mount audit finding /api/michael outside requireAuth",
+      "rollout_strategy": "Land the code; the chairman applies the -B migration and runs the consent once; feeders in child D consume",
+      "rollback_procedure": "Revert the PR; delete the michael_credentials row; revoke the grant at myaccount.google.com/permissions"
+    }
+  },
+  "goal_summary": null,
+  "venture_id": null,
+  "smoke_test_cmd": null,
+  "activation_test_id": null
+}

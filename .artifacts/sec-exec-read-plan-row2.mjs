@@ -1,0 +1,15 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createClient } from '@supabase/supabase-js';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(path.resolve(__dirname, '..'), '.env') });
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await sb.from('sub_agent_execution_results').select('*').eq('id', '5f31b9b9-acb6-4a17-884b-5ac25b07c6bb').maybeSingle();
+const ci = data.critical_issues || [];
+console.log('=== CRITICAL_ISSUES (' + (Array.isArray(ci)?ci.length:'obj') + ') ===');
+for (const f of (Array.isArray(ci)?ci:[ci])) console.log(JSON.stringify(f));
+console.log('=== WARNINGS ===');
+for (const f of (data.warnings||[])) console.log(JSON.stringify(f));
+console.log('=== CONDITIONS ===');
+console.log(JSON.stringify(data.conditions, null, 1));

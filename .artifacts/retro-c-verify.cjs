@@ -1,0 +1,22 @@
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+(async () => {
+  const B = '058c33b2-62ce-45d0-a712-39716c5e8cfc', C = '591400cf-7b88-4974-832a-6043e4f59152';
+  const { data: bretro } = await sb.from('sub_agent_execution_results').select('*').eq('sd_id', B).eq('sub_agent_code','RETRO').order('created_at',{ascending:false}).limit(1);
+  console.log('B RETRO row:', JSON.stringify(bretro, null, 1).slice(0, 4000));
+  const { data: bret } = await sb.from('retrospectives').select('id,sd_id,title,quality_score,generated_by,status,created_at,trigger_type,retro_type,metadata').eq('sd_id', B).order('created_at',{ascending:false}).limit(2);
+  console.log('B retrospectives:', JSON.stringify(bret, null, 1));
+  const { data: cret } = await sb.from('retrospectives').select('id,sd_id,title,quality_score,status,created_at').eq('sd_id', C);
+  console.log('C retrospectives (existing):', JSON.stringify(cret));
+  const { data: sd } = await sb.from('strategic_directives_v2').select('id,sd_key,title,status,current_phase,parent_sd_id,created_at,updated_at,metadata').eq('id', C).single();
+  console.log('C SD:', JSON.stringify({...sd, metadata: undefined}), 'metadata keys:', Object.keys(sd.metadata||{}));
+  const { data: ho } = await sb.from('sd_phase_handoffs').select('id,handoff_type,status,validation_score,created_at').eq('sd_id', C).order('created_at');
+  console.log('C handoffs:', JSON.stringify(ho));
+  const { data: ev } = await sb.from('sub_agent_execution_results').select('id,sub_agent_code,phase,verdict,confidence,created_at,metadata').eq('sd_id', C).order('created_at');
+  console.log('C evidence:', JSON.stringify(ev.map(e=>({id:e.id.slice(0,8),code:e.sub_agent_code,phase:e.phase,verdict:e.verdict,conf:e.confidence,at:e.created_at,prov:!!(e.metadata&&e.metadata.content_hash), mk:Object.keys(e.metadata||{}).slice(0,12)}))));
+  const { data: rf } = await sb.from('ship_review_findings').select('id,pr_number,severity,finding,created_at').in('pr_number',[8346,8351]).order('created_at');
+  console.log('review findings:', JSON.stringify((rf||[]).map(r=>({pr:r.pr_number,sev:r.severity,f:(r.finding||'').slice(0,140)}))));
+  const { data: hb } = await sb.from('feedback').select('id,title,description,created_at').eq('category','harness_backlog').gte('created_at','2026-09-06T11:00:00Z').order('created_at');
+  console.log('harness_backlog today:', JSON.stringify((hb||[]).map(h=>({id:h.id, t:(h.title||h.description||'').slice(0,120), at:h.created_at}))));
+})();

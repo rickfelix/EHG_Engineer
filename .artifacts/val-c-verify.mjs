@@ -1,0 +1,12 @@
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+const sb = createSupabaseServiceClient();
+const { data: r } = await sb.from('sub_agent_execution_results').select('*').eq('id','b4ed3c2c-4a20-4e6f-9bb7-1d9ab532e887').maybeSingle();
+const m = r.metadata||{};
+console.log('sd_id:', r.sd_id, '| code:', r.sub_agent_code, '| phase:', r.phase, '| verdict:', r.verdict, '| source:', r.source);
+console.log('meta.repo_path:', m.repo_path);
+console.log('meta.executed_from_cwd:', m.executed_from_cwd);
+console.log('meta.session_id:', m.session_id);
+console.log('meta.content_hash:', m.content_hash);
+console.log('meta.evaluated_commit_sha:', m.evaluated_commit_sha);
+console.log('meta.repo_resolved:', m.repo_resolved, '| gate:', m.gate, '| findings kept:', Array.isArray(m.findings)? m.findings.length : ('stripped='+m._findings_stripped));
+console.log('top-level repo_path column present?', 'repo_path' in r);

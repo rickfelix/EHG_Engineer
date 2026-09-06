@@ -1,0 +1,389 @@
+{
+  "id": "591400cf-7b88-4974-832a-6043e4f59152",
+  "title": "Michael C: Google chairman OAuth module, consent flow, michael_credentials, credential-venue change (host Task Scheduler, GHA credential-free per ff4ef5b4) with SECURITY sub-agent evidence row with provenance, requireAuth on /api/michael/*",
+  "version": "1.0",
+  "status": "in_progress",
+  "category": "Orchestrator",
+  "priority": "medium",
+  "description": "Child C (Google chairman OAuth) of SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002: generalize lib/integrations/youtube/oauth-manager.js into lib/integrations/google/chairman-oauth.js using the host .env GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, tokens AES-256-GCM encrypted with lib/security/encryption.cjs in michael_credentials (one row, google_chairman_oauth, decrypted only on the chairman's host), and one consent flow scripts/michael/google-consent.mjs on localhost:3456 requesting gmail.modify, calendar.readonly and drive.readonly (youtube deferred to v1.1). This child carries the credential-venue change of ratification ff4ef5b4: credentialed feeders run on Windows Task Scheduler on the host, GitHub Actions stays credential-free (ratification 0daf3bd8 intact), and no MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET enters GHA secrets. It requires a SECURITY sub-agent evidence row with provenance (producer, run id, content hash per ratification 6c263823) and puts GET /api/michael/* behind requireAuth in server/index.js. Under the seven-day re-consent posture (D4, ratification 8e6ac764) the michael-oauth-health gauge is the warning source and the re-consent runbook is one host command. Source of record: docs/michael/02-SPEC.md v0.3 section 4.",
+  "strategic_intent": null,
+  "rationale": "Child of SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002",
+  "scope": "Child SD of SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002: Michael C: Google chairman OAuth module, consent flow, michael_credentials, credential-venue change (host Task Scheduler, GHA credential-free per ff4ef5b4) with SECURITY sub-agent evidence row with provenance, requireAuth on /api/michael/*",
+  "key_changes": [
+    {
+      "change": "lib/security/encryption.cjs additionally exports the CredentialEncryption class (module.exports.CredentialEncryption) so a caller can bind a different master-key source without duplicating the AES-256-GCM/PBKDF2 code; the default singleton and every existing caller are unchanged",
+      "impact": "Child C can refuse-without-key and fingerprint the key while keeping storage on the established precedent (oauth-manager.js, token-vault.js)"
+    },
+    {
+      "change": "lib/integrations/google/chairman-oauth.js (ESM, mirrors lib/integrations/youtube/oauth-manager.js): SCOPES gmail.modify + calendar.readonly + drive.readonly (youtube deferred to v1.1), redirect http://localhost:3456/oauth2callback, CREDENTIAL_IDENTIFIER='google_chairman_oauth'; a HostKeyEncryption subclass whose getMasterKey reads MICHAEL_ENCRYPTION_KEY (64 hex chars) and throws MICHAEL_ENCRYPTION_KEY_MISSING otherwise; assertHostVenue() throws when GITHUB_ACTIONS or CI is set; getStoredTokens/storeTokens read and upsert michael_credentials (encrypted_blob, encryption_metadata, key_fingerprint = first 16 hex of sha256(key), scopes, expires_at from expiry_date, last_refreshed_at, last_error null on success); getAuthenticatedClient refreshes an expired access token and on invalid_grant writes last_error='invalid_grant' and rethrows; runConsentFlow opens the browser, catches the callback on 3456 and stores the tokens; every function takes injectable { sb, enc } for tests",
+      "impact": "One grant, ciphertext only at rest, decrypt only on the host, the gauge's two predicates (last_error='invalid_grant', expires_at) are written by the module itself"
+    },
+    {
+      "change": "scripts/michael/google-consent.mjs: the one-command re-consent runbook on the host (runs runConsentFlow with prompt=consent; --status prints identifier, scopes, expires_at, last_refreshed_at, last_error and key_fingerprint with no blob; --json); exits 2 with a named refusal when MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is absent or when run under GITHUB_ACTIONS; refuses before the browser opens when michael_credentials is not applied (TABLES_ABSENT, the lib/michael/db.mjs pattern)",
+      "impact": "Re-consent posture D4 is one host command; nothing can be granted into an unrecordable store"
+    },
+    {
+      "change": "lib/michael/gmail-client.mjs: modifyThread({ threadId, addLabelIds, removeLabelIds }) -> { ok, modified } on googleapis gmail.users.threads.modify with the chairman OAuth client, the exact lazy-import contract scripts/michael/gmail-act.mjs (child B) already expects; an auth or API failure returns { ok:false, error }",
+      "impact": "gmail-act stops exiting GMAIL_CLIENT_ABSENT; label, archive and --unarchive reach the mailbox through the one grant"
+    },
+    {
+      "change": "server/routes/michael.js (GET /oauth/status reading michael_credentials without encrypted_blob or encryption_metadata, adding hours_to_expiry) mounted in server/index.js as app.use('/api/michael', requireAuth, michaelRoutes) beside the other requireAuth mounts",
+      "impact": "GET /api/michael/* is unreachable unauthenticated; the response can never carry token material"
+    },
+    {
+      "change": "Tests with injected clients (vitest unit project): chairman-oauth refuses without MICHAEL_ENCRYPTION_KEY, refuses under GITHUB_ACTIONS, writes no plaintext token field and stamps key_fingerprint, records last_error='invalid_grant' on a failed refresh; gmail-client maps the modify call and failure shape; the michael route omits blob fields and returns 401 through requireAuth when unauthenticated. No migration in this child: michael_credentials already ships in 20260906_michael_tables.sql (child B, chairman-gated)",
+      "impact": "The refusal paths and the no-plaintext invariant are pinned before the chairman applies -B and consents"
+    }
+  ],
+  "strategic_objectives": [
+    "Give Michael one chairman-user Google grant: lib/integrations/google/chairman-oauth.js generalizes the YouTube OAuth manager for gmail.modify, calendar.readonly and drive.readonly, storing only AES-256-GCM ciphertext in michael_credentials (identifier google_chairman_oauth) and decrypting only on the chairman's host",
+    "Resolve the key source the -B migration left open: the master key is MICHAEL_ENCRYPTION_KEY in the host .env and nowhere else; the module refuses to run without it and never auto-generates a key, and stamps key_fingerprint so a wrong-key decrypt is diagnosable",
+    "Carry the credential-venue change of ratification ff4ef5b4 in code: any process with GITHUB_ACTIONS set is refused before a decrypt, so GitHub Actions stays credential-free (0daf3bd8) and no GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET or MICHAEL_ENCRYPTION_KEY is needed in GHA secrets",
+    "Land the Gmail API leg child B deferred (lib/michael/gmail-client.mjs modifyThread) and put GET /api/michael/* behind requireAuth with a read-only credential-status route that never returns token material, so the michael-oauth-health gauge (child G) and the dashboard (child H) have a source",
+    "Make the seven-day re-consent posture (D4, 8e6ac764) operable: invalid_grant is recorded as last_error, expires_at is kept current on refresh, and re-consent is one host command (node scripts/michael/google-consent.mjs)"
+  ],
+  "success_criteria": [
+    {
+      "measure": "Unit test asserts the upsert payload contains encrypted_blob/encryption_metadata/key_fingerprint/scopes/expires_at/last_refreshed_at and no access_token/refresh_token/id_token key; grep of the diff finds no plaintext token column",
+      "criterion": "No plaintext token is ever written: every storeTokens write to michael_credentials carries encrypted_blob (base64 from encryption.cjs) and encryption_metadata, and no field of the OAuth token object appears in the row"
+    },
+    {
+      "measure": "Unit test: with the variable unset getStoredTokens/storeTokens/runConsentFlow throw MICHAEL_ENCRYPTION_KEY_MISSING and write nothing; with a 64-hex value the row's key_fingerprint equals the first 16 hex of sha256(key)",
+      "criterion": "Key source resolved: the module derives its key only from MICHAEL_ENCRYPTION_KEY and never auto-generates one"
+    },
+    {
+      "measure": "Unit test: GITHUB_ACTIONS=true makes assertHostVenue throw before any decrypt; grep .github/workflows for MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET returns nothing",
+      "criterion": "Credential venue: the grant cannot be used from GitHub Actions"
+    },
+    {
+      "measure": "node scripts/michael/google-consent.mjs --status exits 0 and prints the row without a blob; a refresh that fails with invalid_grant leaves last_error='invalid_grant' (unit test); a successful refresh updates expires_at and last_refreshed_at",
+      "criterion": "Re-consent posture is operable from one host command and the gauge predicates are written by the module"
+    },
+    {
+      "measure": "node scripts/michael/gmail-act.mjs --thread t1 --archive --dry-run no longer exits GMAIL_CLIENT_ABSENT; unit test maps modifyThread to gmail.users.threads.modify with { addLabelIds, removeLabelIds } and returns { ok:true, modified:true }",
+      "criterion": "gmail-act's deferred API leg is landed"
+    },
+    {
+      "measure": "server/index.js mounts /api/michael with requireAuth (grep); route unit test asserts the /oauth/status payload has no encrypted_blob or encryption_metadata key",
+      "criterion": "GET /api/michael/* is behind requireAuth and returns no token material"
+    },
+    {
+      "measure": "sub_agent_execution_results row for this SD with sub_agent_code=SECURITY, phase=EXEC, metadata.content_hash, session_id and evaluated_commit_sha set (ratification 6c263823)",
+      "criterion": "SECURITY sub-agent evidence row with provenance exists before EXEC-TO-PLAN"
+    }
+  ],
+  "key_principles": [
+    "Follow LEO Protocol for all changes",
+    "Ensure backward compatibility"
+  ],
+  "implementation_guidelines": [
+    "Implement changes for: Michael C: Google chairman OAuth module, consent flow, michael_credentials, credential-venue change (host Task Scheduler, GHA credential-free per ff4ef5b4) with SECURITY sub-agent evidence row with provenance, requireAuth on /api/michael/*",
+    "Verify no regressions in existing functionality"
+  ],
+  "dependencies": [],
+  "risks": [
+    {
+      "risk": "Implementation may not fully address root cause",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "Verify against original evidence; re-queue via /learn if pattern recurs"
+    }
+  ],
+  "success_metrics": [
+    {
+      "metric": "Implementation completeness",
+      "target": "100% of scope items implemented"
+    },
+    {
+      "metric": "Test coverage",
+      "target": "≥80% code coverage for new code"
+    },
+    {
+      "metric": "Zero regressions",
+      "target": "0 existing tests broken"
+    }
+  ],
+  "stakeholders": [],
+  "approved_by": null,
+  "approval_date": null,
+  "effective_date": null,
+  "expiry_date": null,
+  "review_schedule": null,
+  "created_at": "2026-09-05T17:13:00.142438+00:00",
+  "updated_at": "2026-09-06T12:07:53.642791+00:00",
+  "created_by": "Claude",
+  "updated_by": null,
+  "metadata": {
+    "source": "leo",
+    "created_at": "2026-09-05T17:12:58.911Z",
+    "scope_lock": {
+      "at": "2026-09-06T12:07:18.114Z",
+      "by": "Bravo 85c82b18 LEAD",
+      "deletions": [
+        "youtube scope deferred to v1.1 (spec §4)",
+        "no migration in this child: michael_credentials ships in 20260906_michael_tables.sql (child B)",
+        "no Calendar/Drive/data routes: /api/michael carries only the read-only oauth status; data routes are child E",
+        "no publish/verify of the Google consent screen (D4 re-consent posture)"
+      ]
+    },
+    "vision_key": "VISION-EHG-L1-001",
+    "child_index": 2,
+    "created_via": "leo-create-sd",
+    "unfenced_at": "2026-09-05T21:08:59.111Z",
+    "unfenced_by": "coordinator:9097ea31",
+    "plan_linkage": {
+      "linked_at": "2026-09-05T17:21:07.982Z",
+      "linked_by": "adam d1140357",
+      "unlinked_reason": "chairman-commissioned role formalization (Michael) 2026-09-05; not wave work; behind 767b288f"
+    },
+    "claim_history": [
+      {
+        "claimed_at": "2026-09-06T11:48:10.856Z",
+        "session_id": "85c82b18-0984-4948-bd86-1992cdf5170d",
+        "identity_source": "env"
+      }
+    ],
+    "min_tier_rank": 4,
+    "parent_sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002",
+    "unfenced_reason": "chairman GO via Adam 56a920ea (18:05Z): review_hold_reason HELD FOR CHAIRMAN GO satisfied; unfenced per Alpha e429ed98, isHoldReleased :710 reads unfenced_at only",
+    "contract_governed": true,
+    "not_before_reason": "placeholder fence until the chairman says \"go\"; ISO string on purpose (QF-599: an object reads NaN). Coordinator removes it together with needs_coordinator_review at go.",
+    "security_reviewed": true,
+    "dedup_match_sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-001-V",
+    "dispatch_directive": {
+      "hold": "needs_coordinator_review=true + not_before fence on parent and every child until the chairman says \"go\"; the clear IS the dispatch authorization (CLAUDE_ADAM.md 4d HOLD MECHANIC)",
+      "kind": "chairman_dispatch_directive",
+      "predecessor": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-001 cancelled 17:1xZ (letter space exhausted by two mis-lettered child batches; no work done)",
+      "recorded_at": "2026-09-05T17:21:07.982Z",
+      "recorded_by": "adam d1140357",
+      "ratifications": [
+        "8e6ac764",
+        "ff4ef5b4",
+        "ced479e7",
+        "2b14e48d",
+        "6d04b3b9",
+        "42111a33"
+      ],
+      "dedicated_seat": "the chairman opened a dedicated Michael terminal session; on his \"go\" the coordinator directs EVERY child to that seat BY NAME via directed assignment (rung 5, lib/checkin/steps/index.cjs:45-55); never onto the belt; no child is self-claimable",
+      "spec_of_record": "docs/michael/02-SPEC.md v0.3 (main abd08a61451, PR 8258); Solomon adjudication docs/michael/05-SOLOMON-ADJUDICATION.md",
+      "parent_setup_first": "the seat claiming the first child runs the parent LEAD-TO-PLAN and PLAN-TO-EXEC (reduced set) before the child LEAD-TO-PLAN, then releases the parent (coordinator contract ORCHESTRATOR PARENT LIFECYCLE, PR 8255)",
+      "priority_of_record": "behind the eleven AltifyAI surfaces (767b288f); chairman mention is provenance not rank (29741684); one venture per month unchanged",
+      "chairman_provenance": "in-terminal at the Adam seat 2026-09-05 ~16:2xZ (two sends; second supersedes) and at the Solomon terminal ~16:1xZ (b4572210)",
+      "superseded_first_send": {
+        "094a9c4d": "ced479e7",
+        "6baf0546": "42111a33",
+        "e1cbb9a2": "2b14e48d",
+        "f313edc5": "ff4ef5b4"
+      }
+    },
+    "review_hold_reason": "HELD FOR CHAIRMAN GO: dedicated Michael seat by directed assignment, never belt (chairman 2026-09-05 16:2xZ). Coordinator clears on the chairman's \"go\" only.",
+    "review_hold_set_at": "2026-09-05T17:21:07.982Z",
+    "review_hold_set_by": "adam d1140357",
+    "directed_assignment": true,
+    "model_tier_decisions": [
+      {
+        "at": "2026-09-06T11:47:57.736Z",
+        "tier": "sonnet",
+        "reason": "default: no R1-R5 match — the litmus (would a wrong answer silently misdirect a week, or does it require noticing what is absent?) is not met",
+        "criterion": null,
+        "dispatch_row_id": null
+      }
+    ],
+    "contract_parent_chain": [
+      "47695217-d641-486a-959e-7acd0f07737a"
+    ],
+    "inherited_from_parent": [
+      "category",
+      "strategic_objectives",
+      "key_principles"
+    ],
+    "not_before_cleared_at": "2026-09-06T11:47:50.889Z",
+    "not_before_cleared_by": "coordinator:6acf5a48",
+    "roadmap_link_exception": {
+      "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C",
+      "recorded_at": "2026-09-05T17:13:00.142438+00:00",
+      "operator_reason": "chairman order: Michael role formalization commissioned in-terminal 2026-09-05 (Cowork spec v0.3, docs/michael/00-README release line); ratifications 8e6ac764/ff4ef5b4/ced479e7/2b14e48d/6d04b3b9/42111a33; ranks behind 767b288f; not busy-work (889dcaa0)",
+      "reason_supplied": true
+    },
+    "mechanism_verifications": [
+      {
+        "verified_at": "lib/integrations/youtube/oauth-manager.js:24",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/security/encryption.cjs:247",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/security/encryption.cjs:26",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "database/migrations/20260906_michael_tables.sql:292",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/michael/gmail-act.mjs:5",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/michael/db.mjs:30",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "server/index.js:92",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "server/index.js:247",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "docs/michael/02-SPEC.md:91",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "docs/michael/02-SPEC.md:93",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "docs/michael/02-SPEC.md:149",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "server/middleware/auth.js:52",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/integrations/youtube/oauth-manager.test.js:42",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/setup-alarm-cron-tasks.mjs:17",
+        "verified_by": "Explore evidence 5552dc0f-4eda-402e-b4bd-0506bda40d91 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/security/encryption.cjs:26",
+        "verified_by": "VALIDATION evidence b4ed3c2c-4a20-4e6f-9bb7-1d9ab532e887 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/integrations/google/chairman-oauth.js:1",
+        "verified_by": "VALIDATION evidence b4ed3c2c-4a20-4e6f-9bb7-1d9ab532e887 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/michael/google-consent.mjs:1",
+        "verified_by": "VALIDATION evidence b4ed3c2c-4a20-4e6f-9bb7-1d9ab532e887 (Bravo 85c82b18, 2026-09-06)"
+      }
+    ],
+    "needs_coordinator_review": false,
+    "not_before_cleared_reason": "Chairman GO given 2026-09-05 18:0xZ (contract :85); -A and -B COMPLETED (PR #8336); -C is the next child, dispatched by DIRECTED assignment to the dedicated Michael build seat 85c82b18. Prior fence: 2026-12-31T00:00:00.000Z (placeholder). needs_coordinator_review was already false.",
+    "sd_authoring_validated_at": "2026-09-05T17:12:58.917Z",
+    "target_application_explicit": false,
+    "roadmap_link_exception_repair": {
+      "prior": "chairman order: Michael role formalization commissioned in-terminal 2026-09-05 (Cowork spec v0.3, docs/michael/00-README release line); ratifications 8e6ac764/ff4ef5b4/ced479e7/2b14e48d/6d04b3b9/42111a33; ranks behind 767b288f; not busy-work (889dcaa0)",
+      "repaired_at": "2026-09-06T11:36:15.957Z",
+      "repaired_by": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-D:scripts/sourcing-engine/repair-reasonless-roadmap-links.mjs"
+    },
+    "sd_authoring_validation_summary": {
+      "warning_count": 6,
+      "violation_count": 0
+    }
+  },
+  "h_count": 0,
+  "m_count": 0,
+  "l_count": 0,
+  "future_count": 0,
+  "must_have_count": 0,
+  "wish_list_count": 0,
+  "must_have_pct": null,
+  "rolled_triage": null,
+  "readiness": null,
+  "must_have_density": null,
+  "new_module_pct": null,
+  "import_run_id": null,
+  "present_in_latest_import": false,
+  "sequence_rank": 1000835,
+  "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C",
+  "parent_sd_id": "47695217-d641-486a-959e-7acd0f07737a",
+  "is_active": true,
+  "archived_at": null,
+  "archived_by": null,
+  "governance_metadata": {},
+  "target_application": "EHG_Engineer",
+  "progress": 0,
+  "completion_date": null,
+  "current_phase": "PLAN_PRD",
+  "phase_progress": 0,
+  "is_working_on": true,
+  "uuid_id": "1315f7f7-3b4e-44f4-97f9-f174be21789b",
+  "progress_percentage": 30,
+  "confidence_score": null,
+  "checkpoint_plan": null,
+  "scope_embedding": null,
+  "embedding_generated_at": null,
+  "embedding_model": "text-embedding-3-small",
+  "sd_type": "infrastructure",
+  "relationship_type": "child",
+  "scope_reduction_percentage": 25,
+  "delivers_capabilities": [],
+  "modifies_capabilities": [],
+  "deprecates_capabilities": [],
+  "active_session_id": "85c82b18-0984-4948-bd86-1992cdf5170d",
+  "complexity_level": "moderate",
+  "dependency_chain": null,
+  "exploration_summary": null,
+  "intensity_level": null,
+  "smoke_test_steps": [
+    {
+      "instruction": "npx vitest run --project unit lib/integrations/google/ lib/michael/ scripts/michael/ server/routes/michael.test.js",
+      "step_number": 1,
+      "expected_outcome": "All green: no-key refusal, GHA-venue refusal, no-plaintext write with key_fingerprint, invalid_grant recorded, gmail-client modify mapping, route omits blob fields"
+    },
+    {
+      "instruction": "MICHAEL_ENCRYPTION_KEY= node scripts/michael/google-consent.mjs --status --json",
+      "step_number": 2,
+      "expected_outcome": "Exits 2 with refusal code MICHAEL_ENCRYPTION_KEY_MISSING; no browser opens; no row written"
+    },
+    {
+      "instruction": "GITHUB_ACTIONS=true node scripts/michael/google-consent.mjs --json",
+      "step_number": 3,
+      "expected_outcome": "Exits 2 with refusal code HOST_VENUE_REQUIRED before any Google call"
+    },
+    {
+      "instruction": "node scripts/michael/gmail-act.mjs --thread smoke --archive --dry-run --json && grep -n \"'/api/michael'\" server/index.js",
+      "step_number": 4,
+      "expected_outcome": "gmail-act prints dry_run:true with would_call (not GMAIL_CLIENT_ABSENT); the grep shows the mount on the requireAuth line"
+    }
+  ],
+  "human_verification_status": "not_required",
+  "llm_ux_score": null,
+  "target_release_id": null,
+  "sd_code_user_facing": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C",
+  "uuid_internal_pk": "1315f7f7-3b4e-44f4-97f9-f174be21789b",
+  "type_change_reason": null,
+  "claiming_session_id": "85c82b18-0984-4948-bd86-1992cdf5170d",
+  "vision_score": null,
+  "vision_score_action": null,
+  "vision_origin_score_id": null,
+  "vision_alignment_score": null,
+  "venture_id": null,
+  "scope_keywords": null,
+  "cancellation_reason": null,
+  "cancelled_by": null,
+  "scope_authority": null,
+  "quality_checked": true,
+  "quality_issues": [],
+  "quality_checked_at": "2026-09-06T12:07:19.145386+00:00",
+  "transition_version": 1,
+  "worktree_path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C",
+  "non_vertical": false,
+  "non_vertical_justification": null,
+  "wiring_validated": null,
+  "scope_slice": null,
+  "adrs_consulted": [],
+  "initiative_id": null,
+  "lineage_attribution_confidence": null,
+  "lineage_verdict": null,
+  "claim_gate_client_version": 1,
+  "lifecycle_write_token": null
+}
