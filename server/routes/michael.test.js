@@ -3,8 +3,9 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import { createMichaelRouter, statusPayload, RECONSENT_COMMAND } from './michael.js';
+import { SCOPES } from '../../lib/integrations/google/chairman-oauth.js';
 
-const ROW = { identifier: 'google_chairman_oauth', scopes: ['a'], expires_at: '2026-09-07T12:00:00Z', last_refreshed_at: '2026-09-06T00:00:00Z', last_error: null, key_fingerprint: 'fp', encrypted_blob: 'MUST-NOT-LEAK', encryption_metadata: { appId: 'x' } };
+const ROW = { identifier: 'google_chairman_oauth', scopes: SCOPES, expires_at: '2026-09-07T12:00:00Z', last_refreshed_at: '2026-09-06T00:00:00Z', last_error: null, key_fingerprint: 'fp', encrypted_blob: 'MUST-NOT-LEAK', encryption_metadata: { appId: 'x' } };
 const NOW = Date.parse('2026-09-06T12:00:00Z');
 const sbWith = (row, missing = false) => ({ from: () => ({ select() { return this; }, eq() { return this; }, limit() { return this; }, then(res) { return Promise.resolve(missing ? { data: null, error: { code: 'PGRST205', message: 'missing' } } : { data: row ? [row] : [], error: null }).then(res); } }) });
 
