@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:18:04.212Z",
+  "generated_at": "2026-09-06T18:21:37.903Z",
   "counts": {
-    "has_catch": 84
+    "has_catch": 78
   },
   "results": [
     {
@@ -527,48 +527,6 @@
       "line": 188,
       "kind": "data",
       "snippet": "const { data: parent } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/recording/HandoffRecorder.js",
-      "line": 410,
-      "kind": "data",
-      "snippet": "const { data: existingAccept } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/recording/HandoffRecorder.js",
-      "line": 913,
-      "kind": "data",
-      "snippet": "const { data: sd } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/recording/HandoffRecorder.js",
-      "line": 925,
-      "kind": "data",
-      "snippet": "const { data: subAgentResults } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/recording/HandoffRecorder.js",
-      "line": 1010,
-      "kind": "data",
-      "snippet": "const { data: sdIssues } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/recording/HandoffRecorder.js",
-      "line": 1167,
-      "kind": "data",
-      "snippet": "const { data: existing } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/recording/HandoffRecorder.js",
-      "line": 1239,
-      "kind": "data",
-      "snippet": "const { data: currentRow } = await this.supabase",
       "classification": "has_catch"
     },
     {
