@@ -11,6 +11,7 @@
 import {
   getGateApplicability,
   computeConfidence,
+  isUnprovenancedPostCutover,
   buildSemanticResult,
   buildSkipResult
 } from '../../../validation/semantic-gate-utils.js';
@@ -48,7 +49,7 @@ export function createScopeAuditGate(supabase) {
             .eq('id', sdId)
             .single(),
           supabase.from('sd_scope_deliverables')
-            .select('deliverable_name, completion_status, deliverable_type')
+            .select('deliverable_name, completion_status, deliverable_type, metadata, completed_at') // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
             .eq('sd_id', sdId),
           supabase.from('product_requirements_v2')
             .select('functional_requirements, acceptance_criteria')
@@ -93,9 +94,12 @@ export function createScopeAuditGate(supabase) {
           });
         }
 
-        // Check deliverable coverage against scope
+        // Check deliverable coverage against scope. A row marked completed but
+        // missing FR-4 provenance (metadata.producer) past the cutover is treated
+        // as not-yet-verified, not completed -- see isUnprovenancedPostCutover.
         const completedDeliverables = deliverables.filter(d =>
-          d.completion_status === 'completed' || d.completion_status === 'done'
+          (d.completion_status === 'completed' || d.completion_status === 'done') &&
+          !isUnprovenancedPostCutover(d)
         );
 
         const coverage = deliverables.length > 0
@@ -113,8 +117,10 @@ export function createScopeAuditGate(supabase) {
         console.log(`   ${passed ? '✅' : '❌'} Score: ${coverage}/100 | Confidence: ${confidence}`);
 
         const incompleteDeliverables = deliverables
-          .filter(d => d.completion_status !== 'completed' && d.completion_status !== 'done')
-          .map(d => `${d.deliverable_name} (${d.completion_status || 'unknown'})`);
+          .filter(d => !((d.completion_status === 'completed' || d.completion_status === 'done') && !isUnprovenancedPostCutover(d)))
+          .map(d => isUnprovenancedPostCutover(d)
+            ? `${d.deliverable_name} (completed with no metadata.producer — unproven)`
+            : `${d.deliverable_name} (${d.completion_status || 'unknown'})`);
 
         return buildSemanticResult({
           passed,

@@ -641,6 +641,10 @@ export async function markDocumentationDeliverablesComplete(supabase, sdId, comp
       }
 
       // Update the deliverable as completed
+      // SEC-G4 (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-4 SECURITY finding): stamp producer,
+      // or the new sd_scope_deliverables completed_at trigger stamps completed_at with no
+      // producer, misclassifying this legitimate DOCMON automation as an unprovenanced
+      // hand-typed UPDATE.
       const { error: updateError } = await supabase
         .from('sd_scope_deliverables')
         .update({
@@ -649,7 +653,8 @@ export async function markDocumentationDeliverablesComplete(supabase, sdId, comp
           verified_by: verifiedBy,
           verified_at: new Date().toISOString(),
           completion_notes: `Auto-completed by DOCMON after generating ${docType} documentation`,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          metadata: { ...(deliverable.metadata || {}), producer: 'docmon_template_completion' }
         })
         .eq('id', deliverable.id);
 

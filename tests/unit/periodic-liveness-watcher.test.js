@@ -61,7 +61,7 @@ vi.mock('@supabase/supabase-js', () => ({
   }),
 }));
 
-const { evaluateRow, STATE, hasCrossedUnverifiedThreshold, UNVERIFIED_ESCALATION_MS, stampStateChangeAnchor, deriveFailureSignature } = await import('../../scripts/periodic-liveness-watcher.mjs');
+const { evaluateRow, isInsideExpectedWindowEt, STATE, hasCrossedUnverifiedThreshold, UNVERIFIED_ESCALATION_MS, stampStateChangeAnchor, deriveFailureSignature } = await import('../../scripts/periodic-liveness-watcher.mjs');
 
 function roleSessionRow(overrides = {}) {
   return {
@@ -136,6 +136,49 @@ describe('evaluateRow', () => {
     const row = roleSessionRow({ currently_expected_active: false });
     const result = await evaluateRow(row);
     expect(result.state).toBe(STATE.INTENTIONALLY_DOWN);
+  });
+
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6, TS-11): the windowed expectation. The Michael
+  // seat row keeps currently_expected_active=true and carries expected_window_et {04:30, 07:30} ET.
+  describe('expected_window_et (windowed expectation, SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A)', () => {
+    const WINDOW = { start: '04:30', end: '07:30' };
+    // 2026-09-06 is EDT (UTC-4): 02:00 ET = 06:00Z, 05:00 ET = 09:00Z, 07:30 ET = 11:30Z, 07:31 ET = 11:31Z.
+    const AT_2AM_ET = Date.parse('2026-09-06T06:00:00.000Z');
+    const AT_5AM_ET = Date.parse('2026-09-06T09:00:00.000Z');
+    const AT_0730_ET = Date.parse('2026-09-06T11:30:00.000Z');
+    const AT_0731_ET = Date.parse('2026-09-06T11:31:00.000Z');
+
+    it('outside the window (02:00 ET) => INTENTIONALLY_DOWN without querying signals, even with currently_expected_active=true', async () => {
+      const row = roleSessionRow({ process_key: 'role_session:michael', currently_expected_active: true, expected_window_et: WINDOW });
+      const result = await evaluateRow(row, { now: AT_2AM_ET });
+      expect(result.state).toBe(STATE.INTENTIONALLY_DOWN);
+      expect(result.signal_note).toMatch(/outside expected_window_et 04:30-07:30 ET/);
+    });
+
+    it('inside the window (05:00 ET) => proceeds to the normal freshness evaluation (not INTENTIONALLY_DOWN)', async () => {
+      state.claudeSessionsRow = { heartbeat_at: OLD_TS, terminal_id: null, process_alive_at: null, is_alive: false };
+      const row = roleSessionRow({ process_key: 'role_session:michael', currently_expected_active: true, expected_window_et: WINDOW });
+      const result = await evaluateRow(row, { now: AT_5AM_ET });
+      expect(result.state).not.toBe(STATE.INTENTIONALLY_DOWN);
+    });
+
+    it('the window is inclusive of its end minute and exclusive after it', () => {
+      const row = { expected_window_et: WINDOW };
+      expect(isInsideExpectedWindowEt(row, AT_0730_ET)).toBe(true);
+      expect(isInsideExpectedWindowEt(row, AT_0731_ET)).toBe(false);
+    });
+
+    it('a row without a window (or a malformed one) behaves exactly as before', async () => {
+      expect(isInsideExpectedWindowEt({}, AT_2AM_ET)).toBeNull();
+      expect(isInsideExpectedWindowEt({ expected_window_et: { start: '4:30am', end: 'x' } }, AT_2AM_ET)).toBeNull();
+      // SEC-M4: an out-of-range hour must be refused, never read as a 1500-minute start that grades
+      // the row INTENTIONALLY_DOWN forever.
+      expect(isInsideExpectedWindowEt({ expected_window_et: { start: '25:00', end: '29:59' } }, AT_2AM_ET)).toBeNull();
+      expect(isInsideExpectedWindowEt({ expected_window_et: { start: '04:30', end: '07:60' } }, AT_2AM_ET)).toBeNull();
+      const row = roleSessionRow({ currently_expected_active: false, expected_window_et: null });
+      const result = await evaluateRow(row, { now: AT_5AM_ET });
+      expect(result.state).toBe(STATE.INTENTIONALLY_DOWN);
+    });
   });
 
   it('role_session: only heartbeat_at populated (terminal_id/process_alive_at null) -> UNVERIFIED, never OVERDUE on 1 signal', async () => {

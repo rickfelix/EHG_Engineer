@@ -19,7 +19,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { computeShadowRescore } from '../lib/quality/gate-threshold-shadow.js';
+import { computeShadowRescore, resolveLiveRescoreThreshold } from '../lib/quality/gate-threshold-shadow.js';
 import { emitFeedbackBatch } from '../lib/governance/emit-feedback.js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
@@ -46,6 +46,18 @@ console.log(`\n${candidates.length} candidate cell(s) out of ${view.length} view
 
 const items = [];
 for (const c of candidates) {
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-E (FR-1): c.current_threshold is
+  // v_ai_quality_tuning_recommendations's HISTORICAL column (the pass_threshold recorded on each
+  // ai_quality_assessments row at assessment time) -- for any pair whose threshold has already
+  // been raised, filtering the re-score population by it silently re-scores only the stale
+  // pre-raise group and reports a vacuous flip count. The LIVE threshold (config.js, via
+  // getPassThreshold) is what a post-apply audit must filter by; resolved here regardless of
+  // whether this run is pre- or post-apply, since the two values are identical before any change.
+  const liveThreshold = resolveLiveRescoreThreshold(c.sd_type, c.content_type);
+  if (liveThreshold !== c.current_threshold) {
+    console.log(`  NOTE: ${c.sd_type}/${c.content_type} live threshold (${liveThreshold}) differs from the view's historical current_threshold (${c.current_threshold}) -- filtering the live population, not the stale one.`);
+  }
+
   // A silent-truncated population read would UNDER-COUNT flips without any error — a wrong
   // shadow number is worse than no number for a decision input, so this reads ALL matching
   // rows via range-pagination rather than a single capped select().
@@ -56,34 +68,34 @@ for (const c of candidates) {
       .select('weighted_score')
       .eq('sd_type', c.sd_type)
       .eq('content_type', c.content_type)
-      .eq('pass_threshold', c.current_threshold)
+      .eq('pass_threshold', liveThreshold)
       .gte('assessed_at', windowStart));
   } catch (err) {
     console.error(`re-score read failed for ${c.sd_type}/${c.content_type}:`, err.message);
     continue;
   }
 
-  const shadow = computeShadowRescore(rows, c.current_threshold, c.suggested_threshold);
+  const shadow = computeShadowRescore(rows, liveThreshold, c.suggested_threshold);
   const cell = `${c.sd_type}/${c.content_type}`;
 
   console.log(
-    `${cell.padEnd(28)} n=${String(shadow.n).padEnd(5)} ${c.current_threshold}->${c.suggested_threshold}`.padEnd(50)
+    `${cell.padEnd(28)} n=${String(shadow.n).padEnd(5)} ${liveThreshold}->${c.suggested_threshold}`.padEnd(50)
     + `pass ${shadow.currentPassRatePct}%->${shadow.candidatePassRatePct}%  `
     + `PASS->FAIL=${shadow.passToFailFlips} FAIL->PASS=${shadow.failToPassFlips} ${shadow.sampleFloorVerdict}`
   );
 
   items.push({
-    title: `Gate-threshold shadow re-score: ${cell} ${c.current_threshold}->${c.suggested_threshold}`,
+    title: `Gate-threshold shadow re-score: ${cell} ${liveThreshold}->${c.suggested_threshold}`,
     description: `Shadow re-score (no change applied): ${cell} n=${shadow.n} over trailing `
-      + `${WINDOW_DAYS}d, current_threshold=${c.current_threshold} (pass ${shadow.currentPassRatePct}%), `
+      + `${WINDOW_DAYS}d, current_threshold=${liveThreshold} (pass ${shadow.currentPassRatePct}%), `
       + `candidate_threshold=${c.suggested_threshold} (pass ${shadow.candidatePassRatePct}%), `
       + `PASS-to-FAIL flips=${shadow.passToFailFlips}, FAIL-to-PASS flips=${shadow.failToPassFlips}, `
       + `sample_floor=${shadow.sampleFloorVerdict}.`,
     category: 'gate_threshold_shadow',
-    dedup_key: `gate_threshold_shadow:${c.sd_type}:${c.content_type}:${c.current_threshold}:${c.suggested_threshold}`,
+    dedup_key: `gate_threshold_shadow:${c.sd_type}:${c.content_type}:${liveThreshold}:${c.suggested_threshold}`,
     metadata: {
       sd_type: c.sd_type, content_type: c.content_type, window_days: WINDOW_DAYS,
-      current_threshold: c.current_threshold, candidate_threshold: c.suggested_threshold,
+      current_threshold: liveThreshold, candidate_threshold: c.suggested_threshold,
       n: shadow.n, current_pass_rate_pct: shadow.currentPassRatePct, candidate_pass_rate_pct: shadow.candidatePassRatePct,
       pass_to_fail_flips: shadow.passToFailFlips, fail_to_pass_flips: shadow.failToPassFlips,
       sample_floor_verdict: shadow.sampleFloorVerdict,

@@ -270,7 +270,7 @@ export class OrchestratorCompletionGuardian {
   async validateDeliverables() {
     const { data: deliverables, error } = await supabase
       .from('sd_scope_deliverables')
-      .select('id, deliverable_name, completion_status')
+      .select('id, deliverable_name, completion_status, metadata')
       .eq('sd_id', this.sdId);
 
     if (error) {
@@ -723,12 +723,17 @@ export class OrchestratorCompletionGuardian {
     // so length was the only real constraint being violated.) The guardian runs at
     // LEAD-FINAL-APPROVAL time as LEAD-phase automation, so 'LEAD' fits both the
     // length cap and the declared (if unenforced) enum -- no schema migration needed.
+    // SEC-G4 (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-4 SECURITY finding): stamp producer +
+    // completed_at, or the new sd_scope_deliverables completed_at trigger stamps completed_at
+    // with no producer, misclassifying this legitimate LEAD-phase automation as an
+    // unprovenanced hand-typed UPDATE.
     const { error } = await supabase
       .from('sd_scope_deliverables')
       .update({
         completion_status: 'completed',
         verified_by: 'LEAD',
-        verified_at: new Date().toISOString()
+        verified_at: new Date().toISOString(),
+        metadata: { ...(deliverable.metadata || {}), producer: 'orchestrator_completion_guardian' }
       })
       .eq('id', deliverable.id);
 

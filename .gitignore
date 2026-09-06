@@ -338,6 +338,11 @@ src/client/dist/
 !.claude/agents/_model-tracking-section.md
 .claude/.agent-gen-hash
 
+# Michael generated review copies (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-B, spec §2 "Prose for
+# review only"): scripts/michael-rules-render.mjs writes RULES.md/CLOSURES.md for the chairman;
+# the rows are the source of truth and the seat never reads these files.
+docs/michael/generated/
+
 # Account handoff exchange (local session state between account switches)
 .claude/handoff/
 
@@ -573,6 +578,7 @@ scratchpad/
 .artifacts/testing-agent-llm-canary/
 .artifacts/testing-c1/
 .artifacts/testing-scratch/
+.artifacts/testing-stage23/
 .artifacts/testing-tmp/
 .artifacts/tmp-alpha2/
 .artifacts/val-drive-forcing/

@@ -38,6 +38,9 @@ import { gapAdjustedAgeMs } from '../lib/periodic-liveness/cron-gap.mjs';
 import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, medianRatioAlarm, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
 import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { resolveGitHubRepo } from '../lib/repo-paths.js';
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6): the windowed-expectation check reads the ET
+// wall-clock from the injectable `now` through the same helpers the chairman ET gates use.
+import { etLocalHour, etLocalMinute } from '../lib/time/chairman-et-wall-clock.js';
 
 const UNVERIFIED_ESCALATION_MS = 7 * 24 * 60 * 60 * 1000; // FR-5: >7 continuous days
 
@@ -217,6 +220,35 @@ async function resolveSchedulerRound(row) {
   return { lastFiredAt: epochMs ? new Date(epochMs).toISOString() : null };
 }
 
+/**
+ * SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6, spec §1.5, ratification 42111a33 Q7): a row may
+ * carry expected_window_et = {start:'HH:MM', end:'HH:MM'} in America/New_York wall-clock. Inside the
+ * window the process is expected (normal evaluation); outside it is INTENTIONALLY_DOWN — a windowed
+ * expectation, not a blind spot and not a false OVERDUE for the other ~21 hours. Pure; a malformed
+ * or absent window returns null so the caller falls through to the prior currently_expected_active
+ * behaviour. The column CHECK narrows the shape, but the watcher does NOT rely on it: an out-of-range
+ * hour ('25:00') read as 1500 minutes would grade the row INTENTIONALLY_DOWN forever with no alarm
+ * (SEC-M4), so the parser refuses hour > 23 / minute > 59 itself and returns null.
+ * @param {object} row
+ * @param {number|Date} now
+ * @returns {boolean|null} true=inside, false=outside, null=no usable window
+ */
+function isInsideExpectedWindowEt(row, now = Date.now()) {
+  const w = row && row.expected_window_et;
+  if (!w || typeof w !== 'object') return null;
+  const parse = (hhmm) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+    if (!m) return NaN;
+    const h = Number(m[1]), mm = Number(m[2]);
+    return h <= 23 && mm <= 59 ? h * 60 + mm : NaN;
+  };
+  const s = parse(w.start), e = parse(w.end);
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
+  const instant = now instanceof Date ? now : new Date(now);
+  const minute = etLocalHour(instant) * 60 + etLocalMinute(instant);
+  return s <= e ? (minute >= s && minute <= e) : (minute >= s || minute <= e);
+}
+
 async function evaluateRow(row, ctx = {}) {
   // TR-6 (SD-FDBK-ENH-PERIODIC-LIVENESS-WATCHER-001): injectable clock seam, same style as the
   // existing pidVenue seam (see the class-split doc comment above) -- required so gap/lag-relative
@@ -224,6 +256,13 @@ async function evaluateRow(row, ctx = {}) {
   // inside/outside a declared cron gap, rather than depending on the wall-clock hour a test
   // happens to run in.
   const { now = Date.now() } = ctx;
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6): the windowed check runs BEFORE the
+  // currently_expected_active short-circuit, so a windowed row keeps currently_expected_active=true
+  // (it IS expected, inside its window) and still reads INTENTIONALLY_DOWN outside it.
+  const inWindow = isInsideExpectedWindowEt(row, now);
+  if (inWindow === false) {
+    return { process_key: row.process_key, state: STATE.INTENTIONALLY_DOWN, signal_note: `outside expected_window_et ${row.expected_window_et.start}-${row.expected_window_et.end} ET` };
+  }
   if (!row.currently_expected_active) {
     return { process_key: row.process_key, state: STATE.INTENTIONALLY_DOWN };
   }
@@ -385,6 +424,7 @@ async function emitOverdueSignal(row, evaluation) {
   const requiredInvocation = row.liveness_source_ref?.required_invocation;
   const invocationNote = requiredInvocation ? ` (requires invocation: '${requiredInvocation}')` : '';
 
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A adds the expected_window_et check to evaluateRow above. target_session comes from resolveOwnerTarget (liveness-validated peer resolvers or the coordinator fallback), never an echoed field.
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
     target_session: ownerTarget.target,
@@ -410,6 +450,7 @@ async function emitOverdueSignal(row, evaluation) {
 async function emitPersistentUnverifiedSignal(row) {
   const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
 
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan for the same reason as emitOverdueSignal above (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A touches evaluateRow, not this insert). target_session comes from resolveOwnerTarget.
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
     target_session: ownerTarget.target,
@@ -746,4 +787,4 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   });
 }
 
-export { main as runWatcher, evaluateRow, emitOverdueSignal, emitPersistentUnverifiedSignal, stampStateChangeAnchor, deriveFailureSignature, STATE, UNVERIFIED_ESCALATION_MS };
+export { main as runWatcher, evaluateRow, isInsideExpectedWindowEt, emitOverdueSignal, emitPersistentUnverifiedSignal, stampStateChangeAnchor, deriveFailureSignature, STATE, UNVERIFIED_ESCALATION_MS };
