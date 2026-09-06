@@ -18,7 +18,7 @@ import { resolveSubagentEvidenceProvenanceMode } from '../../gates/subagent-evid
  * gate name as returned by getRequiredGates(). `enforced` reflects each flag's CURRENT resolved
  * default (read live from process.env at census time, matching each gate's own polarity).
  */
-const ENV_FLAG_GATES = {
+export const ENV_FLAG_GATES = {
   ADKAR_ADOPTION: {
     env_flag: 'ENFORCE_ADKAR_GATE',
     polarity: 'opt-out', // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-D FR-D3: flipped to enforce-by-default
@@ -60,6 +60,16 @@ const ENV_FLAG_GATES = {
     polarity: 'opt-in',
     resolve: () => process.env.SUCCESS_CRITERIA_UNPOPULATED_GATE_BINDING === 'true',
     disposition: 'OBSERVE-ONLY (default) -- validation-agent measured an unconditional blocking version would fail 24/52 (46%) of live non-terminal SDs; binding is a future, separate rollout decision once the fleet backlog is worked down.',
+  },
+  // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B: opt-in BY CONSTRUCTION (a declared
+  // metadata.acceptance_artifact pointer is required just to be evaluated at all -- measured
+  // 0 of 4,919 SDs carry this key at authoring time), so binding changes nothing for the
+  // undeclared majority. Observe-only default kept for rollout-convention-consistency only.
+  GATE_ACCEPTANCE_ARTIFACT: {
+    env_flag: 'ACCEPTANCE_ARTIFACT_GATE_BINDING',
+    polarity: 'opt-in',
+    resolve: () => process.env.ACCEPTANCE_ARTIFACT_GATE_BINDING === 'true',
+    disposition: 'OBSERVE-ONLY (default) -- opt-in by construction (0/4,919 SDs declare the pointer today); binding is cheap here precisely because the gate is inert for every SD that has not explicitly opted in.',
   },
 };
 
