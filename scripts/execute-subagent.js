@@ -60,6 +60,23 @@ export function parseArgs() {
       // --phase/--validation-mode above -- a bare boolean coercion would drop the range.
       const value = args[++i];
       parsed.options.diff_range = typeof value === 'string' ? value : null;
+    } else if (arg === '--e2e-scope-touched-paths') {
+      // SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-4): comma-separated paths (relative to the
+      // resolved repoPath) the SD's diff touched. Presence of this flag (non-empty) switches
+      // TESTING into the scoped mode regardless of --full-e2e -- see phase3-execution.js
+      // runScopedE2ESuite for the honesty contract (never silently full-suite-equivalent).
+      const value = args[++i];
+      parsed.options.e2e_scope_touched_paths = typeof value === 'string' && value.length > 0
+        ? value.split(',').map((p) => p.trim()).filter(Boolean)
+        : [];
+    } else if (arg === '--e2e-timeout-ms') {
+      // SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-3): same explicit-value-flag pattern as
+      // --phase/--validation-mode/--diff-range above. lib/sub-agents/testing/index.js spreads
+      // `options` verbatim into `enhancedOptions`, which phase3-execution.js's
+      // `options.e2e_timeout_ms || DEFAULT_E2E_TIMEOUT_MS` already reads -- this is the ONLY
+      // missing link; omitting the flag preserves the existing 30-minute default exactly.
+      const value = Number(args[++i]);
+      parsed.options.e2e_timeout_ms = Number.isFinite(value) && value > 0 ? value : null;
     } else if (arg.startsWith('--')) {
       // Boolean flag (e.g., --full-e2e)
       const flagName = arg.slice(2).replace(/-/g, '_');
@@ -105,6 +122,15 @@ OPTIONAL FLAGS (sub-agent specific):
                           "<from>..<to>" git range to use instead of the default
                           main...HEAD (which is empty once the branch is merged).
                           e.g. --diff-range abc1234~1..abc1234
+  --e2e-timeout-ms <ms>   Override the E2E test run timeout (TESTING --full-e2e).
+                          Defaults to phase3-execution.js's DEFAULT_E2E_TIMEOUT_MS
+                          (30 minutes) when omitted. e.g. --e2e-timeout-ms 1800000
+  --e2e-scope-touched-paths <a,b,c>
+                          Scoped TESTING mode (TESTING): comma-separated spec paths
+                          (relative to repoPath) to run instead of the full suite.
+                          Overrides --full-e2e when non-empty. Never silently
+                          equivalent to a full-suite pass -- the verdict records
+                          {mode, touched_paths, included_specs, excluded_count}.
 
 UTILITY OPTIONS:
   --list, -l              List all available sub-agents

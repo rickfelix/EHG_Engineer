@@ -1,11 +1,13 @@
 import { chromium } from '@playwright/test';
 import * as dotenv from 'dotenv';
-import * as path from 'path';
 import * as fs from 'fs';
+import { resolveEnvTestPath } from '../../e2e/setup/resolve-env-test-path.js';
 
-// Load test environment variables - prefer .env.test.local if it exists
-const localEnvPath = path.resolve(process.cwd(), '.env.test.local');
-const defaultEnvPath = path.resolve(process.cwd(), '.env.test');
+// SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1): both files are gitignored and live only at the
+// main repo root -- a bare process.cwd()-relative path is invisible from a worktree checkout.
+// Resolve via git's own --git-common-dir instead (see resolve-env-test-path.js).
+const localEnvPath = resolveEnvTestPath('.env.test.local');
+const defaultEnvPath = resolveEnvTestPath('.env.test');
 
 if (fs.existsSync(localEnvPath)) {
   console.log('📋 Loading credentials from .env.test.local');
@@ -100,12 +102,17 @@ async function globalSetup() {
     await passwordField.fill(password);
 
     // Find and click sign in button
+    // SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1, same root cause as tests/e2e/ehg-app/
+    // auth.setup.spec.ts): 'button:has-text("Sign In")' is TAG-based and also matches a
+    // Radix TabsTrigger tab labeled "Sign In" that precedes the real submit button in DOM
+    // order -- .first() picked the no-op tab. Form/type-scoped selectors now come first.
     const signInSelectors = [
+      'form button[type="submit"]',
+      'button[type="submit"]',
+      '[data-testid="signin-button"]',
       'button:has-text("Sign In")',
       'button:has-text("Log In")',
-      'button:has-text("Login")',
-      'button[type="submit"]',
-      '[data-testid="signin-button"]'
+      'button:has-text("Login")'
     ];
 
     let signInButton = null;

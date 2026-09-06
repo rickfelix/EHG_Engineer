@@ -48,7 +48,9 @@ test.describe('Phase Handoff System E2E Tests', () => {
       .insert({
         id: testSDId,
         sd_key: testSDId,
-        legacy_id: testSDId,
+        // SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1): legacy_id was dropped from
+        // strategic_directives_v2 (confirmed live: 'column ... legacy_id does not exist') --
+        // this insert failed for every test in the file since it never got past beforeAll.
         title: `Test Phase Handoff System - ${timestamp}`,
         description: 'End-to-end testing of phase handoff workflows',
         rationale: 'Test handoff system functionality and phase transition workflows',
@@ -110,7 +112,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
     test('should create LEAD→PLAN handoff successfully', async () => {
       // Execute handoff via unified handoff system
       const { stdout, stderr } = await execAsync(
-        `node scripts/unified-handoff-system.js execute LEAD-TO-PLAN ${testSDId}`
+        `node scripts/handoff.js execute LEAD-TO-PLAN ${testSDId}`
       );
 
       console.log('Handoff output:', stdout);
@@ -171,7 +173,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
 
       // Attempt handoff
       const result = await execAsync(
-        `node scripts/unified-handoff-system.js execute LEAD-TO-PLAN ${incompleteSDId}`
+        `node scripts/handoff.js execute LEAD-TO-PLAN ${incompleteSDId}`
       ).catch(err => ({ stdout: err.stdout, stderr: err.stderr }));
 
       // Verify rejection (script exits with error)
@@ -252,7 +254,10 @@ test.describe('Phase Handoff System E2E Tests', () => {
     test('should create PLAN→EXEC handoff with BMAD validation', async () => {
       // Execute handoff
       const { stdout } = await execAsync(
-        `node scripts/unified-handoff-system.js execute PLAN-TO-EXEC ${testSDId} ${testPRDId}`
+        // SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1): scripts/handoff.js (the successor to
+        // the deprecated unified-handoff-system.js this test used to call) resolves the PRD
+        // from the SD internally -- it takes execute TYPE SD-ID, no trailing PRD-id arg.
+        `node scripts/handoff.js execute PLAN-TO-EXEC ${testSDId}`
       );
 
       console.log('PLAN→EXEC output:', stdout);
@@ -322,7 +327,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
 
       // Attempt handoff (should fail)
       const result = await execAsync(
-        `node scripts/unified-handoff-system.js execute PLAN-TO-EXEC ${noPRDSDId}`
+        `node scripts/handoff.js execute PLAN-TO-EXEC ${noPRDSDId}`
       ).catch(err => ({ stdout: err.stdout }));
 
       // Verify rejection
@@ -382,7 +387,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
     test('should create EXEC→PLAN handoff for verification', async () => {
       // Execute handoff
       const { stdout } = await execAsync(
-        `node scripts/unified-handoff-system.js execute EXEC-TO-PLAN ${testSDId}`
+        `node scripts/handoff.js execute EXEC-TO-PLAN ${testSDId}`
       );
 
       console.log('EXEC→PLAN output:', stdout);
@@ -490,7 +495,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
 
       // Attempt handoff (should fail due to missing documentation)
       const result = await execAsync(
-        `node scripts/unified-handoff-system.js execute EXEC-TO-PLAN ${noDocsSDId}`
+        `node scripts/handoff.js execute EXEC-TO-PLAN ${noDocsSDId}`
       ).catch(err => ({ stdout: err.stdout }));
 
       // Verify rejection
@@ -520,7 +525,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
     test('should create PLAN→LEAD handoff for final approval', async () => {
       // Execute handoff
       const { stdout } = await execAsync(
-        `node scripts/unified-handoff-system.js execute PLAN-TO-LEAD ${testSDId}`
+        `node scripts/handoff.js execute PLAN-TO-LEAD ${testSDId}`
       );
 
       console.log('PLAN→LEAD output:', stdout);
@@ -597,7 +602,7 @@ test.describe('Phase Handoff System E2E Tests', () => {
 
       // Attempt handoff (will fail)
       await execAsync(
-        `node scripts/unified-handoff-system.js execute LEAD-TO-PLAN ${rejectSDId}`
+        `node scripts/handoff.js execute LEAD-TO-PLAN ${rejectSDId}`
       ).catch(() => {
         // Expected to fail
       });

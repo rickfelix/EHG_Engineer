@@ -111,28 +111,55 @@ export default defineConfig({
   },
 
   // Configure projects for major browsers
+  //
+  // SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1, e2e-arch-expert finding): *.setup.spec.ts files
+  // (e.g. tests/e2e/ehg-app/auth.setup.spec.ts) were collected as ORDINARY tests in all 5
+  // browser projects, with NO project-level `dependencies` -- so with fullyParallel:true,
+  // nothing guaranteed auth.setup ran (and finished) before a spec that depends on its
+  // storageState. Fixing the auth SELECTOR bug alone converts a 100%-reproducible failure into
+  // a scheduling coin-flip, not a real fix (measured live: auth.setup scheduled 243rd of 687 in
+  // one run, with 10 dependent tests already failing in 3-6ms before it even started). The
+  // 'setup' project below runs *.setup.spec.ts files ONCE (not once-per-browser -- the auth
+  // state is a single Supabase localStorage key, not engine-specific), and every browser
+  // project now declares dependencies:['setup'] plus testIgnore for the setup pattern (added
+  // to, not replacing, the existing top-level exclusions -- Playwright project-level
+  // testIgnore REPLACES rather than merges with the top-level array).
   projects: [
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.spec\.ts$/,
+    },
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup'],
+      testIgnore: ['**/venture-creation/**', '**/*.test.js', '**/*.test.ts', '**/*.setup.spec.ts'],
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      dependencies: ['setup'],
+      testIgnore: ['**/venture-creation/**', '**/*.test.js', '**/*.test.ts', '**/*.setup.spec.ts'],
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      dependencies: ['setup'],
+      testIgnore: ['**/venture-creation/**', '**/*.test.js', '**/*.test.ts', '**/*.setup.spec.ts'],
     },
 
     // Mobile viewports for responsive testing
     {
       name: 'Mobile Chrome',
       use: { ...devices['Pixel 5'] },
+      dependencies: ['setup'],
+      testIgnore: ['**/venture-creation/**', '**/*.test.js', '**/*.test.ts', '**/*.setup.spec.ts'],
     },
     {
       name: 'Mobile Safari',
       use: { ...devices['iPhone 12'] },
+      dependencies: ['setup'],
+      testIgnore: ['**/venture-creation/**', '**/*.test.js', '**/*.test.ts', '**/*.setup.spec.ts'],
     },
   ],
 

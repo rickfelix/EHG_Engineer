@@ -71,7 +71,11 @@ async function globalSetup() {
     await passwordField.fill(password);
 
     // Find and click sign in button
-    const signInButton = page.locator('button:has-text("Sign In"), button[type="submit"]').first();
+    // SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1, same root cause as tests/e2e/ehg-app/
+    // auth.setup.spec.ts): a bare 'button:has-text("Sign In")' also matches a Radix
+    // TabsTrigger tab labeled "Sign In" that precedes the real submit button in DOM order --
+    // .first() on the combined selector could pick the no-op tab. Form/type-scoped first.
+    const signInButton = page.locator('form button[type="submit"], button[type="submit"], button:has-text("Sign In")').first();
     console.log('[E2E Auth] Clicking sign in button...');
 
     await Promise.race([
