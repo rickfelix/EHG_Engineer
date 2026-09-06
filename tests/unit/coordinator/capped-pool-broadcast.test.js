@@ -298,6 +298,33 @@ describe('tick(): state-file persistence + AC-19 acked-target-still-suppressed',
     expect(inserted).toHaveLength(1);
   });
 
+  // ROUND-2 FIX (adversarial post-merge review, PR #8356): the FIRST fix reverted only
+  // last_cleared_notice_at on a zero-seat notify_clear, which was inert -- decide()'s not-overCap
+  // branch ALWAYS flushes over_cap_since to null in nextState, and decide()'s own gate for even
+  // considering a clear notice requires over_cap_since != null. Without ALSO restoring
+  // over_cap_since, a zero-seat clear fan-out permanently drops the episode marker and the clear
+  // notice can never be retried on any later tick.
+  it('WARN-fix round 2: a notify_clear that reaches ZERO seats restores over_cap_since too -- the next tick can still retry the clear notice', async () => {
+    const overSince = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    writeState(statePath, { schema_version: 1, over_cap_since: overSince, last_emitted_at: overSince, last_cleared_notice_at: null });
+
+    // No live targets -> every dispatch is refused, written=0.
+    const { supabase: sb1 } = mockSupabase({ liveTargets: [] });
+    const first = await tick(sb1, { repoRoot: tmpDir, coordinatorId: COORDINATOR, used: 38, cap: 40, statePath, seats: [{ session_id: SEAT_A }] });
+    expect(first.action).toBe('notify_clear');
+    expect(first.written).toBe(0);
+    const stateAfterFirst = readState(statePath);
+    expect(stateAfterFirst.over_cap_since).toBe(overSince); // restored, not flushed to null
+    expect(stateAfterFirst.last_cleared_notice_at).toBeNull(); // also restored -- never actually sent
+
+    // A later tick, now with a live seat, must still be ABLE to send the clear notice.
+    const { supabase: sb2, inserted } = mockSupabase({ liveTargets: [SEAT_A] });
+    const second = await tick(sb2, { repoRoot: tmpDir, coordinatorId: COORDINATOR, used: 38, cap: 40, statePath, seats: [{ session_id: SEAT_A }] });
+    expect(second.action).toBe('notify_clear');
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].payload.cleared).toBe(true);
+  });
+
   // WARNING (adversarial post-merge review, PR #8356): writeState was a bare fs.writeFileSync
   // with no temp+rename and no try/catch, unlike the reaper pattern it claimed to mirror.
   it('WARN-fix: writeState never throws, even when the target directory cannot be created', () => {

@@ -306,7 +306,50 @@ describe('WIRING — the worker can actually see it', () => {
     expect(step).toMatch(/ctx\.base\.outstanding_signals_warning\s*=/);
   });
 
-  it('is attached CONDITIONALLY, so an empty result adds no key', () => {
-    expect(step).toMatch(/if \(outstanding\)/);
+  // CORRECTED (adversarial post-merge review, PR #8356): this used to regex-match
+  // `if (outstanding)` alone, which stayed green even after fetchOutstandingSignals started
+  // returning a real (truthy) empty-shaped object for "genuinely zero outstanding" — the
+  // structural check kept passing while the guarantee it names ("an empty result adds no key")
+  // was silently broken. A source-text match can prove wiring exists; it cannot prove the
+  // condition is still CORRECT after an upstream contract change. See the real behavioral test
+  // below (roll-call step actually run) for that half.
+  it('is attached conditionally on actual content, not bare truthiness (source-text half)', () => {
+    expect(step).toMatch(/if \(outstanding && outstanding\.count/);
+  });
+});
+
+describe('BEHAVIOR — the roll-call step actually suppresses the empty-shaped result', () => {
+  const rollCallStep = require(path.join(REPO, 'lib/checkin/steps/roll-call.cjs'));
+
+  async function runStep({ outstanding, formatOutstandingWarningReturn = null }) {
+    const ctx = {
+      sb: {}, sessionId: 'sess-1', coordinatorId: 'coord-1', sessionRole: 'worker', callsign: 'X', mySd: null, sessionMetadata: null,
+      helpers: {
+        registerRollCall: async () => ({ id: 'rc-1' }),
+        surfaceCoordinatorMessages: async () => [],
+        fetchOutstandingSignals: async () => outstanding,
+        formatOutstandingWarning: () => formatOutstandingWarningReturn,
+      },
+    };
+    await rollCallStep.run(ctx);
+    return ctx;
+  }
+
+  it('a genuinely empty (real, truthy) result from fetchOutstandingSignals attaches NO key to ctx.base', async () => {
+    const ctx = await runStep({ outstanding: { count: 0, shown: 0, oldest_age_minutes: null, signals: [], received_check_reliable: true } });
+    expect(ctx.base.outstanding_signals).toBeUndefined();
+    expect(ctx.base.outstanding_signals_warning).toBeUndefined();
+  });
+
+  it('null (a genuine fetch failure) also attaches no key', async () => {
+    const ctx = await runStep({ outstanding: null });
+    expect(ctx.base.outstanding_signals).toBeUndefined();
+  });
+
+  it('a genuinely non-empty result DOES attach the key', async () => {
+    const real = { count: 1, shown: 1, oldest_age_minutes: 45, signals: [{ id: 'a' }], received_check_reliable: true };
+    const ctx = await runStep({ outstanding: real, formatOutstandingWarningReturn: '⚠ 1 signal(s) you sent are still UNANSWERED' });
+    expect(ctx.base.outstanding_signals).toBe(real);
+    expect(ctx.base.outstanding_signals_warning).toBe('⚠ 1 signal(s) you sent are still UNANSWERED');
   });
 });

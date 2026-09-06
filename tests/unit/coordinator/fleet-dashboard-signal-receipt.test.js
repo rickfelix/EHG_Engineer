@@ -51,7 +51,7 @@ const signal = (id, overrides = {}) => ({
  * session_coordination select terminates on `.maybeSingle()`/`.limit()`, so `.in()` is an
  * unambiguous fingerprint for it. The final `session_coordination.insert(row)` is recorded.
  */
-function mockSupabase({ existingReceipts = [], existenceCheckThrows = false, liveTargets = [] } = {}) {
+function mockSupabase({ existingReceipts = [], existenceCheckThrows = false, existenceCheckResolvesError = false, liveTargets = [] } = {}) {
   const inserted = [];
   const updateCalls = [];
   const limitCalls = [];
@@ -83,7 +83,12 @@ function mockSupabase({ existingReceipts = [], existenceCheckThrows = false, liv
         return chain;
       },
       then(resolve, reject) {
-        if (sawIn) return Promise.resolve({ data: existingReceipts, error: null }).then(resolve, reject);
+        if (sawIn) {
+          if (existenceCheckResolvesError) {
+            return Promise.resolve({ data: null, error: { message: 'relation does not exist' } }).then(resolve, reject);
+          }
+          return Promise.resolve({ data: existingReceipts, error: null }).then(resolve, reject);
+        }
         // Any other select-style await (dedup/disposition checks) — no match, fail-open-safe.
         return Promise.resolve({ data: chain._inserted ? [chain._inserted] : [], error: null }).then(resolve, reject);
       },
@@ -273,6 +278,19 @@ describe('writeSignalReceipts: fail-soft', () => {
   it('an existence-check query failure does not block the write (fail-soft toward at-least-once, never lost)', async () => {
     const a = signal('a');
     const { supabase, inserted } = mockSupabase({ existenceCheckThrows: true, liveTargets: [a.sender_session] });
+    const result = await writeSignalReceipts(supabase, COORDINATOR, [a]);
+    expect(result).toEqual({ written: 1, skipped: 0 });
+    expect(inserted).toHaveLength(1);
+  });
+
+  // Round-2 post-merge review (PR #8356): supabase-js/postgrest-js return a query failure as
+  // {data: null, error} — they do NOT throw. The test above only covers the reject() path; this
+  // covers the resolve-with-error path, which previously discarded `error` and silently treated
+  // the failed lookup as "zero existing receipts", risking a duplicate receipt write for the
+  // whole batch instead of hitting the documented fail-soft catch.
+  it('an existence-check query RESOLVING with {data:null,error} (not throwing) is also fail-soft, not a silent false-negative', async () => {
+    const a = signal('a');
+    const { supabase, inserted } = mockSupabase({ existenceCheckResolvesError: true, liveTargets: [a.sender_session] });
     const result = await writeSignalReceipts(supabase, COORDINATOR, [a]);
     expect(result).toEqual({ written: 1, skipped: 0 });
     expect(inserted).toHaveLength(1);

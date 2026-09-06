@@ -54,6 +54,16 @@ describe('sanitizeRenderText', () => {
     }
   });
 
+  // Round-2 post-merge review addition: the invisible/reordering "Trojan Source" class this
+  // module's docblock already named, but the initial range list under-covered.
+  it('strips the Arabic Letter Mark and the zero-width/BOM invisible-character set', () => {
+    const codepoints = [0x061c, 0x200b, 0x200c, 0x200d, 0x2060, 0xfeff];
+    for (const cp of codepoints) {
+      const input = 'a' + String.fromCodePoint(cp) + 'b';
+      expect(sanitizeRenderText(input)).toBe('a b');
+    }
+  });
+
   it('leaves ordinary Unicode text (non-control) untouched', () => {
     expect(sanitizeRenderText('café — naïve résumé 日本語')).toBe('café — naïve résumé 日本語');
   });

@@ -1717,12 +1717,17 @@ async function writeSignalReceipts(supabase, coordinatorId, signals) {
     // filter's 1-2-row premise, which this widening removes. batch.length + headroom covers a
     // rare duplicate receipt row per correlation_id without becoming a truncation risk as the
     // batch grows toward printInbox()'s own .limit(20) cap (count-truncation-diff-lint).
-    const { data: existingReceipts } = await supabase
+    const { data: existingReceipts, error: existingReceiptsError } = await supabase
       .from('session_coordination')
       .select('payload')
       .eq('payload->>kind', DASH_PAYLOAD_KINDS.SIGNAL_RECEIPT)
       .in('payload->>correlation_id', batch.map((s) => s.id))
       .limit(batch.length + 50);
+    // Round-2 post-merge review (PR #8356): supabase-js/postgrest-js return a query failure as
+    // {data: null, error}, they do not throw -- discarding `error` here left the catch below
+    // (and its fail-soft contract) unreachable on a genuine PostgREST failure, silently treating
+    // "the lookup failed" as "no existing receipts" and writing duplicates for the whole batch.
+    if (existingReceiptsError) throw existingReceiptsError;
     existingReceiptCorrelationIds = new Set((existingReceipts || []).map((r) => r.payload?.correlation_id));
   } catch { /* fail-soft: an existence-check failure risks a duplicate receipt, never a lost inbox render */ }
 
