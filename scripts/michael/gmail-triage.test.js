@@ -158,9 +158,11 @@ describe('runGmailTriage', () => {
     expect(updates).toHaveLength(5);
     for (const u of updates) {
       expect(Object.keys(u.ops[0].args[0])).toEqual([...ITEM_UPDATE_KEYS]);
-      expect(u.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is']);
+      expect(u.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is', 'or']);
       expect(u.ops[3].args).toEqual(['action_taken_at', null]);
       expect(u.ops[4].args).toEqual(['verified_by', null]);
+      // only rows the feeder queued (class null) or rule-stamped (rule_key set) are ever rewritten
+      expect(u.ops[5].args).toEqual(['class.is.null,rule_key.not.is.null']);
     }
     expect(dbCalls.filter((c) => c.table === 'michael_feeder_runs').map((c) => c.kind)).toEqual(['select', 'insert', 'update']);
     expect(r.counts).toMatchObject({ modify: false, threads_modified: 0 });
