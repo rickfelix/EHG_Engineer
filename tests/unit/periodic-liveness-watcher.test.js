@@ -171,6 +171,10 @@ describe('evaluateRow', () => {
     it('a row without a window (or a malformed one) behaves exactly as before', async () => {
       expect(isInsideExpectedWindowEt({}, AT_2AM_ET)).toBeNull();
       expect(isInsideExpectedWindowEt({ expected_window_et: { start: '4:30am', end: 'x' } }, AT_2AM_ET)).toBeNull();
+      // SEC-M4: an out-of-range hour must be refused, never read as a 1500-minute start that grades
+      // the row INTENTIONALLY_DOWN forever.
+      expect(isInsideExpectedWindowEt({ expected_window_et: { start: '25:00', end: '29:59' } }, AT_2AM_ET)).toBeNull();
+      expect(isInsideExpectedWindowEt({ expected_window_et: { start: '04:30', end: '07:60' } }, AT_2AM_ET)).toBeNull();
       const row = roleSessionRow({ currently_expected_active: false, expected_window_et: null });
       const result = await evaluateRow(row, { now: AT_5AM_ET });
       expect(result.state).toBe(STATE.INTENTIONALLY_DOWN);
