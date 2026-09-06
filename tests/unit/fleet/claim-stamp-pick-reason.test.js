@@ -88,10 +88,44 @@ describe('buildPickReason', () => {
 });
 
 describe('stampClaim — pick_reason on the SD path', () => {
-  it('TS-2: pick_reason reads UNSCORED when comparator.cjs is not present (default path, no injection)', async () => {
+  // TESTING-AGENT FINDING (Child B CI run, 2026-09-06): this test originally asserted
+  // "comparator.cjs is not present" by relying on it being ABSENT from the filesystem — true
+  // only in the transient window before Child B (lib/priority/comparator.cjs) merged. Once
+  // Child B ships, the DEFAULT (no-injection) path legitimately resolves the real module and
+  // calls computePriorityScore(row, {}) with empty inputs, which is a DIFFERENT (but still
+  // all-UNSCORED) shape than the frozen UNSCORED_PICK_REASON sentinel (real comparatorVersion,
+  // real component keys, not an empty {}). Derives the expected shape from the real module so
+  // this test tracks whatever comparator.cjs actually returns for empty inputs, rather than
+  // re-encoding its internals as a second, driftable copy.
+  it('TS-2: pick_reason reads all-UNSCORED via the real comparator.cjs when no leverage/criticality/alignment/age inputs are wired (default path, no injection)', async () => {
+    const { computePriorityScore } = require('../../../lib/priority/comparator.cjs');
+    const expectedShape = computePriorityScore({}, {});
     const row = { id: SD_ID, sd_key: 'SD-TEST-PICK-001', metadata: {} };
     const { client, calls } = mockSupabase(row);
     const entry = await stampClaim(client, 'SD-TEST-PICK-001', 'sess-new', 'env', makeMergeFn(row, calls));
+    expect(entry).not.toBeNull();
+    expect(entry.pick_reason).toEqual({
+      score: expectedShape.score,
+      components: expectedShape.components,
+      comparatorVersion: expectedShape.comparatorVersion,
+    });
+  });
+
+  it('TS-2 (defensive degrade): pick_reason falls back to the frozen UNSCORED_PICK_REASON sentinel when comparator.cjs genuinely cannot be resolved', async () => {
+    const row = { id: SD_ID, sd_key: 'SD-TEST-PICK-001B', metadata: {} };
+    const { client, calls } = mockSupabase(row);
+    // Force the "module unavailable" branch deterministically (rather than relying on ambient
+    // filesystem absence, which is no longer guaranteed once Child B has shipped) by injecting a
+    // scoring function that itself behaves exactly like a failed resolution: buildPickReason's
+    // contract is "no function supplied -> UNSCORED_PICK_REASON", and resolveScoreFn returns
+    // exactly that shape when its dynamic import throws. A thrown scoreFn call collapses to the
+    // same UNSCORED_PICK_REASON output via buildPickReason's own catch, exercising the identical
+    // degrade path a genuinely-missing module would hit.
+    const unresolvable = () => { throw new Error('MODULE_NOT_FOUND (simulated)'); };
+    const entry = await stampClaim(
+      client, 'SD-TEST-PICK-001B', 'sess-new', 'env', makeMergeFn(row, calls),
+      { computePriorityScoreFn: unresolvable }
+    );
     expect(entry).not.toBeNull();
     expect(entry.pick_reason).toEqual(UNSCORED_PICK_REASON);
   });
@@ -119,7 +153,10 @@ describe('stampClaim — pick_reason on the SD path', () => {
     const legacyEntry = { session_id: 'old-sess', claimed_at: '2026-06-01T00:00:00Z' };
     const row = { id: SD_ID, sd_key: 'SD-TEST-PICK-004', metadata: { claim_history: [legacyEntry] } };
     const { client, calls } = mockSupabase(row);
-    await stampClaim(client, 'SD-TEST-PICK-004', 'sess-new', 'env', makeMergeFn(row, calls));
+    // This test is about legacy-entry preservation, not comparator resolution -- inject a fixed
+    // no-op scoring function so its expectation is decoupled from whether comparator.cjs happens
+    // to exist on disk (Child B ships it as a real, permanent module going forward).
+    await stampClaim(client, 'SD-TEST-PICK-004', 'sess-new', 'env', makeMergeFn(row, calls), { computePriorityScoreFn: () => null });
     const md = calls.updates[0].payload.metadata;
     expect(md.claim_history[0]).toEqual(legacyEntry); // untouched, no backfilled pick_reason
     expect(md.claim_history[1].pick_reason).toEqual(UNSCORED_PICK_REASON);
@@ -137,7 +174,10 @@ describe('stampClaim — QF-shaped ref auto-detect (AC-6)', () => {
       mergeCallArgs = { qfId, sessionId, entry };
       return { merged: true };
     };
-    const entry = await stampClaim(client, 'QF-20260906-1', 'sess-qf', 'env', null, { mergeQfMetadataFn });
+    // This test is about QF-shaped routing, not comparator resolution -- inject a fixed no-op
+    // scoring function so its expectation is decoupled from whether comparator.cjs happens to
+    // exist on disk (Child B ships it as a real, permanent module going forward).
+    const entry = await stampClaim(client, 'QF-20260906-1', 'sess-qf', 'env', null, { mergeQfMetadataFn, computePriorityScoreFn: () => null });
     expect(sdTableTouched).toBe(false);
     expect(entry).not.toBeNull();
     expect(entry.pick_reason).toEqual(UNSCORED_PICK_REASON);
