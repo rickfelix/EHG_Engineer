@@ -21,6 +21,8 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { disposeUserStory } from './dispose-user-story.js';
+import { allAcsBoilerplate } from './modules/auto-trigger-stories.mjs';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -172,8 +174,12 @@ async function autoValidateUserStories(sdId, sbClient) {
   // design-only quality bar — SD-LEO-INFRA-VALIDATE-DESIGN-ONLY-STORIES-001).
   const { data: stories, error: storiesError } = await supabase
     .from('user_stories')
-    .select('id, title, status, validation_status, acceptance_criteria, implementation_context')
-    .eq('sd_id', resolvedSdId);
+    .select('id, story_key, title, status, validation_status, acceptance_criteria, implementation_context')
+    .eq('sd_id', resolvedSdId)
+    // count-truncation-diff-lint: bounded, not paginated -- an SD legitimately never has more
+    // than a few dozen user stories, so 500 is a generous ceiling that can never truncate real
+    // data while still making this read provably bounded (classifier requires N < 1000).
+    .limit(500);
 
   if (storiesError) {
     console.error('❌ Error fetching user stories:', storiesError.message);
@@ -232,14 +238,50 @@ async function autoValidateUserStories(sdId, sbClient) {
   // SD-FDBK-INFRA-COMPLETION-FLAG-HARNESS-001: PLAN / add-prd-to-database create user stories as
   // status='draft'. Promoting only 'ready' left those draft stories untouched, so they failed
   // USER_STORY_COVERAGE at EXEC-TO-PLAN and had to be hand-completed every SD. Include 'draft'.
-  const promotableStories = stories.filter(s => s.status === 'ready' || s.status === 'draft');
+  //
+  // QF-20260903-031: a 'draft' story from the AUTO-GENERATED pipeline
+  // (lib/sub-agents/modules/stories/execute.js:367) means something different from the
+  // add-prd-to-database.js meaning above: allAcsBoilerplate()->draft is a deliberate LOW-QUALITY
+  // signal (SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001), not "not yet promoted." Blindly promoting
+  // it alongside the other 'draft' meaning erased that signal — a "story" synthesized from PRD
+  // analysis prose (a code finding, an LOC/scope estimate, never an implementable feature) with
+  // 100% boilerplate acceptance criteria was silently promoted to completed+validated,
+  // indistinguishable from real work. Route those through the sanctioned disposition path instead
+  // (scripts/dispose-user-story.js, QF-20260903-222) so they are EXCLUDED from the completeness
+  // gate rather than left stuck at draft, which would just recreate the same block one status
+  // value over.
+  const isBoilerplateArtefact = (s) => s.status === 'draft' && allAcsBoilerplate(s.acceptance_criteria);
+  const boilerplateArtefacts = stories.filter(isBoilerplateArtefact);
+  if (boilerplateArtefacts.length > 0) {
+    console.log(`⚠️  ${boilerplateArtefacts.length} story(ies) are all-boilerplate generator artefacts — dispositioning instead of promoting:`);
+    for (const s of boilerplateArtefacts) {
+      console.log(`   - ${s.story_key}: ${s.title}`);
+      try {
+        await disposeUserStory(supabase, {
+          storyKey: s.story_key,
+          reasonCode: 'AUTO_BOILERPLATE_GENERATOR_ARTEFACT',
+          reason: 'All acceptance criteria are generator boilerplate (allAcsBoilerplate) — the source PRD content was not an implementable requirement.',
+          actor: 'auto-validate-user-stories-on-exec-complete',
+        });
+        s.status = 'blocked';
+        s.validation_status = 'skipped';
+      } catch (err) {
+        console.warn(`   ⚠️  Could not disposition ${s.story_key}: ${err.message}`);
+      }
+    }
+  }
+
+  const promotableStories = stories.filter(s => (s.status === 'ready' || s.status === 'draft') && !isBoilerplateArtefact(s));
   if (promotableStories.length > 0) {
     console.log(`📈 Promoting ${promotableStories.length} ready/draft stories to completed (deliverables done)...`);
+    // Matched by id, NOT by a blanket status IN ('ready','draft') filter — a boilerplate
+    // artefact whose disposition call above FAILED is still status='draft' in the database, and
+    // a status-only filter here would silently re-promote exactly the row the block above just
+    // tried to exclude.
     const { error: promoteError } = await supabase
       .from('user_stories')
       .update({ status: 'completed' })
-      .eq('sd_id', resolvedSdId)
-      .in('status', ['ready', 'draft']);
+      .in('id', promotableStories.map((s) => s.id));
     if (promoteError) {
       console.error('❌ Error promoting ready/draft->completed:', promoteError.message);
       return { validated: false, error: promoteError.message };
