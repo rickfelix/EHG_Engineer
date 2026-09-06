@@ -65,6 +65,7 @@ import { isStaleRatification, formatRatificationStaleLine } from '../lib/governa
 // a dozen inbound rows has been filed, not surfaced.
 import { evaluateStandingPriority } from '../lib/adam/standing-priority.js';
 import { runChairmanGatedDecisionRowGuard } from '../lib/chairman/chairman-gated-decision-row-guard.mjs';
+import { runClassifierDenialGuard } from '../lib/chairman/classifier-denial-guard.mjs';
 import { countCompletionReadyParents } from '../lib/fleet/parent-completion.mjs';
 // QF-20260830-590: the required-loops predicate (ADAM_LOOPS/parseArmedSet/loopStatus) lives in
 // ONE place, consumed by both the startup check (point-in-time) and this tick (continuous) so
@@ -1635,6 +1636,20 @@ async function main() {
       }
     } catch (e) {
       console.error(`QUIET_TICK_CHAIRMAN_GATED_STAMP_ERROR=adam guard_failed error="${e && e.message ? e.message : e}"`);
+    }
+
+    // QF-20260906-881: sibling probe — ungated migration-apply WAIT verdicts and worker /signal
+    // stuck rows naming a classifier-denied host command, neither covered by the guard above.
+    try {
+      const denialGuard = await runClassifierDenialGuard(sb);
+      if (denialGuard.hits > 0) {
+        console.log(`QUIET_TICK_CLASSIFIER_DENIAL_GUARD=${denialGuard.hits} recorded=${denialGuard.recorded} errors=${denialGuard.errors.length}`);
+      }
+      for (const e of denialGuard.errors) {
+        console.error(`QUIET_TICK_CLASSIFIER_DENIAL_STAMP_ERROR=adam sd_key=${e.sd_key} error="${e.error}"`);
+      }
+    } catch (e) {
+      console.error(`QUIET_TICK_CLASSIFIER_DENIAL_STAMP_ERROR=adam guard_failed error="${e && e.message ? e.message : e}"`);
     }
     // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): first-class inbox surfacing —
     // directive/reply-needed rows carry the distinct hard-interrupt token.
