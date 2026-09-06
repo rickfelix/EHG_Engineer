@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T19:31:26.608Z",
+  "generated_at": "2026-09-06T19:34:14.012Z",
   "counts": {
-    "has_catch": 40
+    "has_catch": 38
   },
   "results": [
     {
@@ -212,20 +212,6 @@
       "line": 94,
       "kind": "data",
       "snippet": "const { data: sibRows } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/index.js",
-      "line": 474,
-      "kind": "data",
-      "snippet": "const { data: leadHandoff } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/index.js",
-      "line": 572,
-      "kind": "data",
-      "snippet": "const { data: userStories } = await this.supabase",
       "classification": "has_catch"
     },
     {
