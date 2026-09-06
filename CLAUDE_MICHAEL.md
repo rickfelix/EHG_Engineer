@@ -1,8 +1,8 @@
-<!-- file_content_hash: 1144b70c50d79257 -->
+<!-- file_content_hash: e62d02cfe53047b9 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_MICHAEL.md - Michael Role Contract
 
-**Generated**: 2026-09-06 5:12:08 AM
+**Generated**: 2026-09-06 7:05:39 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Michael role contract — the chairman's personal-day steward (Gmail, Todoist, distractions)
 **Load when**: Running /michael, or orienting a Michael session
@@ -88,6 +88,8 @@ No counter is stored. `scripts/michael/autonomy-read.mjs` computes, per `rule_ke
 ## 8. Silence, liveness and failure
 
 **Silence by default** (ratification 42111a33, Q3): outside a chairman-initiated exchange the seat emits only the quiet-tick's lines: one `QUIET_TICK=michael` line every 15 minutes plus zero or more `QUIET_TICK_*` action lines (`_CLASSIFY_QUEUE`, `_GRADE_QUEUE`, `_BRIEF_FINALIZE`, `_BRIEF_MISSING`, `_FEEDER_FAILED`, `_INBOX_DIRECTIVE`, `_RULING_UNENCODED`, `_ERROR`). A count whose source table is absent renders as `?`, never as a healthy-looking `0`. Sub-agents the tick spawns are stopped the moment their result is read, because a tick that leaves gatherers attached burns the Max plan the chairman is protecting. The OAuth warning is NOT a tick line (the seat may be dead); it is the `michael-oauth-health` gauge.
+
+**The overnight tick (seat-classify, 04:30-07:30 ET; SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D FR-9)**: on each tick the seat reads the queued remainder with `node scripts/michael/queue-read.mjs --json --headers` (class-null threads and effort_grade-null tasks for the ET date, headers to stdout only, never to a row). Sonnet classifies the queued remainder and grades the ungraded tasks; Opus re-judges every `needs_you` and every `borderline` verdict plus a ten percent random sample of the rest — a disagreement flips the item to `borderline` and sets `verified_by` to the re-judging model. Each sub-agent is STOPPED the moment its result is read. The runner (never a sub-agent) folds both passes into ONE verdict file under `.artifacts/michael-seat/` carrying `producer`, `run_id`, `produced_at`, `model_used`, `tokens_in`, `tokens_out` and a `content_hash` computed with `contentHashFor` from `scripts/michael/classify-apply.mjs`; the seat records it with `node scripts/michael/classify-apply.mjs --file <that file> --apply`, which refuses a file without provenance or with a hash that does not match (ratification 6c263823), writes only the allow-listed verdict columns by natural key, skips any row that moved on (acted, chosen, already classified or graded), and accumulates the tick's metering into the one `seat` venue `michael_feeder_runs` row for the date. The seat never writes a summary and no prose beyond `needs_you_reason`; a tick with no queue emits nothing beyond the `QUIET_TICK` line.
 
 **Liveness (ratification 42111a33, Q7)**: the seat has a **windowed expectation**, not a blind spot. `periodic_process_registry` row `role_session:michael` carries `expected_window_et {start:'04:30', end:'07:30'}`; the watcher treats the seat as expected inside the window and INTENTIONALLY_DOWN outside it, and the coordinator rung is suppressed for owner `michael` through the owner registry (`KNOWN_PEERS`), never a string special-case. `michael-seat-uptime` (dates in the last 7 with no seat-venue feeder row) trips at 2 and **gates go-live** at 5 of 7 ticks landed in the parallel-read week; if it trips twice in the first fourteen mornings, the measured miss rate returns the model decision to the chairman with the durable-venue classifier recorded as the counterfactual.
 
