@@ -11,7 +11,6 @@ import { fileURLToPath } from 'url';
 import ConnectionManager from './connections.js';
 import StrategicLoaders from './strategic-loaders.js';
 import SubmissionsManager from './submissions.js';
-import PRReviewsManager from './pr-reviews.js';
 import DatabaseUtilities from './utilities.js';
 import StatusValidator from '../status-validator.js';
 import ProgressCalculator from '../progress-calculator.js';
@@ -34,7 +33,6 @@ class DatabaseLoader {
     this.connectionManager = new ConnectionManager();
     this.strategicLoaders = new StrategicLoaders(this.connectionManager);
     this.submissionsManager = new SubmissionsManager(this.connectionManager);
-    this.prReviewsManager = new PRReviewsManager(this.connectionManager);
     this.utilities = new DatabaseUtilities();
 
     // Preserve original properties for compatibility
@@ -127,33 +125,12 @@ class DatabaseLoader {
     return this.submissionsManager.saveScreenshot(submissionId, screenshot);
   }
 
-  async getSubmissionProgress(submissionId) {
-    return this.submissionsManager.getSubmissionProgress(submissionId);
-  }
-
   async getSubmissionById(submissionId) {
     return this.submissionsManager.getSubmissionById(submissionId);
   }
 
   async saveStrategicDirective(sdData) {
     return this.submissionsManager.saveStrategicDirective(sdData);
-  }
-
-  // PR Review methods
-  async loadPRReviews(limit = 50) {
-    return this.prReviewsManager.loadPRReviews(limit);
-  }
-
-  async calculatePRMetrics() {
-    return this.prReviewsManager.calculatePRMetrics();
-  }
-
-  async savePRReview(review) {
-    return this.prReviewsManager.savePRReview(review);
-  }
-
-  async updatePRMetrics() {
-    return this.prReviewsManager.updatePRMetrics();
   }
 
   // Utility methods
