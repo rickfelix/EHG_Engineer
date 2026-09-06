@@ -6,6 +6,7 @@
  */
 
 import { isLightweightSDType } from '../../../validation/sd-type-applicability-policy.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Create the GATE_DELIVERABLES_PLANNING gate validator
@@ -38,11 +39,14 @@ export async function validateDeliverablesPlanning(supabase, sd) {
     const sdType = (sd.sd_type || 'feature').toLowerCase();
 
     // Check if this SD type requires deliverables from sd_type_validation_profiles
-    const { data: profile } = await supabase
-      .from('sd_type_validation_profiles')
-      .select('requires_deliverables, requires_deliverables_gate')
-      .eq('sd_type', sdType)
-      .single();
+    const profile = await safeQuery(
+      supabase
+        .from('sd_type_validation_profiles')
+        .select('requires_deliverables, requires_deliverables_gate')
+        .eq('sd_type', sdType)
+        .single(),
+      { site: 'deliverables-planning:profile' }
+    );
 
     // Determine if deliverables are required
     // Priority: requires_deliverables_gate > requires_deliverables > centralized policy
@@ -67,10 +71,13 @@ export async function validateDeliverablesPlanning(supabase, sd) {
     }
 
     // Check for existing deliverables
-    const { data: deliverables } = await supabase
-      .from('sd_scope_deliverables')
-      .select('id, deliverable_name, completion_status')
-      .eq('sd_id', sd.id);
+    const deliverables = await safeQuery(
+      supabase
+        .from('sd_scope_deliverables')
+        .select('id, deliverable_name, completion_status')
+        .eq('sd_id', sd.id),
+      { site: 'deliverables-planning:deliverables' }
+    );
 
     const deliverableCount = deliverables?.length || 0;
 
@@ -122,6 +129,18 @@ export async function validateDeliverablesPlanning(supabase, sd) {
 
   } catch (error) {
     console.log(`   ⚠️  Deliverables gate error: ${error.message}`);
+    // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-2: a genuine query-discipline failure must not
+    // be swallowed into the same lenient advisory pass as an ordinary unexpected error.
+    if (error.code === 'QUERY_FAILED' || error.code === 'COUNT_UNMEASURABLE') {
+      return {
+        passed: false,
+        score: 0,
+        max_score: 100,
+        issues: [`Deliverables planning could not run — query failed: ${error.message}`],
+        warnings: [],
+        details: { error: error.message }
+      };
+    }
     return {
       passed: true,
       score: 50,

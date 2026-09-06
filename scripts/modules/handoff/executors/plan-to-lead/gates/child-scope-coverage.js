@@ -14,6 +14,7 @@ import {
   buildSemanticResult,
   buildSkipResult
 } from '../../../validation/semantic-gate-utils.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'CHILD_SCOPE_COVERAGE';
 
@@ -42,16 +43,22 @@ export function createChildScopeCoverageGate(supabase) {
 
       try {
         // Get parent SD deliverables
-        const { data: parentDeliverables } = await supabase
-          .from('sd_scope_deliverables')
-          .select('id, deliverable_name, deliverable_type')
-          .eq('sd_id', sdId);
+        const parentDeliverables = await safeQuery(
+          supabase
+            .from('sd_scope_deliverables')
+            .select('id, deliverable_name, deliverable_type')
+            .eq('sd_id', sdId),
+          { site: 'child-scope-coverage:parent_deliverables' }
+        );
 
         // Get children SDs
-        const { data: children } = await supabase
-          .from('strategic_directives_v2')
-          .select('id, title, status')
-          .eq('parent_sd_id', sdId);
+        const children = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('id, title, status')
+            .eq('parent_sd_id', sdId),
+          { site: 'child-scope-coverage:children' }
+        );
 
         if (!children || children.length === 0) {
           console.log('   ⚠️  No children found — not an orchestrator');
@@ -75,10 +82,13 @@ export function createChildScopeCoverageGate(supabase) {
 
         // Get all child deliverables
         const childIds = children.map(c => c.id);
-        const { data: childDeliverables } = await supabase
-          .from('sd_scope_deliverables')
-          .select('sd_id, deliverable_name, deliverable_type, completion_status')
-          .in('sd_id', childIds);
+        const childDeliverables = await safeQuery(
+          supabase
+            .from('sd_scope_deliverables')
+            .select('sd_id, deliverable_name, deliverable_type, completion_status')
+            .in('sd_id', childIds),
+          { site: 'child-scope-coverage:child_deliverables' }
+        );
 
         // Check parent deliverable coverage by children
         const childTitles = (childDeliverables || []).map(d => d.deliverable_name.toLowerCase());
@@ -137,6 +147,16 @@ export function createChildScopeCoverageGate(supabase) {
         });
       } catch (err) {
         console.log(`   ⚠️  Error: ${err.message}`);
+        // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-2: a genuine query-discipline failure must
+        // not be swallowed into the same lenient advisory pass as an ordinary unexpected error.
+        if (err.code === 'QUERY_FAILED' || err.code === 'COUNT_UNMEASURABLE') {
+          // confidence must be >= 0.7: buildSemanticResult forces passed=true when confidence < 0.7
+          // (its "degrade blocking to warning" rule), which would silently re-swallow this fix.
+          return buildSemanticResult({
+            passed: false, score: 0, confidence: 0.9,
+            issues: [`Child scope coverage could not run — query failed: ${err.message}`]
+          });
+        }
         return buildSemanticResult({
           passed: true, score: 50, confidence: 0.3,
           warnings: [`Child scope coverage error: ${err.message}`]
