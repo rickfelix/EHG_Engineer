@@ -75,6 +75,13 @@ describe('severityWeightFor (FR-4/FR-5)', () => {
     expect(severityWeightFor({})).toBe(UNSCORED);
     expect(severityWeightFor({ priority: 'nonsense' })).toBe(UNSCORED);
   });
+
+  it('a prototype-chain key never reads as a recognized severity level', () => {
+    // A naive `level in SEVERITY_WEIGHT` check would misread these as "recognized".
+    expect(severityWeightFor({ priority: 'constructor' })).toBe(UNSCORED);
+    expect(severityWeightFor({ priority: 'toString' })).toBe(UNSCORED);
+    expect(severityWeightFor({ priority: '__proto__' })).toBe(UNSCORED);
+  });
 });
 
 describe('mostRecentRiskScore (FR-4, TS-6)', () => {
