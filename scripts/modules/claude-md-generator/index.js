@@ -752,6 +752,23 @@ export function assertSingleReadFit(files, opts = {}) {
     );
   }
 
+  // QF-20260905-908: a plain, unmissable 95%-of-cap warning, scoped to `mustFit` files (the ones
+  // that actually throw at 100%) -- distinct from the CONFIRMED-FIT tier below, which exists for a
+  // different reason (predictor-uncertainty banding) and is silent on plenty of files that are
+  // nonetheless one append away from the wall. CLAUDE_SOLOMON.md drifted from 23,175 to 24,918
+  // tokens (99.7% of cap) while the confirmed-fit warning printed every run and CI stayed green --
+  // proof that an existing warn-only line is not the same as a NAMED, cap-relative headroom figure
+  // that reads as urgent. Evaluated after the hard-cap throw so it can never change whether that
+  // throw fires or what it says; silent below 95%, never blocks generation.
+  const NINETY_FIVE_PERCENT_CAP_FRACTION = 0.95;
+  const nearCap = (files || [])
+    .map(({ name, bytes }) => ({ name, tokens: Math.round((bytes || 0) / bytesPerToken) }))
+    .filter((f) => mustFit.includes(f.name) && f.tokens >= cap * NINETY_FIVE_PERCENT_CAP_FRACTION);
+  for (const f of nearCap) {
+    const headroom = cap - f.tokens;
+    onWarn(`   ⚠ 95% OF SINGLE-READ CAP: ${f.name} ~${f.tokens} tokens, only ${headroom} tokens of headroom left before the ${cap}-token cap throws. The next content append risks tripping assertSingleReadFit fleet-wide -- trim or split now.`);
+  }
+
   // SECOND TIER, evaluated only AFTER the hard cap has passed, so it can never change whether the
   // existing throw fires or what it says. Anything at or above the confirmed-fit threshold is a file
   // the read-coverage instrument cannot report fits:true for -- it is inside the predictor's error

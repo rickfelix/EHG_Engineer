@@ -1,8 +1,8 @@
-<!-- file_content_hash: 6502a1406cf2ea90 -->
+<!-- file_content_hash: 9e20cebafa415ce5 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MODEL_POSTURE.md — Solomon Model Posture (binding companion)
 
-**Generated**: 2026-09-05 10:08:45 AM
+**Generated**: 2026-09-06 5:12:08 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Model/Max-plan pin, bounded-window swap strategy, availability degradation, and the P4 portability guard
 **Load when**: On any pin change, Fable-window open/close, or budget-state change — before acting on model posture
@@ -25,6 +25,6 @@
 
 ---
 
-*Generated from database: 2026-09-05*
+*Generated from database: 2026-09-06*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_model_posture). Do not hand-edit — edit the DB section and regenerate.*
