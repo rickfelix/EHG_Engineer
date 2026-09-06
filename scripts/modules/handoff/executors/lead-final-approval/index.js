@@ -9,6 +9,7 @@
  */
 
 import BaseExecutor from '../BaseExecutor.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 import ResultBuilder from '../../ResultBuilder.js';
 import { runPreflightRetroCheck } from '../../retro-filters.js';
 import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
@@ -817,11 +818,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
       // was never actually completed).
       console.log('   ℹ️  CAS guard: status was no longer pending_approval — re-reading to determine cause.');
       await cleanupLosingPreInsert(this.supabase, preInsertedRowId);
-      const { data: freshSd } = await this.supabase
-        .from('strategic_directives_v2')
-        .select('*')
-        .eq('id', sd.id)
-        .maybeSingle();
+      const freshSd = await safeQuery(
+        this.supabase
+          .from('strategic_directives_v2')
+          .select('*')
+          .eq('id', sd.id)
+          .maybeSingle(),
+        { site: 'lead-final-approval/index:fresh_sd_cas_reread' }
+      );
 
       if (freshSd?.status !== 'completed') {
         console.log(`   ❌ CAS miss was NOT a concurrent completion (fresh status: '${freshSd?.status}') — refusing to fabricate a completion record.`);

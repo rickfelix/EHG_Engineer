@@ -4,6 +4,7 @@
  */
 
 import { validatePRDQuality } from '../../../../prd-quality-validation.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 import { validateUserStoriesForHandoff } from '../../../../user-story-quality-validation.js';
 import { validateBMADForPlanToExec } from '../../../../bmad-validation.js';
 import { isLightweightSDType } from '../../sd-type-applicability-policy.js';
@@ -87,10 +88,13 @@ export function registerGate1Validators(registry) {
 
     // If no stories in PRD, check the user_stories table
     if (stories.length === 0 && supabase && (sd_id || prd?.sd_id)) {
-      const { data: tableStories } = await supabase
-        .from('user_stories')
-        .select('*')
-        .eq('sd_id', sd_id || prd?.sd_id);
+      const tableStories = await safeQuery(
+        supabase
+          .from('user_stories')
+          .select('*')
+          .eq('sd_id', sd_id || prd?.sd_id),
+        { site: 'gate-1-plan-to-exec:table_stories' }
+      );
       stories = tableStories || [];
     }
 

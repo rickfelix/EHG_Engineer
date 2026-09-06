@@ -14,6 +14,7 @@
 import ResultBuilder from '../ResultBuilder.js';
 import { validatorRegistry } from './ValidatorRegistry.js';
 import { shouldSkipCodeValidation } from '../../../../lib/utils/sd-type-validation.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import {
   createSkippedResult,
   isSkippedResult,
@@ -1071,11 +1072,14 @@ export class ValidationOrchestrator {
             const isStrategicValueGate = String(gate) === '4';
             if (mergedContext.sd_id || mergedContext.sdId) {
               const sdId = mergedContext.sd_id || mergedContext.sdId;
-              const { data: sdData } = await this.supabase
-                .from('strategic_directives_v2')
-                .select('id, sd_type, title')
-                .eq('id', sdId)
-                .single();
+              const sdData = await safeQuery(
+                this.supabase
+                  .from('strategic_directives_v2')
+                  .select('id, sd_type, title')
+                  .eq('id', sdId)
+                  .single(),
+                { site: 'ValidationOrchestrator:sd_type_skip_guard' }
+              );
 
               if (sdData && shouldSkipCodeValidation(sdData)) {
                 if (isStrategicValueGate && skipGuardBound) {

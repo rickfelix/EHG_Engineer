@@ -9,6 +9,7 @@
  */
 
 import { normalizeSDId } from '../../../sd-id-normalizer.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
 
 // Import orchestrator child completion for per-child post-completion handling
@@ -435,11 +436,14 @@ export async function completeOrchestratorSD(supabase, sdId, childrenCount) {
   // SD-FDBK-FIX-ORCHESTRATOR-GHOST-COMPLETE-001: PLAN-TO-LEAD stages the
   // orchestrator at pending_approval (same as standard SDs) — only the
   // LEAD-FINAL-APPROVAL executor writes status='completed'.
-  const { data: sdRow } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, created_at, status')
-    .eq('id', canonicalId)
-    .maybeSingle();
+  const sdRow = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, created_at, status')
+      .eq('id', canonicalId)
+      .maybeSingle(),
+    { site: 'plan-to-lead/state-transitions:orchestrator_sd_row' }
+  );
 
   const routing = await routeOrchestratorToLeadFinal(supabase, sdRow || { id: canonicalId }, {
     source: 'plan-to-lead:completeOrchestratorSD'
