@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T19:04:52.981Z",
+  "generated_at": "2026-09-06T19:31:26.608Z",
   "counts": {
-    "has_catch": 42
+    "has_catch": 40
   },
   "results": [
     {
@@ -268,20 +268,6 @@
       "line": 79,
       "kind": "data",
       "snippet": "const { data: staleClaims } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/gates/subagent-evidence-gate.js",
-      "line": 241,
-      "kind": "data",
-      "snippet": "const { data } = await db",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/gates/subagent-evidence-gate.js",
-      "line": 261,
-      "kind": "data",
-      "snippet": "const { data } = await db",
       "classification": "has_catch"
     },
     {
