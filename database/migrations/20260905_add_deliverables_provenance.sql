@@ -35,6 +35,17 @@
 ALTER TABLE sd_scope_deliverables
   ADD COLUMN IF NOT EXISTS completed_at timestamptz;
 
+-- SECURITY finding SEC-G6: without this backfill, ~24.6k already-completed rows keep
+-- completed_at NULL. The very next unrelated UPDATE to any one of them (e.g. a later
+-- completion_notes edit) would hit the new BEFORE trigger's NULL guard and retroactively
+-- stamp completed_at=NOW() -- mislabeling a months-old completion as a fresh, post-cutover,
+-- producer-less completion. Backfilling with the best available prior timestamp keeps every
+-- pre-existing completion correctly dated before the cutover, so it stays exempt.
+UPDATE sd_scope_deliverables
+SET completed_at = COALESCE(verified_at, updated_at, created_at)
+WHERE completion_status IN ('completed', 'done')
+  AND completed_at IS NULL;
+
 -- TESTING finding F-2/F-3 (EXEC-TO-PLAN pass): completed_at has no DEFAULT, so a bare hand-typed
 -- `UPDATE ... SET completion_status = 'completed'` (no producer, no completed_at) left BOTH fields
 -- unset -- isUnprovenancedPostCutover's `completed_at IS NULL` short-circuit then treated it as
