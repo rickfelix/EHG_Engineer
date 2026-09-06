@@ -90,15 +90,27 @@ export function buildWrapperScript({ repoRoot, script, env = {} } = {}) {
 
 /**
  * TR-3 / QF-20260904-169: the /TR action for every task this script registers is the hidden-
- * window launcher, never the .cmd directly. `wrapperPath` and `hiddenLauncherPath` are both
- * passed UNQUOTED (matching the whole setup-*-task.mjs family's own convention) -- execFileSync
- * passes each argv element as its own token via CreateProcess, so embedding literal quote
- * characters would hand schtasks a path string CONTAINING quotes, not the real file.
+ * window launcher, never the .cmd directly.
+ *
+ * SECURITY sub-agent finding (EXEC-TO-PLAN, CWE-428 unquoted search path), CORRECTED: an earlier
+ * revision of this function left hiddenLauncherPath/wrapperPath unquoted, reasoning (wrongly)
+ * that this matched "the whole setup-*-task.mjs family's own convention". Measured against the
+ * REAL, live-registered 'EHG EVA Scheduler Watcher' task (`schtasks /Query /TN "EHG EVA
+ * Scheduler Watcher" /XML`), Task Scheduler stores a multi-token /TR as SEPARATE <Command> and
+ * <Arguments> elements -- and the live task's own <Arguments> QUOTES both paths:
+ *   //B "C:\...\run-hidden.vbs" "C:\...\eva-watcher-task.cmd"
+ * The six sibling scripts emit a SINGLE-TOKEN /TR (a bare wrapper path), where quoting is moot --
+ * this is the first in the family to emit a multi-token action, so there was no unquoted
+ * convention to inherit. Unquoted paths are safe today only because repoRoot happens to contain
+ * no spaces on this host; on a host whose repo path DOES contain a space, run-hidden.vbs's
+ * `WScript.Arguments(0)` would receive a truncated path and Windows' CreateProcess would append
+ * `.exe` to whatever prefix that truncation left, running a planted `<prefix>.exe` every
+ * intervalMinutes as the task owner if one existed at that path.
  */
 export function buildHiddenTrAction({ hiddenLauncherPath, wrapperPath } = {}) {
   if (!hiddenLauncherPath) throw new Error('buildHiddenTrAction: hiddenLauncherPath required');
   if (!wrapperPath) throw new Error('buildHiddenTrAction: wrapperPath required');
-  return `wscript.exe //B ${hiddenLauncherPath} ${wrapperPath}`;
+  return `wscript.exe //B "${hiddenLauncherPath}" "${wrapperPath}"`;
 }
 
 export function buildCreateArgs({ taskName, trAction, intervalMinutes, startTime } = {}) {
@@ -123,23 +135,34 @@ export function buildQueryXmlArgs(taskName) {
 /**
  * Verification predicate (PURE) — run against the XML the OS hands back, never against
  * anything submitted. Confirms the /TR action is the hidden launcher (TR-3), not a bare .cmd.
+ *
+ * SECURITY sub-agent finding (EXEC-TO-PLAN), CORRECTED: an earlier revision matched only
+ * `<Command>`, on the wrong assumption that the whole "wscript.exe //B <a> <b>" string would land
+ * there verbatim. MEASURED against the real, live-registered 'EHG EVA Scheduler Watcher' task:
+ * Task Scheduler splits a multi-token action into `<Command>wscript.exe</Command>` and a
+ * SEPARATE `<Arguments>//B "..." "..."</Arguments>` element -- so the prior version would report
+ * FAILED for every correctly-registered task (fails closed, never falsely certifies, but makes
+ * the control it exists to prove unverifiable). Now checks both elements.
  */
 export function verifyHiddenLaunch(xml) {
   if (!xml || !xml.trim()) return { ok: false, problems: ['no task definition returned by the OS'] };
   const problems = [];
   const commandMatch = /<Command>([^<]*)<\/Command>/.exec(xml);
+  const argumentsMatch = /<Arguments>([^<]*)<\/Arguments>/.exec(xml);
   const command = commandMatch ? commandMatch[1] : '';
+  const args = argumentsMatch ? argumentsMatch[1] : '';
+  const combined = `${command} ${args}`;
   if (!/wscript\.exe/i.test(command)) {
-    problems.push(`Task Scheduler /TR is not the hidden-window launcher (QF-20260904-169): "${command}"`);
+    problems.push(`Task Scheduler /TR's <Command> is not the hidden-window launcher (QF-20260904-169): "${command}"`);
   }
-  if (!/run-hidden\.vbs/i.test(command)) {
-    problems.push(`Task Scheduler /TR does not reference run-hidden.vbs: "${command}"`);
+  if (!/run-hidden\.vbs/i.test(combined)) {
+    problems.push(`Task Scheduler /TR does not reference run-hidden.vbs (checked <Command> and <Arguments>): "${combined.trim()}"`);
   }
   if (/<Enabled>false<\/Enabled>/.test(xml)) problems.push('task is explicitly disabled');
   if (!/<Repetition>/.test(xml) || !/<Interval>PT\d+M<\/Interval>/.test(xml)) {
     problems.push('no repeating interval — would fire once and never again');
   }
-  return { ok: problems.length === 0, problems, command };
+  return { ok: problems.length === 0, problems, command, args: args || null };
 }
 
 function runSchtasks(args) {

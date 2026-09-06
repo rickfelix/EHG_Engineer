@@ -60,11 +60,18 @@ describe('buildWrapperScript', () => {
   });
 });
 
-describe('buildHiddenTrAction (TR-3, QF-20260904-169)', () => {
+describe('buildHiddenTrAction (TR-3, QF-20260904-169; quoting per SECURITY sub-agent finding SEC-2)', () => {
   it('never returns the wrapper path bare — always wraps it in the hidden-window launcher', () => {
     const action = buildHiddenTrAction({ hiddenLauncherPath: 'C:/repo/scripts/cron/run-hidden.vbs', wrapperPath: 'C:/repo/scripts/cron/foo.cmd' });
-    expect(action).toBe('wscript.exe //B C:/repo/scripts/cron/run-hidden.vbs C:/repo/scripts/cron/foo.cmd');
+    expect(action).toBe('wscript.exe //B "C:/repo/scripts/cron/run-hidden.vbs" "C:/repo/scripts/cron/foo.cmd"');
     expect(action).not.toBe('C:/repo/scripts/cron/foo.cmd');
+  });
+
+  it('quotes both paths, matching the REAL live-registered EHG EVA Scheduler Watcher task\'s own stored <Arguments> shape', () => {
+    // Measured via `schtasks /Query /TN "EHG EVA Scheduler Watcher" /XML`:
+    //   <Arguments>//B "C:\...\run-hidden.vbs" "C:\...\eva-watcher-task.cmd"</Arguments>
+    const action = buildHiddenTrAction({ hiddenLauncherPath: 'C:\\repo\\scripts\\cron\\run-hidden.vbs', wrapperPath: 'C:\\repo\\scripts\\cron\\foo.cmd' });
+    expect(action).toBe('wscript.exe //B "C:\\repo\\scripts\\cron\\run-hidden.vbs" "C:\\repo\\scripts\\cron\\foo.cmd"');
   });
 
   it('throws without either path', () => {
@@ -74,7 +81,7 @@ describe('buildHiddenTrAction (TR-3, QF-20260904-169)', () => {
 });
 
 describe('buildCreateArgs', () => {
-  const trAction = 'wscript.exe //B C:/repo/scripts/cron/run-hidden.vbs C:/repo/scripts/cron/foo.cmd';
+  const trAction = 'wscript.exe //B "C:/repo/scripts/cron/run-hidden.vbs" "C:/repo/scripts/cron/foo.cmd"';
 
   it('/TR is the hidden-launch action, never the bare wrapper (regression guard for QF-20260904-169)', () => {
     const args = buildCreateArgs({ taskName: 'T', trAction, intervalMinutes: 15, startTime: '00:11' });
@@ -106,10 +113,14 @@ describe('buildRemoveArgs / buildQueryArgs', () => {
   });
 });
 
-describe('verifyHiddenLaunch (reads the OS-returned XML, never our own input)', () => {
-  it('passes for a hidden-launch, enabled, repeating task', () => {
-    const xml = '<Task><Actions><Exec><Command>wscript.exe //B C:\\repo\\scripts\\cron\\run-hidden.vbs C:\\repo\\scripts\\cron\\foo.cmd</Command></Exec></Actions><Triggers><Repetition><Interval>PT15M</Interval></Repetition></Triggers></Task>';
-    expect(verifyHiddenLaunch(xml).ok).toBe(true);
+// Real shape, measured via `schtasks /Query /TN "EHG EVA Scheduler Watcher" /XML`: Task
+// Scheduler splits a multi-token action into SEPARATE <Command> and <Arguments> elements --
+// <Command>wscript.exe</Command> alone, never the whole "wscript.exe //B ..." string.
+const REAL_HIDDEN_LAUNCH_XML = '<Task><Actions><Exec><Command>wscript.exe</Command><Arguments>//B "C:\\repo\\scripts\\cron\\run-hidden.vbs" "C:\\repo\\scripts\\cron\\foo.cmd"</Arguments></Exec></Actions><Triggers><Repetition><Interval>PT15M</Interval></Repetition></Triggers></Task>';
+
+describe('verifyHiddenLaunch (reads the OS-returned XML, never our own input; SECURITY sub-agent finding SEC-1)', () => {
+  it('passes for a hidden-launch, enabled, repeating task (REAL Command+Arguments split, not a synthetic single-element fixture)', () => {
+    expect(verifyHiddenLaunch(REAL_HIDDEN_LAUNCH_XML).ok).toBe(true);
   });
 
   it('FAILS for a task whose /TR is the bare .cmd — the exact QF-20260904-169 shape', () => {
@@ -119,13 +130,20 @@ describe('verifyHiddenLaunch (reads the OS-returned XML, never our own input)', 
     expect(v.problems.join(' ')).toMatch(/hidden-window launcher/);
   });
 
+  it('FAILS if <Command> is wscript.exe but <Arguments> never names run-hidden.vbs (e.g. a future edit that swaps the launcher)', () => {
+    const xml = '<Task><Actions><Exec><Command>wscript.exe</Command><Arguments>//B "C:\\repo\\other-launcher.vbs" "C:\\repo\\foo.cmd"</Arguments></Exec></Actions><Triggers><Repetition><Interval>PT15M</Interval></Repetition></Triggers></Task>';
+    const v = verifyHiddenLaunch(xml);
+    expect(v.ok).toBe(false);
+    expect(v.problems.join(' ')).toMatch(/run-hidden\.vbs/);
+  });
+
   it('FAILS for a disabled task', () => {
-    const xml = '<Task><Actions><Exec><Command>wscript.exe //B run-hidden.vbs foo.cmd</Command></Exec></Actions><Triggers><Repetition><Interval>PT15M</Interval></Repetition></Triggers><Settings><Enabled>false</Enabled></Settings></Task>';
+    const xml = REAL_HIDDEN_LAUNCH_XML.replace('</Task>', '<Settings><Enabled>false</Enabled></Settings></Task>');
     expect(verifyHiddenLaunch(xml).ok).toBe(false);
   });
 
   it('FAILS for a non-repeating task', () => {
-    const xml = '<Task><Actions><Exec><Command>wscript.exe //B run-hidden.vbs foo.cmd</Command></Exec></Actions></Task>';
+    const xml = '<Task><Actions><Exec><Command>wscript.exe</Command><Arguments>//B run-hidden.vbs foo.cmd</Arguments></Exec></Actions></Task>';
     expect(verifyHiddenLaunch(xml).ok).toBe(false);
   });
 
