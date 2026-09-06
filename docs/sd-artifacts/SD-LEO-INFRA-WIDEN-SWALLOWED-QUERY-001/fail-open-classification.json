@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:31:07.154Z",
+  "generated_at": "2026-09-06T18:39:42.351Z",
   "counts": {
-    "has_catch": 66
+    "has_catch": 62
   },
   "results": [
     {
@@ -51,34 +51,6 @@
       "line": 261,
       "kind": "data",
       "snippet": "const { data: existing } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/BaseExecutor.js",
-      "line": 863,
-      "kind": "data",
-      "snippet": "const { data: currentClaim } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/BaseExecutor.js",
-      "line": 873,
-      "kind": "data",
-      "snippet": "const { data: uuidClaim } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/BaseExecutor.js",
-      "line": 1099,
-      "kind": "data",
-      "snippet": "const { data: profile } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/BaseExecutor.js",
-      "line": 1218,
-      "kind": "data",
-      "snippet": "const { data: existingExecution } = await this.supabase",
       "classification": "has_catch"
     },
     {
