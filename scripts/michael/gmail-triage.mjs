@@ -69,9 +69,15 @@ export function labelChangeFor(intent) {
   return m ? { addLabelIds: [m[1]], removeLabelIds: [] } : null;
 }
 
-/** Pure: the modify budget left for the ET date — the ceiling minus threads_modified over every prior run. */
-export function budgetFor(ceiling, priorRuns = []) {
-  const used = priorRuns.reduce((n, r) => n + (r && r.counts && Number.isFinite(Number(r.counts.threads_modified)) ? Number(r.counts.threads_modified) : 0), 0);
+/**
+ * Pure: the modify budget left for the ET date. `used` is the LEDGER count — today's rows carrying a feeder
+ * intent with action_taken_at set — never a sum of finished runs' counts: a run killed or hung mid-loop
+ * leaves no finished count, but every thread it modified is stamped (adversarial review of PR 8378). Prior
+ * runs' threads_modified is taken as a floor so an unstamped modify (stamp write refused) still counts.
+ */
+export function budgetFor(ceiling, priorRuns = [], stampedToday = 0) {
+  const fromRuns = priorRuns.reduce((n, r) => n + (r && r.counts && Number.isFinite(Number(r.counts.threads_modified)) ? Number(r.counts.threads_modified) : 0), 0);
+  const used = Math.max(Number(stampedToday) || 0, fromRuns);
   return { used, budget: Math.max(ceiling - used, 0) };
 }
 
@@ -144,8 +150,11 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
     etDateOverride,
     dryRun: !apply,
     run: async ({ etDate, priorRuns = [] }) => {
-      const { used, budget } = budgetFor(ceiling, priorRuns);
-      const counts = { dry_run: !apply, modify: modify, ceiling, budget_before: budget, threads_modified: 0, modify_failed: 0, ceiling_hit: false, borderline: 0, labels_seen: 0, missing_labels: [], threads_seen: 0, matched: 0, unmatched: 0, fleet: 0, intents: 0, skipped_class: 0, meta_failed: 0, truncated_query: [] };
+      // The ledger is the budget's source of truth (bounded read; the ceiling hard max is 500, so a full page means exhausted).
+      const stamped = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).not('action_intent', 'is', null).not('action_taken_at', 'is', null), { select: 'thread_id' });
+      if (stamped.error) return { status: 'failed', counts: { dry_run: !apply, error_code: 'READ_FAILED', phase: 'ledger' } };
+      const { used, budget } = budgetFor(ceiling, priorRuns, stamped.rows.length);
+      const counts = { dry_run: !apply, modify: modify, ceiling, budget_before: budget, threads_modified: 0, modify_failed: 0, modified_unrecorded: 0, skipped_changed: 0, ceiling_hit: false, borderline: 0, labels_seen: 0, missing_labels: [], threads_seen: 0, matched: 0, unmatched: 0, fleet: 0, intents: 0, skipped_class: 0, meta_failed: 0, truncated_query: [] };
       counts.date_modified_before = used;
 
       // 1. labels: reconcile the registry (three owned columns) and find configured classes missing from Gmail
@@ -237,22 +246,32 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
         const pending = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).not('action_intent', 'is', null).is('action_taken_at', null).eq('borderline', false).order('created_at', { ascending: true }), { select: 'thread_id,action_intent' });
         if (pending.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'pending' } };
         counts.pending_intents = pending.rows.length;
+        // Every modify counts against the date, recorded or not: `spent` = stamped + unrecorded.
+        const spent = () => counts.threads_modified + counts.modified_unrecorded;
         for (const item of pending.rows) {
-          if (counts.threads_modified >= budget) { counts.ceiling_hit = true; break; }
+          if (spent() >= budget) { counts.ceiling_hit = true; break; }
           const change = labelChangeFor(item.action_intent);
           if (!change) { counts.modify_failed += 1; continue; }
+          // Re-read the row right before the call: a concurrent fire or a chairman action (gmail-act) since the
+          // pending read may have stamped it or changed the intent; act only on the intent as recorded now.
+          const fresh = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).eq('thread_id', item.thread_id), { select: 'action_intent,action_taken_at,borderline' });
+          if (fresh.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'recheck' } };
+          const row = fresh.rows[0];
+          if (!row || row.action_taken_at || row.borderline || row.action_intent !== item.action_intent) { counts.skipped_changed += 1; continue; }
           attempted += 1;
           const m = await modifyThread({ threadId: item.thread_id, ...change }, deps);
           if (!m.ok) { counts.modify_failed += 1; continue; }
-          const stamp = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update({ action_taken_at: new Date().toISOString() }).eq('et_date', etDate).eq('thread_id', item.thread_id).is('action_taken_at', null));
-          if (!stamp.ok) return { status: 'failed', counts: { ...counts, error_code: stamp.refusal, phase: 'stamp' } };
+          // The stamp must land on exactly one still-unstamped row; zero rows means someone else acted meanwhile —
+          // the Gmail call already happened, so it is counted against the ceiling as unrecorded.
+          const stamp = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update({ action_taken_at: new Date().toISOString() }).eq('et_date', etDate).eq('thread_id', item.thread_id).is('action_taken_at', null).select('thread_id'));
+          if (!stamp.ok || !Array.isArray(stamp.data) || stamp.data.length !== 1) { counts.modified_unrecorded += 1; continue; }
           counts.threads_modified += 1;
         }
-        if (!counts.ceiling_hit && budget === 0 && pending.rows.length) counts.ceiling_hit = true;
-        counts.intents_left = Math.max(pending.rows.length - counts.threads_modified - counts.modify_failed, 0);
+        if (!counts.ceiling_hit && pending.rows.length && spent() >= budget) counts.ceiling_hit = true;
+        counts.intents_left = Math.max(pending.rows.length - spent() - counts.modify_failed - counts.skipped_changed, 0);
       }
-      if (attempted > 0 && counts.threads_modified === 0) return { status: 'failed', counts: { ...counts, error_code: 'ALL_MODIFIES_FAILED', phase: 'modify' } };
-      const degraded = counts.missing_labels.length > 0 || counts.truncated_query.length > 0 || counts.meta_failed > 0 || counts.ceiling_hit || counts.modify_failed > 0;
+      if (attempted > 0 && counts.modify_failed === attempted) return { status: 'failed', counts: { ...counts, error_code: 'ALL_MODIFIES_FAILED', phase: 'modify' } };
+      const degraded = counts.missing_labels.length > 0 || counts.truncated_query.length > 0 || counts.meta_failed > 0 || counts.ceiling_hit || counts.modify_failed > 0 || counts.modified_unrecorded > 0;
       return { status: degraded ? 'degraded' : 'ok', counts, preview: apply ? undefined : rows };
     },
   }, { sb, env, now });
