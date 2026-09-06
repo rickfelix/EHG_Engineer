@@ -169,9 +169,11 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
         let updates = 0;
         for (const row of rows) {
           const patch = Object.fromEntries(ITEM_UPDATE_KEYS.map((k) => [k, row[k]]));
-          // A retry (degraded runs re-arm every 15 min) must never reset a class the seat wrote: verified_by is
-          // the seat's stamp (classify-apply allow-list), so the guard is action_taken_at IS NULL AND verified_by IS NULL.
-          const u = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update(patch).eq('et_date', etDate).eq('thread_id', row.thread_id).is('action_taken_at', null).is('verified_by', null));
+          // A retry (degraded runs re-arm every 15 min) must never reset a class the seat wrote. The guard
+          // does not lean on a seat stamp: the feeder rewrites only rows it queued itself (class IS NULL) or
+          // rule-stamped itself (rule_key set); a seat-classified row has class set and rule_key null.
+          // verified_by IS NULL is kept as belt-and-braces for the Opus re-judge stamp (spec §5).
+          const u = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update(patch).eq('et_date', etDate).eq('thread_id', row.thread_id).is('action_taken_at', null).is('verified_by', null).or('class.is.null,rule_key.not.is.null'));
           if (!u.ok) return { status: 'failed', counts: { ...counts, error_code: u.refusal, phase: 'items', updates } };
           updates += 1;
         }
