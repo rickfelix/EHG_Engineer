@@ -175,7 +175,11 @@ async function autoValidateUserStories(sdId, sbClient) {
   const { data: stories, error: storiesError } = await supabase
     .from('user_stories')
     .select('id, story_key, title, status, validation_status, acceptance_criteria, implementation_context')
-    .eq('sd_id', resolvedSdId);
+    .eq('sd_id', resolvedSdId)
+    // count-truncation-diff-lint: bounded, not paginated -- an SD legitimately never has more
+    // than a few dozen user stories, so 500 is a generous ceiling that can never truncate real
+    // data while still making this read provably bounded (classifier requires N < 1000).
+    .limit(500);
 
   if (storiesError) {
     console.error('❌ Error fetching user stories:', storiesError.message);

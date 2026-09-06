@@ -59,6 +59,7 @@ function makeClient(opts) {
       update(d) { st.op = 'update'; st.updateData = d; return api; },
       eq(k, v) { st.eqs[k] = v; return api; },
       in(k, arr) { st.ins[k] = arr; return api; },
+      limit() { return api; },
       maybeSingle() { return Promise.resolve(resolve()); },
       single() { return Promise.resolve(resolve()); },
       then(res, rej) { return Promise.resolve(resolve()).then(res, rej); },
