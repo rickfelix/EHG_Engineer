@@ -221,6 +221,9 @@ scripts/verify-*.cjs
 !scripts/verify-completion.mjs
 !scripts/verify-git-commit-status.js
 !scripts/verify-app-architecture.js
+# SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-F: quick_fixes.metadata activation-invariant runbook
+# verifier (chairman/coordinator run this post-migration-apply; see the script's own header).
+!scripts/verify-quick-fixes-metadata-activation.mjs
 # Marketing schema contract verifier (SD-EHG-MARKETING-DISTRIBUTION-INFRASTRUCTURE-ORCH-001-A)
 # Wired into CI (.github/workflows/marketing-schema-verify.yml) and LEAD-TO-PLAN
 # pre-handoff gate for Marketing Distribution phases B/C/D.
