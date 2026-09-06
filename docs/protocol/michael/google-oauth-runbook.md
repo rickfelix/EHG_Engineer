@@ -36,7 +36,7 @@ node scripts/michael/google-consent.mjs --status          # seven lines, one per
 node scripts/michael/google-consent.mjs --status --json   # one JSON object
 ```
 
-Fields: `health` (`ok` | `expiring` | `partial_scope` | `invalid_grant` | `absent`), scopes, `expires_at` with hours to expiry, `last_refreshed_at`, `last_error`, stored `key_fingerprint` beside the host key fingerprint (`MISMATCH` means the host key is not the one the blob was encrypted under: restore the original `MICHAEL_ENCRYPTION_KEY` or re-consent). The same fields are served at `GET /api/michael/oauth/status` behind `requireAuth` + `requireAdminRole` (404 `NO_CREDENTIAL`, 503 `TABLES_ABSENT`).
+Fields: `health` (`ok` | `expiring` | `partial_scope` | `invalid_grant` | `absent`), scopes, `expires_at` with hours to expiry, `last_refreshed_at`, `last_error`, stored `key_fingerprint` beside the host key fingerprint (`MISMATCH` means the host key is not the one the blob was encrypted under: restore the original `MICHAEL_ENCRYPTION_KEY` or re-consent). `GET /api/michael/oauth/status` (behind `requireAuth` + `requireAdminRole`; 404 `NO_CREDENTIAL`, 503 `TABLES_ABSENT`) serves the stored fields plus `health`, `hours_to_expiry` and the re-consent command, but NOT the host-key comparison: `MISMATCH` is visible only from the CLI `--status`, which reads the host key.
 
 ## Refusal codes
 
