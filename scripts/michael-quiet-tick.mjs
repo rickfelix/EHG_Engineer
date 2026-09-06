@@ -18,6 +18,9 @@
 
 import 'dotenv/config';
 import { etLocalHour, etLocalMinute, etDateStr } from '../lib/time/chairman-et-wall-clock.js';
+// Window helpers and the brief deadline live in the feeder harness (child D FR-1); the tick re-exports
+// inWindow with its own default window so the seat's callers and tests keep the one-argument form.
+import { hhmmToMinutes, inWindow as feederInWindow, etMinuteOfDay, BRIEF_DEADLINE_ET } from '../lib/michael/feeder.mjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 // Recognized inbound kinds come from the drain-set registry (DRAIN_SETS.michael + role_drain_sets
 // rows), never a hand-rolled per-role kind list — tests/static-guards/drain-set-registry-readers
@@ -29,20 +32,12 @@ export const NEXT_WAKE_SECONDS = 900;
 // The seat's expected window (spec §1.5); the tick is ACTIVE inside it and QUIET outside.
 export const WINDOW_ET = Object.freeze({ start: '04:30', end: '07:30' });
 const CLASSIFY_AFTER_ET = '04:30';
-const BRIEF_DEADLINE_ET = '05:45';
 
-/** Pure: 'HH:MM' -> minutes since midnight. */
-export function hhmmToMinutes(hhmm) {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
-  if (!m) return NaN;
-  return Number(m[1]) * 60 + Number(m[2]);
-}
+export { hhmmToMinutes };
 
-/** Pure: is the ET wall-clock minute-of-day inside [start, end]? */
+/** Pure: is the ET wall-clock minute-of-day inside the INCLUSIVE [start, end] seat window? */
 export function inWindow(minuteOfDay, window = WINDOW_ET) {
-  const s = hhmmToMinutes(window.start), e = hhmmToMinutes(window.end);
-  if (!Number.isFinite(s) || !Number.isFinite(e) || !Number.isFinite(minuteOfDay)) return false;
-  return s <= e ? (minuteOfDay >= s && minuteOfDay <= e) : (minuteOfDay >= s || minuteOfDay <= e);
+  return feederInWindow(minuteOfDay, window);
 }
 
 /** Pure: space-free ISO-8601 ET stamp for the line (the only field that could carry whitespace). */
@@ -93,7 +88,7 @@ export async function countRows(sb, table, build = (q) => q) {
  * renderLines() turns into the line contract. Never throws.
  */
 export async function runQuietTick({ sb, now = new Date(), env = process.env } = {}) {
-  const etMinute = etLocalHour(now) * 60 + etLocalMinute(now);
+  const etMinute = etMinuteOfDay(now);
   const today = etDateStr(now);
   const mode = inWindow(etMinute) ? 'ACTIVE' : 'QUIET';
   const errors = [];
