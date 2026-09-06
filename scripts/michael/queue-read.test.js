@@ -103,9 +103,10 @@ describe('runQueueRead', () => {
     ]);
     // nothing written: reads only
     expect(dbCalls.every((c) => c.ops[0].op === 'select')).toBe(true);
+    const before = calls.length;
     const plain = await runQueueRead({ sb, argv: [], now: NOW, env, gmail: gmailFactory({}, calls) });
     expect(plain.items.every((i) => !('headers' in i))).toBe(true);
-    expect(calls.filter((c) => c[0] === 'factory')).toHaveLength(1);
+    expect(calls).toHaveLength(before); // without --headers the Gmail factory is never touched
     const gha = await runQueueRead({ sb, argv: ['--headers'], now: NOW, env: { GITHUB_ACTIONS: 'true' }, gmail: gmailFactory({}, calls) });
     expect(gha).toMatchObject({ ok: false, refusal: 'HOST_VENUE_REQUIRED' });
     const many = Array.from({ length: HEADERS_MAX + 5 }, (_, i) => ({ thread_id: `t${i}`, rule_key: null, last_message_id: null, borderline: false }));
