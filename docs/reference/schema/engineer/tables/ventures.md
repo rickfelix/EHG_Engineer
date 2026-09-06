@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 30
+**Generated**: 2026-09-06T17:42:38.372Z
+**Rows**: 157
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (91 total)
+## Columns (100 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -114,6 +114,15 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 | launched_at | `timestamp with time zone` | YES | - | - |
 | stack_descriptor | `jsonb` | YES | - | - |
 | seeded_from_venture_id | `uuid` | YES | - | Provenance: source venture this venture was reseeded from (clean-clone mechanism). Nullable, additive, no backfill. |
+| launch_mode | `text` | **NO** | `'simulated'::text` | Artifact-authenticity axis (simulated|live) — simulated: sim-gates verify labeled-simulation artifacts (default, current behavior). live: live-gates verify EXTERNAL observations only (deployed endpoint 200, real billing product id, real telemetry rows), never self-authored artifacts. Set by the chairman at S23/go-live. Distinct from pipeline_mode (lifecycle-stage axis: building/operations/growth/...). |
+| support_is_armed | `boolean` | **NO** | `false` | Explicit human/chairman-set FIRST CUSTOMER flag for the support pipeline. Default false. Never auto-detected (SD-FDBK-FIX-SCOPE-VENTURE-SUPPORT-001). Informational/readiness signal only -- does not block ticket intake/processing. |
+| support_armed_at | `timestamp with time zone` | YES | - | Timestamp support_is_armed was last set true by a human/chairman action. |
+| support_rail_address | `text` | YES | - | Per-venture support intake address (e.g. email alias or webhook path). lib/support/intake-pipeline.js resolves venture_id from a ticket's rail_address against this column when the caller does not already know the venture_id. |
+| teardown_disposition | `text` | YES | - | - |
+| teardown_disposition_reason | `text` | YES | - | - |
+| teardown_disposition_by | `text` | YES | - | - |
+| teardown_disposition_at | `timestamp with time zone` | YES | - | - |
+| stage_write_token | `text` | YES | - | SD-LEO-INFRA-STAGE-WRITER-CHOKE-001. TRANSIENT per-statement validation token, NOT a writer-identity history. Set in the SAME UPDATE as a current_lifecycle_stage change; validated against ventures_canonical_writer_policy(); then set back to NULL by zzz_enforce_canonical_stage_write_final on EVERY update, so the column is structurally NULL AT REST. That NULL-at-rest property is load-bearing: without it, one legitimate stamped write would leave a valid value behind that the next UNSTAMPED write to the same row would inherit. |
 
 ## Constraints
 
@@ -130,15 +139,20 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 - `ventures_seeded_from_venture_id_fkey`: seeded_from_venture_id → ventures(id)
 - `ventures_vision_id_fkey`: vision_id → eva_vision_documents(id)
 
+### Unique Constraints
+- `ventures_support_rail_address_unique`: UNIQUE (support_rail_address)
+
 ### Check Constraints
 - `ck_ventures_build_model`: CHECK (((build_model IS NULL) OR ((build_model)::text = ANY ((ARRAY['leo_bridge'::character varying, 'seeded_repo'::character varying])::text[]))))
 - `ventures_autonomy_level_check`: CHECK ((autonomy_level = ANY (ARRAY['L0'::text, 'L1'::text, 'L2'::text, 'L3'::text, 'L4'::text])))
 - `ventures_business_model_class_enum`: CHECK (((business_model_class IS NULL) OR (business_model_class = ANY (ARRAY['saas'::text, 'fintech'::text, 'healthcare'::text, 'civic'::text, 'ecommerce'::text, 'marketplace'::text, 'devtools'::text, 'media'::text, 'gaming'::text, 'artist'::text, 'publishing'::text, 'gallery'::text, 'agency'::text, 'education'::text, 'consumer'::text]))))
-- `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 26)))
+- `ventures_current_lifecycle_stage_check`: CHECK (((current_lifecycle_stage >= 1) AND (current_lifecycle_stage <= 27)))
 - `ventures_health_status_check`: CHECK (((health_status)::text = ANY ((ARRAY['healthy'::character varying, 'warning'::character varying, 'critical'::character varying])::text[])))
+- `ventures_launch_mode_check`: CHECK ((launch_mode = ANY (ARRAY['simulated'::text, 'live'::text])))
 - `ventures_pipeline_mode_check`: CHECK ((pipeline_mode = ANY (ARRAY['building'::text, 'operations'::text, 'growth'::text, 'scaling'::text, 'exit_prep'::text, 'divesting'::text, 'sold'::text])))
 - `ventures_portfolio_synergy_score_range`: CHECK (((portfolio_synergy_score IS NULL) OR ((portfolio_synergy_score >= (0)::numeric) AND (portfolio_synergy_score <= (1)::numeric))))
 - `ventures_target_platform_check`: CHECK ((target_platform = ANY (ARRAY['web'::text, 'mobile'::text, 'both'::text])))
+- `ventures_teardown_disposition_check`: CHECK (((teardown_disposition IS NULL) OR (teardown_disposition = ANY (ARRAY['pending_teardown'::text, 'retained'::text, 'torn_down'::text]))))
 - `ventures_time_horizon_classification_check`: CHECK ((time_horizon_classification = ANY (ARRAY['build_now'::text, 'park_later'::text, 'window_closing'::text])))
 - `ventures_venture_type_check`: CHECK ((venture_type = ANY (ARRAY['ui'::text, 'backend'::text, 'mixed'::text, 'data'::text])))
 - `ventures_vertical_category_check`: CHECK ((vertical_category = ANY (ARRAY['healthcare'::text, 'fintech'::text, 'edtech'::text, 'logistics'::text, 'other'::text])))
@@ -225,6 +239,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
   ```sql
   CREATE INDEX idx_ventures_status ON public.ventures USING btree (status)
   ```
+- `idx_ventures_teardown_disposition`
+  ```sql
+  CREATE INDEX idx_ventures_teardown_disposition ON public.ventures USING btree (teardown_disposition) WHERE (teardown_disposition IS NOT NULL)
+  ```
 - `idx_ventures_unique_active_name`
   ```sql
   CREATE UNIQUE INDEX idx_ventures_unique_active_name ON public.ventures USING btree (name) WHERE (status = ANY (ARRAY['active'::venture_status_enum, 'paused'::venture_status_enum]))
@@ -249,6 +267,10 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
   ```sql
   CREATE UNIQUE INDEX ventures_pkey ON public.ventures USING btree (id)
   ```
+- `ventures_support_rail_address_unique`
+  ```sql
+  CREATE UNIQUE INDEX ventures_support_rail_address_unique ON public.ventures USING btree (support_rail_address)
+  ```
 
 ## RLS Policies
 
@@ -265,10 +287,25 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 ## Triggers
 
+### aaa_enforce_canonical_stage_write
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_canonical_stage_write('early')`
+
+### aaa_reset_canonical_stage_write_token_insert
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION reset_stage_write_token_on_insert()`
+
 ### auto_populate_company_id_trigger
 
 - **Timing**: BEFORE INSERT
 - **Action**: `EXECUTE FUNCTION auto_populate_venture_company_id()`
+
+### enforce_stage_advancement_artifact_gate
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION fn_enforce_stage_advancement_artifact_gate()`
 
 ### enforce_tier0_stage_cap
 
@@ -284,6 +321,16 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 - **Timing**: BEFORE INSERT
 - **Action**: `EXECUTE FUNCTION trg_enforce_stage0_origin()`
+
+### trg_reject_live_born_venture
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION reject_live_born_venture()`
+
+### trg_reject_unaudited_launch_mode_flip
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION reject_unaudited_launch_mode_flip()`
 
 ### trg_sync_stage_work_on_advance
 
@@ -329,6 +376,11 @@ Example: {"intensity": 5, "color_override": "warm", "accessibility_strict": true
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION update_ventures_updated_at()`
+
+### zzz_enforce_canonical_stage_write_final
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_canonical_stage_write('final')`
 
 ---
 

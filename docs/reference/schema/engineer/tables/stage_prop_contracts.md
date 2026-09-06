@@ -4,7 +4,7 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
+**Generated**: 2026-09-06T17:42:38.372Z
 **Rows**: 34
 **RLS**: Enabled (2 policies)
 
@@ -39,7 +39,7 @@
 - `stage_prop_contracts_component_path_unique`: UNIQUE (component_path)
 
 ### Check Constraints
-- `stage_prop_contracts_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 26)))
+- `stage_prop_contracts_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 27)))
 
 ## Indexes
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 253,290
+**Generated**: 2026-09-06T17:42:38.372Z
+**Rows**: 1,056,811
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -41,6 +41,10 @@
 - `idx_retention_archive_run`
   ```sql
   CREATE INDEX idx_retention_archive_run ON public.retention_archive USING btree (run_id)
+  ```
+- `idx_retention_archive_source_table_id`
+  ```sql
+  CREATE INDEX idx_retention_archive_source_table_id ON public.retention_archive USING btree (source_table, source_id)
   ```
 - `idx_retention_archive_source_ts`
   ```sql

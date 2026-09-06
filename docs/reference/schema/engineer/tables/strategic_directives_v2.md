@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 4,810
+**Generated**: 2026-09-06T17:42:38.372Z
+**Rows**: 6,149
 **RLS**: Enabled (7 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (103 total)
+## Columns (105 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -38,12 +38,12 @@
 | success_metrics | `jsonb` | YES | - | SUCCESS METRICS: Array of quantifiable metrics to measure success. Format: [{ metric: "Name", target: "Target value", actual: "Current value" }] |
 | stakeholders | `jsonb` | YES | `'[]'::jsonb` | STAKEHOLDERS: Array of stakeholders and their roles. Format: [{ name: "Person/Team", role: "Role", contact: "Email/Slack" }] |
 | approved_by | `character varying(100)` | YES | - | APPROVED BY: Name/ID of person who approved this directive (typically LEAD agent or human reviewer). NULL if not yet approved. |
-| approval_date | `timestamp without time zone` | YES | - | APPROVAL DATE: Timestamp when directive was approved and moved to active status. NULL if not yet approved. |
-| effective_date | `timestamp without time zone` | YES | - | EFFECTIVE DATE: Date when this directive becomes active/enforceable. Can be future-dated for planned implementations. |
-| expiry_date | `timestamp without time zone` | YES | - | EXPIRY DATE: Optional expiration date for time-bound directives. NULL for indefinite directives. |
+| approval_date | `timestamp with time zone` | YES | - | APPROVAL DATE: Timestamp when directive was approved and moved to active status. NULL if not yet approved. |
+| effective_date | `timestamp with time zone` | YES | - | EFFECTIVE DATE: Date when this directive becomes active/enforceable. Can be future-dated for planned implementations. |
+| expiry_date | `timestamp with time zone` | YES | - | EXPIRY DATE: Optional expiration date for time-bound directives. NULL for indefinite directives. |
 | review_schedule | `character varying(100)` | YES | - | REVIEW SCHEDULE: Cadence for reviewing this directive (e.g., "quarterly", "annually", "on completion"). NULL if no review needed. |
-| created_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | CREATED AT: Timestamp when this record was first created in the database. Auto-set on INSERT. |
-| updated_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | UPDATED AT: Timestamp of last modification. Auto-updated on any UPDATE. Use this to track recent changes. |
+| created_at | `timestamp with time zone` | YES | `CURRENT_TIMESTAMP` | CREATED AT: Timestamp when this record was first created in the database. Auto-set on INSERT. |
+| updated_at | `timestamp with time zone` | YES | `CURRENT_TIMESTAMP` | UPDATED AT: Timestamp of last modification. Auto-updated on any UPDATE. Use this to track recent changes. |
 | created_by | `character varying(100)` | YES | - | CREATED BY: User/agent who created this directive (e.g., "LEAD", "human:john@example.com"). NULL if system-generated. |
 | updated_by | `character varying(100)` | YES | - | UPDATED BY: User/agent who last modified this directive. NULL if no updates since creation. |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | METADATA: Flexible JSONB object for additional custom fields not covered by schema. Use sparingly - prefer structured columns. |
@@ -64,7 +64,7 @@
 | sd_key | `text` | **NO** | - | SD KEY: Human-readable key format used by Vision Alignment Pipeline (e.g., SD-2025-09-22-vision-pipeline). Alternative to id field for workflows. |
 | parent_sd_id | `character varying(50)` | YES | - | Parent SD ID for Child SD Pattern. If set, this SD is a child implementation unit of the parent orchestrator SD. Parent SDs coordinate children but do not contain implementation code. |
 | is_active | `boolean` | YES | `true` | IS ACTIVE: Boolean flag indicating if this SD is currently active. FALSE = soft-deleted/archived. Default: TRUE. |
-| archived_at | `timestamp without time zone` | YES | - | ARCHIVED AT: Timestamp when this directive was archived. NULL if currently active. Set when is_active changes to FALSE. |
+| archived_at | `timestamp with time zone` | YES | - | ARCHIVED AT: Timestamp when this directive was archived. NULL if currently active. Set when is_active changes to FALSE. |
 | archived_by | `character varying(100)` | YES | - | ARCHIVED BY: User/agent who archived this directive. NULL if not archived. |
 | governance_metadata | `jsonb` | YES | `'{}'::jsonb` | GOVERNANCE METADATA: Flexible JSONB object for governance-related data (compliance, approvals, audit trails). Structure varies by org policy. |
 | target_application | `character varying(20)` | YES | `'EHG'::character varying` | TARGET APPLICATION: Which application this SD targets. Valid values: "EHG" (customer-facing app) or "EHG_Engineer" (management dashboard). Default: EHG. |
@@ -125,6 +125,8 @@ Use the id column instead - it is the canonical identifier. |
 | initiative_id | `uuid` | YES | - | Initiative grain: the OKR objective this (orchestrator) SD advances. Nullable; forward-looking adoption. SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001. |
 | lineage_attribution_confidence | `numeric(5,2)` | YES | - | - |
 | lineage_verdict | `text` | YES | - | - |
+| claim_gate_client_version | `integer(32)` | YES | - | - |
+| lifecycle_write_token | `text` | YES | - | SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001. TRANSIENT per-statement validation token, NOT a writer-identity history. Set in the SAME UPDATE as a status/current_phase/completion_date change; validated against sd_canonical_writer_policy(); then set back to NULL by zzz_enforce_canonical_lifecycle_write_final on EVERY update, so the column is structurally NULL AT REST. That NULL-at-rest property is load-bearing: without it, one legitimate stamped write would leave a valid value behind that every subsequent UNSTAMPED write to the same row would inherit, degrading the guard to no-guard on exactly the hot rows canonical writers touch most. CONSEQUENCE: this column carries ZERO at-rest audit value. For writer-identity audit use the existing log_sd_mutation_audit() / trg_sd_governance_metadata_audit path instead. |
 
 ## Constraints
 
@@ -350,6 +352,11 @@ Use the id column instead - it is the canonical identifier. |
 
 ## Triggers
 
+### aaa_enforce_canonical_lifecycle_write
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_canonical_lifecycle_write('early')`
+
 ### audit_strategic_directives
 
 - **Timing**: AFTER INSERT
@@ -395,6 +402,16 @@ Use the id column instead - it is the canonical identifier. |
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION enforce_progress_on_completion()`
 
+### roadmap_wave_rollup_on_sd_status
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION trg_roadmap_wave_rollup_on_sd_status()`
+
+### sd_cancel_restamp_remainder
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION trg_restamp_items_on_sd_cancel()`
+
 ### status_auto_transition
 
 - **Timing**: BEFORE UPDATE
@@ -404,6 +421,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION check_intensity_required()`
+
+### tr_claim_eligibility_observe
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION claim_eligibility_observe()`
 
 ### tr_enforce_business_value_gate
 
@@ -625,6 +647,11 @@ Use the id column instead - it is the canonical identifier. |
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION trg_audit_governance_metadata()`
 
+### trg_sd_mutation_audit
+
+- **Timing**: AFTER UPDATE
+- **Action**: `EXECUTE FUNCTION log_sd_mutation_audit()`
+
 ### trg_sync_sd_code_user_facing
 
 - **Timing**: BEFORE INSERT
@@ -664,6 +691,11 @@ Use the id column instead - it is the canonical identifier. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION validate_child_sd_sequence()`
+
+### zzz_enforce_canonical_lifecycle_write_final
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_canonical_lifecycle_write('final')`
 
 ## Usage Examples
 
