@@ -2,10 +2,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { stubClient } from '../../lib/michael/db.test.js';
-import { runQueueRead, exitCodeForQueue, READ_BOUND, HEADERS_MAX, ITEM_KEYS, TASK_KEYS } from './queue-read.mjs';
+import { runQueueRead, exitCodeForQueue, validEtDate, READ_BOUND, HEADERS_MAX, ITEM_KEYS, TASK_KEYS } from './queue-read.mjs';
 
-// 05:00 ET on 2026-09-06 (EDT) -> 09:00Z
-const NOW = new Date('2026-09-06T09:00:00.000Z');
+// 22:30 ET on 2026-09-06 (EDT) -> 02:30Z on the 7th: a UTC date slice would read the wrong day (adversarial review)
+const NOW = new Date('2026-09-07T02:30:00.000Z');
 const env = { GITHUB_ACTIONS: 'false', CI: '' };
 const MISSING = { data: null, error: { code: '42P01', message: 'relation does not exist' } };
 const ITEMS = [
@@ -15,11 +15,11 @@ const ITEMS = [
 const TASKS = [{ task_id: 'k1', proposed_date: null, role_tag: 'home' }, { task_id: 'k2', proposed_date: '2026-09-07' }];
 
 /** DB stub scripted per table; records every call. `counts` answers the exact-count reads. */
-function db({ items = ITEMS, tasks = TASKS, absent = false, counts = {}, fail = null } = {}) {
+function db({ items = ITEMS, tasks = TASKS, absent = false, absentTasks = false, counts = {}, fail = null } = {}) {
   const calls = [];
   const sb = stubClient((table, ops) => {
     calls.push({ table, ops });
-    if (absent) return MISSING;
+    if (absent || (absentTasks && table === 'michael_todoist_snapshot')) return MISSING;
     if (fail === table) return { data: null, error: { code: '57014', message: 'statement timeout' } };
     const head = ops[0].args[1] && ops[0].args[1].head === true;
     if (head) return { data: null, count: counts[table] ?? null, error: null };
@@ -69,7 +69,15 @@ describe('runQueueRead', () => {
     const d = await runQueueRead({ sb, argv: ['--date', '2026-09-05'], now: NOW, env });
     expect(d).toMatchObject({ ok: false, refusal: 'FLAG_UNSUPPORTED' }); expect(exitCodeForQueue(d)).toBe(2);
     const f = await runQueueRead({ sb: db({ fail: 'michael_todoist_snapshot' }).sb, argv: [], now: NOW, env });
-    expect(f.ok).toBe(false); expect(f.errors).toHaveLength(1); expect(f.items).toHaveLength(2); expect(exitCodeForQueue(f)).toBe(1);
+    expect(f).toMatchObject({ ok: false, refusal: 'READ_FAILED' }); expect(f.message).toMatch(/statement timeout/);
+    expect(f.errors).toHaveLength(1); expect(f.items).toHaveLength(2); expect(exitCodeForQueue(f)).toBe(1);
+    // one table absent while the other is present is a partial read, reported, never an empty task queue
+    const half = await runQueueRead({ sb: db({ absentTasks: true }).sb, argv: [], now: NOW, env });
+    expect(half).toMatchObject({ ok: false, refusal: 'READ_FAILED', tables_absent: false }); expect(half.message).toMatch(/relation absent/); expect(half.items).toHaveLength(2);
+    // boolean flags take no value; impossible calendar dates are refused here, not by Postgres
+    expect(await runQueueRead({ sb, argv: ['--headers', 'yes'], now: NOW, env })).toMatchObject({ ok: false, refusal: 'FLAG_INVALID' });
+    expect(await runQueueRead({ sb, argv: ['--et-date', '2026-13-45'], now: NOW, env })).toMatchObject({ ok: false, refusal: 'ET_DATE_INVALID' });
+    expect(validEtDate('2026-02-29')).toBe(false); expect(validEtDate('2028-02-29')).toBe(true);
   });
   it('absent tables yield empty lists, ok, exit 0 and no second read', async () => {
     const { sb, calls } = db({ absent: true });
@@ -108,7 +116,17 @@ describe('runQueueRead', () => {
     expect(plain.items.every((i) => !('headers' in i))).toBe(true);
     expect(calls).toHaveLength(before); // without --headers the Gmail factory is never touched
     const gha = await runQueueRead({ sb, argv: ['--headers'], now: NOW, env: { GITHUB_ACTIONS: 'true' }, gmail: gmailFactory({}, calls) });
-    expect(gha).toMatchObject({ ok: false, refusal: 'HOST_VENUE_REQUIRED' });
+    expect(gha).toMatchObject({ ok: false, refusal: 'HOST_VENUE_REQUIRED' }); expect(exitCodeForQueue(gha)).toBe(2);
+    // the grant is resolved once, before the loop; a dead grant is one attempt and a failed run (exit 1), never one per thread
+    let resolves = 0;
+    const dead = await runQueueRead({ sb, argv: ['--headers'], now: NOW, env, gmail: gmailFactory({}, []), resolveAuth: async () => { resolves += 1; throw Object.assign(new Error('invalid_grant'), { code: 'OAUTH_REFRESH_FAILED' }); } });
+    expect(dead).toMatchObject({ ok: false, refusal: 'HEADERS_AUTH_FAILED' }); expect(resolves).toBe(1); expect(exitCodeForQueue(dead)).toBe(1);
+    const liveCalls = [];
+    const live = await runQueueRead({ sb, argv: ['--headers'], now: NOW, env, gmail: gmailFactory({}, liveCalls), resolveAuth: async () => { resolves += 1; return 'RESOLVED'; } });
+    expect(resolves).toBe(2); expect(liveCalls.filter((c) => c[0] === 'factory').every((c) => c[1] === 'RESOLVED')).toBe(true); expect(live.ok).toBe(true);
+    // every fetch failing is a failed run, not ok with a count
+    const allFail = await runQueueRead({ sb, argv: ['--headers'], now: NOW, env, auth: 'AUTH', gmail: gmailFactory({ reject: new Set(['t1', 't2']) }, []) });
+    expect(allFail).toMatchObject({ ok: false, refusal: 'HEADERS_FAILED', counts: { headers_failed: 2 } }); expect(exitCodeForQueue(allFail)).toBe(1);
     const many = Array.from({ length: HEADERS_MAX + 5 }, (_, i) => ({ thread_id: `t${i}`, rule_key: null, last_message_id: null, borderline: false }));
     const capCalls = [];
     const capped = await runQueueRead({ sb: db({ items: many }).sb, argv: ['--headers'], now: NOW, env, auth: 'AUTH', gmail: gmailFactory({}, capCalls) });

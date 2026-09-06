@@ -16,7 +16,7 @@
 import 'dotenv/config';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { createMichaelClient, parseArgs, readRows, refusal, emit } from '../../lib/michael/db.mjs';
-import { assertHostVenue } from '../../lib/integrations/google/chairman-oauth.js';
+import { assertHostVenue, getAuthenticatedClient } from '../../lib/integrations/google/chairman-oauth.js';
 import { getThreadMeta } from '../../lib/michael/gmail-client.mjs';
 import { etDateStr } from '../../lib/time/chairman-et-wall-clock.js';
 
@@ -27,10 +27,14 @@ export const HEADERS_MAX = 200;
 export const ITEM_KEYS = Object.freeze(['thread_id', 'rule_key', 'last_message_id', 'borderline']);
 export const TASK_KEYS = Object.freeze(['task_id', 'proposed_date']);
 
-/** Pure: exit code for the CLI — 0 for a read (empty, inert or truncated alike), 1 for a read failure, 2 for a refusal. */
+/** Refusals that are failures of the read itself (exit 1), not of the invocation (exit 2). */
+export const RUN_FAILURES = Object.freeze(['READ_FAILED', 'HEADERS_AUTH_FAILED', 'HEADERS_FAILED']);
+
+/** Pure: exit code for the CLI — 0 for a read (empty, inert or truncated alike), 1 for a failed read or header fetch, 2 for a refused invocation. */
 export function exitCodeForQueue(r) {
-  if (!r || r.ok === false) return r && r.refusal ? 2 : 1;
-  return Array.isArray(r.errors) && r.errors.length ? 1 : 0;
+  if (!r) return 1;
+  if (r.ok === false) return RUN_FAILURES.includes(r.refusal) || !r.refusal ? 1 : 2;
+  return 0;
 }
 
 /** Exact count for one queue, taken ONLY after the bounded read established the table is present. Null on any error. */
@@ -46,18 +50,28 @@ function pick(row, keys) {
   return Object.fromEntries(keys.map((k) => [k, row && row[k] !== undefined ? row[k] : null]));
 }
 
-/** The reader. deps: { sb, argv, now, env, auth, gmail (factory) }. Never throws. */
-export async function runQueueRead({ sb, argv = [], now = new Date(), env = process.env, auth, gmail } = {}) {
+/** Pure: a calendar-valid YYYY-MM-DD (2026-13-45 is refused here, not by Postgres). */
+export function validEtDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+/** The reader. deps: { sb, argv, now, env, auth, gmail (factory), resolveAuth }. Never throws. */
+export async function runQueueRead({ sb, argv = [], now = new Date(), env = process.env, auth, gmail, resolveAuth = getAuthenticatedClient } = {}) {
   const a = parseArgs(argv);
   if (a.date !== undefined) return refusal('FLAG_UNSUPPORTED', '--date is not supported; use --et-date YYYY-MM-DD');
+  for (const flag of ['headers', 'json']) if (a[flag] !== undefined && a[flag] !== true) return refusal('FLAG_INVALID', `--${flag} takes no value (got ${JSON.stringify(a[flag])})`);
   const etDate = a['et-date'] !== undefined ? String(a['et-date']) : etDateStr(now);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(etDate)) return refusal('ET_DATE_INVALID', '--et-date must be YYYY-MM-DD');
+  if (!validEtDate(etDate)) return refusal('ET_DATE_INVALID', '--et-date must be a valid YYYY-MM-DD');
   const headers = a.headers === true;
   if (headers) { try { assertHostVenue(env); } catch (e) { return refusal(e.code || 'HOST_VENUE_REQUIRED', e.message); } }
 
   const items = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).is('class', null).order('created_at', { ascending: true }), { select: ITEM_KEYS.join(',') });
   if (items.tables_absent) return { ok: true, tables_absent: true, et_date: etDate, items: [], tasks: [], counts: { items: 0, tasks: 0 }, errors: [] };
   const tasks = await readRows(sb, 'michael_todoist_snapshot', (q) => q.eq('et_date', etDate).is('effort_grade', null).order('created_at', { ascending: true }), { select: TASK_KEYS.join(',') });
+  // one table present and the other absent is a partial read, never an empty queue
+  if (tasks.tables_absent) tasks.error = 'michael_todoist_snapshot: relation absent while michael_gmail_triage_items is present';
   const errors = [items, tasks].map((r) => r.error).filter(Boolean);
 
   const counts = { items: items.rows.length, tasks: tasks.rows.length, items_truncated: items.rows.length >= READ_BOUND, tasks_truncated: tasks.rows.length >= READ_BOUND };
@@ -65,8 +79,15 @@ export async function runQueueRead({ sb, argv = [], now = new Date(), env = proc
   if (counts.tasks_truncated) counts.tasks_total = await countExact(sb, 'michael_todoist_snapshot', (q) => q.eq('et_date', etDate).is('effort_grade', null));
 
   const out = { ok: errors.length === 0, tables_absent: false, et_date: etDate, items: items.rows.map((r) => pick(r, ITEM_KEYS)), tasks: tasks.rows.map((r) => pick(r, TASK_KEYS)), counts, errors };
+  // a failed read still prints what was read, but as a named failure (emit() renders REFUSED <code>: <message>)
+  if (errors.length) Object.assign(out, { refusal: 'READ_FAILED', message: errors.join('; ') });
   if (headers && out.items.length) {
-    const deps = { auth, gmailFactory: gmail, sb, env };
+    // The grant is resolved ONCE: a dead grant is one refresh attempt and one last_error write, never one per thread.
+    let client = auth;
+    if (!client) {
+      try { client = await resolveAuth({ sb, env }); } catch (e) { return { ...out, ok: false, refusal: 'HEADERS_AUTH_FAILED', message: `the chairman grant could not be resolved: ${(e && e.code) || 'AUTH'}` }; }
+    }
+    const deps = { auth: client, gmailFactory: gmail, sb, env };
     counts.headers_fetched = 0; counts.headers_failed = 0; counts.headers_skipped = Math.max(out.items.length - HEADERS_MAX, 0);
     for (const item of out.items.slice(0, HEADERS_MAX)) {
       const m = await getThreadMeta({ threadId: item.thread_id }, deps);
@@ -74,6 +95,8 @@ export async function runQueueRead({ sb, argv = [], now = new Date(), env = proc
       item.headers = { from: m.meta.from, subject: m.meta.subject, list_id: m.meta.listId, date: m.meta.date };
       counts.headers_fetched += 1;
     }
+    // every fetch failing is a failed run (the classifier has nothing to read), not an ok with a count
+    if (counts.headers_fetched === 0 && counts.headers_failed > 0) return { ...out, ok: false, refusal: 'HEADERS_FAILED', message: `all ${counts.headers_failed} header fetches failed` };
   }
   return out;
 }
@@ -86,5 +109,6 @@ async function main() {
 }
 
 if (isMainModule(import.meta.url)) {
-  main().catch((e) => { console.error(`[michael:queue-read] fatal ${e && e.code ? e.code : ''}`); process.exitCode = 2; });
+  // a crash (no env, no DB client) is a failure of the run, exit 1; refusals are the invocation's and exit 2
+  main().catch((e) => { console.error(`[michael:queue-read] fatal ${e && e.code ? e.code : ''}`); process.exitCode = 1; });
 }
