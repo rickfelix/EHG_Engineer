@@ -52,9 +52,79 @@ const AMBIGUITY_SCAN_EXEMPT_FILES = [
   'database/schema-reference-snapshot.json',
 ];
 
+// SD-LEO-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 (4th FP family, discovered building this
+// very fix's own PR): a test file asserting that the scanner correctly matches/excludes a
+// marker word must contain that word literally as fixture DATA -- proving a detection
+// regex fires is not the same thing as the implementer expressing their own unresolved
+// uncertainty. That is the SAME class of "third-party DATA, not
+// this SD's decisions" already exempted for generated files above. `tests/` is this repo's
+// canonical, directory-enforced test root (mirrored by session-coordination-insert-
+// classguard-lint.mjs's own EXCLUDE_DIR_PREFIXES=['tests/']); requiring BOTH the tests/
+// prefix AND a recognized test-file suffix (not a bare prefix match) preserves the
+// no-copycat-filename hardening note above -- a non-test file cannot masquerade as exempt
+// just by living under tests/.
+const TEST_FILE_RE = /^tests\/.*\.(test|spec)\.(js|mjs|cjs|ts|tsx)$/;
+
+/**
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+export function isAmbiguityScanExemptTestFile(filePath) {
+  return TEST_FILE_RE.test(filePath);
+}
+
+// SD-LEO-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 (Finding A): product_requirements_v2's
+// persisted metadata.grounding_validation is a DERIVED analysis cache computed once from
+// the PRD's authored text (scripts/prd/index.js), never re-synced when the authored text
+// (functional_requirements, the rendered content mirror) is later edited. A committed
+// full-row PRD mirror (docs/prds/*.json) can carry this cache verbatim into a diff, so a
+// marker word inside the CACHE -- never re-verified against the live authored text -- can
+// permanently block a genuinely-clean SD (no honest edit exists: fixing the cache would
+// falsify a historical analysis record). Elide the "grounding_validation" JSON sub-object's
+// added lines from the scan surface (brace/bracket-depth tracked, so only that key's own
+// nested value is dropped) -- the rest of the file's authored FR/TR text, the scanner's
+// actual target, is still scanned.
+const GROUNDING_VALIDATION_KEY_RE = /"grounding_validation"\s*:/;
+
+/**
+ * Elide the "grounding_validation" JSON key's value from already-'+'-prefixed diff lines.
+ * Pure: no I/O.
+ * @param {string} text
+ * @returns {string}
+ */
+export function stripGroundingValidationBlock(text) {
+  if (!text || typeof text !== 'string') return text;
+  const kept = [];
+  let depth = 0;
+  let inBlock = false;
+  for (const line of text.split('\n')) {
+    if (!inBlock && GROUNDING_VALIDATION_KEY_RE.test(line)) {
+      inBlock = true;
+      depth = 0;
+      for (const ch of line) {
+        if (ch === '{' || ch === '[') depth++;
+        else if (ch === '}' || ch === ']') depth--;
+      }
+      if (depth <= 0) inBlock = false; // single-line value (e.g. null)
+      continue;
+    }
+    if (inBlock) {
+      for (const ch of line) {
+        if (ch === '{' || ch === '[') depth++;
+        else if (ch === '}' || ch === ']') depth--;
+      }
+      if (depth <= 0) inBlock = false;
+      continue;
+    }
+    kept.push(line);
+  }
+  return kept.join('\n');
+}
+
 /**
  * Filter a unified diff down to ADDED lines ('+', excluding '+++' headers) while
- * dropping lines belonging to generated files exempt from the ambiguity scan.
+ * dropping lines belonging to generated files exempt from the ambiguity scan, and eliding
+ * the derived grounding_validation cache's added lines wherever it appears.
  * File attribution follows '+++ b/<path>' section headers. Pure: no I/O.
  * @param {string} combinedDiff
  * @returns {string}
@@ -68,12 +138,52 @@ export function addedLinesForAmbiguityScan(combinedDiff) {
       const filePath = line.replace(/^\+\+\+ [ab]\//, '').trim();
       // Exact canonical path only (security-agent c0582f56 hardening note 1):
       // a nested copycat filename must NOT inherit the exemption.
-      inExemptFile = AMBIGUITY_SCAN_EXEMPT_FILES.includes(filePath);
+      inExemptFile = AMBIGUITY_SCAN_EXEMPT_FILES.includes(filePath)
+        || isAmbiguityScanExemptTestFile(filePath);
       continue;
     }
     if (line.startsWith('+') && !inExemptFile) kept.push(line);
   }
-  return kept.join('\n');
+  return stripGroundingValidationBlock(kept.join('\n'));
+}
+
+// SD-LEO-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 (Finding B, independent of Finding A):
+// the prior inline logic deduped to UNIQUE LINE TEXT for the printed "Examples" list, so
+// two distinct occurrences sharing identical rendered text (e.g. two templated cache
+// entries) collapsed the reported instance count to 1 when 2 markers actually fired. This
+// is a general counting defect, not specific to any one pattern or blob.
+/**
+ * Count raw stub-pattern occurrences in a diff, while also collecting a de-duplicated,
+ * human-readable example line per unique match text. Pure: no I/O.
+ * @param {string} diff - already-filtered added-lines diff text
+ * @param {RegExp[]} patterns
+ * @returns {{ occurrenceCount: number, foundStubs: string[] }}
+ */
+export function countStubOccurrences(diff, patterns) {
+  const foundStubs = [];
+  const foundLines = new Set();
+  let occurrenceCount = 0;
+
+  for (const pattern of patterns) {
+    const matches = diff.match(pattern);
+    if (matches) {
+      occurrenceCount += matches.length;
+      for (const match of matches) {
+        const lines = diff.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('+') && line.includes(match.trim())) {
+            const cleanedLine = line.substring(1).trim();
+            if (!foundLines.has(cleanedLine)) {
+              foundLines.add(cleanedLine);
+              foundStubs.push(cleanedLine);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return { occurrenceCount, foundStubs };
 }
 
 /**
@@ -347,32 +457,13 @@ async function checkStubbedCode(sd_id, validation, supabase) {
         /return\s*\{\s*\};?\s*\/\/\s*(stub|todo|placeholder)/gi
       ];
 
-      const foundStubs = [];
-      const foundLines = new Set();
+      const { occurrenceCount, foundStubs } = countStubOccurrences(diff, stubbedCodePatterns);
 
-      for (const pattern of stubbedCodePatterns) {
-        const matches = diff.match(pattern);
-        if (matches) {
-          for (const match of matches) {
-            const lines = diff.split('\n');
-            for (const line of lines) {
-              if (line.startsWith('+') && line.includes(match.trim())) {
-                const cleanedLine = line.substring(1).trim();
-                if (!foundLines.has(cleanedLine)) {
-                  foundLines.add(cleanedLine);
-                  foundStubs.push(cleanedLine);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      if (foundStubs.length > 0) {
-        validation.issues.push(`[PREFLIGHT] CRITICAL: Stubbed/incomplete code detected (${foundStubs.length} instances)`);
+      if (occurrenceCount > 0) {
+        validation.issues.push(`[PREFLIGHT] CRITICAL: Stubbed/incomplete code detected (${occurrenceCount} instances)`);
         validation.failed_gates.push('STUBBED_CODE_DETECTION');
         validation.details.stubbed_code = foundStubs;
-        console.log(`   ❌ Found ${foundStubs.length} stubbed/incomplete code pattern(s)`);
+        console.log(`   ❌ Found ${occurrenceCount} stubbed/incomplete code pattern(s)`);
         console.log(`   Examples: ${foundStubs.slice(0, 3).join(' | ')}`);
         console.log('   ⚠️  NON-NEGOTIABLE: All code must be fully implemented before handoff');
         validation.passed = false;
