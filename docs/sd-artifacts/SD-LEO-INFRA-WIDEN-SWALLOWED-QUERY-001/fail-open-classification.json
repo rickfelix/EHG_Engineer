@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T19:38:46.477Z",
+  "generated_at": "2026-09-06T19:45:51.695Z",
   "counts": {
-    "has_catch": 36
+    "has_catch": 34
   },
   "results": [
     {
@@ -163,20 +163,6 @@
       "line": 178,
       "kind": "data",
       "snippet": "const { data: children } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/migration-data-verification.js",
-      "line": 227,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/migration-data-verification.js",
-      "line": 258,
-      "kind": "data",
-      "snippet": "const { data: deliverables } = await supabase",
       "classification": "has_catch"
     },
     {

@@ -10,6 +10,7 @@
 // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 (FR-4): WAIT for the "applied but not yet
 // verified" race window; FAIL only when verification actually ran and crashed.
 import { buildWaitResult, buildFailResult } from '../../../../../../lib/handoff/wait-verdict.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const BLOCKING_SD_TYPES = ['database'];
 
@@ -224,15 +225,18 @@ async function findSdMigrations(supabase, sdId, sdKey) {
 
   // Check for migration records in the database
   try {
-    const { data } = await supabase
-      .from('sd_phase_handoffs')
-      .select('metadata')
-      .eq('sd_id', sdId)
-      .eq('handoff_type', 'PLAN-TO-EXEC')
-      .eq('status', 'accepted')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const data = await safeQuery(
+      supabase
+        .from('sd_phase_handoffs')
+        .select('metadata')
+        .eq('sd_id', sdId)
+        .eq('handoff_type', 'PLAN-TO-EXEC')
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      { site: 'migration-data-verification:find_sd_migrations_handoff' }
+    );
 
     if (data?.metadata?.migrations) {
       for (const m of data.metadata.migrations) {
@@ -255,11 +259,14 @@ async function findSdMigrations(supabase, sdId, sdKey) {
   // Also check for migration files by SD key pattern
   if (migrations.length === 0 && sdKey) {
     try {
-      const { data: deliverables } = await supabase
-        .from('sd_deliverables')
-        .select('title, metadata')
-        .eq('sd_id', sdId)
-        .ilike('title', '%migration%');
+      const deliverables = await safeQuery(
+        supabase
+          .from('sd_deliverables')
+          .select('title, metadata')
+          .eq('sd_id', sdId)
+          .ilike('title', '%migration%'),
+        { site: 'migration-data-verification:find_sd_migrations_deliverables' }
+      );
 
       if (deliverables) {
         for (const d of deliverables) {
