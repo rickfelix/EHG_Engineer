@@ -87,6 +87,7 @@ describe('runClassifierDenialGuard', () => {
     expect(recorded).toBe(1);
     const call = recordPendingDecisionMock.mock.calls[0][1];
     expect(call.decisionType).toBe('chairman_approval');
+    expect(call.raisedBy).toBe('classifier-denial-guard');
     expect(call.context.sd_key).toBe('SD-TEST-001');
     expect(call.context.kind).toBe('migration_apply_wait');
   });
