@@ -218,35 +218,6 @@ class SubmissionsManager {
   }
 
   /**
-   * Get submission progress
-   */
-  async getSubmissionProgress(submissionId) {
-    if (!this.connectionManager.isReady()) {
-      return null;
-    }
-
-    const supabase = this.connectionManager.getClient();
-
-    try {
-      const { data, error } = await supabase
-        .from('directive_submissions')
-        .select('current_step, processing_history, gate_status, status')
-        .eq('id', submissionId)
-        .single();
-
-      if (error) {
-        console.error('❌ Error fetching submission progress:', error.message);
-        return null;
-      }
-
-      return data;
-    } catch (error) {
-      console.error('❌ Failed to get submission progress:', error.message);
-      return null;
-    }
-  }
-
-  /**
    * Get submission by ID
    */
   async getSubmissionById(submissionId) {

@@ -153,34 +153,13 @@ class RealtimeDashboard {
 
     this.subscriptions.set('execution_sequences', eesChannel);
 
-    // Subscribe to PR Review changes (Agentic Review Integration)
-    const prReviewChannel = this.supabase
-      .channel('pr-reviews-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'agentic_reviews'
-        },
-        (payload) => {
-          console.log('📡 PR review change detected:', payload.eventType);
-          this._debouncedReload('prReviews', async () => {
-            if (this.dbLoader) {
-              const reviews = await this.dbLoader.loadPRReviews();
-              const metrics = await this.dbLoader.calculatePRMetrics();
-              onUpdate('prReviews', { reviews, metrics });
-            }
-          });
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Subscribed to PR Reviews');
-        }
-      });
-
-    this.subscriptions.set('agentic_reviews', prReviewChannel);
+    // PR Review subscription retired (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-A): this
+    // watched real agentic_reviews changes but its refresh callback queried the
+    // never-existing pr_reviews table (dbLoader.loadPRReviews/calculatePRMetrics,
+    // now deleted) -- it was already silently non-functional before this change.
+    // A working agentic_reviews-shaped dashboard panel would be new feature work,
+    // not a repoint, since agentic_reviews' schema (pr_number, status, summary,
+    // issues, sub_agent_reviews, ...) does not match what the dead code expected.
 
     console.log('📡 Real-time subscriptions active');
   }
