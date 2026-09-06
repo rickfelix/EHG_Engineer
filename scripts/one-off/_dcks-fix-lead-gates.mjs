@@ -14,18 +14,32 @@ const mechanism_verifications = [
   { verified_at: 'complete-quick-fix.js measurement (QF-20260906-881)', verified_by: 'lead-explore-evidence (net source LOC 183 > 75 cap, correctly routed to this SD wrapper)' },
 ];
 
-const { data: sd, error: readErr } = await supabase
-  .from('strategic_directives_v2')
-  .select('id, metadata')
-  .eq('sd_key', SD_KEY)
-  .maybeSingle();
-if (readErr) { console.error(readErr); process.exit(1); }
+// Read-then-write on a shared JSONB column races a concurrent metadata writer (this repo runs
+// many parallel sessions). Guarded with an updated_at compare-and-swap: retry the read+merge if
+// another writer landed between fetch and update, instead of silently clobbering it.
+let done = false;
+for (let attempt = 0; attempt < 5 && !done; attempt++) {
+  const { data: sd, error: readErr } = await supabase
+    .from('strategic_directives_v2')
+    .select('id, metadata, updated_at')
+    .eq('sd_key', SD_KEY)
+    .maybeSingle();
+  if (readErr) { console.error(readErr); process.exit(1); }
 
-const metadata = { ...(sd.metadata || {}), mechanism_verifications };
+  const metadata = { ...(sd.metadata || {}), mechanism_verifications };
 
-const { error: writeErr } = await supabase
-  .from('strategic_directives_v2')
-  .update({ metadata })
-  .eq('id', sd.id);
-if (writeErr) { console.error('WRITE ERROR', writeErr); process.exit(1); }
-console.log('SD-LEO-INFRA-DURABLE-CHAIRMAN-KEYSTROKE-001 enriched: metadata.mechanism_verifications.');
+  const { data: updated, error: writeErr } = await supabase
+    .from('strategic_directives_v2')
+    .update({ metadata })
+    .eq('id', sd.id)
+    .eq('updated_at', sd.updated_at)
+    .select('id');
+  if (writeErr) { console.error('WRITE ERROR', writeErr); process.exit(1); }
+  if (updated && updated.length > 0) {
+    done = true;
+    console.log('SD-LEO-INFRA-DURABLE-CHAIRMAN-KEYSTROKE-001 enriched: metadata.mechanism_verifications.');
+  } else {
+    console.log(`   [CAS] updated_at changed since read (attempt ${attempt + 1}/5) -- retrying`);
+  }
+}
+if (!done) { console.error('CAS retries exhausted -- another writer keeps winning the race'); process.exit(1); }
