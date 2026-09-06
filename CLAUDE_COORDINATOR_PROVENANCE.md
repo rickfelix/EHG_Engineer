@@ -2,7 +2,7 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR_PROVENANCE.md — Coordinator Provenance (dated rationale)
 
-**Generated**: 2026-09-06 7:12:51 PM
+**Generated**: 2026-09-06 3:47:38 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — dated operator/chairman directives, live incidents, superseded cadences
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one

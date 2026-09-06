@@ -1,0 +1,125 @@
+#!/usr/bin/env node
+// scripts/michael/queue-read.mjs — the seat's queue reader (READ ONLY; spec §5 seat tick).
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D (FR-9, PR 8a).
+//
+// Prints, bounded, the ET date's michael_gmail_triage_items with class NULL (nullability IS the queue
+// signal: thread_id, rule_key, last_message_id, borderline) and michael_todoist_snapshot rows with
+// effort_grade NULL (task_id, proposed_date), plus counts. Reads go through readRows (literal 500 bound);
+// a full page is reported as truncated and, only then, an exact count is taken — presence is established
+// by the bounded read first, so a head-count can never read an absent table as present (DB-D10).
+// With --headers (host venue only: the chairman grant lives on the host) the From / Subject / List-Id /
+// Date of each queued thread's last message are re-fetched through getThreadMeta and printed to STDOUT
+// ONLY — never written to a row, a log or a file; the classifier reads them from this output.
+// Absent tables yield empty lists and exit 0 (inert). Never throws.
+//
+// Usage: node scripts/michael/queue-read.mjs [--json] [--et-date YYYY-MM-DD] [--headers]
+import 'dotenv/config';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { createMichaelClient, parseArgs, readRows, refusal, emit } from '../../lib/michael/db.mjs';
+import { assertHostVenue, getAuthenticatedClient } from '../../lib/integrations/google/chairman-oauth.js';
+import { getThreadMeta } from '../../lib/michael/gmail-client.mjs';
+import { etDateStr } from '../../lib/time/chairman-et-wall-clock.js';
+
+/** The bound readRows applies (lib/michael/db.mjs); a page of exactly this many rows is a truncated read. */
+export const READ_BOUND = 500;
+/** Header re-fetches per run: one Gmail call per queued thread, capped so a runaway queue cannot burn the grant. */
+export const HEADERS_MAX = 200;
+export const ITEM_KEYS = Object.freeze(['thread_id', 'rule_key', 'last_message_id', 'borderline']);
+export const TASK_KEYS = Object.freeze(['task_id', 'proposed_date']);
+
+/** Refusals that are failures of the read itself (exit 1), not of the invocation (exit 2). */
+export const RUN_FAILURES = Object.freeze(['READ_FAILED', 'HEADERS_AUTH_FAILED', 'HEADERS_FAILED', 'DB_CLIENT_FAILED']);
+
+/** Pure: exit code for the CLI — 0 for a read (empty, inert or truncated alike), 1 for a failed read or header fetch, 2 for a refused invocation. */
+export function exitCodeForQueue(r) {
+  if (!r) return 1;
+  if (r.ok === false) return RUN_FAILURES.includes(r.refusal) || !r.refusal ? 1 : 2;
+  return 0;
+}
+
+/** Exact count for one queue, taken ONLY after the bounded read established the table is present. Null on any error. */
+async function countExact(sb, table, build) {
+  try {
+    const { count, error } = await build(sb.from(table).select('id', { count: 'exact', head: true }));
+    return error || !Number.isFinite(Number(count)) ? null : Number(count);
+  } catch { return null; }
+}
+
+/** Pure: pick the published keys off a row (uniform key set, nothing else leaks to stdout). */
+function pick(row, keys) {
+  return Object.fromEntries(keys.map((k) => [k, row && row[k] !== undefined ? row[k] : null]));
+}
+
+/** Pure: a calendar-valid YYYY-MM-DD (2026-13-45 is refused here, not by Postgres). */
+export function validEtDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+/** Pure: validate argv; returns { etDate, headers } or a refusal. Runs BEFORE any client is built. */
+export function parseQueueArgs(argv, now) {
+  const a = parseArgs(argv);
+  if (a.date !== undefined) return refusal('FLAG_UNSUPPORTED', '--date is not supported; use --et-date YYYY-MM-DD');
+  for (const flag of ['headers', 'json']) if (a[flag] !== undefined && a[flag] !== true) return refusal('FLAG_INVALID', `--${flag} takes no value (got ${JSON.stringify(a[flag])})`);
+  const etDate = a['et-date'] !== undefined ? String(a['et-date']) : etDateStr(now);
+  if (!validEtDate(etDate)) return refusal('ET_DATE_INVALID', '--et-date must be a valid YYYY-MM-DD');
+  return { ok: true, etDate, headers: a.headers === true };
+}
+
+/** The reader. deps: { sb (client or factory), argv, now, env, auth, gmail (factory), resolveAuth }. Never throws. */
+export async function runQueueRead({ sb, argv = [], now = new Date(), env = process.env, auth, gmail, resolveAuth = getAuthenticatedClient } = {}) {
+  const parsed = parseQueueArgs(argv, now);
+  if (!parsed.ok) return parsed;
+  const { etDate, headers } = parsed;
+  if (headers) { try { assertHostVenue(env); } catch (e) { return refusal(e.code || 'HOST_VENUE_REQUIRED', e.message); } }
+  // the client is built only after every refusal has had its chance (a host without DB env still refuses, never crashes)
+  if (typeof sb === 'function') { try { sb = sb(); } catch (e) { return { ok: false, refusal: 'DB_CLIENT_FAILED', message: `cannot build the DB client: ${(e && e.message) || e}` }; } }
+  if (!sb) return { ok: false, refusal: 'DB_CLIENT_FAILED', message: 'no DB client' };
+
+  const items = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).is('class', null).order('created_at', { ascending: true }), { select: ITEM_KEYS.join(',') });
+  const tasks = await readRows(sb, 'michael_todoist_snapshot', (q) => q.eq('et_date', etDate).is('effort_grade', null).order('created_at', { ascending: true }), { select: TASK_KEYS.join(',') });
+  // both absent = the migration is unapplied: inert. One absent while the other is present is a partial read, never an empty queue.
+  if (items.tables_absent && tasks.tables_absent) return { ok: true, tables_absent: true, et_date: etDate, items: [], tasks: [], counts: { items: 0, tasks: 0 }, errors: [] };
+  if (items.tables_absent) items.error = 'michael_gmail_triage_items: relation absent while michael_todoist_snapshot is present';
+  if (tasks.tables_absent) tasks.error = 'michael_todoist_snapshot: relation absent while michael_gmail_triage_items is present';
+  const errors = [items, tasks].map((r) => r.error).filter(Boolean);
+
+  const counts = { items: items.rows.length, tasks: tasks.rows.length, items_truncated: items.rows.length >= READ_BOUND, tasks_truncated: tasks.rows.length >= READ_BOUND };
+  if (counts.items_truncated) counts.items_total = await countExact(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).is('class', null));
+  if (counts.tasks_truncated) counts.tasks_total = await countExact(sb, 'michael_todoist_snapshot', (q) => q.eq('et_date', etDate).is('effort_grade', null));
+
+  const out = { ok: errors.length === 0, tables_absent: false, et_date: etDate, items: items.rows.map((r) => pick(r, ITEM_KEYS)), tasks: tasks.rows.map((r) => pick(r, TASK_KEYS)), counts, errors };
+  // a failed read still prints what was read, but as a named failure (emit() renders REFUSED <code>: <message>)
+  if (errors.length) Object.assign(out, { refusal: 'READ_FAILED', message: errors.join('; ') });
+  if (headers && out.items.length) {
+    // The grant is resolved ONCE: a dead grant is one refresh attempt and one last_error write, never one per thread.
+    let client = auth;
+    if (!client) {
+      try { client = await resolveAuth({ sb, env }); } catch (e) { return { ...out, ok: false, refusal: out.refusal || 'HEADERS_AUTH_FAILED', message: [out.message, `the chairman grant could not be resolved: ${(e && e.code) || 'AUTH'}`].filter(Boolean).join('; ') }; }
+    }
+    const deps = { auth: client, gmailFactory: gmail, sb, env };
+    counts.headers_fetched = 0; counts.headers_failed = 0; counts.headers_skipped = Math.max(out.items.length - HEADERS_MAX, 0);
+    for (const item of out.items.slice(0, HEADERS_MAX)) {
+      const m = await getThreadMeta({ threadId: item.thread_id }, deps);
+      if (!m.ok) { counts.headers_failed += 1; item.headers = null; continue; }
+      item.headers = { from: m.meta.from, subject: m.meta.subject, list_id: m.meta.listId, date: m.meta.date };
+      counts.headers_fetched += 1;
+    }
+    // every fetch failing is a failed run (the classifier has nothing to read), not an ok with a count
+    if (counts.headers_fetched === 0 && counts.headers_failed > 0) return { ...out, ok: false, refusal: out.refusal || 'HEADERS_FAILED', message: [out.message, `all ${counts.headers_failed} header fetches failed`].filter(Boolean).join('; ') };
+  }
+  return out;
+}
+
+async function main() {
+  const argv = process.argv.slice(2);
+  const r = await runQueueRead({ sb: () => createMichaelClient(), argv });
+  emit(r, { json: argv.includes('--json') });
+  process.exitCode = exitCodeForQueue(r);
+}
+
+if (isMainModule(import.meta.url)) {
+  // a crash (no env, no DB client) is a failure of the run, exit 1; refusals are the invocation's and exit 2
+  main().catch((e) => { console.error(`[michael:queue-read] fatal ${e && e.code ? `${e.code} ` : ''}${(e && e.message) || e}`); process.exitCode = 1; });
+}
