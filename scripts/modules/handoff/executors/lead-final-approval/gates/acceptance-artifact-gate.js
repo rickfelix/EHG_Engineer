@@ -74,17 +74,41 @@ const GATE_NAME = 'GATE_ACCEPTANCE_ARTIFACT';
 const ARTIFACT_PROVENANCE_ABSENT = 'ARTIFACT_PROVENANCE_ABSENT';
 const DECLARATION_INVALID = 'DECLARATION_INVALID';
 
-const TABLE_CONFIG = Object.freeze({
+// deepFreeze so the nested arrays (matchColumns, selectColumns, and the per-kind field lists)
+// can never be mutated at runtime -- a shallow Object.freeze only locks the top-level table
+// keys, leaving e.g. TABLE_CONFIG.venture_artifacts.matchColumns.push(...) silently legal.
+function deepFreeze(obj) {
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === 'object' && !Object.isFrozen(value)) deepFreeze(value);
+  }
+  return Object.freeze(obj);
+}
+
+// TESTING (EXEC-TO-PLAN review, kind/field pairing gap): a flat per-table `satisfiedFields`
+// list let a declaration pair `numeric_threshold` with a text column (e.g. uat_test_runs.status)
+// or `self_reported_verdict` with a numeric column (venture_artifacts.quality_score) -- valid
+// per validateDeclaration, but never satisfiable by any real row. Once BINDING is ever flipped,
+// that is a hard block for what is actually a declaration TYPE error, reported as
+// ARTIFACT_UNSATISFIED ("the criterion is unmet") -- directly contradicting this gate's own
+// stated principle that a malformed declaration is never evidence of an unmet criterion.
+// satisfiedFieldsByKind closes this: the allowlist is now keyed by {kind: [fields]}, so a
+// numeric_threshold declaration can only ever name a genuinely numeric column and vice versa.
+const TABLE_CONFIG = deepFreeze({
   venture_artifacts: {
     selectColumns: ['id', 'venture_id', 'artifact_type', 'is_current', 'source', 'content', 'quality_score', 'created_at'],
     matchColumns: ['id', 'venture_id', 'artifact_type', 'is_current'],
-    satisfiedFields: ['content', 'quality_score'],
+    satisfiedFieldsByKind: {
+      self_reported_verdict: ['content'],
+      numeric_threshold: ['quality_score'],
+    },
     hasProvenance: (row) => row?.source != null,
   },
   uat_test_runs: {
     selectColumns: ['id', 'sd_id', 'status', 'pass_rate', 'metadata', 'created_at'],
     matchColumns: ['id', 'sd_id', 'status'],
-    satisfiedFields: ['pass_rate', 'status'],
+    satisfiedFieldsByKind: {
+      numeric_threshold: ['pass_rate'],
+    },
     hasProvenance: (row) => row?.metadata?.evidence_hash != null,
   },
 });
@@ -96,6 +120,13 @@ const NUMERIC_OPS = Object.freeze({
   lt: (a, b) => a < b,
   eq: (a, b) => a === b,
 });
+
+// TESTING (EXEC-TO-PLAN review): a raw `err.message` throws when `err` is not an object with a
+// message (a rejected promise or thrown value need not be an Error -- `throw null`/`throw "x"`
+// are both legal JS). Never let extracting an error message become a second, masking error.
+function errorMessage(err) {
+  return err && typeof err === 'object' && typeof err.message === 'string' ? err.message : String(err);
+}
 
 // TESTING (PLAN-TO-EXEC review, F1/F2): a plain-object `[key]` lookup resolves inherited
 // Object.prototype members ('constructor', 'toString', '__proto__', 'hasOwnProperty',
@@ -122,7 +153,7 @@ export function validateDeclaration(declaration) {
   const { table, match, order_by: orderBy, satisfied } = declaration;
 
   const tableConfig = ownLookup(TABLE_CONFIG, table);
-  if (!tableConfig) return { valid: false, reason: `table "${table}" is not in the allowlist (${Object.keys(TABLE_CONFIG).join(', ')})` };
+  if (!tableConfig) return { valid: false, reason: `table "${String(table)}" is not in the allowlist (${Object.keys(TABLE_CONFIG).join(', ')})` };
 
   if (!match || typeof match !== 'object' || Array.isArray(match) || Object.keys(match).length === 0) {
     return { valid: false, reason: 'match must be a non-empty object' };
@@ -151,10 +182,16 @@ export function validateDeclaration(declaration) {
     return { valid: false, reason: `satisfied.kind "${satisfied.kind}" is not one of self_reported_verdict|numeric_threshold|row_exists` };
   }
   if (satisfied.kind !== 'row_exists') {
-    if (!tableConfig.satisfiedFields.includes(satisfied.field)) return { valid: false, reason: `satisfied.field "${satisfied.field}" is not allowlisted for ${table}` };
+    // satisfied.kind is, by this point, guaranteed to be one of the 3 literal enum strings
+    // above (never attacker-arbitrary), so a direct property lookup here carries none of
+    // ownLookup's prototype-pollution risk -- none of the 3 collide with Object.prototype.
+    const allowedFields = tableConfig.satisfiedFieldsByKind[satisfied.kind] || [];
+    if (!allowedFields.includes(satisfied.field)) {
+      return { valid: false, reason: `satisfied.field "${satisfied.field}" is not allowlisted for satisfied.kind="${satisfied.kind}" on ${table} (allowed: ${allowedFields.join(', ') || 'none'})` };
+    }
   }
   if (satisfied.kind === 'numeric_threshold') {
-    if (!ownLookup(NUMERIC_OPS, satisfied.op)) return { valid: false, reason: `satisfied.op "${satisfied.op}" is not one of ${Object.keys(NUMERIC_OPS).join(', ')}` };
+    if (!ownLookup(NUMERIC_OPS, satisfied.op)) return { valid: false, reason: `satisfied.op "${String(satisfied.op)}" is not one of ${Object.keys(NUMERIC_OPS).join(', ')}` };
     if (typeof satisfied.value !== 'number') return { valid: false, reason: 'satisfied.value must be a number for numeric_threshold' };
   }
 
@@ -233,11 +270,12 @@ export function createAcceptanceArtifactGate(supabase) {
           const effectiveOrderBy = orderBy || { column: 'created_at', desc: true };
           query = query.order(effectiveOrderBy.column, { ascending: !effectiveOrderBy.desc }).limit(1);
           const { data, error } = await query;
-          if (error) throw new Error(error.message);
+          if (error) throw new Error(errorMessage(error));
           rows = data || [];
         } catch (err) {
-          console.log(`   ⚠️  Acceptance-artifact lookup error (failing open): ${err.message}`);
-          return passResult([`Acceptance-artifact check skipped — lookup failed: ${err.message}`], { declared: true, reason_code: 'DB_ERROR' });
+          const msg = errorMessage(err);
+          console.log(`   ⚠️  Acceptance-artifact lookup error (failing open): ${msg}`);
+          return passResult([`Acceptance-artifact check skipped — lookup failed: ${msg}`], { declared: true, reason_code: 'DB_ERROR' });
         }
 
         if (rows.length === 0) {
@@ -263,8 +301,13 @@ export function createAcceptanceArtifactGate(supabase) {
         console.log(`   ✅ Acceptance artifact ${table}#${row.id} satisfies the declared criterion.`);
         return passResult([], { declared: true, table, row_id: row.id, bound });
       } catch (err) {
-        console.log(`   ⚠️  Unexpected error evaluating acceptance_artifact (failing open): ${err.message}`);
-        return passResult([`Acceptance-artifact check skipped — unexpected error: ${err.message}`], { declared: true, reason_code: 'DB_ERROR' });
+        // TESTING (EXEC-TO-PLAN review): a distinct code from the inner catch's 'DB_ERROR' --
+        // this branch means something OTHER than the DB query itself failed (a gate-code bug, a
+        // malformed row shape, etc). Conflating the two under one label made a genuine connection
+        // error indistinguishable from a real defect in this gate's own code.
+        const msg = errorMessage(err);
+        console.log(`   ⚠️  Unexpected error evaluating acceptance_artifact (failing open): ${msg}`);
+        return passResult([`Acceptance-artifact check skipped — unexpected error: ${msg}`], { declared: true, reason_code: 'UNEXPECTED_ERROR' });
       }
     },
     required: true,

@@ -256,6 +256,18 @@ describe('createAcceptanceArtifactGate', () => {
     expect(result.passed).toBe(true);
     expect(result.score).toBe(100);
     expect(result.warnings[0]).toMatch(/unexpected error/);
+    // TESTING (EXEC-TO-PLAN review): must be distinguishable from a genuine DB_ERROR -- a real
+    // connection failure and a gate-code bug were previously indistinguishable in `details`.
+    expect(result.details.reason_code).toBe('UNEXPECTED_ERROR');
+  });
+
+  it('TESTING (EXEC-TO-PLAN review): a non-Error throw (null/string) never breaks message extraction', async () => {
+    const supabase = { from() { throw null; } };
+    const gate = createAcceptanceArtifactGate(supabase);
+    const result = await gate.validator({ sd: FIXTURE_A_SD });
+    expect(result.passed).toBe(true);
+    expect(result.warnings[0]).toMatch(/lookup failed/);
+    expect(result.warnings[0]).not.toMatch(/Cannot read propert/);
   });
 });
 
@@ -344,6 +356,28 @@ describe('validateDeclaration', () => {
       const r = validateDeclaration({ table: 'uat_test_runs', match: { sd_id: 'x' }, satisfied: { kind: 'numeric_threshold', field: 'pass_rate', op, value: 1 } });
       expect(r.valid, `op="${op}" should be rejected`).toBe(false);
     }
+  });
+
+  it('TESTING (EXEC-TO-PLAN, kind/field pairing gap): rejects numeric_threshold on a non-numeric field, even if allowlisted for a different kind', () => {
+    // venture_artifacts.content is allowlisted for self_reported_verdict, NOT numeric_threshold --
+    // previously a flat per-table satisfiedFields list let this slip through as "valid" even
+    // though no row could ever satisfy it (content is a JSON/text verdict blob, not a number).
+    const r1 = validateDeclaration({ table: 'venture_artifacts', match: { venture_id: 'x' }, satisfied: { kind: 'numeric_threshold', field: 'content', op: 'gte', value: 1 } });
+    expect(r1.valid).toBe(false);
+    // uat_test_runs.status is a text column -- previously allowlisted flat, now correctly
+    // rejected for numeric_threshold.
+    const r2 = validateDeclaration({ table: 'uat_test_runs', match: { sd_id: 'x' }, satisfied: { kind: 'numeric_threshold', field: 'status', op: 'gte', value: 1 } });
+    expect(r2.valid).toBe(false);
+  });
+
+  it('TESTING (EXEC-TO-PLAN, kind/field pairing gap): rejects self_reported_verdict on a non-verdict field', () => {
+    const r = validateDeclaration({ table: 'venture_artifacts', match: { venture_id: 'x' }, satisfied: { kind: 'self_reported_verdict', field: 'quality_score' } });
+    expect(r.valid).toBe(false);
+  });
+
+  it('rejects self_reported_verdict on uat_test_runs entirely (no verdict-bearing column on that table)', () => {
+    const r = validateDeclaration({ table: 'uat_test_runs', match: { sd_id: 'x' }, satisfied: { kind: 'self_reported_verdict', field: 'status' } });
+    expect(r.valid).toBe(false);
   });
 });
 
