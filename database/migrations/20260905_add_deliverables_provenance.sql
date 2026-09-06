@@ -15,9 +15,44 @@
 -- REPLACE -- omitting them would silently revert the search_path hardening
 -- shipped in 20260317_security_definer_audit.sql, since CREATE OR REPLACE
 -- replaces the whole function definition, not just the body.
+--
+-- TESTING finding F-10 (EXEC-TO-PLAN pass): apply via the default (single-transaction) path
+-- ONLY -- `scripts/apply-migration.js ... --split-statements` shreds the dollar-quoted
+-- function bodies below into fragments and will corrupt this file's own SQL. The normal
+-- `apply-migration.js` invocation (no --split-statements) already runs the whole file as one
+-- statement batch and is safe; this note exists only to keep a future --split-statements
+-- retry off the table.
 
 ALTER TABLE sd_scope_deliverables
   ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+
+-- TESTING finding F-2/F-3 (EXEC-TO-PLAN pass): completed_at has no DEFAULT, so a bare hand-typed
+-- `UPDATE ... SET completion_status = 'completed'` (no producer, no completed_at) left BOTH fields
+-- unset -- isUnprovenancedPostCutover's `completed_at IS NULL` short-circuit then treated it as
+-- exempt (pre-migration), silently defeating the exact threat model this SD exists to close. This
+-- trigger makes completed_at unconditional: ANY write that lands completion_status in
+-- ('completed','done') gets completed_at stamped if not already set, by every path -- sanctioned
+-- producer or raw hand-typed UPDATE alike -- so the gate classifier's completed_at-based cutover
+-- test can never again be starved of the one field it depends on. The NULL guard is what makes
+-- this idempotent across repeated no-op updates: a genuine completion is stamped once, never bumped.
+CREATE OR REPLACE FUNCTION public.set_deliverable_completed_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF NEW.completion_status IN ('completed', 'done') AND NEW.completed_at IS NULL THEN
+    NEW.completed_at := NOW();
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_set_deliverable_completed_at ON sd_scope_deliverables;
+CREATE TRIGGER trg_set_deliverable_completed_at
+  BEFORE INSERT OR UPDATE ON sd_scope_deliverables
+  FOR EACH ROW
+  EXECUTE FUNCTION public.set_deliverable_completed_at();
 
 -- fn_auto_close_deliverables_on_sd_completion: SECURITY INVOKER (default),
 -- SET search_path TO 'public', 'extensions' confirmed live.

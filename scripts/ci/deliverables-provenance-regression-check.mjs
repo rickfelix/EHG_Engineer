@@ -64,10 +64,16 @@ export function classifyDeliverableProvenance(rows, cutoverIso) {
 }
 
 function parseArgs(argv) {
-  // Deliberately errs EARLY (same convention as bypass-ledger-handoff-join-check.mjs's
-  // --cutover default) -- an early cutover only costs a few extra rows briefly examined that
-  // predate this SD's fixes, a late one would hide a real regression.
-  const out = { cutover: '2026-09-05T00:00:00.000Z' };
+  // TESTING finding F-4 (EXEC-TO-PLAN pass): the bypass-ledger-handoff-join-check.mjs sibling's
+  // "err early" convention does NOT transfer here -- there, an early cutover only widens the
+  // legitimate refused_before_handoff bucket. Here, an early cutover puts pre-fix rows straight
+  // into the FAILURE buckets: measured 33/167 accepted handoffs written before this SD's own
+  // fix landed were flagged as false-positive regressions at a same-day default. This must
+  // instead be set to (or past) the actual merge instant of this SD -- deliberately erring LATE.
+  // Override via DELIVERABLES_PROVENANCE_REGRESSION_CUTOVER at CI-deploy time once the merge
+  // commit's timestamp is known; the literal default here is a placeholder one day past
+  // authoring, not a substitute for that override.
+  const out = { cutover: '2026-09-06T00:00:00.000Z' };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--cutover') out.cutover = argv[++i];
   }

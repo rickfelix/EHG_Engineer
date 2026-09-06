@@ -142,6 +142,10 @@ const BYPASS_LEDGER_JOIN_CHECK_GATE_INCLUDE = ['**/tests/integration/bypass-ledg
 // immediately above, for the sibling deliverables-provenance-regression-check.mjs entrypoint proof.
 const DELIVERABLES_PROVENANCE_REGRESSION_GATE_INCLUDE = ['**/tests/integration/deliverables-provenance-regression-check-entrypoint.test.js'];
 
+// SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G (FR-1, TESTING finding F-5): same precedent, for
+// handoff-provenance-census.mjs's own entrypoint proof (FR-1 AC#3 "CI-asserted").
+const HANDOFF_PROVENANCE_CENSUS_GATE_INCLUDE = ['**/tests/integration/handoff-provenance-census-entrypoint.test.js'];
+
 // ─── SD-LEO-INFRA-VITEST-TIER-REAL-001: the db gate moved from DISCOVERY to RUNTIME ─────────────
 //
 // QF-20260726-459 Part 1b gated the PROJECT here (include: [] when undesignated), which closed
@@ -392,6 +396,23 @@ export default defineConfig({
             SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
           },
           include: DELIVERABLES_PROVENANCE_REGRESSION_GATE_INCLUDE,
+          exclude: SHARED_EXCLUDE,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'handoff-provenance-census-gate',
+          // NO setupFiles, same rationale as the two sibling gate projects above: the suite
+          // opens no client of its own -- only the subprocess it spawns sees these vars,
+          // inherited from this process env, and its own dotenv load never overrides
+          // already-set vars.
+          env: {
+            SUPABASE_URL: 'https://test.invalid.local',
+            NEXT_PUBLIC_SUPABASE_URL: 'https://test.invalid.local',
+            SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key-not-real',
+          },
+          include: HANDOFF_PROVENANCE_CENSUS_GATE_INCLUDE,
           exclude: SHARED_EXCLUDE,
         },
       },
