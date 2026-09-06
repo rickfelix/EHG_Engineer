@@ -7,6 +7,8 @@
  * WARNING only (not blocking) for backward compatibility.
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 export async function validateLeadEvaluation(supabase, sdId, sdKey) {
   const result = {
     passed: true,
@@ -81,11 +83,14 @@ export async function validateLeadEvaluation(supabase, sdId, sdKey) {
  * Returns { drifted: boolean, changes: string[] }
  */
 async function detectScopeDrift(supabase, sdId, baseline) {
-  const { data: sd } = await supabase
-    .from('strategic_directives_v2')
-    .select('title, description, key_changes, success_criteria')
-    .eq('id', sdId)
-    .single();
+  const sd = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('title, description, key_changes, success_criteria')
+      .eq('id', sdId)
+      .single(),
+    { site: 'lead-evaluation-check:detect_scope_drift' }
+  );
 
   if (!sd) return { drifted: false, changes: [] };
 

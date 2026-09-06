@@ -844,13 +844,16 @@ describe('TS-10: consuming gates tolerate the extended classification shape', ()
 describe('TR-5/TS-9: mutation test — regex_fr_mentions is genuinely non-load-bearing', () => {
   const SOURCE_PATH = fileURLToPath(new URL('../../../../scripts/modules/handoff/gates/fr-delivery-classifier.js', import.meta.url));
   const E2E_PATH_GUARD_URL = pathToFileURL(fileURLToPath(new URL('../../../../lib/stories/e2e-path-guard.js', import.meta.url))).href;
+  const SAFE_QUERY_URL = pathToFileURL(fileURLToPath(new URL('../../../../lib/db/safe-query.mjs', import.meta.url))).href;
   const ANCHOR = 'const deliveredBy = validated.find((s) => frReferencesId(s, id));';
   const MUTATED = "const deliveredBy = validated.find((s) => frReferencesId(s, id)) || (regexFrMentions.some((m) => String(m.fr_id).trim().toUpperCase() === String(id).trim().toUpperCase()) ? { id: '__MUTATION_REGEX_WITNESS__' } : undefined);";
-  // The mutated copy is written to os.tmpdir(), so its own relative import of e2e-path-guard.js
-  // (added for SECURITY finding 2) would resolve against the WRONG directory. Rewrite it to an
-  // absolute file:// URL before writing the copy — same end-anchored-string-replace hermetic
-  // approach as the ANCHOR mutation itself, not a fixed offset.
+  // The mutated copy is written to os.tmpdir(), so its own relative imports of e2e-path-guard.js
+  // (SECURITY finding 2) and safe-query.mjs (SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-4) would
+  // resolve against the WRONG directory. Rewrite both to absolute file:// URLs before writing the
+  // copy — same end-anchored-string-replace hermetic approach as the ANCHOR mutation itself, not
+  // a fixed offset.
   const IMPORT_ANCHOR = "import { specFileExists } from '../../../../lib/stories/e2e-path-guard.js';";
+  const SAFE_QUERY_IMPORT_ANCHOR = "import { safeQuery } from '../../../../lib/db/safe-query.mjs';";
 
   it('wiring regex_fr_mentions into deliveredBy resolution makes TS-6 and TS-6b fail, by name', async () => {
     const source = readFileSync(SOURCE_PATH, 'utf8');
@@ -858,9 +861,12 @@ describe('TR-5/TS-9: mutation test — regex_fr_mentions is genuinely non-load-b
     expect(occurrences).toBe(1); // the pinned anchor must exist exactly once, end-anchored, for a hermetic mutation
     const importOccurrences = source.split(IMPORT_ANCHOR).length - 1;
     expect(importOccurrences).toBe(1);
+    const safeQueryImportOccurrences = source.split(SAFE_QUERY_IMPORT_ANCHOR).length - 1;
+    expect(safeQueryImportOccurrences).toBe(1);
     const mutatedSource = source
       .replace(ANCHOR, MUTATED)
-      .replace(IMPORT_ANCHOR, `import { specFileExists } from '${E2E_PATH_GUARD_URL}';`);
+      .replace(IMPORT_ANCHOR, `import { specFileExists } from '${E2E_PATH_GUARD_URL}';`)
+      .replace(SAFE_QUERY_IMPORT_ANCHOR, `import { safeQuery } from '${SAFE_QUERY_URL}';`);
 
     const tempPath = join(tmpdir(), `fr-delivery-classifier.mutated.${Date.now()}.${Math.random().toString(36).slice(2)}.mjs`);
     writeFileSync(tempPath, mutatedSource, 'utf8');

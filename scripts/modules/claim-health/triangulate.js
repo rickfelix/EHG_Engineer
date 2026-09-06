@@ -28,6 +28,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -261,7 +262,7 @@ export async function triangulate(supabase, sdKey = null, opts = {}) {
     sessionQuery = sessionQuery.eq('sd_key', sdKey);
   }
 
-  const { data: sessions } = await sessionQuery;
+  const sessions = await safeQuery(sessionQuery, { site: 'triangulate:sessions' });
 
   // Signal 2: Get all SDs with is_working_on = true (need id for FR1.c sub-agent activity lookup)
   let sdQuery = supabase

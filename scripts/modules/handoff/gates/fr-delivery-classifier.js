@@ -39,6 +39,7 @@
  * number it did not measure is the defect this module was repaired to remove.
  */
 import { specFileExists } from '../../../../lib/stories/e2e-path-guard.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 
 /** True when strict FR-delivery enforcement is turned on. Default OFF (warn-only). */
 export function isFrTraceabilityEnforced(env = process.env) {
@@ -412,11 +413,14 @@ export async function classifyFrDelivery(supabase, {
     // product_requirements_v2.directive_id stores the SD KEY (e.g. SD-FOO-001), not the UUID.
     // Callers that only have the UUID must pass directiveId=sd_key; fall back to sdId otherwise.
     const lookupKey = directiveId || sdId;
-    const { data: prd } = await supabase
-      .from('product_requirements_v2')
-      .select('functional_requirements')
-      .eq('directive_id', lookupKey)
-      .maybeSingle();
+    const prd = await safeQuery(
+      supabase
+        .from('product_requirements_v2')
+        .select('functional_requirements')
+        .eq('directive_id', lookupKey)
+        .maybeSingle(),
+      { site: 'fr-delivery-classifier:prd' }
+    );
     frs = (prd && prd.functional_requirements) || [];
   }
 

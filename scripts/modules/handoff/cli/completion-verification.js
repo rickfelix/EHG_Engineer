@@ -9,6 +9,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import { getSDWorkflow } from './sd-workflow.js';
 import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
 
@@ -38,12 +39,15 @@ export async function verifySDCompletion(sdId) {
   const requiredHandoffs = workflowInfo.workflow?.required || [];
 
   // Get existing handoffs for this SD
-  const { data: handoffs } = await supabase
-    .from('leo_handoff_executions')
-    .select('handoff_type, status, created_at')
-    .eq('sd_id', sd.id)
-    .eq('status', 'accepted')
-    .order('created_at', { ascending: true });
+  const handoffs = await safeQuery(
+    supabase
+      .from('leo_handoff_executions')
+      .select('handoff_type, status, created_at')
+      .eq('sd_id', sd.id)
+      .eq('status', 'accepted')
+      .order('created_at', { ascending: true }),
+    { site: 'completion-verification:handoffs' }
+  );
 
   const existingHandoffs = (handoffs || []).map(h => h.handoff_type.toUpperCase());
 
