@@ -123,7 +123,7 @@ export async function readBackClaimHistory(dbClientFactory, qfId) {
  * @param {() => string} [deps.scratchIdFn] - generates the scratch QF id (must match /^QF-/).
  * @param {(qfId: string, sessionId: string) => Promise<void>} [deps.insertScratchQfFn] - creates the scratch row, already claimed + non-open.
  * @param {(qfId: string, sessionId: string) => Promise<void>} [deps.deleteScratchQfFn] - deletes the scratch row (called in finally).
- * @param {(dbClientFactory: Function, qfId: string) => Promise<object|null>} [deps.readBackFn] - independently confirms persistence (real: readBackClaimHistory).
+ * @param {(dbClientFactory: Function, qfId: string) => Promise<{entry: object|null, indeterminate?: true, error?: string}>} [deps.readBackFn] - independently confirms persistence (real: readBackClaimHistory).
  * @returns {Promise<{state: 'NOT_YET_APPLIED'|'ACTIVATED'|'REGRESSED'|'INDETERMINATE', exitCode: number, detail: string}>}
  */
 export async function resolveActivationState(deps = {}) {
