@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:48:18.531Z",
+  "generated_at": "2026-09-06T18:52:23.858Z",
   "counts": {
-    "has_catch": 54
+    "has_catch": 51
   },
   "results": [
     {
@@ -282,27 +282,6 @@
       "line": 27,
       "kind": "data",
       "snippet": "const { data: validationProfile } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js",
-      "line": 140,
-      "kind": "data",
-      "snippet": "const { data: parentCheck } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js",
-      "line": 219,
-      "kind": "data",
-      "snippet": "const { data: handoffs } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-gate.js",
-      "line": 226,
-      "kind": "data",
-      "snippet": "const { data: stories } = await supabase",
       "classification": "has_catch"
     },
     {
