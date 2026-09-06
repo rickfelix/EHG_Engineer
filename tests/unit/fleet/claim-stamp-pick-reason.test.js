@@ -11,7 +11,13 @@
  * AC-6 / QF auto-detect: a QF-shaped ref routes through the QF-side merge, never the SD path.
  */
 import { describe, it, expect } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { stampClaim, buildPickReason, UNSCORED_PICK_REASON, QF_ID_RE } from '../../../lib/fleet/claim-stamp.cjs';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const readSrc = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 
 const SD_ID = 'bb4692db-732b-4719-ad79-595a5aa45f8e';
 
@@ -151,5 +157,42 @@ describe('stampClaim — QF-shaped ref auto-detect (AC-6)', () => {
     const mergeQfMetadataFn = async () => ({ merged: false, reason: 'cas_lost' });
     const entry = await stampClaim(client, 'QF-20260906-3', 'sess-qf', 'env', null, { mergeQfMetadataFn });
     expect(entry).toBeNull();
+  });
+});
+
+// SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E (Child E) TS-7/AC-7 — testing-agent finding (evidence
+// 77f22659): a behavioural test cannot exercise these two top-level scripts (real DB side
+// effects, process.exit calls). Matching the repo's own established convention for exactly this
+// situation (tests/unit/claim-liveness-fence-qf-surfaces-order.test.js's docblock), these are
+// SOURCE-ORDER assertions — deliberately weaker than a behavioural test, but they DO catch the
+// regression that matters: a future refactor silently deleting the stampClaim call at either site
+// (dead-by-construction, invisible to every other test in the repo before this addition).
+describe('stampClaim call sites are present and correctly ordered (TS-7/AC-7)', () => {
+  it('lib/sd-creation/source-adapters/qf.js calls stampClaim in the born-claim success branch, after claim_sd', () => {
+    const src = readSrc('lib/sd-creation/source-adapters/qf.js');
+    const rpcIdx = src.indexOf("supabase.rpc('claim_sd'");
+    const stampIdx = src.indexOf('stampClaim(supabase, sdKey, qfSession', rpcIdx);
+    expect(rpcIdx, 'claim_sd call not found').toBeGreaterThan(-1);
+    expect(stampIdx, 'stampClaim call not found after claim_sd').toBeGreaterThan(-1);
+    expect(stampIdx, 'stampClaim must be called after claim_sd succeeds, never before or in place of it')
+      .toBeGreaterThan(rpcIdx);
+  });
+
+  it('scripts/qf-start.js calls stampClaim after a successful claim_sd, before the claim is reported', () => {
+    const src = readSrc('scripts/qf-start.js');
+    const rpcIdx = src.indexOf("supabase.rpc('claim_sd'");
+    const stampIdx = src.indexOf('stampClaim(supabase, qfId, sessionId', rpcIdx);
+    const reportedIdx = src.indexOf('Quick-fix ${qfId} claimed', stampIdx);
+    expect(rpcIdx, 'claim_sd call not found').toBeGreaterThan(-1);
+    expect(stampIdx, 'stampClaim call not found after claim_sd').toBeGreaterThan(-1);
+    expect(reportedIdx, 'success message not found after stampClaim').toBeGreaterThan(-1);
+    expect(stampIdx, 'stampClaim must run after claim_sd succeeds').toBeGreaterThan(rpcIdx);
+    expect(reportedIdx, 'stampClaim must run before the success message, matching the fail-soft try/catch placement')
+      .toBeGreaterThan(stampIdx);
+  });
+
+  it('both scripts require lib/fleet/claim-stamp.cjs', () => {
+    expect(readSrc('lib/sd-creation/source-adapters/qf.js')).toContain("require('../../fleet/claim-stamp.cjs')");
+    expect(readSrc('scripts/qf-start.js')).toContain("'../lib/fleet/claim-stamp.cjs'");
   });
 });
