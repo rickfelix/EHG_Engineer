@@ -133,6 +133,39 @@ describe('classifySessionBucket — precedence and the three corrected defects',
     expect(classifySessionBucket(s, { isClaimed: () => true, nowMs: NOW })).toBe('ZOMBIE');
   });
 
+  it('CORRECTED DEFECT (QF-20260904-650): a LIVE, claimed, tool-frozen session classifies ZOMBIE, never ENGAGED', () => {
+    // The exact measured gap: heartbeat_at fresh (isLive=true) is what let the old ordering
+    // reach `if (isClaimed && isClaimed(session)) return 'ENGAGED';` and return BEFORE the
+    // already-computed `wedged` term was ever consulted -- the 09-04 report's
+    // "engagement.engaged=6, zombie=0" beside "utilization.live_workers=3" shape. The dead-
+    // heartbeat wedge case above (line ~126) exercises the DIFFERENT not-live branch and was
+    // already correct; this is the live-path gap that was actually broken.
+    const s = session({
+      loop_state: 'active',
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(), // 3h tool-silent, past the cut
+      sd_key: 'SD-SOME-CLAIMED-DEAD-LOOP-001',
+    }); // heartbeat_at stays at the default fresh value -- isLive === true
+    expect(classifySessionBucket(s, { isClaimed: () => true, nowMs: NOW })).toBe('ZOMBIE');
+  });
+
+  it('reproduces the 2026-09-04 report shape: 3 live+idle beside 3 live+claimed+wedged sessions -> zombie=3, never zombie=0', () => {
+    const idleSessions = [1, 2, 3].map((n) => session({ session_id: `idle-${n}` }));
+    const deadLoopSessions = [1, 2, 3].map((n) => session({
+      session_id: `dead-${n}`,
+      loop_state: 'active',
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+      sd_key: `SD-DEAD-LOOP-${n}`,
+    }));
+    const claimedIds = new Set(deadLoopSessions.map((s) => s.session_id));
+    const result = classifyEngagementBuckets([...idleSessions, ...deadLoopSessions], {
+      isClaimed: (s) => claimedIds.has(s.session_id),
+      now: NOW,
+    });
+    expect(result.zombie).toBe(3);
+    expect(result.engaged).toBe(0);
+    expect(result.idle).toBe(3);
+  });
+
   it('a claimed, LIVE session with an old last_tool_at (e.g. a cross-repo claimant working elsewhere) is still ENGAGED — the fix only gates on heartbeat liveness, not tool-call recency', () => {
     const s = session({
       heartbeat_at: new Date(NOW - 30_000).toISOString(), // fresh — session process is alive
