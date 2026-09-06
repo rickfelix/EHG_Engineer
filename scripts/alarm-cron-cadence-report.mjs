@@ -77,7 +77,11 @@ export async function main(argv = process.argv, deps = {}) {
     const { data, error } = await supabase
       .from('periodic_process_registry')
       .select('*')
-      .in('process_key', REPORTED_PROCESS_KEYS);
+      // count-truncation-diff-lint: explicit bound -- REPORTED_PROCESS_KEYS is a fixed 2-entry
+      // list (see its own doc comment above), so the IN clause can never match more than that
+      // many rows; 10 is a generous literal cap that tolerates future key additions.
+      .in('process_key', REPORTED_PROCESS_KEYS)
+      .limit(10);
     if (error) throw new Error(error.message);
     rows = data || [];
   } catch (err) {

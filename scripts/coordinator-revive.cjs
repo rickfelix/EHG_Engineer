@@ -298,12 +298,15 @@ async function assessQueueHealth(supabase) {
   try {
     const nowMs = Date.now();
     const recentSinceIso = new Date(nowMs - RECENT_FULFILLMENT_WINDOW_MS).toISOString();
-    const head = { count: 'exact', head: true };
+    // count-truncation-diff-lint: the { count: 'exact', head: true } object is inlined at each
+    // call site (not hoisted to a shared `head` const) so the head-count intent is visible as
+    // literal text on every .select() line, not hidden behind a variable the lint's textual
+    // classifier cannot resolve -- these are HEAD requests (no rows returned), never truncatable.
     const [{ count: total }, { count: pending }, { count: everFulfilled }, { count: recentlyFulfilled }] = await Promise.all([
-      supabase.from('worker_spawn_requests').select('*', head),
-      supabase.from('worker_spawn_requests').select('*', head).eq('status', 'pending'),
-      supabase.from('worker_spawn_requests').select('*', head).not('fulfilled_at', 'is', null),
-      supabase.from('worker_spawn_requests').select('*', head).gte('fulfilled_at', recentSinceIso),
+      supabase.from('worker_spawn_requests').select('*', { count: 'exact', head: true }),
+      supabase.from('worker_spawn_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('worker_spawn_requests').select('*', { count: 'exact', head: true }).not('fulfilled_at', 'is', null),
+      supabase.from('worker_spawn_requests').select('*', { count: 'exact', head: true }).gte('fulfilled_at', recentSinceIso),
     ]);
     const { data: oldest } = await supabase
       .from('worker_spawn_requests')
