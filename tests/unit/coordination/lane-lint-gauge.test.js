@@ -258,3 +258,82 @@ describe('runLaneLintGauge — tick entry point, fail-open, read-only', () => {
     expect(result.error).toBeUndefined();
   });
 });
+
+// SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-7b) — the six writer shapes this SD fixed,
+// with a mandatory RED control (PLAN-phase testing-agent review, 3e0331d8-68ac-4027-a43f-8c795e07d1c):
+// an all-zero assertion alone would pass identically before and after the fix and prove nothing.
+describe('FR-7(b) fixture — the six fixed machine-writer shapes', () => {
+  /** The six now-clean writer shapes, one row each. */
+  function cleanFixedShapeRows() {
+    return [
+      // scripts/assign-fleet-identities.cjs SET_IDENTITY
+      cleanRow({
+        sender_type: 'coordinator',
+        sender_session: 'coord-session-1',
+        message_type: 'SET_IDENTITY',
+        payload: { kind: 'SET_IDENTITY', color: 'blue', callsign: 'Charlie', display_name: 'Charlie | idle', tier_rank: 4 },
+        body: 'The coordinator assigned you callsign "Charlie" with color "blue".',
+      }),
+      // scripts/worker-signal.cjs
+      cleanRow({
+        sender_type: 'worker',
+        sender_session: 'worker-session-1',
+        payload: { kind: 'worker_signal', signal_type: 'stuck', body: 'stuck on gate X' },
+        body: 'stuck on gate X',
+      }),
+      // scripts/stale-session-sweep.cjs signal_resolved
+      cleanRow({
+        sender_type: 'coordinator',
+        sender_session: 'stale-session-sweep',
+        payload: { kind: 'signal_resolved', signal_resolved: true },
+        body: 'Your earlier signal has been dispositioned by the coordinator.',
+      }),
+      // scripts/periodic-liveness-watcher.mjs
+      cleanRow({
+        sender_type: 'periodic-liveness-watcher',
+        sender_session: 'periodic-liveness-watcher',
+        payload: { kind: 'periodic_liveness_flag', process_key: 'p1', state: 'OVERDUE' },
+        body: 'P1 is OVERDUE.',
+      }),
+      // lib/npm-install-lock.cjs — sender_type='system' is ALREADY exempt via
+      // LEGITIMATE_EMPTY_SENDER_TYPES; this row has no sender_session by design.
+      cleanRow({
+        sender_type: 'system',
+        sender_session: null,
+        payload: { kind: 'node_modules_lock', lock_type: 'NODE_MODULES', status: 'locked' },
+        body: 'Session abcd1234 is running npm install',
+      }),
+      // scripts/fleet-dashboard.cjs STALE_WARNING
+      cleanRow({
+        sender_type: 'dashboard',
+        sender_session: 'fleet-dashboard',
+        message_type: 'STALE_WARNING',
+        payload: { kind: 'stale_heartbeat_warning', session_id: 's1', heartbeat_age: 300 },
+        body: 'Your session on SD-FOO-001 has not heartbeated in 5m.',
+      }),
+    ];
+  }
+
+  it('GREEN: all six fixed shapes read as zero violations', () => {
+    const result = computeRowViolationCounts(cleanFixedShapeRows());
+    expect(result).toEqual({ untyped_row: 0, bodyless_row: 0, empty_sender_row: 0 });
+  });
+
+  it('RED CONTROL: the same six rows with their stamps stripped are NOT all-zero — proves the assertion above is discriminating, not vacuous', () => {
+    const stripped = cleanFixedShapeRows().map((row, i) => {
+      const payload = { ...row.payload };
+      delete payload.kind;
+      // sender_session is stripped on every row EXCEPT the npm-install-lock row (index 4),
+      // whose sender_type='system' is exempt regardless — stripping only its kind must show
+      // up as untyped_row, never empty_sender_row (the exact distinction TESTING flagged).
+      const sender_session = i === 4 ? row.sender_session : null;
+      return { ...row, payload, sender_session };
+    });
+    const result = computeRowViolationCounts(stripped);
+    // All six lose their kind -> untyped_row = 6. Five of six (all but npm-install-lock) also
+    // lose sender_session with a non-exempt sender_type -> empty_sender_row = 5.
+    expect(result.untyped_row).toBe(6);
+    expect(result.empty_sender_row).toBe(5);
+    expect(result).not.toEqual({ untyped_row: 0, bodyless_row: 0, empty_sender_row: 0 });
+  });
+});

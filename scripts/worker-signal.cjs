@@ -712,7 +712,15 @@ async function main() {
   // SD-LEO-INFRA-CLAIM-RPC-HONOR-001 then the coordinator filed a duplicate ~4min later). The
   // coordinator reads payload.links_sd to dedup before filing a worker-requested follow-up.
   const linksSd = normalizeLinksSd(flags['links-sd']);
+  // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-3): payload.kind is ADDITIVE beside
+  // signal_type (never a replacement) — the friction channel keeps keying on signal_type
+  // everywhere it already does (e.g. the backpressure exemption at
+  // lib/coordinator/dispatch.cjs assertSendBackpressure). 'worker_signal' is registered in
+  // every role's DRAIN_SETS (lib/fleet/worker-status.cjs) in the same PR so
+  // classifyCoordinationRow() still classifies these rows as actionable via the kind path,
+  // not only via the signal_type fallback.
   const payload = {
+    kind: 'worker_signal',
     signal_type: type,
     body,
     severity,
