@@ -1,0 +1,44 @@
+[
+  {
+    "id": "QF-20260902-824",
+    "owner": "chairman",
+    "release_condition": "[oracle_read_pending] review_at=2026-09-03T01:48:57.105Z consult=1de73409-ad72-44ff-99d3-c7e4429d2443 :: batch mint detected (group size 3)",
+    "verification_notes": "PR https://github.com/rickfelix/EHG_Engineer/pull/8085 MERGED and reachable from origin/main (efcddd6a1c0516b69b9258cc7da7af38ca31cbb3) — merge witnessed, SCOPE ACCEPTANCE OUTSTANDING (QF-20260725-691: a merged PR proves code landed, not that this QF's scope is satisfied; UAT not re-run in the reconcile path). Attest with: node scripts/complete-quick-fix.js QF-20260902-824 --pr-url https://github.com/rickfelix/EHG_Engineer/pull/8085 --scope-accepted \"<who/why>\". | PR https://github.com/rickfelix/EHG_Engineer/pull/8085 MERGED and reachable from origin/main (efcddd6a1c0516b69b9258cc7da7af38ca31cbb3); SCOPE ACCEPTED by the dry-run + in-flight census tools per the ORIGINAL ruling a4dfd033 are shipped and live-verified; the AMENDED ruling 480c8178's grandfathering+flip work is HELD because SD-LEO-FIX-EXEC-PLAN-ACCEPTED-001 FR-6 already unconditionally blocks the defect class regardless of SUBAGENT_VERDICT_MODE, making that code inert -- escalated via signal 567ce716, awaiting coordinator clarification (QF-20260725-691 attestation; UAT not re-run in reconcile path)."
+  },
+  {
+    "id": "QF-20260902-724",
+    "owner": "chairman",
+    "release_condition": "[oracle_read_pending] review_at=2026-09-03T01:48:57.105Z consult=1de73409-ad72-44ff-99d3-c7e4429d2443 :: batch mint detected (group size 3)",
+    "verification_notes": "PR https://github.com/rickfelix/EHG_Engineer/pull/8086 MERGED and reachable from origin/main (2c09efbda626a6facee2b4dfeb0cd616a933c524); SCOPE ACCEPTED by Golf-2: implemented both named phantom-column fixes (a) — detectClaimFocusMismatch's id-vs-session_id join and ownership-detection.js's last_heartbeat-vs-heartbeat_at read — each with a regression test reproducing the exact failure mode, plus a follow-up commit paginating the newly-fixed session read per count-truncation-diff-lint (matching this file's own FR-6 discipline). DELIBERATELY DESCOPED (b)'s auto-release step: detectClaimFocusMismatch was built stamp-only by QF-20260824-154, whose docstring documents this as an unresolved open model-ruling question (live-but-focused-elsewhere may be a legitimate protocol-sanctioned multi-hold, not abandonment) with its own dedicated 'not auto-released' regression test. Adding release would reverse that documented safety boundary fleet-wide without resolving the question — signaled to the coordinator (feedback signal 57b406fc) for explicit confirmation rather than decided unilaterally. 139/139 tests pass, eslint + count-truncation-diff-lint clean. (QF-20260725-691 attestation; UAT not re-run in reconcile path)."
+  },
+  {
+    "id": "QF-20260901-259",
+    "owner": "chairman",
+    "release_condition": "[oracle_read_pending] review_at=2026-09-01T18:59:13.067Z consult=e089a0d6-2060-4351-bd0f-e3afbe5f3255 :: batch mint detected (group size 4)",
+    "verification_notes": null
+  },
+  {
+    "id": "QF-20260901-023",
+    "owner": "chairman",
+    "release_condition": "[oracle_read_pending] review_at=2026-09-01T18:59:13.067Z consult=e089a0d6-2060-4351-bd0f-e3afbe5f3255 :: batch mint detected (group size 4)",
+    "verification_notes": "13/13 dispatch-send-backpressure tests + 1079/1079 broader coordinator suite passing"
+  },
+  {
+    "id": "QF-20260903-052",
+    "owner": "chairman",
+    "release_condition": "[oracle_read_pending] review_at=2026-09-03T21:44:30.733Z consult=0b79e160-8589-4511-b84e-069191b20d45 :: batch mint detected (group size 7)",
+    "verification_notes": null
+  },
+  {
+    "id": "QF-20260904-868",
+    "owner": "chairman",
+    "release_condition": "[oracle_read_pending] review_at=2026-09-05T00:40:42.938Z consult=36836d9d-0f0f-448b-a359-baa3137cbb78 :: batch mint detected (group size 6)",
+    "verification_notes": "PR https://github.com/rickfelix/EHG_Engineer/pull/8186 MERGED and reachable from origin/main (e3d02316a5885b9e5b7ce02e702c9391425b209a); SCOPE ACCEPTED by Golf (worker) — root-caused and fixed the actual CRIT-003 defect (the ticket's own stated addedLinesOnly-bypass premise was verified empirically wrong; real cause was an unconstrained proximity-pattern span matching across a 1.2MB single-line generated JSON test-evidence blob). Fixed generally via a line-length cap protecting all proximity-based CRIT patterns, verified via full test suite (492+34 tests) plus reproduction against the real PR #8177 diff, 0 regressions. (QF-20260725-691 attestation; UAT not re-run in reconcile path)."
+  },
+  {
+    "id": "QF-20260903-469",
+    "owner": "chairman",
+    "release_condition": "[oracle_read_pending] review_at=2026-09-03T21:44:30.733Z consult=0b79e160-8589-4511-b84e-069191b20d45 :: batch mint detected (group size 7)",
+    "verification_notes": "PR https://github.com/rickfelix/EHG_Engineer/pull/8141 MERGED and reachable from origin/main (6550f53c9c704f206d23fc81b5a73471068a0fb9); SCOPE ACCEPTED by Charlie (fleet worker 63b3161a). Merged 6550f53c9c7. This row was my own finding, measured on a live completion and promoted to CRITICAL by the coordinator. SCOPE SHIPPED: HandoffRecorder now stamps executing_commit_sha and executing_cwd into validation_details on BOTH the accepted and the rejected path — both, because a stale FAIL blocks correct work over a defect already fixed exactly as a stale PASS certifies work against a check that no longer exists, and that symmetry is how this was discovered. Chose the STAMP over a freshness assertion at handoff entry, as the row argued: refusing to run only prevents future cases, while recording the commit makes historical verdicts auditable, and it costs one field. REUSED resolveEvaluatedCommitSha() from results-storage.js:394 rather than writing a second sha resolver — injectable exec, 5s-bounded, never throws. A duplicate representation introduced inside the fix for a provenance gap would have been this programme committing its own defect class. HONEST NULL: the key is ALWAYS present and null means COULD NOT DETERMINE, never fresh and never same-as-HEAD; omitting it on failure would make an unmeasured verdict indistinguishable from an unstamped one. And I deliberately added NO consumer guard of the form if (sha && ...), because a falsy value silently opting a check out is a LIVE defect elsewhere in this codebase and must not be reproduced. THE DEPENDENCY QUESTION WAS ANSWERED BEFORE BUILDING, as the coordinator note required: this row and sweep finding 2 in feedback d9238acf are NOT the same fix site — finding 2 is sub-agent EVIDENCE rows (written results-storage.js:632, consumed subagent-evidence-gate.js:325-326 where a falsy sha skips the check), mine is the GATE OWN executing tree where no field existed at all. Different record, writer and consumer, so neither can close leaving the other silently open. I FOUND AND FIXED A HOLE IN MY OWN FIX: the pathological truncation fallback in preflight-remediation.js is an explicit WHITELIST that silently dropped the stamp — a pathological rejection is precisely the verdict whose provenance matters most, and a stamp that vanishes on the hard path reads as present while being absent when it counts. THREE LIMITS, STATED NOT GLOSSED: (1) if verdicts were historically produced from lagging trees, that population is UNMEASURABLE TODAY BY CONSTRUCTION because the executing commit was never recorded — this creates the instrument, it cannot look backwards, and no remainder is filed because I cannot size it; (2) NO consumer reads the field today — it is an after-the-fact audit record, additive to a JSONB blob, and nothing needed teaching to read it; (3) sweep finding 2 remains LIVE and is SOLOMON's — 142 of the 500 most recent sub_agent_execution_results rows carry no evaluated_commit_sha, 28.4 percent across 11 sub-agent codes, and this PR does NOT close it. VERIFICATION: proved the truncation test actually catches the defect by removing the fallback keys — 2 of 4 fail, and pass again on restore. Tests: tests/unit/handoff/ = 120 files, 1170 passed, 3 skipped. CI: 44 SUCCESS, 1 SKIPPED, 0 failures at merge. (QF-20260725-691 attestation; UAT not re-run in reconcile path)."
+  }
+]
