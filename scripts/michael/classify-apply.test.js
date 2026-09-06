@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { stubClient } from '../../lib/michael/db.test.js';
-import { runClassifyApply, validateEnvelope, contentHashFor, itemProblem, taskProblem, pathAllowed, mergeRun, exitCodeForApply, ITEM_WRITABLE, TASK_WRITABLE, PRODUCER, FEEDER } from './classify-apply.mjs';
+import { runClassifyApply, validateEnvelope, contentHashFor, itemProblem, taskProblem, pathAllowed, mergeRun, appliedRunIds, exitCodeForApply, ITEM_WRITABLE, TASK_WRITABLE, PRODUCER, FEEDER, RUN_IDS_KEPT } from './classify-apply.mjs';
 
 // 05:00 ET on 2026-09-06 (EDT) -> 09:00Z (inside 04:30-07:30); 02:00 ET -> 06:00Z (outside).
 const NOW = new Date('2026-09-06T09:00:00.000Z');
@@ -70,6 +70,11 @@ describe('validation (pure)', () => {
     const at = (over) => validateEnvelope(envelope(over), { etDate: '2026-09-06', now: NOW });
     expect(at({ model_used: 'claude-haiku-4-5' })).toMatchObject({ refusal: 'MODEL_NOT_ALLOWED' });
     expect(at({ model_used: 'claude-opus-5' })).toEqual({ ok: true });
+    // free text can never ride an identifier column into the seat row
+    expect(at({ model_used: `claude-sonnet-5 ${'p'.repeat(60)}` })).toMatchObject({ refusal: 'MODEL_NOT_ALLOWED' });
+    expect(at({ model_used: 'claude-sonnet-5+claude-opus-5' })).toMatchObject({ refusal: 'MODEL_NOT_ALLOWED' });
+    expect(at({ run_id: 'r'.repeat(81) })).toMatchObject({ refusal: 'PROVENANCE_MISSING' });
+    expect(at({ run_id: 'run 1 with prose' })).toMatchObject({ refusal: 'PROVENANCE_MISSING' });
     expect(at({ tokens_in: -1 })).toMatchObject({ refusal: 'METERING_INVALID' });
     expect(at({ tokens_out: 1.5 })).toMatchObject({ refusal: 'METERING_INVALID' });
     expect(at({ produced_at: '2026-09-06T05:30:00.000Z' })).toMatchObject({ refusal: 'PRODUCED_AT_INVALID' }); // 3h30 old
@@ -92,6 +97,8 @@ describe('validation (pure)', () => {
     expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: 'delete' })).toBe('INTENT_INVALID');
     expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: 'label:L_1' })).toBe(null);
     expect(itemProblem({ thread_id: '', class: 'x' })).toBe('ITEM_INVALID');
+    expect(itemProblem({ thread_id: 't1', class: 'x', verified_by: 'v'.repeat(65) })).toBe('ITEM_INVALID');
+    expect(taskProblem({ task_id: 'k1', effort_grade: 'S', role_tag: 'r'.repeat(41) })).toBe('TASK_INVALID');
     expect(taskProblem({ task_id: 'k1', effort_grade: 'S' })).toBe(null);
     expect(taskProblem({ task_id: 'k1', effort_grade: 'XL' })).toBe('GRADE_INVALID');
     expect(taskProblem({ task_id: 'k1', effort_grade: 'S', chosen_action: 'x' })).toBe('FIELD_NOT_WRITABLE');
@@ -107,8 +114,12 @@ describe('validation (pure)', () => {
     expect(pathAllowed('C:\\elsewhere\\run-1.json', ROOT)).toBe(false);
     const pass = { run_id: 'r2', model_used: 'claude-opus-5', tokens_in: 10, tokens_out: 5, counts: { classified: 2, needs_you: 1, borderline: 1, graded: 0, opus_rejudged: 1, sample: 0, items_skipped: 1, tasks_skipped: 0 } };
     const prior = { counts: { classified: 5, needs_you: 0, borderline: 0, graded: 3, opus_rejudged: 0, sample: 1, passes: 1, items_skipped: 0, tasks_skipped: 2, last_run_id: 'r1' }, model_used: 'claude-sonnet-5', tokens_in: 100, tokens_out: 50 };
-    expect(mergeRun(prior, pass)).toEqual({ counts: { classified: 7, needs_you: 1, borderline: 1, graded: 3, opus_rejudged: 1, sample: 1, passes: 2, items_skipped: 1, tasks_skipped: 2, last_run_id: 'r2' }, model_used: 'claude-sonnet-5+claude-opus-5', tokens_in: 110, tokens_out: 55 });
-    expect(mergeRun(null, pass).counts.passes).toBe(1);
+    expect(mergeRun(prior, pass)).toEqual({ counts: { classified: 7, needs_you: 1, borderline: 1, graded: 3, opus_rejudged: 1, sample: 1, passes: 2, items_skipped: 1, tasks_skipped: 2, last_run_id: 'r2', run_ids: ['r1', 'r2'] }, model_used: 'claude-sonnet-5+claude-opus-5', tokens_in: 110, tokens_out: 55 });
+    expect(mergeRun(null, pass).counts).toMatchObject({ passes: 1, run_ids: ['r2'] });
+    expect(appliedRunIds({ counts: { run_ids: ['a', 'b'], last_run_id: 'c' } })).toEqual(['a', 'b', 'c']);
+    expect(appliedRunIds(null)).toEqual([]);
+    const many = { counts: { run_ids: Array.from({ length: RUN_IDS_KEPT }, (_, i) => `r${i}`) } };
+    expect(mergeRun(many, { ...pass, run_id: 'new' }).counts.run_ids).toHaveLength(RUN_IDS_KEPT);
   });
 });
 
@@ -141,6 +152,31 @@ describe('runClassifyApply', () => {
     const up = calls.find((c) => c.kind === 'upsert').ops[0].args[0];
     expect(up).toMatchObject({ status: 'ok', model_used: 'claude-sonnet-5+claude-opus-5', tokens_in: 1700, tokens_out: 400, started_at: '2026-09-06T08:31:00.000Z', counts: { classified: 5, graded: 3, sample: 1, opus_rejudged: 1, passes: 2, items_skipped: 1, last_run_id: 'run-1' } });
   });
+  it('a replayed run_id is inert (no row or metering write); a prior degraded seat row stays degraded through a clean pass', async () => {
+    const prior = [{ id: 'row', status: 'ok', counts: { classified: 4, run_ids: ['run-0', 'run-1'], last_run_id: 'run-1' }, model_used: 'claude-sonnet-5', tokens_in: 500, tokens_out: 100, started_at: '2026-09-06T08:31:00.000Z' }];
+    const { sb, calls } = db({ prior });
+    const r = await runClassifyApply({ sb, argv: ['--file', FILE, '--apply'], now: NOW, root: ROOT, fs: fsFor(envelope()) });
+    expect(r).toMatchObject({ ok: true, action: 'inert', reason: 'already_applied', run_id: 'run-1' });
+    expect(calls.filter((c) => c.kind !== 'select')).toEqual([]);
+    expect(exitCodeForApply(r)).toBe(0);
+    const legacy = [{ id: 'row', status: 'ok', counts: { last_run_id: 'run-1' }, tokens_in: 1, tokens_out: 1 }];
+    expect(await runClassifyApply({ sb: db({ prior: legacy }).sb, argv: ['--file', FILE, '--apply'], now: NOW, root: ROOT, fs: fsFor(envelope()) })).toMatchObject({ action: 'inert', reason: 'already_applied' });
+    const degraded = [{ id: 'row', status: 'degraded', counts: { classified: 1, run_ids: ['run-0'] }, model_used: 'claude-sonnet-5', tokens_in: 5, tokens_out: 5, started_at: '2026-09-06T08:31:00.000Z' }];
+    const d = db({ prior: degraded });
+    const s = await runClassifyApply({ sb: d.sb, argv: ['--file', FILE, '--apply'], now: NOW, root: ROOT, fs: fsFor(envelope()) });
+    expect(s).toMatchObject({ ok: true, status: 'degraded', rows_refused: 0 });
+    expect(d.calls.find((c) => c.kind === 'upsert').ops[0].args[0]).toMatchObject({ status: 'degraded', counts: { run_ids: ['run-0', 'run-1'] } });
+  });
+  it('the window gates on produced_at: a file produced at 07:25 ET applied at 07:31 ET is applied; one produced outside the window is inert', async () => {
+    // 07:25 ET = 11:25Z; applied 07:31 ET = 11:31Z
+    const late = new Date('2026-09-06T11:31:00.000Z');
+    const { sb, calls } = db();
+    const r = await runClassifyApply({ sb, argv: ['--file', FILE, '--apply'], now: late, root: ROOT, fs: fsFor(envelope({ produced_at: '2026-09-06T11:25:00.000Z' })) });
+    expect(r).toMatchObject({ ok: true, action: 'run', status: 'ok', counts: { classified: 2, graded: 1 } });
+    expect(calls.filter((c) => c.kind === 'upsert')).toHaveLength(1);
+    const early = await runClassifyApply({ sb, argv: ['--file', FILE, '--apply'], now: NOW, root: ROOT, fs: fsFor(envelope({ produced_at: '2026-09-06T08:00:00.000Z' })) }); // 04:00 ET
+    expect(early).toMatchObject({ ok: true, action: 'inert', reason: 'outside_et_window' });
+  });
   it('dry-run by default: validates, reads the seat row, writes nothing, previews the merged row', async () => {
     const { sb, calls } = db();
     const r = await runClassifyApply({ sb, argv: ['--file', FILE], now: NOW, root: ROOT, fs: fsFor(envelope()) });
@@ -164,7 +200,7 @@ describe('runClassifyApply', () => {
     expect(await at(['--file', FILE, '--et-date', '2026-09-05'])).toMatchObject({ ok: false, refusal: 'ET_DATE_MISMATCH' });
     expect(calls).toEqual([]);
     const early = await runClassifyApply({ sb, argv: ['--file', FILE, '--apply'], now: TWO_AM, root: ROOT, fs: fsFor(envelope({ produced_at: '2026-09-06T05:55:00.000Z' })) });
-    expect(early).toMatchObject({ ok: true, action: 'inert', reason: 'outside_et_window' });
+    expect(early).toMatchObject({ ok: true, action: 'inert', reason: 'outside_et_window', produced_at: '2026-09-06T05:55:00.000Z' });
     expect(calls).toEqual([]);
     const absent = await runClassifyApply({ sb: db({ absent: true }).sb, argv: ['--file', FILE, '--apply'], now: NOW, root: ROOT, fs: fsFor(envelope()) });
     expect(absent).toMatchObject({ ok: true, action: 'inert', reason: 'tables_absent', tables_absent: true });
@@ -172,9 +208,13 @@ describe('runClassifyApply', () => {
   });
   it('a refused row write is reported, the pass continues, the seat row lands degraded, exit 1', async () => {
     const r = await run({ sb: db({ refuse: 'michael_todoist_snapshot' }).sb });
-    expect(r).toMatchObject({ ok: false, status: 'degraded', run_row_ok: true, counts: { classified: 2, graded: 0 } });
+    // a degraded apply is a completed write with a named count (never an unnamed ok:false that emit prints as REFUSED undefined)
+    expect(r).toMatchObject({ ok: true, status: 'degraded', run_row_ok: true, rows_refused: 1, counts: { classified: 2, graded: 0 } });
+    expect(r.refusal).toBeUndefined();
     expect(r.errors).toEqual(['task k1: WRITE_FAILED']);
     expect(exitCodeForApply(r)).toBe(1);
+    expect(exitCodeForApply({ ok: false, refusal: 'WRITE_FAILED' })).toBe(1);
+    expect(exitCodeForApply({ ok: false, refusal: 'HASH_MISMATCH' })).toBe(2);
   });
   it('never writes summary, prose or a run row outside the allow-lists (source guard)', () => {
     const src = readFileSync(new URL('./classify-apply.mjs', import.meta.url), 'utf8').split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');

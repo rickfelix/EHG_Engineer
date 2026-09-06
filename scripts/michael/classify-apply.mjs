@@ -35,7 +35,12 @@ import { etDateStr } from '../../lib/time/chairman-et-wall-clock.js';
 export const FEEDER = 'seat-classify';
 export const PRODUCER = 'michael-seat-classifier';
 export const VERDICT_DIR = path.join('.artifacts', 'michael-seat');
-export const MODEL_ALLOWED = /^claude-(sonnet|opus)/i;
+export const MODEL_ALLOWED = /^claude-(sonnet|opus)[a-z0-9.-]{0,40}$/i;
+export const RUN_ID_RE = /^[A-Za-z0-9._:-]{1,80}$/;
+export const VERIFIED_BY_MAX = 64;
+export const ROLE_TAG_MAX = 40;
+/** run_ids the seat row remembers for replay refusal (bounded; a tick has far fewer passes). */
+export const RUN_IDS_KEPT = 50;
 export const PRODUCED_AT_MAX_AGE_MS = 3 * 60 * 60 * 1000;
 export const NEEDS_YOU_REASON_MAX = 240;
 export const ITEM_WRITABLE = Object.freeze(['class', 'needs_you', 'needs_you_reason', 'borderline', 'verified_by', 'action_intent']);
@@ -54,7 +59,8 @@ export function contentHashFor(envelope) {
 }
 
 const isInt = (v, min = 0) => Number.isInteger(v) && v >= min;
-const strOrNull = (v) => v === null || (typeof v === 'string' && v.length > 0);
+// free text is bounded everywhere it can reach a row: an identifier, never prose
+const strOrNull = (v, max = 240) => v === null || (typeof v === 'string' && v.length > 0 && v.length <= max);
 
 /** Pure: validate one item verdict; returns a refusal code or null. */
 export function itemProblem(it) {
@@ -65,7 +71,7 @@ export function itemProblem(it) {
   if ('needs_you' in it && typeof it.needs_you !== 'boolean') return 'ITEM_INVALID';
   if ('borderline' in it && typeof it.borderline !== 'boolean') return 'ITEM_INVALID';
   if ('needs_you_reason' in it && (!strOrNull(it.needs_you_reason) || (it.needs_you_reason && it.needs_you_reason.length > NEEDS_YOU_REASON_MAX))) return 'REASON_INVALID';
-  if ('verified_by' in it && !strOrNull(it.verified_by)) return 'ITEM_INVALID';
+  if ('verified_by' in it && !strOrNull(it.verified_by, VERIFIED_BY_MAX)) return 'ITEM_INVALID';
   if ('action_intent' in it && it.action_intent !== null && !(typeof it.action_intent === 'string' && INTENT_RE.test(it.action_intent))) return 'INTENT_INVALID';
   return null;
 }
@@ -78,7 +84,7 @@ export function taskProblem(t) {
   if (!['S', 'M', 'L'].includes(t.effort_grade)) return 'GRADE_INVALID';
   if ('est_minutes' in t && t.est_minutes !== null && !isInt(t.est_minutes, 1)) return 'TASK_INVALID';
   if ('proposed_date' in t && t.proposed_date !== null && !(typeof t.proposed_date === 'string' && DATE_RE.test(t.proposed_date))) return 'TASK_INVALID';
-  if ('role_tag' in t && !strOrNull(t.role_tag)) return 'TASK_INVALID';
+  if ('role_tag' in t && !strOrNull(t.role_tag, ROLE_TAG_MAX)) return 'TASK_INVALID';
   return null;
 }
 
@@ -88,6 +94,7 @@ export function validateEnvelope(env, { etDate, now }) {
   for (const k of Object.keys(env)) if (!ENVELOPE_KEYS.includes(k)) return refusal('FIELD_NOT_WRITABLE', `unknown envelope key "${k}"`);
   if (typeof env.producer !== 'string' || !env.producer || typeof env.run_id !== 'string' || !env.run_id) return refusal('PROVENANCE_MISSING', 'producer and run_id are required (ratification 6c263823)');
   if (env.producer !== PRODUCER) return refusal('PRODUCER_UNKNOWN', `producer must be ${PRODUCER}`);
+  if (!RUN_ID_RE.test(env.run_id)) return refusal('PROVENANCE_MISSING', 'run_id must be an identifier (1-80 chars of [A-Za-z0-9._:-])');
   if (typeof env.content_hash !== 'string' || env.content_hash !== contentHashFor(env)) return refusal('HASH_MISMATCH', 'content_hash does not match sha256(canonicalJson(envelope minus content_hash))');
   if (typeof env.model_used !== 'string' || !MODEL_ALLOWED.test(env.model_used)) return refusal('MODEL_NOT_ALLOWED', 'model_used must be a claude-sonnet or claude-opus model');
   if (!isInt(env.tokens_in) || !isInt(env.tokens_out)) return refusal('METERING_INVALID', 'tokens_in and tokens_out must be non-negative integers');
@@ -112,7 +119,15 @@ export function pathAllowed(file, root) {
   return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) && full.toLowerCase().endsWith('.json');
 }
 
-/** Pure: merge this pass into the seat row's counts and metering (sums; model list). */
+/** Pure: the run_ids a seat row has applied (counts.run_ids, with the older last_run_id as a fallback). */
+export function appliedRunIds(prior) {
+  const counts = prior && prior.counts && typeof prior.counts === 'object' ? prior.counts : {};
+  const ids = Array.isArray(counts.run_ids) ? counts.run_ids.filter((x) => typeof x === 'string') : [];
+  if (typeof counts.last_run_id === 'string' && !ids.includes(counts.last_run_id)) ids.push(counts.last_run_id);
+  return ids;
+}
+
+/** Pure: merge this pass into the seat row's counts and metering (sums; model list; run_ids for replay refusal). */
 export function mergeRun(prior, pass) {
   const counts = { ...(prior && prior.counts && typeof prior.counts === 'object' ? prior.counts : {}) };
   for (const k of RUN_COUNT_KEYS) counts[k] = (isInt(counts[k]) ? counts[k] : 0) + (isInt(pass.counts[k]) ? pass.counts[k] : 0);
@@ -120,6 +135,7 @@ export function mergeRun(prior, pass) {
   counts.items_skipped = (isInt(counts.items_skipped) ? counts.items_skipped : 0) + pass.counts.items_skipped;
   counts.tasks_skipped = (isInt(counts.tasks_skipped) ? counts.tasks_skipped : 0) + pass.counts.tasks_skipped;
   counts.last_run_id = pass.run_id;
+  counts.run_ids = [...appliedRunIds(prior).filter((id) => id !== pass.run_id), pass.run_id].slice(-RUN_IDS_KEPT);
   const models = new Set(String(prior && prior.model_used ? prior.model_used : '').split('+').filter(Boolean));
   models.add(pass.model_used);
   return {
@@ -144,7 +160,11 @@ export async function runClassifyApply({ sb, argv = [], now = new Date(), env = 
   const v = validateEnvelope(envelope, { etDate, now });
   if (!v.ok) return v;
   const reg = FEEDERS[FEEDER];
-  if (!inWindow(etMinuteOfDay(now), reg.window)) return { ok: true, action: 'inert', feeder: FEEDER, et_date: etDate, reason: 'outside_et_window', window: reg.window };
+  // The window gates WHEN THE VERDICTS WERE PRODUCED (produced_at, already validated fresh), not the apply
+  // instant: a file produced at 07:25 ET and applied at 07:31 ET is the tick's own work and its tokens were
+  // spent; discarding it would drop classifications and leave the metering unrecorded anywhere.
+  const producedAt = new Date(Date.parse(envelope.produced_at));
+  if (!inWindow(etMinuteOfDay(producedAt), reg.window)) return { ok: true, action: 'inert', feeder: FEEDER, et_date: etDate, reason: 'outside_et_window', window: reg.window, produced_at: envelope.produced_at };
 
   const pass = {
     run_id: envelope.run_id, model_used: envelope.model_used, tokens_in: envelope.tokens_in, tokens_out: envelope.tokens_out,
@@ -161,6 +181,9 @@ export async function runClassifyApply({ sb, argv = [], now = new Date(), env = 
   const prior = await readRows(sb, 'michael_feeder_runs', (q) => q.eq('et_date', etDate).eq('feeder', FEEDER).eq('attempt', 1), { select: 'id,status,counts,model_used,tokens_in,tokens_out,started_at' });
   if (prior.tables_absent) return { ok: true, action: 'inert', feeder: FEEDER, et_date: etDate, reason: 'tables_absent', tables_absent: true };
   if (prior.error) return refusal('READ_FAILED', prior.error);
+  // a run_id the seat row already carries is a replay: no rows would change (the queue guards hold) but the
+  // metering would double — inert, exit 0, no write
+  if (appliedRunIds(prior.rows[0]).includes(envelope.run_id)) return { ok: true, action: 'inert', feeder: FEEDER, et_date: etDate, reason: 'already_applied', run_id: envelope.run_id };
 
   for (const it of envelope.items) {
     const patch = Object.fromEntries(ITEM_WRITABLE.filter((k) => k in it).map((k) => [k, it[k]]));
@@ -182,19 +205,22 @@ export async function runClassifyApply({ sb, argv = [], now = new Date(), env = 
 
   // one seat row per ET date, accumulated across passes; degraded when any row write was refused
   const merged = mergeRun(prior.rows[0] || null, pass);
-  const row = { feeder: FEEDER, et_date: etDate, attempt: 1, venue: reg.venue, status: out.errors.length ? 'degraded' : 'ok', counts: merged.counts, model_used: merged.model_used, tokens_in: merged.tokens_in, tokens_out: merged.tokens_out, started_at: prior.rows[0] && prior.rows[0].started_at ? prior.rows[0].started_at : now.toISOString(), finished_at: new Date().toISOString() };
+  // a refused row earlier in the morning stays visible: degraded is sticky for the date
+  const priorDegraded = Boolean(prior.rows[0] && prior.rows[0].status === 'degraded');
+  const row = { feeder: FEEDER, et_date: etDate, attempt: 1, venue: reg.venue, status: out.errors.length || priorDegraded ? 'degraded' : 'ok', counts: merged.counts, model_used: merged.model_used, tokens_in: merged.tokens_in, tokens_out: merged.tokens_out, started_at: prior.rows[0] && prior.rows[0].started_at ? prior.rows[0].started_at : now.toISOString(), finished_at: new Date().toISOString() };
   const up = await writeRows(sb, 'michael_feeder_runs', (t) => t.upsert(row, { onConflict: 'et_date,feeder,attempt' }));
   out.run_row_ok = up.ok;
-  if (!up.ok) out.errors.push(`seat run row: ${up.refusal}`);
+  if (!up.ok) return { ...out, ok: false, refusal: up.refusal, message: `seat run row: ${up.error || up.refusal}`, status: row.status };
   out.status = row.status;
-  out.ok = out.errors.length === 0;
+  out.rows_refused = out.errors.length;
   return out;
 }
 
-/** Pure: exit code — 0 for a write, inert or dry-run; 1 for a partially refused write; 2 for a refusal. */
+/** Pure: exit code — 0 for a clean write, inert or dry-run; 1 for a degraded write (rows refused) or a failed run-row write; 2 for a refused invocation. */
 export function exitCodeForApply(r) {
-  if (!r || r.ok === false) return r && r.refusal ? 2 : 1;
-  return 0;
+  if (!r) return 1;
+  if (r.ok === false) return r.refusal && !['READ_FAILED', 'WRITE_FAILED', 'TABLES_ABSENT'].includes(r.refusal) ? 2 : 1;
+  return r.action === 'run' && r.rows_refused > 0 ? 1 : 0;
 }
 
 async function main() {
