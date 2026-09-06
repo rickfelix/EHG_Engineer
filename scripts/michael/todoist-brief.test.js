@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { stubClient } from '../../lib/michael/db.test.js';
-import { runTodoistBrief, parseEstMinutes, gradeFor, dueDateOf, isDueOrOverdue, snapshotRow, mutationRecord, SNAPSHOT_KEYS, SNAPSHOT_UPDATE_KEYS, EXCLUDED_PROJECT_NAMES } from './todoist-brief.mjs';
+import { runTodoistBrief, parseEstMinutes, gradeFor, dueDateOf, isDueOrOverdue, snapshotRow, mutationRecord, excludedProjectIds, SNAPSHOT_KEYS, SNAPSHOT_UPDATE_KEYS, EXCLUDED_PROJECT_NAMES } from './todoist-brief.mjs';
 import { etDateStr } from '../../lib/time/chairman-et-wall-clock.js';
 
 // 05:00 ET on 2026-09-06 (EDT) -> 09:00Z (inside 04:45-05:30); 02:00 ET -> 06:00Z.
@@ -37,11 +37,12 @@ function client({ projects = PROJECTS, tasks = TASKS, rejectUpdate = null, pageS
     updateTask: async (id, args) => { calls.push(['updateTask', id, args]); if (rejectUpdate && rejectUpdate.has(id)) throw new Error('todoist 500'); return { id }; },
   };
 }
-function db({ runs = [], rules = RULES, snapshot = [], absent = false } = {}) {
+function db({ runs = [], rules = RULES, snapshot = [], absent = false, updateAnswer = null } = {}) {
   const calls = [];
   const sb = stubClient((table, ops) => {
     calls.push({ table, kind: ops[0].op, ops });
     if (absent) return MISSING;
+    if (ops[0].op === 'update') { const id = ops.find((o) => o.op === 'eq' && o.args[0] === 'task_id'); const tid = id ? id.args[1] : null; return { data: updateAnswer ? updateAnswer(tid, ops[0].args[0]) : [{ task_id: tid }], error: null }; }
     if (ops[0].op !== 'select') return { data: null, error: null };
     if (table === 'michael_feeder_runs') return { data: runs, error: null };
     if (table === 'michael_rules') return { data: rules, error: null };
@@ -59,6 +60,13 @@ describe('pure helpers', () => {
     expect(parseEstMinutes('Est: 1.5h')).toBe(90);
     expect(parseEstMinutes('Est: 20 min')).toBe(20);
     expect(parseEstMinutes('Est: 25')).toBe(25);
+    // compound forms (adversarial review): no word boundary between the hour unit and the next digit
+    expect(parseEstMinutes('Est: 1h30m')).toBe(90);
+    expect(parseEstMinutes('Est: 2h15m')).toBe(135);
+    expect(parseEstMinutes('Est: 1hr30m')).toBe(90);
+    expect(parseEstMinutes('Est: 1h 30')).toBe(90);
+    expect(parseEstMinutes('Est: 1 hour 5 minutes')).toBe(65);
+    expect(parseEstMinutes('Est: 0m')).toBe(null);
     expect(parseEstMinutes('Estimate everything')).toBe(null);
     expect(parseEstMinutes('Est: soon')).toBe(null);
     expect(parseEstMinutes('')).toBe(null);
@@ -68,7 +76,12 @@ describe('pure helpers', () => {
     expect(dueDateOf({ due: { date: '2026-09-06' } }, etDateStr)).toBe('2026-09-06');
     // 03:30Z on the 6th is 23:30 ET on the 5th
     expect(dueDateOf({ due: { datetime: '2026-09-06T03:30:00Z' } }, etDateStr)).toBe('2026-09-05');
+    // a floating datetime (no offset) is the chairman's ET wall clock: 23:30 on the 5th stays the 5th, never runner-UTC shifted
+    expect(dueDateOf({ due: { date: '2026-09-05T23:30:00' } }, etDateStr)).toBe('2026-09-05');
+    expect(dueDateOf({ due: { datetime: '2026-09-06T00:30:00', date: '2026-09-06' } }, etDateStr)).toBe('2026-09-06');
+    expect(dueDateOf({ due: { datetime: '2026-09-06T03:30:00+00:00' } }, etDateStr)).toBe('2026-09-05');
     expect(dueDateOf({ due: null }, etDateStr)).toBe(null);
+    expect(excludedProjectIds([{ id: 'a', name: ' eva ' }, { id: 'b', name: 'Sub', parentId: 'a' }, { id: 'c', name: 'Deeper', parentId: 'b' }, { id: 'd', name: 'Home' }])).toEqual(new Set(['a', 'b', 'c']));
     expect(isDueOrOverdue({ due: { date: '2026-09-05' } }, '2026-09-06', etDateStr)).toBe(true);
     expect(isDueOrOverdue({ due: { date: '2026-09-07' } }, '2026-09-06', etDateStr)).toBe(false);
     expect(isDueOrOverdue({}, '2026-09-06', etDateStr)).toBe(false);
@@ -128,14 +141,18 @@ describe('runTodoistBrief', () => {
     const snapshotUpdates = updates.filter((u) => !('mutations_applied' in u.ops[0].args[0]));
     expect(snapshotUpdates).toHaveLength(5);
     for (const u of snapshotUpdates) {
-      expect(Object.keys(u.ops[0].args[0])).toEqual([...SNAPSHOT_UPDATE_KEYS]);
-      expect(u.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is']);
+      const keys = Object.keys(u.ops[0].args[0]);
+      expect(keys.every((k) => SNAPSHOT_UPDATE_KEYS.includes(k))).toBe(true);
+      expect(Object.values(u.ops[0].args[0]).some((v) => v === null)).toBe(false);
+      expect(u.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is', 'select']);
       expect(u.ops[3].args).toEqual(['chosen_action', null]); expect(u.ops[4].args).toEqual(['moved_back_at', null]);
     }
+    // the ungraded rows (t3, t9, T_CHECKIN) never carry effort_grade/est_minutes in their patch: a re-fire cannot null a seat grade
+    expect(snapshotUpdates.filter((u) => 'effort_grade' in u.ops[0].args[0]).map((u) => u.ops[2].args[1]).sort()).toEqual(['t1', 't2']);
     const mutUpdates = updates.filter((u) => 'mutations_applied' in u.ops[0].args[0]);
     expect(mutUpdates).toHaveLength(4);
     for (const u of mutUpdates) {
-      expect(u.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is']);
+      expect(u.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is', 'select']);
       expect(Array.isArray(u.ops[0].args[0].mutations_applied)).toBe(true);
       expect(JSON.stringify(u.ops[0].args[0])).not.toMatch(/gutter|check-in|Evening/);
     }
@@ -163,6 +180,40 @@ describe('runTodoistBrief', () => {
     expect(r.preview.mutations.map((m) => m.action)).toEqual(['label:home-day', 'label:home-day', 'label:home-day']);
     const f = await runTodoistBrief({ sb: db().sb, argv: ['--apply'], now: NOW, todoist: client({ rejectUpdate: new Set(['t1']) }), env });
     expect(f).toMatchObject({ status: 'degraded', counts: { mutation_failed: 1, mutations_applied: 3 } });
+  });
+  it('a recurring check-in is re-anchored through its own due string (recurrence kept); one without "every" is skipped with a reason; unconfigured id is surfaced', async () => {
+    const calls = [];
+    const tasks = TASKS.map((t) => (t.id === 'T_CHECKIN' ? { ...t, due: { date: '2026-09-04', isRecurring: true, string: 'every day' } } : t));
+    const r = await runTodoistBrief({ sb: db().sb, argv: ['--apply'], now: NOW, todoist: client({ tasks }, calls), env });
+    expect(calls.filter((c) => c[0] === 'updateTask' && c[2].dueString)).toEqual([['updateTask', 'T_CHECKIN', { dueString: 'every day' }]]);
+    expect(calls.some((c) => c[0] === 'updateTask' && c[2].dueDate)).toBe(false);
+    expect(r.counts).toMatchObject({ mutations_applied: 4, reschedule_skipped: null });
+    const odd = TASKS.map((t) => (t.id === 'T_CHECKIN' ? { ...t, due: { date: '2026-09-04', isRecurring: true, string: 'tomorrow' } } : t));
+    const s = await runTodoistBrief({ sb: db().sb, argv: [], now: NOW, todoist: client({ tasks: odd }), env });
+    expect(s.counts).toMatchObject({ mutations_planned: 3, reschedule_skipped: 'recurring_without_every' });
+    const u = await runTodoistBrief({ sb: db().sb, argv: [], now: NOW, todoist: client(), env: {} });
+    expect(u.counts).toMatchObject({ mutations_planned: 3, reschedule_skipped: 'checkin_unconfigured' });
+  });
+  it('a check-in outside the kept set gets a base row before its mutation is recorded; a 0-row record write is counted unrecorded and degrades', async () => {
+    const calls = [];
+    // the check-in lives in the EHG project (pointer only), overdue: not in `kept`, still rescheduled and given a row
+    const tasks = TASKS.map((t) => (t.id === 'T_CHECKIN' ? { ...t, projectId: '6grHWpvVM8QXrj5W' } : t));
+    const { sb, calls: dbCalls } = db();
+    const r = await runTodoistBrief({ sb, argv: ['--apply'], now: NOW, todoist: client({ tasks }, calls), env });
+    expect(r.counts).toMatchObject({ ehg_pointer: 2, rows_added_for_mutation: 1, rows_written: 5, mutations_applied: 3 });
+    const up = dbCalls.find((c) => c.table === 'michael_todoist_snapshot' && c.kind === 'upsert');
+    expect(up.ops[0].args[0].map((x) => x.task_id)).toContain('T_CHECKIN');
+    expect(calls.filter((c) => c[0] === 'updateTask').map((c) => c[1])).toEqual(['t1', 't9', 'T_CHECKIN']);
+    const zero = await runTodoistBrief({ sb: db({ updateAnswer: (id, patch) => ('mutations_applied' in patch && id === 't1' ? [] : [{ task_id: id }]) }).sb, argv: ['--apply'], now: NOW, todoist: client(), env });
+    expect(zero).toMatchObject({ status: 'degraded', counts: { mutations_applied: 3, mutation_unrecorded: 1, updates: 5 } });
+    const unmatched = await runTodoistBrief({ sb: db({ updateAnswer: (id, patch) => ('mutations_applied' in patch || id !== 't2' ? [{ task_id: id }] : []) }).sb, argv: ['--apply'], now: NOW, todoist: client(), env });
+    expect(unmatched.counts).toMatchObject({ updates: 4, updates_unmatched: 1 });
+  });
+  it('a label rule without role_tag or label is inert and counted, never applied', async () => {
+    const rules = [...RULES, { rule_key: 'todoist/bare-label', rule_json: { match: { project: 'Home' }, label: 'bare' }, auto_apply: true, auto_apply_verb: 'label' }];
+    const r = await runTodoistBrief({ sb: db({ rules }).sb, argv: [], now: NOW, todoist: client(), env });
+    expect(r.counts).toMatchObject({ label_rules_inert: 1, mutations_planned: 4 });
+    expect(r.preview.mutations.some((m) => m.action === 'label:bare')).toBe(false);
   });
   it('pages through projects and tasks; an exceeded page bound fails the run without writing', async () => {
     const calls = [];
