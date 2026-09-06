@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A (W3 child A)
 --
 -- ROOT DEFECT (20260712_claim_sd_claim_switch_clobber_guard.sql): the claim-switch
