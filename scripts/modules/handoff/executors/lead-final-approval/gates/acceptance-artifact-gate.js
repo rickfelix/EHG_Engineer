@@ -350,10 +350,16 @@ export function createAcceptanceArtifactGate(supabase) {
 
         let rows;
         try {
-          let query = supabase.from(table).select(tableConfig.selectColumns.join(',')).match(match);
           const effectiveOrderBy = orderBy || { column: 'created_at', desc: true };
-          query = query.order(effectiveOrderBy.column, { ascending: !effectiveOrderBy.desc }).limit(1);
-          const { data, error } = await query;
+          // Built as one chained expression (not query-var-reassigned across statements) so
+          // count-truncation-diff-lint's static check can see .limit(1) bounding this .select()
+          // on the same statement -- this always resolves at most one row, never an unbounded read.
+          const { data, error } = await supabase
+            .from(table)
+            .select(tableConfig.selectColumns.join(','))
+            .match(match)
+            .order(effectiveOrderBy.column, { ascending: !effectiveOrderBy.desc })
+            .limit(1);
           if (error) throw new Error(errorMessage(error));
           rows = data || [];
         } catch (err) {
