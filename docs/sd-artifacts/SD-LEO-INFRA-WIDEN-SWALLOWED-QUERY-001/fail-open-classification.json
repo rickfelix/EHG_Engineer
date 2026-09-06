@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:13:01.045Z",
+  "generated_at": "2026-09-06T18:18:04.212Z",
   "counts": {
-    "has_catch": 92
+    "has_catch": 84
   },
   "results": [
     {
@@ -520,62 +520,6 @@
       "line": 1066,
       "kind": "data",
       "snippet": "const { data } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
-      "line": 511,
-      "kind": "data",
-      "snippet": "const { data: saData } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
-      "line": 665,
-      "kind": "data",
-      "snippet": "const { data: sd } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
-      "line": 843,
-      "kind": "data",
-      "snippet": "const { data: claimedChildren } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
-      "line": 857,
-      "kind": "data",
-      "snippet": "const { data: claimer } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
-      "line": 936,
-      "kind": "data",
-      "snippet": "const { data: orchSD } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
-      "line": 979,
-      "kind": "data",
-      "snippet": "const { data: completedChildren } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
-      "line": 1079,
-      "kind": "data",
-      "snippet": "const { data: sessionData } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/orchestrator-completion-hook.js",
-      "line": 1095,
-      "kind": "data",
-      "snippet": "const { data: sdData } = await supabase",
       "classification": "has_catch"
     },
     {
