@@ -14,6 +14,8 @@
  *   L4: Substance — quality indicators (advisory)
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 // SD types that hard-block on planning completeness failure
 const BLOCKING_SD_TYPES = ['feature', 'infrastructure', 'database', 'security', 'frontend'];
 // SD types where planning completeness is advisory only
@@ -54,11 +56,14 @@ export async function validatePlanningCompleteness(supabase, sd) {
   const isBlocking = BLOCKING_SD_TYPES.includes(sdType);
 
   // Get SD type profile
-  const { data: profile } = await supabase
-    .from('sd_type_validation_profiles')
-    .select('requires_prd, requires_deliverables')
-    .eq('sd_type', sdType)
-    .single();
+  const profile = await safeQuery(
+    supabase
+      .from('sd_type_validation_profiles')
+      .select('requires_prd, requires_deliverables')
+      .eq('sd_type', sdType)
+      .single(),
+    { site: 'planning-completeness:sd_type_profile' }
+  );
 
   // Run all three rings in parallel
   const [ring1, ring2, ring3] = await Promise.all([
@@ -102,7 +107,7 @@ export async function validatePlanningCompleteness(supabase, sd) {
   }
 
   // Display summary
-  console.log(`\n   📊 Planning Completeness Summary:`);
+  console.log('\n   📊 Planning Completeness Summary:');
   console.log(`      Ring 1 (Individual SD): ${ring1.score}% ${ring1.issues.length === 0 ? '✅' : '❌'}`);
   console.log(`      Ring 2 (Orchestrator):  ${ring2.score}% ${ring2.warnings.length === 0 ? '✅' : '⚠️'}`);
   console.log(`      Ring 3 (Venture):       ${ring3.score}% ${ring3.warnings.length === 0 ? '✅' : '⚠️'}`);
@@ -129,23 +134,26 @@ async function validateIndividualSD(supabase, sd, profile) {
   const sdType = (sd.sd_type || 'feature').toLowerCase();
   const requiresPrd = profile?.requires_prd ?? true;
 
-  console.log(`\n   🔵 Ring 1: Individual SD Validation`);
+  console.log('\n   🔵 Ring 1: Individual SD Validation');
 
   // --- PRD Check (L1: Existence) ---
   if (requiresPrd) {
-    const { data: prd } = await supabase
-      .from('product_requirements_v2')
-      .select('id, title, status, executive_summary, functional_requirements')
-      .eq('sd_id', sd.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const prd = await safeQuery(
+      supabase
+        .from('product_requirements_v2')
+        .select('id, title, status, executive_summary, functional_requirements')
+        .eq('sd_id', sd.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+      { site: 'planning-completeness:prd' }
+    );
 
     if (!prd) {
       issues.push(`PRD required for ${sdType} type but not found`);
-      remediation.push(`Create PRD: node scripts/add-prd-to-database.js`);
+      remediation.push('Create PRD: node scripts/add-prd-to-database.js');
       score -= 40;
-      console.log(`      L1 PRD Existence: ❌ Not found`);
+      console.log('      L1 PRD Existence: ❌ Not found');
     } else {
       console.log(`      L1 PRD Existence: ✅ ${prd.title}`);
 
@@ -170,10 +178,10 @@ async function validateIndividualSD(supabase, sd, profile) {
       } else {
         const dummyPatterns = /^(tbd|todo|placeholder|lorem ipsum|fill in|coming soon|n\/a)$/i;
         if (dummyPatterns.test(execSummary.trim())) {
-          issues.push(`PRD executive_summary contains placeholder text`);
-          remediation.push(`Replace PRD executive_summary placeholder with actual content`);
+          issues.push('PRD executive_summary contains placeholder text');
+          remediation.push('Replace PRD executive_summary placeholder with actual content');
           score -= 15;
-          console.log(`      L3 Anti-Dummy: ❌ Placeholder text detected`);
+          console.log('      L3 Anti-Dummy: ❌ Placeholder text detected');
         } else {
           console.log(`      L3 Anti-Dummy: ✅ executive_summary substantial (${execSummary.length} chars)`);
         }
@@ -195,7 +203,7 @@ async function validateIndividualSD(supabase, sd, profile) {
         console.log(`      L4 Substance: ✅ Detailed executive summary (${execSummary.length} chars)`);
       } else {
         warnings.push(`PRD executive_summary is minimal (${execSummary.length} chars). Consider expanding.`);
-        console.log(`      L4 Substance: ⚠️ Minimal executive summary`);
+        console.log('      L4 Substance: ⚠️ Minimal executive summary');
       }
     }
   } else {
@@ -203,17 +211,20 @@ async function validateIndividualSD(supabase, sd, profile) {
   }
 
   // --- Deliverables Check (L1: Existence) ---
-  const { data: deliverables } = await supabase
-    .from('sd_scope_deliverables')
-    .select('id, deliverable_name')
-    .eq('sd_id', sd.id);
+  const deliverables = await safeQuery(
+    supabase
+      .from('sd_scope_deliverables')
+      .select('id, deliverable_name')
+      .eq('sd_id', sd.id),
+    { site: 'planning-completeness:deliverables' }
+  );
 
   const deliverableCount = deliverables?.length || 0;
   if (deliverableCount === 0) {
     warnings.push('No deliverables defined in sd_scope_deliverables');
     remediation.push('Define deliverables or let auto-populate from PRD');
     score -= 5;
-    console.log(`      L1 Deliverables: ⚠️ None defined`);
+    console.log('      L1 Deliverables: ⚠️ None defined');
   } else {
     console.log(`      L1 Deliverables: ✅ ${deliverableCount} defined`);
   }
@@ -228,18 +239,21 @@ async function validateOrchestratorCoherence(supabase, sd) {
   const remediation = [];
   let score = 100;
 
-  console.log(`\n   🟡 Ring 2: Orchestrator Coherence`);
+  console.log('\n   🟡 Ring 2: Orchestrator Coherence');
 
   // Check if this SD has a parent (is a child)
   if (!sd.parent_sd_id) {
     // Check if this SD IS a parent (has children)
-    const { data: children } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, status')
-      .eq('parent_sd_id', sd.id);
+    const children = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_key, status')
+        .eq('parent_sd_id', sd.id),
+      { site: 'planning-completeness:ring2_children' }
+    );
 
     if (!children || children.length === 0) {
-      console.log(`      ℹ️  Standalone SD — no orchestrator context`);
+      console.log('      ℹ️  Standalone SD — no orchestrator context');
       return { score: 100, warnings: [], remediation: [] };
     }
 
@@ -256,14 +270,17 @@ async function validateOrchestratorCoherence(supabase, sd) {
   }
 
   // This is a child SD — validate parent and siblings
-  console.log(`      Child SD — validating parent orchestrator`);
+  console.log('      Child SD — validating parent orchestrator');
 
   // Get parent
-  const { data: parent } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, title, status')
-    .eq('id', sd.parent_sd_id)
-    .single();
+  const parent = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, title, status')
+      .eq('id', sd.parent_sd_id)
+      .single(),
+    { site: 'planning-completeness:parent' }
+  );
 
   if (!parent) {
     warnings.push(`Parent SD ${sd.parent_sd_id} not found`);
@@ -275,10 +292,13 @@ async function validateOrchestratorCoherence(supabase, sd) {
   console.log(`      Parent: ${parent.sd_key} (${parent.status})`);
 
   // Get siblings
-  const { data: siblings } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, status')
-    .eq('parent_sd_id', sd.parent_sd_id);
+  const siblings = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status')
+      .eq('parent_sd_id', sd.parent_sd_id),
+    { site: 'planning-completeness:siblings' }
+  );
 
   const siblingCount = siblings?.length || 0;
   const completedSiblings = siblings?.filter(s => s.status === 'completed').length || 0;
@@ -286,10 +306,13 @@ async function validateOrchestratorCoherence(supabase, sd) {
   console.log(`      Siblings: ${siblingCount} total, ${completedSiblings} completed`);
 
   // Check for dependency issues among siblings
-  const { data: deps } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, dependencies')
-    .eq('parent_sd_id', sd.parent_sd_id);
+  const deps = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('id, dependencies')
+      .eq('parent_sd_id', sd.parent_sd_id),
+    { site: 'planning-completeness:sibling_deps' }
+  );
 
   if (deps) {
     const siblingIds = new Set(siblings?.map(s => s.id) || []);
@@ -312,28 +335,31 @@ async function validateVentureFoundation(supabase, sd) {
   const remediation = [];
   let score = 100;
 
-  console.log(`\n   🟢 Ring 3: Venture Foundation`);
+  console.log('\n   🟢 Ring 3: Venture Foundation');
 
   // Check if SD has a venture_id
   if (!sd.venture_id) {
-    console.log(`      ℹ️  No venture_id — skipping venture validation`);
+    console.log('      ℹ️  No venture_id — skipping venture validation');
     return { score: 100, warnings: [], remediation: [] };
   }
 
   console.log(`      Venture ID: ${sd.venture_id}`);
 
   // L1: Check for vision document
-  const { data: visions } = await supabase
-    .from('eva_vision_documents')
-    .select('vision_key, status, content')
-    .eq('venture_id', sd.venture_id)
-    .eq('status', 'active');
+  const visions = await safeQuery(
+    supabase
+      .from('eva_vision_documents')
+      .select('vision_key, status, content')
+      .eq('venture_id', sd.venture_id)
+      .eq('status', 'active'),
+    { site: 'planning-completeness:vision_documents' }
+  );
 
   if (!visions || visions.length === 0) {
     warnings.push(`No active vision document found for venture ${sd.venture_id}`);
-    remediation.push(`Create vision document: run brainstorm → vision pipeline for venture`);
+    remediation.push('Create vision document: run brainstorm → vision pipeline for venture');
     score -= 20;
-    console.log(`      L1 Vision: ⚠️ Not found`);
+    console.log('      L1 Vision: ⚠️ Not found');
   } else {
     console.log(`      L1 Vision: ✅ ${visions.length} active vision(s)`);
 
@@ -343,24 +369,27 @@ async function validateVentureFoundation(supabase, sd) {
     if (visionContent.length < 100) {
       warnings.push(`Vision document content is minimal (${visionContent.length} chars)`);
       score -= 10;
-      console.log(`      L3 Anti-Dummy: ⚠️ Vision content minimal`);
+      console.log('      L3 Anti-Dummy: ⚠️ Vision content minimal');
     } else {
-      console.log(`      L3 Anti-Dummy: ✅ Vision content substantial`);
+      console.log('      L3 Anti-Dummy: ✅ Vision content substantial');
     }
   }
 
   // L1: Check for architecture plan
-  const { data: archPlans } = await supabase
-    .from('eva_architecture_plans')
-    .select('plan_key, status, vision_key, content')
-    .eq('venture_id', sd.venture_id)
-    .eq('status', 'active');
+  const archPlans = await safeQuery(
+    supabase
+      .from('eva_architecture_plans')
+      .select('plan_key, status, vision_key, content')
+      .eq('venture_id', sd.venture_id)
+      .eq('status', 'active'),
+    { site: 'planning-completeness:arch_plans' }
+  );
 
   if (!archPlans || archPlans.length === 0) {
     warnings.push(`No active architecture plan found for venture ${sd.venture_id}`);
-    remediation.push(`Create architecture plan for venture`);
+    remediation.push('Create architecture plan for venture');
     score -= 15;
-    console.log(`      L1 Architecture: ⚠️ Not found`);
+    console.log('      L1 Architecture: ⚠️ Not found');
   } else {
     console.log(`      L1 Architecture: ✅ ${archPlans.length} active plan(s)`);
 
@@ -368,11 +397,11 @@ async function validateVentureFoundation(supabase, sd) {
     const unlinked = archPlans.filter(p => !p.vision_key);
     if (unlinked.length > 0) {
       warnings.push(`${unlinked.length} architecture plan(s) not linked to vision (vision_key is null)`);
-      remediation.push(`Link architecture plans to vision: UPDATE eva_architecture_plans SET vision_key = '<key>'`);
+      remediation.push('Link architecture plans to vision: UPDATE eva_architecture_plans SET vision_key = \'<key>\'');
       score -= 10;
       console.log(`      L2 Linkage: ⚠️ ${unlinked.length} unlinked plan(s)`);
     } else {
-      console.log(`      L2 Linkage: ✅ All plans linked to vision`);
+      console.log('      L2 Linkage: ✅ All plans linked to vision');
     }
   }
 
