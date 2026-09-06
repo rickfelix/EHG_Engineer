@@ -72,4 +72,14 @@ describe('coordinator-revive queue health reporting', () => {
   it('does not cry wolf on an empty queue', () => {
     expect(formatQueueWarning({ total: 0, pending: 0, everFulfilled: 0, oldestPendingAt: null, neverConsumed: false })).toBe('');
   });
+
+  // FR-4 (QF-20260903-834): neverConsumed is now windowed, so everFulfilled can be > 0 on a
+  // dead report. The message must say "not recently", not falsely claim "NEVER".
+  it('says "not recently" (not "NEVER") when the queue fulfilled requests historically but has gone stale', () => {
+    const STALE = { total: 47, pending: 5, everFulfilled: 5, recentlyFulfilled: 0, oldestPendingAt: '2026-08-22T10:31:09.000Z', oldestPendingExpired: true, neverConsumed: true };
+    const w = formatQueueWarning(STALE);
+    expect(w).toContain('NOT fulfilled a request recently');
+    expect(w).toContain('5 of 47');
+    expect(w).not.toContain('has NEVER fulfilled a request');
+  });
 });
