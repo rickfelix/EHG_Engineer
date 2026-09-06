@@ -43,4 +43,16 @@ describe('evaluateQuarantineGrowth', () => {
   it('PASSes a brand-new list against a zero baseline (first-ever merge)', () => {
     expect(evaluateQuarantineGrowth(0, 0).status).toBe('PASS');
   });
+
+  it('PASSes a large first-ever population against a zero baseline (bootstrap, not growth)', () => {
+    const result = evaluateQuarantineGrowth(259, 0);
+    expect(result.status).toBe('PASS');
+    expect(result.bootstrap).toBe(true);
+  });
+
+  it('FAILs growth once a real (nonzero) baseline exists, even by one', () => {
+    const result = evaluateQuarantineGrowth(260, 259);
+    expect(result.status).toBe('FAIL');
+    expect(result.bootstrap).toBe(false);
+  });
 });

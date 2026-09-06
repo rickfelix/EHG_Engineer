@@ -1,3 +1,1310 @@
 {
-  "quarantined": []
+  "_provenance": {
+    "measured_at": "2026-09-06T19:00:49.113Z",
+    "measured_by": "full tests/e2e suite run (5 browser projects), post FR-1 partial fixes (auth selector reorder, legacy_id removal, unified-handoff-system.js -> handoff.js rename), PRE the setup-project dependency wiring and login.spec.ts/tests-uat env-path fixes",
+    "stats": {
+      "expected": 791,
+      "skipped": 1493,
+      "unexpected": 1151,
+      "unique_failing_tests": 259
+    },
+    "note": "STOPPED BY COORDINATOR INCIDENT DIRECTIVE (2026-09-06 ~19:35Z): the e2e suite was found to write test rows into the LIVE PRODUCTION strategic_directives_v2 table. Per that directive, no further live e2e runs may be executed by any worker seat until SD-LEO-INFRA-E2E-REAL-TEST-001 (an isolated test-database target) lands. This quarantine list is therefore seeded from the LAST VALID pre-incident full-suite run rather than a fresh post-fix run -- it does NOT reflect the setup-project dependency fix, the login.spec.ts env-path fix, or the tests/uat/setup/global-auth.js env-path fix, all of which landed after this measurement. Reconciling this list against a fresh, SAFE run is explicit follow-up work once SD-LEO-INFRA-E2E-REAL-TEST-001 lands."
+  },
+  "quarantined": [
+    {
+      "spec": "accessibility/placeholder-replacement.spec.ts",
+      "test": "should have proper label-input associations",
+      "reason": "other: TypeError: page.locator(...).all(...).first is not a function"
+    },
+    {
+      "spec": "accessibility/wcag-check.spec.ts",
+      "test": "main navigation has correct tab order",
+      "reason": "other: Error: Focus trap detected at element: button Escape attempts: 1"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-001: should activate kill switch when budget is zero",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'budget_remaining')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-002: should activate kill switch when budget is negative",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'budget_remaining')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-003: should allow execution when budget is positive",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'budget_remaining')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-004: should fire warning when budget below 20%",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'budget_remaining')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-005: should not fire warning when budget above 20%",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'budget_remaining')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-006: should handle edge case at exactly 20%",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'budget_remaining')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-007: should HALT when no budget record exists",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-008: should log NO_RECORD status to system_events",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-009: should prefer venture_token_budgets over phase budgets",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'budget_remaining')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-010: should fallback to venture_phase_budgets when token budget missing",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-014: should log PASSED status for healthy budget",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-015: should log BLOCKED status for exhausted budget",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/budget-kill-switch.spec.ts",
+      "test": "BKS-016: should track token consumption",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'budget_remaining')"
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-002: should successfully write memory with venture_id",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"23502\", \"details\": \"Failing row contains (a93489ca-f"
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-003: should track memory versions",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"23502\", \"details\": \"Failing row contains (af960f70-7"
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-004: MedSync agent should only access MedSync memory",
+      "reason": "other: TypeError: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoHaveLength\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m  \u001b[1mMatcher error\u001b[22m: \u001b[31mreceived\u001b[39m"
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-007: should initialize CEO memory with venture context",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"23502\", \"details\": \"Failing row contains (1081e919-f"
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-009: should update memory with venture_id enforcement",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"23502\", \"details\": \"Failing row contains (a3ee5b05-2"
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-011: should track importance scores",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32mtrue\u001b[39m Receive"
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-013: should associate memory with correct agent",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m  \u001b[1mMatcher error\u001b[22m: \u001b[31mreceived\u001b[39m "
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-014: agent 2 cannot access agent 1 memory",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m0\u001b[39m Received: "
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-015: should handle memory currency transitions",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "agents/memory-isolation.spec.ts",
+      "test": "MEM-016: should preserve memory history",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m3\u001b[39m Received: "
+    },
+    {
+      "spec": "agents/shared-operators-arming.spec.ts",
+      "test": "TS-1 + TS-2: fresh-or-idempotent instantiation creates exactly 4 holdco rows, re-entry is a no-op",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m4\u001b[39m Received: "
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-002: should track instantiation attempts in system_events",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-003: should log BLOCKED_NO_VENTURE status",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-005: should succeed with valid ventureId",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32mtrue\u001b[39m Receive"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-006: should log successful instantiation",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-007: should throw BudgetExhaustedException when budget is zero",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-008: should throw BudgetConfigurationException when no budget record",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-009: should log BLOCKED_BUDGET_EXHAUSTED status",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-010: should check venture_token_budgets first",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mnot\u001b[2m.\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31mnull\u001b[39m"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-011: should fallback to venture_phase_budgets",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-012: should track sub-agent activations",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST205\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/sub-agent-invocation.spec.ts",
+      "test": "SA-014: should log FAILED_ERROR status on exceptions",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "agents/venture-ceo-verify-first.spec.ts",
+      "test": "TS-1: happy path — full seeded thread completes end-to-end against real tables",
+      "reason": "other: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoHaveLength\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m  Expected length: \u001b[32m4\u001b[39m Received length: "
+    },
+    {
+      "spec": "ai-engines/smoke-tests.spec.ts",
+      "test": "GET /suggestions/:brand_genome_id - should handle missing ID",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "altifyai-uat-fetch-001.spec.ts",
+      "test": "AltifyAI sign-in reaches Clerk, and this SD's post-submit auth-detection is origin-scoped",
+      "reason": "other: \u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+    },
+    {
+      "spec": "api/eva-operations.spec.ts",
+      "test": "GET /api/eva/operations/status — returns 200 with expected shape",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m200\u001b[39m Received"
+    },
+    {
+      "spec": "api/marketing-distribution.spec.ts",
+      "test": "GET /channels - should return available distribution channels",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "chairman/attention-queue-sidebar.spec.ts",
+      "test": "TS-001: should render sidebar container in ChairmanLayout",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('[data-testid=\"attention-queue-container\"]"
+    },
+    {
+      "spec": "chairman/attention-queue-sidebar.spec.ts",
+      "test": "TS-002: should render collapsed sidebar by default",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('[data-testid=\"attention-queue-sidebar-col"
+    },
+    {
+      "spec": "chairman/attention-queue-sidebar.spec.ts",
+      "test": "TS-003: should expand sidebar when expand button clicked",
+      "reason": "timeout: TimeoutError: locator.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for getByRole('button', { name: /expand attention queue/i })\u001b[22m "
+    },
+    {
+      "spec": "chairman/attention-queue-sidebar.spec.ts",
+      "test": "TS-004: should display severity summary badges",
+      "reason": "timeout: TimeoutError: locator.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for getByRole('button', { name: /expand attention queue/i })\u001b[22m "
+    },
+    {
+      "spec": "chairman/attention-queue-sidebar.spec.ts",
+      "test": "TS-005: should display venture items in list",
+      "reason": "timeout: TimeoutError: locator.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for getByRole('button', { name: /expand attention queue/i })\u001b[22m "
+    },
+    {
+      "spec": "chairman/attention-queue-sidebar.spec.ts",
+      "test": "TS-006: should collapse sidebar when collapse button clicked",
+      "reason": "timeout: TimeoutError: locator.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for getByRole('button', { name: /expand attention queue/i })\u001b[22m "
+    },
+    {
+      "spec": "chairman/attention-queue-sidebar.spec.ts",
+      "test": "TS-007: should show venture details on hover/focus",
+      "reason": "timeout: TimeoutError: locator.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for getByRole('button', { name: /expand attention queue/i })\u001b[22m "
+    },
+    {
+      "spec": "chairman/attention-queue-sidebar.spec.ts",
+      "test": "TS-008: sidebar navigates to chairman pages correctly",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoContainText\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed  Locator: locator('h1') Expected pattern"
+    },
+    {
+      "spec": "concurrency/concurrent-operations.spec.ts",
+      "test": "should show conflict notification on concurrent save",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32mtrue\u001b[39m Receive"
+    },
+    {
+      "spec": "context7-failure-scenarios.spec.ts",
+      "test": "US-004: Circuit breaker opens after 3 consecutive failures",
+      "reason": "module-not-found: Error: Command failed: node scripts/context7-circuit-breaker.js failure node:internal/modules/cjs/loader:1424\r   throw err;\r   ^\r \r Error: Cannot find"
+    },
+    {
+      "spec": "context7-failure-scenarios.spec.ts",
+      "test": "SCENARIO-006: Circuit breaker auto-recovers after 1 hour",
+      "reason": "module-not-found: Error: Command failed: node scripts/context7-circuit-breaker.js allow node:internal/modules/cjs/loader:1424\r   throw err;\r   ^\r \r Error: Cannot find m"
+    },
+    {
+      "spec": "context7-failure-scenarios.spec.ts",
+      "test": "US-004: HALF_OPEN → OPEN on failed recovery test",
+      "reason": "module-not-found: Error: Command failed: node scripts/context7-circuit-breaker.js failure node:internal/modules/cjs/loader:1424\r   throw err;\r   ^\r \r Error: Cannot find"
+    },
+    {
+      "spec": "context7-failure-scenarios.spec.ts",
+      "test": "US-004: HALF_OPEN → CLOSED on successful recovery test",
+      "reason": "module-not-found: Error: Command failed: node scripts/context7-circuit-breaker.js success node:internal/modules/cjs/loader:1424\r   throw err;\r   ^\r \r Error: Cannot find"
+    },
+    {
+      "spec": "context7-failure-scenarios.spec.ts",
+      "test": "Circuit breaker state persistence",
+      "reason": "module-not-found: Error: Command failed: node scripts/context7-circuit-breaker.js failure node:internal/modules/cjs/loader:1424\r   throw err;\r   ^\r \r Error: Cannot find"
+    },
+    {
+      "spec": "context7-failure-scenarios.spec.ts",
+      "test": "SCENARIO-007: Token budget enforcement (mock)",
+      "reason": "module-not-found: Error: Command failed: node scripts/automated-knowledge-retrieval.js SD-KNOWLEDGE-001 \"TestTech\" node:internal/modules/esm/resolve:274\r     throw new "
+    },
+    {
+      "spec": "context7-failure-scenarios.spec.ts",
+      "test": "Circuit breaker reset functionality",
+      "reason": "module-not-found: Error: Command failed: node scripts/context7-circuit-breaker.js reset node:internal/modules/cjs/loader:1424\r   throw err;\r   ^\r \r Error: Cannot find m"
+    },
+    {
+      "spec": "edge-cases/boundary-conditions.spec.ts",
+      "test": "should catch and display component errors gracefully",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/boundary-conditions.spec.ts",
+      "test": "should handle network disconnection",
+      "reason": "timeout: TimeoutError: locator.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('button').first()\u001b[22m \u001b[2m    - locator resolved to <but"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/ventures/:id/artifacts - should return empty array for new venture",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/marketing/queue/:venture_id - should return empty queue",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m404\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/financial-engine/list/:venture_id - should return empty models list",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/content-forge/list - should handle empty content list",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/naming-engine/suggestions/:id - should return empty suggestions",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/financial-engine/:id - should return 404 for non-existent model",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m404\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/naming-engine/generate - should return 404 for non-existent brand genome",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m404\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/content-forge/generate - should return 404 for non-existent brand genome",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m404\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "PATCH /api/ventures/:id/stage - should handle non-existent venture",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/content-forge/compliance-check - should handle non-existent content_id",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m404\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/ventures/:id/artifacts - should handle invalid UUID format",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/financial-engine/project - should reject invalid UUID",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/naming-engine/generate - should reject invalid UUID",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/content-forge/list - should handle zero offset",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/content-forge/list - should handle large offset",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/content-forge/list - should handle limit=1",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/content-forge/list - should reject negative offset",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/content-forge/list - should reject excessive limit",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/content-forge/list - should handle non-matching status filter",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/content-forge/list - should handle invalid status filter",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/ventures/:id/artifacts - should handle stage filter with no results",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "GET /api/v2/marketing/queue/:id - should handle combined filters",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/ventures - should reject empty body",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/ventures/:id/artifacts - should reject empty body",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/content-forge/compliance-check - should reject empty body",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/ventures - should handle null optional fields",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/financial-engine/project - should handle missing optional assumptions",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/content-forge/generate - should handle empty parameters",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "PATCH /api/ventures/:id/stage - should reject stage 0",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "PATCH /api/ventures/:id/stage - should reject stage 26",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/naming-engine/generate - should handle count boundaries",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "edge-cases/empty-state-tests.spec.ts",
+      "test": "POST /api/v2/financial-engine/project - should handle projection_years boundaries",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m400\u001b[39m Received"
+    },
+    {
+      "spec": "ehg-app/admin-directives.spec.ts",
+      "test": "SD management page loads",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('main, [role=\"main\"], .main-content') Expe"
+    },
+    {
+      "spec": "ehg-app/admin-directives.spec.ts",
+      "test": "SD list displays directive items",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('tr, [data-testid*=\"directive\"], [class*=\""
+    },
+    {
+      "spec": "ehg-app/auth.setup.spec.ts",
+      "test": "authenticate",
+      "reason": "auth-setup-flake: Error: [auth.setup] Could not find email input field with any known selector — the login form markup may have changed; update EMAIL_SELECTORS."
+    },
+    {
+      "spec": "ehg-app/chairman-dashboard.spec.ts",
+      "test": "chairman dashboard loads and shows daily briefing",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('main, [role=\"main\"], .main-content') Expe"
+    },
+    {
+      "spec": "ehg-app/chairman-dashboard.spec.ts",
+      "test": "chairman sidebar navigation is visible",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('nav, aside, [role=\"navigation\"]').first()"
+    },
+    {
+      "spec": "ehg-app/login.spec.ts",
+      "test": "login page renders with email and password fields",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: getByRole('textbox', { name: 'Email' }) Expected: "
+    },
+    {
+      "spec": "ehg-app/login.spec.ts",
+      "test": "successful login redirects to chairman dashboard",
+      "reason": "other: TimeoutError: locator.fill: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for getByRole('textbox', { name: 'Email' })\u001b[22m "
+    },
+    {
+      "spec": "ehg-app/login.spec.ts",
+      "test": "login page shows error for invalid credentials",
+      "reason": "other: TimeoutError: locator.fill: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for getByRole('textbox', { name: 'Email' })\u001b[22m "
+    },
+    {
+      "spec": "ehg-app/login.spec.ts",
+      "test": "unauthenticated access to /chairman redirects to /login",
+      "reason": "timeout: TimeoutError: page.waitForURL: Timeout 10000ms exceeded. =========================== logs =========================== waiting for navigation until \"lo"
+    },
+    {
+      "spec": "ehg-app/public-pages.spec.ts",
+      "test": "home page loads and renders content",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator:  locator('body') Expected: visible Received: hidde"
+    },
+    {
+      "spec": "ehg-app/public-pages.spec.ts",
+      "test": "about page loads",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('main, [role=\"main\"], article') Expected: "
+    },
+    {
+      "spec": "ehg-app/public-pages.spec.ts",
+      "test": "ventures public page loads",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator:  locator('body') Expected: visible Received: hidde"
+    },
+    {
+      "spec": "ehg-app/public-pages.spec.ts",
+      "test": "login page loads from navigation",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: getByLabel(/email/i) Expected: visible Timeout: 50"
+    },
+    {
+      "spec": "ehg-app/ventures.spec.ts",
+      "test": "ventures page loads and shows venture list",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('main, [role=\"main\"]') Expected: visible T"
+    },
+    {
+      "spec": "ehg-app/ventures.spec.ts",
+      "test": "venture cards or list items are displayed",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('[class*=\"venture\"], [class*=\"card\"], [dat"
+    },
+    {
+      "spec": "error-handling/api-failure-states.spec.ts",
+      "test": "should provide fallback UI on 500 error",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "forms/validation-error-states.spec.ts",
+      "test": "should show inline errors near invalid fields",
+      "reason": "other: TypeError: page.locator(...).count(...).first is not a function"
+    },
+    {
+      "spec": "forms/validation-error-states.spec.ts",
+      "test": "should enable submission after fixing errors",
+      "reason": "other: TypeError: page.locator(...).all(...).first is not a function"
+    },
+    {
+      "spec": "knowledge-retrieval-flow.spec.ts",
+      "test": "US-001: Retrospective search returns results in <2s",
+      "reason": "module-not-found: Error: Command failed: node scripts/automated-knowledge-retrieval.js SD-KNOWLEDGE-001 \"Supabase\" node:internal/modules/esm/resolve:274\r     throw new "
+    },
+    {
+      "spec": "knowledge-retrieval-flow.spec.ts",
+      "test": "US-002: Context7 fallback when local results <3",
+      "reason": "module-not-found: Error: Command failed: node scripts/automated-knowledge-retrieval.js SD-KNOWLEDGE-001 \"RareTechStack2025\" node:internal/modules/esm/resolve:274\r     t"
+    },
+    {
+      "spec": "knowledge-retrieval-flow.spec.ts",
+      "test": "US-003: PRD auto-enrichment with confidence >0.85",
+      "reason": "module-not-found: Error: Command failed: node scripts/enrich-prd-with-research.js PRD-KNOWLEDGE-001 node:internal/modules/esm/resolve:274\r     throw new ERR_MODULE_NOT_"
+    },
+    {
+      "spec": "knowledge-retrieval-flow.spec.ts",
+      "test": "US-005: Research telemetry logging",
+      "reason": "module-not-found: Error: Command failed: node scripts/automated-knowledge-retrieval.js SD-KNOWLEDGE-001 \"Supabase\" node:internal/modules/esm/resolve:274\r     throw new "
+    },
+    {
+      "spec": "knowledge-retrieval-flow.spec.ts",
+      "test": "SCENARIO-008: Cache hit within 24 hours",
+      "reason": "module-not-found: Error: Command failed: node scripts/automated-knowledge-retrieval.js SD-KNOWLEDGE-001 \"Supabase\" node:internal/modules/esm/resolve:274\r     throw new "
+    },
+    {
+      "spec": "knowledge-retrieval-flow.spec.ts",
+      "test": "SCENARIO-009: Graceful degradation when Context7 down",
+      "reason": "module-not-found: Error: Command failed: node scripts/automated-knowledge-retrieval.js SD-KNOWLEDGE-001 \"Supabase\" node:internal/modules/esm/resolve:274\r     throw new "
+    },
+    {
+      "spec": "manual/admin-routes-verification.spec.ts",
+      "test": "should load Admin Dashboard at /admin",
+      "reason": "timeout: TimeoutError: page.waitForURL: Timeout 10000ms exceeded. =========================== logs =========================== waiting for navigation until \"lo"
+    },
+    {
+      "spec": "manual/admin-routes-verification.spec.ts",
+      "test": "should load SDManager at /admin/directives",
+      "reason": "timeout: TimeoutError: page.waitForURL: Timeout 10000ms exceeded. =========================== logs =========================== waiting for navigation until \"lo"
+    },
+    {
+      "spec": "manual/admin-routes-verification.spec.ts",
+      "test": "should load BacklogManager at /admin/backlog",
+      "reason": "timeout: TimeoutError: page.waitForURL: Timeout 10000ms exceeded. =========================== logs =========================== waiting for navigation until \"lo"
+    },
+    {
+      "spec": "manual/admin-routes-verification.spec.ts",
+      "test": "should load PRReviews at /admin/pr-reviews",
+      "reason": "timeout: TimeoutError: page.waitForURL: Timeout 10000ms exceeded. =========================== logs =========================== waiting for navigation until \"lo"
+    },
+    {
+      "spec": "manual/admin-routes-verification.spec.ts",
+      "test": "should load UATDashboard at /admin/uat",
+      "reason": "timeout: TimeoutError: page.waitForURL: Timeout 10000ms exceeded. =========================== logs =========================== waiting for navigation until \"lo"
+    },
+    {
+      "spec": "manual/admin-routes-verification.spec.ts",
+      "test": "should load DirectiveLab at /admin/directive-lab",
+      "reason": "timeout: TimeoutError: page.waitForURL: Timeout 10000ms exceeded. =========================== logs =========================== waiting for navigation until \"lo"
+    },
+    {
+      "spec": "manual/admin-routes-verification.spec.ts",
+      "test": "should capture console errors across all routes",
+      "reason": "timeout: TimeoutError: page.waitForURL: Timeout 10000ms exceeded. =========================== logs =========================== waiting for navigation until \"lo"
+    },
+    {
+      "spec": "mobile/placeholder-mobile.spec.ts",
+      "test": "should handle touch focus on form fields",
+      "reason": "other: Error: locator.tap: The page does not support tap. Use hasTouch context option to enable touch support."
+    },
+    {
+      "spec": "mobile/placeholder-mobile.spec.ts",
+      "test": "should have appropriately sized touch targets",
+      "reason": "other: TypeError: page.locator(...).all(...).first is not a function"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should create LEAD→PLAN handoff successfully",
+      "reason": "gate-pipeline-incompatible: Error: Command failed: node scripts/handoff.js execute LEAD-TO-PLAN SD-TEST-HANDOFF-1788721303203 [handoff.js] ⚠️  Claim check failed (fail-open): cla"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should reject LEAD→PLAN handoff with incomplete SD",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected substring: \u001b[32m\"VALIDATION F"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should persist learning context in handoff metadata",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mundefined\u001b[39m"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should create PLAN→EXEC handoff with BMAD validation",
+      "reason": "other: Error: Failed to create test PRD: Could not find the 'description' column of 'product_requirements_v2' in the schema cache"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should enforce Git branch (Gate 6) before EXEC work",
+      "reason": "other: Error: Failed to create test PRD: Could not find the 'description' column of 'product_requirements_v2' in the schema cache"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should create EXEC→PLAN handoff for verification",
+      "reason": "gate-pipeline-incompatible: Error: Command failed: node scripts/handoff.js execute EXEC-TO-PLAN SD-TEST-HANDOFF-1788721313089 [handoff.js] ⚠️  Claim check failed (fail-open): cla"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should validate documentation exists (SD-DOCUMENTATION-001)",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mundefined\u001b[39m"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should reject EXEC→PLAN handoff without documentation",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should validate E2E test coverage (minimum 50%)",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mundefined\u001b[39m"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should create PLAN→LEAD handoff for final approval",
+      "reason": "gate-pipeline-incompatible: Error: Command failed: node scripts/handoff.js execute PLAN-TO-LEAD SD-TEST-HANDOFF-1788721318559 [handoff.js] ⚠️  Claim check failed (fail-open): cla"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should enforce Git commit (Gate 5) before final approval",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mundefined\u001b[39m"
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should persist all handoffs in sd_phase_handoffs table",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m  Expected: >= \u001b[32m4\u001b[39m Received:  "
+    },
+    {
+      "spec": "phase-handoffs.spec.ts",
+      "test": "should track complete status progression",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThanOrEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m  Expected: >= \u001b[32m4\u001b[39m Received:  "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should create new PRD via PLAN workflow",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-PRD-1788721321085')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should enforce required PRD fields",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('button:has-text(\"Create PRD\")')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should validate PRD ID format",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('button:has-text(\"Create PRD\")')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should validate system_architecture field",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should validate data_model field",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should validate ui_ux_requirements field",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should validate test_scenarios field",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should validate implementation_approach field",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should show completeness score",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should add user story to PRD",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should validate user story has acceptance criteria",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should validate user story has test scenarios",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should edit existing user story",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should delete user story",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should submit PRD for approval",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should approve PRD for EXEC handoff",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should reject PRD with feedback",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-REJECT-1788721337818')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should prevent approval of incomplete PRD",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-INCOMPLETE-1788721352353')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should transition DRAFT → PLANNING",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should transition PLANNING → APPROVED",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should transition APPROVED → IN_PROGRESS",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should transition IN_PROGRESS → COMPLETED",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should prevent invalid status transitions",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-DRAFT-1788721343027')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should create handoff document when PRD approved",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should include all user stories in handoff",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should export handoff as JSON",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should run validation gates before approval",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "prd-management.spec.ts",
+      "test": "should show gate results with pass/fail status",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=PRD-TEST')\u001b[22m "
+    },
+    {
+      "spec": "resilience/chaos-testing.spec.ts",
+      "test": "handles API failures gracefully",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator:  locator('body') Expected: visible Received: hidde"
+    },
+    {
+      "spec": "resilience/chaos-testing.spec.ts",
+      "test": "recovers from temporary offline",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32mtrue\u001b[39m Receive"
+    },
+    {
+      "spec": "resilience/chaos-testing.spec.ts",
+      "test": "handles slow network gracefully",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator:  locator('body') Expected: visible Received: hidde"
+    },
+    {
+      "spec": "resilience/chaos-testing.spec.ts",
+      "test": "forced 500 error shows user-friendly message",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator:  locator('body') Expected: visible Received: hidde"
+    },
+    {
+      "spec": "resilience/chaos-testing.spec.ts",
+      "test": "timeout shows appropriate message",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator:  locator('body') Expected: visible Received: hidde"
+    },
+    {
+      "spec": "security/csrf-validation.spec.ts",
+      "test": "should reject form submission without CSRF token",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected substring: \u001b[32m\"ventures\"\u001b[3"
+    },
+    {
+      "spec": "security/rbac-permissions.spec.ts",
+      "test": "should deny access to another user resources",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "security/rbac-permissions.spec.ts",
+      "test": "should allow viewer to read but not write",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected substring: \u001b[32m\"Viewable Ven"
+    },
+    {
+      "spec": "templates/venture-smoke.template.ts",
+      "test": "1.1 App loads without errors",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m0\u001b[39m Received: "
+    },
+    {
+      "spec": "templates/venture-smoke.template.ts",
+      "test": "2.2 Protected routes redirect unauthenticated users",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32mtrue\u001b[39m Receive"
+    },
+    {
+      "spec": "state-machine/golden-nugget-validation.spec.ts",
+      "test": "GN-001: should block handoff with missing required artifacts",
+      "reason": "db-constraint-violation: Error: Failed to create test venture: null value in column \"problem_statement\" of relation \"ventures\" violates not-null constraint"
+    },
+    {
+      "spec": "state-machine/golden-nugget-validation.spec.ts",
+      "test": "GN-003: should reject artifacts with empty content",
+      "reason": "db-constraint-violation: Error: Failed to create test venture: null value in column \"problem_statement\" of relation \"ventures\" violates not-null constraint"
+    },
+    {
+      "spec": "state-machine/golden-nugget-validation.spec.ts",
+      "test": "GN-005: should validate artifact quality scores meet threshold",
+      "reason": "db-constraint-violation: Error: Failed to create test venture: null value in column \"problem_statement\" of relation \"ventures\" violates not-null constraint"
+    },
+    {
+      "spec": "state-machine/golden-nugget-validation.spec.ts",
+      "test": "GN-007: should reject artifacts with TODO/placeholder markers",
+      "reason": "db-constraint-violation: Error: Failed to create test venture: null value in column \"problem_statement\" of relation \"ventures\" violates not-null constraint"
+    },
+    {
+      "spec": "state-machine/golden-nugget-validation.spec.ts",
+      "test": "GN-009: should validate risk matrix has epistemic classification",
+      "reason": "db-constraint-violation: Error: Failed to create test venture: null value in column \"problem_statement\" of relation \"ventures\" violates not-null constraint"
+    },
+    {
+      "spec": "state-machine/golden-nugget-validation.spec.ts",
+      "test": "GN-011: should reject PRD with forbidden persona (developer-focused)",
+      "reason": "db-constraint-violation: Error: Failed to create test venture: null value in column \"problem_statement\" of relation \"ventures\" violates not-null constraint"
+    },
+    {
+      "spec": "state-machine/golden-nugget-validation.spec.ts",
+      "test": "GN-013: should validate title length gate",
+      "reason": "db-constraint-violation: Error: Failed to create test venture: null value in column \"problem_statement\" of relation \"ventures\" violates not-null constraint"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-001: should detect stale cache when db stage differs",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32m\"Stage 11\"\u001b[39m R"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-002: should pass verification when cache matches db",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"22P02\", \"details\": null, \"hint\": null, \"message\": \"i"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-004: should rehydrate cache from database after staleness detected",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'current_lifecycle_stage')"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-005: should retry operation after successful rehydration",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m  Expected: \u001b[32mtrue\u001b[39m Receive"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-007: should allow transition after successful freshness verification",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'current_lifecycle_stage')"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-008: should verify freshness before handoff operations",
+      "reason": "no-error-captured: (no error message captured)"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-009: should detect concurrent stage modification",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'current_lifecycle_stage')"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-010: should handle race condition with optimistic locking",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'updated_at')"
+    },
+    {
+      "spec": "state-machine/jit-cache-recovery.spec.ts",
+      "test": "JIT-012: should log staleness detection for observability",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-001: should create AGENT_PREDICTION event with correlation_id",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-002: should include venture_id in prediction event_data",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-003: should reject duplicate idempotency_key",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-004: should create AGENT_OUTCOME linked to prediction via parent_event_id",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-005: should calculate accuracy penalty for failed prediction",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-006: should apply 60/40 Truth Law weighting",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-007: should track field-level comparison details",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-008: should maintain prediction-outcome chain for auditing",
+      "reason": "null-reference: TypeError: Cannot read properties of null (reading 'id')"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-009: should query predictions by venture for calibration analysis",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"42703\", \"details\": null, \"hint\": null, \"message\": \"c"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-010: should handle missing parent_event_id gracefully",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "state-machine/truth-layer-integration.spec.ts",
+      "test": "TL-011: should preserve event_data on database errors",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"PGRST204\", \"details\": null, \"hint\": null, \"message\":"
+    },
+    {
+      "spec": "stories/release-gate.spec.ts",
+      "test": "POST /api/stories/generate - should check feature flag",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m  Expected value: \u001b[32m401\u001b[39m Received"
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should create new SD via LEAD workflow",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=New Directive')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should enforce required fields",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=New Directive')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should validate SD ID format",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=New Directive')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should display SD details",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-CRUD')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should display SD list with filters",
+      "reason": "timeout: TimeoutError: page.selectOption: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('select[name=\"status_filter\"]')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should edit SD title",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-CRUD')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should edit SD description",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-CRUD')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should change SD category",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-CRUD')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should change SD priority",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-CRUD')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should transition from DRAFT to ACTIVE",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-CRUD')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should transition from ACTIVE to IN_PROGRESS",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-CRUD')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should transition from IN_PROGRESS to COMPLETED",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-CRUD')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should prevent invalid status transitions",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-TRANSITION-1788721367404')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should soft delete SD",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=SD-TEST-DELETE-1788721380694')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should show deleted SDs in archive view",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=Show Archived')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should prevent deletion of SD with active PRDs",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('button:has-text(\"Delete\")')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should enforce title length constraints",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=New Directive')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should enforce description length constraints",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=New Directive')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should validate category values",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=New Directive')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should validate priority values",
+      "reason": "timeout: TimeoutError: page.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('text=New Directive')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should filter SDs by status",
+      "reason": "timeout: TimeoutError: page.selectOption: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('select[name=\"status_filter\"]')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should filter SDs by priority",
+      "reason": "timeout: TimeoutError: page.selectOption: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('select[name=\"priority_filter\"]')\u001b[22m "
+    },
+    {
+      "spec": "strategic-directives-crud.spec.ts",
+      "test": "should search SDs by title",
+      "reason": "other: TimeoutError: page.fill: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('input[name=\"search\"]')\u001b[22m "
+    },
+    {
+      "spec": "ux-evaluation/llm-ux.spec.ts",
+      "test": "home page is clear for new users",
+      "reason": "other: Error: UX evaluation failed for lens \"first-time-user\" Score: 5 (threshold: 50) Issues:   - The page is completely blank, offering no information or v"
+    },
+    {
+      "spec": "ux-evaluation/llm-ux.spec.ts",
+      "test": "login page has clear guidance",
+      "reason": "other: Error: UX evaluation failed for lens \"first-time-user\" Score: 5 (threshold: 50) Issues:   - The image provided is completely white, which means there "
+    },
+    {
+      "spec": "ux-evaluation/llm-ux.spec.ts",
+      "test": "home page visual accessibility",
+      "reason": "other: SyntaxError: Unterminated string in JSON at position 3944 (line 68 column 35)"
+    },
+    {
+      "spec": "ux-evaluation/llm-ux.spec.ts",
+      "test": "home page mobile-friendly",
+      "reason": "other: Error: UX evaluation failed for lens \"mobile-user\" Score: 0 (threshold: 50) Issues:   - The image is completely white, providing no discernible UI ele"
+    },
+    {
+      "spec": "ux-evaluation/llm-ux.spec.ts",
+      "test": "home page comprehensive evaluation",
+      "reason": "other: SyntaxError: Unexpected end of JSON input"
+    },
+    {
+      "spec": "ux-evaluation/llm-ux.spec.ts",
+      "test": "login journey has no high-risk drop-offs",
+      "reason": "other: Error: High-risk drop-off points detected in user journey:   Step 2: Lack of 'Sign Up' or 'Create Account' option on the login page for new users, pot"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-001: should navigate to venture evaluation matrix page",
+      "reason": "other: Error: \u001b[2mexpect(\u001b[22m\u001b[31mpage\u001b[39m\u001b[2m).\u001b[22mtoHaveURL\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed  Expected pattern: \u001b[32m/\\/ventures\\/matrix/\u001b[3"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-002: should display evaluation matrix with ventures",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeGreaterThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m  Expected: > \u001b[32m0\u001b[39m Received:   \u001b[31m0\u001b"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-010: should show attention queue sidebar on chairman page",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed  Locator: locator('[data-testid=\"attention-queue-container\"]"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-020: should display portfolio overview",
+      "reason": "timeout: TimeoutError: locator.waitFor: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('nav, [role=\"navigation\"], .sidebar').first() to be vis"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-021: should show quadrant classification on matrix page",
+      "reason": "timeout: TimeoutError: locator.waitFor: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('main, [role=\"main\"], .container').first() to be visibl"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-030: should access venture workflow page",
+      "reason": "enoent: Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPA"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-031: should display launch preparation stages",
+      "reason": "enoent: Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPA"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-041: should display decision recommendations",
+      "reason": "other: Error: \u001b[2mexpect(\u001b[22m\u001b[31mpage\u001b[39m\u001b[2m).\u001b[22mtoHaveURL\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m failed  Expected pattern: \u001b[32m/\\/ventures\\/decisions/"
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-050: should access calibration review page",
+      "reason": "timeout: TimeoutError: locator.waitFor: Timeout 15000ms exceeded. Call log: \u001b[2m  - waiting for getByText('Calibration').first() to be visible\u001b[22m "
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-051: should display calibration metrics",
+      "reason": "timeout: TimeoutError: locator.waitFor: Timeout 15000ms exceeded. Call log: \u001b[2m  - waiting for getByText('Calibration').first() to be visible\u001b[22m "
+    },
+    {
+      "spec": "venture-launch/protocol-validation.spec.ts",
+      "test": "VLP-060: should persist venture data across page navigation",
+      "reason": "timeout: TimeoutError: locator.waitFor: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('nav, [role=\"navigation\"], main, .sidebar').first() to "
+    },
+    {
+      "spec": "venture-lifecycle/full-journey.spec.ts",
+      "test": "Stage 2: AI Review",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"SVCW1\", \"details\": \"guard=aaa_enforce_canonical_stag"
+    },
+    {
+      "spec": "venture-lifecycle/full-journey.spec.ts",
+      "test": "should not allow skipping stages",
+      "reason": "enoent: Error: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPAIR-DECAYED-EHG-001\\test-results\\"
+    },
+    {
+      "spec": "venture-lifecycle/full-journey.spec.ts",
+      "test": "should track stage history",
+      "reason": "enoent: Error: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPAIR-DECAYED-EHG-001\\test-results\\"
+    },
+    {
+      "spec": "venture-lifecycle/phase1-the-truth.spec.ts",
+      "test": "S2-002: should allow Stage 2 entry after idea_brief created",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"SVCW1\", \"details\": \"guard=aaa_enforce_canonical_stag"
+    },
+    {
+      "spec": "venture-lifecycle/phase2-the-engine.spec.ts",
+      "test": "S6-001: should advance to Stage 6 after Phase 1 complete",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"SVCW1\", \"details\": \"guard=aaa_enforce_canonical_stag"
+    },
+    {
+      "spec": "venture-lifecycle/phase3-the-identity.spec.ts",
+      "test": "S10-002: should advance to Stage 10",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"SVCW1\", \"details\": \"guard=aaa_enforce_canonical_stag"
+    },
+    {
+      "spec": "venture-lifecycle/phase3-the-identity.spec.ts",
+      "test": "S10-001: should require Strategic Directive for Stage 10",
+      "reason": "enoent: Error: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPAIR-DECAYED-EHG-001\\test-results\\"
+    },
+    {
+      "spec": "venture-lifecycle/phase4-the-blueprint.spec.ts",
+      "test": "S13-001: should advance to Stage 13",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"SVCW1\", \"details\": \"guard=aaa_enforce_canonical_stag"
+    },
+    {
+      "spec": "venture-lifecycle/phase5-the-build-loop.spec.ts",
+      "test": "S17-001: should advance to Stage 17",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"SVCW1\", \"details\": \"guard=aaa_enforce_canonical_stag"
+    },
+    {
+      "spec": "venture-lifecycle/phase6-launch-and-learn.spec.ts",
+      "test": "S21-002: should create test_plan with 80% coverage target",
+      "reason": "enoent: Error: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPAIR-DECAYED-EHG-001\\test-results\\"
+    },
+    {
+      "spec": "venture-lifecycle/phase6-launch-and-learn.spec.ts",
+      "test": "S21-003: should create uat_report artifact",
+      "reason": "enoent: Error: ENOENT: no such file or directory, open 'C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-REPAIR-DECAYED-EHG-001\\test-results\\"
+    },
+    {
+      "spec": "venture-lifecycle/phase6-launch-and-learn.spec.ts",
+      "test": "S23-001: should advance to Stage 23",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m  Received: \u001b[31m{\"code\": \"SVCW1\", \"details\": \"guard=aaa_enforce_canonical_stag"
+    },
+    {
+      "spec": "ventures/artifact-management.spec.ts",
+      "test": "Step 1: GET /api/ventures - should return ventures list",
+      "reason": "assertion-mismatch: Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeTruthy\u001b[2m()\u001b[22m  Received: \u001b[31mfalse\u001b[39m"
+    },
+    {
+      "spec": "visual/cls-measurement.spec.ts",
+      "test": "clicking buttons does not shift viewport",
+      "reason": "timeout: TimeoutError: locator.click: Timeout 10000ms exceeded. Call log: \u001b[2m  - waiting for locator('button').first()\u001b[22m \u001b[2m    - locator resolved to <but"
+    },
+    {
+      "spec": "visual/cls-measurement.spec.ts",
+      "test": "heading hierarchy is valid",
+      "reason": "other: Error: Heading hierarchy violations: Skipped heading level: H3 after H1 (\"ExecHoldings Global\")"
+    }
+  ]
 }

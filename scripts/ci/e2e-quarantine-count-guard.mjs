@@ -30,13 +30,19 @@ export function countQuarantineEntries(doc) {
   return entries.length;
 }
 
-/** Pure: the actual gate predicate. Growth (current > base) fails; anything else passes. */
+/** Pure: the actual gate predicate. Growth (current > base) fails; anything else passes.
+ * A base count of 0 (no quarantine.json on the base ref yet) is the FIRST-EVER population of
+ * the list -- there is nothing to have "grown from", so any current_count is a bootstrap
+ * baseline being established, not a regression, and always passes. Growth is only a meaningful
+ * concept once a real (nonzero) baseline exists. */
 export function evaluateQuarantineGrowth(currentCount, baseCount) {
+  const isBootstrap = baseCount === 0;
   return {
-    status: currentCount > baseCount ? 'FAIL' : 'PASS',
+    status: (!isBootstrap && currentCount > baseCount) ? 'FAIL' : 'PASS',
     current_count: currentCount,
     base_count: baseCount,
     delta: currentCount - baseCount,
+    bootstrap: isBootstrap,
   };
 }
 

@@ -6,27 +6,9 @@
  */
 import { test as setup, expect } from '@playwright/test';
 import dotenv from 'dotenv';
-import { execFileSync } from 'child_process';
-import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-
-// SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-1): .env.test is gitignored and lives ONLY at the
-// main repo root -- a relative './.env.test' resolves against process.cwd(), which in a
-// worktree checkout (e.g. .worktrees/<SD>/) never contains a copy. Resolve it via git's own
-// --git-common-dir (works from any linked worktree, not just the main one) so credentials are
-// found regardless of which checkout the suite runs from; falls back to the plain relative
-// path (today's behavior) if git resolution fails for any reason.
-function resolveEnvTestPath() {
-  try {
-    const commonDir = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-    if (commonDir) {
-      const candidate = join(dirname(commonDir), '.env.test');
-      if (existsSync(candidate)) return candidate;
-    }
-  } catch { /* not a git repo, git absent, or resolution failed -- fall through */ }
-  return '.env.test';
-}
+import { resolveEnvTestPath } from '../setup/resolve-env-test-path.js';
 dotenv.config({ path: resolveEnvTestPath() });
 
 const __filename = fileURLToPath(import.meta.url);

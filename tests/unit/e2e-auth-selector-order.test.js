@@ -48,11 +48,24 @@ describe('e2e auth helpers: form/type-scoped sign-in selectors precede ambiguous
   });
 });
 
-describe('tests/e2e/ehg-app/auth.setup.spec.ts: .env.test resolves via git-common-dir, not a bare relative path', () => {
-  it('does not call dotenv.config with a bare relative ".env.test" path literal', () => {
-    const src = readFileSync(path.join(REPO_ROOT, 'tests/e2e/ehg-app/auth.setup.spec.ts'), 'utf8');
-    expect(src).not.toMatch(/dotenv\.config\(\{\s*path:\s*'\.env\.test'\s*\}\)/);
-    expect(src).toMatch(/resolveEnvTestPath/);
+describe('.env.test resolves via the shared resolveEnvTestPath (git-common-dir), never a bare relative path', () => {
+  it('resolve-env-test-path.js itself resolves via --git-common-dir', () => {
+    const src = readFileSync(path.join(REPO_ROOT, 'tests/e2e/setup/resolve-env-test-path.js'), 'utf8');
     expect(src).toMatch(/--git-common-dir/);
+    expect(src).toMatch(/export function resolveEnvTestPath/);
   });
+
+  for (const [file, importPath] of [
+    ['tests/e2e/ehg-app/auth.setup.spec.ts', '../setup/resolve-env-test-path.js'],
+    ['tests/e2e/ehg-app/login.spec.ts', '../setup/resolve-env-test-path.js'],
+    ['tests/uat/setup/global-auth.js', '../../e2e/setup/resolve-env-test-path.js'],
+  ]) {
+    it(`${file} imports resolveEnvTestPath rather than calling dotenv.config with a bare relative path`, () => {
+      const src = readFileSync(path.join(REPO_ROOT, file), 'utf8');
+      expect(src).not.toMatch(/dotenv\.config\(\{\s*path:\s*'\.env\.test'\s*\}\)/);
+      expect(src).not.toMatch(/path\.resolve\(process\.cwd\(\),\s*'\.env\.test/);
+      expect(src).toContain(importPath);
+      expect(src).toMatch(/resolveEnvTestPath/);
+    });
+  }
 });
