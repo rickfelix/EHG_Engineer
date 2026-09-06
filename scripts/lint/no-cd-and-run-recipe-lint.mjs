@@ -45,7 +45,11 @@ const ALLOWLIST_PATH = path.join(__dirname, 'no-cd-and-run-recipe-allowlist.json
 // spelling actually used in this docs corpus, not just ```bash -- an untagged/```shell/```console
 // fence was a silent bypass. Deliberately NOT a bare optional tag (which would also scan
 // ```json/```javascript/etc. and risk false positives on unrelated code samples).
-const FENCE_RE = /```(?:bash|sh|shell|zsh|console)?\n([\s\S]*?)```/g;
+// Adversarial review (post-merge) finding: `\n` immediately after the tag required an LF fence;
+// `.claude/commands/document.md`, `learn.md`, `leo.md` are stored CRLF and `CLAUDE_COORDINATOR*.md`
+// are mixed (confirmed via `git ls-files --eol`, none pinned eol=lf in .gitattributes) -- a
+// ```bash\r\n fence in any of them never matched at all, silently skipping the whole block.
+const FENCE_RE = /```(?:bash|sh|shell|zsh|console)?\r?\n([\s\S]*?)```/g;
 
 export function findCdAndRunViolations(markdown) {
   const violations = [];
