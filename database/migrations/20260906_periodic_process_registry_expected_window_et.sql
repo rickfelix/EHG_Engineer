@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- =============================================================================
 -- Migration: periodic_process_registry -- add expected_window_et (nullable jsonb)
 -- SD: SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6), spec docs/michael/02-SPEC.md v0.3 §1.5
