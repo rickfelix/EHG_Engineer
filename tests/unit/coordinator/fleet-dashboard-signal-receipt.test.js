@@ -68,9 +68,9 @@ function mockSupabase({ existingReceipts = [], existenceCheckThrows = false, liv
       order() { return chain; },
       limit() { return chain; },
       in() {
-        sawIn = true;
         if (existenceCheckThrows) throw new Error('existence-check query failed');
-        return Promise.resolve({ data: existingReceipts, error: null });
+        sawIn = true;
+        return chain;
       },
       maybeSingle() { return Promise.resolve({ data: null, error: null }); },
       single() { return Promise.resolve({ data: null, error: null }); },

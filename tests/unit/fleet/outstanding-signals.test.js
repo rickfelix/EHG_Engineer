@@ -31,17 +31,23 @@ const minsAgo = (m) => new Date(NOW - m * 60_000).toISOString();
  */
 function sbDouble(rows, { count = null, error = null, writes = [], receiptRows = [] } = {}) {
   const calls = { eq: [], is: [], not: [], order: [], limit: [], from: [], select: [], in: [] };
+  // QF-20260906-162 (count-truncation-diff-lint): the receipt-existence-check query now
+  // chains an explicit .limit(20) after .in() (a literal, provable bound). Track whether
+  // THIS chain traversal saw .in() so the shared .limit() resolves the right result —
+  // the main query never calls .in(), so it is unaffected.
+  let sawIn = false;
   const builder = {
     select(sel, o) { calls.select.push([sel, o]); return builder; },
     eq(col, val) { calls.eq.push([col, val]); return builder; },
     is(col, val) { calls.is.push([col, val]); return builder; },
     not(col, op, val) { calls.not.push([col, op, val]); return builder; },
     order(col, o) { calls.order.push([col, o]); return builder; },
-    limit(n) { calls.limit.push(n); return Promise.resolve({ data: rows, error, count: count === null ? rows.length : count }); },
-    // QF-20260906-162: the SEPARATE receipt-existence-check query (outstanding-signals.cjs's
-    // RECEIVED lookup) terminates on .in(), not .limit() — the main query never calls .in(),
-    // so this resolving here cannot change the main query's own behavior/assertions.
-    in(col, val) { calls.in.push([col, val]); return Promise.resolve({ data: receiptRows, error: null }); },
+    in(col, val) { calls.in.push([col, val]); sawIn = true; return builder; },
+    limit(n) {
+      calls.limit.push(n);
+      if (sawIn) { sawIn = false; return Promise.resolve({ data: receiptRows, error: null }); }
+      return Promise.resolve({ data: rows, error, count: count === null ? rows.length : count });
+    },
     update(patch) { writes.push(['update', patch]); return builder; },
     insert(patch) { writes.push(['insert', patch]); return builder; },
   };
@@ -89,7 +95,9 @@ describe('the predicate — acknowledged_at, never read_at', () => {
     const { client, calls } = sbDouble([row('a', 90)]);
     await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
     expect(calls.order).toContainEqual(['created_at', { ascending: true }]);
-    expect(calls.limit).toEqual([DEFAULT_LIST_CAP]);
+    // QF-20260906-162: the receipt-existence-check also calls .limit() (its own literal
+    // bound, count-truncation-diff-lint) — the main query's cap is still the FIRST call.
+    expect(calls.limit[0]).toBe(DEFAULT_LIST_CAP);
   });
 });
 
@@ -185,8 +193,9 @@ describe('QF-20260906-162: RECEIVED — a signal_receipt row exists', () => {
             }),
           };
         }
-        // receipt-existence-check query
-        return { select: () => ({ eq: () => ({ in: () => Promise.reject(new Error('boom')) }) }) };
+        // receipt-existence-check query — the failure surfaces at .limit() (QF-20260906-162
+        // added an explicit literal bound after .in() for count-truncation-diff-lint).
+        return { select: () => ({ eq: () => ({ in: () => ({ limit: () => Promise.reject(new Error('boom')) }) }) }) };
       },
     };
     const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });

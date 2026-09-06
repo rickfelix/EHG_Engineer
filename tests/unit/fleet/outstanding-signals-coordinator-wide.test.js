@@ -24,17 +24,24 @@ const row = (id, mins, sender) => ({
 /** Same query-builder double shape as outstanding-signals.test.js, but records eq() presence/absence. */
 function sbDouble(rows) {
   const calls = { eq: [] };
+  // QF-20260906-162 (count-truncation-diff-lint): the receipt-existence-check query now
+  // chains an explicit .limit(20) after .in() — track whether this traversal saw .in() so
+  // the shared .limit() resolves empty receipts instead of the main query's rows.
+  let sawIn = false;
   const builder = {
     select() { return builder; },
     eq(col, val) { calls.eq.push([col, val]); return builder; },
     not() { return builder; },
     is() { return builder; },
     order() { return builder; },
-    limit(n) { return Promise.resolve({ data: rows.slice(0, n), error: null, count: rows.length }); },
-    // QF-20260906-162: the SEPARATE receipt-existence-check query terminates on .in(), never
-    // .eq(sender_session,...) — resolving empty here means these pre-existing tests, which
+    // QF-20260906-162: the SEPARATE receipt-existence-check query terminates on .in()+.limit(),
+    // never .eq(sender_session,...) — resolving empty here means these pre-existing tests, which
     // don't care about RECEIVED, are unaffected by it.
-    in() { return Promise.resolve({ data: [], error: null }); },
+    in() { sawIn = true; return builder; },
+    limit(n) {
+      if (sawIn) { sawIn = false; return Promise.resolve({ data: [], error: null }); }
+      return Promise.resolve({ data: rows.slice(0, n), error: null, count: rows.length });
+    },
   };
   return { client: { from() { return builder; } }, calls };
 }

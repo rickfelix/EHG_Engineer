@@ -1697,11 +1697,15 @@ async function writeSignalReceipts(supabase, coordinatorId, signals) {
   const runId = crypto.randomUUID();
   let existingReceiptCorrelationIds = new Set();
   try {
+    // Explicit literal bound (count-truncation-diff-lint): highStuckSignals is drawn from
+    // printInbox()'s own .limit(20) batch, so 50 is generous headroom even allowing for a
+    // rare duplicate receipt row per correlation_id — never a truncation risk in practice.
     const { data: existingReceipts } = await supabase
       .from('session_coordination')
       .select('payload')
       .eq('payload->>kind', DASH_PAYLOAD_KINDS.SIGNAL_RECEIPT)
-      .in('payload->>correlation_id', highStuckSignals.map((s) => s.id));
+      .in('payload->>correlation_id', highStuckSignals.map((s) => s.id))
+      .limit(50);
     existingReceiptCorrelationIds = new Set((existingReceipts || []).map((r) => r.payload?.correlation_id));
   } catch { /* fail-soft: an existence-check failure risks a duplicate receipt, never a lost inbox render */ }
 
