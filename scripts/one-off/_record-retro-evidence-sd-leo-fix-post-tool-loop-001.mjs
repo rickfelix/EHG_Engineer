@@ -8,6 +8,7 @@
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_ID = 'SD-LEO-FIX-POST-TOOL-LOOP-001';
 const RETRO_ID = '9342cbe0-7164-49db-b092-7e7a331eda94';
@@ -65,4 +66,6 @@ async function main() {
   console.log('RETRO evidence recorded and read back:', JSON.stringify(data, null, 2));
 }
 
-main().catch((e) => { console.error('FATAL', e); process.exitCode = 1; });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('FATAL', e); process.exitCode = 1; });
+}
