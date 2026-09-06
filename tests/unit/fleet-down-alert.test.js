@@ -837,6 +837,20 @@ describe('main() wiring (source-text pin — TESTING sub-agent finding)', () => 
     const armNames = [...armsBlock.matchAll(/\[\s*'([^']+)'/g)].map((m) => m[1]);
     expect(armNames).toEqual(['dead-coordinator-pager', 'worker-fleet-email']);
   });
+
+  // SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-6: same source-text-pin approach as the arms
+  // list above, for the same reason (main() requires a live-shaped db/env to invoke directly).
+  it('main() self-stamps host_cron:fleet-down-alert BEFORE runAlertArms, non-fatally', () => {
+    const src = readFileSync(fileURLToPath(new URL('../../scripts/fleet-down-alert.mjs', import.meta.url)), 'utf8');
+    const stampIdx = src.indexOf('stampLastFired(db, HOST_CRON_PROCESS_KEY)');
+    const armsIdx = src.indexOf('await runAlertArms([');
+    expect(stampIdx).toBeGreaterThan(-1);
+    expect(armsIdx).toBeGreaterThan(-1);
+    expect(stampIdx).toBeLessThan(armsIdx);
+    // Non-fatal: the stamp call must be inside a try/catch, never able to abort main() on its own.
+    const between = src.slice(Math.max(0, stampIdx - 200), stampIdx + 200);
+    expect(between).toMatch(/try\s*\{[\s\S]*stampLastFired\(db, HOST_CRON_PROCESS_KEY\)[\s\S]*\}\s*catch/);
+  });
 });
 
 describe('evaluateFleetLivenessPredicate (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1)', () => {

@@ -20,6 +20,12 @@ import { pathToFileURL } from 'url';
 import path from 'path';
 import { enforceCliSendGuard } from '../lib/notifications/cli-send-guard.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
+import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+
+// SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-6: self-stamp periodic_process_registry's
+// host_cron:fleet-down-alert row so this alarm's OWN delivered cadence is honestly gauged,
+// rather than only inferred from GHA's own (measured 200-280 min median) API-reported cadence.
+export const HOST_CRON_PROCESS_KEY = 'host_cron:fleet-down-alert';
 
 const REQUIRED_CONSECUTIVE = Number(process.env.FLEET_DOWN_CONSECUTIVE_PULSES) > 0
   ? Number(process.env.FLEET_DOWN_CONSECUTIVE_PULSES)
@@ -1000,6 +1006,12 @@ async function main() {
     process.exit(2);
   }
   const db = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+
+  // FR-6 (SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001): liveness first, non-fatal -- a genuine
+  // invocation is recorded even if an alert arm below throws. Mirrors scripts/cron/
+  // adam-decision-scheduler-tick.mjs's own convention.
+  try { await stampLastFired(db, HOST_CRON_PROCESS_KEY); }
+  catch (err) { console.warn(`[fleet-down-alert] liveness stamp failed (non-fatal): ${err.message}`); }
 
   // TR-4: runAlertArms runs sequentially, so this closure-scoped let is race-free; fails safe
   // (stays false) if the fleet-dead-man-pager arm itself throws. `delivered` (not `transitioned`
