@@ -93,6 +93,11 @@ export { createAcceptanceTierDowngradeGate };
 // LEAD-FINAL-APPROVAL-002)
 import { createSuccessCriteriaUnpopulatedGate } from './gates/success-criteria-unpopulated-gate.js';
 export { createSuccessCriteriaUnpopulatedGate };
+// Acceptance-Artifact Gate — refuses completion when a declared metadata.acceptance_artifact
+// pointer resolves to a missing/provenance-less/self-reported-unsatisfied row, observe-only by
+// default (SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B)
+import { createAcceptanceArtifactGate } from './gates/acceptance-artifact-gate.js';
+export { createAcceptanceArtifactGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
 // SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B: block completion of a
@@ -2064,6 +2069,11 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // [UNPOPULATED] sentinel measure, observe-only by default (SD-LEO-FIX-LEAD-FINAL-APPROVAL-002)
   gates.push(createSuccessCriteriaUnpopulatedGate());
 
+  // Acceptance-Artifact Gate — refuses completion when a declared metadata.acceptance_artifact
+  // pointer resolves to missing/provenance-less/self-reported-unsatisfied evidence, observe-only
+  // by default (SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B)
+  gates.push(createAcceptanceArtifactGate(supabase));
+
   // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: GATE4_WORKFLOW_ROI is intentionally NOT pushed here —
   // it already runs at LEAD-FINAL via the validator-registry DB rules (see header note). The (A)
   // fix is the PLAN-TO-LEAD removal + the (B) gate1 key-drift fix so the LFA computation scores
@@ -2093,5 +2103,6 @@ export default {
   createCrossSdFileOverlapTemporalShipGate,
   createActivationInvariantGate,
   createSuccessCriteriaUnpopulatedGate,
+  createAcceptanceArtifactGate,
   getRequiredGates
 };
