@@ -66,6 +66,10 @@ const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligib
 // nothing — belt-depth used the looser qf-supply-predicate.cjs instead). Imported here in
 // place of the local definitions that used to follow this line; behavior is byte-identical.
 const { isAutoStartableQF, isClaimableWithVerify, getQfPickerVerdict, STALE_QF_DAYS } = require('../lib/fleet/qf-auto-start.cjs');
+// SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-B: SHADOW-ONLY scalar tie-break instrumentation. Never
+// changes the order sortQfCandidatesBySeverity/orderByFleetCriticalThenRank produce -- see each
+// call site's own comment.
+const { shadowCompareAndLog } = require('../lib/priority/shadow-logger.cjs');
 // SD-ARCH-HOTSPOT-SD-START-001 FR-2: the CONVERGED dependency gate shared with scripts/sd-start.js
 // (one resolution truth — deps array shapes + blocked_on_sd fold + sd_key-OR-id lookup). This
 // consumer applies its native FAIL-CLOSED polarity via depsSatisfiedFromVerdict: skip on
@@ -743,7 +747,22 @@ const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routin
     // Fail-open throughout: any fault leaves the candidate list untouched, so a gh/auth outage
     // can never present as an empty belt (AC-3).
     const { withheldFilteredQfs } = require('../lib/checkin/steps/critical-qf-jump.cjs');
-    const qfCandidates = await withheldFilteredQfs(sortQfCandidatesBySeverity(qfs), {});
+    const severityOrderedQfs = sortQfCandidatesBySeverity(qfs);
+    // SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-B (Child B): SHADOW-ONLY. Reads the order
+    // sortQfCandidatesBySeverity just produced; never re-sorts, never changes what
+    // withheldFilteredQfs/callers see. Fire-and-forget: shadowCompareAndLog never rejects.
+    shadowCompareAndLog({
+      items: severityOrderedQfs,
+      keyOf: (q) => q?.id,
+      scoreInputsOf: (q) => ({
+        criticality: { critical: 10, high: 7, medium: 4, low: 1 }[q?.severity],
+        age: Number.isFinite(Date.parse(q?.created_at)) ? (Date.now() - Date.parse(q.created_at)) / 86400000 : undefined,
+      }),
+      liveOrder: severityOrderedQfs.map((q) => q?.id),
+      callSite: 'worker-checkin.cjs:189 sortQfCandidatesBySeverity',
+      entityType: 'qf',
+    }).catch(() => {});
+    const qfCandidates = await withheldFilteredQfs(severityOrderedQfs, {});
     for (const qf of qfCandidates) {
       // SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-A: a QF held out ONLY by staleness is demoted to
       // claimable-with-verify rather than excluded (see getQfPickerVerdict's doc comment).
@@ -853,7 +872,22 @@ async function sortByDispatchRank(sb, items, keyOf) {
       const pr = PRIORITY_RANK[String(r.priority || '').toLowerCase()];
       if (pr != null) priorityMap.set(r.sd_key, pr);
     }
-    return orderByFleetCriticalThenRank(items, keyOf, rankMap, fleetCriticalSet, priorityMap);
+    const ordered = orderByFleetCriticalThenRank(items, keyOf, rankMap, fleetCriticalSet, priorityMap);
+    // SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-B (Child B): SHADOW-ONLY. Reads the order
+    // orderByFleetCriticalThenRank just produced; never re-sorts, never changes what the
+    // caller sees. Only the well-defined fleet_critical signal is wired as criticality here --
+    // alignment/leverage/age are left UNSCORED (via omission) rather than guessed from
+    // dispatch_rank/priority, which are different axes with different semantics. Fire-and-
+    // forget: shadowCompareAndLog never rejects.
+    shadowCompareAndLog({
+      items: ordered,
+      keyOf,
+      scoreInputsOf: (item) => ({ criticality: fleetCriticalSet.has(keyOf(item)) ? 10 : undefined }),
+      liveOrder: ordered.map(keyOf),
+      callSite: 'worker-checkin.cjs:805 orderByFleetCriticalThenRank',
+      entityType: 'sd',
+    }).catch(() => {});
+    return ordered;
   } catch { return items || []; } // fail-open: ordering must never break self-claim
 }
 const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };

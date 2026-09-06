@@ -236,6 +236,9 @@ import { committingItemBandCompare } from '../lib/roadmap/committing-item-band.j
 // deliberately a SEPARATE representation from dependencies[].relation (never unify: that vocabulary
 // is claim-path-only and hard-blocks claimability, the exact inversion of this band's intent).
 import { buildPrecedesEdges, detectPrecedesCycles, sequenceCompare } from '../lib/roadmap/precedes-band.js';
+// SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-B: SHADOW-ONLY scalar tie-break instrumentation. Never
+// changes the order claimable.sort() below produces -- see the call site's own comment.
+import { shadowCompareAndLog } from '../lib/priority/shadow-logger.cjs';
 
 const DRY = process.argv.includes('--dry-run');
 const PRIORITY_W = { critical: 3, high: 2, medium: 1, med: 1, low: 0 };
@@ -431,6 +434,26 @@ async function main() {
     if (sc !== 0) return sc;
     return new Date(a.created_at) - new Date(b.created_at); // older first
   });
+
+  // SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-B (Child B): SHADOW-ONLY instrumentation. Reads the
+  // order claimable.sort() just produced (above); never re-sorts `claimable` and never changes
+  // what callers see. Only leverage (unlockScore, already computed live above) and age are wired
+  // today -- criticality/alignment read UNSCORED until Child C/D ship those data sources, which
+  // is expected (see the PRD's risk register), not a bug. Fire-and-forget: shadowCompareAndLog
+  // already never rejects, the .catch() here is defense-in-depth only.
+  shadowCompareAndLog({
+    items: claimable,
+    keyOf: (d) => d.sd_key,
+    scoreInputsOf: (d) => ({
+      leverage: unlockScore(d.sd_key),
+      age: Number.isFinite(new Date(d.created_at).getTime())
+        ? (Date.now() - new Date(d.created_at).getTime()) / 86400000
+        : undefined,
+    }),
+    liveOrder: claimable.map((d) => d.sd_key),
+    callSite: 'coordinator-backlog-rank.mjs:363',
+    entityType: 'sd',
+  }).catch(() => {});
 
   const now = new Date().toISOString();
   console.log(`[BACKLOG-RANK] ${now}${DRY ? ' (dry-run)' : ''} — ${claimable.length} claimable leaf SD(s) ranked`);
