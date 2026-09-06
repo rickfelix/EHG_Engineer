@@ -54,9 +54,9 @@ const AMBIGUITY_SCAN_EXEMPT_FILES = [
 
 // SD-LEO-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 (4th FP family, discovered building this
 // very fix's own PR): a test file asserting that the scanner correctly matches/excludes a
-// marker word must contain that word literally as fixture DATA (e.g. a string like
-// "This is ambiguous and unclear" used to prove a regex works) -- that is not an
-// implementer's own unresolved uncertainty, it is the SAME class of "third-party DATA, not
+// marker word must contain that word literally as fixture DATA -- proving a detection
+// regex fires is not the same thing as the implementer expressing their own unresolved
+// uncertainty. That is the SAME class of "third-party DATA, not
 // this SD's decisions" already exempted for generated files above. `tests/` is this repo's
 // canonical, directory-enforced test root (mirrored by session-coordination-insert-
 // classguard-lint.mjs's own EXCLUDE_DIR_PREFIXES=['tests/']); requiring BOTH the tests/
