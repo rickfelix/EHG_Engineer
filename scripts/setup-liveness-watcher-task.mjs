@@ -59,6 +59,11 @@ import path from 'path';
 import { pathToFileURL } from 'url';
 import { execFileSync } from 'child_process';
 import { getRepoRoot } from '../lib/repo-paths.js';
+// QF-20260904-169: this registrar's /TR previously pointed at the .cmd directly for all three
+// tasks it registers (cadence, startup arm, sweep), materialising a visible console on every
+// fire. Reuse the SECURITY-reviewed, quoting-correct hidden-window action builder from
+// setup-alarm-cron-tasks.mjs rather than re-deriving the same quoting logic again.
+import { buildHiddenTrAction, HIDDEN_LAUNCHER_REL_PATH } from './setup-alarm-cron-tasks.mjs';
 
 export const TASK_NAME = 'EHG LEO Liveness Watcher (PID classes)';
 export const STARTUP_TASK_NAME = 'EHG LEO Liveness Watcher (startup arm)';
@@ -187,17 +192,21 @@ ${startupTrigger}
  * Neither needs elevation, so the fleet host can actually install this. `--boot` swaps the
  * companion for /SC ONSTART, which DOES require an elevated shell and is documented as such.
  */
-export function buildCreateArgs({ taskName = TASK_NAME, wrapperPath, intervalMinutes = DEFAULT_INTERVAL_MINUTES } = {}) {
+export function buildCreateArgs({ taskName = TASK_NAME, wrapperPath, hiddenLauncherPath, intervalMinutes = DEFAULT_INTERVAL_MINUTES } = {}) {
   if (!wrapperPath) throw new Error('buildCreateArgs: wrapperPath required');
+  if (!hiddenLauncherPath) throw new Error('buildCreateArgs: hiddenLauncherPath required');
   const mo = parseInt(intervalMinutes, 10);
   if (!Number.isFinite(mo) || mo < 1) throw new Error(`buildCreateArgs: invalid intervalMinutes ${intervalMinutes}`);
-  return ['/Create', '/TN', taskName, '/TR', wrapperPath, '/SC', 'MINUTE', '/MO', String(mo), '/F'];
+  const trAction = buildHiddenTrAction({ hiddenLauncherPath, wrapperPath });
+  return ['/Create', '/TN', taskName, '/TR', trAction, '/SC', 'MINUTE', '/MO', String(mo), '/F'];
 }
 
 /** The startup companion. ONLOGON by default (unelevated); ONSTART with --boot (needs admin). */
-export function buildStartupCreateArgs({ taskName = STARTUP_TASK_NAME, wrapperPath, boot = false } = {}) {
+export function buildStartupCreateArgs({ taskName = STARTUP_TASK_NAME, wrapperPath, hiddenLauncherPath, boot = false } = {}) {
   if (!wrapperPath) throw new Error('buildStartupCreateArgs: wrapperPath required');
-  return ['/Create', '/TN', taskName, '/TR', wrapperPath, '/SC', boot ? 'ONSTART' : 'ONLOGON', '/F'];
+  if (!hiddenLauncherPath) throw new Error('buildStartupCreateArgs: hiddenLauncherPath required');
+  const trAction = buildHiddenTrAction({ hiddenLauncherPath, wrapperPath });
+  return ['/Create', '/TN', taskName, '/TR', trAction, '/SC', boot ? 'ONSTART' : 'ONLOGON', '/F'];
 }
 export function buildRemoveArgs(taskName = TASK_NAME) {
   return ['/Delete', '/TN', taskName, '/F'];
@@ -326,6 +335,7 @@ export async function main(argv = process.argv, deps = {}) {
   const repoRoot = deps.repoRoot || getRepoRoot();
   const wrapperPath = path.join(repoRoot, WRAPPER_REL_PATH);
   const xmlPath = path.join(repoRoot, XML_REL_PATH);
+  const hiddenLauncherPath = path.join(repoRoot, HIDDEN_LAUNCHER_REL_PATH);
 
   if (platform !== 'win32') {
     logger.error(`${tag} win32-only (schtasks). On POSIX use two crontab lines instead:`);
@@ -409,13 +419,13 @@ export async function main(argv = process.argv, deps = {}) {
   }
 
   const wrapperContent = buildWrapperScript({ repoRoot });
-  const cadenceArgs = buildCreateArgs({ wrapperPath });
-  const startupArgs = buildStartupCreateArgs({ wrapperPath, boot: args.boot });
+  const cadenceArgs = buildCreateArgs({ wrapperPath, hiddenLauncherPath });
+  const startupArgs = buildStartupCreateArgs({ wrapperPath, hiddenLauncherPath, boot: args.boot });
   // The sweep's host-local venue (see SWEEP_TASK_NAME). No LIVENESS_CLASSES — the sweep takes no
   // class filter; what it needs from this venue is simply a host that can read the pid markers.
   const sweepWrapperPath = path.join(repoRoot, SWEEP_WRAPPER_REL_PATH);
   const sweepWrapperContent = buildWrapperScript({ repoRoot, env: {}, script: SWEEP_SCRIPT });
-  const sweepArgs = buildCreateArgs({ taskName: SWEEP_TASK_NAME, wrapperPath: sweepWrapperPath, intervalMinutes: SWEEP_INTERVAL_MINUTES });
+  const sweepArgs = buildCreateArgs({ taskName: SWEEP_TASK_NAME, wrapperPath: sweepWrapperPath, hiddenLauncherPath, intervalMinutes: SWEEP_INTERVAL_MINUTES });
   if (args.dryRun) {
     logger.log(`${tag} DRY RUN — wrapper ${wrapperPath}:`);
     logger.log(wrapperContent.replace(/\r\n/g, '\n'));
@@ -425,6 +435,11 @@ export async function main(argv = process.argv, deps = {}) {
     logger.log(sweepWrapperContent.replace(/\r\n/g, '\n'));
     logger.log(`${tag} would run: schtasks ${sweepArgs.join(' ')}`);
     return { exitCode: 0, action: 'dry_run_register', wrapperPath, sweepWrapperPath };
+  }
+
+  if (!fs.existsSync(hiddenLauncherPath)) {
+    logger.error(`${tag} hidden-window launcher missing at ${hiddenLauncherPath} — refusing to register a task that would fall back to a visible console.`);
+    return { exitCode: 1, action: 'launcher_missing' };
   }
 
   try {
