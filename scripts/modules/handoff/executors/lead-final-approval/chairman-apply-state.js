@@ -74,14 +74,28 @@ export async function classifyMigrationApplyState() {
  * @param {string} sdKey
  * @param {Array<{githubRepo: string}>} reposWithPaths - from computeReposForSD(sd) (caller-owned;
  *   this module deliberately does not import gates.js, to avoid a circular import).
+ * @param {object} supabase - service-role client, threaded to loadKeySet(supabase). Without one,
+ *   loadKeySet returns {ok:false} and this function returns error (could-not-determine), NEVER a
+ *   silent empty key set — an empty Set is iterable and would make every branch resolve
+ *   NO_MATCHING_KEY, i.e. "found nothing", which is the exact fail-open this function's own
+ *   contract forbids (QF-20260906-048, RCA a6eefe27).
  * @returns {Promise<{files: string[], error: string|null}>} `error` non-null means
  *   could-not-determine -- callers must NOT treat this the same as "found nothing".
  */
-export async function findMergedPrFileList(sdKey, reposWithPaths) {
+export async function findMergedPrFileList(sdKey, reposWithPaths, supabase) {
   if (!sdKey || !Array.isArray(reposWithPaths) || reposWithPaths.length === 0) {
     return { files: [], error: null };
   }
-  const keySet = await loadKeySet().catch(() => null);
+  // QF-20260906-048: loadKeySet(supabase) returns a FAIL-CLOSED ENVELOPE {ok, keys, reason,
+  // error}, never the Set itself and never a rejected promise. The prior `loadKeySet().catch(...)`
+  // (a) never passed a client, so `ok` was always false, and (b) passed the whole envelope where
+  // branchBelongsToSd expects an iterable Set, which threw inside resolveBranchOwner and was
+  // caught by the OUTER per-repo try below -- masquerading as "gh CLI error" for every SD, always.
+  const keySetResult = await loadKeySet(supabase);
+  if (!keySetResult.ok) {
+    return { files: [], error: `key set unavailable: ${keySetResult.error || keySetResult.reason}` };
+  }
+  const keySet = keySetResult.keys;
   const SCAN_LIMIT = 100;
   let anyFailed = false;
   for (const { githubRepo: repo } of reposWithPaths) {
