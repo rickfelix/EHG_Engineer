@@ -226,8 +226,9 @@ async function resolveSchedulerRound(row) {
  * window the process is expected (normal evaluation); outside it is INTENTIONALLY_DOWN — a windowed
  * expectation, not a blind spot and not a false OVERDUE for the other ~21 hours. Pure; a malformed
  * or absent window returns null so the caller falls through to the prior currently_expected_active
- * behaviour (the CHECK constraint on the column makes malformed values unreachable once applied,
- * but the watcher must never read a bad value as "no window" silently — hence the explicit null).
+ * behaviour. The column CHECK narrows the shape, but the watcher does NOT rely on it: an out-of-range
+ * hour ('25:00') read as 1500 minutes would grade the row INTENTIONALLY_DOWN forever with no alarm
+ * (SEC-M4), so the parser refuses hour > 23 / minute > 59 itself and returns null.
  * @param {object} row
  * @param {number|Date} now
  * @returns {boolean|null} true=inside, false=outside, null=no usable window
@@ -235,7 +236,12 @@ async function resolveSchedulerRound(row) {
 function isInsideExpectedWindowEt(row, now = Date.now()) {
   const w = row && row.expected_window_et;
   if (!w || typeof w !== 'object') return null;
-  const parse = (hhmm) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '')); return m ? Number(m[1]) * 60 + Number(m[2]) : NaN; };
+  const parse = (hhmm) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+    if (!m) return NaN;
+    const h = Number(m[1]), mm = Number(m[2]);
+    return h <= 23 && mm <= 59 ? h * 60 + mm : NaN;
+  };
   const s = parse(w.start), e = parse(w.end);
   if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
   const instant = now instanceof Date ? now : new Date(now);
