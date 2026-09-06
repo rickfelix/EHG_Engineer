@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T14:09:09.749Z",
+  "generated_at": "2026-09-06T14:13:16.097Z",
   "counts": {
-    "no_catch": 39,
+    "no_catch": 32,
     "has_catch": 115
   },
   "results": [
@@ -63,35 +63,7 @@
     },
     {
       "file": "scripts/modules/handoff/auto-complete-deliverables.js",
-      "line": 145,
-      "kind": "data",
-      "snippet": "const { data: prd } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/auto-complete-deliverables.js",
-      "line": 161,
-      "kind": "data",
-      "snippet": "const { data: subAgentResults } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/auto-complete-deliverables.js",
-      "line": 172,
-      "kind": "data",
-      "snippet": "const { data: handoffs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/auto-complete-deliverables.js",
-      "line": 183,
-      "kind": "data",
-      "snippet": "const { data: stories } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/auto-complete-deliverables.js",
-      "line": 567,
+      "line": 580,
       "kind": "data",
       "snippet": "const { data: breakdown } = await supabase",
       "classification": "has_catch"
@@ -970,27 +942,6 @@
       "kind": "data",
       "snippet": "const { data: parent } = await supabase",
       "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/pre-checks/prerequisite-preflight.js",
-      "line": 583,
-      "kind": "data",
-      "snippet": "const { data: prd } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/pre-checks/prerequisite-preflight.js",
-      "line": 661,
-      "kind": "data",
-      "snippet": "const { data: planToLeadRows } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/pre-checks/prerequisite-preflight.js",
-      "line": 680,
-      "kind": "data",
-      "snippet": "const { data: retros } = await supabase",
-      "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/recording/HandoffRecorder.js",
