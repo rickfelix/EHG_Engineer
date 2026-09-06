@@ -1,0 +1,89 @@
+{
+  "produced_by": "gh api repos/rickfelix/EHG_Engineer/commits/<sha>/check-runs --paginate + gh run view 34011567215 --log",
+  "produced_at": "2026-09-06T05:15:33.436Z",
+  "sd_id": "SD-LEO-INFRA-RETRO-PUBLISHED-GUARD-001",
+  "pr": 8319,
+  "head_sha": "29143c8efa6d139234a0e89208e505cc7853c984",
+  "ci": {
+    "total_check_runs": 60,
+    "success": 59,
+    "skipped": [
+      "Agentic Review"
+    ],
+    "failures": []
+  },
+  "key_checks": {
+    "ddl": {
+      "conclusion": "success",
+      "url": "https://github.com/rickfelix/EHG_Engineer/actions/runs/34011567215/job/101428201321"
+    },
+    "coverage": {
+      "conclusion": "success",
+      "url": "https://github.com/rickfelix/EHG_Engineer/actions/runs/34011567262/job/101428201502"
+    },
+    "Run Unit Tier (quarantine-aware)": {
+      "conclusion": "success",
+      "url": "https://github.com/rickfelix/EHG_Engineer/actions/runs/34011567277/job/101428201586"
+    },
+    "secdef-execute-revoke-lint": {
+      "conclusion": "success",
+      "url": "https://github.com/rickfelix/EHG_Engineer/actions/runs/34011567217/job/101428201416"
+    },
+    "security-scan": {
+      "conclusion": "success",
+      "url": "https://github.com/rickfelix/EHG_Engineer/actions/runs/34011567252/job/101428201530"
+    },
+    "smoke": {
+      "conclusion": "success",
+      "url": "https://github.com/rickfelix/EHG_Engineer/actions/runs/34011567113/job/101428201115"
+    },
+    "schema-reference-lint": {
+      "conclusion": "success",
+      "url": "https://github.com/rickfelix/EHG_Engineer/actions/runs/34011567131/job/101428201058"
+    },
+    "Verify RLS Permissions": {
+      "conclusion": "success",
+      "url": "https://github.com/rickfelix/EHG_Engineer/actions/runs/34011567342/job/101428201838"
+    }
+  },
+  "ddl_tier": {
+    "runner": "vitest on real ephemeral PostgreSQL (GitHub Actions service container)",
+    "test_files_passed": 19,
+    "tests_passed": 427,
+    "tests_failed": 0,
+    "guard_suite": "tests/ddl/retrospectives-published-guard-ddl.db.test.js (12 tests, incl. TS-S1)",
+    "log_excerpt": [
+      "ddl\tApply the migration and assert its behaviour\t2026-09-06T04:28:50.0479327Z  ✓  ddl  tests/ddl/retrospectives-published-guard-ddl.db.test.js (12 tests) 315ms",
+      "ddl\tApply the migration and assert its behaviour\t2026-09-06T04:28:57.1181293Z  Test Files  19 passed (19)",
+      "ddl\tApply the migration and assert its behaviour\t2026-09-06T04:28:57.1183514Z       Tests  427 passed (427)",
+      "ddl\tApply the migration and assert its behaviour\t2026-09-06T04:28:57.1189139Z    Duration  12.35s (transform 184ms, setup 0ms, import 608ms, tests 9.90s, environment 1ms)"
+    ]
+  },
+  "file_verification": {
+    "method": "git show 29143c8efa6:<path> (committed blob, not working tree)",
+    "migration": {
+      "path": "database/chairman-gated/20260906_retrospectives_published_guard.sql",
+      "sha256": "4fd70aa8ce47b7fc65f79e8cb96f4c9c99f75b022841928e9293fc6fc958a2f2",
+      "trigger_binding": "CREATE TRIGGER zzz_retrospectives_published_guard BEFORE INSERT OR UPDATE ON public.retrospectives FOR EACH ROW EXECUTE FUNCTION public.enforce_retrospectives_published_guard();",
+      "tg_op_guard": "IF TG_OP = 'UPDATE' AND OLD.retro_type = 'SD_COMPLETION' AND OLD.status = 'PUBLISHED' THEN",
+      "null_at_rest": "NEW.retro_write_token := NULL; (unconditional, runs on INSERT and UPDATE)",
+      "revoke_execute": "REVOKE EXECUTE ON FUNCTION public.trg_retrospectives_audit() FROM PUBLIC, anon, authenticated;"
+    },
+    "down": {
+      "path": "database/chairman-gated/20260906_retrospectives_published_guard_DOWN.sql",
+      "sha256": "4b83bb494d9773e00d7f8f5361b7368bac68c96048a21c896de087abb4277734",
+      "revoke_execute_present": true
+    },
+    "ddl_test": {
+      "path": "tests/ddl/retrospectives-published-guard-ddl.db.test.js",
+      "sha256": "27cd7ff1699e7515f3c36ca14f6f86e11a8b30b14130ecc1be834a2bcd1829f7",
+      "ts_s1_present": true
+    }
+  },
+  "findings_closed": {
+    "S-1": "VERIFIED - trigger is BEFORE INSERT OR UPDATE; refusal logic gated on TG_OP=UPDATE; token nulled at rest on both paths; TS-S1 regression test executes on real Postgres in CI and passes.",
+    "S-2": "VERIFIED - REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated present in BOTH the UP file (line 246) and the DOWN file (line 36); secdef-execute-revoke-lint PASS.",
+    "B-1/B-2/F-3/F-4": "Previously fixed; covered by the green ddl + unit tiers on this sha."
+  },
+  "verdict": "PASS"
+}

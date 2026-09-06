@@ -6,7 +6,7 @@
  * loudly instead of the census silently going stale.
  */
 import { describe, it, expect } from 'vitest';
-import { buildGateCensus } from './gate-census.js';
+import { buildGateCensus, ENV_FLAG_GATES } from './gate-census.js';
 
 const FIXTURE_SD = { sd_key: 'CENSUS-TEST-FIXTURE', sd_type: 'bugfix' };
 
@@ -29,13 +29,23 @@ describe('buildGateCensus', () => {
     expect(census.find((g) => g.name === 'WIRE_CHECK_GATE')?.required).toBe(true);
   });
 
-  it('the 5 env-flag-gated gates each carry their flag name and a documented disposition', () => {
-    const flagged = ['ADKAR_ADOPTION', 'LEARNING_OR_BYPASS_RESOLVED', 'ACCEPTANCE_TIER_DOWNGRADE', 'INVOCATION_PATH_PROOF', 'GATE_ACTIVATION_INVARIANT'];
-    for (const name of flagged) {
+  it('every ENV_FLAG_GATES entry carries its flag name and a documented disposition in the census', () => {
+    // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B: reads ENV_FLAG_GATES itself instead of a
+    // hand-maintained array -- a prior hardcoded array of 5 silently drifted the moment a 6th
+    // entry (GATE_SUCCESS_CRITERIA_UNPOPULATED) was added to gate-census.js without a matching
+    // update here, and nothing caught it. A single source of truth cannot drift from itself.
+    for (const name of Object.keys(ENV_FLAG_GATES)) {
       const entry = census.find((g) => g.name === name);
       expect(entry, `expected ${name} in the census`).toBeDefined();
       expect(entry.env_flag).toBeTruthy();
       expect(entry.env_flag_disposition).toBeTruthy();
+    }
+  });
+
+  it('every ENV_FLAG_GATES key names an actually-registered gate (catches a typo/rename going stale)', () => {
+    const registeredNames = new Set(census.map((g) => g.name));
+    for (const name of Object.keys(ENV_FLAG_GATES)) {
+      expect(registeredNames.has(name), `ENV_FLAG_GATES["${name}"] does not match any gate returned by getRequiredGates()`).toBe(true);
     }
   });
 

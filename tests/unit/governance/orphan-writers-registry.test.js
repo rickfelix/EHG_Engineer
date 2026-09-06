@@ -113,7 +113,9 @@ describe('orphan-writers-registry: known-orphan count baseline (QF-20260831-821)
   // (context-usage-log-leo-phase-tagging-migration, operator-cash-burn-manual-revenue-provenance-migration).
   // QF-20260831-313: 17 -> 18. One new seat-population-orphan mechanism-proof specimen
   // (seat-population:fixture-dormant-seat-001).
-  const PINNED_TOTAL_ENTRIES = 18;
+  // SD-LEO-INFRA-RETRO-PUBLISHED-GUARD-001: 18 -> 19. One new shipped-but-not-applied entry
+  // (retrospectives-published-guard-migration).
+  const PINNED_TOTAL_ENTRIES = 19;
 
   it('total entry count matches the pinned baseline -- update PINNED_TOTAL_ENTRIES with a reason if this genuinely changed', () => {
     expect(ORPHAN_ENTRIES.length).toBe(PINNED_TOTAL_ENTRIES);

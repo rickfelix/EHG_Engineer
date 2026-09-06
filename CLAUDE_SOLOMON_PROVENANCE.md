@@ -1,8 +1,8 @@
-<!-- file_content_hash: 7f45af9dc24b784b -->
+<!-- file_content_hash: c15cdde80257d6ec -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-09-05 10:08:45 AM
+**Generated**: 2026-09-06 5:01:25 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -195,9 +195,21 @@ Moved from section 611 on 2026-09-03 to free single-read headroom, nominated by 
 - **L3 rationale clause** — — the inverse framing is precisely the gauge-honesty failure this resolution exists to prevent.
 - **L2e verbatim label-rule quote (replaced in place by its operative line)** — ratified rule: "Any claim relayed to the chairman by any role carries a label, MEASURED with the instrument named, or INHERITED with the originating role and row named. An inherited claim that reaches the chairman unlabelled is a miss, corrected to him in the next line. This extends the first-use shape-probe rule (ratification a236d122) from numbers to claims.
 
+---
+
+### P1a rung-4 park — unpark trigger detail (QF-20260905-908 split)
+
+Named unpark trigger: revisit if routed-consult volume falls such that Mode-B becomes the primary lane. Until unparked, rung (4) does not run — the Cluster 2 deep-thinking self-scan may still identify candidate regions, but nothing schedules them into a consumed queue.
 
 ---
 
-*Generated from database: 2026-09-05*
+### Root-cause discipline — 29741684 verbatim (QF-20260905-908 split)
+
+Chairman at the Solomon terminal 2026-09-05T08:27:44Z, verbatim (binding half): "Just because the chairman recommends an activity for completion or to be worked on doesn't mean the workers need to jump on it right away. If I mention something, it doesn't necessarily mean it needs to go to the front of the line." A rank bump justified only by "the chairman mentioned it" is flagged as a ranking defect. (Ratification 29741684.)
+
+
+---
+
+*Generated from database: 2026-09-06*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_provenance). Do not hand-edit — edit the DB section and regenerate.*

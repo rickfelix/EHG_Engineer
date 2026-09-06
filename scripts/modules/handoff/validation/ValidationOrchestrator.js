@@ -1019,6 +1019,12 @@ export class ValidationOrchestrator {
       return acc;
     }, {});
 
+    // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A: read once per buildGatesFromRules() call, not once
+    // per rule closure (8x for gate 4 alone) -- an in-process env mutation between rule closures
+    // would otherwise produce a torn verdict with nothing recording which mode produced it
+    // (SECURITY finding C3, EXEC-TO-PLAN review).
+    const skipGuardBound = process.env.SD_TYPE_SKIP_GUARD_BINDING === 'true';
+
     // Build gates from database rules
     const dbGates = [];
     for (const [gate, rules] of Object.entries(rulesByGate)) {
@@ -1034,6 +1040,35 @@ export class ValidationOrchestrator {
 
             // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Check SD type and skip code validation
             // Uses centralized SD-type applicability policy for proper SKIPPED status
+            //
+            // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A: LEAD-FINAL-APPROVAL's gate '4' actually has
+            // EIGHT registered rules (TESTING sub-agent, EXEC-TO-PLAN review), not just the four
+            // strategic-value ones this SD was scoped against: valueDelivered/
+            // patternEffectiveness/executiveValidation/processAdherence (gate-4-strategic-value.js,
+            // aliasing to validateGate4LeadFinal) PLUS planToLeadHandoffExists/
+            // userStoriesComplete/retrospectiveExists/prMergeVerification (additional-validators.js,
+            // all seeded weight:0 -- but ValidationOrchestrator.js:401/1336's separate, OUT-OF-SCOPE
+            // `gate.weight || 1.0` falsy-zero defect gives them effective weight 1.0 anyway, so
+            // exempting gate 4 makes THAT defect load-bearing for the binding decision, not merely
+            // adjacent). All eight check whether value was delivered / process was followed --
+            // meaningful for every sd_type, including infrastructure/orchestrator -- not "code
+            // validation". Must never be swept up by this skip, which exists to exempt genuinely
+            // code-specific validation (TESTING/GITHUB/E2E) for non-code SD types. Without this
+            // exemption, a live specimen (SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001)
+            // completed LEAD-FINAL-APPROVAL at score 97 with gate 4 silently full-scored via
+            // createSkippedResult (100/100, arithmetically identical to a genuine pass) despite
+            // zero real evidence.
+            //
+            // Observe-only rollout (SD_TYPE_SKIP_GUARD_BINDING=true to enforce): 73.7% of the live
+            // fleet (3,626/4,919 non-cancelled SDs) sits in a blanket-skipped sd_type, so
+            // unconditionally exempting gate 4 would immediately start failing/re-scoring a large
+            // share of in-flight SDs -- fix the adjacent weight defect FIRST if this is ever bound,
+            // or prMergeVerification/planToLeadHandoffExists/userStoriesComplete/
+            // retrospectiveExists will hard-block real SDs at an unintended effective weight.
+            // Unbound (default), the skip fires exactly as before -- the only change is a warning
+            // naming what would happen once bound. Bound, gate 4 falls through to the real
+            // validator below instead of returning a fabricated pass.
+            const isStrategicValueGate = String(gate) === '4';
             if (mergedContext.sd_id || mergedContext.sdId) {
               const sdId = mergedContext.sd_id || mergedContext.sdId;
               const { data: sdData } = await this.supabase
@@ -1043,13 +1078,20 @@ export class ValidationOrchestrator {
                 .single();
 
               if (sdData && shouldSkipCodeValidation(sdData)) {
-                // Extract validator name from rule for proper policy lookup
-                const validatorName = rule.rule_name?.toUpperCase() ||
-                                     gate.split(':').pop()?.toUpperCase() ||
-                                     'UNKNOWN';
+                if (isStrategicValueGate && skipGuardBound) {
+                  // Exempted: fall through to the real validator below.
+                } else {
+                  if (isStrategicValueGate) {
+                    console.warn(`   [SD_TYPE_SKIP_GUARD observe-only] gate=4 rule=${rule.rule_name} sd_type=${sdData.sd_type} would no longer be silently skipped once SD_TYPE_SKIP_GUARD_BINDING=true is set.`);
+                  }
+                  // Extract validator name from rule for proper policy lookup
+                  const validatorName = rule.rule_name?.toUpperCase() ||
+                                       gate.split(':').pop()?.toUpperCase() ||
+                                       'UNKNOWN';
 
-                // Use policy to get proper skip result with SKIPPED status
-                return createSkippedResult(validatorName, sdData.sd_type, SkipReasonCode.NON_APPLICABLE_SD_TYPE);
+                  // Use policy to get proper skip result with SKIPPED status
+                  return createSkippedResult(validatorName, sdData.sd_type, SkipReasonCode.NON_APPLICABLE_SD_TYPE);
+                }
               }
             }
 
@@ -1061,7 +1103,8 @@ export class ValidationOrchestrator {
             ruleName: rule.rule_name,
             criteria: rule.criteria,
             executionOrder: rule.execution_order,
-            fromDatabase: true
+            fromDatabase: true,
+            ...(String(gate) === '4' ? { sdTypeSkipGuardBound: skipGuardBound } : {})
           }
         });
       }

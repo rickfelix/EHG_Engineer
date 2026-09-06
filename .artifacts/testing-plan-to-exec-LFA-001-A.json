@@ -1,0 +1,28 @@
+{
+  "sd_key": "SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A",
+  "phase": "PLAN_TO_EXEC",
+  "mode": "pre-implementation-test-strategy-review",
+  "premise_checks": {
+    "specimen_91525aed": {
+      "sd": "SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001",
+      "sd_type": "infrastructure", "status": "accepted", "validation_score": 97,
+      "gates_total": 32, "gates_skipped": 8, "skipped_required_true": 7,
+      "every_skipped_gate": {"score": 100, "maxScore": 100, "passed": true, "reason": "NON_APPLICABLE_SD_TYPE"},
+      "verdict": "PREMISE CONFIRMED"
+    },
+    "uncovered_four_weights": {"valueDelivered": 0.35, "patternEffectiveness": 0.30, "executiveValidation": 0.25, "processAdherence": 0.10, "weight_sum": 1.00,
+      "note": "the other 4 skipped rules carry weight 0, so 100% of the weighted DB-rule contribution at LEAD-FINAL-APPROVAL is fabricated"},
+    "validators_registered": "all 4 registered in gate-4-strategic-value.js (alias to valueDelivered -> validateGate4LeadFinal); NOT auto-passing fallbacks, so TS-2 is achievable",
+    "census_reproduced": {"non_cancelled": 4919, "sd_type_in_NON_CODE": 3626, "pct": 73.7, "prd_stated": "3624/4917", "drift": "2 SDs over 2 days", "verdict": "CONFIRMED",
+      "category_branch_dead": "call site selects only (id, sd_type, title); shouldSkipCodeValidation Priority-2 category and Priority-3 scope branches are unreachable there (+87 SDs / 75.5% if they were live)"},
+    "score_path": "createSkippedResult emits snake_case max_score; gate-result-schema.js:98-102 maps it to maxScore, so 100/100 -> gatePercentage 100 -> weightedScoreSum += 100*weight. Arithmetically identical to a genuine pass. CONFIRMED"
+  },
+  "namespace_measurement": {
+    "leo_validation_rules_distinct_rule_names": 64,
+    "handoff_types": ["LEAD-TO-PLAN","PLAN-TO-EXEC","EXEC-TO-PLAN","PLAN-TO-LEAD","LEAD-FINAL-APPROVAL"],
+    "SD_TYPE_POLICY_keys": ["TESTING","DESIGN","GITHUB","DATABASE","REGRESSION","DOCMON","STORIES","WIREFRAME"],
+    "rule_names_matching_a_policy_key": 0,
+    "implication": "isValidatorNonApplicable(sdType, rule_name.toUpperCase()) is constant-false over the ENTIRE DB-rule population for every sd_type"
+  },
+  "baseline": {"cmd": "npx vitest run --project unit tests/unit/handoff/validation-orchestrator-zero-weight-threshold.test.js tests/unit/sd-type-applicability-policy.test.js", "files": 2, "tests_passed": 53, "failures": 0, "duration_ms": 646}
+}

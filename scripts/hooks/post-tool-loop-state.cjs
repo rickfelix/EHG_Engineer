@@ -16,8 +16,11 @@
  *     env-only guard exited silently on EVERY harness invocation. That single
  *     guard is why claude_sessions.loop_state read 'unknown' fleet-wide all day
  *     2026-06-10 and parked workers were indistinguishable from stalled ones.
- *   - Always exit 0 — observability writes MUST NOT block the tool call. Any
- *     failure is logged to stderr by the tracker module.
+ *   - Always exit 0 — observability writes MUST NOT block the tool call. The
+ *     tracker module writes failures to stderr, but PostToolUse stderr on
+ *     exit 0 is discarded by the harness (debug log only, not operator-visible)
+ *     — do not rely on it to detect a broken writer (QF-20260905-970). Assert
+ *     against the tracker's return value or a DB-side canary instead.
  *   - Feature-flag gate: setting LEO_LOOP_STATE_SIGNAL=off short-circuits the
  *     write entirely (no tracker import, no DB call) so an operator can
  *     disable the writer per-session without redeploying.
