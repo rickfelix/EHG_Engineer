@@ -27,6 +27,10 @@ import { getRepoRoot, getWorktreesDir, createWorkTypeWorktree } from '../lib/wor
 
 // SD-LEO-INFRA-EXCLUDE-CHAIRMAN-GATED-001: canonical chairman-gated-hold predicate (CJS).
 const { isChairmanGatedQF } = createRequire(import.meta.url)('../lib/fleet/qf-gated-hold.cjs');
+// SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E (Child E): stamp provenance after a successful claim
+// below. qfId is QF-shaped, so claim-stamp.cjs's stampClaim auto-routes to the QF-side merge
+// (fail-soft on the not-yet-applied quick_fixes.metadata column).
+const { stampClaim } = createRequire(import.meta.url)('../lib/fleet/claim-stamp.cjs');
 
 dotenv.config();
 
@@ -143,6 +147,10 @@ async function main() {
     if (data?.message) console.error(`  ${data.message}`);
     await safeExit(3);
   }
+
+  try {
+    await stampClaim(supabase, qfId, sessionId, 'env');
+  } catch { /* fail-soft: a provenance-stamp hiccup must never break the claim itself */ }
 
   console.log(`✓ Quick-fix ${qfId} claimed (session ${sessionId})`);
   console.log(`  Branch convention: qf/${qfId}`);

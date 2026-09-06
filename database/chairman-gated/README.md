@@ -1141,3 +1141,32 @@ helper functions. Safe to re-apply the UP file after a rollback — unlike the s
 migrations elsewhere in this directory, nothing here is a NULL-at-rest / accumulation concern (no
 column, no at-rest state touched). Both UP and DOWN verified together, in sequence, inside one
 ROLLBACK-guarded transaction during authoring.
+
+## Applying `20260906_add_quick_fixes_metadata_column.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260906_add_quick_fixes_metadata_column.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260906_add_quick_fixes_metadata_column_DOWN.sql` (`ALTER TABLE quick_fixes DROP
+COLUMN IF EXISTS metadata`).
+
+## What it does
+
+Adds an additive, nullable `metadata JSONB` column to `quick_fixes` — the same generic-provenance
+role `strategic_directives_v2.metadata` already plays for SDs. SD-LEO-INFRA-PRIORITY-RECORD-ONE-
+001-E (Child E) is the first writer: `lib/fleet/qf-metadata-merge.mjs`'s `mergeQfMetadataKeys`
+appends a claim-provenance entry to `metadata.claim_history` under a `claiming_session_id`
+compare-and-swap guard, whenever `lib/fleet/claim-stamp.cjs`'s `stampClaim` is called with a
+QF-shaped ref (`/^QF-/`).
+
+Deliberately placed here rather than in `database/migrations/` even though the ALTER alone is
+provably additive (TIER-1): Child E's own PLAN phase scoped applying this column as OUT OF SCOPE
+for that SD, deferred to the chairman's normal DDL cadence — an auto-scanned path would apply it
+regardless of tier the next time the pending-migration detector runs, defeating that deferral. The
+code path is fail-soft on the column's absence either way (`mergeQfMetadataKeys` catches Postgres
+`42703` and returns `{merged:false, reason:'column_absent'}`), so claim provenance simply does not
+land on the QF side until this is applied — no claim ever fails because of it.
