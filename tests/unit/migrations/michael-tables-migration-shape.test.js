@@ -67,6 +67,8 @@ describe('michael_* migration shape (FR-1)', () => {
     expect(up).toMatch(/status TEXT NOT NULL DEFAULT 'active' CHECK \(status IN \('active', 'superseded'\)\)/);
     expect(up).toMatch(/auto_apply_verb TEXT NULL CHECK \(auto_apply_verb IN \('label', 'archive', 'reschedule'\)\)/);
     expect(up).toContain('CHECK (auto_apply = false OR (auto_apply_verb IS NOT NULL AND auto_apply_since IS NOT NULL))');
+    // SEC-M1: the verifier requirement is table-bound, not only rule-encode's JS gate.
+    expect(up).toContain("CHECK (auto_apply = false OR (provenance -> 'verifier' ->> 'subject_hash') IS NOT NULL)");
     expect(up).toContain('CREATE INDEX IF NOT EXISTS michael_rules_supersedes_idx ON public.michael_rules (supersedes);');
   });
 
@@ -117,6 +119,7 @@ describe('michael_* migration shape (FR-1)', () => {
     expect(up).toContain('CREATE OR REPLACE FUNCTION public.michael_set_updated_at()');
     expect(up).toContain('REVOKE EXECUTE ON FUNCTION public.michael_set_updated_at() FROM PUBLIC, anon, authenticated;');
     expect(up).toContain('GRANT EXECUTE ON FUNCTION public.michael_set_updated_at() TO service_role;');
+    expect(up).toContain('SET search_path = pg_catalog, public');
     expect(up).not.toMatch(/set_updated_at\(\)\s*RETURNS trigger[\s\S]*?public\.set_updated_at\(\)/);
   });
 
@@ -133,6 +136,9 @@ describe('michael_* migration shape (FR-1)', () => {
     expect(block).toContain('information_schema.columns');
     expect(block).toContain("has_function_privilege('anon', 'public.michael_set_updated_at()', 'EXECUTE')");
     expect((block.match(/ASSERT /g) || []).length).toBeGreaterThanOrEqual(20);
+    // SEC-M5: a RAISE-based guard so the block cannot be a silent no-op under check_asserts = off.
+    expect(block).toMatch(/current_setting\('plpgsql\.check_asserts', true\)/);
+    expect(block.indexOf('RAISE EXCEPTION')).toBeLessThan(block.indexOf('FOREACH t IN ARRAY v_tables'));
   });
 
   it('has no transaction wrapper and never depends on --split-statements', () => {

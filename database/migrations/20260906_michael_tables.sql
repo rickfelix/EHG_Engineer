@@ -34,6 +34,7 @@
 CREATE OR REPLACE FUNCTION public.michael_set_updated_at()
 RETURNS trigger
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public
 AS $fn$
 BEGIN
   NEW.updated_at := now();
@@ -59,6 +60,9 @@ CREATE TABLE IF NOT EXISTS public.michael_rules (
   auto_apply_verb TEXT NULL CHECK (auto_apply_verb IN ('label', 'archive', 'reschedule')),
   -- Table-level binding of the autonomy invariant (TR-8): a JS guard does not bind a service-role writer.
   CHECK (auto_apply = false OR (auto_apply_verb IS NOT NULL AND auto_apply_since IS NOT NULL)),
+  -- SEC-M1 (EXEC SECURITY b4e557d4): the Opus verifier requirement binds here too — an auto-applied
+  -- rule must carry provenance.verifier.subject_hash, whoever the writer is.
+  CHECK (auto_apply = false OR (provenance -> 'verifier' ->> 'subject_hash') IS NOT NULL),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -375,6 +379,11 @@ DECLARE
   i INTEGER;
   v_rel TEXT;
 BEGIN
+  -- SEC-M5: every check below is an ASSERT, and ASSERTs are a silent no-op under
+  -- plpgsql.check_asserts = off. RAISE is not an ASSERT, so this guard fires regardless.
+  IF lower(coalesce(current_setting('plpgsql.check_asserts', true), 'on')) IN ('off', 'false', '0') THEN
+    RAISE EXCEPTION 'MICHAEL-TABLES: plpgsql.check_asserts is off — the verify block cannot verify anything';
+  END IF;
   FOREACH t IN ARRAY v_tables LOOP
     v_rel := 'public.' || t;
     ASSERT to_regclass(v_rel) IS NOT NULL, 'MICHAEL-TABLES: ' || t || ' did not land';

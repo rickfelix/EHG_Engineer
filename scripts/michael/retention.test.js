@@ -51,10 +51,10 @@ describe('cutoffEtDate', () => {
 
 describe('runRetention', () => {
   it('dry run: counts eligible rows per target with a STRICT lt(cutoff), writes no table, and still stamps feeder_runs (venue gha)', async () => {
-    const sb = stub({ counts: { michael_brief_runs: 4, michael_gmail_triage_items: 9, michael_calendar_day: 12 } });
+    const sb = stub({ counts: { michael_brief_runs: 4, michael_gmail_triage_items: 9, michael_calendar_day: 12, michael_feeder_runs: 5 } });
     const r = await runRetention({ sb, argv: [], now: NOW });
     expect(r).toMatchObject({ ok: true, tables_absent: false, mode: 'dry_run', days: 30, cutoff: '2026-08-07', stamped: true, attempt: 1 });
-    expect(r.per_table.map((t) => [t.table, t.eligible])).toEqual([['michael_brief_runs', 4], ['michael_gmail_triage_items', 9], ['michael_calendar_day', 12]]);
+    expect(r.per_table.map((t) => [t.table, t.eligible])).toEqual([['michael_brief_runs', 4], ['michael_gmail_triage_items', 9], ['michael_calendar_day', 12], ['michael_feeder_runs', 5]]);
     const mutated = sb.writes.map((w) => w.table);
     expect(mutated).toEqual(['michael_feeder_runs']);
     const stamp = sb.writes[0].ops[0].args[0];
@@ -62,10 +62,13 @@ describe('runRetention', () => {
     expect(stamp.counts.mode).toBe('dry_run');
   });
   it('apply: nulls exactly the prose columns and deletes calendar rows, both strictly older than the cutoff (boundary row at cutoff untouched)', async () => {
-    const sb = stub({ counts: { michael_brief_runs: 2, michael_gmail_triage_items: 0, michael_calendar_day: 3 } });
+    const sb = stub({ counts: { michael_brief_runs: 2, michael_gmail_triage_items: 0, michael_calendar_day: 3, michael_feeder_runs: 1 } });
     const r = await runRetention({ sb, argv: ['--apply'], now: NOW });
     expect(r.ok).toBe(true);
     expect(r.mode).toBe('apply');
+    const feederWrites = sb.writes.filter((x) => x.table === 'michael_feeder_runs');
+    expect(feederWrites.map((x) => x.ops[0].op)).toEqual(['update', 'insert']); // log_md nulling, then the stamp
+    expect(feederWrites[0].ops[0].args[0]).toEqual({ log_md: null });
     const w = sb.writes.filter((x) => x.table !== 'michael_feeder_runs');
     expect(w.map((x) => [x.table, x.ops[0].op])).toEqual([['michael_brief_runs', 'update'], ['michael_calendar_day', 'delete']]);
     expect(w[0].ops[0].args[0]).toEqual({ rendered_html: null, brief_md: null });
@@ -77,13 +80,14 @@ describe('runRetention', () => {
     expect(w[0].ops.find((o) => o.op === 'or').args[0]).toBe('rendered_html.not.is.null,brief_md.not.is.null');
     expect(r.per_table[0].applied).toBe(2);
     expect(r.per_table[1].applied).toBeUndefined();
+    expect(r.per_table[3].applied).toBe(1);
   });
   it('never touches rules, closures, the ledger, snapshots, labels, credentials or staged items', async () => {
     const sb = stub({ counts: { michael_brief_runs: 1, michael_gmail_triage_items: 1, michael_calendar_day: 1 } });
     await runRetention({ sb, argv: ['--apply'], now: NOW });
     const touched = new Set(sb.froms);
-    for (const t of NEVER_TOUCHED) if (t !== 'michael_feeder_runs') expect(touched.has(t), t).toBe(false);
-    expect(RETENTION_TARGETS.map((t) => t.table)).toEqual(['michael_brief_runs', 'michael_gmail_triage_items', 'michael_calendar_day']);
+    for (const t of NEVER_TOUCHED) expect(touched.has(t), t).toBe(false);
+    expect(RETENTION_TARGETS.map((t) => t.table)).toEqual(['michael_brief_runs', 'michael_gmail_triage_items', 'michael_calendar_day', 'michael_feeder_runs']);
   });
   it('the stamp attempt increments from the newest retention row of the same ET day', async () => {
     const sb = stub({ tables: { michael_feeder_runs: [{ attempt: 3 }] } });
