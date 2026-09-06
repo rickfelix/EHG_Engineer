@@ -1035,23 +1035,33 @@ export class ValidationOrchestrator {
             // SD-LEO-FIX-REMEDIATE-TYPE-AWARE-001: Check SD type and skip code validation
             // Uses centralized SD-type applicability policy for proper SKIPPED status
             //
-            // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A: gate '4' (the strategic-value composite --
-            // valueDelivered/patternEffectiveness/executiveValidation/processAdherence, all
-            // aliasing to validateGate4LeadFinal) checks whether VALUE was delivered and a
-            // retrospective pattern captured. That is meaningful for every sd_type, including
-            // infrastructure/orchestrator -- it is not "code validation" and must never be
-            // swept up by this skip, which exists to exempt genuinely code-specific validation
-            // (TESTING/GITHUB/E2E) for non-code SD types. Without this exemption, a live specimen
-            // (SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001) completed LEAD-FINAL-APPROVAL at
-            // score 97 with all 4 of these gates silently full-scored via createSkippedResult
-            // (100/100, arithmetically identical to a genuine pass) despite zero real evidence.
+            // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A: LEAD-FINAL-APPROVAL's gate '4' actually has
+            // EIGHT registered rules (TESTING sub-agent, EXEC-TO-PLAN review), not just the four
+            // strategic-value ones this SD was scoped against: valueDelivered/
+            // patternEffectiveness/executiveValidation/processAdherence (gate-4-strategic-value.js,
+            // aliasing to validateGate4LeadFinal) PLUS planToLeadHandoffExists/
+            // userStoriesComplete/retrospectiveExists/prMergeVerification (additional-validators.js,
+            // all seeded weight:0 -- but ValidationOrchestrator.js:401/1336's separate, OUT-OF-SCOPE
+            // `gate.weight || 1.0` falsy-zero defect gives them effective weight 1.0 anyway, so
+            // exempting gate 4 makes THAT defect load-bearing for the binding decision, not merely
+            // adjacent). All eight check whether value was delivered / process was followed --
+            // meaningful for every sd_type, including infrastructure/orchestrator -- not "code
+            // validation". Must never be swept up by this skip, which exists to exempt genuinely
+            // code-specific validation (TESTING/GITHUB/E2E) for non-code SD types. Without this
+            // exemption, a live specimen (SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001)
+            // completed LEAD-FINAL-APPROVAL at score 97 with gate 4 silently full-scored via
+            // createSkippedResult (100/100, arithmetically identical to a genuine pass) despite
+            // zero real evidence.
             //
             // Observe-only rollout (SD_TYPE_SKIP_GUARD_BINDING=true to enforce): 73.7% of the live
-            // fleet (3,624/4,917 non-cancelled SDs) sits in a blanket-skipped sd_type, so
+            // fleet (3,626/4,919 non-cancelled SDs) sits in a blanket-skipped sd_type, so
             // unconditionally exempting gate 4 would immediately start failing/re-scoring a large
-            // share of in-flight SDs. Unbound (default), the skip fires exactly as before -- the
-            // only change is a warning naming what would happen once bound. Bound, gate 4 falls
-            // through to the real validator below instead of returning a fabricated pass.
+            // share of in-flight SDs -- fix the adjacent weight defect FIRST if this is ever bound,
+            // or prMergeVerification/planToLeadHandoffExists/userStoriesComplete/
+            // retrospectiveExists will hard-block real SDs at an unintended effective weight.
+            // Unbound (default), the skip fires exactly as before -- the only change is a warning
+            // naming what would happen once bound. Bound, gate 4 falls through to the real
+            // validator below instead of returning a fabricated pass.
             const isStrategicValueGate = String(gate) === '4';
             const skipGuardBound = process.env.SD_TYPE_SKIP_GUARD_BINDING === 'true';
             if (mergedContext.sd_id || mergedContext.sdId) {

@@ -1,12 +1,16 @@
 /**
  * SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A — buildGatesFromRules' per-gate validator wrapper
  * blanket-skips EVERY DB-rule validator for a NON_CODE sd_type via shouldSkipCodeValidation(),
- * including gate '4' (the strategic-value composite: valueDelivered/patternEffectiveness/
- * executiveValidation/processAdherence, combined weight 1.00). That composite checks whether
- * value was delivered and a retrospective pattern captured -- meaningful for every sd_type,
- * not "code validation". Live specimen: SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001
- * (sd_type=infrastructure) completed LEAD-FINAL-APPROVAL at score 97 with these 4 gates silently
- * full-scored via createSkippedResult (100/100, arithmetically identical to a genuine pass).
+ * including all EIGHT rules registered under gate '4': valueDelivered/patternEffectiveness/
+ * executiveValidation/processAdherence (gate-4-strategic-value.js) PLUS
+ * planToLeadHandoffExists/userStoriesComplete/retrospectiveExists/prMergeVerification
+ * (additional-validators.js, seeded weight:0 but effectively weight 1.0 via the separate,
+ * out-of-scope `gate.weight || 1.0` defect at ValidationOrchestrator.js:401/1336 -- TESTING
+ * sub-agent, EXEC-TO-PLAN review). All eight check whether value/process was delivered --
+ * meaningful for every sd_type, not "code validation". Live specimen:
+ * SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 (sd_type=infrastructure) completed
+ * LEAD-FINAL-APPROVAL at score 97 with gate 4 silently full-scored via createSkippedResult
+ * (100/100, arithmetically identical to a genuine pass).
  *
  * Fix: gate '4' is exempted from the skip ONLY when SD_TYPE_SKIP_GUARD_BINDING=true (observe-only
  * rollout, mirrors the LFA-002 *_BINDING=true precedent given a 73.7% fleet blast radius). Unbound
@@ -51,6 +55,16 @@ function makeOrchestrator(rules, sdTypeRow) {
 const GATE4_RULE = { gate: '4', rule_name: 'valueDelivered', weight: 0.35, required: true };
 const NON_GATE4_RULE = { gate: '2', rule_name: 'someCodeCheck', weight: 0.5, required: true };
 const INFRA_SD = { id: 'sd-under-test', sd_type: 'infrastructure', title: 'test' };
+
+// TESTING sub-agent (EXEC-TO-PLAN review): gate '4' has 4 MORE registered rules beyond the
+// strategic-value composite -- all seeded weight:0 in additional-validators.js, all subject to
+// the same blanket skip, so the exemption (keyed on gate==='4' only) covers them too.
+const ZERO_WEIGHT_GATE4_RULES = [
+  { gate: '4', rule_name: 'planToLeadHandoffExists', weight: 0, required: true },
+  { gate: '4', rule_name: 'userStoriesComplete', weight: 0, required: true },
+  { gate: '4', rule_name: 'retrospectiveExists', weight: 0, required: true },
+  { gate: '4', rule_name: 'prMergeVerification', weight: 0, required: true },
+];
 
 describe('buildGatesFromRules — gate 4 (strategic-value) skip guard', () => {
   it('unbound (default): gate 4 is still SKIPPED for an infrastructure SD, byte-identical to before the fix', async () => {
@@ -112,4 +126,33 @@ describe('buildGatesFromRules — gate 4 (strategic-value) skip guard', () => {
     expect(realValidatorSpy).toHaveBeenCalledTimes(1);
     expect(result.passed).toBe(true);
   });
+
+  it.each(ZERO_WEIGHT_GATE4_RULES)(
+    'the zero-weight gate-4 rule $rule_name is also exempted when bound (the fix is keyed on gate===4, not on any specific rule_name)',
+    async (rule) => {
+      process.env.SD_TYPE_SKIP_GUARD_BINDING = 'true';
+      const { orchestrator, realValidatorSpy } = makeOrchestrator([rule], INFRA_SD);
+      const gates = await orchestrator.buildGatesFromRules([], 'LEAD-FINAL-APPROVAL', {
+        sd_id: INFRA_SD.id,
+      });
+      const gate = gates.find((g) => g.meta?.ruleName === rule.rule_name);
+      const result = await gate.validator({});
+      expect(realValidatorSpy).toHaveBeenCalledTimes(1);
+      expect(result.status).not.toBe('SKIPPED');
+    },
+  );
+
+  it.each(ZERO_WEIGHT_GATE4_RULES)(
+    'the zero-weight gate-4 rule $rule_name is still SKIPPED unbound (default, no behavior change)',
+    async (rule) => {
+      const { orchestrator, realValidatorSpy } = makeOrchestrator([rule], INFRA_SD);
+      const gates = await orchestrator.buildGatesFromRules([], 'LEAD-FINAL-APPROVAL', {
+        sd_id: INFRA_SD.id,
+      });
+      const gate = gates.find((g) => g.meta?.ruleName === rule.rule_name);
+      const result = await gate.validator({});
+      expect(result.status).toBe('SKIPPED');
+      expect(realValidatorSpy).not.toHaveBeenCalled();
+    },
+  );
 });
