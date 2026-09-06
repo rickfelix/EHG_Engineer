@@ -95,7 +95,7 @@ describe('Feedback Routes', () => {
         resolution_sd_id: null,
       };
 
-      const newSD = { id: 'uuid-123', legacy_id: 'SD-FB-20260317-ABC' };
+      const newSD = { id: 'uuid-123', sd_key: 'SD-FB-20260317-ABC' };
 
       // Fetch feedback
       const fetchChain = {

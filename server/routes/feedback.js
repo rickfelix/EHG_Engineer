@@ -82,7 +82,7 @@ router.post('/:id/promote-to-sd', async (req, res) => {
 
     // Create the Strategic Directive
     const sdData = {
-      legacy_id: sdId,
+      sd_key: sdId,
       title: title || feedback.title,
       description: description || feedback.description || `Promoted from feedback: ${feedback.title}`,
       status: 'draft',
@@ -105,7 +105,7 @@ router.post('/:id/promote-to-sd', async (req, res) => {
     const { data: newSD, error: insertError } = await dbLoader.supabase
       .from('strategic_directives_v2')
       .insert(sdData)
-      .select('id, legacy_id')
+      .select('id, sd_key')
       .single();
 
     if (insertError) {
@@ -117,7 +117,7 @@ router.post('/:id/promote-to-sd', async (req, res) => {
     const { error: updateError } = await dbLoader.supabase
       .from('feedback')
       .update({
-        resolution_sd_id: newSD.legacy_id,
+        resolution_sd_id: newSD.sd_key,
         status: 'triaged',
         updated_at: new Date().toISOString()
       })
@@ -127,11 +127,11 @@ router.post('/:id/promote-to-sd', async (req, res) => {
       console.error('⚠️ Failed to update feedback with SD reference:', updateError.message);
     }
 
-    console.log(`✅ [SERVER] Created SD ${newSD.legacy_id} from feedback ${id}`);
+    console.log(`✅ [SERVER] Created SD ${newSD.sd_key} from feedback ${id}`);
 
     res.json({
       success: true,
-      sd_id: newSD.legacy_id,
+      sd_id: newSD.sd_key,
       sd_uuid: newSD.id,
       feedback_id: id,
       message: 'Feedback successfully promoted to Strategic Directive'
