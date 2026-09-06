@@ -1,0 +1,16 @@
+import 'dotenv/config';
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createClient } from '@supabase/supabase-js';
+const W = process.argv[2];
+const { markRatificationEncoded } = await import(pathToFileURL(path.join(W, 'lib/chairman/ratification-writer.mjs')).href);
+const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const manifest = JSON.parse(fs.readFileSync(path.join(W, 'claude-generation-manifest.json'), 'utf8'));
+const markerText = 'ALTIFYAI ELEVEN-001 STAYS COMPLETED AS SHIPPED-ACCEPTANCE-PENDING; THE STAGE-23 WALK IS THE CI-FORM EXIT PREDICATE ON SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 (ratification c741130b)';
+const adam = fs.readFileSync(path.join(W, 'CLAUDE_ADAM.md'), 'utf8'); const coord = fs.readFileSync(path.join(W, 'CLAUDE_COORDINATOR.md'), 'utf8');
+console.log('marker in ADAM:', adam.includes(markerText), 'in COORDINATOR:', coord.includes(markerText), 'manifest 601:', manifest.section_digests.byId['601']);
+const r = await markRatificationEncoded(s, 'c741130b-793b-4b64-ae96-1b764dd3c29f', { sectionId: '601', manifestHash: manifest.section_digests.byId['601'], markerText, repoRoot: W });
+console.log('mark result:', JSON.stringify(r).slice(0, 600));
+const { data } = await s.from('chairman_ratifications').select('id,encoded_at,encoded_ref,marker_text').eq('id', 'c741130b-793b-4b64-ae96-1b764dd3c29f').single();
+console.log('readback:', JSON.stringify(data).slice(0, 400));
