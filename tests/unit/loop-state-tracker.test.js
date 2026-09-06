@@ -5,6 +5,14 @@ const require = createRequire(import.meta.url);
 const tracker = require('../../scripts/lib/sessions/loop-state-tracker.cjs');
 const { withSchemaDriftDetection } = require('../../lib/supabase-client-schema-drift.cjs');
 
+// Every test below passes options.supabase explicitly, so setLoopState never
+// reaches createSupabaseServiceClient() / a real client — this mock (matching
+// the idiom in tests/unit/client-factory-schema-drift-throw.test.js, the
+// canonical unit test for the same imported module) makes that unreachable
+// path provably so, satisfying audit-db-test-guards.mjs's static DB-module-
+// specifier signal on the supabase-client-schema-drift.cjs import above.
+vi.mock('@supabase/supabase-js', () => ({ createClient: vi.fn() }));
+
 // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001 unit tests.
 // Covers: constants match DB whitelist, validation, missing-session graceful
 // handling, success path, and the supabase-unavailable fallback.
@@ -63,16 +71,20 @@ describe('loop-state-tracker: setLoopState', () => {
     process.stderr.write = originalWrite;
   });
 
-  // QF-20260905-970: the real postgrest-js .update().eq().select(cols) chain
-  // resolves { data, error } — count is NOT part of this shape (a {count,head}
-  // options object on this arity-1 select() is silently discarded on the wire).
-  // The mock must match that contract, not the pre-fix code's mental model of it.
-  function makeMockSupabase({ updateError = null, data = [{ session_id: 'sess-12345678' }] } = {}) {
+  // QF-20260905-970: the real chain is .update().eq().select(cols).maybeSingle()
+  // — session_id carries a UNIQUE DB constraint, so maybeSingle() is exact and
+  // resolves { data: object|null, error } (never an array, never `count`; a
+  // {count,head} options object on this arity-1 select() would be silently
+  // discarded on the wire). The mock must match that contract, not the pre-fix
+  // code's mental model of it.
+  function makeMockSupabase({ updateError = null, data = { session_id: 'sess-12345678' } } = {}) {
     return {
       from: vi.fn(() => ({
         update: vi.fn(() => ({
           eq: vi.fn(() => ({
-            select: vi.fn(async () => ({ error: updateError, data: updateError ? null : data }))
+            select: vi.fn(() => ({
+              maybeSingle: vi.fn(async () => ({ error: updateError, data: updateError ? null : data }))
+            }))
           }))
         }))
       }))
@@ -93,7 +105,7 @@ describe('loop-state-tracker: setLoopState', () => {
   });
 
   it('returns ok when update affects one row', async () => {
-    const supa = makeMockSupabase({ data: [{ session_id: 'sess-12345678' }] });
+    const supa = makeMockSupabase({ data: { session_id: 'sess-12345678' } });
     const result = await tracker.setLoopState('sess-12345678', tracker.LOOP_STATE_AWAITING_TICK, {
       supabase: supa
     });
@@ -101,9 +113,9 @@ describe('loop-state-tracker: setLoopState', () => {
     expect(supa.from).toHaveBeenCalledWith('claude_sessions');
   });
 
-  it('returns skipped + warns to stderr when session row not found (empty data)', async () => {
+  it('returns skipped + warns to stderr when session row not found (null data)', async () => {
     const result = await tracker.setLoopState('sess-missing', tracker.LOOP_STATE_EXITED, {
-      supabase: makeMockSupabase({ data: [] })
+      supabase: makeMockSupabase({ data: null })
     });
     expect(result).toEqual({ ok: false, skipped: 'session_not_found' });
     const combined = stderrMessages.join('');
@@ -112,8 +124,8 @@ describe('loop-state-tracker: setLoopState', () => {
   });
 
   // QF-20260905-970 regression canary: setLoopState's real update chain is
-  // .update().eq().select('session_id') — a SINGLE arg, run through the
-  // production schema-drift proxy. A prior version called
+  // .update().eq().select('session_id').maybeSingle() — a SINGLE-arg select(),
+  // run through the production schema-drift proxy. A prior version called
   // .select('session_id', { count: 'exact', head: true }); that extra arg is
   // silently dropped by postgrest-js's arity-1 select() on a mutation chain,
   // so `count` always resolved null and the proxy rejected every SUCCESSFUL
@@ -123,7 +135,9 @@ describe('loop-state-tracker: setLoopState', () => {
       from: () => ({
         update: () => ({
           eq: () => ({
-            select: async () => ({ data: [{ session_id: 'sess-12345678' }], error: null, count: null })
+            select: () => ({
+              maybeSingle: async () => ({ data: { session_id: 'sess-12345678' }, error: null, count: null })
+            })
           })
         })
       })
