@@ -2,23 +2,29 @@
 // Pure argv/content assertions plus main() driven through injected deps: no schtasks invocation, no host mutation.
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
-import { MICHAEL_TASKS, INTERVAL_MINUTES, START_TIME, assertTaskName, commandFor, buildPlan, parseArgs, main, wrapperPromoted, scriptFileOf } from '../../../scripts/setup-michael-host-tasks.mjs';
+import { MICHAEL_TASKS, INTERVAL_MINUTES, START_TIME, assertTaskName, commandFor, buildPlan, parseArgs, main, wrapperPromoted, scriptFileOf, wrapperPathFromXml } from '../../../scripts/setup-michael-host-tasks.mjs';
 import { TASK_NAME_ILLEGAL_CHARS } from '../../../scripts/setup-alarm-cron-tasks.mjs';
 
 const REPO = 'C:\\repo with space';
 
 /** exists: boolean for every path, or a predicate(path). files: path -> content for readFileSync (the wrappers on disk). */
-function deps({ platform = 'win32', schtasks = () => ({ ok: true, stdout: '' }), exists = true, files = {} } = {}) {
-  const logs = [], errors = [], warns = [], calls = [], writes = [];
+function deps({ platform = 'win32', schtasks = () => ({ ok: true, stdout: '' }), exists = true, files = {}, renameFails = false } = {}) {
+  const logs = [], errors = [], warns = [], calls = [], writes = [], renames = [], unlinks = [];
   const has = (p) => (typeof exists === 'function' ? exists(p) : exists);
   return {
     d: {
       platform, repoRoot: REPO,
       logger: { log: (m) => logs.push(String(m)), error: (m) => errors.push(String(m)), warn: (m) => { warns.push(String(m)); errors.push(String(m)); } },
       runSchtasks: (args) => { calls.push(args); return schtasks(args); },
-      fs: { existsSync: (p) => has(p), mkdirSync: () => {}, writeFileSync: (p, c) => writes.push([p, c]), readFileSync: (p) => { if (!(p in files)) throw new Error('ENOENT'); return files[p]; } },
+      fs: {
+        existsSync: (p) => has(p), mkdirSync: () => {},
+        writeFileSync: (p, c) => writes.push([p, c]),
+        renameSync: (from, to) => { renames.push([from, to]); if (renameFails) throw new Error('EPERM'); },
+        unlinkSync: (p) => unlinks.push(p),
+        readFileSync: (p) => { if (!(p in files)) throw new Error('ENOENT'); return files[p]; },
+      },
     },
-    logs, errors, warns, calls, writes,
+    logs, errors, warns, calls, writes, renames, unlinks,
   };
 }
 const GMAIL_WRAPPER = path.join(REPO, 'scripts', 'cron', 'michael-gmail-triage-task.cmd');
@@ -94,13 +100,14 @@ describe('main (injected deps, no host mutation)', () => {
   it('register writes the three wrappers and runs three /Create calls; --with-modify promotes only gmail-triage', async () => {
     const { d, calls, writes } = deps();
     expect(await main(['node', 'x'], d)).toMatchObject({ exitCode: 0, action: 'registered', withModify: false });
-    expect(writes.map(([p]) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd', 'michael-calendar-read-task.cmd', 'michael-gmail-triage-task.cmd']);
+    expect(writes.map(([p]) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new']);
     expect(calls).toHaveLength(3);
     for (const c of calls) { expect(c[0]).toBe('/Create'); expect(c).not.toContain('/RU'); expect(c).not.toContain('/NP'); }
     expect(writes.every(([, c]) => !/--modify/.test(c))).toBe(true);
     const p = deps();
     expect(await main(['node', 'x', '--with-modify'], p.d)).toMatchObject({ exitCode: 0, action: 'registered', withModify: true });
-    expect(p.writes.filter(([, c]) => /--modify/.test(c)).map(([f]) => path.basename(f))).toEqual(['michael-gmail-triage-task.cmd']);
+    expect(p.writes.filter(([, c]) => /--modify/.test(c)).map(([f]) => path.basename(f))).toEqual(['michael-gmail-triage-task.cmd.new']);
+    expect(p.renames.map(([, to]) => path.basename(to))).toContain('michael-gmail-triage-task.cmd');
   });
   it('refuses to register when run-hidden.vbs is missing; a failed /Create yields exit 1', async () => {
     const { d, calls } = deps({ exists: false });
@@ -116,10 +123,24 @@ describe('main (injected deps, no host mutation)', () => {
     const promoted = deps({ files: { [GMAIL_WRAPPER]: `cd /d "${REPO}"\r\ncall node scripts/michael/gmail-triage.mjs --apply --modify\r\n` } });
     expect(await main(['node', 'x'], promoted.d)).toMatchObject({ exitCode: 0, action: 'registered', withModify: false });
     expect(promoted.warns.join('\n')).toMatch(/DEMOTES/);
-    expect(deps().warns).toEqual([]);
+    const plain = deps({ files: { [GMAIL_WRAPPER]: 'call node scripts/michael/gmail-triage.mjs --apply\r\n' } });
+    expect(await main(['node', 'x'], plain.d)).toMatchObject({ exitCode: 0, action: 'registered' });
+    expect(plain.warns).toEqual([]);
     const f = deps({ schtasks: (args) => (args[2] === 'EHG Michael calendar-read' ? { ok: false, code: 1, stderr: 'ERROR: Access is denied.' } : { ok: true, stdout: 'SUCCESS' }) });
     expect(await main(['node', 'x'], f.d)).toMatchObject({ exitCode: 1, action: 'registered' });
     expect(f.errors.join('\n')).toMatch(/Access is denied/);
+    // the wrapper is swapped in only after /Create succeeds: the failed task's staged wrapper is removed, its old wrapper untouched
+    expect(f.renames.map(([, to]) => path.basename(to))).toEqual(['michael-tasks-classifier-task.cmd', 'michael-gmail-triage-task.cmd']);
+    expect(f.unlinks.map((p) => path.basename(p))).toEqual(['michael-calendar-read-task.cmd.new']);
+    expect(f.errors.join('\n')).toMatch(/left unchanged/);
+    // a promotion whose /Create is refused never reaches the live wrapper
+    const denied = deps({ schtasks: (args) => (args[2] === 'EHG Michael gmail-triage' ? { ok: false, code: 1, stderr: 'ERROR: Access is denied.' } : { ok: true, stdout: 'SUCCESS' }) });
+    expect(await main(['node', 'x', '--with-modify'], denied.d)).toMatchObject({ exitCode: 1 });
+    expect(denied.renames.some(([, to]) => /gmail/.test(to))).toBe(false);
+    expect(denied.unlinks).toEqual([path.join(REPO, 'scripts', 'cron', 'michael-gmail-triage-task.cmd.new')]);
+    const swap = deps({ renameFails: true });
+    expect(await main(['node', 'x'], swap.d)).toMatchObject({ exitCode: 1 });
+    expect(swap.errors.join('\n')).toMatch(/runs the PREVIOUS wrapper/);
   });
   it('--status queries each task; --remove deletes each; --verify reads the split <Command>/<Arguments> XML and reports the shadow phase', async () => {
     const s = deps({ schtasks: () => ({ ok: true, stdout: 'TaskName: x' }) });
@@ -128,18 +149,32 @@ describe('main (injected deps, no host mutation)', () => {
     const rm = deps();
     expect(await main(['node', 'x', '--remove'], rm.d)).toEqual({ exitCode: 0, action: 'removed' });
     expect(rm.calls.map((c) => c.slice(0, 3))).toEqual(MICHAEL_TASKS.map((t) => ['/Delete', '/TN', t.taskName]));
-    const xml = () => `<Task><Actions><Exec><Command>wscript.exe</Command><Arguments>//B "${path.join(REPO, 'scripts', 'cron', 'run-hidden.vbs')}" "${path.join(REPO, 'scripts', 'cron', 'michael-x-task.cmd')}"</Arguments></Exec></Actions><Triggers><TimeTrigger><Repetition><Interval>PT15M</Interval></Repetition></TimeTrigger></Triggers></Task>`;
-    const v = deps({ schtasks: () => ({ ok: true, stdout: xml() }) });
+    const wrapperOf = (name) => path.join(REPO, 'scripts', 'cron', `michael-${name}-task.cmd`);
+    const xmlFor = (wrapper) => `<Task><Actions><Exec><Command>wscript.exe</Command><Arguments>//B "${path.join(REPO, 'scripts', 'cron', 'run-hidden.vbs')}" "${wrapper}"</Arguments></Exec></Actions><Triggers><TimeTrigger><Repetition><Interval>PT15M</Interval></Repetition></TimeTrigger></Triggers></Task>`;
+    // each query answers with the XML of the task asked about, naming that task's own wrapper
+    const perTask = (args) => ({ ok: true, stdout: xmlFor(wrapperOf(MICHAEL_TASKS.find((t) => t.taskName === args[2]).feeder)) });
+    expect(wrapperPathFromXml(xmlFor('C:\\x\\w.cmd'))).toBe('C:\\x\\w.cmd');
+    expect(wrapperPathFromXml('<Task></Task>')).toBe(null);
+    const v = deps({ schtasks: perTask });
     const r = await main(['node', 'x', '--verify'], v.d);
     expect(r).toMatchObject({ exitCode: 0, action: 'verified' });
     expect(r.results.map((x) => x.ok)).toEqual([true, true, true]);
+    expect(r.results.map((x) => x.wrapper)).toEqual(MICHAEL_TASKS.map((t) => wrapperOf(t.feeder)));
     expect(v.logs.find((l) => /gmail-triage/.test(l))).toMatch(/shadow phase/);
-    // the promotion lives in the wrapper .cmd (the XML never carries --modify): --verify reads it from there
-    const p = deps({ schtasks: () => ({ ok: true, stdout: xml() }), files: { [GMAIL_WRAPPER]: 'call node scripts/michael/gmail-triage.mjs --apply --modify\r\n' } });
+    // the promotion lives in the wrapper .cmd the OS launches (the XML never carries --modify): --verify reads THAT file
+    const p = deps({ schtasks: perTask, files: { [GMAIL_WRAPPER]: 'call node scripts/michael/gmail-triage.mjs --apply --modify\r\n' } });
     const pr = await main(['node', 'x', '--verify'], p.d);
     expect(pr.results.find((x) => /gmail/.test(x.taskName)).modify).toBe(true);
     expect(p.logs.find((l) => /gmail-triage/.test(l))).toMatch(/--modify PROMOTED/);
     expect(pr.results.filter((x) => x.modify)).toHaveLength(1);
+    // a task launching another worktree's wrapper, or a wrapper that does not exist, fails verify: never 'healthy shadow phase'
+    const other = deps({ schtasks: (args) => (args[2] === 'EHG Michael gmail-triage' ? { ok: true, stdout: xmlFor('C:\\other-worktree\\scripts\\cron\\michael-gmail-triage-task.cmd') } : perTask(args)) });
+    const or = await main(['node', 'x', '--verify'], other.d);
+    expect(or.exitCode).toBe(1); expect(or.results.find((x) => /gmail/.test(x.taskName))).toMatchObject({ ok: false, modify: false });
+    expect(other.errors.join('\n')).toMatch(/launches C:\\other-worktree/);
+    const gone = deps({ schtasks: perTask, exists: (f) => f !== GMAIL_WRAPPER });
+    const gr = await main(['node', 'x', '--verify'], gone.d);
+    expect(gr.exitCode).toBe(1); expect(gone.errors.join('\n')).toMatch(/does not exist/);
     expect(wrapperPromoted(GMAIL_WRAPPER, { existsSync: () => true, readFileSync: () => 'call node x.mjs --apply --modifying' })).toBe(false);
     const bare = deps({ schtasks: () => ({ ok: true, stdout: '<Task><Actions><Exec><Command>C:\\x\\michael-x-task.cmd</Command></Exec></Actions></Task>' }) });
     expect((await main(['node', 'x', '--verify'], bare.d)).exitCode).toBe(1);

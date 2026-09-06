@@ -127,6 +127,14 @@ export function wrapperPromoted(wrapperPath, fsx = fs) {
   try { return fsx.existsSync(wrapperPath) && /(^|\s)--modify(\s|$)/.test(fsx.readFileSync(wrapperPath, 'utf8')); } catch { return false; }
 }
 
+/** Pure: the wrapper .cmd the OS task actually launches, read from the XML <Arguments> (the second quoted path); null when absent. */
+export function wrapperPathFromXml(xml) {
+  const m = /<Arguments>([\s\S]*?)<\/Arguments>/i.exec(String(xml || ''));
+  if (!m) return null;
+  const quoted = [...m[1].replace(/&quot;/g, '"').matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+  return quoted.length >= 2 ? quoted[1] : null;
+}
+
 /** Pure: the script file each plan entry launches (first token of its command line). */
 export function scriptFileOf(plan, repoRoot) {
   return path.join(repoRoot, String(plan.script).split(/\s+/)[0]);
@@ -171,11 +179,19 @@ export async function main(argv = process.argv, deps = {}) {
         allOk = false; results.push({ taskName: t.taskName, ok: false }); continue;
       }
       const verdict = verifyHiddenLaunch(q.stdout);
-      // the XML carries only the launcher and the wrapper path; the promotion is read from the wrapper itself
-      const modify = t.promotable ? wrapperPromoted(path.join(repoRoot, t.wrapperRelPath), fsx) : false;
-      if (!verdict.ok) { for (const p of verdict.problems) logger.error(`${tag} VERIFY FAILED (${t.taskName}) — ${p}`); allOk = false; }
+      const problems = [...verdict.problems];
+      // the XML carries only the launcher and the wrapper path; the promotion is read from THE WRAPPER THE OS LAUNCHES,
+      // which must be this repo's wrapper (another worktree's is a different registration) and must exist on disk
+      const expected = path.join(repoRoot, t.wrapperRelPath);
+      const launched = wrapperPathFromXml(q.stdout);
+      if (!launched) problems.push('the task action names no wrapper .cmd');
+      else if (path.resolve(launched).toLowerCase() !== path.resolve(expected).toLowerCase()) problems.push(`the task launches ${launched}, not this repo's ${expected}`);
+      else if (!fsx.existsSync(launched)) problems.push(`the launched wrapper ${launched} does not exist`);
+      const ok = problems.length === 0;
+      const modify = ok && t.promotable ? wrapperPromoted(launched, fsx) : false;
+      if (!ok) { for (const p of problems) logger.error(`${tag} VERIFY FAILED (${t.taskName}) — ${p}`); allOk = false; }
       else logger.log(`${tag} '${t.taskName}' VERIFIED — hidden-window launch, repeating, enabled${t.promotable ? (modify ? ', --modify PROMOTED' : ', shadow phase (no --modify)') : ''}`);
-      results.push({ taskName: t.taskName, ok: verdict.ok, modify });
+      results.push({ taskName: t.taskName, ok, modify, wrapper: launched });
     }
     return { exitCode: allOk ? 0 : 1, action: 'verified', results };
   }
@@ -219,16 +235,28 @@ export async function main(argv = process.argv, deps = {}) {
 
   let allOk = true;
   for (const p of plan) {
+    // The wrapper is what a task already registered at this path runs on its next fire, so a promotion or demotion
+    // takes effect the moment the file changes. It is therefore staged as <wrapper>.new and swapped in only after
+    // schtasks /Create succeeds; a failed /Create leaves the previous wrapper untouched (adversarial review of PR 8379).
+    const staged = `${p.wrapperPath}.new`;
     try {
       fsx.mkdirSync(path.dirname(p.wrapperPath), { recursive: true });
-      fsx.writeFileSync(p.wrapperPath, p.wrapperContent, 'utf8');
+      fsx.writeFileSync(staged, p.wrapperContent, 'utf8');
     } catch (err) {
-      logger.error(`${tag} could not write wrapper ${p.wrapperPath}: ${err.message}`);
+      logger.error(`${tag} could not write wrapper ${staged}: ${err.message}`);
       allOk = false; continue;
     }
     const res = runSchtasks(p.createArgs);
-    if (res.ok) logger.log(`${tag} registered '${p.taskName}' — every ${INTERVAL_MINUTES} min (window ${p.windowEt} ET enforced in-script) → ${p.wrapperRelPath} (hidden launch)${p.promotable ? (args.withModify ? ' [--modify PROMOTED]' : ' [shadow phase: no --modify]') : ''}`);
-    else { logger.error(`${tag} schtasks /Create failed for '${p.taskName}' (code ${res.code}): ${(res.stderr || '').trim()}`); allOk = false; }
+    if (!res.ok) {
+      try { fsx.unlinkSync(staged); } catch { /* best effort */ }
+      logger.error(`${tag} schtasks /Create failed for '${p.taskName}' (code ${res.code}): ${(res.stderr || '').trim()} — wrapper ${p.wrapperRelPath} left unchanged`);
+      allOk = false; continue;
+    }
+    try { fsx.renameSync(staged, p.wrapperPath); } catch (err) {
+      logger.error(`${tag} task '${p.taskName}' registered but the wrapper swap failed (${err.message}); the task runs the PREVIOUS wrapper until a re-run succeeds`);
+      allOk = false; continue;
+    }
+    logger.log(`${tag} registered '${p.taskName}' — every ${INTERVAL_MINUTES} min (window ${p.windowEt} ET enforced in-script) → ${p.wrapperRelPath} (hidden launch)${p.promotable ? (args.withModify ? ' [--modify PROMOTED]' : ' [shadow phase: no --modify]') : ''}`);
   }
   logger.log(`${tag} run --verify to read the definitions back out of the OS.`);
   return { exitCode: allOk ? 0 : 1, action: 'registered', withModify: args.withModify };
