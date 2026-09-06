@@ -33,6 +33,7 @@ import { LAST_RUN_FIELD } from '../../../lib/drive-loop/report-posture.js';
 import { makeCapacityVerdictPersist, makeCapacityVerdictUnavailablePersist } from '../../../scripts/lib/capacity-verdict-store.mjs';
 import { gatherCapacityInputs } from '../../../scripts/lib/capacity-inputs.mjs';
 import { hourlyWindowKey } from '../../../scripts/cron/drive-report-hourly-sweep.mjs';
+import { EARNING_POINTS, LEG_POINTS } from '../../../lib/drive-loop/score/leg4-capacity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../..');
@@ -828,18 +829,22 @@ describe('FR-3 — leg4 is injected, not declared unavailable', () => {
     expect(leg.verdict_row_id, 'the leg must cite the row that was written').toBe('verdict-row-1');
   });
 
-  it('TS-3 — SURPLUS does not earn the healthy points, TIGHT does', async () => {
-    // The bidirectional gauge, end to end through the wiring. A build that awarded points for
-    // SURPLUS scores HIGHER and fails here — that is what makes the mistake attractive.
+  it('TS-3 — SURPLUS does not earn the full points, TIGHT does (ratified be6e9d73, under ffebbd68)', async () => {
+    // The bidirectional gauge, end to end through the wiring. A build that awarded FULL points
+    // (the same as TIGHT) for SURPLUS scores HIGHER and fails here — that is what makes the
+    // mistake attractive. SURPLUS is ratified to earn HALF (EARNING_POINTS.SURPLUS), not zero and
+    // not the full LEG_POINTS.
     const surplus = await scoreCapacityLeg({ gatherCapacity, persistVerdict: okPersist([]) });
-    expect(surplus.points.value, 'SURPLUS is the flooded pole, not a good run').toBe(0);
+    expect(surplus.points.value, 'SURPLUS is the flooded pole, not TIGHT — it must not earn full points')
+      .toBe(EARNING_POINTS.SURPLUS);
+    expect(surplus.points.value).toBeLessThan(LEG_POINTS);
 
     // beltDepth 2, demandSoon 1, buffer 1 -> deficit 0 -> TIGHT.
     const tight = await scoreCapacityLeg({
       gatherCapacity: async () => ({ idleNow: 1, freeingSoon: 0, claimableCount: 2, openQfCount: 0 }),
       persistVerdict: okPersist([]),
     });
-    expect(tight.points.value, 'TIGHT is the target — the positive control').toBe(2);
+    expect(tight.points.value, 'TIGHT is the target — the positive control').toBe(LEG_POINTS);
   });
 
   it('TS-2 — SEEDED: a failing persist leaves the leg UNMEASURED, never scored', async () => {

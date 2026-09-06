@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { computeBeltVerdict } from '../../lib/drive-loop/belt-verdict.js';
-import { VERDICTS, HEALTHY_VERDICTS } from '../../lib/drive-loop/score/leg4-capacity.js';
+import { VERDICTS, EARNING_POINTS, LEG_POINTS } from '../../lib/drive-loop/score/leg4-capacity.js';
 
 const beltCapacityVerdictsSnapshot = JSON.parse(
   readFileSync(new URL('../fixtures/belt-capacity-verdicts-snapshot.json', import.meta.url), 'utf8')
@@ -69,9 +69,10 @@ describe('the returned shape is exactly what leg4 injects for', () => {
     for (const c of cases) expect(VERDICTS).toContain(computeBeltVerdict(c).verdict);
   });
 
-  it('TIGHT is the only one leg4 scores as healthy — SURPLUS is not', () => {
-    expect(HEALTHY_VERDICTS).toEqual(['TIGHT']);
-    expect(HEALTHY_VERDICTS).not.toContain('SURPLUS');
+  it('TIGHT is the only one leg4 scores for full points — SURPLUS is not', () => {
+    // Ratified be6e9d73 (under ffebbd68): TIGHT earns the full LEG_POINTS; SURPLUS earns half.
+    expect(EARNING_POINTS.TIGHT).toBe(LEG_POINTS);
+    expect(EARNING_POINTS.SURPLUS).toBeLessThan(LEG_POINTS);
   });
 });
 
