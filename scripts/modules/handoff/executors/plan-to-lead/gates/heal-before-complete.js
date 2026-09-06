@@ -38,6 +38,7 @@ import { GATE_REASON_CODES, MAX_HEAL_ITERATIONS } from './gate-reason-codes.js';
 // so the comment above ("single source as the LEAD-TO-PLAN vision-score gate") described an
 // intention the import did not implement, and the two tables drifted apart unobserved.
 import { countAddressableDimensions, calculateDynamicThreshold, SD_TYPE_THRESHOLDS } from '../../../../../../lib/handoff/threshold-resolver.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Is this rubric_snapshot an sd-heal snapshot? — SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-3.
@@ -569,10 +570,13 @@ export function createHealBeforeCompleteGate(supabase) {
       const sdUuid = ctx.sd?.id || ctx.sdId;
 
       // Parent orchestrators skip heal gate — children are individually healed
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'heal-before-complete:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Orchestrator SD with ${childSDs.length} children — skipping heal gate`);

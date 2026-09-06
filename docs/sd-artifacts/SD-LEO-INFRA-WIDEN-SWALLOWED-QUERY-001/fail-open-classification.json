@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T13:50:49.905Z",
+  "generated_at": "2026-09-06T14:09:09.749Z",
   "counts": {
-    "no_catch": 49,
+    "no_catch": 39,
     "has_catch": 115
   },
   "results": [
@@ -109,27 +109,6 @@
       "kind": "data",
       "snippet": "const { data: claimer } = await supabase",
       "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/cli/cli-main.js",
-      "line": 926,
-      "kind": "data",
-      "snippet": "const { data: completedHandoffs } = await supabaseForCheck",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/cli/cli-main.js",
-      "line": 1478,
-      "kind": "data",
-      "snippet": "const { data: depSDs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/cli/cli-main.js",
-      "line": 1491,
-      "kind": "data",
-      "snippet": "const { data: claimSession } = await supabase",
-      "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/continuation-state.js",
@@ -566,27 +545,6 @@
       "classification": "has_catch"
     },
     {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js",
-      "line": 24,
-      "kind": "data",
-      "snippet": "const { data: childSDs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js",
-      "line": 39,
-      "kind": "data",
-      "snippet": "const { data: profile } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-validation.js",
-      "line": 86,
-      "kind": "data",
-      "snippet": "const { data: testMappings } = await supabase",
-      "classification": "no_catch"
-    },
-    {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/architecture-plan-validation.js",
       "line": 43,
       "kind": "data",
@@ -616,168 +574,161 @@
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 197,
+      "line": 198,
       "kind": "data",
       "snippet": "const { data: preHandoffs } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 206,
+      "line": 207,
       "kind": "data",
       "snippet": "const { data: stories } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 232,
+      "line": 233,
       "kind": "data",
       "snippet": "const { data: prd } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 249,
+      "line": 250,
       "kind": "data",
       "snippet": "const { data: retro } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 271,
+      "line": 272,
       "kind": "data",
       "snippet": "const { data: handoffs } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 299,
+      "line": 300,
       "kind": "data",
       "snippet": "const { data: sd } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 572,
-      "kind": "data",
-      "snippet": "const { data: childSDs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 596,
+      "line": 600,
       "kind": "data",
       "snippet": "const { data: parentCheck } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 626,
+      "line": 630,
       "kind": "data",
       "snippet": "const { data: sdRecord } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 730,
+      "line": 734,
       "kind": "data",
       "snippet": "const { data: visionDocs } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 740,
+      "line": 744,
       "kind": "count",
       "snippet": "const { count: iterCount } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 802,
+      "line": 806,
       "kind": "data",
       "snippet": "const { data: t2VisionDocs } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 806,
+      "line": 810,
       "kind": "count",
       "snippet": "const { count: t2IterCount } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 852,
+      "line": 856,
       "kind": "data",
       "snippet": "const { data: t3VisionDocs } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 857,
+      "line": 861,
       "kind": "count",
       "snippet": "const { count: t3IterCount } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 952,
+      "line": 956,
       "kind": "data",
       "snippet": "const { data: scoreDims } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 957,
+      "line": 961,
       "kind": "data",
       "snippet": "const { data: sdForOverride } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 1021,
+      "line": 1025,
       "kind": "data",
       "snippet": "const { data: visionScores } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 1047,
+      "line": 1051,
       "kind": "data",
       "snippet": "const { data: sdRecord } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 1054,
+      "line": 1058,
       "kind": "data",
       "snippet": "const { data: parentSD } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 1165,
+      "line": 1169,
       "kind": "data",
       "snippet": "const { data: reVisionDocs } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 1172,
+      "line": 1176,
       "kind": "count",
       "snippet": "const { count: reIterCount } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 1207,
+      "line": 1211,
       "kind": "data",
       "snippet": "const { data: reScopedDocs } = await supabase",
       "classification": "has_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.js",
-      "line": 1211,
+      "line": 1215,
       "kind": "count",
       "snippet": "const { count: reScopedIter } = await supabase",
       "classification": "has_catch"
@@ -816,27 +767,6 @@
       "kind": "data",
       "snippet": "const { data: parentCheck } = await supabase",
       "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/traceability-gates.js",
-      "line": 35,
-      "kind": "data",
-      "snippet": "const { data: execToPlanHandoff } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/traceability-gates.js",
-      "line": 86,
-      "kind": "data",
-      "snippet": "const { data: planToExecHandoff } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/traceability-gates.js",
-      "line": 93,
-      "kind": "data",
-      "snippet": "const { data: execToPlanHandoff } = await supabase",
-      "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/index.js",
