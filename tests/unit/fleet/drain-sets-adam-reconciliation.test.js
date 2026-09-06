@@ -53,10 +53,14 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // +1 each again (30/20/28/26) as of QF-20260906-162: 'signal_receipt' joined
     // BACKPRESSURE_EXEMPT_KINDS (a coordinator delivery receipt must bypass a busy target's
     // backlog cap the same way the six pre-existing exempt kinds do), spread into all four sets.
-    expect(DRAIN_SETS.adam.length).toBe(30);
-    expect(DRAIN_SETS.solomon.length).toBe(20);
-    expect(DRAIN_SETS.coordinator.length).toBe(28);
-    expect(DRAIN_SETS.worker.length).toBe(26);
+    // +1 each again (31/21/29/27) as of SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-
+    // CONSTRAINTS-001: 'capped_pool_broadcast' joined BACKPRESSURE_EXEMPT_KINDS for the same
+    // reason (a fleet-wide over-cap notice must reach every live seat regardless of backlog
+    // depth), spread into all four sets.
+    expect(DRAIN_SETS.adam.length).toBe(31);
+    expect(DRAIN_SETS.solomon.length).toBe(21);
+    expect(DRAIN_SETS.coordinator.length).toBe(29);
+    expect(DRAIN_SETS.worker.length).toBe(27);
   });
 
   it('the 8 reconciled kinds are present in DRAIN_SETS.adam', () => {

@@ -54,6 +54,7 @@ const signal = (id, overrides = {}) => ({
 function mockSupabase({ existingReceipts = [], existenceCheckThrows = false, liveTargets = [] } = {}) {
   const inserted = [];
   const updateCalls = [];
+  const limitCalls = [];
   const live = new Set(liveTargets);
 
   function sessionCoordinationChain() {
@@ -66,7 +67,7 @@ function mockSupabase({ existingReceipts = [], existenceCheckThrows = false, liv
       gt() { return chain; },
       gte() { return chain; },
       order() { return chain; },
-      limit() { return chain; },
+      limit(n) { limitCalls.push(n); return chain; },
       in() {
         if (existenceCheckThrows) throw new Error('existence-check query failed');
         sawIn = true;
@@ -132,31 +133,42 @@ function mockSupabase({ existingReceipts = [], existenceCheckThrows = false, liv
       return genericChain();
     },
   };
-  return { supabase, inserted, updateCalls };
+  return { supabase, inserted, updateCalls, limitCalls };
 }
 
 describe('writeSignalReceipts: filtering', () => {
-  it('writes a receipt only for signal_type=stuck AND severity=high rows', async () => {
+  // SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-1 (AC-1): the stuck+high
+  // filter is REMOVED -- every signal in the enumerated batch, any signal_type/severity, gets
+  // exactly one receipt.
+  it('writes a receipt for every signal in the batch, regardless of signal_type/severity', async () => {
     const a = signal('a');
-    const { supabase, inserted } = mockSupabase({ liveTargets: [a.sender_session] });
-    const signals = [
-      a,
-      { id: 'b', sender_session: targetFor('b'), payload: { signal_type: 'stuck', severity: 'medium' } },
-      { id: 'c', sender_session: targetFor('c'), payload: { signal_type: 'harness-bug', severity: 'high' } },
-    ];
-    const result = await writeSignalReceipts(supabase, COORDINATOR, signals);
-    expect(result).toEqual({ written: 1, skipped: 0 });
-    expect(inserted).toHaveLength(1);
-    expect(inserted[0].target_session).toBe(a.sender_session);
+    const b = { id: 'b', sender_session: targetFor('b'), payload: { signal_type: 'stuck', severity: 'medium' } };
+    const c = { id: 'c', sender_session: targetFor('c'), payload: { signal_type: 'harness-bug', severity: 'high' } };
+    const { supabase, inserted } = mockSupabase({ liveTargets: [a.sender_session, targetFor('b'), targetFor('c')] });
+    const result = await writeSignalReceipts(supabase, COORDINATOR, [a, b, c]);
+    expect(result).toEqual({ written: 3, skipped: 0 });
+    expect(inserted).toHaveLength(3);
+    expect(inserted.map((r) => r.target_session).sort()).toEqual([a.sender_session, targetFor('b'), targetFor('c')].sort());
   });
 
-  it('short-circuits with zero supabase calls when no signal qualifies', async () => {
+  it('short-circuits with zero supabase calls when the batch is empty', async () => {
     let fromCalled = false;
     const supabase = { from: () => { fromCalled = true; } };
-    const signals = [{ id: 'b', sender_session: targetFor('b'), payload: { signal_type: 'stuck', severity: 'low' } }];
-    const result = await writeSignalReceipts(supabase, COORDINATOR, signals);
+    const result = await writeSignalReceipts(supabase, COORDINATOR, []);
     expect(result).toEqual({ written: 0, skipped: 0 });
     expect(fromCalled).toBe(false);
+  });
+
+  // TST-P6 / AC-17: the existence-check bound must be DERIVED from the batch's own length, never
+  // a fixed literal -- the old .limit(50) was justified only by the stuck+high filter's 1-2-row
+  // premise, which the widening above removes.
+  it('AC-17: the existence-check limit scales with the enumerated batch size, not a fixed literal', async () => {
+    const twentySignals = Array.from({ length: 20 }, (_, i) => ({
+      id: `sig-${i}`, sender_session: targetFor('a'), payload: { signal_type: 'need-sweep', severity: 'medium' },
+    }));
+    const { supabase, limitCalls } = mockSupabase({ liveTargets: [targetFor('a')] });
+    await writeSignalReceipts(supabase, COORDINATOR, twentySignals);
+    expect(limitCalls[0]).toBeGreaterThanOrEqual(20);
   });
 
   it('skips (never dispatches) a qualifying row with no sender_session to receipt back to', async () => {
@@ -228,6 +240,32 @@ describe('writeSignalReceipts: payload shape', () => {
     expect(row.target_session).toBe(sig.sender_session);
     expect(row.sender_session).toBe(COORDINATOR);
     expect(row.message_type).toBe('INFO');
+  });
+
+  // AC-2 / TS-2b: the disposition line renders into Subject (coordination-inbox.cjs has no
+  // generic payload-field render), derived from fields signal-router.cjs already stamps.
+  it('AC-2: renders "queued" in the Subject for a plain unrouted signal', async () => {
+    const sig = signal('a');
+    const { supabase, inserted } = mockSupabase({ liveTargets: [sig.sender_session] });
+    await writeSignalReceipts(supabase, COORDINATOR, [sig]);
+    expect(inserted[0].subject).toContain('queued');
+    expect(inserted[0].payload.receipt).toBe('queued');
+  });
+
+  it('AC-2: renders "routed:harness_backlog" in the Subject for a promoted signal', async () => {
+    const sig = signal('b', { payload: { signal_type: 'stuck', severity: 'high', routed_to_feedback_id: 'fb-1' } });
+    const { supabase, inserted } = mockSupabase({ liveTargets: [sig.sender_session] });
+    await writeSignalReceipts(supabase, COORDINATOR, [sig]);
+    expect(inserted[0].subject).toContain('routed:harness_backlog');
+    expect(inserted[0].payload.receipt).toBe('routed:harness_backlog');
+  });
+
+  it('AC-2: renders "needs-decision:coordinator" in the Subject for a lone-routed signal', async () => {
+    const sig = signal('c', { payload: { signal_type: 'stuck', severity: 'high', routed_to_coordinator: true } });
+    const { supabase, inserted } = mockSupabase({ liveTargets: [sig.sender_session] });
+    await writeSignalReceipts(supabase, COORDINATOR, [sig]);
+    expect(inserted[0].subject).toContain('needs-decision:coordinator');
+    expect(inserted[0].payload.receipt).toBe('needs-decision:coordinator');
   });
 });
 
