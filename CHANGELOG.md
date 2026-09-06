@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-09-06](#2026-09-06)
+  - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
 - [2026-09-05](#2026-09-05)
   - [Bugfix](#bugfix)
@@ -185,6 +186,12 @@
 
 ## 2026-09-06
 
+### Bugfix
+
+- **LEAD-FINAL-APPROVAL gains an observe-only gate catching an SD accepted with an unmeasured completion criterion still on the row** - SD-LEO-FIX-LEAD-FINAL-APPROVAL-002
+  - Escalated from QF-20260905-641 (chairman-facing: SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-ELEVEN-001 reached `status='completed'` while `success_criteria[0].measure` still carried the literal `[UNPOPULATED]` sentinel). The originally-proposed fix — a new SD status value, a schema migration, and full evidence-artifact-pointer resolution — was investigated during LEAD and found to require a 450+ call-site migration on `strategic_directives_v2.status` and, if built as unconditionally blocking, would immediately fail 24 of 52 (46%) of live non-terminal SDs.
+  - Scope was deliberately narrowed instead: a new `GATE_SUCCESS_CRITERIA_UNPOPULATED` gate reuses the existing, already-proven `classifyEntry()` primitive (`lib/sd-fields/unpopulated.js`, previously wired for disclosure-only at LEAD-TO-PLAN) to flag any `success_criteria` entry still carrying the sentinel, mirroring `acceptance-tier-downgrade-gate.js`'s observe-only env-flip convention (`SUCCESS_CRITERIA_UNPOPULATED_GATE_BINDING=true` to make it blocking). Registered in `gate-census.js` so the fleet-wide gate census reports it correctly as opt-in rather than unconditionally enforced.
+  - Full evidence-artifact-pointer resolution and the `strategic_directives_v2.status` schema migration remain explicitly out of scope, named as candidate follow-up work.
 ### Infrastructure
 
 - **All eleven remaining stage-23 walker step overrides registered for AltifyAI, plus a hard CI registry-completeness gate — the fourteen-journey acceptance walk is now reachable** - SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001
