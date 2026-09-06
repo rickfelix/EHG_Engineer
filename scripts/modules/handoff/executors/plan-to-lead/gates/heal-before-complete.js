@@ -38,7 +38,7 @@ import { GATE_REASON_CODES, MAX_HEAL_ITERATIONS } from './gate-reason-codes.js';
 // so the comment above ("single source as the LEAD-TO-PLAN vision-score gate") described an
 // intention the import did not implement, and the two tables drifted apart unobserved.
 import { countAddressableDimensions, calculateDynamicThreshold, SD_TYPE_THRESHOLDS } from '../../../../../../lib/handoff/threshold-resolver.js';
-import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+import { safeQuery, safeCount } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Is this rubric_snapshot an sd-heal snapshot? — SD-FDBK-FIX-HEAL-BEFORE-COMPLETE-001 FR-3.
@@ -195,19 +195,25 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType, opts = {}) {
   let acceptedHandoffCount = 0; // populated in Check 4, used for story credit
   try {
     // Pre-fetch accepted handoff count for cross-check use in story scoring
-    const { data: preHandoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('id')
-      .eq('sd_id', sdUuid)
-      .eq('status', 'accepted');
+    const preHandoffs = await safeQuery(
+      supabase
+        .from('sd_phase_handoffs')
+        .select('id')
+        .eq('sd_id', sdUuid)
+        .eq('status', 'accepted'),
+      { site: 'heal-before-complete:pre_handoffs' }
+    );
     acceptedHandoffCount = preHandoffs?.length || 0;
   } catch (e) { console.debug('[HealBeforeComplete] pre-handoff count suppressed:', e?.message || e); }
 
   try {
-    const { data: stories } = await supabase
-      .from('user_stories')
-      .select('id, status')
-      .eq('sd_id', sdUuid);
+    const stories = await safeQuery(
+      supabase
+        .from('user_stories')
+        .select('id, status')
+        .eq('sd_id', sdUuid),
+      { site: 'heal-before-complete:stories' }
+    );
     structuralChecks++;
     if (stories && stories.length > 0) {
       const completed = stories.filter(s => ['completed', 'done', 'validated'].includes(s.status));
@@ -230,12 +236,15 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType, opts = {}) {
 
   // Check 2: PRD exists
   try {
-    const { data: prd } = await supabase
-      .from('product_requirements_v2')
-      .select('id, status')
-      .eq('sd_id', sdUuid)
-      .limit(1)
-      .single();
+    const prd = await safeQuery(
+      supabase
+        .from('product_requirements_v2')
+        .select('id, status')
+        .eq('sd_id', sdUuid)
+        .limit(1)
+        .single(),
+      { site: 'heal-before-complete:prd' }
+    );
     structuralChecks++;
     if (prd) {
       structuralPassed++;
@@ -247,13 +256,16 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType, opts = {}) {
 
   // Check 3: Retrospective exists with PUBLISHED status
   try {
-    const { data: retro } = await supabase
-      .from('retrospectives')
-      .select('id, status, quality_score')
-      .eq('sd_id', sdUuid)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const retro = await safeQuery(
+      supabase
+        .from('retrospectives')
+        .select('id, status, quality_score')
+        .eq('sd_id', sdUuid)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+      { site: 'heal-before-complete:retro' }
+    );
     structuralChecks++;
     if (retro && retro.status === 'PUBLISHED') {
       structuralPassed++;
@@ -269,11 +281,14 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType, opts = {}) {
   // Check 4: Handoff chain has required handoffs
   // SD-LEARN-FIX-ADDRESS-PAT-AUTO-073: Award partial credit for 1 accepted handoff
   try {
-    const { data: handoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('handoff_type, status')
-      .eq('sd_id', sdUuid)
-      .eq('status', 'accepted');
+    const handoffs = await safeQuery(
+      supabase
+        .from('sd_phase_handoffs')
+        .select('handoff_type, status')
+        .eq('sd_id', sdUuid)
+        .eq('status', 'accepted'),
+      { site: 'heal-before-complete:handoffs' }
+    );
     structuralChecks++;
     const handoffCount = handoffs?.length || 0;
     if (handoffCount >= 2) { // Minimum for infrastructure
@@ -297,11 +312,14 @@ async function fastAutoHeal(supabase, sdKey, sdUuid, sdType, opts = {}) {
   let semanticScore = null;
   try {
     // Load SD context
-    const { data: sd } = await supabase
-      .from('strategic_directives_v2')
-      .select('title, key_changes, success_criteria, success_metrics')
-      .eq('sd_key', sdKey)
-      .single();
+    const sd = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('title, key_changes, success_criteria, success_metrics')
+        .eq('sd_key', sdKey)
+        .single(),
+      { site: 'heal-before-complete:semantic_sd_context' }
+    );
 
     if (!sd) throw new Error('SD not found');
 
@@ -597,11 +615,14 @@ export function createHealBeforeCompleteGate(supabase) {
       let isChildSD = false;
       const CHILD_SD_TOLERANCE_BONUS = 5;
       try {
-        const { data: parentCheck } = await supabase
-          .from('strategic_directives_v2')
-          .select('parent_sd_id')
-          .eq('id', sdUuid)
-          .single();
+        const parentCheck = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('parent_sd_id')
+            .eq('id', sdUuid)
+            .single(),
+          { site: 'heal-before-complete:parent_check' }
+        );
         isChildSD = !!parentCheck?.parent_sd_id;
       } catch (e) {
         // Intentionally suppressed: Fail-open, treat as standalone if check fails
@@ -627,11 +648,14 @@ export function createHealBeforeCompleteGate(supabase) {
       let isLearnSource = false;
       const LEARN_SOURCE_TOLERANCE_BONUS = 5;
       try {
-        const { data: sdRecord } = await supabase
-          .from('strategic_directives_v2')
-          .select('metadata')
-          .eq('id', sdUuid)
-          .single();
+        const sdRecord = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('metadata')
+            .eq('id', sdUuid)
+            .single(),
+          { site: 'heal-before-complete:corrective_sd_check' }
+        );
 
         if (sdRecord?.metadata?.vision_origin_score_id) {
           isCorrective = true;
@@ -731,20 +755,26 @@ export function createHealBeforeCompleteGate(supabase) {
 
               // Find a vision_id to reference (parent orchestrator or any recent)
               let visionId = null;
-              const { data: visionDocs } = await supabase
-                .from('eva_vision_documents')
-                .select('id')
-                .order('created_at', { ascending: false })
-                .limit(1);
+              const visionDocs = await safeQuery(
+                supabase
+                  .from('eva_vision_documents')
+                  .select('id')
+                  .order('created_at', { ascending: false })
+                  .limit(1),
+                { site: 'heal-before-complete:tier1_vision_docs' }
+              );
               if (visionDocs && visionDocs.length > 0) {
                 visionId = visionDocs[0].id;
               }
 
               // Count existing iterations for this SD
-              const { count: iterCount } = await supabase
-                .from('eva_vision_scores')
-                .select('id', { count: 'exact', head: true })
-                .eq('sd_id', sdKey);
+              const iterCount = await safeCount(
+                supabase
+                  .from('eva_vision_scores')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('sd_id', sdKey),
+                { site: 'heal-before-complete:tier1_iter_count' }
+              );
 
               const dimensionScores = buildFastHealDimensionScores(fastResult);
 
@@ -803,12 +833,16 @@ export function createHealBeforeCompleteGate(supabase) {
             const scopedResult = await fastAutoHeal(supabase, sdKey, sdUuid, sdType, { changedFiles });
             if (scopedResult) {
               let t2VisionId = null;
-              const { data: t2VisionDocs } = await supabase
-                .from('eva_vision_documents').select('id').order('created_at', { ascending: false }).limit(1);
+              const t2VisionDocs = await safeQuery(
+                supabase.from('eva_vision_documents').select('id').order('created_at', { ascending: false }).limit(1),
+                { site: 'heal-before-complete:tier2_vision_docs' }
+              );
               if (t2VisionDocs && t2VisionDocs.length > 0) t2VisionId = t2VisionDocs[0].id;
 
-              const { count: t2IterCount } = await supabase
-                .from('eva_vision_scores').select('id', { count: 'exact', head: true }).eq('sd_id', sdKey);
+              const t2IterCount = await safeCount(
+                supabase.from('eva_vision_scores').select('id', { count: 'exact', head: true }).eq('sd_id', sdKey),
+                { site: 'heal-before-complete:tier2_iter_count' }
+              );
 
               const t2Payload = {
                 sd_id: sdKey,
@@ -853,13 +887,17 @@ export function createHealBeforeCompleteGate(supabase) {
 
               // Find a vision_id to reference
               let t3VisionId = null;
-              const { data: t3VisionDocs } = await supabase
-                .from('eva_vision_documents').select('id').order('created_at', { ascending: false }).limit(1);
+              const t3VisionDocs = await safeQuery(
+                supabase.from('eva_vision_documents').select('id').order('created_at', { ascending: false }).limit(1),
+                { site: 'heal-before-complete:tier3_vision_docs' }
+              );
               if (t3VisionDocs && t3VisionDocs.length > 0) t3VisionId = t3VisionDocs[0].id;
 
               // Count existing iterations
-              const { count: t3IterCount } = await supabase
-                .from('eva_vision_scores').select('id', { count: 'exact', head: true }).eq('sd_id', sdKey);
+              const t3IterCount = await safeCount(
+                supabase.from('eva_vision_scores').select('id', { count: 'exact', head: true }).eq('sd_id', sdKey),
+                { site: 'heal-before-complete:tier3_iter_count' }
+              );
 
               const t3DimensionScores = fastResult.details || {
                 structural: { score: structuralOnlyScore }
@@ -953,16 +991,22 @@ export function createHealBeforeCompleteGate(supabase) {
         narrowingOutcome = { outcome: 'skipped_corrective', reason: 'corrective SDs use GRADE.A and are deliberately exempt from narrowing' };
       } else {
         try {
-          const { data: scoreDims } = await supabase
-            .from('eva_vision_scores')
-            .select('dimension_scores')
-            .eq('id', latestScore.id)
-            .single();
-          const { data: sdForOverride } = await supabase
-            .from('strategic_directives_v2')
-            .select('metadata')
-            .eq('id', sdUuid)
-            .single();
+          const scoreDims = await safeQuery(
+            supabase
+              .from('eva_vision_scores')
+              .select('dimension_scores')
+              .eq('id', latestScore.id)
+              .single(),
+            { site: 'heal-before-complete:narrowing_score_dims' }
+          );
+          const sdForOverride = await safeQuery(
+            supabase
+              .from('strategic_directives_v2')
+              .select('metadata')
+              .eq('id', sdUuid)
+              .single(),
+            { site: 'heal-before-complete:narrowing_sd_metadata' }
+          );
           if (!scoreDims?.dimension_scores) {
             narrowingOutcome = { outcome: 'no_dimension_scores', reason: `score ${latestScore.id} carries no dimension_scores — narrowing had no input` };
           } else if (!sdForOverride?.metadata) {
@@ -1022,12 +1066,15 @@ export function createHealBeforeCompleteGate(supabase) {
       // Check vision heal score (advisory — non-blocking)
       let visionAdvisory = null;
       try {
-        const { data: visionScores } = await supabase
-          .from('eva_vision_scores')
-          .select('id, total_score, scored_at')
-          .is('sd_id', null)
-          .order('scored_at', { ascending: false })
-          .limit(1);
+        const visionScores = await safeQuery(
+          supabase
+            .from('eva_vision_scores')
+            .select('id, total_score, scored_at')
+            .is('sd_id', null)
+            .order('scored_at', { ascending: false })
+            .limit(1),
+          { site: 'heal-before-complete:vision_advisory', tolerate: 'ADVISORY block (non-blocking per in-code comment) — a query failure must not affect gate pass/fail' }
+        );
 
         if (visionScores && visionScores.length > 0) {
           visionAdvisory = {
@@ -1048,18 +1095,24 @@ export function createHealBeforeCompleteGate(supabase) {
       // Advisory only — does not affect pass/fail score.
       let intentAdvisory = null;
       try {
-        const { data: sdRecord } = await supabase
-          .from('strategic_directives_v2')
-          .select('parent_sd_id, strategic_objectives, key_changes, title')
-          .eq('sd_key', sdKey)
-          .single();
+        const sdRecord = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('parent_sd_id, strategic_objectives, key_changes, title')
+            .eq('sd_key', sdKey)
+            .single(),
+          { site: 'heal-before-complete:intent_advisory_sd', tolerate: 'ADVISORY block (does not affect heal pass/fail per in-code comment)' }
+        );
 
         if (sdRecord?.parent_sd_id) {
-          const { data: parentSD } = await supabase
-            .from('strategic_directives_v2')
-            .select('strategic_objectives, key_changes, title, description')
-            .eq('id', sdRecord.parent_sd_id)
-            .single();
+          const parentSD = await safeQuery(
+            supabase
+              .from('strategic_directives_v2')
+              .select('strategic_objectives, key_changes, title, description')
+              .eq('id', sdRecord.parent_sd_id)
+              .single(),
+            { site: 'heal-before-complete:intent_advisory_parent', tolerate: 'ADVISORY block (does not affect heal pass/fail per in-code comment)' }
+          );
 
           if (parentSD) {
             const parentObjectives = parentSD.strategic_objectives || [];
@@ -1166,17 +1219,23 @@ export function createHealBeforeCompleteGate(supabase) {
               const fastResult = await fastAutoHeal(supabase, sdKey, sdUuid, sdType);
               if (fastResult && fastResult.score >= effectiveThreshold) {
                 let reHealVisionId = null;
-                const { data: reVisionDocs } = await supabase
-                  .from('eva_vision_documents')
-                  .select('id')
-                  .order('created_at', { ascending: false })
-                  .limit(1);
+                const reVisionDocs = await safeQuery(
+                  supabase
+                    .from('eva_vision_documents')
+                    .select('id')
+                    .order('created_at', { ascending: false })
+                    .limit(1),
+                  { site: 'heal-before-complete:re_heal_vision_docs' }
+                );
                 if (reVisionDocs && reVisionDocs.length > 0) reHealVisionId = reVisionDocs[0].id;
 
-                const { count: reIterCount } = await supabase
-                  .from('eva_vision_scores')
-                  .select('id', { count: 'exact', head: true })
-                  .eq('sd_id', sdKey);
+                const reIterCount = await safeCount(
+                  supabase
+                    .from('eva_vision_scores')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('sd_id', sdKey),
+                  { site: 'heal-before-complete:re_heal_iter_count' }
+                );
 
                 const reHealPayload = {
                   sd_id: sdKey,
@@ -1208,12 +1267,16 @@ export function createHealBeforeCompleteGate(supabase) {
               const scopedResult = await fastAutoHeal(supabase, sdKey, sdUuid, sdType, { changedFiles });
               if (scopedResult) {
                 let reScopedVisionId = null;
-                const { data: reScopedDocs } = await supabase
-                  .from('eva_vision_documents').select('id').order('created_at', { ascending: false }).limit(1);
+                const reScopedDocs = await safeQuery(
+                  supabase.from('eva_vision_documents').select('id').order('created_at', { ascending: false }).limit(1),
+                  { site: 'heal-before-complete:re_scoped_vision_docs' }
+                );
                 if (reScopedDocs && reScopedDocs.length > 0) reScopedVisionId = reScopedDocs[0].id;
 
-                const { count: reScopedIter } = await supabase
-                  .from('eva_vision_scores').select('id', { count: 'exact', head: true }).eq('sd_id', sdKey);
+                const reScopedIter = await safeCount(
+                  supabase.from('eva_vision_scores').select('id', { count: 'exact', head: true }).eq('sd_id', sdKey),
+                  { site: 'heal-before-complete:re_scoped_iter_count' }
+                );
 
                 const reScopedPayload = {
                   sd_id: sdKey,
