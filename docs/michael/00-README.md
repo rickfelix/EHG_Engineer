@@ -29,6 +29,16 @@ adjudication (05) and the chairman's decisions are already folded into the spec;
 
 Once the orchestrator SD exists, this folder is deleted or its surviving documents move under `docs/protocol/`.
 
+## Status 2026-09-06 — sourced and building
+
+The orchestrator exists: **SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002** (children -A … -J). Child A (foundation) is **completed** (PRs #8272 #8273 #8276 #8279 #8283 #8290 #8297). The permanent homes now hold the binding text:
+
+- Role contract: `docs/protocol/michael/role-contract.md` → `leo_protocol_sections` 658 → `CLAUDE_MICHAEL.md` (generated; do not hand-edit).
+- Model posture: `docs/protocol/michael/model-posture.md` → `leo_protocol_sections` 659 → `CLAUDE_MICHAEL_MODEL_POSTURE.md`.
+- Seat verbs: `/michael`, `scripts/michael-register.cjs`, `scripts/michael-startup-check.mjs`, `scripts/michael-quiet-tick.mjs`, `scripts/michael-restart.cjs`.
+
+The vision, spec, challenge, commission and adjudication below remain the sourcing record for the other children; the spec's §12 verdict map is still the authority for what each child ships. Deleting this folder is the orchestrator's completion step, not child A's.
+
 ## Ground rules for sessions that open this folder
 
 Workers: nothing here is claimable. Do not create SDs, QFs, or PRDs from these documents; sourcing is Adam's verb and happens only after Solomon's review.
