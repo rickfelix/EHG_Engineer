@@ -682,7 +682,7 @@ async function main() {
       // (DB hiccup) logs and continues to the next worker instead of aborting the naming loop.
       try {
         // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- PRE-EXISTING site, not introduced by this SD; flagged only because --diff mode lints whole changed files and SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7) touches this file. It is part of the ~28-site backlog this lint deliberately does not convert en masse (see its header), and the DB-level advisory trigger in 20260702_session_coordination_insert_lint.sql covers it regardless. Converting SET_IDENTITY broadcast semantics to insertCoordinationRow would add assertValidTarget THROW-on-lookup-failure into this naming loop, which can abort naming mid-run — a real behaviour change that belongs in its own SD, not smuggled into a canary-fence change.
-        await supabase
+        const { error: rebroadcastErr } = await supabase
           .from('session_coordination')
           .insert({
             target_session: w.session_id,
@@ -694,9 +694,16 @@ async function main() {
             // display only — it never feeds back into whether this worker gets renamed.
             payload: { kind: 'SET_IDENTITY', color: id.color, callsign: id.callsign, display_name: expectedDisplayName, tier_rank: tierRankOf(w) },
             sender_type: 'coordinator',
-            sender_session: _mySessionId || null,
+            sender_session: _mySessionId || 'assign-fleet-identities',
             expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
           });
+        // PLAN-phase TESTING (T-9): supabase-js RESOLVES {error} on a normal DB error rather
+        // than throwing — the try/catch below only catches a genuinely thrown exception (a
+        // network-level fault or client-side error). Check the resolved error explicitly too,
+        // so a constraint violation or RLS refusal is logged, not silently swallowed.
+        if (rebroadcastErr) {
+          console.error(`  [SET_IDENTITY] rebroadcast insert failed for ${sessionCol(w.session_id)}: ${rebroadcastErr.message}`);
+        }
       } catch (e) {
         console.error(`  [SET_IDENTITY] rebroadcast insert failed for ${sessionCol(w.session_id)}: ${e && e.message}`);
       }
@@ -806,7 +813,7 @@ async function main() {
         sender_type: 'coordinator',
         // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-2): the coordinator's own
         // resolved session id, not empty — see the rebroadcast insert site above.
-        sender_session: _mySessionId || null,
+        sender_session: _mySessionId || 'assign-fleet-identities',
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
       });
 

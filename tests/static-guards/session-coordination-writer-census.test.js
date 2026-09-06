@@ -43,7 +43,7 @@ const MANIFEST = [
     file: 'scripts/assign-fleet-identities.cjs',
     mustContain: [
       "payload: { kind: 'SET_IDENTITY'", // rebroadcast site
-      'sender_session: _mySessionId || null', // both insert sites
+      "sender_session: _mySessionId || 'assign-fleet-identities'", // both insert sites — EXEC-phase TESTING (T-8) found the bare `|| null` fallback left sender_session null on a cron invocation with no CLAUDE_SESSION_ID and no .claude/session-id.json
       "kind: 'SET_IDENTITY', color, callsign", // buildIdentityMessage (non-rename branch)
     ],
     expectedInsertOccurrences: 2,
