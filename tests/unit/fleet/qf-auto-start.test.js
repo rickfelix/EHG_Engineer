@@ -18,7 +18,7 @@
 import { describe, test, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { isAutoStartableQF, isClaimableWithVerify, TIER3_RISK_RE, STALE_QF_DAYS } = require('../../../lib/fleet/qf-auto-start.cjs');
+const { isAutoStartableQF, isClaimableWithVerify, getQfPickerVerdict, TIER3_RISK_RE, STALE_QF_DAYS } = require('../../../lib/fleet/qf-auto-start.cjs');
 
 const NOW = Date.parse('2026-08-15T12:00:00Z');
 
@@ -161,6 +161,23 @@ describe('isClaimableWithVerify — complement of isAutoStartableQF on staleness
     const row = qf({ created_at: freshCreated });
     expect(isAutoStartableQF(row, NOW)).toBe(true);
     expect(isClaimableWithVerify(row, NOW)).toBe(false);
+  });
+
+  // SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-A: getQfPickerVerdict is the picker's actual
+  // eligibility gate -- it wires isClaimableWithVerify into the self-claim loop (previously an
+  // unused/gauge-only function; the picker called isAutoStartableQF alone, hard-excluding every
+  // stale row with no complement ever reached).
+  test('getQfPickerVerdict: fresh row is eligible, no verify needed', () => {
+    expect(getQfPickerVerdict(qf({ created_at: freshCreated }), NOW)).toEqual({ eligible: true, needsVerify: false });
+  });
+
+  test('getQfPickerVerdict: stale-but-otherwise-eligible row is DEMOTED to eligible+needsVerify, not excluded', () => {
+    expect(getQfPickerVerdict(qf({ created_at: staleCreated }), NOW)).toEqual({ eligible: true, needsVerify: true });
+  });
+
+  test('getQfPickerVerdict: a stale row blocked by any other gate stays fully excluded', () => {
+    expect(getQfPickerVerdict(qf({ created_at: staleCreated, factory_lane: true }), NOW)).toEqual({ eligible: false, needsVerify: false });
+    expect(getQfPickerVerdict(qf({ created_at: staleCreated, routing_tier: 3 }), NOW)).toEqual({ eligible: false, needsVerify: false });
   });
 
   test('a stale QF blocked by ANY other gate is excluded from BOTH sets, not counted as verify-gated', () => {

@@ -67,6 +67,7 @@ import stage24Routes from './routes/stage24.js';
 import githubRepoRoutes from './routes/github-repo.js';
 import protocolLintRoutes, { requireAdminRole } from './routes/protocol-lint.js';
 import fleetSessionsRoutes from './routes/fleet-sessions.js';
+import michaelRoutes from './routes/michael.js';
 import fleetPanelRoutes from './routes/fleet-panel.js';
 import fleetActionsRoutes from './routes/fleet-actions.js';
 import { createChairmanScopeGuard } from '../lib/middleware/chairman-scope-guard.js';
@@ -268,6 +269,9 @@ app.use('/api/admin/protocol-lint', requireAuth, requireAdminRole, protocolLintR
 // Fleet launcher Session View pane (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-B): attach-focus +
 // sandboxed browser pane control -- OS-level foreground focus, CDP launch, human-pause.
 app.use('/api/fleet/sessions', requireAuth, fleetSessionsRoutes);
+// Michael chairman-grant status (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C): chairman-scope data,
+// two guards like /api/admin/protocol-lint; the route never selects token material.
+app.use('/api/michael', requireAuth, requireAdminRole, michaelRoutes);
 // Dashboard routes: read-only, optional auth
 app.use('/api', optionalAuth, dashboardRoutes);
 // Fleet panel (SD-LEO-INFRA-LEO-LAUNCHER-SHELL-001-A): read-only, optional auth

@@ -35,6 +35,9 @@ const RECONCILIATION_MIGRATION_PATHS = [
   // QF-20260906-162: the new signal_receipt kind, joining BACKPRESSURE_EXEMPT_KINDS and so
   // registered for all four roles (mirroring the six pre-existing exempt kinds' precedent).
   path.join(REPO_ROOT, 'database/migrations/20260906_role_drain_sets_add_signal_receipt.sql'),
+  // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001: the new worker_signal kind, registered for
+  // coordinator/solomon/michael/adam (not worker — worker-signal.cjs never targets that role).
+  path.join(REPO_ROOT, 'database/migrations/20260906_role_drain_sets_add_worker_signal.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -163,9 +166,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 106 (102 prior + 4 reconciliation: signal_receipt for all four roles, QF-20260906-162)', () => {
+  it('total seed row count is exactly 110 (106 prior + 4 reconciliation: worker_signal for coordinator/solomon/michael/adam, SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 — the michael row is outside this pattern\'s (solomon|adam|coordinator|worker) role set, so only 3 of the 4 new rows are matched here)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(106);
+    expect(matches.length).toBe(109);
   });
 });

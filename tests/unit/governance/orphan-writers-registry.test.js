@@ -115,7 +115,10 @@ describe('orphan-writers-registry: known-orphan count baseline (QF-20260831-821)
   // (seat-population:fixture-dormant-seat-001).
   // SD-LEO-INFRA-RETRO-PUBLISHED-GUARD-001: 18 -> 19. One new shipped-but-not-applied entry
   // (retrospectives-published-guard-migration).
-  const PINNED_TOTAL_ENTRIES = 19;
+  // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001: 19 -> 20. One new no-stamper-wired entry
+  // (lane-lint-gauge-machine-writers) — re-check live against QF-20260904-116 at merge time,
+  // which independently appends a different set of entries to this same array.
+  const PINNED_TOTAL_ENTRIES = 20;
 
   it('total entry count matches the pinned baseline -- update PINNED_TOTAL_ENTRIES with a reason if this genuinely changed', () => {
     expect(ORPHAN_ENTRIES.length).toBe(PINNED_TOTAL_ENTRIES);

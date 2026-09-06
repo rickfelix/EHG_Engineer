@@ -674,21 +674,39 @@ async function main() {
       // consume the SET_IDENTITY message below before its screen can learn the rebind.
       writeIdentityFile(w.session_id, { ...expectedIdentity, tier_rank: tierRankOf(w) });
       // Send updated identity message so worker's local file refreshes
-      // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- PRE-EXISTING site, not introduced by this SD; flagged only because --diff mode lints whole changed files and SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7) touches this file. It is part of the ~28-site backlog this lint deliberately does not convert en masse (see its header), and the DB-level advisory trigger in 20260702_session_coordination_insert_lint.sql covers it regardless. Converting SET_IDENTITY broadcast semantics to insertCoordinationRow would add assertValidTarget THROW-on-lookup-failure into this naming loop, which can abort naming mid-run — a real behaviour change that belongs in its own SD, not smuggled into a canary-fence change.
-      await supabase
-        .from('session_coordination')
-        .insert({
-          target_session: w.session_id,
-          target_sd: w.sd_key || null,
-          message_type: 'SET_IDENTITY',
-          subject: `Identity update: ${id.callsign} now on ${currentSdLabel}`,
-          body: `Your display name updated to "${expectedDisplayName}" (SD changed).`,
-          // QF-20260829-312: tier_rank rides alongside the identity as a CURRENT ATTRIBUTE for
-          // display only — it never feeds back into whether this worker gets renamed.
-          payload: { color: id.color, callsign: id.callsign, display_name: expectedDisplayName, tier_rank: tierRankOf(w) },
-          sender_type: 'coordinator',
-          expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
-        });
+      // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-2): payload.kind uses the EXACT
+      // uppercase literal 'SET_IDENTITY' already registered in DRAIN_SETS.worker (this file's
+      // own message_type) — never the lowercase 'set_identity', which orphan-reroute-sweep.js
+      // would treat as a DIFFERENT, unrecognized kind and could re-target. sender_session is
+      // the coordinator's own resolved id. Wrapped in try/catch so a single insert failure
+      // (DB hiccup) logs and continues to the next worker instead of aborting the naming loop.
+      try {
+        // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- PRE-EXISTING site, not introduced by this SD; flagged only because --diff mode lints whole changed files and SD-LEO-INFRA-SESSION-SPAWN-AND-PROMPT-LIBRARY-001-E (FR-7) touches this file. It is part of the ~28-site backlog this lint deliberately does not convert en masse (see its header), and the DB-level advisory trigger in 20260702_session_coordination_insert_lint.sql covers it regardless. Converting SET_IDENTITY broadcast semantics to insertCoordinationRow would add assertValidTarget THROW-on-lookup-failure into this naming loop, which can abort naming mid-run — a real behaviour change that belongs in its own SD, not smuggled into a canary-fence change.
+        const { error: rebroadcastErr } = await supabase
+          .from('session_coordination')
+          .insert({
+            target_session: w.session_id,
+            target_sd: w.sd_key || null,
+            message_type: 'SET_IDENTITY',
+            subject: `Identity update: ${id.callsign} now on ${currentSdLabel}`,
+            body: `Your display name updated to "${expectedDisplayName}" (SD changed).`,
+            // QF-20260829-312: tier_rank rides alongside the identity as a CURRENT ATTRIBUTE for
+            // display only — it never feeds back into whether this worker gets renamed.
+            payload: { kind: 'SET_IDENTITY', color: id.color, callsign: id.callsign, display_name: expectedDisplayName, tier_rank: tierRankOf(w) },
+            sender_type: 'coordinator',
+            sender_session: _mySessionId || 'assign-fleet-identities',
+            expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
+          });
+        // PLAN-phase TESTING (T-9): supabase-js RESOLVES {error} on a normal DB error rather
+        // than throwing — the try/catch below only catches a genuinely thrown exception (a
+        // network-level fault or client-side error). Check the resolved error explicitly too,
+        // so a constraint violation or RLS refusal is logged, not silently swallowed.
+        if (rebroadcastErr) {
+          console.error(`  [SET_IDENTITY] rebroadcast insert failed for ${sessionCol(w.session_id)}: ${rebroadcastErr.message}`);
+        }
+      } catch (e) {
+        console.error(`  [SET_IDENTITY] rebroadcast insert failed for ${sessionCol(w.session_id)}: ${e && e.message}`);
+      }
       refreshed++;
     }
   }
@@ -793,6 +811,9 @@ async function main() {
         // contract this composes.
         ...buildIdentityMessage({ priorIdentity, callsign, color, displayName, tierRank: tierRankOf(worker) }),
         sender_type: 'coordinator',
+        // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-2): the coordinator's own
+        // resolved session id, not empty — see the rebroadcast insert site above.
+        sender_session: _mySessionId || 'assign-fleet-identities',
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString()
       });
 
@@ -834,11 +855,17 @@ async function main() {
 function buildIdentityMessage({ priorIdentity, callsign, color, displayName, tierRank }) {
   const isRename = !!priorIdentity && priorIdentity.callsign !== callsign;
 
+  // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-2): payload.kind uses the EXACT
+  // uppercase literal 'SET_IDENTITY' already registered in DRAIN_SETS.worker — see the
+  // rebroadcast insert site's comment above for why casing matters (orphan-reroute-sweep.js
+  // would treat a differently-cased kind as unrecognized). Both branches already carry a
+  // non-empty `body`, so this addition clears untyped_row without creating a new
+  // bodyless_row violation.
   if (!isRename) {
     return {
       subject: `Identity: ${callsign} (${color})`,
       body: `The coordinator assigned you callsign "${callsign}" with color "${color}". Your statusline will update automatically. You may also run: /color ${color}\n\nCommunication: send signals back via /signal (try /signal --help for types). Use it when stuck on a gate >2x, about to bypass, or seeing protocol/spec friction.`,
-      payload: { color, callsign, display_name: displayName, tier_rank: tierRank }
+      payload: { kind: 'SET_IDENTITY', color, callsign, display_name: displayName, tier_rank: tierRank }
     };
   }
 
@@ -846,7 +873,7 @@ function buildIdentityMessage({ priorIdentity, callsign, color, displayName, tie
     subject: `Identity CHANGED: ${priorIdentity.callsign} -> ${callsign}`,
     body: `The coordinator RENAMED your callsign from "${priorIdentity.callsign}" to "${callsign}" (color "${color}"). Your statusline will update automatically. You may also run: /color ${color}\n\nAny commit message, PR body, or evidence file you wrote referencing "${priorIdentity.callsign}" before this message was written is now stale — correct it if practical.\n\nCommunication: send signals back via /signal (try /signal --help for types). Use it when stuck on a gate >2x, about to bypass, or seeing protocol/spec friction.`,
     payload: {
-      color, callsign, display_name: displayName, tier_rank: tierRank,
+      kind: 'SET_IDENTITY', color, callsign, display_name: displayName, tier_rank: tierRank,
       prior_callsign: priorIdentity.callsign, renamed_at: new Date().toISOString()
     }
   };
