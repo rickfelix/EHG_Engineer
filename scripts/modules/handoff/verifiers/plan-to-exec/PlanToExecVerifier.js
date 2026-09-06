@@ -8,6 +8,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../../../lib/supabase-client.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 import HandoffValidator from '../../../../handoff-validator.js';
 import { validateUserStoriesForHandoff, getUserStoryImprovementGuidance } from '../../../user-story-quality-validation.js';
 import { validatePRDForHandoff, getPRDImprovementGuidance } from '../../../prd-quality-validation.js';
@@ -121,11 +122,14 @@ export class PlanToExecVerifier {
 
       if (prdError || !prds || prds.length === 0) {
         // RCA-PRD-FRICTION: Check validation profile for sd_type exemption
-        const { data: prdProfile } = await this.supabase
-          .from('sd_type_validation_profiles')
-          .select('requires_prd')
-          .eq('sd_type', sd.sd_type || 'feature')
-          .maybeSingle();
+        const prdProfile = await safeQuery(
+          this.supabase
+            .from('sd_type_validation_profiles')
+            .select('requires_prd')
+            .eq('sd_type', sd.sd_type || 'feature')
+            .maybeSingle(),
+          { site: 'PlanToExecVerifier:no_prd_exemption_profile' }
+        );
 
         if (prdProfile && prdProfile.requires_prd === false) {
           console.log(`   ℹ️  PRD not required for sd_type='${sd.sd_type}' - proceeding without PRD`);
@@ -146,19 +150,25 @@ export class PlanToExecVerifier {
       console.log(`PRD Found: ${prd.id} (via ${prdSource})`);
 
       // 3. Load handoff template
-      const { data: template } = await this.supabase
-        .from('leo_handoff_templates')
-        .select('*')
-        .eq('from_agent', 'PLAN')
-        .eq('to_agent', 'EXEC')
-        .single();
+      const template = await safeQuery(
+        this.supabase
+          .from('leo_handoff_templates')
+          .select('*')
+          .eq('from_agent', 'PLAN')
+          .eq('to_agent', 'EXEC')
+          .single(),
+        { site: 'PlanToExecVerifier:handoff_template' }
+      );
 
       // 3a. MANDATORY: Check User Stories Exist
-      const { data: validationProfile } = await this.supabase
-        .from('sd_type_validation_profiles')
-        .select('requires_user_stories, requires_e2e_tests, requires_prd')
-        .eq('sd_type', sd.sd_type)
-        .single();
+      const validationProfile = await safeQuery(
+        this.supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_user_stories, requires_e2e_tests, requires_prd')
+          .eq('sd_type', sd.sd_type)
+          .single(),
+        { site: 'PlanToExecVerifier:user_stories_validation_profile' }
+      );
 
       const requiresUserStories = validationProfile?.requires_user_stories !== false;
       let userStories = [];
