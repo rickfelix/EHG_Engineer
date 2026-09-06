@@ -1,0 +1,16 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+const s = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const M = 'VENTURE TROUBLESHOOTING IS AUTOMATED; THE CHAIRMAN IS NEVER HANDED A DASHBOARD OR LOG-READING STEP (ratification 1afdeaac)';
+const short = `- **${M}** — Chairman at the Adam seat 2026-09-06 ~13:37Z. Coordinator share: a remedy shaped "the chairman reads the log / sets the secret / checks the dashboard" is routed to Adam as an automation defect, never relayed as a keystroke; venture CI (Deploy, one-shot workflows) is the diagnosis venue and diagnosis is dispatched there first. Full text: ledger row 1afdeaac; SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001.`;
+const { data } = await s.from('leo_protocol_sections').select('content').eq('id', '605').single();
+const lines = data.content.split('\n');
+const i = lines.findIndex((l) => l.startsWith('- **' + M));
+if (i < 0) throw new Error('clause not found');
+console.log('old bytes', Buffer.byteLength(lines[i]), 'new bytes', Buffer.byteLength(short));
+lines[i] = short;
+const after = lines.join('\n');
+const { error } = await s.from('leo_protocol_sections').update({ content: after }).eq('id', '605'); if (error) throw error;
+const { data: rb } = await s.from('leo_protocol_sections').select('content').eq('id', '605').single();
+if (rb.content !== after) throw new Error('readback mismatch');
+console.log('605 trimmed + readback ok, size', after.length);
