@@ -28,7 +28,7 @@ export const ITEM_KEYS = Object.freeze(['thread_id', 'rule_key', 'last_message_i
 export const TASK_KEYS = Object.freeze(['task_id', 'proposed_date']);
 
 /** Refusals that are failures of the read itself (exit 1), not of the invocation (exit 2). */
-export const RUN_FAILURES = Object.freeze(['READ_FAILED', 'HEADERS_AUTH_FAILED', 'HEADERS_FAILED']);
+export const RUN_FAILURES = Object.freeze(['READ_FAILED', 'HEADERS_AUTH_FAILED', 'HEADERS_FAILED', 'DB_CLIENT_FAILED']);
 
 /** Pure: exit code for the CLI — 0 for a read (empty, inert or truncated alike), 1 for a failed read or header fetch, 2 for a refused invocation. */
 export function exitCodeForQueue(r) {
@@ -57,20 +57,31 @@ export function validEtDate(s) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 
-/** The reader. deps: { sb, argv, now, env, auth, gmail (factory), resolveAuth }. Never throws. */
-export async function runQueueRead({ sb, argv = [], now = new Date(), env = process.env, auth, gmail, resolveAuth = getAuthenticatedClient } = {}) {
+/** Pure: validate argv; returns { etDate, headers } or a refusal. Runs BEFORE any client is built. */
+export function parseQueueArgs(argv, now) {
   const a = parseArgs(argv);
   if (a.date !== undefined) return refusal('FLAG_UNSUPPORTED', '--date is not supported; use --et-date YYYY-MM-DD');
   for (const flag of ['headers', 'json']) if (a[flag] !== undefined && a[flag] !== true) return refusal('FLAG_INVALID', `--${flag} takes no value (got ${JSON.stringify(a[flag])})`);
   const etDate = a['et-date'] !== undefined ? String(a['et-date']) : etDateStr(now);
   if (!validEtDate(etDate)) return refusal('ET_DATE_INVALID', '--et-date must be a valid YYYY-MM-DD');
-  const headers = a.headers === true;
+  return { ok: true, etDate, headers: a.headers === true };
+}
+
+/** The reader. deps: { sb (client or factory), argv, now, env, auth, gmail (factory), resolveAuth }. Never throws. */
+export async function runQueueRead({ sb, argv = [], now = new Date(), env = process.env, auth, gmail, resolveAuth = getAuthenticatedClient } = {}) {
+  const parsed = parseQueueArgs(argv, now);
+  if (!parsed.ok) return parsed;
+  const { etDate, headers } = parsed;
   if (headers) { try { assertHostVenue(env); } catch (e) { return refusal(e.code || 'HOST_VENUE_REQUIRED', e.message); } }
+  // the client is built only after every refusal has had its chance (a host without DB env still refuses, never crashes)
+  if (typeof sb === 'function') { try { sb = sb(); } catch (e) { return { ok: false, refusal: 'DB_CLIENT_FAILED', message: `cannot build the DB client: ${(e && e.message) || e}` }; } }
+  if (!sb) return { ok: false, refusal: 'DB_CLIENT_FAILED', message: 'no DB client' };
 
   const items = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).is('class', null).order('created_at', { ascending: true }), { select: ITEM_KEYS.join(',') });
-  if (items.tables_absent) return { ok: true, tables_absent: true, et_date: etDate, items: [], tasks: [], counts: { items: 0, tasks: 0 }, errors: [] };
   const tasks = await readRows(sb, 'michael_todoist_snapshot', (q) => q.eq('et_date', etDate).is('effort_grade', null).order('created_at', { ascending: true }), { select: TASK_KEYS.join(',') });
-  // one table present and the other absent is a partial read, never an empty queue
+  // both absent = the migration is unapplied: inert. One absent while the other is present is a partial read, never an empty queue.
+  if (items.tables_absent && tasks.tables_absent) return { ok: true, tables_absent: true, et_date: etDate, items: [], tasks: [], counts: { items: 0, tasks: 0 }, errors: [] };
+  if (items.tables_absent) items.error = 'michael_gmail_triage_items: relation absent while michael_todoist_snapshot is present';
   if (tasks.tables_absent) tasks.error = 'michael_todoist_snapshot: relation absent while michael_gmail_triage_items is present';
   const errors = [items, tasks].map((r) => r.error).filter(Boolean);
 
@@ -85,7 +96,7 @@ export async function runQueueRead({ sb, argv = [], now = new Date(), env = proc
     // The grant is resolved ONCE: a dead grant is one refresh attempt and one last_error write, never one per thread.
     let client = auth;
     if (!client) {
-      try { client = await resolveAuth({ sb, env }); } catch (e) { return { ...out, ok: false, refusal: 'HEADERS_AUTH_FAILED', message: `the chairman grant could not be resolved: ${(e && e.code) || 'AUTH'}` }; }
+      try { client = await resolveAuth({ sb, env }); } catch (e) { return { ...out, ok: false, refusal: out.refusal || 'HEADERS_AUTH_FAILED', message: [out.message, `the chairman grant could not be resolved: ${(e && e.code) || 'AUTH'}`].filter(Boolean).join('; ') }; }
     }
     const deps = { auth: client, gmailFactory: gmail, sb, env };
     counts.headers_fetched = 0; counts.headers_failed = 0; counts.headers_skipped = Math.max(out.items.length - HEADERS_MAX, 0);
@@ -96,19 +107,19 @@ export async function runQueueRead({ sb, argv = [], now = new Date(), env = proc
       counts.headers_fetched += 1;
     }
     // every fetch failing is a failed run (the classifier has nothing to read), not an ok with a count
-    if (counts.headers_fetched === 0 && counts.headers_failed > 0) return { ...out, ok: false, refusal: 'HEADERS_FAILED', message: `all ${counts.headers_failed} header fetches failed` };
+    if (counts.headers_fetched === 0 && counts.headers_failed > 0) return { ...out, ok: false, refusal: out.refusal || 'HEADERS_FAILED', message: [out.message, `all ${counts.headers_failed} header fetches failed`].filter(Boolean).join('; ') };
   }
   return out;
 }
 
 async function main() {
   const argv = process.argv.slice(2);
-  const r = await runQueueRead({ sb: createMichaelClient(), argv });
+  const r = await runQueueRead({ sb: () => createMichaelClient(), argv });
   emit(r, { json: argv.includes('--json') });
   process.exitCode = exitCodeForQueue(r);
 }
 
 if (isMainModule(import.meta.url)) {
   // a crash (no env, no DB client) is a failure of the run, exit 1; refusals are the invocation's and exit 2
-  main().catch((e) => { console.error(`[michael:queue-read] fatal ${e && e.code ? e.code : ''}`); process.exitCode = 1; });
+  main().catch((e) => { console.error(`[michael:queue-read] fatal ${e && e.code ? `${e.code} ` : ''}${(e && e.message) || e}`); process.exitCode = 1; });
 }

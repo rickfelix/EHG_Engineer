@@ -15,11 +15,11 @@ const ITEMS = [
 const TASKS = [{ task_id: 'k1', proposed_date: null, role_tag: 'home' }, { task_id: 'k2', proposed_date: '2026-09-07' }];
 
 /** DB stub scripted per table; records every call. `counts` answers the exact-count reads. */
-function db({ items = ITEMS, tasks = TASKS, absent = false, absentTasks = false, counts = {}, fail = null } = {}) {
+function db({ items = ITEMS, tasks = TASKS, absent = false, absentTasks = false, absentItems = false, counts = {}, fail = null } = {}) {
   const calls = [];
   const sb = stubClient((table, ops) => {
     calls.push({ table, ops });
-    if (absent || (absentTasks && table === 'michael_todoist_snapshot')) return MISSING;
+    if (absent || (absentTasks && table === 'michael_todoist_snapshot') || (absentItems && table === 'michael_gmail_triage_items')) return MISSING;
     if (fail === table) return { data: null, error: { code: '57014', message: 'statement timeout' } };
     const head = ops[0].args[1] && ops[0].args[1].head === true;
     if (head) return { data: null, count: counts[table] ?? null, error: null };
@@ -76,14 +76,27 @@ describe('runQueueRead', () => {
     expect(half).toMatchObject({ ok: false, refusal: 'READ_FAILED', tables_absent: false }); expect(half.message).toMatch(/relation absent/); expect(half.items).toHaveLength(2);
     // boolean flags take no value; impossible calendar dates are refused here, not by Postgres
     expect(await runQueueRead({ sb, argv: ['--headers', 'yes'], now: NOW, env })).toMatchObject({ ok: false, refusal: 'FLAG_INVALID' });
+    expect(await runQueueRead({ sb, argv: ['--json', '1'], now: NOW, env })).toMatchObject({ ok: false, refusal: 'FLAG_INVALID' });
+    // the DB client is built after validation: a refusal is a refusal (exit 2) even where the client cannot be built
+    const boom = () => { throw new Error('SUPABASE_URL missing'); };
+    const late = await runQueueRead({ sb: boom, argv: ['--date', 'x'], now: NOW, env });
+    expect(late).toMatchObject({ ok: false, refusal: 'FLAG_UNSUPPORTED' }); expect(exitCodeForQueue(late)).toBe(2);
+    const venue = await runQueueRead({ sb: boom, argv: ['--headers'], now: NOW, env: { CI: 'true' } });
+    expect(venue).toMatchObject({ ok: false, refusal: 'HOST_VENUE_REQUIRED' }); expect(exitCodeForQueue(venue)).toBe(2);
+    const built = await runQueueRead({ sb: boom, argv: [], now: NOW, env });
+    expect(built).toMatchObject({ ok: false, refusal: 'DB_CLIENT_FAILED' }); expect(built.message).toMatch(/SUPABASE_URL missing/); expect(exitCodeForQueue(built)).toBe(1);
+    expect(await runQueueRead({ sb: () => db().sb, argv: [], now: NOW, env })).toMatchObject({ ok: true, counts: { items: 2 } });
+    // the mirror partial read: items absent while the snapshot is present is a READ_FAILED, never inert
+    const mirror = await runQueueRead({ sb: db({ absentItems: true }).sb, argv: [], now: NOW, env });
+    expect(mirror).toMatchObject({ ok: false, refusal: 'READ_FAILED', tables_absent: false }); expect(mirror.message).toMatch(/michael_gmail_triage_items: relation absent/); expect(mirror.tasks).toHaveLength(2);
     expect(await runQueueRead({ sb, argv: ['--et-date', '2026-13-45'], now: NOW, env })).toMatchObject({ ok: false, refusal: 'ET_DATE_INVALID' });
     expect(validEtDate('2026-02-29')).toBe(false); expect(validEtDate('2028-02-29')).toBe(true);
   });
-  it('absent tables yield empty lists, ok, exit 0 and no second read', async () => {
+  it('absent tables yield empty lists, ok, exit 0 and no count read', async () => {
     const { sb, calls } = db({ absent: true });
     const r = await runQueueRead({ sb, argv: [], now: NOW, env });
     expect(r).toEqual({ ok: true, tables_absent: true, et_date: '2026-09-06', items: [], tasks: [], counts: { items: 0, tasks: 0 }, errors: [] });
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(exitCodeForQueue(r)).toBe(0);
   });
   it('a full page is reported truncated and only then counted exactly (presence first, never a head-count on an absent table)', async () => {
@@ -127,6 +140,9 @@ describe('runQueueRead', () => {
     // every fetch failing is a failed run, not ok with a count
     const allFail = await runQueueRead({ sb, argv: ['--headers'], now: NOW, env, auth: 'AUTH', gmail: gmailFactory({ reject: new Set(['t1', 't2']) }, []) });
     expect(allFail).toMatchObject({ ok: false, refusal: 'HEADERS_FAILED', counts: { headers_failed: 2 } }); expect(exitCodeForQueue(allFail)).toBe(1);
+    // a read failure is never overwritten by a later header failure: both reach the message
+    const both = await runQueueRead({ sb: db({ fail: 'michael_todoist_snapshot' }).sb, argv: ['--headers'], now: NOW, env, auth: 'AUTH', gmail: gmailFactory({ reject: new Set(['t1', 't2']) }, []) });
+    expect(both.refusal).toBe('READ_FAILED'); expect(both.message).toMatch(/statement timeout.*all 2 header fetches failed/);
     const many = Array.from({ length: HEADERS_MAX + 5 }, (_, i) => ({ thread_id: `t${i}`, rule_key: null, last_message_id: null, borderline: false }));
     const capCalls = [];
     const capped = await runQueueRead({ sb: db({ items: many }).sb, argv: ['--headers'], now: NOW, env, auth: 'AUTH', gmail: gmailFactory({}, capCalls) });
