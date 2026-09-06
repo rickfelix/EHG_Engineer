@@ -42,6 +42,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -142,11 +143,14 @@ async function gatherVerificationEvidence(sdId) {
   };
 
   // 1. Get PRD with exec_checklist
-  const { data: prd } = await supabase
-    .from('product_requirements_v2')
-    .select('id, status, exec_checklist, metadata')
-    .eq('sd_id', sdId)
-    .single();
+  const prd = await safeQuery(
+    supabase
+      .from('product_requirements_v2')
+      .select('id, status, exec_checklist, metadata')
+      .eq('sd_id', sdId)
+      .single(),
+    { site: 'auto-complete-deliverables:prd' }
+  );
 
   if (prd) {
     evidence.prdChecklist = {
@@ -158,32 +162,41 @@ async function gatherVerificationEvidence(sdId) {
   }
 
   // 2. Get sub-agent execution results (actual verification, not claims)
-  const { data: subAgentResults } = await supabase
-    .from('sub_agent_execution_results')
-    .select('sub_agent_code, verdict, confidence, metadata, executed_at')
-    .eq('sd_id', sdId)
-    .order('executed_at', { ascending: false });
+  const subAgentResults = await safeQuery(
+    supabase
+      .from('sub_agent_execution_results')
+      .select('sub_agent_code, verdict, confidence, metadata, executed_at')
+      .eq('sd_id', sdId)
+      .order('executed_at', { ascending: false }),
+    { site: 'auto-complete-deliverables:sub_agent_results' }
+  );
 
   if (subAgentResults) {
     evidence.subAgentResults = subAgentResults;
   }
 
   // 3. Get accepted handoffs (proof of phase transitions)
-  const { data: handoffs } = await supabase
-    .from('sd_phase_handoffs')
-    .select('handoff_type, status, metadata, created_at')
-    .eq('sd_id', sdId)
-    .eq('status', 'accepted');
+  const handoffs = await safeQuery(
+    supabase
+      .from('sd_phase_handoffs')
+      .select('handoff_type, status, metadata, created_at')
+      .eq('sd_id', sdId)
+      .eq('status', 'accepted'),
+    { site: 'auto-complete-deliverables:handoffs' }
+  );
 
   if (handoffs) {
     evidence.handoffs = handoffs;
   }
 
   // 4. Get validated user stories (proof of requirements met)
-  const { data: stories } = await supabase
-    .from('user_stories')
-    .select('story_key, validation_status, acceptance_criteria')
-    .eq('sd_id', sdId);
+  const stories = await safeQuery(
+    supabase
+      .from('user_stories')
+      .select('story_key, validation_status, acceptance_criteria')
+      .eq('sd_id', sdId),
+    { site: 'auto-complete-deliverables:user_stories' }
+  );
 
   if (stories) {
     evidence.userStories = {
