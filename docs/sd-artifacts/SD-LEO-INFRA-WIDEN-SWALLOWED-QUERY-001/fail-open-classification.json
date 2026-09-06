@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:45:53.662Z",
+  "generated_at": "2026-09-06T18:48:18.531Z",
   "counts": {
-    "has_catch": 58
+    "has_catch": 54
   },
   "results": [
     {
@@ -156,34 +156,6 @@
       "line": 258,
       "kind": "data",
       "snippet": "const { data: handoffs } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/scope-reduction-verification.js",
-      "line": 68,
-      "kind": "data",
-      "snippet": "const { data: jsonbGates } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/scope-reduction-verification.js",
-      "line": 120,
-      "kind": "data",
-      "snippet": "const { data: vision } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/scope-reduction-verification.js",
-      "line": 140,
-      "kind": "data",
-      "snippet": "const { data: arch } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/scope-reduction-verification.js",
-      "line": 242,
-      "kind": "data",
-      "snippet": "const { data: scores } = await supabase",
       "classification": "has_catch"
     },
     {

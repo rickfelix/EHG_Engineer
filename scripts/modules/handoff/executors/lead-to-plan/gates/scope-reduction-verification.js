@@ -22,6 +22,7 @@ import {
   buildSemanticResult,
   buildSkipResult
 } from '../../../validation/semantic-gate-utils.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'SCOPE_REDUCTION_VERIFICATION';
 const MAX_VISION_DELTA = 5;
@@ -65,13 +66,16 @@ async function getProtectedItems(supabase, sdId, sdKey) {
 
     if (!relevantGates.length) {
       // Fallback: check any recent gates for this SD via target_ref JSONB
-      const { data: jsonbGates } = await supabase
-        .from('eva_translation_gates')
-        .select('gaps, coverage_score')
-        .eq('gate_type', 'architecture_to_sd')
-        .or(`target_ref->key.eq.${sdKey},target_ref->id.eq.${sdId}`)
-        .order('created_at', { ascending: false })
-        .limit(3);
+      const jsonbGates = await safeQuery(
+        supabase
+          .from('eva_translation_gates')
+          .select('gaps, coverage_score')
+          .eq('gate_type', 'architecture_to_sd')
+          .or(`target_ref->key.eq.${sdKey},target_ref->id.eq.${sdId}`)
+          .order('created_at', { ascending: false })
+          .limit(3),
+        { site: 'scope-reduction-verification:protected_items_jsonb_fallback' }
+      );
 
       if (!jsonbGates?.length) {
         return { protectedItems: [], hasData: false };
@@ -117,11 +121,14 @@ async function classifyScopeItems(supabase, sd, protectedItems) {
   // Load vision dimensions for context
   let visionContext = '';
   try {
-    const { data: vision } = await supabase
-      .from('eva_vision_documents')
-      .select('extracted_dimensions, vision_key')
-      .eq('vision_key', 'VISION-EHG-L1-001')
-      .single();
+    const vision = await safeQuery(
+      supabase
+        .from('eva_vision_documents')
+        .select('extracted_dimensions, vision_key')
+        .eq('vision_key', 'VISION-EHG-L1-001')
+        .single(),
+      { site: 'scope-reduction-verification:vision_dimensions' }
+    );
 
     if (vision?.extracted_dimensions) {
       const dims = vision.extracted_dimensions;
@@ -137,11 +144,14 @@ async function classifyScopeItems(supabase, sd, protectedItems) {
   // Load architecture dimensions
   let archContext = '';
   try {
-    const { data: arch } = await supabase
-      .from('eva_architecture_plans')
-      .select('extracted_dimensions, plan_key')
-      .eq('plan_key', 'ARCH-EHG-L1-001')
-      .single();
+    const arch = await safeQuery(
+      supabase
+        .from('eva_architecture_plans')
+        .select('extracted_dimensions, plan_key')
+        .eq('plan_key', 'ARCH-EHG-L1-001')
+        .single(),
+      { site: 'scope-reduction-verification:architecture_dimensions' }
+    );
 
     if (arch?.extracted_dimensions) {
       const dims = arch.extracted_dimensions;
@@ -239,12 +249,15 @@ Respond with JSON:
 async function checkVisionDelta(supabase, sdKey, sdType) {
   try {
     // Get most recent vision score for this SD
-    const { data: scores } = await supabase
-      .from('eva_vision_scores')
-      .select('total_score')
-      .eq('sd_id', sdKey)
-      .order('created_at', { ascending: false })
-      .limit(1);
+    const scores = await safeQuery(
+      supabase
+        .from('eva_vision_scores')
+        .select('total_score')
+        .eq('sd_id', sdKey)
+        .order('created_at', { ascending: false })
+        .limit(1),
+      { site: 'scope-reduction-verification:vision_delta_scores' }
+    );
 
     if (!scores?.length) {
       return { preScore: null, canCheck: false };
