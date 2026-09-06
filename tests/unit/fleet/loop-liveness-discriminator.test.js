@@ -78,22 +78,37 @@ describe('classifyLoopLiveness (fail-open, alarm-appropriate)', () => {
 describe('classifyLoopLivenessStrict (non-fail-open, actuation-appropriate)', () => {
   it('agrees with classifyLoopLiveness on the raw verdict direction for a confirmed dead loop', () => {
     const s = { session_id: 'i', loop_state: 'active', last_tool_at: minutesAgo(90) };
-    expect(classifyLoopLivenessStrict(s, NOW, CUT)).toBe('STUCK');
+    expect(classifyLoopLivenessStrict(s, { nowMs: NOW, cutMinutes: CUT })).toBe('STUCK');
     expect(classifyLoopLiveness(s, { nowMs: NOW, cutMinutes: CUT })).toBe('DEAD-LOOP');
   });
 
   it('returns HEALTHY for a live session (does not require loop_state -- classifySeat itself never reads it)', () => {
     const s = { session_id: 'j', last_tool_at: minutesAgo(1) };
-    expect(classifyLoopLivenessStrict(s, NOW, CUT)).toBe('HEALTHY');
+    expect(classifyLoopLivenessStrict(s, { nowMs: NOW, cutMinutes: CUT })).toBe('HEALTHY');
   });
 
   it('returns UNKNOWN, never a fabricated verdict, when last_tool_at is unreadable', () => {
     const s = { session_id: 'k', last_tool_at: null };
-    expect(classifyLoopLivenessStrict(s, NOW, CUT)).toBe('UNKNOWN');
+    expect(classifyLoopLivenessStrict(s, { nowMs: NOW, cutMinutes: CUT })).toBe('UNKNOWN');
   });
 
   it('STUCK even on the parked-arm case that classifyLoopLiveness reports as live -- the two views deliberately disagree on OUTPUT VOCABULARY, never on the underlying raw signal', () => {
     const s = { session_id: 'l', loop_state: 'awaiting_tick', last_tool_at: minutesAgo(90) };
-    expect(classifyLoopLivenessStrict(s, NOW, CUT)).toBe('STUCK');
+    expect(classifyLoopLivenessStrict(s, { nowMs: NOW, cutMinutes: CUT })).toBe('STUCK');
+  });
+
+  // TESTING sub-agent finding, EXEC-TO-PLAN: a prior positional-args revision of this function
+  // let the (options-object) call convention silently pass an object where classifySeat expected
+  // a numeric clock, falling back to Date.now() instead of the caller's intended time -- a
+  // genuinely HEALTHY row could misread STUCK depending on real-world clock drift at call time.
+  // Pinned here so the signature can never regress to positional without this test catching it.
+  it('regression: the options-object call must actually use the supplied nowMs, not silently fall back to the wall clock', () => {
+    // A wall-clock fallback would compute "1 minute ago" against the REAL current time too and
+    // still read HEALTHY by coincidence for a small offset -- use a NOW far in the future so a
+    // fallback to Date.now() would make last_tool_at look ancient (STUCK) while the supplied NOW
+    // correctly reads it as 1 minute old (HEALTHY).
+    const FAR_FUTURE_NOW = Date.parse('2030-01-01T00:00:00Z');
+    const sFarFuture = { session_id: 'm2', loop_state: 'active', last_tool_at: new Date(FAR_FUTURE_NOW - 60_000).toISOString() };
+    expect(classifyLoopLivenessStrict(sFarFuture, { nowMs: FAR_FUTURE_NOW, cutMinutes: CUT })).toBe('HEALTHY');
   });
 });

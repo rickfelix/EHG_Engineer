@@ -30,7 +30,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { discoverAllProcesses } from '../lib/periodic-liveness/enumerate-processes.mjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
@@ -263,7 +263,7 @@ async function seedStandaloneCrons() {
   });
 }
 
-async function main() {
+export async function main() {
   const roleUpserts = await seedRoleSessions();
   const roundUpserts = await seedSchedulerRounds();
   const cronUpserts = await seedStandaloneCrons();
@@ -289,7 +289,13 @@ async function main() {
   for (const row of data) console.log(`  - ${row.process_key}`);
 }
 
-main().catch((err) => {
-  console.error(`[seed-periodic-process-registry] FAILED: ${err.message}`);
-  process.exit(1);
-});
+// SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-6 (TESTING sub-agent finding, EXEC-TO-PLAN):
+// previously unguarded -- importing this module for its pure seed*() functions ran the entire
+// live-DB seeding pipeline as a side effect of import, which is why seedHostAlarmCrons() could
+// not be safely unit-tested. Guard pattern matches every other setup-*/seed-* script in this repo.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(`[seed-periodic-process-registry] FAILED: ${err.message}`);
+    process.exit(1);
+  });
+}
