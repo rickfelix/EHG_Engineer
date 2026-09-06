@@ -37,31 +37,43 @@ import { normalizeAppName } from '../../../../../lib/repo-paths.js';
  */
 async function resolveOrchestratorRetroTargetApplication(supabase, sdId) {
   try {
-    const { data: sdRow } = await supabase
-      .from('strategic_directives_v2')
-      .select('metadata')
-      .eq('id', sdId)
-      .maybeSingle();
+    const sdRow = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('metadata')
+        .eq('id', sdId)
+        .maybeSingle(),
+      { site: 'state-transitions:retro_target_app_sd_metadata' }
+    );
 
     const ventureName = sdRow?.metadata?.venture_name;
     if (ventureName) {
       const needle = normalizeAppName(ventureName);
       if (needle === 'ehg' || needle === 'ehgengineer') return ventureName;
-      const { data: apps } = await supabase.from('applications').select('name').eq('status', 'active');
+      const apps = await safeQuery(
+        supabase.from('applications').select('name').eq('status', 'active'),
+        { site: 'state-transitions:retro_target_app_registered_apps' }
+      );
       if ((apps || []).some((a) => normalizeAppName(a.name) === needle)) return ventureName;
     }
 
-    const { data: children } = await supabase
-      .from('strategic_directives_v2')
-      .select('id')
-      .eq('parent_sd_id', sdId);
+    const children = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('id')
+        .eq('parent_sd_id', sdId),
+      { site: 'state-transitions:retro_target_app_children' }
+    );
     if (children?.length) {
-      const { data: childRetros } = await supabase
-        .from('retrospectives')
-        .select('target_application')
-        .in('sd_id', children.map((c) => c.id))
-        .not('target_application', 'is', null)
-        .limit(1);
+      const childRetros = await safeQuery(
+        supabase
+          .from('retrospectives')
+          .select('target_application')
+          .in('sd_id', children.map((c) => c.id))
+          .not('target_application', 'is', null)
+          .limit(1),
+        { site: 'state-transitions:retro_target_app_child_retros' }
+      );
       if (childRetros?.[0]?.target_application) return childRetros[0].target_application;
     }
   } catch {
@@ -307,13 +319,16 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
 
   try {
     // Check if PLAN-TO-LEAD or PLAN-TO-EXEC handoff exists
-    const { data: handoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('id')
-      .eq('sd_id', sdId)
-      .in('handoff_type', ['PLAN-TO-LEAD', 'PLAN-TO-EXEC'])
-      .eq('status', 'accepted')
-      .limit(1);
+    const handoffs = await safeQuery(
+      supabase
+        .from('sd_phase_handoffs')
+        .select('id')
+        .eq('sd_id', sdId)
+        .in('handoff_type', ['PLAN-TO-LEAD', 'PLAN-TO-EXEC'])
+        .eq('status', 'accepted')
+        .limit(1),
+      { site: 'state-transitions:template_satisfaction_handoff_check' }
+    );
 
     if (!handoffs || handoffs.length === 0) {
       const { error: hErr } = await supabase
@@ -347,11 +362,14 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
     }
 
     // Check if retrospective exists
-    const { data: retros } = await supabase
-      .from('retrospectives')
-      .select('id')
-      .eq('sd_id', sdId)
-      .limit(1);
+    const retros = await safeQuery(
+      supabase
+        .from('retrospectives')
+        .select('id')
+        .eq('sd_id', sdId)
+        .limit(1),
+      { site: 'state-transitions:template_satisfaction_retro_check' }
+    );
 
     if (!retros || retros.length === 0) {
       // SD-LEO-INFRA-BACKEND-WRITE-SAFETY-001 (formerly SD-FDBK-INFRA-HANDOFF-RETRO-GENERATORS-001, cancelled) (FR-4): defense-in-depth guard.

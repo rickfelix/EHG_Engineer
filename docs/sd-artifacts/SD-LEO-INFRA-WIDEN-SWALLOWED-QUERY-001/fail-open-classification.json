@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:21:37.903Z",
+  "generated_at": "2026-09-06T18:23:53.656Z",
   "counts": {
-    "has_catch": 78
+    "has_catch": 72
   },
   "results": [
     {
@@ -415,48 +415,6 @@
       "line": 131,
       "kind": "data",
       "snippet": "const { data: plan } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js",
-      "line": 40,
-      "kind": "data",
-      "snippet": "const { data: sdRow } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js",
-      "line": 50,
-      "kind": "data",
-      "snippet": "const { data: apps } = await supabase.from('applications').select('name').eq('status', 'active');",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js",
-      "line": 54,
-      "kind": "data",
-      "snippet": "const { data: children } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js",
-      "line": 59,
-      "kind": "data",
-      "snippet": "const { data: childRetros } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js",
-      "line": 310,
-      "kind": "data",
-      "snippet": "const { data: handoffs } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/state-transitions.js",
-      "line": 350,
-      "kind": "data",
-      "snippet": "const { data: retros } = await supabase",
       "classification": "has_catch"
     },
     {
