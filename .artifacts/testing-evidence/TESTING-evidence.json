@@ -1,0 +1,65 @@
+{
+  "schema": "testing-subagent-evidence/v1",
+  "sd_key": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-B",
+  "sd_id": "22cf5155-dc08-4311-9a13-a4c743eda14f",
+  "phase": "EXEC",
+  "sub_agent_code": "TESTING",
+  "produced_by": "lib/priority evidence runner (.artifacts/testing-evidence/write-testing-verdict.mjs)",
+  "produced_at": "2026-09-06T13:53:06.083Z",
+  "run_id": "testing-SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-B-1788702786083",
+  "git": {
+    "head_sha": "0835428a892d3a5f57f02e5168a439ea7c6f3581",
+    "merge_base_origin_main": "d1750b83618522f557dad2247ddcff7cd6f68514",
+    "diff_sha256": "f7d39fb3ab24407194621b0eb0849a444592904b97d77b43646799ac54ed9e5e",
+    "numstat": "81\t0\tlib/priority/comparator.cjs\n82\t0\tlib/priority/comparator.test.js\n129\t0\tlib/priority/shadow-logger.cjs\n180\t0\tlib/priority/shadow-logger.test.js\n23\t0\tscripts/coordinator-backlog-rank.mjs\n36\t2\tscripts/worker-checkin.cjs\n61\t0\ttests/unit/priority/shadow-comparator-order-invariant.test.js"
+  },
+  "runs": [
+    {
+      "name": "sd-unit-tests",
+      "runner": "vitest run --project unit",
+      "files": [
+        "lib/priority/comparator.test.js",
+        "lib/priority/shadow-logger.test.js",
+        "unit/priority/shadow-comparator-order-invariant.test.js"
+      ],
+      "total": 30,
+      "passed": 30,
+      "failed": 0,
+      "success": true,
+      "artifact": "priority-b-unit.json",
+      "artifact_sha256": "3dbcd7295bcb4d1183bb1da6022d0a6d5efca4b998e5c177ebbfa7afb31967f1"
+    },
+    {
+      "name": "regression-slice",
+      "runner": "vitest run --project unit (125 files importing worker-checkin.cjs / coordinator-backlog-rank.mjs)",
+      "suites": 568,
+      "total": 1700,
+      "passed": 1700,
+      "failed": 0,
+      "success": true,
+      "artifact": "priority-b-regression.json",
+      "artifact_sha256": "9698133f98909705485d951eb57e0fc4885606a476a55d84918a7da57657c8a3"
+    },
+    {
+      "name": "independent-order-invariance-probe",
+      "runner": "node (TESTING sub-agent authored, adversarial)",
+      "total": 14,
+      "passed": 14,
+      "failed": 0,
+      "exit_code": 0,
+      "artifact": "independent-probe-output.json",
+      "artifact_sha256": "94179501d2b6be44b3e0c2b1d484e15d39fb30454725cea92283d06f8450fa9a",
+      "probe_source_sha256": "efdf4616852b28cae92778e20290f814ea51809d63e5f9f39bee1db6415a3c80"
+    }
+  ],
+  "syntax_check": {
+    "command": "node --check",
+    "files_checked": 7,
+    "all_ok": true
+  },
+  "esm_cjs_interop_check": {
+    "module": "lib/priority/shadow-logger.cjs",
+    "named_export_resolved": true
+  },
+  "content_hash": "c218a0a44802883a283cc28d87c3c963880a1741c9f68a68cc27776e1f7eeaf8"
+}

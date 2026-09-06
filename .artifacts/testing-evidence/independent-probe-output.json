@@ -1,0 +1,68 @@
+{
+  "probe": "independent-order-invariance",
+  "total": 14,
+  "passed": 14,
+  "failed": 0,
+  "results": [
+    {
+      "name": "P1a no sync throw when keyOf throws",
+      "status": "PASS"
+    },
+    {
+      "name": "P1b no sync throw when scoreInputsOf throws",
+      "status": "PASS"
+    },
+    {
+      "name": "P1c no sync throw with NO arguments at all",
+      "status": "PASS"
+    },
+    {
+      "name": "P1d no sync throw when items is not an array",
+      "status": "PASS"
+    },
+    {
+      "name": "P2a promise never rejects when insert throws",
+      "status": "PASS"
+    },
+    {
+      "name": "P2b promise never rejects when client.from throws",
+      "status": "PASS"
+    },
+    {
+      "name": "P3a items array not mutated after await",
+      "status": "PASS"
+    },
+    {
+      "name": "P3b frozen items array survives (proves no in-place sort)",
+      "status": "PASS"
+    },
+    {
+      "name": "P4 kill switch off means skipped and client never touched",
+      "status": "PASS"
+    },
+    {
+      "name": "P5a sortByDispatchRank order identical shadow ON vs OFF",
+      "status": "PASS"
+    },
+    {
+      "name": "P5b sortByDispatchRank early-return returns SAME array reference",
+      "status": "PASS"
+    },
+    {
+      "name": "P6 QF severity order survives the shadow call (call site 2 pattern)",
+      "status": "PASS"
+    },
+    {
+      "status": "INFO",
+      "name": "P7-observation: coordinator wrote 3 of 3 items as disagreements"
+    },
+    {
+      "name": "P7 coordinator claimable array untouched by the exact call-site block",
+      "status": "PASS"
+    },
+    {
+      "name": "P8 audit_log row shape matches FR-3",
+      "status": "PASS"
+    }
+  ]
+}
