@@ -4469,6 +4469,29 @@ async function main() {
     console.log('');
   }
 
+  // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A FR-3 — role-seat checkpoint mirror tick.
+  // Wrapped so any failure NEVER aborts the sweep's claim-cleanup work, same contract as the
+  // reaper tick and the capped-pool-broadcast tick above. Mirrors the newest local file for each
+  // of the 4 fixed role seats UNCONDITIONALLY (no liveness gate) -- see
+  // lib/fleet/seat-checkpoint-mirror.cjs's own docblock for why a liveness gate was rejected.
+  try {
+    const { SEAT_NAMES } = require('../lib/fleet/seat-checkpoint-registry.cjs');
+    const { mirrorSeat } = require('../lib/fleet/seat-checkpoint-mirror.cjs');
+    const claudeDir = path.resolve(__dirname, '..', '.claude');
+    for (const seatName of SEAT_NAMES) {
+      const outcome = await mirrorSeat(supabase, claudeDir, seatName);
+      if (outcome.action === 'error') {
+        console.log('  seat_checkpoint_mirror[' + seatName + ']: ' + outcome.reason);
+      } else if (outcome.action === 'skipped') {
+        console.log('  seat_checkpoint_mirror[' + seatName + ']: skipped (' + outcome.reason + ')');
+      }
+      // 'inserted' / 'refreshed' / 'no_candidate' are the expected quiet outcomes -- no log noise.
+    }
+  } catch (seatCkErr) {
+    console.log('SEAT CHECKPOINT MIRROR TICK: ' + (seatCkErr && seatCkErr.message ? seatCkErr.message : 'unknown'));
+    console.log('');
+  }
+
   // SD-LEO-INFRA-LOOP-STATE-SIGNAL-001 — flip loop_state to `exited` on
   // sessions that just got released by this sweep cycle. Best-effort: failure
   // does not roll back the release. Single bulk UPDATE rather than threading
