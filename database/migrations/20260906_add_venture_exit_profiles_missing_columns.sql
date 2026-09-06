@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- Add venture_exit_profiles.readiness_assessment and .updated_at
 -- (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-D)
 --

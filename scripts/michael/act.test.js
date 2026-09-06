@@ -86,11 +86,19 @@ describe('gmail-act (TS-9)', () => {
     expect(called).toBe(false);
     expect(sb.writes).toHaveLength(0);
   });
-  it('absent tables after a successful modify: refuses TABLES_ABSENT and says the API change was applied', async () => {
+  it('SEC-L1: absent tables refuse BEFORE the Gmail call — modifyThread is never invoked', async () => {
+    let called = false;
     const sb = recorder({ readError: MISSING });
-    const r = await runGmailAct({ sb, argv: ['--thread', 't', '--archive'], now: NOW, loadClient: async () => ({ modifyThread: async () => ({ ok: true }) }) });
+    const r = await runGmailAct({ sb, argv: ['--thread', 't', '--archive'], now: NOW, loadClient: async () => ({ modifyThread: async () => { called = true; return { ok: true }; } }) });
     expect(r.refusal).toBe('TABLES_ABSENT');
-    expect(r.api_applied).toBe(true);
+    expect(called).toBe(false);
+    expect(r.api_applied).toBeUndefined();
+  });
+  it('SEC-L4: a throwing modifyThread is GMAIL_MODIFY_FAILED, not an uncaught throw', async () => {
+    const sb = recorder();
+    const r = await runGmailAct({ sb, argv: ['--thread', 't', '--archive'], now: NOW, loadClient: async () => ({ modifyThread: async () => { throw new Error('quota'); } }) });
+    expect(r.refusal).toBe('GMAIL_MODIFY_FAILED');
+    expect(sb.writes).toHaveLength(0);
   });
 });
 
@@ -117,7 +125,7 @@ describe('todoist-act (TS-8)', () => {
     expect(sb.writes[0].ops[0].args[1]).toEqual({ onConflict: 'et_date,task_id' });
     expect(row.moved_back_at).toBe(NOW.toISOString());
     expect(row.mutations_applied).toHaveLength(2);
-    expect(row.mutations_applied[1]).toMatchObject({ verb: 'reschedule', args: ['42', { dueDate: '2026-09-10' }] });
+    expect(row.mutations_applied[1]).toMatchObject({ verb: 'reschedule', args: { task_id: '42', due_date: '2026-09-10' } });
     expect(row.chosen_action).toBe('reschedule');
     expect(row.rule_key).toBe('never-tuesday');
   });
@@ -138,6 +146,13 @@ describe('todoist-act (TS-8)', () => {
     expect(log[2][1]).toEqual({ taskId: '7', content: 'done' });
     expect(sb.writes).toHaveLength(3);
     expect(VERBS).toEqual(['reschedule', 'complete', 'add', 'comment']);
+    // SEC-M3: the chairman's prose is never stored verbatim in mutations_applied.
+    const addRow = sb.writes[1].ops[0].args[0];
+    expect(JSON.stringify(addRow)).not.toContain('Call dentist');
+    expect(addRow.mutations_applied[0].args).toMatchObject({ project_id: 'p1', due_date: '2026-09-09', content_len: 12 });
+    expect(addRow.mutations_applied[0].args.content_sha256).toMatch(/^[0-9a-f]{64}$/);
+    const commentRow = sb.writes[2].ops[0].args[0];
+    expect(JSON.stringify(commentRow)).not.toContain('"done"');
   });
   it('refusals: unknown verb, missing args, bad dates; --dry-run never loads the client', async () => {
     expect((await runTodoistAct({ sb: recorder(), argv: ['delete', '--task', '1'] })).refusal).toBe('INVALID_VERB');
@@ -147,6 +162,14 @@ describe('todoist-act (TS-8)', () => {
     const r = await runTodoistAct({ sb: recorder(), argv: ['complete', '--task', '1', '--dry-run'], now: NOW, loadClient: async () => { loaded = true; return api([]); } });
     expect(r).toMatchObject({ ok: true, dry_run: true, would_call: { method: 'closeTask', args: ['1'] } });
     expect(loaded).toBe(false);
+  });
+  it('SEC-L1: absent tables refuse BEFORE the Todoist call — the client is never loaded', async () => {
+    let loaded = false;
+    const sb = recorder({ readError: MISSING });
+    const r = await runTodoistAct({ sb, argv: ['complete', '--task', '1'], now: NOW, loadClient: async () => { loaded = true; return api([]); } });
+    expect(r.refusal).toBe('TABLES_ABSENT');
+    expect(loaded).toBe(false);
+    expect(sb.writes).toHaveLength(0);
   });
   it('a client failure is TODOIST_CALL_FAILED with nothing written; a missing token is TODOIST_CLIENT_UNAVAILABLE', async () => {
     const sb = recorder();

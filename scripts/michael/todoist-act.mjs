@@ -14,10 +14,23 @@
 //   node scripts/michael/todoist-act.mjs comment    --task <id> --text "..."
 //   common: [--et-date YYYY-MM-DD] [--dry-run] [--json]
 import { isMainModule } from '../../lib/utils/is-main-module.js';
-import { createMichaelClient, parseArgs, readRows, writeRows, refusal, emit, todayEt } from '../../lib/michael/db.mjs';
+import { createMichaelClient, parseArgs, readRows, writeRows, refusal, emit, todayEt, sha256Hex } from '../../lib/michael/db.mjs';
 
 export const VERBS = Object.freeze(['reschedule', 'complete', 'add', 'comment']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Pure: the mutation record stored in mutations_applied. SEC-M3: chairman prose (task content,
+ * comment text) is NEVER stored verbatim — only its sha256 and length — because
+ * michael_todoist_snapshot is not aged out by retention.
+ */
+export function redactCall(call) {
+  const [first, second] = call.args;
+  if (call.method === 'updateTask') return { task_id: first, due_date: second && second.dueDate ? second.dueDate : null };
+  if (call.method === 'closeTask') return { task_id: first };
+  if (call.method === 'addTask') return { project_id: first.projectId ?? null, due_date: first.dueDate ?? null, content_sha256: sha256Hex(first.content), content_len: first.content.length };
+  return { task_id: first.taskId, content_sha256: sha256Hex(first.content), content_len: first.content.length };
+}
 
 /** Pure: does this reschedule reverse the proposal? (proposed_date present and different) */
 export function reversesProposal(priorRow, newDate) {
@@ -55,6 +68,14 @@ export async function runTodoistAct({ sb, argv = [], now = new Date(), loadClien
   }
   if (a['dry-run']) return { ok: true, dry_run: true, verb, would_call: call, et_date: etDate };
 
+  // SEC-L1 / TESTING F1: pre-flight the recording table BEFORE touching the external account, so an
+  // unapplied migration never yields a mutation that cannot be recorded.
+  const preflight = verb === 'add'
+    ? await readRows(sb, 'michael_todoist_snapshot', (q) => q.eq('task_id', '__preflight__'), { select: 'id' })
+    : await readRows(sb, 'michael_todoist_snapshot', (q) => q.eq('et_date', etDate).eq('task_id', String(a.task)), { select: 'id,proposed_date,mutations_applied,rule_key' });
+  if (preflight.tables_absent) return refusal('TABLES_ABSENT', 'michael_todoist_snapshot is not applied yet — refusing BEFORE the Todoist call so nothing mutates unrecorded');
+  if (preflight.error) return refusal('READ_FAILED', preflight.error);
+
   let api;
   try {
     api = await loadClient();
@@ -66,10 +87,12 @@ export async function runTodoistAct({ sb, argv = [], now = new Date(), loadClien
 
   const taskId = verb === 'add' ? String(result && result.id ? result.id : '') : String(a.task);
   if (!taskId) return { ok: true, verb, api: result, recorded: false, note: 'addTask returned no id; nothing recorded' };
-  const existing = await readRows(sb, 'michael_todoist_snapshot', (q) => q.eq('et_date', etDate).eq('task_id', taskId), { select: 'id,proposed_date,mutations_applied,rule_key' });
+  const existing = verb === 'add'
+    ? await readRows(sb, 'michael_todoist_snapshot', (q) => q.eq('et_date', etDate).eq('task_id', taskId), { select: 'id,proposed_date,mutations_applied,rule_key' })
+    : preflight;
   if (existing.tables_absent) return refusal('TABLES_ABSENT', 'michael_todoist_snapshot is not applied yet — the Todoist change was applied but not recorded', { api_applied: true });
   const prior = existing.rows[0] || null;
-  const mutation = { verb, at: now.toISOString(), args: call.args, by: process.env.CLAUDE_SESSION_ID || 'cli' };
+  const mutation = { verb, at: now.toISOString(), args: redactCall(call), by: process.env.CLAUDE_SESSION_ID || 'cli' };
   const movedBack = verb === 'reschedule' && reversesProposal(prior, a.date);
   const row = {
     et_date: etDate,

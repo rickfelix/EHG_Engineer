@@ -55,11 +55,18 @@ export async function runGmailAct({ sb, argv = [], now = new Date(), loadClient 
   if (!client) return refusal(GMAIL_CLIENT_ABSENT, `lib/michael/gmail-client.mjs (child C: chairman OAuth) is not landed; no Gmail call and no row written`, { would_call: { threadId, ...plan } });
   if (a['dry-run']) return { ok: true, dry_run: true, would_call: { threadId, ...plan }, would_write: { et_date: etDate, thread_id: threadId, action_intent: intent } };
 
-  const api = await client.modifyThread({ threadId, ...plan });
+  // SEC-L1 / TESTING F1: pre-flight the recording table BEFORE the Gmail call, so an unapplied
+  // migration never yields a mailbox change that cannot be recorded.
+  const existing = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).eq('thread_id', threadId), { select: 'id,rule_key,action_intent' });
+  if (existing.tables_absent) return refusal('TABLES_ABSENT', 'michael_gmail_triage_items is not applied yet — refusing BEFORE the Gmail call so nothing changes unrecorded');
+  if (existing.error) return refusal('READ_FAILED', existing.error);
+
+  let api;
+  try {
+    api = await client.modifyThread({ threadId, ...plan });
+  } catch (e) { return refusal('GMAIL_MODIFY_FAILED', e && e.message ? e.message : String(e)); }
   if (!api || api.ok === false) return refusal('GMAIL_MODIFY_FAILED', (api && api.error) || 'modifyThread did not succeed');
 
-  const existing = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).eq('thread_id', threadId), { select: 'id,rule_key,action_intent' });
-  if (existing.tables_absent) return refusal('TABLES_ABSENT', 'michael_gmail_triage_items is not applied yet — the Gmail change was applied but not recorded', { api_applied: true });
   const prior = existing.rows[0] || null;
   const row = {
     et_date: etDate,

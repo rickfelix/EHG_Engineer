@@ -1661,6 +1661,79 @@ const { hasCorrelatedReply } = require('../lib/coordinator/reply-correlation.cjs
 // TRUE oldest-first age instead, "so a 2.5h latency is visible at the tick, not discovered in
 // retro" (this SD's own provenance). Reuses DEFAULT_ALERT_AGE_MIN, not a new SLA constant.
 const { fetchAllOutstandingSignals, formatCoordinatorOverdueWarning } = require('../lib/fleet/outstanding-signals.cjs');
+// QF-20260906-162: delivery-receipt write-site imports — dispatchToWorker carries the shared
+// backpressure/target-role guards (signal_receipt is exempt from the former, see dispatch.cjs);
+// PAYLOAD_KINDS.SIGNAL_RECEIPT is the canonical kind literal (lib/fleet/worker-status.cjs).
+const { dispatchToWorker } = require('../lib/coordinator/dispatch.cjs');
+const { PAYLOAD_KINDS: DASH_PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
+
+/**
+ * QF-20260906-162: WRITE SITE — called by the coordinator inbox core (printInbox, below) at
+ * the moment it enumerates a batch of signal rows. For each row carrying
+ * payload.signal_type='stuck' AND payload.severity='high', writes ONE kind=signal_receipt
+ * row back to the original sender via dispatchToWorker (which carries the shared
+ * backpressure/target-role guards — signal_receipt is registered exempt from the former in
+ * lib/coordinator/dispatch.cjs). A RECEIPT, never an ack: never sets acknowledged_at/
+ * answered_at on the original signal row — that stays coordinator-ack-signal.cjs's job
+ * alone. Idempotent by construction: checks for an existing receipt (by
+ * payload.correlation_id) before writing, so re-enumerating the same still-unacknowledged
+ * row on a later render never double-writes. Fail-soft throughout — a receipt-write failure
+ * must never break the coordinator's own inbox render.
+ *
+ * Extracted as its own exported, injectable-client function (unlike printInbox itself, which
+ * has no injectable client) specifically so this write path is directly unit-testable.
+ *
+ * @param {object} supabase - injected Supabase client
+ * @param {string} coordinatorId - the coordinator's own session id (payload.producer)
+ * @param {Array<{id:string, sender_session:string, payload:object}>} signals - the enumerated batch
+ * @returns {Promise<{written:number, skipped:number}>}
+ */
+async function writeSignalReceipts(supabase, coordinatorId, signals) {
+  const highStuckSignals = (signals || []).filter((s) => s.payload?.signal_type === 'stuck' && s.payload?.severity === 'high');
+  let written = 0;
+  let skipped = 0;
+  if (highStuckSignals.length === 0) return { written, skipped };
+
+  const runId = crypto.randomUUID();
+  let existingReceiptCorrelationIds = new Set();
+  try {
+    // Explicit literal bound (count-truncation-diff-lint): highStuckSignals is drawn from
+    // printInbox()'s own .limit(20) batch, so 50 is generous headroom even allowing for a
+    // rare duplicate receipt row per correlation_id — never a truncation risk in practice.
+    const { data: existingReceipts } = await supabase
+      .from('session_coordination')
+      .select('payload')
+      .eq('payload->>kind', DASH_PAYLOAD_KINDS.SIGNAL_RECEIPT)
+      .in('payload->>correlation_id', highStuckSignals.map((s) => s.id))
+      .limit(50);
+    existingReceiptCorrelationIds = new Set((existingReceipts || []).map((r) => r.payload?.correlation_id));
+  } catch { /* fail-soft: an existence-check failure risks a duplicate receipt, never a lost inbox render */ }
+
+  for (const s of highStuckSignals) {
+    if (existingReceiptCorrelationIds.has(s.id)) { skipped++; continue; }
+    if (!s.sender_session) { skipped++; continue; } // no target to receipt back to
+    try {
+      await dispatchToWorker(supabase, {
+        message_type: 'INFO',
+        target_session: s.sender_session,
+        sender_session: coordinatorId,
+        subject: '[SIGNAL_RECEIPT] coordinator inbox has seen this stuck/high signal',
+        payload: {
+          kind: DASH_PAYLOAD_KINDS.SIGNAL_RECEIPT,
+          producer: coordinatorId,
+          run_id: runId,
+          enumerated_row_id: s.id,
+          correlation_id: s.id,
+        },
+      });
+      written++;
+    } catch (e) {
+      console.log(`  (signal_receipt write skipped for ${s.id}: ${e.message || e})`);
+      skipped++;
+    }
+  }
+  return { written, skipped };
+}
 
 // ── Section: Worker-Signal Inbox (FR-3a) ──
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001
@@ -1713,6 +1786,12 @@ async function printInbox() {
     console.log('');
     return;
   }
+
+  // QF-20260906-162: WRITE SITE — the coordinator inbox core, AT THE MOMENT it enumerates a
+  // severity=high signal_type=stuck row, writes ONE kind=signal_receipt row back to the
+  // sender. See writeSignalReceipts below (extracted for direct unit testing — printInbox
+  // itself has no injectable client).
+  await writeSignalReceipts(supabase, coordinatorId, signals);
 
   // QF-20260704-877: signals.length is capped by .limit(20) above, so it can never report
   // more than 20 even when the true unacknowledged backlog is larger — the label read "20
@@ -3303,7 +3382,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate, writeSignalReceipts };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.

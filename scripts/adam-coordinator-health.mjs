@@ -18,8 +18,10 @@ import { createClient } from '@supabase/supabase-js';
 import { liveFleetWorkers } from '../lib/fleet/genuine-worker.mjs';
 import { computeWaveLinkageCoverage } from '../lib/roadmap/wave-linkage-coverage.js';
 // SD-LEO-INFRA-ROADMAP-LINK-COUNTED-EXCEPTION-001 (FR-5): surface the counted exception beside
-// the adherence number. Shared pure tally — never re-derived here.
-import { countRoadmapLinkExceptions } from '../lib/sourcing-engine/roadmap-link-exception.js';
+// the adherence number. Shared pure tally — never re-derived here. countRoadmapLinkExceptionsByScope
+// (SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-D) delegates to the same all-corpus tally, never a second
+// reason_supplied===true predicate.
+import { countRoadmapLinkExceptionsByScope } from '../lib/sourcing-engine/roadmap-link-exception.js';
 import { computeClaimableLeaves } from './coordinator-backlog-rank.mjs';
 import { getActiveCoordinatorId } from '../lib/coordinator/resolve.cjs';
 // QF-20260725-089: the ONE belt-depth gauge, eligibility-gated. Never re-derive a depth count here.
@@ -205,18 +207,27 @@ export async function computePlanAdherence(supabase) {
  * under-count on a table of this size) and FAIL-SOFT — a fault returns zeros rather than
  * throwing, because this gauge is advisory and must never break the health probe.
  * The tally itself is the shared pure function, not a re-derivation.
+ *
+ * SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-D (FR-5): also selects `status` and returns
+ * countRoadmapLinkExceptionsByScope's {all, non_terminal} split as an ADDITIVE `non_terminal`
+ * sub-object, with the flat all-corpus triple kept spread at the top level for backward
+ * compatibility (existing readers of .total/.with_reason/.without_reason are unchanged).
  */
 async function countRoadmapLinkExceptionsLive(supabase) {
   try {
     const { fetchAllPaginated } = await import('../lib/db/fetch-all-paginated.mjs');
     const rows = await fetchAllPaginated(() => supabase
       .from('strategic_directives_v2')
-      .select('sd_key, metadata')
+      .select('sd_key, status, metadata')
       .not('metadata->roadmap_link_exception', 'is', null)
       .order('sd_key', { ascending: true }));
-    return countRoadmapLinkExceptions(rows || []);
+    const scoped = countRoadmapLinkExceptionsByScope(rows || []);
+    return { ...scoped.all, non_terminal: scoped.non_terminal };
   } catch {
-    return { total: 0, with_reason: 0, without_reason: 0, unmeasured: true };
+    return {
+      total: 0, with_reason: 0, without_reason: 0, unmeasured: true,
+      non_terminal: { total: 0, with_reason: 0, without_reason: 0, unmeasured: true },
+    };
   }
 }
 
