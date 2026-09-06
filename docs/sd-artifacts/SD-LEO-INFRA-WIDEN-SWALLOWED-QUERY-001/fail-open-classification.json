@@ -1,8 +1,7 @@
 {
-  "generated_at": "2026-09-06T14:46:09.005Z",
+  "generated_at": "2026-09-06T14:54:30.336Z",
   "counts": {
-    "has_catch": 115,
-    "no_catch": 9
+    "has_catch": 115
   },
   "results": [
     {
@@ -319,69 +318,6 @@
       "kind": "data",
       "snippet": "const { data: deliverables } = await supabase",
       "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 57,
-      "kind": "data",
-      "snippet": "const { data: profile } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 136,
-      "kind": "data",
-      "snippet": "const { data: prd } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 206,
-      "kind": "data",
-      "snippet": "const { data: deliverables } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 236,
-      "kind": "data",
-      "snippet": "const { data: children } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 262,
-      "kind": "data",
-      "snippet": "const { data: parent } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 278,
-      "kind": "data",
-      "snippet": "const { data: siblings } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 289,
-      "kind": "data",
-      "snippet": "const { data: deps } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 326,
-      "kind": "data",
-      "snippet": "const { data: visions } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js",
-      "line": 353,
-      "kind": "data",
-      "snippet": "const { data: archPlans } = await supabase",
-      "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-exec/gates/prd-gates.js",
