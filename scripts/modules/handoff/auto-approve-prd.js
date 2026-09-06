@@ -9,6 +9,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -92,11 +93,14 @@ export async function autoApprovePRD(sdId, options = {}) {
 
   if (prdError || !prd) {
     // Try by sd_id
-    const { data: prdBySdId } = await supabase
-      .from('product_requirements_v2')
-      .select('*')
-      .eq('sd_id', sdId)
-      .single();
+    const prdBySdId = await safeQuery(
+      supabase
+        .from('product_requirements_v2')
+        .select('*')
+        .eq('sd_id', sdId)
+        .single(),
+      { site: 'auto-approve-prd:prd_by_sd_id' }
+    );
 
     if (!prdBySdId) {
       return { approved: false, reason: `PRD not found for SD: ${sdId}` };
@@ -201,10 +205,13 @@ export async function autoApproveChildPRDs(parentSdId) {
   console.log('═'.repeat(60));
 
   // Get all children
-  const { data: children } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, title, sd_type')
-    .eq('parent_sd_id', parentSdId);
+  const children = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('id, title, sd_type')
+      .eq('parent_sd_id', parentSdId),
+    { site: 'auto-approve-prd:child_sds' }
+  );
 
   if (!children || children.length === 0) {
     return { results: [], summary: 'No children found' };
