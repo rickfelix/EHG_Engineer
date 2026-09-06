@@ -122,11 +122,14 @@ export async function main(argv = process.argv, deps = {}) {
   let alreadyCoveredToday = false;
   try {
     const sinceIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    // Explicitly bounded (count-truncation-diff-lint): only "did anything land today" matters,
+    // and this obligation kind fires at most a handful of times per day.
     const { data: recentStatus } = await supabase
       .from('sms_outbound_obligations')
       .select('kind, created_at')
       .in('kind', ['morning_brief', 'heartbeat_status'])
-      .gte('created_at', sinceIso);
+      .gte('created_at', sinceIso)
+      .limit(20);
     const todayEt = etDateStr(now);
     alreadyCoveredToday = (recentStatus || []).some((r) => etDateStr(new Date(r.created_at)) === todayEt);
   } catch { /* fail-soft: falls through to the normal dedupe_key enqueue path */ }
