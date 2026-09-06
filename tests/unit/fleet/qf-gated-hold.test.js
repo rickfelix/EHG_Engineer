@@ -139,3 +139,50 @@ describe('releaseChairmanGatedQf (FR-4 / TS-4, TS-5)', () => {
     expect(client._updates).toHaveLength(0);
   });
 });
+
+// SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E (Child E) FR-4 / AC-9, AC-10: a chairman-label/
+// provenance field (metadata.claim_history[].pick_reason, added by lib/fleet/claim-stamp.cjs +
+// lib/fleet/qf-metadata-merge.mjs) must never alter isChairmanGatedQF's existing hard-exclusion
+// -- this is a proof of NON-INTERFERENCE, not a new tripwire. The review_by/"review_at passed with
+// no dispatch" check named in the parent SD's original success criteria is explicitly OUT OF
+// SCOPE for this child (validation-agent 787c567b, Q8 deletion audit) and is deliberately absent
+// from this file.
+describe('isChairmanGatedQF non-interference with new provenance fields (Child E FR-4)', () => {
+  const PROVENANCE = {
+    metadata: {
+      claim_history: [
+        { session_id: 'sess-1', claimed_at: '2026-09-06T00:00:00.000Z', identity_source: 'env',
+          pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } },
+      ],
+    },
+  };
+
+  // Representative shapes of the 3 live chairman-gated QF fixtures (owner casing varies).
+  const GATED_FIXTURES = [
+    { id: 'QF-20260713-970', owner: 'CHAIRMAN', release_condition: 'Chairman approves (verbal suffices) -> apply migration 031' },
+    { id: 'QF-20260905-884', owner: 'chairman', release_condition: '[oracle_read_pending] review_at=2026-09-06T01:27:08.595Z consult=6155ae63 :: batch mint detected (group size 6)' },
+    { id: 'QF-20260905-631', owner: 'chairman', release_condition: '[oracle_read_pending] review_at=2026-09-06T01:27:08.595Z consult=6155ae63 :: batch mint detected (group size 6)' },
+  ];
+
+  test('AC-9: all 3 live chairman-gated fixtures still gate identically with and without pick_reason/provenance present', () => {
+    for (const fixture of GATED_FIXTURES) {
+      const without = isChairmanGatedQF(fixture);
+      const withProvenance = isChairmanGatedQF({ ...fixture, ...PROVENANCE });
+      expect(without).toBe(true);
+      expect(withProvenance).toBe(true);
+      expect(withProvenance).toBe(without); // byte-identical verdict
+    }
+  });
+
+  test('AC-10: a non-gated QF stays non-gated regardless of a provenance field', () => {
+    const nonGated = { id: 'QF-NORMAL', owner: null, release_condition: null };
+    expect(isChairmanGatedQF(nonGated)).toBe(false);
+    expect(isChairmanGatedQF({ ...nonGated, ...PROVENANCE })).toBe(false);
+  });
+
+  test('AC-11: no review_by/review_at tripwire is exported by this module (explicitly out of scope)', () => {
+    const require2 = require;
+    const mod = require2('../../../lib/fleet/qf-gated-hold.cjs');
+    expect(Object.keys(mod).sort()).toEqual(['GATED_HOLD_COLUMNS', 'isChairmanGatedQF']);
+  });
+});
