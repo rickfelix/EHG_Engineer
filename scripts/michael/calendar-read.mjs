@@ -70,7 +70,8 @@ export function isOptional(event) {
 
 /** Pure: a meeting has at least one attendee other than the chairman; a self-created block has none. */
 export function isMeeting(event) {
-  return (Array.isArray(event.attendees) ? event.attendees : []).some((a) => a && a.self !== true);
+  // A booked room (resource: true) is not another person.
+  return (Array.isArray(event.attendees) ? event.attendees : []).some((a) => a && a.self !== true && a.resource !== true);
 }
 
 const isoOrNull = (v) => { const d = v ? new Date(v) : null; return d && Number.isFinite(d.getTime()) ? d.toISOString() : null; };
@@ -80,15 +81,19 @@ const isoOrNull = (v) => { const d = v ? new Date(v) : null; return d && Number.
  * its ET start date; an all-day event is one row per covered date (start.date up to the exclusive
  * end.date), so a multi-day block covering today reaches today. Returns [] for a malformed event.
  */
-export function eventRows(event, calendarId) {
+export function eventRows(event, calendarId, window = null) {
   if (!event || !event.id || !event.start) return [];
   const allDay = Boolean(event.start.date && !event.start.dateTime);
   if (allDay) {
     const first = String(event.start.date);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(first)) return [];
     const endExclusive = event.end && /^\d{4}-\d{2}-\d{2}$/.test(String(event.end.date || '')) ? String(event.end.date) : shiftDate(first, 1);
+    // Walk only the covered dates inside the window, so a block that began months ago still reaches today
+    // (adversarial review of PR 8369 round 2); without a window, walk the whole block.
+    const from = window && window.from > first ? window.from : first;
+    const to = window && window.toExclusive < endExclusive ? window.toExclusive : endExclusive;
     const rows = [];
-    for (let d = first, i = 0; d < endExclusive && i < 31; d = shiftDate(d, 1), i += 1) rows.push(eventRow(event, calendarId, { allDay: true, etDate: d }));
+    for (let d = from; d < to; d = shiftDate(d, 1)) rows.push(eventRow(event, calendarId, { allDay: true, etDate: d }));
     return rows;
   }
   const startsAt = isoOrNull(event.start.dateTime);
@@ -157,8 +162,9 @@ export function etWeekday(dateStr) {
  */
 export function classifyDay(rows, dateStr) {
   const today = rows.filter((r) => r.et_date === dateStr);
-  // A declined coded event carries no intent for the day (adversarial review of PR 8369).
-  const coded = today.filter((r) => r.response_status !== 'declined').map((r) => r.coded_marker).filter(Boolean);
+  // A declined, tentative or unanswered coded invite carries no intent for the day (adversarial review of
+  // PR 8369): the override comes from non-optional, non-declined rows only, matching the Recovery predicate.
+  const coded = today.filter((r) => !r.optional && r.response_status !== 'declined').map((r) => r.coded_marker).filter(Boolean);
   const override = coded.map((c) => CODED_OVERRIDES[c]).find(Boolean);
   const accepted = today.filter((r) => !r.optional && ACCEPTED.has(r.response_status));
   // A meeting has other attendees; a self-created timed block (gym, lunch, focus) is not one.
@@ -215,7 +221,7 @@ export async function runCalendarRead({ sb, argv = [], now = new Date(), auth, c
         if (r.truncated) truncated.push(label);
         for (const ev of r.events) {
           if (!ev || ev.status === 'cancelled') continue;
-          const built = eventRows(ev, calendarId);
+          const built = eventRows(ev, calendarId, { from: dates[0], toExclusive: shiftDate(etDate, 2) });
           if (!built.length) { skippedMalformed += 1; continue; }
           for (const row of built) if (dates.includes(row.et_date)) rows.push(row);
         }

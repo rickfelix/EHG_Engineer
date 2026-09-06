@@ -53,6 +53,10 @@ describe('pure helpers', () => {
     expect(isMeeting({ ...solo })).toBe(false); expect(isMeeting({})).toBe(false);
     // a multi-day all-day event yields one row per covered date (end.date exclusive); malformed events yield none
     expect(eventRows({ id: 'ooo', summary: 'OOO', start: { date: '2026-09-03' }, end: { date: '2026-09-08' } }, PRIMARY).map((x) => x.et_date)).toEqual(['2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-07']);
+    // a block that began months ago walks only the window's dates and still reaches today
+    expect(eventRows({ id: 'leave', start: { date: '2026-07-20' }, end: { date: '2026-10-01' } }, PRIMARY, { from: '2026-09-05', toExclusive: '2026-09-08' }).map((x) => x.et_date)).toEqual(['2026-09-05', '2026-09-06', '2026-09-07']);
+    expect(eventRows({ id: 'short', start: { date: '2026-09-06' }, end: { date: '2026-09-07' } }, PRIMARY, { from: '2026-09-05', toExclusive: '2026-09-08' }).map((x) => x.et_date)).toEqual(['2026-09-06']);
+    expect(isMeeting({ attendees: [{ self: true }, { email: 'room@resource.calendar.google.com', resource: true }] })).toBe(false);
     expect(eventRows({ id: 'bad', start: { dateTime: 'not a date' } }, PRIMARY)).toEqual([]);
     expect(eventRows({ id: 'nostart' }, PRIMARY)).toEqual([]);
     const a = eventRows(allDay('h1', '2026-09-07', { summary: 'Holiday' }), 'exelon')[0];
@@ -97,6 +101,10 @@ describe('classifyDay (TS-8)', () => {
     // a declined coded event never overrides; a day with only declined events is Recovery
     expect(classifyDay([timed('a', 13), timed('b', 15), timed('c', 17), timed('pto', 19, { summary: '[RECOVERY] PTO', attendees: [{ self: true, responseStatus: 'declined' }, { email: 'p@x' }] })], D)).toMatchObject({ classification: 'Interpersonal', coded: [] });
     expect(classifyDay([timed('d', 13, { attendees: [{ self: true, responseStatus: 'declined' }, { email: 'p@x' }] })], D)).toMatchObject({ classification: 'Recovery' });
+    // a tentative or unanswered coded invite never overrides either
+    expect(classifyDay([timed('a', 13), timed('b', 15), timed('c', 17), timed('maybe', 19, { summary: '[RECOVERY] maybe', ...tentative })], D)).toMatchObject({ classification: 'Interpersonal', coded: [] });
+    // three solo blocks with a booked room are still not meetings
+    expect(classifyDay([timed('g', 11, { attendees: [{ self: true, responseStatus: 'accepted' }, { resource: true }] }), timed('l', 16, { attendees: [{ self: true, responseStatus: 'accepted' }, { resource: true }] }), timed('f', 18, { attendees: [{ self: true, responseStatus: 'accepted' }, { resource: true }] })], D)).toMatchObject({ classification: 'Deep', meetings: 0 });
   });
   it('a coded event overrides everything, including three meetings and the Tuesday rule', () => {
     expect(classifyDay([timed('a', 13), timed('b', 15), timed('c', 17), timed('d', 19, { summary: '[DEEP] write' })], D)).toMatchObject({ classification: 'Deep', reason: 'coded DEEP', coded: ['DEEP'] });
@@ -173,6 +181,12 @@ describe('runCalendarRead (TS-11, TS-15)', () => {
     expect(one).toMatchObject({ action: 'run', status: 'degraded', counts: { failed_calendar: ['exelon'], rows_total: 2 } });
     const both = await runCalendarRead({ sb: db().sb, argv: ['--apply'], now: SUNDAY, auth: 'AUTH', calendar: calendars({ primary: err, 'exelon@group.calendar.google.com': err }), env });
     expect(both).toMatchObject({ action: 'run', status: 'failed', counts: { failed_calendar: ['primary', 'exelon'], error_code: '503' } });
+  });
+  it('a long all-day block that began before the window reaches today through the run loop', async () => {
+    const factory = calendars({ primary: [{ id: 'leave', summary: 'Parental leave', start: { date: '2026-07-20' }, end: { date: '2026-10-01' } }], 'exelon@group.calendar.google.com': [] });
+    const r = await runCalendarRead({ sb: db().sb, argv: [], now: SUNDAY, auth: 'AUTH', calendar: factory, env });
+    expect(r.preview.map((x) => x.et_date)).toEqual(['2026-09-05', '2026-09-06', '2026-09-07']);
+    expect(r.counts).toMatchObject({ rows_total: 3, events_by_date: { '2026-09-06': 1 } });
   });
   it('a truncated calendar page degrades the run, and a malformed event is skipped and counted', async () => {
     const factory = async () => ({ events: { list: async (args) => ({ data: { items: args.calendarId === 'primary' ? [ev('p1', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z', accepted), { id: 'bad', start: { dateTime: 'nope' } }] : [], nextPageToken: args.calendarId === 'primary' ? 'tok' : undefined } }) } });
