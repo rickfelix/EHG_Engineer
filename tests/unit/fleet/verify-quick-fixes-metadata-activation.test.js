@@ -54,7 +54,7 @@ describe('resolveActivationState', () => {
     expect(deleted).toBe(false);
   });
 
-  it('TS-2: ACTIVATED when the merge succeeds and the returned entry carries pick_reason', async () => {
+  it('TS-2: ACTIVATED when the merge succeeds, the returned entry carries pick_reason, AND an independent read-back confirms persistence', async () => {
     const result = await resolveActivationState({
       dbClientFactory: fakePresentDb,
       mergeQfMetadataFn: async () => ({ merged: true }),
@@ -62,9 +62,42 @@ describe('resolveActivationState', () => {
         const merged = await opts.mergeQfMetadataFn(qfId, sessionId, {});
         return merged.merged ? { session_id: sessionId, claimed_at: 'x', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } } : null;
       },
+      readBackFn: async () => ({ session_id: 'sess-1', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } }),
     });
     expect(result.state).toBe('ACTIVATED');
     expect(result.exitCode).toBe(EXIT_CODES.ACTIVATED);
+    expect(result.detail).toMatch(/independently read back/);
+  });
+
+  it('V-F1: REGRESSED (not ACTIVATED) when the in-memory entry claims success but an independent read-back finds nothing persisted', async () => {
+    // VALIDATION-AGENT FINDING (evidence 64ea554f, now resolved): the in-memory `entry`
+    // object claim-stamp.cjs returns proves nothing about what actually landed in the
+    // database -- this pins that ACTIVATED requires the independent read-back to agree.
+    const result = await resolveActivationState({
+      dbClientFactory: fakePresentDb,
+      mergeQfMetadataFn: async () => ({ merged: true }),
+      stampClaimFn: async (_supabase, qfId, sessionId, _id, _m, opts) => {
+        await opts.mergeQfMetadataFn(qfId, sessionId, {});
+        return { session_id: sessionId, claimed_at: 'x', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } };
+      },
+      readBackFn: async () => null, // nothing found on independent re-read
+    });
+    expect(result.state).toBe('REGRESSED');
+    expect(result.exitCode).toBe(EXIT_CODES.REGRESSED);
+    expect(result.detail).toMatch(/read-after-write/);
+  });
+
+  it('readBackClaimHistory returns the newest entry from a real-shaped pg result, and null when the client cannot connect', async () => {
+    const { readBackClaimHistory } = await import('../../../scripts/verify-quick-fixes-metadata-activation.mjs');
+    const withHistory = async () => ({
+      query: async () => ({ rows: [{ claim_history: [{ session_id: 'old' }, { session_id: 'new', pick_reason: {} }] }] }),
+      end: async () => {},
+    });
+    const found = await readBackClaimHistory(withHistory, 'QF-X');
+    expect(found).toEqual({ session_id: 'new', pick_reason: {} });
+
+    const unreachable = async () => { throw new Error('ECONNREFUSED'); };
+    expect(await readBackClaimHistory(unreachable, 'QF-X')).toBeNull();
   });
 
   it('TS-3: REGRESSED when the merge returns a definite failure reason (cas_lost)', async () => {
@@ -160,6 +193,7 @@ describe('resolveActivationState', () => {
         return merged.merged ? { session_id: sessionId, claimed_at: 'x', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } } : null;
       },
       deleteScratchQfFn: async () => { throw new Error('delete failed: RLS denied'); },
+      readBackFn: async () => ({ session_id: 'sess-1', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } }),
     });
     expect(result.state).toBe('ACTIVATED'); // verdict unchanged by a cleanup failure
     expect(result.detail).toMatch(/CLEANUP FAILED/);

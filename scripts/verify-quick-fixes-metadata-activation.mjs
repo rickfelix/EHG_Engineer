@@ -28,8 +28,12 @@
  *    wrapper as opts.mergeQfMetadataFn that delegates to the real mergeQfMetadataKeys and
  *    captures the full {merged, reason} result in a closure variable, so both stampClaim()'s
  *    return AND the underlying reason discriminator come from one real call.
+ *  - ACTIVATED requires BOTH an in-memory success from stampClaim() AND an INDEPENDENT
+ *    read-back (readBackClaimHistory, a fresh SELECT) confirming the pick_reason-bearing entry
+ *    actually persisted -- the in-memory object claim-stamp.cjs returns proves nothing about
+ *    what landed in the database on its own (VALIDATION-agent finding 64ea554f).
  *  - Core logic is exported as resolveActivationState({ dbClientFactory, mergeQfMetadataFn,
- *    stampClaimFn }) so unit tests can inject fakes for ACTIVATED/REGRESSED/INDETERMINATE
+ *    stampClaimFn, readBackFn }) so unit tests can inject fakes for ACTIVATED/REGRESSED/INDETERMINATE
  *    without touching live schema or a real DB connection at all -- scripts/lib/
  *    supabase-connection.js exposes only the ehg/engineer projects, both live production
  *    databases with no staging equivalent, so no live test may safely simulate the column
@@ -79,6 +83,34 @@ export async function probeColumnPresent(dbClientFactory) {
 }
 
 /**
+ * Independently confirms the claim_history entry actually persisted, via a fresh SELECT --
+ * never trusting the in-memory `entry` object stampClaim() happens to return (that object is
+ * built locally by claim-stamp.cjs regardless of whether the write truly landed). Returns the
+ * newest claim_history element (by claimed_at), or null if none is found / the query fails.
+ * VALIDATION-AGENT FINDING (evidence 64ea554f, now resolved): ACTIVATED previously rested
+ * entirely on this in-memory object plus a rowCount from the UPDATE -- "reads back" in the
+ * docblock/runbook text was not literally true until this function existed.
+ */
+export async function readBackClaimHistory(dbClientFactory, qfId) {
+  let client;
+  try {
+    client = await dbClientFactory();
+  } catch {
+    return null;
+  }
+  try {
+    const { rows } = await client.query('SELECT metadata -> \'claim_history\' AS claim_history FROM quick_fixes WHERE id = $1', [qfId]);
+    const history = rows && rows[0] && rows[0].claim_history;
+    if (!Array.isArray(history) || history.length === 0) return null;
+    return history[history.length - 1];
+  } catch {
+    return null;
+  } finally {
+    try { await client.end(); } catch { /* best-effort close */ }
+  }
+}
+
+/**
  * Core, injectable classification logic. No live DB access required when fakes are injected.
  * @param {object} deps
  * @param {() => Promise<object>} [deps.dbClientFactory] - resolves a raw pg client (real: 'engineer' project).
@@ -87,6 +119,7 @@ export async function probeColumnPresent(dbClientFactory) {
  * @param {() => string} [deps.scratchIdFn] - generates the scratch QF id (must match /^QF-/).
  * @param {(qfId: string, sessionId: string) => Promise<void>} [deps.insertScratchQfFn] - creates the scratch row, already claimed + non-open.
  * @param {(qfId: string, sessionId: string) => Promise<void>} [deps.deleteScratchQfFn] - deletes the scratch row (called in finally).
+ * @param {(dbClientFactory: Function, qfId: string) => Promise<object|null>} [deps.readBackFn] - independently confirms persistence (real: readBackClaimHistory).
  * @returns {Promise<{state: 'NOT_YET_APPLIED'|'ACTIVATED'|'REGRESSED'|'INDETERMINATE', exitCode: number, detail: string}>}
  */
 export async function resolveActivationState(deps = {}) {
@@ -96,6 +129,7 @@ export async function resolveActivationState(deps = {}) {
   const scratchIdFn = deps.scratchIdFn || (() => `QF-VERIFYACT-${process.pid}-${Date.now().toString(36)}`.toUpperCase());
   const insertScratchQfFn = deps.insertScratchQfFn || null;
   const deleteScratchQfFn = deps.deleteScratchQfFn || null;
+  const readBackFn = deps.readBackFn || readBackClaimHistory;
 
   const probe = await probeColumnPresent(dbClientFactory);
   if (probe.indeterminate) {
@@ -135,9 +169,18 @@ export async function resolveActivationState(deps = {}) {
 
     if (entry && capturedResult && capturedResult.merged) {
       const hasPickReason = Object.prototype.hasOwnProperty.call(entry, 'pick_reason');
-      result = hasPickReason
-        ? { state: 'ACTIVATED', exitCode: EXIT_CODES.ACTIVATED, detail: `real pick_reason-bearing claim_history entry written and returned for ${qfId}.` }
-        : { state: 'REGRESSED', exitCode: EXIT_CODES.REGRESSED, detail: 'merge reported success but the returned entry has no pick_reason -- a real defect in the write path.' };
+      if (!hasPickReason) {
+        result = { state: 'REGRESSED', exitCode: EXIT_CODES.REGRESSED, detail: 'merge reported success but the returned entry has no pick_reason -- a real defect in the write path.' };
+        return result;
+      }
+      // VALIDATION-AGENT FINDING (evidence 64ea554f, now resolved): the entry above is an
+      // in-memory object claim-stamp.cjs builds locally -- it proves nothing about what
+      // actually persisted. Independently re-read the row before declaring ACTIVATED.
+      const persisted = await readBackFn(dbClientFactory, qfId);
+      const persistedHasPickReason = persisted && Object.prototype.hasOwnProperty.call(persisted, 'pick_reason');
+      result = persistedHasPickReason
+        ? { state: 'ACTIVATED', exitCode: EXIT_CODES.ACTIVATED, detail: `real pick_reason-bearing claim_history entry written AND independently read back from quick_fixes.metadata for ${qfId}.` }
+        : { state: 'REGRESSED', exitCode: EXIT_CODES.REGRESSED, detail: `merge reported success and returned a pick_reason-bearing entry, but an independent read-back of quick_fixes.metadata for ${qfId} found no matching persisted entry -- a real read-after-write defect.` };
       return result;
     }
 
