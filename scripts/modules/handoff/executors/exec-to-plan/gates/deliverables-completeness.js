@@ -111,7 +111,7 @@ export async function reconcileDeliverables(deliverables, sdId, supabase) {
       const nowIso = new Date().toISOString();
       const { error: updateErr } = await supabase
         .from('sd_scope_deliverables')
-        .update({ // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
+        .update({ // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated) -- metadata-fullblob-lint-disable-line: sd_scope_deliverables, not strategic_directives_v2 (file-level gate false-positive, this file separately reads strategic_directives_v2 at :254)
           completion_status: 'completed',
           completed_at: nowIso,
           metadata: { ...(d.metadata || {}), reconciled_evidence: evidenceType, reconciled_at: nowIso, producer: 'gate_reconcile' }
