@@ -27,11 +27,11 @@ function makeFakeSupabase({ sds = [], signals = [], decisions = [], feedbackRows
     _feedbackUpdates: feedbackUpdates,
     from(table) {
       if (table === 'strategic_directives_v2') {
-        const api = { select: () => api, eq: () => api, then: (r) => r({ data: sds, error: null }) };
+        const api = { select: () => api, eq: () => api, limit: () => api, then: (r) => r({ data: sds, error: null }) };
         return api;
       }
       if (table === 'session_coordination') {
-        const api = { select: () => api, eq: () => api, gte: () => api, then: (r) => r({ data: signals, error: null }) };
+        const api = { select: () => api, eq: () => api, gte: () => api, limit: () => api, then: (r) => r({ data: signals, error: null }) };
         return api;
       }
       if (table === 'chairman_decisions') {
@@ -44,7 +44,7 @@ function makeFakeSupabase({ sds = [], signals = [], decisions = [], feedbackRows
       }
       if (table === 'feedback') {
         const api = {
-          select: () => api, eq: () => api, contains: () => api,
+          select: () => api, eq: () => api, contains: () => api, limit: () => api,
           then: (r) => r({ data: feedbackRows, error: null }),
           update: (patch) => ({ eq: (col, val) => { feedbackUpdates.push({ patch, id: val }); return Promise.resolve({ data: [{ id: val }], error: null }); } }),
         };
