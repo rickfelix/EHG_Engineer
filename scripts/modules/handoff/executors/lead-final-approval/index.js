@@ -12,6 +12,7 @@ import BaseExecutor from '../BaseExecutor.js';
 import ResultBuilder from '../../ResultBuilder.js';
 import { runPreflightRetroCheck } from '../../retro-filters.js';
 import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
+import { deriveBypassAwareRecordFields, buildPersistedBypassMetadata } from '../../../../../lib/handoff/bypass-stamp.js';
 
 /**
  * Project the orchestrator's per-gate results into a compact, queryable shape for persistence
@@ -68,6 +69,53 @@ export function projectGateResultsForPersistence(gateResults) {
     }
     return entry;
   });
+}
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-2/FR-3: derive the canonical write's validation_passed/
+ * score_source/metadata.bypass fields from bypassInfo, via the SAME shared
+ * deriveBypassAwareRecordFields function every other handoff type already uses correctly.
+ * Extracted as its own pure function (mirroring projectGateResultsForPersistence's pattern above)
+ * so this logic is directly testable without driving executeSpecific()'s full DB-touching
+ * completion cascade. Confirmed live defect this replaces: a genuinely bypassed LEAD-FINAL-
+ * APPROVAL was previously recorded validation_passed=true with no bypass marker anywhere on the
+ * canonical sd_phase_handoffs row (specimen: row 987bfd16-0eb8-4c68-9729-9ac032872317).
+ *
+ * @param {object|null} bypassInfo - from BaseExecutor's bypassInfo, or null when not bypassed
+ * @returns {{validation_passed: boolean, score_source: string, bypass: object|null}}
+ */
+export function deriveCanonicalLfaFields(bypassInfo) {
+  const { isBypassed, scoreSource, validationPassed } = deriveBypassAwareRecordFields({ bypassed: !!bypassInfo }, 'measured');
+  const bypass = isBypassed
+    ? buildPersistedBypassMetadata(
+        { bypassReason: bypassInfo.reason, bypassedGates: bypassInfo.gates, bypassPatternId: bypassInfo.patternId, bypassFollowupSdKey: bypassInfo.followupSdKey, bypassSelfAuthorshipCheckStatus: bypassInfo.selfAuthorshipCheckStatus },
+        { actor: bypassInfo.source }
+      )
+    : null;
+  return { validation_passed: validationPassed, score_source: scoreSource, bypass };
+}
+
+/**
+ * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-3: for the reconcile path (a DIFFERENT, earlier
+ * invocation's completion -- this call's own bypassInfo would typically be null even when that
+ * earlier completion was genuinely bypassed), copy validation_passed/score_source/bypass straight
+ * across from the sibling leo_handoff_executions row (already correctly stamped by
+ * HandoffRecorder) rather than re-deriving or hardcoding validation_passed:true. Pure, directly
+ * testable without a DB.
+ *
+ * @param {{validation_passed?: boolean, validation_details?: {score_source?: string, bypass?: object}}|null} srcRow
+ * @param {boolean} scoreMeasured - fallback measured/not_measured inference, used only when srcRow is absent
+ * @returns {{validation_passed: boolean, score_source: string, bypass: object|null}}
+ */
+export function deriveReconciledLfaFields(srcRow, scoreMeasured) {
+  if (!srcRow) {
+    return { validation_passed: true, score_source: scoreMeasured ? 'measured' : 'not_measured', bypass: null };
+  }
+  return {
+    validation_passed: !!srcRow.validation_passed,
+    score_source: srcRow.validation_details?.score_source || (scoreMeasured ? 'measured' : 'not_measured'),
+    bypass: srcRow.validation_details?.bypass || null,
+  };
 }
 
 /**
@@ -486,7 +534,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     return getRequiredGates(this.supabase, this.prdRepo, sd);
   }
 
-  async executeSpecific(sdId, sd, options, gateResults) {
+  async executeSpecific(sdId, sd, options, gateResults, execContext = {}) {
+    // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-2/FR-3: bypassInfo is resolved earlier in
+    // BaseExecutor.execute() (before this canonical write ever runs) and threaded in here --
+    // this executor previously never received it, so a genuinely bypassed LEAD-FINAL-APPROVAL
+    // was recorded validation_passed=true with no bypass marker at all on the canonical row
+    // (confirmed live specimen: sd_phase_handoffs row 987bfd16, vs the correctly-stamped
+    // leo_handoff_executions row 4b8cb8fa for the SAME approval).
+    const bypassInfo = execContext?.bypassInfo ?? null;
     // If already completed, just return success
     if (options._alreadyCompleted) {
       console.log('\n✅ SD already completed - verification passed');
@@ -655,6 +710,20 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           if (isFallbackKnownIssues(knownIssues)) knownIssues = [];
           knownIssues = [...knownIssues, caughtGapIssue];
         }
+        // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-2/FR-3: derive validation_passed/score_source/
+        // bypass via the extracted, directly-tested deriveCanonicalLfaFields, instead of
+        // hardcoding validation_passed:true with no bypass marker. A non-bypassed approval is
+        // unaffected (score_source falls through to 'measured', validation_passed=true) -- this
+        // is additive correctness, not a behavior change for the common case.
+        const canonicalFields = deriveCanonicalLfaFields(bypassInfo);
+        const canonicalMetadata = {
+          canonical_pre_completion_write: true,
+          sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001',
+          // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 FR-5: make the per-gate verdicts
+          // auditable after the run. Previously absent on all 62 LEAD-FINAL rows.
+          gate_results: projectGateResultsForPersistence(gateResults),
+          ...(canonicalFields.bypass ? { bypass: canonicalFields.bypass } : {}),
+        };
         const { data: canonRow, error: canonErr } = await this.supabase
           .from('sd_phase_handoffs')
           .insert({
@@ -671,17 +740,11 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
             action_items: [{ item: 'None — SD lifecycle complete; post-completion tail follows' }],
             completeness_report: { validation_score: normalizedScore },
             validation_score: normalizedScore,
-            validation_passed: true,
-            validation_details: { written_by: 'LeadFinalApprovalExecutor pre-completion canonical write' },
+            validation_passed: canonicalFields.validation_passed,
+            validation_details: { written_by: 'LeadFinalApprovalExecutor pre-completion canonical write', score_source: canonicalFields.score_source },
             accepted_at: new Date().toISOString(),
             created_by: HANDOFF_SYSTEM_TAG,
-            metadata: {
-              canonical_pre_completion_write: true,
-              sd_ref: 'SD-FDBK-FIX-LFA-ACCEPT-ORDERING-001',
-              // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001 FR-5: make the per-gate verdicts
-              // auditable after the run. Previously absent on all 62 LEAD-FINAL rows.
-              gate_results: projectGateResultsForPersistence(gateResults)
-            }
+            metadata: canonicalMetadata
           })
           .select('id')
           .single();
@@ -1212,21 +1275,27 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
 
       // Source the score/provenance from the genuine accepted leo_handoff_executions
       // LFA row (the real completion evidence), falling back to the gate result then 100.
+      // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G FR-3: also select validation_passed and
+      // validation_details -- this invocation never has its own bypassInfo (it handles a
+      // DIFFERENT, earlier invocation's completion), so validation_passed/bypass are COPIED
+      // from the sibling leo_handoff_executions row (already correctly stamped by
+      // HandoffRecorder via deriveBypassAwareRecordFields) rather than hardcoded/re-derived.
       const { data: lheRows } = await this.supabase
         .from('leo_handoff_executions')
-        .select('id, validation_score')
+        .select('id, validation_score, validation_passed, validation_details')
         .eq('sd_id', sd.id)
         .eq('handoff_type', 'LEAD-FINAL-APPROVAL')
         .eq('status', 'accepted')
         .order('created_at', { ascending: false })
         .limit(1);
-      const srcId = lheRows && lheRows[0] ? lheRows[0].id : null;
-      const srcScoreMeasured = !!((lheRows && lheRows[0] && lheRows[0].validation_score != null)
+      const srcRow = lheRows && lheRows[0] ? lheRows[0] : null;
+      const srcId = srcRow ? srcRow.id : null;
+      const srcScoreMeasured = !!((srcRow && srcRow.validation_score != null)
         || (gateResults && gateResults.actualScore != null));
-      const srcScore = (lheRows && lheRows[0] && lheRows[0].validation_score != null)
-        ? lheRows[0].validation_score
+      const srcScore = (srcRow && srcRow.validation_score != null)
+        ? srcRow.validation_score
         : (gateResults && gateResults.actualScore != null ? gateResults.actualScore : NOT_MEASURED_SCORE);
-      const srcScoreSource = srcScoreMeasured ? 'measured' : 'not_measured';
+      const reconciledFields = deriveReconciledLfaFields(srcRow, srcScoreMeasured);
 
       // F1/FR-3: surface genuine retro known-issues on the resume/reconcile path too, combined
       // with (never replacing) the existing honest provenance note. combineKnownIssuesWithProvenance
@@ -1254,11 +1323,14 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
           action_items: [{ item: 'None — historical reconciliation; the already-completed path now self-heals via this branch' }],
           completeness_report: { validation_score: srcScore, source: 'leo_handoff_executions' },
           validation_score: srcScore,
-          validation_passed: true,
-          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42', score_source: srcScoreSource },
+          validation_passed: reconciledFields.validation_passed,
+          validation_details: { reconciled_by: 'LeadFinalApprovalExecutor already-completed path', sd_ref: 'SD-REFILL-0038AO42', score_source: reconciledFields.score_source },
           accepted_at: new Date().toISOString(),
           created_by: 'ADMIN_OVERRIDE',
-          metadata: { canonical_reconcile_write: true, resume_path: true, source_execution_id: srcId, sd_ref: 'SD-REFILL-0038AO42' }
+          metadata: {
+            canonical_reconcile_write: true, resume_path: true, source_execution_id: srcId, sd_ref: 'SD-REFILL-0038AO42',
+            ...(reconciledFields.bypass ? { bypass: reconciledFields.bypass } : {}),
+          }
         });
       if (insErr) {
         console.warn(`   ⚠️  Canonical LFA reconcile failed (non-fatal): ${insErr.message}. Run scripts/one-off/backfill-lfa-canonical-rows.mjs --execute to clear the ghost.`);

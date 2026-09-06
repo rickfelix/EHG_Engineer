@@ -7923,5 +7923,25 @@
   "classification": "tripwired",
   "match": ".select('session_id, metadata')",
   "note": "warnIfCapTruncated already applied two lines below (FR-6 batch 3) — classifier flags the .select( line before it sees the tripwire."
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js:167": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, completion_status, metadata, created_by, completed_at')",
+  "note": "SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G: .eq('sd_id', sdId) scopes this to one SD's deliverables -- operationally a few dozen rows per SD, never near the 1000-row cap."
+ },
+ "scripts/modules/handoff/executors/exec-to-plan/gates/deliverables-completeness.js:205": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, completion_status, metadata, created_by, completed_at')",
+  "note": "SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G: same JIT-extraction re-query as :167, also .eq('sd_id', sdId) -- one SD's deliverables."
+ },
+ "scripts/modules/handoff/orchestrator-completion-guardian.js:273": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, completion_status, metadata')",
+  "note": "SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G: .eq('sd_id', this.sdId) -- one SD's deliverables, a few dozen rows at most."
+ },
+ "scripts/sync-deliverables-from-git.js:246": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, deliverable_name, deliverable_type, completion_status, metadata')",
+  "note": "SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-G: .eq('sd_id', sdUuid).neq('completion_status', 'completed') -- one SD's pending deliverables, a small subset of an already-small per-SD population."
  }
 }
