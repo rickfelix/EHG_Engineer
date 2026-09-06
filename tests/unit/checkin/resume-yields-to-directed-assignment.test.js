@@ -40,14 +40,14 @@ function makeSb() {
 }
 
 /** ctx.mySd starts NULL — the "resumable release" case: findOwnSdClaim rediscovers RESUMABLE_SD. */
-function makeRehydratingCtx({ messages = [], ackedIds = [] } = {}) {
+function makeRehydratingCtx({ messages = [], ackedIds = [], sessionMetadata = {}, isBuildForbiddenSession = () => false } = {}) {
   return {
     sb: makeSb(),
     sessionId: ME,
     opts: {},
     mySd: null,
     sessionRole: 'worker',
-    sessionMetadata: {},
+    sessionMetadata,
     base: { callsign: null, directed_lane_verdict: { outcome: 'none', id: null, sd_key: null, reason: null } },
     helpers: {
       ws: { getMessagesForSession: async () => messages, DIRECTIVE_KINDS: [] },
@@ -60,6 +60,7 @@ function makeRehydratingCtx({ messages = [], ackedIds = [] } = {}) {
       isInformationalNudge: () => false,
       ASSIGNMENT_RECENCY_WINDOW_MS: 86_400_000,
       ackMessage: async (_sb, id) => { ackedIds.push(id); return { acknowledged: true }; },
+      isBuildForbiddenSession,
     },
   };
 }
@@ -120,6 +121,37 @@ describe('FR-1: a rediscovered (resumable-release) claim yields to a directed WO
     const res = await runSteps([resume, directedAssignmentStub(hits)], ctx);
     expect(res.action).toBe('resume');
     expect(hits).toEqual([]);
+  });
+});
+
+describe('FR-1 hardening: a build-forbidden or canary session never attempts the yield', () => {
+  it('a build-forbidden (propose-only) session takes the surface-only yielded_to_resume path instead of yielding', async () => {
+    const hits = [];
+    const ctx = makeRehydratingCtx({
+      messages: [DIRECTED_WA('SD-DIRECTED-Y')],
+      sessionMetadata: { non_fleet: true, role: 'adam' },
+      isBuildForbiddenSession: () => true,
+    });
+    const res = await runSteps([resume, directedAssignmentStub(hits)], ctx);
+    // Falls through to the pre-existing, unmodified yielded_to_resume branch: resume itself
+    // short-circuits before build-forbidden-guard/canary-claim-fence ever run, exactly preserving
+    // the invariant those steps' own positioning relies on.
+    expect(res.action).toBe('resume');
+    expect(res.sd).toBe(RESUMABLE_SD);
+    expect(hits).toEqual([]); // directed-assignment never reached — no yield attempt
+    expect(ctx.base.resume_yielded_to_directed).toBeUndefined();
+    expect(ctx.base.directed_lane_verdict).toMatchObject({ outcome: 'yielded_to_resume', sd_key: 'SD-DIRECTED-Y' });
+  });
+
+  it('a build-forbidden check that throws fails OPEN to attempting the yield (downstream gates still fail closed)', async () => {
+    const hits = [];
+    const ctx = makeRehydratingCtx({
+      messages: [DIRECTED_WA('SD-DIRECTED-Y')],
+      isBuildForbiddenSession: () => { throw new Error('boom'); },
+    });
+    const res = await runSteps([resume, directedAssignmentStub(hits)], ctx);
+    expect(res.action).toBe('claimed_assignment');
+    expect(hits).toEqual([{ mySd: null }]);
   });
 });
 
