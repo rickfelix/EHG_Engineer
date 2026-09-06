@@ -55,6 +55,17 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // ai_quality_assessments WHERE pass_threshold=60: prd n=101, pass=101/101 (100%); retrospective
   // n=138, pass=133/138 (96.4%) -- both clear the >=10 sample floor, confirm both keys remain
   // healthy under their live bar.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-D (2026-09-05): child D's audit renders the formal
+  // verdict for both keys, re-querying ai_quality_assessments directly since 2026-08-28. prd:
+  // n=102, pass=102/102 (100%), 0 flips against the prior 55 bar -- SOUND, no rollback.
+  // retrospective: n=141, pass=139/141 (98.6%), 2 genuine flips (id=47283f94-437e-4143-9c0a-
+  // e01770b7cccb score=58; id=cfec2d37-6f4e-4a4d-923b-727bcccba3ad score=59). Both flipped rows
+  // were hand-inspected (AI-judge feedback text plus the linked retrospective's own separately-
+  // stored quality_score): both show genuine learning_specificity / action_item_actionability
+  // defects (vague phase-name "deadlines" like "PLAN-TO-EXEC" instead of dates; generic learnings
+  // that restate pass/fail rather than offer insight) -- the raised bar correctly caught real
+  // quality gaps, not sound work incorrectly failed. VERDICT: SOUND for both keys, no rollback.
   infrastructure: { default: 55, prd: 60, retrospective: 60 },
 
   // Feature SDs: Moderate baseline
@@ -84,8 +95,14 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // NOT cite those rows. The REAL post-raise number, queried directly against
   // ai_quality_assessments WHERE pass_threshold=65: n=25, pass=25/25 (100%) -- clears the >=10
   // sample floor, confirms retrospective remains healthy under its live bar. (feature/retrospective
-  // is one of the two three-flip pairs held per Solomon's hold 9a3e1a95 -- this is verification
-  // evidence for child D's audit, not a decision to keep or roll back.)
+  // is one of the two three-flip pairs held per Solomon's hold 9a3e1a95 -- this was verification
+  // evidence for child D's audit.)
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-D (2026-09-05): child D's audit re-queried directly
+  // against ai_quality_assessments WHERE pass_threshold=65, since 2026-08-28: n=25, pass=25/25
+  // (100%), 0 flips against the prior 60 bar -- no row in the live population would have passed
+  // before and fails now. VERDICT: SOUND, no rollback. Satisfies the inspection Solomon's hold
+  // 9a3e1a95 called for on this pair.
   feature: { default: 60, prd: 65, retrospective: 65 },
 
   // Database SDs: Slightly stricter (data integrity)
@@ -129,7 +146,14 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // post-raise number, queried directly against ai_quality_assessments WHERE pass_threshold=75:
   // n=2, pass=2/2 (100%) -- BELOW the >=10 sample floor. Unlike the other pairs in this file,
   // this one is INSUFFICIENT DATA under its live bar, not confirmed healthy; flagged as live
-  // evidence for child D's audit, not a decision to keep or roll back.
+  // evidence for child D's audit.
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-D (2026-09-05): child D's audit re-queried directly
+  // against ai_quality_assessments WHERE pass_threshold=75, since 2026-08-28: n=2, pass=2/2
+  // (100%), 0 flips against the prior 70 bar -- confirms E's count, still below the >=10 sample
+  // floor. VERDICT: provisionally SOUND -- zero observed harm (no failures, no flips), but the
+  // sample is too small to fully confirm long-run health at this bar. No rollback; recommend
+  // continued monitoring until n>=10 accrues rather than acting on an underpowered sample.
   security: { default: 70, retrospective: 75 },
 
   // Refactor SDs: raised 60 -> 65 by SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002.
@@ -182,6 +206,12 @@ export const SD_TYPE_PASS_THRESHOLDS = {
   // healthy under its live bar. (bugfix/retrospective is one of the two three-flip pairs held per
   // Solomon's hold 9a3e1a95 -- this is verification evidence for child D's audit, not a decision
   // to keep or roll back.)
+  //
+  // SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-D (2026-09-05): child D's audit re-queried directly
+  // against ai_quality_assessments WHERE pass_threshold=65, since 2026-08-28: n=77, pass=77/77
+  // (100%), 0 flips against the prior 60 bar -- confirms E's count (one more assessment landed
+  // since), no row in the live population would have passed before and fails now. VERDICT: SOUND,
+  // no rollback. Satisfies the inspection Solomon's hold 9a3e1a95 called for on this pair.
   bugfix: { default: 60, prd: 65, retrospective: 65 }
 };
 
