@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T19:34:14.012Z",
+  "generated_at": "2026-09-06T19:38:46.477Z",
   "counts": {
-    "has_catch": 38
+    "has_catch": 36
   },
   "results": [
     {
@@ -184,20 +184,6 @@
       "line": 28,
       "kind": "data",
       "snippet": "const { data: profile } = await ctx.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/sd-prd-drift.js",
-      "line": 116,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/sd-prd-drift.js",
-      "line": 135,
-      "kind": "data",
-      "snippet": "const { data } = await sb",
       "classification": "has_catch"
     },
     {
