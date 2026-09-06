@@ -1019,6 +1019,12 @@ export class ValidationOrchestrator {
       return acc;
     }, {});
 
+    // SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-A: read once per buildGatesFromRules() call, not once
+    // per rule closure (8x for gate 4 alone) -- an in-process env mutation between rule closures
+    // would otherwise produce a torn verdict with nothing recording which mode produced it
+    // (SECURITY finding C3, EXEC-TO-PLAN review).
+    const skipGuardBound = process.env.SD_TYPE_SKIP_GUARD_BINDING === 'true';
+
     // Build gates from database rules
     const dbGates = [];
     for (const [gate, rules] of Object.entries(rulesByGate)) {
@@ -1063,7 +1069,6 @@ export class ValidationOrchestrator {
             // naming what would happen once bound. Bound, gate 4 falls through to the real
             // validator below instead of returning a fabricated pass.
             const isStrategicValueGate = String(gate) === '4';
-            const skipGuardBound = process.env.SD_TYPE_SKIP_GUARD_BINDING === 'true';
             if (mergedContext.sd_id || mergedContext.sdId) {
               const sdId = mergedContext.sd_id || mergedContext.sdId;
               const { data: sdData } = await this.supabase
@@ -1098,7 +1103,8 @@ export class ValidationOrchestrator {
             ruleName: rule.rule_name,
             criteria: rule.criteria,
             executionOrder: rule.execution_order,
-            fromDatabase: true
+            fromDatabase: true,
+            ...(String(gate) === '4' ? { sdTypeSkipGuardBound: skipGuardBound } : {})
           }
         });
       }
