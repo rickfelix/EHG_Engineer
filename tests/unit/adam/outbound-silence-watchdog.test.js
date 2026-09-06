@@ -211,4 +211,61 @@ describe('outbound-silence-watchdog: tick wiring (TS-2..TS-5)', () => {
     expect(result.probed).toHaveLength(MAX_PROBES_PER_TICK);
     expect(sb.inserts).toHaveLength(MAX_PROBES_PER_TICK);
   });
+
+  // QF-20260904-790 (SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-3): the watchdog
+  // previously built its live set from heartbeat_at alone, so a dead-loop seat (heartbeat
+  // fresh, tool clock frozen) read as a live target ignoring the probe -- it got probed AND,
+  // on the next tick, escalated as a HIGH channel-breach. Live specimen: the Solomon seat
+  // (e3f5188b) whose loop died 2026-09-04T01:36:07Z accumulated 14 rows this way.
+  it('QF-20260904-790: a dead-loop target (fresh heartbeat, frozen tool clock) is never probed or escalated', async () => {
+    const DEAD = 'target-dead-loop-1';
+    const deadLoopSessionRows = [{
+      session_id: DEAD,
+      heartbeat_at: new Date(NOW).toISOString(), // fresh -- the exact false-live signal
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(), // 3h tool-silent
+      loop_state: 'active',
+    }];
+    const deadRow = { ...breachingRow, id: 'row-dead', target_session: DEAD };
+    const sb = makeStub({ outboundRows: [deadRow], sessionRows: deadLoopSessionRows, priorProbeRows: [] });
+    const result = await runOutboundSilenceWatchdog(sb, { now: NOW });
+    expect(result.probed).toHaveLength(0);
+    expect(result.escalated).toHaveLength(0);
+    expect(sb.inserts).toHaveLength(0);
+  });
+
+  // SECURITY sub-agent finding SEC-3 (EXEC-TO-PLAN): the dead-loop exclusion above silences
+  // probing/escalation/laneHealth all at once with no residual signal -- deadLoopSuppressed
+  // names the suppressed row instead of it being indistinguishable from "nothing to see".
+  it('QF-20260904-790 + SEC-3: a suppressed dead-loop breach is named in result.deadLoopSuppressed', async () => {
+    const DEAD = 'target-dead-loop-2';
+    const deadLoopSessionRows = [{
+      session_id: DEAD,
+      heartbeat_at: new Date(NOW).toISOString(),
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+      loop_state: 'active',
+    }];
+    const deadRow = { ...breachingRow, id: 'row-dead-2', target_session: DEAD };
+    const sb = makeStub({ outboundRows: [deadRow], sessionRows: deadLoopSessionRows, priorProbeRows: [] });
+    const result = await runOutboundSilenceWatchdog(sb, { now: NOW });
+    expect(result.deadLoopSuppressed).toEqual([{ id: 'row-dead-2', target_session: DEAD }]);
+  });
+
+  it('SEC-3 control: no dead-loop sessions -> deadLoopSuppressed stays empty', async () => {
+    const sb = makeStub({ outboundRows: [breachingRow], priorProbeRows: [] });
+    const result = await runOutboundSilenceWatchdog(sb, { now: NOW });
+    expect(result.deadLoopSuppressed).toEqual([]);
+  });
+
+  it('QF-20260904-790 control: a live-idle target (fresh heartbeat, recent tool activity) is probed exactly as before this fix', async () => {
+    const liveSessionRows = [{
+      session_id: LIVE,
+      heartbeat_at: new Date(NOW).toISOString(),
+      last_tool_at: new Date(NOW - 60_000).toISOString(),
+      loop_state: 'active',
+    }];
+    const sb = makeStub({ outboundRows: [breachingRow], sessionRows: liveSessionRows, priorProbeRows: [] });
+    const result = await runOutboundSilenceWatchdog(sb, { now: NOW });
+    expect(result.probed).toHaveLength(1);
+    expect(sb.inserts).toHaveLength(1);
+  });
 });

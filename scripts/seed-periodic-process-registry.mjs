@@ -30,7 +30,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { discoverAllProcesses } from '../lib/periodic-liveness/enumerate-processes.mjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
 
@@ -171,6 +171,47 @@ async function seedSchedulerRounds() {
   return upserts;
 }
 
+// SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-6: hand-listed self_stamped rows for the two
+// alarm crons FR-5 registers as host-local tasks (fleet-down-alert.mjs, fleet-worker-pulse.mjs).
+// Hand-listed rather than routed through discoverAllProcesses/discoverCronScripts for the same
+// reason DECLARED_ROUND_INTERVALS overrides prefix-inferred scheduler_round intervals above:
+// the real cadence is KNOWN upfront (matches each script's own gha_cron:*.yml sibling row,
+// already live at 900s/grace 3) and mechanical discovery would either miss these entirely
+// (the underlying scripts live at scripts/*.mjs, not scripts/cron/*, where only their FR-5
+// wrapper .cmd files -- not scanned by discoverCronScripts' .mjs/.cjs/.js filter -- reside) or
+// assign the wrong (86400s daily default) interval if it did find them. periodic-liveness-
+// watcher.mjs is deliberately NOT given a third row here: it already self-tracks via its own
+// __watcher_self__ mechanism, which improves automatically once FR-5 fires it more often.
+export const HOST_ALARM_CRON_INTERVAL_SECONDS = 900; // matches gha_cron:fleet-down-alert-cron.yml / gha_cron:fleet-worker-pulse-cron.yml
+export async function seedHostAlarmCrons() {
+  return [
+    {
+      process_key: 'host_cron:fleet-down-alert',
+      display_name: 'Host-local cron: fleet-down-alert.mjs',
+      owner: 'coordinator-fleet',
+      process_type: 'standalone_cron',
+      expected_interval_seconds: HOST_ALARM_CRON_INTERVAL_SECONDS,
+      liveness_source: 'self_stamped',
+      liveness_source_ref: { discovered_from: 'sd_leo_infra_loop_liveness_discriminator_001_fr6', script: 'scripts/fleet-down-alert.mjs' },
+      session_bound: false,
+      currently_expected_active: true,
+      updated_at: new Date().toISOString(),
+    },
+    {
+      process_key: 'host_cron:fleet-worker-pulse',
+      display_name: 'Host-local cron: fleet-worker-pulse.mjs',
+      owner: 'coordinator-fleet',
+      process_type: 'standalone_cron',
+      expected_interval_seconds: HOST_ALARM_CRON_INTERVAL_SECONDS,
+      liveness_source: 'self_stamped',
+      liveness_source_ref: { discovered_from: 'sd_leo_infra_loop_liveness_discriminator_001_fr6', script: 'scripts/fleet-worker-pulse.mjs' },
+      session_bound: false,
+      currently_expected_active: true,
+      updated_at: new Date().toISOString(),
+    },
+  ];
+}
+
 // FR-2: standalone_cron pass — one owned row per discovered recurring process. New rows get the
 // coordinator interim owner ('coordinator-fleet') per the parent LEAD condition (never silently
 // unowned); EXISTING rows keep their current owner — a re-run must never clobber a later
@@ -222,11 +263,12 @@ async function seedStandaloneCrons() {
   });
 }
 
-async function main() {
+export async function main() {
   const roleUpserts = await seedRoleSessions();
   const roundUpserts = await seedSchedulerRounds();
   const cronUpserts = await seedStandaloneCrons();
-  const all = [...roleUpserts, ...roundUpserts, ...cronUpserts];
+  const hostAlarmCronUpserts = await seedHostAlarmCrons();
+  const all = [...roleUpserts, ...roundUpserts, ...cronUpserts, ...hostAlarmCronUpserts];
 
   if (all.length === 0) {
     console.log('No mechanically-derivable registry rows found (0 role sessions, 0 scheduler rounds) -- nothing to seed.');
@@ -243,10 +285,17 @@ async function main() {
   console.log(`  role_session: ${roleUpserts.length}`);
   console.log(`  scheduler_round: ${roundUpserts.length}`);
   console.log(`  standalone_cron: ${cronUpserts.length}`);
+  console.log(`  host_alarm_cron: ${hostAlarmCronUpserts.length}`);
   for (const row of data) console.log(`  - ${row.process_key}`);
 }
 
-main().catch((err) => {
-  console.error(`[seed-periodic-process-registry] FAILED: ${err.message}`);
-  process.exit(1);
-});
+// SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-6 (TESTING sub-agent finding, EXEC-TO-PLAN):
+// previously unguarded -- importing this module for its pure seed*() functions ran the entire
+// live-DB seeding pipeline as a side effect of import, which is why seedHostAlarmCrons() could
+// not be safely unit-tested. Guard pattern matches every other setup-*/seed-* script in this repo.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(`[seed-periodic-process-registry] FAILED: ${err.message}`);
+    process.exit(1);
+  });
+}

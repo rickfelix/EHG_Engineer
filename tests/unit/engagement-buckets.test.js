@@ -133,6 +133,39 @@ describe('classifySessionBucket — precedence and the three corrected defects',
     expect(classifySessionBucket(s, { isClaimed: () => true, nowMs: NOW })).toBe('ZOMBIE');
   });
 
+  it('CORRECTED DEFECT (QF-20260904-650): a LIVE, claimed, tool-frozen session classifies ZOMBIE, never ENGAGED', () => {
+    // The exact measured gap: heartbeat_at fresh (isLive=true) is what let the old ordering
+    // reach `if (isClaimed && isClaimed(session)) return 'ENGAGED';` and return BEFORE the
+    // already-computed `wedged` term was ever consulted -- the 09-04 report's
+    // "engagement.engaged=6, zombie=0" beside "utilization.live_workers=3" shape. The dead-
+    // heartbeat wedge case above (line ~126) exercises the DIFFERENT not-live branch and was
+    // already correct; this is the live-path gap that was actually broken.
+    const s = session({
+      loop_state: 'active',
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(), // 3h tool-silent, past the cut
+      sd_key: 'SD-SOME-CLAIMED-DEAD-LOOP-001',
+    }); // heartbeat_at stays at the default fresh value -- isLive === true
+    expect(classifySessionBucket(s, { isClaimed: () => true, nowMs: NOW })).toBe('ZOMBIE');
+  });
+
+  it('reproduces the 2026-09-04 report shape: 3 live+idle beside 3 live+claimed+wedged sessions -> zombie=3, never zombie=0', () => {
+    const idleSessions = [1, 2, 3].map((n) => session({ session_id: `idle-${n}` }));
+    const deadLoopSessions = [1, 2, 3].map((n) => session({
+      session_id: `dead-${n}`,
+      loop_state: 'active',
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+      sd_key: `SD-DEAD-LOOP-${n}`,
+    }));
+    const claimedIds = new Set(deadLoopSessions.map((s) => s.session_id));
+    const result = classifyEngagementBuckets([...idleSessions, ...deadLoopSessions], {
+      isClaimed: (s) => claimedIds.has(s.session_id),
+      now: NOW,
+    });
+    expect(result.zombie).toBe(3);
+    expect(result.engaged).toBe(0);
+    expect(result.idle).toBe(3);
+  });
+
   it('a claimed, LIVE session with an old last_tool_at (e.g. a cross-repo claimant working elsewhere) is still ENGAGED — the fix only gates on heartbeat liveness, not tool-call recency', () => {
     const s = session({
       heartbeat_at: new Date(NOW - 30_000).toISOString(), // fresh — session process is alive
@@ -151,6 +184,34 @@ describe('classifySessionBucket — precedence and the three corrected defects',
     const graceMs = 10 * 60 * 1000;
     const s = session({ released_reason: 'completed', released_at: new Date(NOW - graceMs - 1000).toISOString() });
     expect(classifySessionBucket(s, { isClaimed: () => false, nowMs: NOW })).toBe('IDLE');
+  });
+
+  // Adversarial review finding (deep-tier /ship gate, pre-merge): the FR-2 fix reorders wedged
+  // ahead of BOTH isClaimed and the TAIL check, not just isClaimed as FR-2's own rationale
+  // named -- previously unverified in either direction for the TAIL interaction. Pinned here as
+  // INTENTIONAL, not an oversight: a session whose tool clock has been silent past the wedged
+  // cut point is exhibiting exactly the "looks fine on paper, is actually dead" signal this SD
+  // exists to catch, regardless of a released_reason='completed' stamp arriving alongside it --
+  // TAIL is for a session that was ACTUALLY working right up to a clean release, which a
+  // wedged tool clock contradicts on its face.
+  it('ZOMBIE outranks TAIL: a wedged session with a completion-release reason still classifies ZOMBIE, not TAIL', () => {
+    const s = session({
+      released_reason: 'completed',
+      released_at: new Date(NOW - 60_000).toISOString(), // inside the TAIL grace window
+      loop_state: 'active',
+      last_tool_at: new Date(NOW - 3 * 60 * 60_000).toISOString(), // but tool-silent for 3h -- wedged
+    });
+    expect(classifySessionBucket(s, { isClaimed: () => false, nowMs: NOW })).toBe('ZOMBIE');
+  });
+
+  it('TAIL control: the same completion-release session with a RECENT tool call (not wedged) still classifies TAIL, confirming the reorder only affects genuinely wedged sessions', () => {
+    const s = session({
+      released_reason: 'completed',
+      released_at: new Date(NOW - 60_000).toISOString(),
+      loop_state: 'active',
+      last_tool_at: new Date(NOW - 30_000).toISOString(), // recent -- not wedged
+    });
+    expect(classifySessionBucket(s, { isClaimed: () => false, nowMs: NOW })).toBe('TAIL');
   });
 
   it('a non-completion release reason (e.g. manual unclaim) never yields TAIL', () => {
