@@ -308,11 +308,13 @@ function spawnLearningCapture(prNumber) {
   log('info', 'spawning_capture_engine', { pr: prNumber, script: captureScript });
 
   // Spawn as detached process so it doesn't block the hook
-  const child = spawn('node', [captureScript, '--pr', prNumber], {
+  // QF-20260906-508 (QF-335 Part 1): windowsHide + no shell -- shell:true opened a cmd.exe console
+  // and the detached child a second one on Windows; process.execPath needs no shell resolution.
+  const child = spawn(process.execPath, [captureScript, '--pr', prNumber], {
     cwd: PROJECT_DIR,
     stdio: 'ignore',
     detached: true,
-    shell: true
+    windowsHide: true
   });
 
   child.unref();
