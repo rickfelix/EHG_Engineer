@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:52:23.858Z",
+  "generated_at": "2026-09-06T18:58:49.912Z",
   "counts": {
-    "has_catch": 51
+    "has_catch": 48
   },
   "results": [
     {
@@ -338,27 +338,6 @@
       "line": 188,
       "kind": "data",
       "snippet": "const { data: parent } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js",
-      "line": 124,
-      "kind": "data",
-      "snippet": "const { data: prdProfile } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js",
-      "line": 149,
-      "kind": "data",
-      "snippet": "const { data: template } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/verifiers/plan-to-exec/PlanToExecVerifier.js",
-      "line": 157,
-      "kind": "data",
-      "snippet": "const { data: validationProfile } = await this.supabase",
       "classification": "has_catch"
     }
   ]
