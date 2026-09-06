@@ -66,8 +66,8 @@ describe('michael flag migration shape (FR-1)', () => {
     expect(elseBranch).not.toContain("- 'role'");
   });
 
-  it('is dormant-but-safe: no @approved-by line until chairman sign-off, and the DOWN drops exactly the two functions', () => {
-    expect(up).not.toMatch(/^--\s*@approved-by/m);
+  it('carries the chairman @approved-by marker (signed off 2026-09-06, ratification 481a10ed) and the DOWN drops exactly the two functions', () => {
+    expect(up).toMatch(/^--\s*@approved-by: codestreetlabs@gmail\.com/m);
     expect(down).toContain('DROP FUNCTION IF EXISTS clear_michael_flag(TEXT);');
     expect(down).toContain('DROP FUNCTION IF EXISTS set_michael_flag(TEXT);');
     expect((down.match(/DROP FUNCTION/g) || []).length).toBe(2);
