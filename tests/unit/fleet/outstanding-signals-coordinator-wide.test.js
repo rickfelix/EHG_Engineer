@@ -73,9 +73,15 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-2: fetchAllOutstandingSignals (coo
     expect(result.oldest_age_minutes).toBe(45);
   });
 
-  it('returns null (quiet) when nothing is outstanding', async () => {
+  // CORRECTED (adversarial post-merge review, PR #8356, WARNING finding): see the sibling
+  // correction note in tests/unit/fleet/outstanding-signals.test.js -- null must mean "unknown"
+  // (a genuine fetch failure), never "verified zero", or countUnreceiptedOverdue's gauge trips on
+  // the healthiest possible state.
+  it('returns a real, empty-shaped result (never bare null) when nothing is outstanding', async () => {
     const { client } = sbDouble([]);
-    expect(await fetchAllOutstandingSignals(client, { nowMs: NOW })).toBeNull();
+    const r = await fetchAllOutstandingSignals(client, { nowMs: NOW });
+    expect(r).not.toBeNull();
+    expect(r).toEqual({ count: 0, shown: 0, oldest_age_minutes: null, signals: [], received_check_reliable: true });
   });
 });
 

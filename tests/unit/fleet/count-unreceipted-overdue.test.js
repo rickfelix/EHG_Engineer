@@ -54,4 +54,14 @@ describe('countUnreceiptedOverdue (FR-5(d))', () => {
     expect(countUnreceiptedOverdue(result)).toBe('unknown');
     expect(countUnreceiptedOverdue(result)).not.toBe(0);
   });
+
+  // CORRECTED (adversarial post-merge review, PR #8356, WARNING finding): a genuinely empty
+  // result (zero outstanding signals) is now a real object with signals:[], NOT bare null (see
+  // the correction in tests/unit/fleet/outstanding-signals.test.js) -- this MUST report a real 0,
+  // never 'unknown', or the gauge trips on the healthiest possible fleet state.
+  it("WARN-fix: reports a real 0 (never 'unknown') for a genuinely empty, verified result", () => {
+    const result = { count: 0, shown: 0, oldest_age_minutes: null, signals: [], received_check_reliable: true };
+    expect(countUnreceiptedOverdue(result)).toBe(0);
+    expect(countUnreceiptedOverdue(result)).not.toBe('unknown');
+  });
 });

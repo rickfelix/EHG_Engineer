@@ -143,6 +143,29 @@ describe('decide() (pure): hold window / re-emit window / clear transition', () 
     expect(second.action).toBe('none');
   });
 
+  // WARNING (adversarial post-merge review, PR #8356): the prior shouldNotifyClear check gated
+  // solely on `over_cap_since != null`, which is stamped on the FIRST over-cap tick -- well before
+  // the hold window elapses. A brief over-cap blip that cleared BEFORE ever reaching the emit
+  // threshold still fanned out a "no longer required" notice to the whole fleet, referring to a
+  // notice nobody ever received.
+  it('WARN-fix: a brief over-cap blip that clears WITHIN the hold window (no emit ever sent) -> none, not notify_clear', () => {
+    const overSince = new Date(nowMs - 5 * 60 * 1000).toISOString(); // only 5 minutes ago, well under the 30m hold
+    const state = { over_cap_since: overSince, last_emitted_at: null, last_cleared_notice_at: null };
+    const result = decide({ used: 38, cap: 40, state, nowMs }); // now back under cap
+    expect(result.action).toBe('none');
+    expect(result.nextState.over_cap_since).toBeNull();
+  });
+
+  it('WARN-fix: over_cap_since predates the last actual emit (a STALE episode marker) -> none, not notify_clear', () => {
+    // last_emitted_at is from an OLDER episode, before this over_cap_since was stamped -- the
+    // emit did not happen FOR this episode, so no clear notice is owed for it.
+    const olderEmit = new Date(nowMs - 10 * 60 * 60 * 1000).toISOString();
+    const newerOverCapSince = new Date(nowMs - 5 * 60 * 1000).toISOString();
+    const state = { over_cap_since: newerOverCapSince, last_emitted_at: olderEmit, last_cleared_notice_at: null };
+    const result = decide({ used: 38, cap: 40, state, nowMs });
+    expect(result.action).toBe('none');
+  });
+
   it('AC-19: dedupe is entirely emission-recency-based -- decide() takes no acknowledged_at input at all', () => {
     // The function signature itself has no ack-state parameter; this is a structural guarantee,
     // not a runtime one. Documented here as the load-bearing contract TST-P3 requires.
@@ -250,5 +273,37 @@ describe('tick(): state-file persistence + AC-19 acked-target-still-suppressed',
     const second = await tick(sb2, { repoRoot: tmpDir, coordinatorId: COORDINATOR, used: 38, cap: 40, statePath, seats: [{ session_id: SEAT_A }] });
     expect(second.action).toBe('none');
     expect(inserted2).toHaveLength(0);
+  });
+
+  // WARNING (adversarial post-merge review, PR #8356): tick() used to persist last_emitted_at
+  // unconditionally, even when the fan-out reached ZERO seats (every dispatch refused) --
+  // burning the 6-hour re-emit window on a notice nobody received, with no operator-visible
+  // failure signal.
+  it('WARN-fix: a fan-out that reaches ZERO seats does NOT persist last_emitted_at -- the next tick retries immediately', async () => {
+    const overSince = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+    writeState(statePath, { schema_version: 1, over_cap_since: overSince, last_emitted_at: null, last_cleared_notice_at: null });
+
+    // No live targets registered -> every dispatch is refused, written=0.
+    const { supabase: sb1 } = mockSupabase({ liveTargets: [] });
+    const first = await tick(sb1, { repoRoot: tmpDir, coordinatorId: COORDINATOR, used: 41, cap: 40, statePath, seats: [{ session_id: SEAT_A }] });
+    expect(first.action).toBe('emit');
+    expect(first.written).toBe(0);
+    const stateAfterFirst = readState(statePath);
+    expect(stateAfterFirst.last_emitted_at).toBeNull(); // NOT stamped -- nothing was delivered
+
+    // A tick moments later, now with a live seat, must retry immediately (not wait 6h).
+    const { supabase: sb2, inserted } = mockSupabase({ liveTargets: [SEAT_A] });
+    const second = await tick(sb2, { repoRoot: tmpDir, coordinatorId: COORDINATOR, used: 41, cap: 40, statePath, seats: [{ session_id: SEAT_A }] });
+    expect(second.action).toBe('emit');
+    expect(inserted).toHaveLength(1);
+  });
+
+  // WARNING (adversarial post-merge review, PR #8356): writeState was a bare fs.writeFileSync
+  // with no temp+rename and no try/catch, unlike the reaper pattern it claimed to mirror.
+  it('WARN-fix: writeState never throws, even when the target directory cannot be created', () => {
+    const impossiblePath = path.join(tmpDir, 'not-a-dir', 'nested', 'state.json');
+    // Create a FILE at the path a directory needs to occupy, so mkdirSync must fail.
+    fs.writeFileSync(path.join(tmpDir, 'not-a-dir'), 'i am a file, not a directory');
+    expect(() => writeState(impossiblePath, { schema_version: 1, over_cap_since: null, last_emitted_at: null, last_cleared_notice_at: null })).not.toThrow();
   });
 });

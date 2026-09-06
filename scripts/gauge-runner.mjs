@@ -201,9 +201,19 @@ function buildDetectorResolvers(supabase) {
     'relay-drop': async () => shapeRelayDropResult(await planRelayDrops(supabase)),
     // SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-5(d): coordinator-wide
     // (no sessionId scoping), mirroring the coordinator-facing formatCoordinatorOverdueWarning
-    // call site in scripts/fleet-dashboard.cjs.
+    // call site in scripts/fleet-dashboard.cjs. cap=200 (vs the check-in-nudge DEFAULT_LIST_CAP=5)
+    // -- a gauge asserting "zero unreceipted" needs the true population, not a 5-row nudge list.
+    // KNOWN RESIDUAL LIMITATION (adversarial post-merge review, PR #8356, WARNING finding, not
+    // fully closed here): this gauge's population (ALL senders, all time, oldest-first) is not
+    // identical to writeSignalReceipts' write-site population (active-coordinator-targeted,
+    // newest 20, 7-day window, scripts/fleet-dashboard.cjs printInbox()) -- a signal outside the
+    // write site's window/target can appear here as permanently unreceipted with no write path
+    // able to clear it. Narrowing the gauge to match would weaken the ratification's fleet-wide
+    // "asserted at zero" guarantee; widening the write site's batch is a separate, riskier change
+    // to a live write path. Left as documented debt rather than a silent redesign under review
+    // pressure -- a real fix needs its own FR.
     'unreceipted-signals-overdue': async () => shapeUnreceiptedOverdueResult(
-      countUnreceiptedOverdue(await fetchAllOutstandingSignals(supabase))
+      countUnreceiptedOverdue(await fetchAllOutstandingSignals(supabase, { cap: 200 }))
     ),
     // SD-LEO-INFRA-TIERED-SOURCING-CLAIM-001 (FR-2): QF-scoped only, see lib/fleet/off-canonical-
     // mint-gauge.js docblock for why SDs are out of scope.

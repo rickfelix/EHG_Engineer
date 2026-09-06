@@ -4422,24 +4422,40 @@ async function main() {
   // reaper tick above.
   try {
     const cappedPoolBroadcast = require('../lib/coordinator/capped-pool-broadcast.cjs');
-    const { countActiveWorktrees, MAX_WORKTREE_COUNT } = await import('../lib/worktree-quota.js');
+    const { countActiveWorktreesOrThrow, MAX_WORKTREE_COUNT } = await import('../lib/worktree-quota.js');
     const cpbRepoRoot = path.resolve(__dirname, '..');
-    const cpbUsed = countActiveWorktrees(cpbRepoRoot);
-    const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
-    let cpbCoordinatorId = null;
-    try { cpbCoordinatorId = await getActiveCoordinatorId(supabase); } catch { /* fail-soft: null coordinatorId still lets the tick run */ }
-    const { liveFleetSessions } = require('../lib/fleet/live-fleet-sessions.cjs');
-    const cpbSeats = await liveFleetSessions(supabase, { coordinatorId: cpbCoordinatorId });
-    const cpbOutcome = await cappedPoolBroadcast.tick(supabase, {
-      repoRoot: cpbRepoRoot,
-      coordinatorId: cpbCoordinatorId,
-      used: cpbUsed,
-      cap: MAX_WORKTREE_COUNT,
-      seats: cpbSeats,
-    });
-    if (cpbOutcome.action !== 'none') {
-      console.log('  capped_pool_broadcast action=' + cpbOutcome.action + ' written=' + cpbOutcome.written + ' skipped=' + cpbOutcome.skipped);
+    // Adversarial post-merge review (PR #8356, WARNING finding): countActiveWorktrees fails OPEN
+    // to 0 on a `git worktree list` failure, which would read here as "not over cap" and fan out
+    // a false all-clear to every live seat while also resetting the hold window. Use the
+    // throwing variant and skip this tick entirely on a genuinely unreadable census -- never
+    // treat "unreadable" as "0".
+    let cpbUsed = null;
+    let cpbCensusReadable = true;
+    try {
+      cpbUsed = countActiveWorktreesOrThrow(cpbRepoRoot);
+    } catch (cpbCensusErr) {
+      cpbCensusReadable = false;
+      console.log('  capped_pool_broadcast: worktree census unreadable (' + (cpbCensusErr && cpbCensusErr.message ? cpbCensusErr.message : 'unknown') + ') -- skipping this tick');
       console.log('');
+    }
+
+    if (cpbCensusReadable) {
+      const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
+      let cpbCoordinatorId = null;
+      try { cpbCoordinatorId = await getActiveCoordinatorId(supabase); } catch { /* fail-soft: null coordinatorId still lets the tick run */ }
+      const { liveFleetSessions } = require('../lib/fleet/live-fleet-sessions.cjs');
+      const cpbSeats = await liveFleetSessions(supabase, { coordinatorId: cpbCoordinatorId });
+      const cpbOutcome = await cappedPoolBroadcast.tick(supabase, {
+        repoRoot: cpbRepoRoot,
+        coordinatorId: cpbCoordinatorId,
+        used: cpbUsed,
+        cap: MAX_WORKTREE_COUNT,
+        seats: cpbSeats,
+      });
+      if (cpbOutcome.action !== 'none') {
+        console.log('  capped_pool_broadcast action=' + cpbOutcome.action + ' written=' + cpbOutcome.written + ' skipped=' + cpbOutcome.skipped);
+        console.log('');
+      }
     }
   } catch (cpbErr) {
     console.log('CAPPED POOL BROADCAST TICK: ' + (cpbErr && cpbErr.message ? cpbErr.message : 'unknown'));

@@ -121,11 +121,19 @@ describe('ages, totals and truncation honesty', () => {
 });
 
 describe('quiet when empty, quiet when it cannot answer', () => {
-  it('nothing outstanding returns null — absence, not an empty stub', async () => {
-    // Asserted as absence: this runs once per loop pass per seat, and a permanent
-    // "0 outstanding" line is one workers learn to skim past.
+  // CORRECTED (adversarial post-merge review, PR #8356, WARNING finding): this used to assert a
+  // bare `null` for "nothing outstanding", identical to what a genuine query ERROR also returns.
+  // countUnreceiptedOverdue(null) reports 'unknown' unconditionally, which tripped the
+  // unreceipted-signals-overdue gauge (SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001
+  // FR-5(d)) on the HEALTHIEST possible fleet state. A genuinely empty result is now a real,
+  // still-falsy-for-count object (count:0/signals:[]) so a caller CAN distinguish "verified zero"
+  // from "unknown" while formatOutstandingWarning's own `!result.count` check still suppresses the
+  // rendered line the same as before -- the "skim past a permanent 0-line" guarantee is unchanged.
+  it('nothing outstanding returns a real, empty-shaped result — never bare null (null means genuinely unknown)', async () => {
     const { client } = sbDouble([]);
-    expect(await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW })).toBeNull();
+    const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
+    expect(r).not.toBeNull();
+    expect(r).toEqual({ count: 0, shown: 0, oldest_age_minutes: null, signals: [], received_check_reliable: true });
   });
 
   it('a query error FAILS QUIET, not closed', async () => {
@@ -200,6 +208,41 @@ describe('QF-20260906-162: RECEIVED — a signal_receipt row exists', () => {
     };
     const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
     expect(r).not.toBeNull();
+    expect(r.signals[0].received).toBe(false);
+  });
+
+  // WARNING (adversarial post-merge review, PR #8356): supabase-js/postgrest-js return a query
+  // failure as `{data: null, error}` — they do NOT throw/reject. The test above only covers the
+  // reject() path; this covers the resolve-with-error path, which the prior code's
+  // `const { data: receipts } = await ...` silently discarded, leaving received_check_reliable
+  // true on a genuine failure (a false-pass — countUnreceiptedOverdue would then trust a hard
+  // number instead of reporting 'unknown').
+  it('the receipt-existence-check RESOLVING with {data:null,error} (not throwing) is still treated as unreliable', async () => {
+    let call = 0;
+    const client = {
+      from() {
+        call++;
+        if (call === 1) {
+          return {
+            select: () => ({
+              eq: () => ({
+                not: () => ({
+                  is: () => ({
+                    order: () => ({
+                      limit: () => Promise.resolve({ data: [{ id: 'a', created_at: minsAgo(40), read_at: null, payload: { signal_type: 'feedback' } }], error: null, count: 1 }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        return { select: () => ({ eq: () => ({ in: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'relation does not exist' } }) }) }) }) };
+      },
+    };
+    const r = await fetchOutstandingSignals(client, 'sess-1', { nowMs: NOW });
+    expect(r).not.toBeNull();
+    expect(r.received_check_reliable).toBe(false);
     expect(r.signals[0].received).toBe(false);
   });
 });
