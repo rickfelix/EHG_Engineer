@@ -208,6 +208,22 @@
   - Mid-build discovery: `src/services/realtime-dashboard.js` held a live subscription (wired via `server/config.js`) watching real `agentic_reviews` changes but fetching from the phantom `pr_reviews` table via the very methods this SD deletes — already silently non-functional before this change, not a regression introduced by it.
   - Also fixes a genuine pre-existing test-design flaw found while verifying this PR: `tests/unit/audit-mounts.test.js`'s FR-5 safety check asserted ambient `git status --porcelain -- server/index.js` was clean, which false-positives against any legitimate concurrent edit to that file (including this PR's own comment-block edit). Replaced with a content-equality check against the source captured at module load, verifying what the test actually intends.
 
+- **Restores 2 missing story-gate views (`v_story_verification_status`, `v_sd_release_gate`) matching the live code's expected schema** - SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-B
+  - Part of the parent 17-object disposition audit: both view names had 2-3 mutually incompatible historical definitions scattered across migration files; `database/migrations/20260906_restore_story_gate_views.sql` reproduces the one 2025-09-22 definition that actually matches `src/api/stories.js`'s expected column shape, not a later, incompatible one built on a different base table.
+  - Migration is merged but **not yet applied to the live database** — applying it via `apply-migration.js` was denied by the auto-mode permission classifier (a correctly-enforced boundary on live schema changes). An operator needs to run it once.
+
+- **Fixes a silent-failure guard in the backlog-summary endpoint, plus restores its underlying caching columns** - SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-C
+  - `server/routes/backlog.js` previously swallowed a genuine `sdError` identically to a legitimate cache-miss; now distinguishes and surfaces the real error via `console.warn` while preserving the existing cache-miss fall-through. This half is live now.
+  - `database/migrations/20260906_restore_backlog_summary_caching.sql` (additive `backlog_summary`/`backlog_summary_generated_at` columns on `strategic_directives_v2`) is merged but **not yet applied to the live database** — same permission-classifier boundary as E-B; an operator needs to run it once.
+
+- **Adds the 2 missing `venture_exit_profiles` columns a mounted EVA-exit dashboard route was crashing on** - SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-D
+  - `GET /api/eva/exit/portfolio-readiness`'s `Promise.all` rejected outright on a `42703` from a `.select()` referencing `readiness_assessment`/`updated_at`, columns that never existed. `database/migrations/20260906_add_venture_exit_profiles_missing_columns.sql` adds both (plus a standard `updated_at` trigger), restoring the route's own already-correct null-fallback design.
+  - No write path exists yet for `readiness_assessment` (the Phase-3 separation-rehearsal persist step referenced in the route's own code comment was never built) — filed as a disclosed completion-flag finding, not built in this SD.
+  - Migration is merged but **not yet applied to the live database** — same permission-classifier boundary as E-B/E-C. LEAD-FINAL-APPROVAL's `GATE_ACTIVATION_INVARIANT` gate correctly flagged this SD as shipping a schema+dashboard chain without an activation test possible until the migration is live; awaiting operator action (migration apply, or a tracked follow-up SD) before it can clear.
+
+- **Repoints 2 code sites that were silently writing/reading dropped or renamed columns** - SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-E
+  - `server/routes/feedback.js` used `legacy_id` (5 sites) where the live schema now has `sd_key`; `server/routes/stage24.js` used `stage_number` where the live schema now has `lifecycle_stage`. Both are pure code repoints, live now, no migration required.
+
 ## 2026-09-05
 
 ### Bugfix
