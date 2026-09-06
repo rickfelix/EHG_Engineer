@@ -85,26 +85,30 @@ export async function probeColumnPresent(dbClientFactory) {
 /**
  * Independently confirms the claim_history entry actually persisted, via a fresh SELECT --
  * never trusting the in-memory `entry` object stampClaim() happens to return (that object is
- * built locally by claim-stamp.cjs regardless of whether the write truly landed). Returns the
- * newest claim_history element (by claimed_at), or null if none is found / the query fails.
+ * built locally by claim-stamp.cjs regardless of whether the write truly landed).
  * VALIDATION-AGENT FINDING (evidence 64ea554f, now resolved): ACTIVATED previously rested
  * entirely on this in-memory object plus a rowCount from the UPDATE -- "reads back" in the
  * docblock/runbook text was not literally true until this function existed.
+ * VALIDATION-AGENT FINDING (evidence 5c499972, V-F3, now resolved): a connection/query error
+ * here must be distinguishable from a genuine "nothing persisted" -- mirrors
+ * probeColumnPresent's {present:false, indeterminate:true, error} shape a few lines above, so
+ * a flaky read-back connection is never misreported as a chain defect (FR-1's own requirement).
+ * @returns {Promise<{entry: object|null, indeterminate?: true, error?: string}>}
  */
 export async function readBackClaimHistory(dbClientFactory, qfId) {
   let client;
   try {
     client = await dbClientFactory();
-  } catch {
-    return null;
+  } catch (err) {
+    return { entry: null, indeterminate: true, error: err && err.message };
   }
   try {
     const { rows } = await client.query('SELECT metadata -> \'claim_history\' AS claim_history FROM quick_fixes WHERE id = $1', [qfId]);
     const history = rows && rows[0] && rows[0].claim_history;
-    if (!Array.isArray(history) || history.length === 0) return null;
-    return history[history.length - 1];
-  } catch {
-    return null;
+    if (!Array.isArray(history) || history.length === 0) return { entry: null };
+    return { entry: history[history.length - 1] };
+  } catch (err) {
+    return { entry: null, indeterminate: true, error: err && err.message };
   } finally {
     try { await client.end(); } catch { /* best-effort close */ }
   }
@@ -176,8 +180,15 @@ export async function resolveActivationState(deps = {}) {
       // VALIDATION-AGENT FINDING (evidence 64ea554f, now resolved): the entry above is an
       // in-memory object claim-stamp.cjs builds locally -- it proves nothing about what
       // actually persisted. Independently re-read the row before declaring ACTIVATED.
-      const persisted = await readBackFn(dbClientFactory, qfId);
-      const persistedHasPickReason = persisted && Object.prototype.hasOwnProperty.call(persisted, 'pick_reason');
+      const readBack = await readBackFn(dbClientFactory, qfId);
+      if (readBack.indeterminate) {
+        // VALIDATION-AGENT FINDING (evidence 5c499972, V-F3, now resolved): a connection/query
+        // error during the read-back is environmental, never a chain defect -- must not be
+        // conflated with "nothing persisted" (which IS a real defect, below).
+        result = { state: 'INDETERMINATE', exitCode: EXIT_CODES.INDETERMINATE, detail: `merge succeeded but the independent read-back could not reach a definite answer (${readBack.error}) -- environmental/transient, not a code defect.` };
+        return result;
+      }
+      const persistedHasPickReason = readBack.entry && Object.prototype.hasOwnProperty.call(readBack.entry, 'pick_reason');
       result = persistedHasPickReason
         ? { state: 'ACTIVATED', exitCode: EXIT_CODES.ACTIVATED, detail: `real pick_reason-bearing claim_history entry written AND independently read back from quick_fixes.metadata for ${qfId}.` }
         : { state: 'REGRESSED', exitCode: EXIT_CODES.REGRESSED, detail: `merge reported success and returned a pick_reason-bearing entry, but an independent read-back of quick_fixes.metadata for ${qfId} found no matching persisted entry -- a real read-after-write defect.` };

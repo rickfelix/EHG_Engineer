@@ -62,7 +62,7 @@ describe('resolveActivationState', () => {
         const merged = await opts.mergeQfMetadataFn(qfId, sessionId, {});
         return merged.merged ? { session_id: sessionId, claimed_at: 'x', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } } : null;
       },
-      readBackFn: async () => ({ session_id: 'sess-1', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } }),
+      readBackFn: async () => ({ entry: { session_id: 'sess-1', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } } }),
     });
     expect(result.state).toBe('ACTIVATED');
     expect(result.exitCode).toBe(EXIT_CODES.ACTIVATED);
@@ -80,24 +80,50 @@ describe('resolveActivationState', () => {
         await opts.mergeQfMetadataFn(qfId, sessionId, {});
         return { session_id: sessionId, claimed_at: 'x', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } };
       },
-      readBackFn: async () => null, // nothing found on independent re-read
+      readBackFn: async () => ({ entry: null }), // nothing found on independent re-read
     });
     expect(result.state).toBe('REGRESSED');
     expect(result.exitCode).toBe(EXIT_CODES.REGRESSED);
     expect(result.detail).toMatch(/read-after-write/);
   });
 
-  it('readBackClaimHistory returns the newest entry from a real-shaped pg result, and null when the client cannot connect', async () => {
+  it('V-F3: an INDETERMINATE (not REGRESSED) read-back connection failure never gets conflated with a real read-after-write defect', async () => {
+    // VALIDATION-AGENT FINDING (evidence 5c499972, now resolved): the read-back's own
+    // connect/query errors were previously swallowed into a bare null, which the caller
+    // then reported as REGRESSED ("a real read-after-write defect") -- a connection blip
+    // must never be misreported as a chain defect (this is the same class of bug FR-1
+    // already required probeColumnPresent to avoid, now mirrored in the read-back).
+    const result = await resolveActivationState({
+      dbClientFactory: fakePresentDb,
+      mergeQfMetadataFn: async () => ({ merged: true }),
+      stampClaimFn: async (_supabase, qfId, sessionId, _id, _m, opts) => {
+        await opts.mergeQfMetadataFn(qfId, sessionId, {});
+        return { session_id: sessionId, claimed_at: 'x', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } };
+      },
+      readBackFn: async () => ({ entry: null, indeterminate: true, error: 'ECONNRESET' }),
+    });
+    expect(result.state).toBe('INDETERMINATE');
+    expect(result.exitCode).toBe(EXIT_CODES.INDETERMINATE);
+    expect(result.detail).not.toMatch(/real read-after-write defect/);
+  });
+
+  it('readBackClaimHistory returns {entry} from a real-shaped pg result, and {entry:null, indeterminate:true} when the client cannot connect', async () => {
     const { readBackClaimHistory } = await import('../../../scripts/verify-quick-fixes-metadata-activation.mjs');
     const withHistory = async () => ({
       query: async () => ({ rows: [{ claim_history: [{ session_id: 'old' }, { session_id: 'new', pick_reason: {} }] }] }),
       end: async () => {},
     });
     const found = await readBackClaimHistory(withHistory, 'QF-X');
-    expect(found).toEqual({ session_id: 'new', pick_reason: {} });
+    expect(found).toEqual({ entry: { session_id: 'new', pick_reason: {} } });
+
+    const empty = async () => ({ query: async () => ({ rows: [{ claim_history: [] }] }), end: async () => {} });
+    expect(await readBackClaimHistory(empty, 'QF-X')).toEqual({ entry: null });
 
     const unreachable = async () => { throw new Error('ECONNREFUSED'); };
-    expect(await readBackClaimHistory(unreachable, 'QF-X')).toBeNull();
+    const failed = await readBackClaimHistory(unreachable, 'QF-X');
+    expect(failed.entry).toBeNull();
+    expect(failed.indeterminate).toBe(true);
+    expect(failed.error).toMatch(/ECONNREFUSED/);
   });
 
   it('TS-3: REGRESSED when the merge returns a definite failure reason (cas_lost)', async () => {
@@ -193,7 +219,7 @@ describe('resolveActivationState', () => {
         return merged.merged ? { session_id: sessionId, claimed_at: 'x', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } } : null;
       },
       deleteScratchQfFn: async () => { throw new Error('delete failed: RLS denied'); },
-      readBackFn: async () => ({ session_id: 'sess-1', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } }),
+      readBackFn: async () => ({ entry: { session_id: 'sess-1', pick_reason: { score: 'UNSCORED', components: {}, comparatorVersion: null } } }),
     });
     expect(result.state).toBe('ACTIVATED'); // verdict unchanged by a cleanup failure
     expect(result.detail).toMatch(/CLEANUP FAILED/);
