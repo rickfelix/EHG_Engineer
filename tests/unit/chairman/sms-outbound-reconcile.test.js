@@ -1569,4 +1569,37 @@ describe("guard (3') — cancel a backstop at drain once its slot's live send la
     expect(summary.canceledLiveCovered).toBe(0);
     expect(summary.sent).toBe(1);
   });
+
+  // Adversarial-review finding (post-merge): 'owed'/'sending' had NO age bound, so a live row
+  // stuck enqueued-but-never-dispatched (crash, misconfig) would cancel the backstop forever --
+  // the exact failure mode this backstop exists to catch, permanently disarming the dead-man.
+  // Uses status='sending' (not 'owed') for the live row: an 'owed' row is independently
+  // claimable by this same worker's Pass 2, which would send it and contaminate the assertion
+  // that backstop is the ONLY thing sent -- 'sending' (mid-dispatch, not re-claimable) isolates
+  // the guard-3' behavior under test, matching the existing in-flight-coverage test above.
+  it('a STALE live sending row (created >5min ago, stuck mid-dispatch) does NOT count as coverage -- the backstop still sends', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      backstopRow(), // default created_at: ago(10 * MIN)
+      // newer than the backstop (ago(7) > ago(10) in wall-clock time) but older than the 5min grace
+      owedRow({ id: 'ob-live-stuck-sending', kind: 'heartbeat_status', dedupe_key: null, status: 'sending', created_at: ago(7 * MIN) }),
+    ] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(summary.canceledLiveCovered).toBe(0);
+    expect(summary.sent).toBe(1);
+    expect(sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-backstop-18h').status).toBe('sent');
+  });
+
+  it('a DELIVERED live row older than the 5min grace still counts as coverage -- only non-terminal statuses are age-bounded', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      backstopRow(), // default created_at: ago(10 * MIN)
+      // newer than the backstop, but well past the 5min staleness grace -- terminal status
+      // must count regardless, since 'delivered' means the message genuinely went out.
+      owedRow({ id: 'ob-live-old-delivered', kind: 'heartbeat_status', dedupe_key: null, status: 'delivered', created_at: ago(8 * MIN) }),
+    ] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(summary.canceledLiveCovered).toBe(1);
+    expect(provider.send).not.toHaveBeenCalled();
+  });
 });
