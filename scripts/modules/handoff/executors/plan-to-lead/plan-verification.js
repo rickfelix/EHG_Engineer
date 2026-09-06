@@ -7,6 +7,7 @@
  */
 
 import { isLightweightSDType } from '../../validation/sd-type-applicability-policy.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 
 /**
  * Validate PLAN verification completeness
@@ -25,10 +26,13 @@ export async function validatePlanVerification(supabase, prd, sd) {
   };
 
   // PARENT SD DETECTION
-  const { data: childSDs } = await supabase
-    .from('strategic_directives_v2')
-    .select('id, sd_key, status')
-    .eq('parent_sd_id', sd.id);
+  const childSDs = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_key, status')
+      .eq('parent_sd_id', sd.id),
+    { site: 'plan-verification:child_sds' }
+  );
 
   const isParentSD = childSDs && childSDs.length > 0;
   const allChildrenComplete = isParentSD && childSDs.every(c => c.status === 'completed');
@@ -61,10 +65,13 @@ async function validateParentSDCompletion(supabase, prd, childSDs, validation) {
   validation.warnings.push(`Parent SD: ${childSDs.length} completed children substitutes for EXEC-TO-PLAN`);
 
   // User stories check (may not have any if work is in children)
-  const { data: userStories } = await supabase
-    .from('user_stories')
-    .select('id, status')
-    .eq('prd_id', prd.id);
+  const userStories = await safeQuery(
+    supabase
+      .from('user_stories')
+      .select('id, status')
+      .eq('prd_id', prd.id),
+    { site: 'plan-verification:user_stories_parent' }
+  );
 
   if (!userStories || userStories.length === 0) {
     validation.score += 30;
@@ -112,13 +119,16 @@ async function validateStandardSDCompletion(supabase, prd, sd, validation) {
     handoffScore = 40;
     validation.warnings.push(`Infrastructure SD: EXEC-TO-PLAN is OPTIONAL (sd_type='${sdType}')`);
   } else {
-    const { data: execHandoff } = await supabase
-      .from('sd_phase_handoffs')
-      .select('id, status')
-      .eq('sd_id', sd.id)
-      .eq('handoff_type', 'EXEC-TO-PLAN')
-      .order('created_at', { ascending: false })
-      .limit(1);
+    const execHandoff = await safeQuery(
+      supabase
+        .from('sd_phase_handoffs')
+        .select('id, status')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'EXEC-TO-PLAN')
+        .order('created_at', { ascending: false })
+        .limit(1),
+      { site: 'plan-verification:exec_handoff' }
+    );
 
     if (execHandoff && execHandoff.length > 0) {
       validation.score += 40;
@@ -129,10 +139,13 @@ async function validateStandardSDCompletion(supabase, prd, sd, validation) {
   }
 
   // Check user stories validation
-  const { data: userStories } = await supabase
-    .from('user_stories')
-    .select('id, status')
-    .eq('prd_id', prd.id);
+  const userStories = await safeQuery(
+    supabase
+      .from('user_stories')
+      .select('id, status')
+      .eq('prd_id', prd.id),
+    { site: 'plan-verification:user_stories_standard' }
+  );
 
   if (userStories && userStories.length > 0) {
     const completedStories = userStories.filter(s =>

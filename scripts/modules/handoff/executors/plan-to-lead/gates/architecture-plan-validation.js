@@ -6,7 +6,13 @@
  * for evidence of dimension coverage.
  *
  * ADVISORY gate — always passes, but reports uncovered dimensions as warnings.
+ *
+ * SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001: queries route through safeQuery with a `tolerate`
+ * reason rather than a bare error-discarding destructure — this gate's own contract is "always
+ * passes", so a hard throw on a broken query would be a behaviour regression, not a fix.
  */
+
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Check if text contains references to a dimension name.
@@ -40,10 +46,13 @@ export function createArchitecturePlanValidationGate(supabase) {
       const sdKey = ctx.sd?.sd_key || ctx.sdId;
 
       // ORCHESTRATOR BYPASS
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'architecture-plan-validation:child_sds', tolerate: 'advisory-only gate — a failed orchestrator-bypass check falls back to treating the SD as non-orchestrator rather than throwing' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Orchestrator SD (${childSDs.length} children) — bypassing`);
@@ -57,11 +66,14 @@ export function createArchitecturePlanValidationGate(supabase) {
       // Read metadata for arch_key
       let metadata = ctx.sd?.metadata;
       if (!metadata) {
-        const { data: sdRecord } = await supabase
-          .from('strategic_directives_v2')
-          .select('metadata')
-          .eq('id', sdUuid)
-          .single();
+        const sdRecord = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('metadata')
+            .eq('id', sdUuid)
+            .single(),
+          { site: 'architecture-plan-validation:sd_record', tolerate: 'advisory-only gate — a failed metadata lookup falls back to no arch_key, which the gate already treats as not-applicable' }
+        );
         metadata = sdRecord?.metadata;
       }
 
@@ -118,22 +130,28 @@ export function createArchitecturePlanValidationGate(supabase) {
       ].join(' ');
 
       // Fetch user stories for text matching
-      const { data: stories } = await supabase
-        .from('user_stories')
-        .select('title, acceptance_criteria')
-        .eq('sd_id', sdUuid);
+      const stories = await safeQuery(
+        supabase
+          .from('user_stories')
+          .select('title, acceptance_criteria')
+          .eq('sd_id', sdUuid),
+        { site: 'architecture-plan-validation:stories', tolerate: 'advisory-only gate — a failed story lookup falls back to no story text, weakening dimension-coverage matching rather than throwing' }
+      );
 
       const storyText = (stories || [])
         .map(s => `${s.title || ''} ${JSON.stringify(s.acceptance_criteria || '')}`)
         .join(' ');
 
       // Fetch latest vision scores for dimension-level scores
-      const { data: visionScores } = await supabase
-        .from('eva_vision_scores')
-        .select('dimension_scores')
-        .eq('sd_id', sdKey)
-        .order('scored_at', { ascending: false })
-        .limit(1);
+      const visionScores = await safeQuery(
+        supabase
+          .from('eva_vision_scores')
+          .select('dimension_scores')
+          .eq('sd_id', sdKey)
+          .order('scored_at', { ascending: false })
+          .limit(1),
+        { site: 'architecture-plan-validation:vision_scores', tolerate: 'advisory-only gate — a failed vision-score lookup falls back to an empty dimension_scores map rather than throwing' }
+      );
 
       const dimensionScores = visionScores?.[0]?.dimension_scores || {};
 
