@@ -14,7 +14,7 @@
  * ACTIVATED/REGRESSED/INDETERMINATE must be provable without ever touching real schema.
  */
 import { describe, it, expect } from 'vitest';
-import { resolveActivationState, probeColumnPresent, EXIT_CODES } from '../../../scripts/verify-quick-fixes-metadata-activation.mjs';
+import { resolveActivationState, probeColumnPresent, buildScratchQfInsertPayload, EXIT_CODES } from '../../../scripts/verify-quick-fixes-metadata-activation.mjs';
 
 const fakeAbsentDb = async () => ({
   query: async () => { const e = new Error('column "metadata" does not exist'); e.code = '42703'; throw e; },
@@ -124,21 +124,31 @@ describe('resolveActivationState', () => {
     expect(capturedId).toMatch(/^QF-/);
   });
 
-  it('TS-6: the scratch-row payload is born claimed and non-open (never belt-auto-startable)', async () => {
-    let insertedPayload = null;
-    await resolveActivationState({
+  it('TS-6: the REAL scratch-row payload (buildScratchQfInsertPayload) is born claimed, non-open, and carries target_application', () => {
+    // TESTING-AGENT FINDING (evidence a9bac2fa, HIGH, now resolved): asserting only what an
+    // injected test double received (the prior version of this test) proves nothing about the
+    // deployed realInsertScratchQf payload -- assert the exported builder directly instead.
+    const payload = buildScratchQfInsertPayload('QF-VERIFYACT-123-ABC', 'sess-1');
+    expect(payload.status).not.toBe('open');
+    expect(payload.claiming_session_id).toBe('sess-1');
+    expect(payload.target_application).toBe('EHG_Engineer');
+    expect(payload.id).toMatch(/^QF-/);
+  });
+
+  it('TS-6b: an insert failure (e.g. missing target_application on a live trigger) classifies INDETERMINATE, never REGRESSED', async () => {
+    let deleteCalled = false;
+    const result = await resolveActivationState({
       dbClientFactory: fakePresentDb,
-      mergeQfMetadataFn: async () => ({ merged: true }),
-      stampClaimFn: async () => ({ pick_reason: {} }),
-      insertScratchQfFn: async (qfId, sessionId) => { insertedPayload = { qfId, sessionId }; },
+      insertScratchQfFn: async () => { throw new Error('null value in column "target_application" violates not-null constraint'); },
+      deleteScratchQfFn: async () => { deleteCalled = true; },
+      stampClaimFn: async () => { throw new Error('should never be reached -- insert failed first'); },
     });
-    // The script's real insert (realInsertScratchQf) always sets status:'in_progress' and a
-    // non-null claiming_session_id at creation time -- this asserts the injected hook receives
-    // a session id it will use for exactly that (never null/open), matching lib/fleet/
-    // belt-depth.cjs's auto-start predicate (status='open' AND claiming_session_id IS NULL)
-    // being unsatisfiable by construction.
-    expect(insertedPayload.sessionId).toBeTruthy();
-    expect(insertedPayload.qfId).toMatch(/^QF-/);
+    expect(result.state).toBe('INDETERMINATE');
+    expect(result.exitCode).toBe(EXIT_CODES.INDETERMINATE);
+    expect(result.detail).toMatch(/environmental\/setup problem, not a code defect/);
+    // Cleanup still runs (finally) even though the insert itself never succeeded -- a
+    // delete-by-id on a row that was never created is a harmless no-op.
+    expect(deleteCalled).toBe(true);
   });
 
   it('cleans up (calls deleteScratchQfFn) even when stampClaimFn throws', async () => {

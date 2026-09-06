@@ -117,7 +117,18 @@ export async function resolveActivationState(deps = {}) {
   };
 
   try {
-    if (insertScratchQfFn) await insertScratchQfFn(qfId, sessionId);
+    if (insertScratchQfFn) {
+      try {
+        await insertScratchQfFn(qfId, sessionId);
+      } catch (err) {
+        // TESTING-AGENT FINDING (evidence a9bac2fa, BLOCKING, now resolved): the prior
+        // insert call never checked its own error and let a failed insert fall through
+        // silently, so the CAS-guarded UPDATE that followed matched 0 rows and got
+        // misclassified as REGRESSED ("a real defect in the chain") -- an insert failure
+        // is an environmental/setup problem, never a chain defect.
+        return { state: 'INDETERMINATE', exitCode: EXIT_CODES.INDETERMINATE, detail: `scratch QF insert failed: ${err && err.message} -- environmental/setup problem, not a code defect.` };
+      }
+    }
     const entry = await stampClaimFn({}, qfId, sessionId, 'verify-activation-probe', null, { mergeQfMetadataFn: wrappedMergeFn });
 
     if (entry && capturedResult && capturedResult.merged) {
@@ -142,9 +153,17 @@ export async function resolveActivationState(deps = {}) {
   }
 }
 
-/** Real scratch-row lifecycle: born claimed + non-open (never belt-auto-startable), cleaned up in finally. */
-async function realInsertScratchQf(supabase, qfId, sessionId) {
-  await supabase.from('quick_fixes').insert({
+/**
+ * The real scratch-row payload: born claimed + non-open (never belt-auto-startable, per
+ * lib/fleet/belt-depth.cjs's auto-start predicate: status='open' AND pr_url IS NULL AND
+ * commit_sha IS NULL AND claiming_session_id IS NULL). Exported so a unit test can assert the
+ * ACTUAL payload shape, not just what a test double happens to receive.
+ * TESTING-AGENT FINDING (evidence a9bac2fa, BLOCKING, now resolved): target_application is
+ * required by the live trg_quick_fixes_validate_target_application trigger (RAISE EXCEPTION on
+ * NULL) -- its prior absence made every real insert fail.
+ */
+export function buildScratchQfInsertPayload(qfId, sessionId) {
+  return {
     id: qfId,
     title: 'ACTIVATION PROBE (SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-F): safe to delete',
     type: 'bug',
@@ -152,7 +171,13 @@ async function realInsertScratchQf(supabase, qfId, sessionId) {
     description: 'Scratch QF created by scripts/verify-quick-fixes-metadata-activation.mjs',
     status: 'in_progress',
     claiming_session_id: sessionId,
-  });
+    target_application: 'EHG_Engineer',
+  };
+}
+
+async function realInsertScratchQf(supabase, qfId, sessionId) {
+  const { error } = await supabase.from('quick_fixes').insert(buildScratchQfInsertPayload(qfId, sessionId));
+  if (error) throw new Error(`insert failed: ${error.message}`);
 }
 async function realDeleteScratchQf(supabase, qfId) {
   await supabase.from('quick_fixes').delete().eq('id', qfId);
