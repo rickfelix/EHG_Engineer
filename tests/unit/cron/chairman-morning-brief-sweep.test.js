@@ -25,12 +25,15 @@ const SUMMER_TOO_LATE = new Date('2026-07-18T16:15:00Z');     // 12:15 EDT -> ET
 const WINTER_WINDOW_START = new Date('2026-01-15T10:00:00Z'); // 05:00 EST -> ET hour 5 (does work)
 
 /** Minimal fake supabase — the brief body builder is imported/exercised via its own suite. */
-function makeSupabase() {
+function makeSupabase(data = {}) {
   const api = {
-    select: () => api, eq: () => api, gte: () => api, not: () => api, order: () => api, limit: () => api,
-    then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+    select: () => api, eq: () => api, gte: () => api, in: () => api, not: () => api, order: () => api, limit: () => api,
+    then: (resolve) => {
+      const rows = api._table === 'sms_outbound_obligations' ? (data.statusObligations || []) : [];
+      return Promise.resolve({ data: rows, error: null }).then(resolve);
+    },
   };
-  return { from: () => api };
+  return { from: (table) => { api._table = table; return api; } };
 }
 
 function baseDeps(overrides = {}) {
@@ -178,6 +181,31 @@ describe('TS-6 — PII-free logging (no phone/body in logs)', () => {
     const logged = logger.log.mock.calls.map((c) => c.join(' ')).join('\n');
     expect(logged).not.toContain(PHONE);
     expect(logged).not.toContain(BODY);
+  });
+});
+
+describe('QF-20260905-284 — per-kind dedupe (Solomon ranking #1)', () => {
+  it('skips enqueue when a heartbeat_status obligation already reached the chairman today (ET)', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const supabase = makeSupabase({ statusObligations: [
+      { kind: 'heartbeat_status', created_at: new Date(SUMMER_WINDOW_START.getTime() - 30 * 60 * 1000).toISOString() },
+    ] });
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase }));
+
+    expect(r.action).toBe('already_covered');
+    expect(r.exitCode).toBe(0);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('still enqueues when the only prior status obligation is from a different ET date', async () => {
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const supabase = makeSupabase({ statusObligations: [
+      { kind: 'heartbeat_status', created_at: new Date(SUMMER_WINDOW_START.getTime() - 23 * 60 * 60 * 1000).toISOString() },
+    ] });
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase, now: SUMMER_WINDOW_START }));
+
+    expect(r.action).toBe('enqueued');
+    expect(enqueue).toHaveBeenCalledTimes(1);
   });
 });
 
