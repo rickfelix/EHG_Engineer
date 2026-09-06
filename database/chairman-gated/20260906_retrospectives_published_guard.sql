@@ -146,7 +146,15 @@ AS $function$
 DECLARE
   v_protected_changed boolean;
 BEGIN
-  IF OLD.retro_type = 'SD_COMPLETION' AND OLD.status = 'PUBLISHED' THEN
+  -- SECURITY finding S-1 (EXEC evidence 91bf24b9): this trigger MUST also fire on INSERT, not only
+  -- UPDATE. Without that, a caller could INSERT a row with retro_write_token already set to a
+  -- registered identity; nothing would ever null it back out (this function never having run on
+  -- that row), and the token would then silently persist as OLD.retro_write_token into every
+  -- SUBSEQUENT unstamped UPDATE (an UPDATE statement that never mentions the column leaves
+  -- NEW.retro_write_token = OLD.retro_write_token by default) -- a one-shot guard bypass. On
+  -- INSERT there is no OLD row and no protected-column-change concept, so only the NULL-at-rest
+  -- cleanup below applies; the refusal logic is UPDATE-only.
+  IF TG_OP = 'UPDATE' AND OLD.retro_type = 'SD_COMPLETION' AND OLD.status = 'PUBLISHED' THEN
     v_protected_changed :=
          NEW.description                          IS DISTINCT FROM OLD.description
       OR NEW.title                                 IS DISTINCT FROM OLD.title
@@ -203,7 +211,7 @@ END;
 $function$;
 
 CREATE TRIGGER zzz_retrospectives_published_guard
-  BEFORE UPDATE ON public.retrospectives
+  BEFORE INSERT OR UPDATE ON public.retrospectives
   FOR EACH ROW EXECUTE FUNCTION public.enforce_retrospectives_published_guard();
 
 -- ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -230,3 +238,9 @@ AS $function$
         RETURN COALESCE(NEW, OLD);
       END;
       $function$;
+
+-- SECURITY finding S-2 / secdef-execute-revoke-lint: a SECURITY DEFINER function carries EXECUTE
+-- for PUBLIC by default. Naming only anon/authenticated would be a no-op (they inherit PUBLIC's
+-- grant) -- PUBLIC must be named explicitly, and anon/authenticated named too since a function can
+-- separately carry a DIRECT grant a REVOKE-from-PUBLIC-alone cannot remove.
+REVOKE EXECUTE ON FUNCTION public.trg_retrospectives_audit() FROM PUBLIC, anon, authenticated;

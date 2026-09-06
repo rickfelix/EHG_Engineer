@@ -289,6 +289,25 @@ describe('retrospectives_published_guard DDL (ephemeral tier)', () => {
     expect(result.ok).toBe(true);
   });
 
+  it('TS-S1: an INSERT-time retro_write_token does not persist to enable a later unstamped UPDATE bypass', async () => {
+    // SECURITY finding S-1 (EXEC evidence 91bf24b9): before this fix the guard was BEFORE UPDATE
+    // only, so an INSERT supplying retro_write_token was never nulled -- a later UPDATE that never
+    // mentions the column would inherit NEW.retro_write_token = OLD.retro_write_token (the stale
+    // INSERT-time value) and pass the guard without ever setting a same-statement token. The
+    // trigger is now BEFORE INSERT OR UPDATE specifically to close this.
+    const { rows } = await client.query(
+      `INSERT INTO public.retrospectives (retro_type, status, description, key_learnings, quality_score, retro_write_token)
+       VALUES ('SD_COMPLETION', 'PUBLISHED', 'seeded via insert', $1, 100, 'restore_from_audit')
+       RETURNING id, retro_write_token`,
+      [JSON.stringify(Array(16).fill('learning'))],
+    );
+    expect(rows[0].retro_write_token).toBeNull(); // nulled at rest on INSERT too, not just UPDATE
+
+    const result = await attempt('UPDATE public.retrospectives SET description = $1 WHERE id = $2', ['bypass attempt', rows[0].id]);
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('RPGD1');
+  });
+
   it('a DRAFT (non-PUBLISHED) SD_COMPLETION row is never guarded, token or not', async () => {
     const { rows } = await client.query(
       "INSERT INTO public.retrospectives (retro_type, status, description) VALUES ('SD_COMPLETION', 'DRAFT', 'draft text') RETURNING id",

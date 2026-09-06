@@ -33,5 +33,7 @@ AS $function$
       END;
       $function$;
 
+REVOKE EXECUTE ON FUNCTION public.trg_retrospectives_audit() FROM PUBLIC, anon, authenticated;
+
 ALTER TABLE public.retrospectives
   DROP COLUMN IF EXISTS retro_write_token;
