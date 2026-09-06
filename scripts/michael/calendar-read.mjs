@@ -27,6 +27,9 @@ export const CLASSIFICATIONS = Object.freeze(['Recovery', 'Interpersonal', 'Deep
 export const CODED_OVERRIDES = Object.freeze({ DEEP: 'Deep', RECOVERY: 'Recovery', OFFICE: 'Interpersonal', SHALLOW: 'Shallow' });
 const OFFICE_RE = /\b(office|on-site|onsite|in person|in-person)\b/i;
 const ACCEPTED = new Set(['accepted', null]);
+/** The columns michael_calendar_day persists; in-memory helpers (is_meeting) are stripped before upsert. */
+export const PERSISTED_KEYS = Object.freeze(['et_date', 'event_id', 'calendar_id', 'title', 'starts_at', 'ends_at', 'all_day', 'response_status', 'coded_marker', 'optional', 'overlap_group']);
+export const persisted = (row) => Object.fromEntries(PERSISTED_KEYS.map((k) => [k, row[k]]));
 
 /** Pure: 'YYYY-MM-DD' shifted by n days (calendar arithmetic, no timezone). */
 export function shiftDate(dateStr, n) {
@@ -65,12 +68,36 @@ export function isOptional(event) {
   return /\boptional\b/i.test(String(event.summary || ''));
 }
 
-/** Pure: one michael_calendar_day row from a Google event (uniform key set, DB-D5). */
-export function eventRow(event, calendarId) {
-  const allDay = Boolean(event.start && event.start.date && !event.start.dateTime);
-  const startsAt = allDay ? null : (event.start && event.start.dateTime ? new Date(event.start.dateTime).toISOString() : null);
-  const endsAt = allDay ? null : (event.end && event.end.dateTime ? new Date(event.end.dateTime).toISOString() : null);
-  const etDate = allDay ? String(event.start.date) : (startsAt ? etDateStr(new Date(startsAt)) : null);
+/** Pure: a meeting has at least one attendee other than the chairman; a self-created block has none. */
+export function isMeeting(event) {
+  return (Array.isArray(event.attendees) ? event.attendees : []).some((a) => a && a.self !== true);
+}
+
+const isoOrNull = (v) => { const d = v ? new Date(v) : null; return d && Number.isFinite(d.getTime()) ? d.toISOString() : null; };
+
+/**
+ * Pure: michael_calendar_day rows from a Google event (uniform key set, DB-D5). A timed event is one row on
+ * its ET start date; an all-day event is one row per covered date (start.date up to the exclusive
+ * end.date), so a multi-day block covering today reaches today. Returns [] for a malformed event.
+ */
+export function eventRows(event, calendarId) {
+  if (!event || !event.id || !event.start) return [];
+  const allDay = Boolean(event.start.date && !event.start.dateTime);
+  if (allDay) {
+    const first = String(event.start.date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(first)) return [];
+    const endExclusive = event.end && /^\d{4}-\d{2}-\d{2}$/.test(String(event.end.date || '')) ? String(event.end.date) : shiftDate(first, 1);
+    const rows = [];
+    for (let d = first, i = 0; d < endExclusive && i < 31; d = shiftDate(d, 1), i += 1) rows.push(eventRow(event, calendarId, { allDay: true, etDate: d }));
+    return rows;
+  }
+  const startsAt = isoOrNull(event.start.dateTime);
+  if (!startsAt) return [];
+  return [eventRow(event, calendarId, { allDay: false, etDate: etDateStr(new Date(startsAt)), startsAt, endsAt: isoOrNull(event.end && event.end.dateTime) })];
+}
+
+/** Pure: one row (see eventRows). */
+export function eventRow(event, calendarId, { allDay, etDate, startsAt = null, endsAt = null }) {
   return {
     et_date: etDate,
     event_id: String(event.id),
@@ -83,6 +110,7 @@ export function eventRow(event, calendarId) {
     coded_marker: parseCodedMarker(event.summary),
     optional: isOptional(event),
     overlap_group: null,
+    is_meeting: isMeeting(event),
   };
 }
 
@@ -129,15 +157,17 @@ export function etWeekday(dateStr) {
  */
 export function classifyDay(rows, dateStr) {
   const today = rows.filter((r) => r.et_date === dateStr);
-  const coded = today.map((r) => r.coded_marker).filter(Boolean);
+  // A declined coded event carries no intent for the day (adversarial review of PR 8369).
+  const coded = today.filter((r) => r.response_status !== 'declined').map((r) => r.coded_marker).filter(Boolean);
   const override = coded.map((c) => CODED_OVERRIDES[c]).find(Boolean);
   const accepted = today.filter((r) => !r.optional && ACCEPTED.has(r.response_status));
-  const meetings = accepted.filter((r) => !r.all_day);
+  // A meeting has other attendees; a self-created timed block (gym, lunch, focus) is not one.
+  const meetings = accepted.filter((r) => !r.all_day && r.is_meeting === true);
   const inOffice = accepted.some((r) => r.coded_marker === 'OFFICE' || OFFICE_RE.test(String(r.title || '')));
   let classification, reason;
   if (override) { classification = override; reason = `coded ${coded.find((c) => CODED_OVERRIDES[c])}`; }
   else if (etWeekday(dateStr) === 'Tuesday' && inOffice) { classification = 'Interpersonal'; reason = 'tuesday_office'; }
-  else if (today.filter((r) => !r.optional).length === 0) { classification = 'Recovery'; reason = 'no_non_optional_events'; }
+  else if (today.filter((r) => !r.optional && r.response_status !== 'declined').length === 0) { classification = 'Recovery'; reason = 'no_non_optional_events'; }
   else if (meetings.length >= 3) { classification = 'Interpersonal'; reason = `${meetings.length} accepted meetings`; }
   else if (meetings.length < 2) { classification = 'Deep'; reason = `${meetings.length} meetings`; }
   else { classification = 'Shallow'; reason = '2 meetings'; }
@@ -176,27 +206,30 @@ export async function runCalendarRead({ sb, argv = [], now = new Date(), auth, c
       const dates = [shiftDate(etDate, -1), etDate, shiftDate(etDate, 1)];
       const timeMin = etMidnightUtc(dates[0]).toISOString();
       const timeMax = etMidnightUtc(shiftDate(etDate, 2)).toISOString();
-      const failed = [];
-      let rows = [];
+      const failed = [], truncated = [];
+      let rows = [], skippedMalformed = 0;
       for (const calendarId of [PRIMARY, exelon.value]) {
+        const label = calendarId === PRIMARY ? PRIMARY : 'exelon';
         const r = await listCalendarEvents({ calendarId, timeMin, timeMax }, { auth, calendarFactory: calendar, sb, env });
-        if (!r.ok) { failed.push({ calendar: calendarId === PRIMARY ? PRIMARY : 'exelon', error: r.error }); continue; }
+        if (!r.ok) { failed.push({ calendar: label, error: r.error }); continue; }
+        if (r.truncated) truncated.push(label);
         for (const ev of r.events) {
-          if (!ev || !ev.id || ev.status === 'cancelled') continue;
-          const row = eventRow(ev, calendarId);
-          if (dates.includes(row.et_date)) rows.push(row);
+          if (!ev || ev.status === 'cancelled') continue;
+          const built = eventRows(ev, calendarId);
+          if (!built.length) { skippedMalformed += 1; continue; }
+          for (const row of built) if (dates.includes(row.et_date)) rows.push(row);
         }
       }
       if (failed.length === 2) return { status: 'failed', counts: { failed_calendar: failed.map((f) => f.calendar), error_code: failed[0].error.split(':')[0] } };
       const dd = dedupeAcrossCalendars(rows);
       rows = assignOverlapGroups(dd.rows);
-      const counts = { ...summarize(rows, etDate), cross_calendar_collisions: dd.collisions, rows_total: rows.length, dates, dry_run: !apply, failed_calendar: failed.map((f) => f.calendar) };
+      const counts = { ...summarize(rows, etDate), cross_calendar_collisions: dd.collisions, rows_total: rows.length, dates, dry_run: !apply, failed_calendar: failed.map((f) => f.calendar), truncated_calendar: truncated, skipped_malformed: skippedMalformed };
       if (apply && rows.length) {
-        const w = await writeRows(sb, 'michael_calendar_day', (t) => t.upsert(rows, { onConflict: 'et_date,event_id' }));
+        const w = await writeRows(sb, 'michael_calendar_day', (t) => t.upsert(rows.map(persisted), { onConflict: 'et_date,event_id' }));
         if (!w.ok) return { status: 'failed', counts: { ...counts, write_refusal: w.refusal } };
         counts.rows_written = rows.length;
       }
-      return { status: failed.length ? 'degraded' : 'ok', counts, preview: apply ? undefined : rows };
+      return { status: failed.length || truncated.length ? 'degraded' : 'ok', counts, preview: apply ? undefined : rows.map(persisted) };
     },
   }, { sb, env, now });
 }

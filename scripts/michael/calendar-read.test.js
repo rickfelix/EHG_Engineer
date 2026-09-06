@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { stubClient } from '../../lib/michael/db.test.js';
 import {
-  runCalendarRead, parseCodedMarker, isOptional, eventRow, dedupeAcrossCalendars, assignOverlapGroups,
+  runCalendarRead, parseCodedMarker, isOptional, eventRows, isMeeting, persisted, PERSISTED_KEYS, dedupeAcrossCalendars, assignOverlapGroups,
   classifyDay, summarize, shiftDate, etMidnightUtc, etWeekday, PRIMARY,
 } from './calendar-read.mjs';
 
@@ -15,7 +15,8 @@ const MISSING = { data: null, error: { code: '42P01', message: 'relation does no
 
 const ev = (id, start, end, extra = {}) => ({ id, summary: extra.summary || id, start: { dateTime: start }, end: { dateTime: end }, ...extra });
 const allDay = (id, date, extra = {}) => ({ id, summary: extra.summary || id, start: { date }, end: { date: shiftDate(date, 1) }, ...extra });
-const accepted = { attendees: [{ self: true, responseStatus: 'accepted' }] };
+const accepted = { attendees: [{ self: true, responseStatus: 'accepted' }, { email: 'peer@example.org', responseStatus: 'accepted' }] };
+const solo = { attendees: [{ self: true, responseStatus: 'accepted' }] };
 const tentative = { attendees: [{ self: true, responseStatus: 'tentative' }] };
 
 /** Calendar factory answering per calendarId; records calls. */
@@ -46,27 +47,33 @@ describe('pure helpers', () => {
     expect(etWeekday('2026-09-08')).toBe('Tuesday');
   });
   it('eventRow carries the uniform key set; all-day rows have no times and take their own date', () => {
-    const r = eventRow(ev('e1', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z', { summary: '[DEEP] Focus', ...accepted }), PRIMARY);
-    expect(r).toEqual({ et_date: '2026-09-06', event_id: 'e1', calendar_id: 'primary', title: '[DEEP] Focus', starts_at: '2026-09-06T13:00:00.000Z', ends_at: '2026-09-06T14:00:00.000Z', all_day: false, response_status: 'accepted', coded_marker: 'DEEP', optional: false, overlap_group: null });
-    const a = eventRow(allDay('h1', '2026-09-07', { summary: 'Holiday' }), 'exelon');
+    const r = eventRows(ev('e1', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z', { summary: '[DEEP] Focus', ...accepted }), PRIMARY)[0];
+    expect(r).toEqual({ et_date: '2026-09-06', event_id: 'e1', calendar_id: 'primary', title: '[DEEP] Focus', starts_at: '2026-09-06T13:00:00.000Z', ends_at: '2026-09-06T14:00:00.000Z', all_day: false, response_status: 'accepted', coded_marker: 'DEEP', optional: false, overlap_group: null, is_meeting: true });
+    expect(Object.keys(persisted(r))).toEqual([...PERSISTED_KEYS]);
+    expect(isMeeting({ ...solo })).toBe(false); expect(isMeeting({})).toBe(false);
+    // a multi-day all-day event yields one row per covered date (end.date exclusive); malformed events yield none
+    expect(eventRows({ id: 'ooo', summary: 'OOO', start: { date: '2026-09-03' }, end: { date: '2026-09-08' } }, PRIMARY).map((x) => x.et_date)).toEqual(['2026-09-03', '2026-09-04', '2026-09-05', '2026-09-06', '2026-09-07']);
+    expect(eventRows({ id: 'bad', start: { dateTime: 'not a date' } }, PRIMARY)).toEqual([]);
+    expect(eventRows({ id: 'nostart' }, PRIMARY)).toEqual([]);
+    const a = eventRows(allDay('h1', '2026-09-07', { summary: 'Holiday' }), 'exelon')[0];
     expect(a).toMatchObject({ et_date: '2026-09-07', all_day: true, starts_at: null, ends_at: null, response_status: null, coded_marker: null });
     expect(Object.keys(a)).toEqual(Object.keys(r));
     // 23:30 ET on the 5th is 03:30Z on the 6th: the ET date wins
-    expect(eventRow(ev('late', '2026-09-06T03:30:00Z', '2026-09-06T04:30:00Z'), PRIMARY).et_date).toBe('2026-09-05');
+    expect(eventRows(ev('late', '2026-09-06T03:30:00Z', '2026-09-06T04:30:00Z'), PRIMARY)[0].et_date).toBe('2026-09-05');
   });
   it('dedupes the same event_id across calendars preferring primary, and groups intersecting intervals per date', () => {
-    const rows = [eventRow(ev('shared', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z'), 'exelon'), eventRow(ev('shared', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z'), PRIMARY), eventRow(ev('solo', '2026-09-06T15:00:00Z', '2026-09-06T16:00:00Z'), 'exelon')];
+    const rows = [eventRows(ev('shared', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z'), 'exelon')[0], eventRows(ev('shared', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z'), PRIMARY)[0], eventRows(ev('solo', '2026-09-06T15:00:00Z', '2026-09-06T16:00:00Z'), 'exelon')[0]];
     const d = dedupeAcrossCalendars(rows);
     expect(d.collisions).toBe(1);
     expect(d.rows.map((r) => `${r.event_id}@${r.calendar_id}`)).toEqual(['shared@primary', 'solo@exelon']);
     const grouped = assignOverlapGroups([
-      eventRow(ev('a', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z'), PRIMARY),
-      eventRow(ev('b', '2026-09-06T13:30:00Z', '2026-09-06T15:00:00Z'), PRIMARY),
-      eventRow(ev('c', '2026-09-06T14:30:00Z', '2026-09-06T15:30:00Z'), PRIMARY),
-      eventRow(ev('d', '2026-09-06T15:30:00Z', '2026-09-06T16:00:00Z'), PRIMARY),
-      eventRow(ev('e', '2026-09-07T13:00:00Z', '2026-09-07T14:00:00Z'), PRIMARY),
-      eventRow(ev('f', '2026-09-07T13:15:00Z', '2026-09-07T13:45:00Z'), PRIMARY),
-      eventRow(allDay('g', '2026-09-06'), PRIMARY),
+      eventRows(ev('a', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z'), PRIMARY)[0],
+      eventRows(ev('b', '2026-09-06T13:30:00Z', '2026-09-06T15:00:00Z'), PRIMARY)[0],
+      eventRows(ev('c', '2026-09-06T14:30:00Z', '2026-09-06T15:30:00Z'), PRIMARY)[0],
+      eventRows(ev('d', '2026-09-06T15:30:00Z', '2026-09-06T16:00:00Z'), PRIMARY)[0],
+      eventRows(ev('e', '2026-09-07T13:00:00Z', '2026-09-07T14:00:00Z'), PRIMARY)[0],
+      eventRows(ev('f', '2026-09-07T13:15:00Z', '2026-09-07T13:45:00Z'), PRIMARY)[0],
+      eventRows(allDay('g', '2026-09-06'), PRIMARY)[0],
     ]);
     expect(Object.fromEntries(grouped.map((r) => [r.event_id, r.overlap_group]))).toEqual({ a: '2026-09-06:g1', b: '2026-09-06:g1', c: '2026-09-06:g1', d: null, e: '2026-09-07:g1', f: '2026-09-07:g1', g: null });
   });
@@ -74,33 +81,38 @@ describe('pure helpers', () => {
 
 describe('classifyDay (TS-8)', () => {
   const D = '2026-09-06', T = '2026-09-08';
-  const timed = (id, h, extra = {}) => eventRow(ev(id, `${D}T${String(h).padStart(2, '0')}:00:00Z`, `${D}T${String(h + 1).padStart(2, '0')}:00:00Z`, { ...accepted, ...extra }), PRIMARY);
+  const timed = (id, h, extra = {}) => eventRows(ev(id, `${D}T${String(h).padStart(2, '0')}:00:00Z`, `${D}T${String(h + 1).padStart(2, '0')}:00:00Z`, { ...accepted, ...extra }), PRIMARY)[0];
   it('Recovery when no non-optional events (none, or only optional/tentative ones)', () => {
     expect(classifyDay([], D)).toMatchObject({ classification: 'Recovery', meetings: 0 });
-    expect(classifyDay([eventRow(ev('t', `${D}T13:00:00Z`, `${D}T14:00:00Z`, tentative), PRIMARY)], D)).toMatchObject({ classification: 'Recovery' });
+    expect(classifyDay([eventRows(ev('t', `${D}T13:00:00Z`, `${D}T14:00:00Z`, tentative), PRIMARY)[0]], D)).toMatchObject({ classification: 'Recovery' });
   });
   it('Interpersonal with three or more accepted meetings; Deep with fewer than two; Shallow with exactly two', () => {
     expect(classifyDay([timed('a', 13), timed('b', 15), timed('c', 17)], D)).toMatchObject({ classification: 'Interpersonal', meetings: 3 });
     expect(classifyDay([timed('a', 13)], D)).toMatchObject({ classification: 'Deep', meetings: 1 });
     expect(classifyDay([timed('a', 13), timed('b', 15)], D)).toMatchObject({ classification: 'Shallow', meetings: 2 });
     // a declined meeting and an all-day event do not count as meetings; the all-day event still makes the day non-Recovery
-    expect(classifyDay([eventRow(allDay('h', D), PRIMARY), timed('x', 13, { attendees: [{ self: true, responseStatus: 'declined' }] })], D)).toMatchObject({ classification: 'Deep', meetings: 0 });
+    expect(classifyDay([eventRows(allDay('h', D), PRIMARY)[0], timed('x', 13, { attendees: [{ self: true, responseStatus: 'declined' }, { email: 'p@x' }] })], D)).toMatchObject({ classification: 'Deep', meetings: 0 });
+    // self-created timed blocks with no other attendee are not meetings
+    expect(classifyDay([timed('gym', 11, solo), timed('lunch', 16, solo), timed('focus', 18, solo)], D)).toMatchObject({ classification: 'Deep', meetings: 0 });
+    // a declined coded event never overrides; a day with only declined events is Recovery
+    expect(classifyDay([timed('a', 13), timed('b', 15), timed('c', 17), timed('pto', 19, { summary: '[RECOVERY] PTO', attendees: [{ self: true, responseStatus: 'declined' }, { email: 'p@x' }] })], D)).toMatchObject({ classification: 'Interpersonal', coded: [] });
+    expect(classifyDay([timed('d', 13, { attendees: [{ self: true, responseStatus: 'declined' }, { email: 'p@x' }] })], D)).toMatchObject({ classification: 'Recovery' });
   });
   it('a coded event overrides everything, including three meetings and the Tuesday rule', () => {
     expect(classifyDay([timed('a', 13), timed('b', 15), timed('c', 17), timed('d', 19, { summary: '[DEEP] write' })], D)).toMatchObject({ classification: 'Deep', reason: 'coded DEEP', coded: ['DEEP'] });
-    const tue = (id, h, extra = {}) => eventRow(ev(id, `${T}T${String(h).padStart(2, '0')}:00:00Z`, `${T}T${String(h + 1).padStart(2, '0')}:00:00Z`, { ...accepted, ...extra }), PRIMARY);
+    const tue = (id, h, extra = {}) => eventRows(ev(id, `${T}T${String(h).padStart(2, '0')}:00:00Z`, `${T}T${String(h + 1).padStart(2, '0')}:00:00Z`, { ...accepted, ...extra }), PRIMARY)[0];
     expect(classifyDay([tue('o', 13, { summary: 'Office day' }), tue('r', 15, { summary: '[RECOVERY] rest' })], T)).toMatchObject({ classification: 'Recovery', reason: 'coded RECOVERY' });
     expect(classifyDay([timed('u', 13, { summary: '[MYSTERY] thing' })], D)).toMatchObject({ classification: 'Deep', coded: ['MYSTERY'] });
   });
   it('Tuesday-office rule marks Tuesday Interpersonal when any accepted in-office event exists, but not on other days', () => {
-    const tue = (id, h, extra = {}) => eventRow(ev(id, `${T}T${String(h).padStart(2, '0')}:00:00Z`, `${T}T${String(h + 1).padStart(2, '0')}:00:00Z`, { ...accepted, ...extra }), PRIMARY);
+    const tue = (id, h, extra = {}) => eventRows(ev(id, `${T}T${String(h).padStart(2, '0')}:00:00Z`, `${T}T${String(h + 1).padStart(2, '0')}:00:00Z`, { ...accepted, ...extra }), PRIMARY)[0];
     expect(classifyDay([tue('o', 13, { summary: 'In office: badge day' })], T)).toMatchObject({ classification: 'Interpersonal', reason: 'tuesday_office', weekday: 'Tuesday' });
     expect(classifyDay([tue('o', 13, { summary: '[OFFICE] day' })], T)).toMatchObject({ classification: 'Interpersonal' });
     expect(classifyDay([tue('o', 13, { summary: 'Office day', ...tentative })], T)).toMatchObject({ classification: 'Recovery' });
     expect(classifyDay([timed('o', 13, { summary: 'Office day' })], D)).toMatchObject({ classification: 'Deep', weekday: 'Sunday' });
   });
   it('summarize reports counts by date, coded, optional and overlap groups', () => {
-    const rows = assignOverlapGroups([timed('a', 13), timed('b', 13, { summary: '[DEEP] x' }), eventRow(ev('t', `${D}T20:00:00Z`, `${D}T21:00:00Z`, tentative), PRIMARY), eventRow(allDay('n', shiftDate(D, 1)), PRIMARY)]);
+    const rows = assignOverlapGroups([timed('a', 13), timed('b', 13, { summary: '[DEEP] x' }), eventRows(ev('t', `${D}T20:00:00Z`, `${D}T21:00:00Z`, tentative), PRIMARY)[0], eventRows(allDay('n', shiftDate(D, 1)), PRIMARY)[0]]);
     expect(summarize(rows, D)).toMatchObject({ classification: 'Deep', events_by_date: { [D]: 3, [shiftDate(D, 1)]: 1 }, coded: 1, optional: 1, overlaps: 1 });
   });
 });
@@ -136,7 +148,8 @@ describe('runCalendarRead (TS-11, TS-15)', () => {
     expect(r).toMatchObject({ ok: true, action: 'dry_run', status: 'ok', et_date: '2026-09-06' });
     expect(calls.filter((c) => c[0] === 'list').map((c) => c[1].calendarId)).toEqual(['primary', 'exelon@group.calendar.google.com']);
     expect(calls[1][1]).toMatchObject({ timeMin: '2026-09-05T04:00:00.000Z', timeMax: '2026-09-08T04:00:00.000Z' });
-    expect(r.counts).toMatchObject({ classification: 'Deep', cross_calendar_collisions: 1, rows_total: 3, dry_run: true, failed_calendar: [], events_by_date: { '2026-09-05': 1, '2026-09-06': 1, '2026-09-07': 1 } });
+    expect(r.counts).toMatchObject({ classification: 'Deep', cross_calendar_collisions: 1, rows_total: 3, dry_run: true, failed_calendar: [], truncated_calendar: [], skipped_malformed: 0, events_by_date: { '2026-09-05': 1, '2026-09-06': 1, '2026-09-07': 1 } });
+    for (const row of r.preview) expect(Object.keys(row)).toEqual([...PERSISTED_KEYS]);
     expect(r.preview.map((x) => `${x.event_id}@${x.calendar_id}`)).toEqual(['p1@primary', 'shared@primary', 'x1@exelon@group.calendar.google.com']);
     expect(dbCalls.map((c) => c.kind)).toEqual(['select']);
     expect(JSON.stringify(r.counts)).not.toContain('p1@');
@@ -150,7 +163,7 @@ describe('runCalendarRead (TS-11, TS-15)', () => {
     expect(up.ops[0].args[1]).toEqual({ onConflict: 'et_date,event_id' });
     const rows = up.ops[0].args[0];
     expect(rows).toHaveLength(3);
-    for (const row of rows) expect(Object.keys(row)).toEqual(Object.keys(rows[0]));
+    for (const row of rows) expect(Object.keys(row)).toEqual([...PERSISTED_KEYS]);
     expect(dbCalls.map((c) => `${c.table}:${c.kind}`)).toEqual(['michael_feeder_runs:select', 'michael_feeder_runs:insert', 'michael_calendar_day:upsert', 'michael_feeder_runs:update']);
     expect(dbCalls[3].ops[0].args[0]).toMatchObject({ status: 'ok', counts: { rows_written: 3, classification: 'Deep' } });
   });
@@ -160,6 +173,11 @@ describe('runCalendarRead (TS-11, TS-15)', () => {
     expect(one).toMatchObject({ action: 'run', status: 'degraded', counts: { failed_calendar: ['exelon'], rows_total: 2 } });
     const both = await runCalendarRead({ sb: db().sb, argv: ['--apply'], now: SUNDAY, auth: 'AUTH', calendar: calendars({ primary: err, 'exelon@group.calendar.google.com': err }), env });
     expect(both).toMatchObject({ action: 'run', status: 'failed', counts: { failed_calendar: ['primary', 'exelon'], error_code: '503' } });
+  });
+  it('a truncated calendar page degrades the run, and a malformed event is skipped and counted', async () => {
+    const factory = async () => ({ events: { list: async (args) => ({ data: { items: args.calendarId === 'primary' ? [ev('p1', '2026-09-06T13:00:00Z', '2026-09-06T14:00:00Z', accepted), { id: 'bad', start: { dateTime: 'nope' } }] : [], nextPageToken: args.calendarId === 'primary' ? 'tok' : undefined } }) } });
+    const r = await runCalendarRead({ sb: db().sb, argv: [], now: SUNDAY, auth: 'AUTH', calendar: factory, env });
+    expect(r).toMatchObject({ action: 'dry_run', status: 'degraded', counts: { truncated_calendar: ['primary'], skipped_malformed: 1, rows_total: 1 } });
   });
   it('--et-date pins the ET date and the Tuesday-office rule reaches the counts', async () => {
     const tue = { primary: [ev('o', '2026-09-08T13:00:00Z', '2026-09-08T14:00:00Z', { summary: 'Office day', ...accepted })], 'exelon@group.calendar.google.com': [] };
