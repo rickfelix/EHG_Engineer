@@ -1,45 +1,10 @@
 {
-  "generated_at": "2026-09-06T14:35:17.372Z",
+  "generated_at": "2026-09-06T14:41:17.629Z",
   "counts": {
-    "no_catch": 20,
-    "has_catch": 115
+    "has_catch": 115,
+    "no_catch": 15
   },
   "results": [
-    {
-      "file": "lib/claim/queue-resolver.cjs",
-      "line": 39,
-      "kind": "data",
-      "snippet": "const { data: activeSessions } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "lib/claim/queue-resolver.cjs",
-      "line": 48,
-      "kind": "data",
-      "snippet": "const { data: candidates } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "lib/claim/queue-resolver.cjs",
-      "line": 79,
-      "kind": "data",
-      "snippet": "const { data: parent } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "lib/claim/queue-resolver.cjs",
-      "line": 104,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "lib/claim/queue-resolver.cjs",
-      "line": 122,
-      "kind": "data",
-      "snippet": "const { data: parentRow } = await supabase",
-      "classification": "no_catch"
-    },
     {
       "file": "lib/claim/release-claim-both-surfaces.mjs",
       "line": 266,
