@@ -171,6 +171,60 @@ describe('checkAlreadyBuilt — QF-20260903-254: predicate 2 also reads the quic
     expect(result.citedQfKey).toBeNull();
   });
 
+  // Adversarial review (post-merge) of this QF: without quick_fixes.description, the semantic
+  // matcher's overlap-coefficient denominator min(myKey, eKey) collapsed to the short QF title's
+  // tiny token count, letting a few shared generic engineering tokens ('user','data','system',
+  // 'process') falsely match a verbose, topically-unrelated candidate. Measured 190/641 (29.6%)
+  // false ALREADY-BUILT vetoes on a real-corpus replay. Including description restores precision.
+  it('does NOT falsely match a topically-unrelated completed QF that merely shares a few generic tokens in its (short) title', async () => {
+    const supabase = makeSupabaseMock(
+      [],
+      [{
+        id: 'QF-UNRELATED-000',
+        title: 'User Data Process System Audit Log Fix',
+        description: 'The audit log writer silently dropped entries when the queue backed up past 500 rows; add a bounded retry and an alert instead of a silent drop.',
+        status: 'completed',
+      }],
+    );
+
+    const result = await checkAlreadyBuilt({
+      supabase,
+      io: {},
+      title: 'Implement User Data Export System for venture cockpit reporting',
+      description: 'Add a process that lets a venture owner export their user data as CSV or JSON from the cockpit reporting dashboard.',
+    });
+
+    expect(result.result).toBe('NOT-FOUND');
+    expect(result.citedQfKey).toBeNull();
+  });
+
+  // MEDIUM finding (same adversarial review): the QF-ALREADY-BUILT branch used to hardcode
+  // citedSdKey:null even when the SD lane had a genuine re_emit signal for the same candidate,
+  // discarding the related-SD reference. It must now be preserved (informational) alongside the
+  // QF citation, without changing the decision itself (still ALREADY-BUILT via the QF).
+  it('preserves the SD lane\'s citedSdKey (informational) when a completed QF ALSO matches, instead of discarding it', async () => {
+    const supabase = makeSupabaseMock(
+      [{
+        sd_key: 'SD-EHG-COCKPIT-VENTPERF-BUILD-001',
+        title: 'Venture performance read cockpit surface',
+        status: 'completed',
+        metadata: { delivers_capabilities: ['Venture-performance read'] }, // not realized by this test's mocked gauge
+      }],
+      [{ id: 'QF-UNRELATED-000', title: 'Venture performance read cockpit surface', status: 'completed' }], // exact_title match
+    );
+
+    const result = await checkAlreadyBuilt({
+      supabase,
+      io: {},
+      title: 'Venture performance read cockpit surface',
+      description: 'Reconcile the venture performance read',
+    });
+
+    expect(result.result).toBe('ALREADY-BUILT');
+    expect(result.citedQfKey).toBe('QF-UNRELATED-000');
+    expect(result.citedSdKey).toBe('SD-EHG-COCKPIT-VENTPERF-BUILD-001');
+  });
+
   it('a quick_fixes read failure is FAIL-LOUD -- never silently returns a clean NOT-FOUND', async () => {
     const okChain = () => { const b = { select: () => b, order: () => b, range: () => Promise.resolve({ data: [], error: null }) }; return b; };
     const failChain = () => { const b = { select: () => b, order: () => b, range: () => Promise.resolve({ data: null, error: { message: 'connection refused' } }) }; return b; };
