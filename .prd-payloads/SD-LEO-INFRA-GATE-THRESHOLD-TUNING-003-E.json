@@ -1,0 +1,134 @@
+{
+  "executive_summary": "gate-threshold-shadow-rescore.mjs (QF-20260902-515) was built for PRE-APPLY decision support: before a threshold change, the view's current_threshold column and config.js's live threshold are the same value, so filtering the re-score population by the view's historical current_threshold is correct. Verified live: config.js's own SD_TYPE_PASS_THRESHOLDS comments (QF-20260830-735) and scoring.js's getPassThreshold() docblock already state, correctly, that the view's current_threshold is a historical trace (the pass_threshold recorded on each ai_quality_assessments row at assessment time -- confirmed live: ai-quality-evaluator.js:139/153 calls getPassThreshold() and stores its result as pass_threshold on every row), NOT a live duplicate. The defect is narrower and real: the same script has since been reused POST-APPLY, after QF-20260817-837 (2026-08-28) raised eight thresholds, to argue those raises were safe. In that reuse, current_threshold can be a STALE historical generation, so the script's line 59 filter (.eq('pass_threshold', c.current_threshold)) silently re-scores only the OLD pre-raise population and reports a flip count of 0 -- vacuous, not verifying the live threshold at all. Sibling child -B already discovered this by hand for 3 pairs (feature/prd, security/user_story, bugfix/prd) and hand-annotated config.js with corrected, directly-queried live-threshold numbers and 'DO NOT cite' warnings on the vacuous feedback rows. This SD tools that hand-verification: extract the population filter into a pure, unit-testable function that resolves the LIVE threshold via the existing getPassThreshold() (never the view's historical column), extend the do-not-cite annotations to the remaining raised pairs sibling -B did not cover, and add a CI-wired predicate asserting every SD_TYPE_PASS_THRESHOLDS key traces to a live-comparable row in v_ai_quality_tuning_recommendations. No threshold values change and no view/schema change is needed -- the fix is entirely in the re-score script's query construction.",
+  "system_architecture": {
+    "overview": "Fix a query-construction defect in one Node script (scripts/gate-threshold-shadow-rescore.mjs) by extracting its population-filter key derivation into a pure function in lib/quality/gate-threshold-shadow.js (already home to the pure computeShadowRescore()), sourcing the live threshold from the existing scoring.js:getPassThreshold() export instead of the view's historical current_threshold column. Add a CI-wired test asserting FR-10's completeness condition. No schema, view, or config.js VALUE changes -- config.js gains only comment annotations.",
+    "existing_infrastructure_reused": "scripts/modules/ai-quality-evaluator/scoring.js's getPassThreshold(contentType, sd) (already the single source of truth per QF-20260830-735); lib/quality/gate-threshold-shadow.js's computeShadowRescore() (pure, already unit-tested in tests/unit/quality/gate-threshold-shadow.test.js) -- the new filter-key function lives alongside it, same file, same testing pattern; database/chairman-gated/20260804_ai_quality_tuning_symmetric_guards.sql's v_ai_quality_tuning_recommendations view (read, not modified).",
+    "confirmed_defect_site": "scripts/gate-threshold-shadow-rescore.mjs:59 -- .eq('pass_threshold', c.current_threshold) where c.current_threshold is v_ai_quality_tuning_recommendations.current_threshold (the GROUP BY pass_threshold historical value from ai_quality_assessments, per database/chairman-gated/20260804_ai_quality_tuning_symmetric_guards.sql:80-92), not the live scoring.js:getPassThreshold() value."
+  },
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Extract the re-score population-filter key into a pure, live-threshold-sourced function",
+      "description": "Add resolveLiveRescoreThreshold(sdType, contentType) to lib/quality/gate-threshold-shadow.js, thin-wrapping scoring.js's getPassThreshold(contentType, { sd_type: sdType }). Update scripts/gate-threshold-shadow-rescore.mjs's query at line 59 to filter on .eq('pass_threshold', resolveLiveRescoreThreshold(c.sd_type, c.content_type)) instead of c.current_threshold. This is strictly more correct for BOTH uses of the script: pre-apply (live threshold and view's historical value are identical, so behavior is unchanged) and post-apply audit (the population now genuinely reflects assessments scored under the live bar).",
+      "acceptance_criteria": [
+        "lib/quality/gate-threshold-shadow.js exports resolveLiveRescoreThreshold(sdType, contentType) that calls the real getPassThreshold from scoring.js.",
+        "Given a fixture where a view row's current_threshold (60) differs from the live config value (65) for the same (sd_type, content_type), resolveLiveRescoreThreshold returns 65, not 60.",
+        "scripts/gate-threshold-shadow-rescore.mjs's population query is updated to use the live-resolved value; a code read confirms line 59 (or its new location) no longer references c.current_threshold as the filter value."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Extend do-not-cite annotations to the remaining raised pairs sibling -B did not cover",
+      "description": "Sibling SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-B already hand-corrected 3 of the 8 raised pairs in config.js (feature/prd, security/user_story via the 2026-08-16 raise, bugfix/prd) with live-queried pass rates and explicit 'DO NOT cite that row' warnings on their vacuous pre-fix shadow_rescore feedback rows. This FR covers the remaining raised pairs still lacking that annotation (infrastructure/prd, infrastructure/retrospective, feature/retrospective, security/retrospective, bugfix/retrospective -- confirm the exact list live against config.js at EXEC time, since -B may have covered more by then) by directly querying ai_quality_assessments WHERE sd_type=<x> AND content_type=<y> AND pass_threshold=<live value> for each, and adding the same comment pattern (n, pass rate, window, sample-floor verdict) plus a 'DO NOT cite' note on that pair's pre-fix feedback row(s) if one exists and is vacuous by the FR-1 defect.",
+      "acceptance_criteria": [
+        "Every key in SD_TYPE_PASS_THRESHOLDS that differs from its type's implicit fallback (i.e., every raise applied by QF-20260817-837, QF-20260807-698, or SD-LEO-INFRA-GATE-THRESHOLD-TUNING-002) has a comment citing a live-threshold-filtered query result (n, pass rate, window) -- either pre-existing (sibling -B, TUNING-002) or newly added by this FR.",
+        "Any pre-fix (dated on/before this SD's EXEC date) shadow_rescore feedback row for a raised pair that this investigation confirms is vacuous under the FR-1 defect gets an explicit 'DO NOT cite' comment note, matching sibling -B's existing pattern.",
+        "No config.js threshold VALUE changes -- comments only."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "CI-wired predicate: every configured threshold traces to a shadow-verified row",
+      "description": "Add a test (wired into the existing CI unit-tier run, not a new workflow) asserting FR-10's completeness condition: every (sd_type, content_type) key pair actually resolvable via SD_TYPE_PASS_THRESHOLDS (including default-only sd_types resolving through the default key) has at least one live-population-comparable row obtainable from v_ai_quality_tuning_recommendations's schema/shape -- i.e., the test enumerates every configured pair from config.js and, for a live-DB integration variant, confirms the view can be queried for it; for the always-run unit variant, confirms resolveLiveRescoreThreshold (FR-1) returns a defined, correctly-typed number for every configured pair (catching a config.js edit that adds a key getPassThreshold can't resolve, which would make the population filter itself silently wrong).",
+      "acceptance_criteria": [
+        "A new unit test iterates every sd_type key in SD_TYPE_PASS_THRESHOLDS x every content_type override plus 'default', calling resolveLiveRescoreThreshold for each, and asserts every call returns a finite number matching getPassThreshold's own output for that pair (no pair silently falls through to an unexpected default).",
+        "The test runs in the existing Unit Tier CI job (tests/unit/quality/ -- same directory as gate-threshold-shadow.test.js) with no new workflow file.",
+        "Mutating the test to remove one SD_TYPE_PASS_THRESHOLDS entry's coverage (or the reverse: adding an uncovered key) demonstrably fails the test, proving it discriminates rather than being vacuously green."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No live threshold values change",
+      "description": "This SD is instrument-and-documentation-only. config.js's SD_TYPE_PASS_THRESHOLDS values are never edited by this SD -- only comments are added. No migration, no view change."
+    },
+    {
+      "id": "TR-2",
+      "title": "resolveLiveRescoreThreshold has zero DB dependency",
+      "description": "The new function in lib/quality/gate-threshold-shadow.js must be pure (like its sibling computeShadowRescore) -- it calls scoring.js's getPassThreshold (also pure, reads only the in-memory config.js object), never touches Supabase. This keeps FR-3's unit test fast and DB-independent."
+    },
+    {
+      "id": "TR-3",
+      "title": "Backward-compatible for the pre-apply use case",
+      "description": "For any pair where no threshold change has been applied since the view's window started, the live-resolved threshold equals the view's historical current_threshold, so gate-threshold-shadow-rescore.mjs's existing pre-apply decision-support behavior (QF-20260902-515's original purpose) is unchanged bit-for-bit."
+    }
+  ],
+  "implementation_approach": {
+    "steps": [
+      "Add resolveLiveRescoreThreshold(sdType, contentType) to lib/quality/gate-threshold-shadow.js, importing getPassThreshold from scoring.js (FR-1).",
+      "Update scripts/gate-threshold-shadow-rescore.mjs's query to use the new function instead of c.current_threshold (FR-1).",
+      "Live-query ai_quality_assessments for each raised pair not yet annotated by sibling -B, add config.js comment annotations + DO-NOT-cite notes where a vacuous pre-fix row is confirmed (FR-2).",
+      "Add the enumeration unit test in tests/unit/quality/ asserting FR-10's completeness condition, plus a mutation-proof negative case (FR-3).",
+      "Run gate-threshold-shadow-rescore.mjs live (read-only, writes only new decision-input feedback rows, changes no threshold) to confirm it now reports non-vacuous, live-threshold-filtered numbers for at least one already-raised pair, cross-checking against sibling -B's hand-verified numbers where overlapping."
+    ],
+    "out_of_scope": "Changing any SD_TYPE_PASS_THRESHOLDS value (that is child D's audit-and-decide job, sequenced AFTER this child); modifying v_ai_quality_tuning_recommendations's SQL (the historical-trace behavior of current_threshold is correct and intentional per config.js's own QF-20260830-735 comment; only the re-score script's consumption of it was wrong); building a new CI workflow file (FR-3's test rides the existing Unit Tier job)."
+  },
+  "integration_operationalization": {
+    "consumers": "The gate-threshold-shadow-rescore.mjs script (run manually as decision-support, per its own header) and child D of this same parent SD, which explicitly sequences its per-pair SOUND/UNSOUND audit AFTER this child lands the corrected instrument.",
+    "dependencies": "scripts/modules/ai-quality-evaluator/scoring.js (getPassThreshold, read-only import); scripts/modules/ai-quality-evaluator/config.js (SD_TYPE_PASS_THRESHOLDS, comment-only edits); v_ai_quality_tuning_recommendations (read-only); ai_quality_assessments (read-only, for FR-2's live-verification queries).",
+    "data_contracts": "No schema change. resolveLiveRescoreThreshold's contract: same (contentType, sd-like-object) shape as getPassThreshold, returns the same number.",
+    "runtime_config": "None new.",
+    "observability_rollout": "Rollout is immediate on merge -- the next manual run of gate-threshold-shadow-rescore.mjs uses the corrected filter. Rollback is a git revert of the single PR; no data impact (the script writes only advisory feedback rows, never mutates thresholds)."
+  },
+  "acceptance_criteria": [
+    "resolveLiveRescoreThreshold exists in lib/quality/gate-threshold-shadow.js, pure, sourcing scoring.js's getPassThreshold.",
+    "gate-threshold-shadow-rescore.mjs's population query uses the live-resolved threshold, not the view's historical current_threshold column.",
+    "config.js's do-not-cite annotations cover every raised pair with a confirmed-vacuous pre-fix shadow row (sibling -B's 3 plus any this SD adds).",
+    "A new CI-run unit test in tests/unit/quality/ asserts every configured SD_TYPE_PASS_THRESHOLDS pair resolves via resolveLiveRescoreThreshold, and demonstrably fails under a coverage-removing mutation.",
+    "Zero regressions in existing tests, including tests/unit/quality/gate-threshold-shadow.test.js."
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "title": "resolveLiveRescoreThreshold returns the live value, not a stale historical one",
+      "type": "unit",
+      "scenario": "Call resolveLiveRescoreThreshold('feature', 'prd') against the live config.js (which has feature.prd=65) while passing a fixture view-row with current_threshold=60 (the pre-raise historical value).",
+      "expected": "Returns 65, ignoring the fixture's stale current_threshold entirely -- proving the function never reads the view's historical column."
+    },
+    {
+      "id": "TS-2",
+      "title": "Coverage-completeness test discriminates on a mutation",
+      "type": "unit",
+      "scenario": "Enumerate every SD_TYPE_PASS_THRESHOLDS pair and assert resolveLiveRescoreThreshold resolves each; then simulate an unresolvable pair (e.g. a sd_type absent from SD_TYPE_PASS_THRESHOLDS) and confirm the test fails rather than silently passing.",
+      "expected": "Full-coverage case passes; the injected gap case fails, proving the test is not vacuous."
+    },
+    {
+      "id": "TS-3",
+      "title": "Live re-score run for an already-raised pair is non-vacuous",
+      "type": "integration",
+      "scenario": "Run gate-threshold-shadow-rescore.mjs live for a pair already raised by QF-20260817-837 (e.g. feature/prd) and inspect its query -- confirm the ai_quality_assessments filter now uses 65 (live), not 60 (historical).",
+      "expected": "n and pass-rate figures match (or are consistent with) sibling -B's independently hand-verified feature/prd numbers (n=10, 90.0% pass, window 2026-08-28..2026-09-05), not the pre-fix n=34/33-row ghost-population numbers cited as vacuous in config.js."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "FR-2's live re-verification queries could surface a pair where the raise actually looks unsound under the live threshold.",
+      "impact": "medium",
+      "likelihood": "low",
+      "mitigation": "This SD only documents/annotates -- it does not decide sound/unsound (that is explicitly child D's job, sequenced after this one). A concerning finding is recorded as evidence for D, not acted on here."
+    },
+    {
+      "risk": "getPassThreshold's signature or config.js's shape changes before this SD merges (e.g. a concurrent sibling adds a new sd_type).",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "FR-3's own coverage test fails loudly if a configured pair is unresolvable, catching drift immediately in CI rather than silently."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-E",
+    "target_application": "EHG_Engineer",
+    "target_files": ["lib/quality/gate-threshold-shadow.js", "scripts/gate-threshold-shadow-rescore.mjs", "scripts/modules/ai-quality-evaluator/config.js", "tests/unit/quality/gate-threshold-shadow.test.js"],
+    "created_via": "worker a1d6d6cf LEAD phase, verified live via fork investigation against origin/main",
+    "related_sds": ["SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003", "SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-B", "SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-D"],
+    "mechanism_verifications": [
+      { "verified_by": "fork-investigation", "verified_at": "scripts/gate-threshold-shadow-rescore.mjs:59" },
+      { "verified_by": "fork-investigation", "verified_at": "database/chairman-gated/20260804_ai_quality_tuning_symmetric_guards.sql:92" },
+      { "verified_by": "fork-investigation", "verified_at": "scripts/modules/ai-quality-evaluator/scoring.js:90" },
+      { "verified_by": "fork-investigation", "verified_at": "scripts/modules/ai-quality-evaluator.js:139" },
+      { "verified_by": "fork-investigation", "verified_at": "scripts/modules/ai-quality-evaluator/storage.js:112" },
+      { "verified_by": "fork-investigation", "verified_at": "lib/quality/gate-threshold-shadow.js:29" }
+    ],
+    "scope_decision": "FR-2's original addendum text asked to mark ALL pre-fix shadow rows do-not-cite; investigation found sibling -B already did this by hand for 3 of the raised pairs directly in config.js (feature/prd, security/user_story, bugfix/prd), so FR-2 is narrowed to the remaining uncovered pairs, avoiding duplicate work."
+  }
+}
