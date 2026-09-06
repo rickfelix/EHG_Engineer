@@ -88,6 +88,11 @@ export { createPhantomTestAuditGate };
 // evidence instead of a silent pass (SD-LEO-INFRA-LEADFINAL-ACCEPTANCE-INTEGRITY-001-C)
 import { createAcceptanceTierDowngradeGate } from './gates/acceptance-tier-downgrade-gate.js';
 export { createAcceptanceTierDowngradeGate };
+// Success-Criteria-Unpopulated Gate — names any success_criteria entry still carrying the
+// [UNPOPULATED] sentinel measure at final approval, observe-only by default (SD-LEO-FIX-
+// LEAD-FINAL-APPROVAL-002)
+import { createSuccessCriteriaUnpopulatedGate } from './gates/success-criteria-unpopulated-gate.js';
+export { createSuccessCriteriaUnpopulatedGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
 // SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B: block completion of a
@@ -2055,6 +2060,10 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // (SD-LEO-INFRA-REQUIRE-END-END-001 FR-2)
   gates.push(createActivationInvariantGate(supabase, prdRepo));
 
+  // Success-Criteria-Unpopulated Gate — names any success_criteria entry still carrying the
+  // [UNPOPULATED] sentinel measure, observe-only by default (SD-LEO-FIX-LEAD-FINAL-APPROVAL-002)
+  gates.push(createSuccessCriteriaUnpopulatedGate());
+
   // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: GATE4_WORKFLOW_ROI is intentionally NOT pushed here —
   // it already runs at LEAD-FINAL via the validator-registry DB rules (see header note). The (A)
   // fix is the PLAN-TO-LEAD removal + the (B) gate1 key-drift fix so the LFA computation scores
@@ -2083,5 +2092,6 @@ export default {
   createDeferredFollowupsGate,
   createCrossSdFileOverlapTemporalShipGate,
   createActivationInvariantGate,
+  createSuccessCriteriaUnpopulatedGate,
   getRequiredGates
 };
