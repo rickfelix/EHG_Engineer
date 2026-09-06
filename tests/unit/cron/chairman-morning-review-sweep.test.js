@@ -16,6 +16,7 @@ import {
   buildMorningReviewBody,
   buildComposedBody,
   assembleMorningBody,
+  resolveSolomonForecastLine,
   etLocalHour,
   etDateStr,
   et6amIso,
@@ -61,6 +62,7 @@ function makeSupabase(data = {}) {
         // empty-result behavior composeDriveLine already degrades gracefully from — the drive
         // line is simply omitted, and this file's 27 pre-existing tests are untouched by this addition.
         else if (table === 'drive_reports') rows = data.driveReports || [];
+        else if (table === 'feedback') rows = data.forecastBasisRows || [];
         return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
       },
     };
@@ -244,6 +246,46 @@ describe('TS-6 — body is short, segment-aware, and PII-free (no phone/body in 
     const logged = logger.log.mock.calls.map((c) => c.join(' ')).join('\n');
     expect(logged).not.toContain(PHONE);
     expect(logged).not.toContain(body);
+  });
+});
+
+describe('QF-20260905-284 — resolveSolomonForecastLine (contract 5h(b): Solomon is the sole forecast-date authority)', () => {
+  it('renders "Solomon forecast vNN: <roadmap_band text>" from a fresh row', async () => {
+    const sb = makeSupabase({ forecastBasisRows: [{
+      created_at: new Date(SUMMER_WORK.getTime() - 60 * 60 * 1000).toISOString(),
+      metadata: { version: 'v32.11', roadmap_band: 'ETA not estimable until QF-282 has a holder' },
+    }] });
+    const line = await resolveSolomonForecastLine(sb, SUMMER_WORK.getTime());
+    expect(line).toBe('Estimated completion (infra-build scope): Solomon forecast v32.11: ETA not estimable until QF-282 has a holder');
+  });
+
+  it('falls back to the literal "no forecast available" when no row exists', async () => {
+    const sb = makeSupabase({ forecastBasisRows: [] });
+    const line = await resolveSolomonForecastLine(sb, SUMMER_WORK.getTime());
+    expect(line).toBe('Estimated completion (infra-build scope): no forecast available');
+  });
+
+  it('falls back when the newest row is older than 48h (staleness gate)', async () => {
+    const sb = makeSupabase({ forecastBasisRows: [{
+      created_at: new Date(SUMMER_WORK.getTime() - 49 * 60 * 60 * 1000).toISOString(),
+      metadata: { version: 'v32.10', roadmap_band: 'stale text' },
+    }] });
+    const line = await resolveSolomonForecastLine(sb, SUMMER_WORK.getTime());
+    expect(line).toBe('Estimated completion (infra-build scope): no forecast available');
+  });
+
+  it('falls back when a fresh row is missing version or roadmap_band (never fabricates)', async () => {
+    const sb = makeSupabase({ forecastBasisRows: [{
+      created_at: SUMMER_WORK.toISOString(),
+      metadata: { version: 'v32.11' }, // roadmap_band missing
+    }] });
+    const line = await resolveSolomonForecastLine(sb, SUMMER_WORK.getTime());
+    expect(line).toBe('Estimated completion (infra-build scope): no forecast available');
+  });
+
+  it('never derives a date from the flat build-% extrapolation (build-completion-forecast.mjs)', () => {
+    const code = SWEEP_SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(code).not.toMatch(/build-completion-forecast\.mjs/);
   });
 });
 

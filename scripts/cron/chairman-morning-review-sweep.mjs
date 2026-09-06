@@ -37,10 +37,8 @@ import 'dotenv/config';
 import { pathToFileURL } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
-import { computeForecast, formatForecastLine } from '../../lib/vision/build-completion-forecast.mjs';
 import { etLocalHour, etDateStr, et6amIso, etPrior545Iso } from '../../lib/time/chairman-et-wall-clock.js';
 import { resolveChairmanZone } from '../../lib/comms/adam-outbound/quiet-hours-extension.js';
-import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { resolveCanonicalRoadmap } from '../../lib/roadmap/canonical-roadmap.js';
 import { buildRoadmapStatusDoc } from '../../lib/chairman/daily-review/roadmap-status-doc.js';
 import { renderGanttPng } from '../../lib/chairman/daily-review/gantt-renderer.js';
@@ -52,7 +50,6 @@ import { composeDriveLine } from '../../lib/fleet/exec-email-drive-line.mjs';
 
 export const SD_KEY = 'SD-LEO-INFRA-CHAIRMAN-DAILY-REVIEW-DOC-001-B';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-morning-review-cron.yml';
-const DAY_MS = 24 * 60 * 60 * 1000;
 const NOT_IN_TERMINAL = '("completed","cancelled","deferred")';
 // ~2 GSM segments (153 chars/segment concatenated). The built body is capped here so a long
 // forecast note can never balloon past the segment budget.
@@ -81,27 +78,36 @@ function buildSupabase() {
 // re-exported here so this script's own CLI/importers are unaffected by the move.
 export { etLocalHour, etDateStr, et6amIso, etPrior545Iso };
 
-// ── body data (DB-only, fail-soft; surgical — no git-grep VDR gauge / CLI refactor) ──
-async function gatherForecastInputs(supabase, nowMs, windowDays = 14) {
-  const sinceIso = new Date(nowMs - windowDays * DAY_MS).toISOString();
-  let velocityPerDay = 0, sourcingPerDay = 0, queueDepth = 0, buildableRemaining = 0;
+// QF-20260905-284 / contract 5h(b): forecast DATES are Solomon's authority class. This
+// previously derived "Estimated completion" from a flat build-% velocity extrapolation
+// (lib/vision/build-completion-forecast.mjs's computeForecast/etaDateIso) — a mechanism
+// with no connection to Solomon's calibrated forecast-trigger basis, and the exact defect
+// the chairman flagged twice (recurrence #2, review-by 2026-09-07T10:00Z). Reads the
+// newest feedback row tagged category='solomon_forecast_basis' and surfaces ITS OWN
+// walk-ETA text (metadata.roadmap_band) verbatim, never a locally-derived date. Falls
+// back to the literal "no forecast available" when no row is fresher than 48h, or the
+// fresh row is missing version/roadmap_band — fail-closed, never fabricated.
+const FORECAST_BASIS_FRESHNESS_MS = 48 * 60 * 60 * 1000;
+const NO_FORECAST_LINE = 'Estimated completion (infra-build scope): no forecast available';
+export async function resolveSolomonForecastLine(supabase, nowMs) {
   try {
-    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — only the count is used;
-    // exact head-count avoids the rows.length-capped-at-1000 gauge bug.
-    const { count } = await supabase.from('strategic_directives_v2').select('id', { count: 'exact', head: true }).eq('status', 'completed').gte('updated_at', sinceIso);
-    velocityPerDay = (count || 0) / windowDays;
-  } catch { /* fail-soft */ }
-  try {
-    // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — rows are filtered by
-    // sd_type/created_at/claiming_session_id below to derive three metrics, so the full set
-    // (not just a count) is needed; strategic_directives_v2 grows, so paginate to completion.
-    const rowsAll = await fetchAllPaginated(() => supabase.from('strategic_directives_v2').select('id, sd_key, created_at, claiming_session_id, sd_type').not('status', 'in', NOT_IN_TERMINAL).order('id', { ascending: true }));
-    const rows = rowsAll.filter((d) => d.sd_type !== 'orchestrator');
-    buildableRemaining = rows.length;
-    sourcingPerDay = rows.filter((d) => d.created_at && d.created_at >= sinceIso).length / windowDays;
-    queueDepth = rows.filter((d) => !d.claiming_session_id).length;
-  } catch { /* fail-soft */ }
-  return { buildPct: null, buildableRemaining, velocityPerDay, sourcingPerDay, queueDepth };
+    const { data, error } = await supabase
+      .from('feedback')
+      .select('created_at, metadata')
+      .eq('category', 'solomon_forecast_basis')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const row = !error && data && data[0];
+    if (!row) return NO_FORECAST_LINE;
+    const ageMs = nowMs - new Date(row.created_at).getTime();
+    if (!Number.isFinite(ageMs) || ageMs > FORECAST_BASIS_FRESHNESS_MS) return NO_FORECAST_LINE;
+    const version = row.metadata?.version;
+    const walkEta = row.metadata?.roadmap_band;
+    if (!version || !walkEta) return NO_FORECAST_LINE;
+    return `Estimated completion (infra-build scope): Solomon forecast ${version}: ${walkEta}`;
+  } catch {
+    return NO_FORECAST_LINE;
+  }
 }
 
 /**
@@ -219,8 +225,7 @@ export function assembleMorningBody(coreLines, driveLine, ceiling = BODY_CEILING
 /** Build the SHORT, PII-free morning-review body. Login-gated summary data only. */
 export async function buildMorningReviewBody(supabase, { now = new Date() } = {}) {
   const nowMs = now.getTime();
-  const inputs = await gatherForecastInputs(supabase, nowMs);
-  const forecastLine = formatForecastLine(computeForecast({ ...inputs, nowMs }), null);
+  const forecastLine = await resolveSolomonForecastLine(supabase, nowMs);
 
   const waves = await gatherWaves(supabase);
   const roadmapLine = formatRoadmapLine(waves);
