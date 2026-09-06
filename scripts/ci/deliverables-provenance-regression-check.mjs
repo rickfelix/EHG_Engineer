@@ -102,7 +102,7 @@ async function main() {
       fetchAllPaginated(() =>
         supabase
           .from('sd_scope_deliverables')
-          .select('id, sd_id, completion_status, completed_at, metadata')
+          .select('id, sd_id, completion_status, completed_at, metadata') // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
           .gte('completed_at', cutoverIso)
       ),
     ]);

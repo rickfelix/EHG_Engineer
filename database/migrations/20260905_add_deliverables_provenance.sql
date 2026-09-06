@@ -178,3 +178,11 @@ BEGIN
   RETURN NEW;
 END;
 $function$;
+
+-- secdef-execute-revoke-lint: this CREATE OR REPLACE does not touch pg_proc.proacl (grants
+-- are independent of the function body/definition and persist across a replace) -- live ACL
+-- is already {postgres=X/postgres,service_role=X/postgres}, i.e. PUBLIC/anon/authenticated
+-- already have no EXECUTE grant. Restated explicitly anyway (idempotent no-op) so the
+-- migration is self-documenting and the lint's diff-based check, which cannot see live
+-- catalog state, has no ambiguity to flag.
+REVOKE EXECUTE ON FUNCTION public.complete_deliverables_on_subagent_pass() FROM PUBLIC, anon, authenticated;

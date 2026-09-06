@@ -111,7 +111,7 @@ export async function reconcileDeliverables(deliverables, sdId, supabase) {
       const nowIso = new Date().toISOString();
       const { error: updateErr } = await supabase
         .from('sd_scope_deliverables')
-        .update({
+        .update({ // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
           completion_status: 'completed',
           completed_at: nowIso,
           metadata: { ...(d.metadata || {}), reconciled_evidence: evidenceType, reconciled_at: nowIso, producer: 'gate_reconcile' }
@@ -164,7 +164,7 @@ export function createDeliverablesCompletenessGate(supabase) {
         // Query deliverables for this SD
         const { data: deliverables, error } = await supabase
           .from('sd_scope_deliverables')
-          .select('id, deliverable_name, completion_status, metadata, created_by, completed_at')
+          .select('id, deliverable_name, completion_status, metadata, created_by, completed_at') // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
           .eq('sd_id', sdId);
 
         if (error) {
@@ -202,7 +202,7 @@ export function createDeliverablesCompletenessGate(supabase) {
                 // Re-query now that deliverables are populated
                 const { data: newDeliverables } = await supabase
                   .from('sd_scope_deliverables')
-                  .select('id, deliverable_name, completion_status, metadata, created_by, completed_at')
+                  .select('id, deliverable_name, completion_status, metadata, created_by, completed_at') // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
                   .eq('sd_id', sdId);
 
                 if (newDeliverables && newDeliverables.length > 0) {

@@ -49,7 +49,7 @@ export function createScopeAuditGate(supabase) {
             .eq('id', sdId)
             .single(),
           supabase.from('sd_scope_deliverables')
-            .select('deliverable_name, completion_status, deliverable_type, metadata, completed_at')
+            .select('deliverable_name, completion_status, deliverable_type, metadata, completed_at') // schema-lint-disable-line staged col completed_at (20260905_add_deliverables_provenance.sql, chairman-gated)
             .eq('sd_id', sdId),
           supabase.from('product_requirements_v2')
             .select('functional_requirements, acceptance_criteria')

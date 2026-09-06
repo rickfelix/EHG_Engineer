@@ -71,13 +71,12 @@ async function main() {
     // past any .limit() the query builder itself declares (it re-issues a fresh, unranged
     // builder per page), so a literal 1000-row .limit() call here never had any effect. Wire
     // it through fetchAllPaginated's own `maxRows` sampling cap instead, which it honors.
-    rows = await fetchAllPaginated(
-      () =>
-        supabase
-          .from('sd_phase_handoffs')
-          .select('handoff_type, validation_details')
-          .eq('status', 'accepted')
-          .order('created_at', { ascending: false }),
+    rows = await fetchAllPaginated(() =>
+      supabase
+        .from('sd_phase_handoffs')
+        .select('handoff_type, validation_details')
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false }),
       { maxRows: args.limit }
     );
   } catch (e) {
