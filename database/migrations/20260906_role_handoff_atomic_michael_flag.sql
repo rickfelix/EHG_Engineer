@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (Michael foundation, FR-1) — copy-rename of
 -- 20260630_role_handoff_atomic_solomon_flag.sql (itself a copy-rename of the Adam flag migration).
 --

@@ -25,8 +25,8 @@ describe('expected_window_et migration shape (FR-6)', () => {
     expect(up).toContain('DELETE FROM public.periodic_process_registry WHERE process_key = v_key');
   });
 
-  it('is dormant-but-safe (no approved-by marker) and the DOWN drops exactly the CHECK and the column', () => {
-    expect(up).not.toMatch(/^--\s*@approved-by/m);
+  it('carries the chairman @approved-by marker (signed off 2026-09-06, ratification 481a10ed) and the DOWN drops exactly the CHECK and the column', () => {
+    expect(up).toMatch(/^--\s*@approved-by: codestreetlabs@gmail\.com/m);
     expect(down).toMatch(/DROP CONSTRAINT IF EXISTS periodic_process_registry_expected_window_et_shape_check/);
     expect(down).toMatch(/DROP COLUMN IF EXISTS expected_window_et/);
     expect((down.match(/DROP /g) || []).length).toBe(2);
