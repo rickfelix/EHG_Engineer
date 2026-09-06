@@ -46,6 +46,15 @@ describe('isSessionGated', () => {
     expect(isSessionGated('true')).toBe(false);
     expect(isSessionGated("(status = 'active')")).toBe(false);
   });
+
+  it('adversarial review finding: does NOT flag a jwt()->>role check against \'anon\' -- that IS genuinely anon-readable, since the anon key\'s own JWT carries role=anon', () => {
+    expect(isSessionGated("((auth.jwt() ->> 'role'::text) = 'anon'::text)")).toBe(false);
+  });
+
+  it('still flags a jwt()->>role check against a real restrictive role', () => {
+    expect(isSessionGated("((auth.jwt() ->> 'role'::text) = 'service_role'::text)")).toBe(true);
+    expect(isSessionGated("((auth.jwt() ->> 'role'::text) = 'chairman'::text)")).toBe(true);
+  });
 });
 
 describe('discoverAnonReadableTables', () => {
@@ -86,6 +95,11 @@ describe('discoverAnonReadableTables', () => {
       { tablename: 'protocol_improvement_queue', roles: ['authenticated'], cmd: 'SELECT', qual: 'true', permissive: 'PERMISSIVE' },
     ];
     expect(discoverAnonReadableTables(rows)).toEqual([]);
+  });
+
+  it('adversarial review finding: includes a table gated by jwt()->>role = \'anon\' -- genuinely anon-readable, must not be masked', () => {
+    const rows = [{ tablename: 't', roles: ['public'], cmd: 'SELECT', qual: "((auth.jwt() ->> 'role'::text) = 'anon'::text)", permissive: 'PERMISSIVE' }];
+    expect(discoverAnonReadableTables(rows)).toEqual(['t']);
   });
 
   it('dedupes multiple qualifying policies on the same table', () => {

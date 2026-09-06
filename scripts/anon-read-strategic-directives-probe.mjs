@@ -83,15 +83,34 @@ const rolesOf = (r) => (Array.isArray(r) ? r : []).map((s) => String(s).trim());
 const anonReachable = (r) => { const x = rolesOf(r); return x.includes('anon') || x.includes('public'); };
 
 /** Session-scoped auth functions the anon key's claimless JWT can never satisfy, so a qual gated
- *  by one of these is not actually anon-readable even though the roles column says anon/public. */
+ *  by one of these is not actually anon-readable even though the roles column says anon/public.
+ *  Every pattern checks the COMPARED VALUE, not just the function's presence -- an earlier draft
+ *  matched bare `jwt() ->> 'role'` regardless of RHS, which would have silently excluded a policy
+ *  like `(auth.jwt() ->> 'role') = 'anon'` (genuinely anon-readable: the anon key's own JWT DOES
+ *  carry role='anon') from discoverAnonReadableTables, defeating the allow-list diff for exactly
+ *  the class of drift this check exists to catch. No such qual exists in production today
+ *  (measured), but the pattern must not depend on that staying true. */
 const SESSION_GATED = [
   /auth\.uid\(\)/i,
   /auth\.role\(\)\s*=\s*'(service_role|authenticated)'/i,
-  /jwt\(\)\s*->>\s*'role'/i,
+  /jwt\(\)\s*->>\s*'role'(?:'?::text)?\)?\s*=\s*'(service_role|authenticated|chairman)'/i,
   /fn_is_chairman/i,
   /fn_is_service_role/i,
   /fn_user_has_venture_access/i,
 ];
+/**
+ * KNOWN LIMITATION, disclosed rather than silently accepted: this is substring/regex matching on
+ * qual TEXT, not a boolean-expression parse. A qual combining a session-gated clause with an
+ * unconditional OR disjunct (e.g. `x IS NULL OR fn_is_chairman()`) is still excluded here even
+ * though the `x IS NULL` half alone can grant unconditional access -- the same class of static-
+ * analysis limit the sibling anon-write-contract-probe.mjs documents for its own qual reads (a
+ * qual that is always-false/always-true via a function is not statically distinguishable from the
+ * literal). No live policy in this schema takes that shape today (measured); closing it fully
+ * would need a real SQL boolean-expression parser, which is out of scope for this frozen-baseline
+ * preventive check. The PRIMARY FR-3 acceptance signal (assertion 1 in main()) is unaffected --
+ * it measures strategic_directives_v2 empirically via SET LOCAL ROLE anon, never through this
+ * heuristic.
+ */
 export const isSessionGated = (qual) => SESSION_GATED.some((re) => re.test(String(qual ?? '')));
 
 /** Pure. Given pg_policies rows (schemaname='public' only), return the anon-readable table names. */
