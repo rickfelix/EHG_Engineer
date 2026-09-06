@@ -1,0 +1,57 @@
+# runner: scripts smoke, HEAD=14e22f0cc0c415fb05fd2b8634642fc90e4570bc at 2026-09-06T04:16:17Z
+$ node scripts/michael-rules-load.mjs --json
+{"tables_absent":true,"rules":[],"closures":[],"errors":[],"ok":true}
+exit=0
+$ node scripts/michael-rules-render.mjs --json --out-dir C:/Users/rickf/AppData/Local/Temp/claude/C--Users-rickf-Projects--EHG-EHG-Engineer/fa09a46d-5b8e-4642-ae63-f1dce3f87fb1/scratchpad/michael-render
+{"ok":true,"tables_absent":true,"files":{"rules":"C:\\Users\\rickf\\AppData\\Local\\Temp\\claude\\C--Users-rickf-Projects--EHG-EHG-Engineer\\fa09a46d-5b8e-4642-ae63-f1dce3f87fb1\\scratchpad\\michael-render\\RULES.md","closures":"C:\\Users\\rickf\\AppData\\Local\\Temp\\claude\\C--Users-rickf-Projects--EHG-EHG-Engineer\\fa09a46d-5b8e-4642-ae63-f1dce3f87fb1\\scratchpad\\michael-render\\CLOSURES.md"},"counts":{"rules":0,"closures":0},"errors":[]}
+exit=0
+$ node scripts/michael/autonomy-read.mjs --json
+{"ok":true,"tables_absent":true,"threshold":7,"proposals":[],"revocations":[],"streaks":{}}
+exit=0
+$ node scripts/michael/retention.mjs --json
+{"ok":true,"tables_absent":true,"mode":"dry_run","days":30,"cutoff":"2026-08-07","per_table":[{"table":"michael_brief_runs","action":"null","eligible":null,"tables_absent":true},{"table":"michael_gmail_triage_items","action":"null","eligible":null,"tables_absent":true},{"table":"michael_calendar_day","action":"delete","eligible":null,"tables_absent":true}],"stamped":false}
+exit=0
+$ node scripts/michael/rule-encode.mjs --domain gmail --key k --text t --source terminal:smoke --json
+{"ok":false,"refusal":"TABLES_ABSENT","message":"michael_rules is not applied yet (chairman applies 20260906_michael_tables.sql)"}
+exit=2
+$ node scripts/michael/closure-add.mjs --domain gmail --key k --topic t --text tx --source terminal:smoke --json
+{"ok":false,"refusal":"TABLES_ABSENT","message":"michael_closures: relation absent (migration unapplied)"}
+exit=2
+$ node scripts/michael/capture.mjs --text x --json
+{"ok":false,"refusal":"TABLES_ABSENT","message":"michael_staged_items: relation absent (migration unapplied)"}
+exit=2
+$ node scripts/michael/feedback-append.mjs --landed x --json
+{"ok":false,"refusal":"TABLES_ABSENT","message":"michael_feedback_ledger is not applied yet (chairman applies 20260906_michael_tables.sql)"}
+exit=2
+$ node scripts/michael/gmail-act.mjs --thread x --archive --json
+{"ok":false,"refusal":"GMAIL_CLIENT_ABSENT","message":"lib/michael/gmail-client.mjs (child C: chairman OAuth) is not landed; no Gmail call and no row written","would_call":{"threadId":"x","addLabelIds":[],"removeLabelIds":["INBOX"]}}
+exit=2
+$ node scripts/michael/todoist-act.mjs complete --task x --dry-run --json
+{"ok":true,"dry_run":true,"verb":"complete","would_call":{"method":"closeTask","args":["x"]},"et_date":"2026-09-06"}
+exit=0
+# lints
+$ node scripts/lint/secdef-execute-revoke-lint.mjs
+✅ secdef-execute-revoke-lint (diff): 0 file(s) scanned, 0 violations.
+exit=0
+$ node scripts/lint/rls-anon-tenant-predicate-lint.mjs
+[RLS-ANON-TENANT-PREDICATE-LINT] mode=diff scanned=0
+  0 violation(s) -- clean.
+exit=0
+$ node scripts/lint/eol-renormalization-lint.mjs
+[eol-renormalization-lint] scanned 15574 eol=lf-managed path(s), 0 renormalization-dirty, allowlist=0 entries
+✅ OK — no renormalization debt outside the reviewed allowlist.
+exit=0
+$ node scripts/lint/alter-default-override-lint.mjs
+
+✅ No un-allow-listed ALTER-SET-DEFAULT override drift.
+exit=0
+$ node scripts/lint/count-truncation-diff-lint.mjs
+✅ count-truncation-diff-lint: 0 new needs-review select() site(s) across 0 changed file(s)
+exit=0
+$ node scripts/lint/workflow-path-filter-lint.mjs
+✅ workflow-path-filter-lint: 0 brace-alternation path filters across 232 file(s) scanned (.github/workflows)
+exit=0
+$ node scripts/check-workflow-yaml.mjs .github/workflows/michael-retention-cron.yml
+✓ .github/workflows/michael-retention-cron.yml
+[WORKFLOW_YAML] all 1 workflow file(s) parse OK
+exit=0

@@ -1,0 +1,11 @@
+import { createDatabaseClient } from '../scripts/lib/supabase-connection.js';
+const c = await createDatabaseClient('engineer', { verify: false });
+const acl = await c.query(`SELECT defaclobjtype, array_to_string(defaclacl,' | ') acl FROM pg_default_acl d JOIN pg_namespace n ON n.oid=d.defaclnamespace WHERE n.nspname='public'`);
+console.log('=== pg_default_acl public ==='); acl.rows.forEach(r=>console.log(r.defaclobjtype, '->', r.acl));
+const rel = await c.query(`SELECT c.relname, c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname LIKE 'michael%' ORDER BY 1`);
+console.log('=== existing michael* relations ==='); console.log(rel.rows.length ? rel.rows : '(none)');
+const fn = await c.query(`SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND (proname LIKE '%updated_at%' OR proname='moddatetime') ORDER BY 1`);
+console.log('=== updated_at-ish functions in public ==='); console.log(fn.rows.map(r=>r.proname).join('\n'));
+const ext = await c.query(`SELECT extname FROM pg_extension ORDER BY 1`);
+console.log('=== extensions ==='); console.log(ext.rows.map(r=>r.extname).join(', '));
+await c.end();
