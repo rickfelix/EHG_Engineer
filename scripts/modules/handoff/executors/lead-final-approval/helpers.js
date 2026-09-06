@@ -14,6 +14,7 @@ import path from 'path';
 import { publishVisionEvent, VISION_EVENTS } from '../../../../../lib/eva/event-bus/vision-events.js';
 import { closeIssuePatterns } from '../../../../../lib/governance/pattern-closure.js';
 import { isTerminalChildStatus } from '../../../../../lib/orchestrator/child-terminal-status.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 
 /**
  * Check and complete parent SD when all children are done
@@ -38,21 +39,27 @@ export async function checkAndCompleteParentSD(sd, supabase, { shippingResults: 
   const noCompletionResult = { orchestratorCompleted: false };
 
   try {
-    const { data: parentSD } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, title, status, sd_type')
-      .eq('id', sd.parent_sd_id)
-      .single();
+    const parentSD = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('id, title, status, sd_type')
+        .eq('id', sd.parent_sd_id)
+        .single(),
+      { site: 'lead-final-approval/helpers:check_parent_sd' }
+    );
 
     if (!parentSD || parentSD.status === 'completed') {
       return noCompletionResult;
     }
 
     // Get all siblings
-    const { data: siblings } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, status')
-      .eq('parent_sd_id', sd.parent_sd_id);
+    const siblings = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('id, status')
+        .eq('parent_sd_id', sd.parent_sd_id),
+      { site: 'lead-final-approval/helpers:check_siblings' }
+    );
 
     // Terminal (completed or cancelled) siblings never block parent completion — QF-20260710-491.
     const allComplete = siblings.every(s => isTerminalChildStatus(s.status));
@@ -255,11 +262,14 @@ async function recordLearningOutcome(sd, supabase) {
     const sdId = sd.sd_key || sd.id;
 
     // Gather quality signals from handoff chain
-    const { data: handoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('handoff_type, validation_score, status')
-      .eq('sd_id', sd.id)
-      .eq('status', 'accepted');
+    const handoffs = await safeQuery(
+      supabase
+        .from('sd_phase_handoffs')
+        .select('handoff_type, validation_score, status')
+        .eq('sd_id', sd.id)
+        .eq('status', 'accepted'),
+      { site: 'lead-final-approval/helpers:record_learning_outcome_handoffs' }
+    );
 
     const leadHandoff = (handoffs || []).find(h => h.handoff_type === 'LEAD-TO-PLAN');
     const execHandoff = (handoffs || []).find(h => h.handoff_type === 'PLAN-TO-EXEC');
