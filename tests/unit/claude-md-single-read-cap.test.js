@@ -104,6 +104,60 @@ describe('FR-4: single-read cap enforcement', () => {
   });
 });
 
+// QF-20260905-908: a plain, unmissable 95%-of-cap warning scoped to MUST_FIT_SINGLE_READ files —
+// distinct from the pre-existing CONFIRMED-FIT tier (predictor-uncertainty banding at ~93.2%),
+// which already printed every run for CLAUDE_SOLOMON.md while it drifted from 23,175 to 24,918
+// tokens and CI stayed green the whole way. This is a second, narrower, explicitly cap-relative
+// signal: named file + tokens remaining before the throw.
+describe('QF-20260905-908: 95%-of-cap warning', () => {
+  it('is SILENT for a must-fit file with real headroom (post-split CLAUDE_SOLOMON.md shape)', () => {
+    const warnings = [];
+    assertSingleReadFit(
+      [{ name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(20242) }],
+      { onWarn: (m) => warnings.push(m) },
+    );
+    expect(warnings.join('\n')).not.toMatch(/95% OF SINGLE-READ CAP/);
+  });
+
+  it('FIRES for a must-fit file at exactly 95% of the cap, naming the file and remaining headroom', () => {
+    const warnings = [];
+    assertSingleReadFit(
+      [{ name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(23750) }], // 95% of 25000
+      { onWarn: (m) => warnings.push(m) },
+    );
+    const joined = warnings.join('\n');
+    expect(joined).toMatch(/95% OF SINGLE-READ CAP/);
+    expect(joined).toMatch(/CLAUDE_SOLOMON\.md/);
+    expect(joined).toMatch(/1250 tokens of headroom/);
+  });
+
+  it('FIRES for a must-fit file just under the hard cap (99.7% — the pre-fix CLAUDE_SOLOMON.md shape)', () => {
+    const warnings = [];
+    assertSingleReadFit(
+      [{ name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(24918) }],
+      { onWarn: (m) => warnings.push(m) },
+    );
+    expect(warnings.join('\n')).toMatch(/95% OF SINGLE-READ CAP.*CLAUDE_SOLOMON\.md/s);
+  });
+
+  it('does NOT fire for a file at 95%+ that is NOT on the must-fit enforcement list', () => {
+    // Mirrors the existing "no SD owns this file yet" distinction — the 95% warning is scoped to
+    // files that actually throw at 100%, not every file the generator happens to measure.
+    const warnings = [];
+    assertSingleReadFit(
+      [{ name: 'CLAUDE_CORE.md', bytes: bytesFor(24000) }],
+      { onWarn: (m) => warnings.push(m) },
+    );
+    expect(warnings.join('\n')).not.toMatch(/95% OF SINGLE-READ CAP/);
+  });
+
+  it('never blocks generation and never changes the hard-cap throw', () => {
+    // A file over 100% throws regardless of whether the 95% warning also matched it on the way up.
+    expect(() => assertSingleReadFit([{ name: 'CLAUDE_LEAD.md', bytes: bytesFor(26000) }]))
+      .toThrow(/SINGLE_READ_CAP_EXCEEDED/);
+  });
+});
+
 // The gap VALIDATION found existed because every fixture above builds `bytes` synthetically and
 // so never exercises the manifest wiring. A guard fed the wrong FIELD is indistinguishable, at the
 // unit level, from a guard fed the right one. These pin the field itself.
