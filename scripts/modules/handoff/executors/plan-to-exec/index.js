@@ -471,15 +471,18 @@ export class PlanToExecExecutor extends BaseExecutor {
       console.log('-'.repeat(50));
 
       // Fetch LEAD-TO-PLAN handoff for this SD
-      const { data: leadHandoff } = await this.supabase
-        .from('sd_phase_handoffs')
-        .select('score, validation_details, created_at')
-        .eq('sd_id', sd.id)
-        .eq('handoff_type', 'LEAD-TO-PLAN')
-        .eq('status', 'accepted')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const leadHandoff = await safeQuery(
+        this.supabase
+          .from('sd_phase_handoffs')
+          .select('score, validation_details, created_at')
+          .eq('sd_id', sd.id)
+          .eq('handoff_type', 'LEAD-TO-PLAN')
+          .eq('status', 'accepted')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        { site: 'plan-to-exec/index:synthesize_lead_analysis_handoff' }
+      );
 
       if (!leadHandoff) {
         console.log('   ℹ️  No LEAD-TO-PLAN handoff found — skipping analysisStep');
@@ -569,11 +572,14 @@ export class PlanToExecExecutor extends BaseExecutor {
       }
 
       // Assess User Stories Quality (if exist)
-      const { data: userStories } = await this.supabase
-        .from('user_stories')
-        .select('*')
-        .eq('prd_id', prd.id)
-        .limit(5);
+      const userStories = await safeQuery(
+        this.supabase
+          .from('user_stories')
+          .select('*')
+          .eq('prd_id', prd.id)
+          .limit(5),
+        { site: 'plan-to-exec/index:russian_judge_user_stories' }
+      );
 
       if (userStories && userStories.length > 0) {
         const { UserStoryQualityRubric } = await import('../../../rubrics/user-story-quality-rubric.js');
