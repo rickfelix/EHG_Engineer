@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import ResultBuilder from '../ResultBuilder.js';
 import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -1288,11 +1289,14 @@ export class BaseExecutor {
     // Step 1: Check if a valid claim already exists (from sd:start or parent conversation).
     // SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001: sd_claims dropped — claude_sessions is the
     // single source of truth. Active claims are sessions with sd_id set and status='active'.
-    const { data: existingClaims } = await this.supabase
-      .from('claude_sessions')
-      .select('session_id, sd_key, claimed_at, heartbeat_at')
-      .eq('sd_key', claimId)
-      .in('status', ['active', 'idle']);
+    const existingClaims = await safeQuery(
+      this.supabase
+        .from('claude_sessions')
+        .select('session_id, sd_key, claimed_at, heartbeat_at')
+        .eq('sd_key', claimId)
+        .in('status', ['active', 'idle']),
+      { site: 'BaseExecutor:existing_claims' }
+    );
 
     const activeClaim = (existingClaims || []).find(c => {
       const ageSeconds = (Date.now() - new Date(c.heartbeat_at || c.claimed_at).getTime()) / 1000;

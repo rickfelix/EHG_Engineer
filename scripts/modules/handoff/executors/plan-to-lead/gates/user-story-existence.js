@@ -6,6 +6,8 @@
  * Prevents "Silent Success" anti-pattern
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 /**
  * Create the USER_STORY_EXISTENCE_GATE validator
  *
@@ -109,13 +111,16 @@ export function createUserStoryExistenceGate(supabase) {
 
       if (storyCount === 0) {
         // Fallback: check if PRD has embedded user_stories before blocking
-        const { data: prdData } = await supabase
-          .from('product_requirements_v2')
-          .select('content')
-          .eq('sd_id', sdIdForStories)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const prdData = await safeQuery(
+          supabase
+            .from('product_requirements_v2')
+            .select('content')
+            .eq('sd_id', sdIdForStories)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          { site: 'user-story-existence:prd_fallback' }
+        );
 
         const prdContent = prdData?.content;
         const embeddedStories = typeof prdContent === 'object' && prdContent?.user_stories;

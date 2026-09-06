@@ -1,9 +1,8 @@
 {
-  "generated_at": "2026-09-06T12:06:36.330Z",
+  "generated_at": "2026-09-06T12:33:56.592Z",
   "counts": {
-    "no_catch": 101,
-    "has_catch": 115,
-    "fail_open": 10
+    "no_catch": 97,
+    "has_catch": 115
   },
   "results": [
     {
@@ -259,13 +258,6 @@
       "classification": "has_catch"
     },
     {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/smoke-test-validation.js",
-      "line": 66,
-      "kind": "data",
-      "snippet": "const { data: sdData } = await supabase",
-      "classification": "fail_open"
-    },
-    {
       "file": "scripts/modules/handoff/executors/exec-to-plan/gates/sub-agent-orchestration.js",
       "line": 36,
       "kind": "data",
@@ -323,52 +315,45 @@
     },
     {
       "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 176,
+      "line": 177,
       "kind": "data",
       "snippet": "const { data: handoff } = await supabase",
       "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 231,
+      "line": 232,
       "kind": "data",
       "snippet": "const { data: typeProfile } = await supabase",
       "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 257,
+      "line": 258,
       "kind": "data",
       "snippet": "const { data: children } = await supabase",
       "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 287,
+      "line": 288,
       "kind": "data",
       "snippet": "const { data: directStories } = await supabase",
       "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 328,
+      "line": 329,
       "kind": "data",
       "snippet": "const { data: stories } = await supabase",
       "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 1442,
+      "line": 1443,
       "kind": "data",
       "snippet": "const { data: children } = await supabase",
       "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 1638,
-      "kind": "data",
-      "snippet": "const { data: anySD } = await supabase",
-      "classification": "fail_open"
     },
     {
       "file": "scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-criteria-traceability.js",
@@ -483,20 +468,6 @@
       "classification": "no_catch"
     },
     {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/phase-coverage.js",
-      "line": 93,
-      "kind": "data",
-      "snippet": "const { data: orchUuids } = await supabase",
-      "classification": "fail_open"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/phase-coverage.js",
-      "line": 100,
-      "kind": "data",
-      "snippet": "const { data: children } = await supabase",
-      "classification": "fail_open"
-    },
-    {
       "file": "scripts/modules/handoff/executors/lead-to-plan/gates/scope-reduction-verification.js",
       "line": 68,
       "kind": "data",
@@ -586,20 +557,6 @@
       "kind": "data",
       "snippet": "const { data: otherPRD } = await supabase",
       "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/deliverables-planning.js",
-      "line": 41,
-      "kind": "data",
-      "snippet": "const { data: profile } = await supabase",
-      "classification": "fail_open"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/deliverables-planning.js",
-      "line": 70,
-      "kind": "data",
-      "snippet": "const { data: deliverables } = await supabase",
-      "classification": "fail_open"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-exec/gates/migration-data-verification.js",
@@ -803,27 +760,6 @@
       "kind": "data",
       "snippet": "const { data: visionScores } = await supabase",
       "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js",
-      "line": 45,
-      "kind": "data",
-      "snippet": "const { data: parentDeliverables } = await supabase",
-      "classification": "fail_open"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js",
-      "line": 51,
-      "kind": "data",
-      "snippet": "const { data: children } = await supabase",
-      "classification": "fail_open"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js",
-      "line": 78,
-      "kind": "data",
-      "snippet": "const { data: childDeliverables } = await supabase",
-      "classification": "fail_open"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/gates/failure-chain-ordering.js",
@@ -1125,41 +1061,6 @@
       "kind": "data",
       "snippet": "const { data: prdData } = await supabase",
       "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/vision-completion-score.js",
-      "line": 24,
-      "kind": "data",
-      "snippet": "const { data: childSDs } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/vision-completion-score.js",
-      "line": 41,
-      "kind": "data",
-      "snippet": "const { data: sdRecord } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/vision-completion-score.js",
-      "line": 76,
-      "kind": "data",
-      "snippet": "const { data: entryScores } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/vision-completion-score.js",
-      "line": 94,
-      "kind": "data",
-      "snippet": "const { data: recentScores } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/vision-completion-score.js",
-      "line": 121,
-      "kind": "data",
-      "snippet": "const { data: newScores } = await supabase",
-      "classification": "fail_open"
     },
     {
       "file": "scripts/modules/handoff/executors/plan-to-lead/index.js",

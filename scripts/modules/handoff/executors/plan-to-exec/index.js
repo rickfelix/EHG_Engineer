@@ -7,6 +7,7 @@
  */
 
 import BaseExecutor from '../BaseExecutor.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 
 // Gate creators
 import {
@@ -107,10 +108,13 @@ export class PlanToExecExecutor extends BaseExecutor {
       console.log('\n   🎯 PARENT ORCHESTRATOR DETECTED');
       console.log('      Implementation gates will be SKIPPED (work delegated to children)');
 
-      const { data: children } = await this.supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sd.id);
+      const children = await safeQuery(
+        this.supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sd.id),
+        { site: 'plan-to-exec/index:parent_orchestrator_children' }
+      );
 
       console.log(`      Children: ${children?.length || 0}`);
       options._childrenCount = children?.length || 0;

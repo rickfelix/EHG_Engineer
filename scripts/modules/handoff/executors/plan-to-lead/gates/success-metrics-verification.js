@@ -21,6 +21,7 @@
  */
 
 import { verifyAllMetrics } from '../../../../../lib/metric-auto-verifier.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const DISABLED_SD_TYPES = new Set(['documentation', 'orchestrator']);
 const ADVISORY_SD_TYPES = new Set(['infrastructure']);
@@ -37,10 +38,13 @@ export function createSuccessMetricsVerificationGate(supabase) {
       const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
 
       // ORCHESTRATOR / children bypass
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'success-metrics-verification:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Parent orchestrator SD (${childSDs.length} children) — bypassing`);

@@ -7,6 +7,7 @@
 
 import { isInfrastructureSDSync } from '../../../../sd-type-checker.js';
 import { autoResolveFailedHandoffs } from '../../../gates/auto-resolve-failures.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 // SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001 TR-1: construct the WAIT verdict through
 // the shared helper (this gate is the PR #4021 precedent; shape is unchanged).
 import { buildWaitResult } from '../../../../../../lib/handoff/wait-verdict.js';
@@ -33,11 +34,14 @@ export function createPrerequisiteCheckGate(supabase) {
       // which silently downgraded a parent-orchestrator WAIT into a hard FAIL.
       // Re-resolve via sd_key (unaffected by the id/uuid_id ambiguity) whenever available.
       if (ctx.sd?.sd_key) {
-        const { data: canonical } = await supabase
-          .from('strategic_directives_v2')
-          .select('id')
-          .eq('sd_key', ctx.sd.sd_key)
-          .maybeSingle();
+        const canonical = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('id')
+            .eq('sd_key', ctx.sd.sd_key)
+            .maybeSingle(),
+          { site: 'plan-to-lead/prerequisite-check:canonical_id' }
+        );
         if (canonical?.id && canonical.id !== sdUuid) {
           console.log(`   ⚠️  sdUuid mismatch (${sdUuid} vs canonical ${canonical.id}) — using canonical id`);
           sdUuid = canonical.id;

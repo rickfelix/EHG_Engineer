@@ -15,6 +15,7 @@
  */
 
 import { verifyAllMetrics } from '../../../../../lib/metric-auto-verifier.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 import { resolveAllBindings, BINDING_EXAMPLES } from '../../../../../lib/metric-evidence-resolver.js';
 import { GATE_REASON_CODES, isPlaceholderActual } from './gate-reason-codes.js';
 
@@ -106,10 +107,13 @@ export function createSuccessMetricsGate(supabase) {
       const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
 
       // ── Orchestrator bypass ──
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'success-metrics-gate:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Parent orchestrator SD (${childSDs.length} children) — bypassing`);
