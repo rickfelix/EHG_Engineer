@@ -110,13 +110,26 @@ async function defaultTodoist() {
   return createTodoistClient();
 }
 
-/** Stage payloads of one kind, skipping dedupe_keys already open (read through the partial index). */
+/** Pure: the source item id inside a task_route dedupe_key ('<et_date>:<id>'), so an item already open under any date is not re-staged. */
+export function itemIdOfKey(dedupeKey) {
+  const s = String(dedupeKey || '');
+  const i = s.indexOf(':');
+  return i === -1 ? s : s.slice(i + 1);
+}
+
+/**
+ * Stage payloads of one kind, skipping dedupe_keys already open (read through the partial index). For
+ * task_route the item id is compared across dates too: a file v1 never drains would otherwise re-stage
+ * every unrouted item each morning until the seat dispositions it (adversarial review of PR 8373).
+ */
 async function stage(sb, kind, payloads, { apply }) {
   if (!payloads.length) return { inserted: 0, skipped: 0, error: null };
   const open = await readRows(sb, 'michael_staged_items', (q) => q.eq('kind', kind).is('dispositioned_at', null), { select: 'payload' });
   if (open.error) return { inserted: 0, skipped: 0, error: open.error };
-  const seen = new Set(open.rows.map((r) => r && r.payload && r.payload.dedupe_key).filter(Boolean));
-  const fresh = payloads.filter((p) => !seen.has(p.dedupe_key));
+  const keys = open.rows.map((r) => r && r.payload && r.payload.dedupe_key).filter(Boolean);
+  const seen = new Set(keys);
+  const seenItems = kind === 'task_route' ? new Set(keys.map(itemIdOfKey)) : new Set();
+  const fresh = payloads.filter((p) => !seen.has(p.dedupe_key) && !(kind === 'task_route' && seenItems.has(itemIdOfKey(p.dedupe_key))));
   if (apply && fresh.length) {
     const w = await writeRows(sb, 'michael_staged_items', (t) => t.insert(fresh.map((payload) => ({ kind, payload }))));
     if (!w.ok) return { inserted: 0, skipped: payloads.length - fresh.length, error: w.error };

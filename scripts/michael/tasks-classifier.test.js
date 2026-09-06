@@ -167,7 +167,8 @@ describe('runTasksClassifier', () => {
     expect(ledgerReads[0].ops.map((x) => x.op)).toEqual(['select', 'limit', 'eq', 'order']);
   });
   it('TS-19: a second fire stages zero duplicates for dedupe_keys already open', async () => {
-    const { sb, calls: dbCalls } = db({ open: { task_route: [{ dedupe_key: '2026-09-06:g4' }], tasks_cleanup: [{ dedupe_key: `2026-09-06:cleanup:F_TASKS:${FRESH}` }] } });
+    // g4 is open under yesterday's key: the same item is not re-staged under today's key either
+    const { sb, calls: dbCalls } = db({ open: { task_route: [{ dedupe_key: '2026-09-05:g4' }], tasks_cleanup: [{ dedupe_key: `2026-09-06:cleanup:F_TASKS:${FRESH}` }] } });
     const r = await runTasksClassifier({ sb, argv: ['--apply'], now: NOW, auth: 'AUTH', drive: driveFactory(), todoist: todoistClient(), env });
     expect(r.counts).toMatchObject({ staged_task_route: 1, staged_cleanup: 0, stage_dupes_skipped: 2 });
     const inserts = dbCalls.filter((c) => c.table === 'michael_staged_items' && c.kind === 'insert');

@@ -27,10 +27,11 @@ export const RETENTION_TARGETS = Object.freeze([
   { table: 'michael_calendar_day', action: 'delete', columns: [] },
   // SEC-M3: feeder logs are prose too; counts and ids on the same row are kept.
   { table: 'michael_feeder_runs', action: 'null', columns: ['log_md'] },
-  // Child D (FR-6, SECURITY F-7 / RISK DA1): staged payloads can carry task prose; once DISPOSITIONED and
-  // older than the cutoff the payload is emptied to {} (kind, disposition and timestamps stay for the
-  // ledger). Undispositioned rows persist until dispositioned — deliberate, stated in TR-4.
-  { table: 'michael_staged_items', action: 'empty_payload', columns: ['payload'], dateColumn: 'dispositioned_at', kinds: ['task_route', 'tasks_cleanup'] },
+  // Child D (FR-6, SECURITY F-7 / RISK DA1): task_route payloads carry task prose (a 200-char title); once
+  // DISPOSITIONED and older than the cutoff the payload is emptied to {} (kind, disposition and timestamps
+  // stay). tasks_cleanup payloads are ids and counts only AND are the bridged-item ledger the classifier's
+  // re-creation guard reads, so they are never emptied. Undispositioned rows persist — deliberate (TR-4).
+  { table: 'michael_staged_items', action: 'empty_payload', columns: ['payload'], dateColumn: 'dispositioned_at', kinds: ['task_route'] },
 ]);
 /** Never touched by retention (spec §2: rules, closures, dispositions and counts are kept). */
 export const NEVER_TOUCHED = Object.freeze(['michael_rules', 'michael_closures', 'michael_feedback_ledger', 'michael_gmail_labels', 'michael_todoist_snapshot', 'michael_credentials']);
