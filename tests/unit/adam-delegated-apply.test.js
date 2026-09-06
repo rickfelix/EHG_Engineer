@@ -158,6 +158,20 @@ describe('Default-deny on degenerate / error input', () => {
   });
 });
 
+// SD-LEO-INFRA-APPLY-PENDING-LEO-001: the real specimen routed to the delegated-apply path
+// (metadata.delegated_apply_route, Adam row be199eff) -- confirms the rewritten migration
+// actually clears this module's stricter (additive, no-policy/RLS) gate, not just the
+// classifier's plain TIER-1.
+describe('SD-LEO-INFRA-APPLY-PENDING-LEO-001: backlog_summary caching migration is delegatable', () => {
+  it('is delegatable as an additive migration', async () => {
+    const { readFileSync } = await import('node:fs');
+    const sql = readFileSync('database/migrations/20260906_restore_backlog_summary_caching.sql', 'utf8');
+    const r = isDelegatableForApply(sql);
+    expect(r.delegatable).toBe(true);
+    expect(r.kind).toBe('additive');
+  });
+});
+
 describe('FR-4 kill-switch — default-OFF, fail-closed (exact sentinel)', () => {
   it('enabled ONLY when the env flag is exactly "on"', () => {
     expect(isDelegationEnabled({ LEO_ADAM_DBAPPLY_DELEGATION: 'on' })).toBe(true);

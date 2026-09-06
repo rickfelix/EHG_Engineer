@@ -290,3 +290,25 @@ describe('SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 — real specimen pinned at TIE
     }
   );
 });
+
+// SD-LEO-INFRA-APPLY-PENDING-LEO-001: this migration (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-C)
+// was rewritten for Adam's delegated-apply route -- the original BEGIN/COMMIT wrapper and two
+// COMMENT ON COLUMN statements classified TIER-2 (not_tier1:unrecognized_or_unsafe_statement:
+// begin; COMMENT ON COLUMN x2). Dropping both leaves a single Rule-C-matching ALTER TABLE ...
+// ADD COLUMN IF NOT EXISTS statement. Pins the TIER-1 verdict so a future edit that
+// reintroduces either construct fails loudly here instead of silently at apply time.
+describe('SD-LEO-INFRA-APPLY-PENDING-LEO-001: backlog_summary caching migration classifies TIER-1', () => {
+  it('classifies TIER-1 via Rule C (add_column_nullable), no BEGIN/COMMIT or COMMENT statements', () => {
+    const sql = readFileSync('database/migrations/20260906_restore_backlog_summary_caching.sql', 'utf8');
+    const r = classifyMigration(sql);
+    expect(r.tier).toBe(1);
+    expect(r.matched).toEqual([
+      'add_column_nullable:strategic_directives_v2.backlog_summary,strategic_directives_v2.backlog_summary_generated_at',
+    ]);
+  });
+
+  it('carries the -- @delegated-by: adam routing marker', () => {
+    const sql = readFileSync('database/migrations/20260906_restore_backlog_summary_caching.sql', 'utf8');
+    expect(sql).toMatch(/^\s*--\s*@delegated-by:\s*adam\s*$/im);
+  });
+});
