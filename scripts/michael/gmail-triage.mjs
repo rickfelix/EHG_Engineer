@@ -75,8 +75,12 @@ export function labelChangeFor(intent) {
  * leaves no finished count, but every thread it modified is stamped (adversarial review of PR 8378). Prior
  * runs' threads_modified is taken as a floor so an unstamped modify (stamp write refused) still counts.
  */
+export const LEDGER_RECHECK_EVERY = 10;
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
 export function budgetFor(ceiling, priorRuns = [], stampedToday = 0) {
-  const fromRuns = priorRuns.reduce((n, r) => n + (r && r.counts && Number.isFinite(Number(r.counts.threads_modified)) ? Number(r.counts.threads_modified) : 0), 0);
+  // recorded AND unrecorded modifies of finished runs: both were Gmail calls the date must carry
+  const fromRuns = priorRuns.reduce((n, r) => n + (r && r.counts ? num(r.counts.threads_modified) + num(r.counts.modified_unrecorded) : 0), 0);
   const used = Math.max(Number(stampedToday) || 0, fromRuns);
   return { used, budget: Math.max(ceiling - used, 0) };
 }
@@ -242,14 +246,28 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
       // 6. act (--modify only): every recorded intent of the date without action_taken_at, in creation order,
       // within the date budget; stamp action_taken_at after each successful call (record-then-act).
       let attempted = 0;
+      let attemptFailed = 0;
       if (apply && modify) {
         const pending = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).not('action_intent', 'is', null).is('action_taken_at', null).eq('borderline', false).order('created_at', { ascending: true }), { select: 'thread_id,action_intent' });
         if (pending.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'pending' } };
         counts.pending_intents = pending.rows.length;
         // Every modify counts against the date, recorded or not: `spent` = stamped + unrecorded.
         const spent = () => counts.threads_modified + counts.modified_unrecorded;
+        // The bound is the LEDGER, not a start-of-run snapshot: a stalled attempt that resumes beside its
+        // successor would otherwise spend additively on disjoint rows (adversarial review of PR 8378, round
+        // 2). The stamped count is re-read every LEDGER_RECHECK_EVERY modifies; between reads this run's
+        // own stamps since the read are added, and its unrecorded modifies always are.
+        let ledger = stamped.rows.length;
+        let ownSinceLedger = 0;
+        const chargeable = () => Math.max(ledger + ownSinceLedger + counts.modified_unrecorded, used + spent());
+        counts.ledger_rechecks = 0;
         for (const item of pending.rows) {
-          if (spent() >= budget) { counts.ceiling_hit = true; break; }
+          if (spent() > 0 && spent() % LEDGER_RECHECK_EVERY === 0 && ownSinceLedger > 0) {
+            const again = await readRows(sb, 'michael_gmail_triage_items', (q) => q.eq('et_date', etDate).not('action_intent', 'is', null).not('action_taken_at', 'is', null), { select: 'thread_id' });
+            if (again.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'ledger' } };
+            ledger = again.rows.length; ownSinceLedger = 0; counts.ledger_rechecks += 1;
+          }
+          if (spent() >= budget || chargeable() >= ceiling) { counts.ceiling_hit = true; break; }
           const change = labelChangeFor(item.action_intent);
           if (!change) { counts.modify_failed += 1; continue; }
           // Re-read the row right before the call: a concurrent fire or a chairman action (gmail-act) since the
@@ -260,17 +278,17 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
           if (!row || row.action_taken_at || row.borderline || row.action_intent !== item.action_intent) { counts.skipped_changed += 1; continue; }
           attempted += 1;
           const m = await modifyThread({ threadId: item.thread_id, ...change }, deps);
-          if (!m.ok) { counts.modify_failed += 1; continue; }
+          if (!m.ok) { counts.modify_failed += 1; attemptFailed += 1; continue; }
           // The stamp must land on exactly one still-unstamped row; zero rows means someone else acted meanwhile —
           // the Gmail call already happened, so it is counted against the ceiling as unrecorded.
           const stamp = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update({ action_taken_at: new Date().toISOString() }).eq('et_date', etDate).eq('thread_id', item.thread_id).is('action_taken_at', null).select('thread_id'));
           if (!stamp.ok || !Array.isArray(stamp.data) || stamp.data.length !== 1) { counts.modified_unrecorded += 1; continue; }
-          counts.threads_modified += 1;
+          counts.threads_modified += 1; ownSinceLedger += 1;
         }
-        if (!counts.ceiling_hit && pending.rows.length && spent() >= budget) counts.ceiling_hit = true;
+        if (!counts.ceiling_hit && pending.rows.length && (spent() >= budget || chargeable() >= ceiling)) counts.ceiling_hit = true;
         counts.intents_left = Math.max(pending.rows.length - spent() - counts.modify_failed - counts.skipped_changed, 0);
       }
-      if (attempted > 0 && counts.modify_failed === attempted) return { status: 'failed', counts: { ...counts, error_code: 'ALL_MODIFIES_FAILED', phase: 'modify' } };
+      if (attempted > 0 && attemptFailed === attempted) return { status: 'failed', counts: { ...counts, error_code: 'ALL_MODIFIES_FAILED', phase: 'modify' } };
       const degraded = counts.missing_labels.length > 0 || counts.truncated_query.length > 0 || counts.meta_failed > 0 || counts.ceiling_hit || counts.modify_failed > 0 || counts.modified_unrecorded > 0;
       return { status: degraded ? 'degraded' : 'ok', counts, preview: apply ? undefined : rows };
     },

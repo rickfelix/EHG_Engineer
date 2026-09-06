@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { stubClient } from '../../lib/michael/db.test.js';
-import { runGmailTriage, inboxQueries, intentFor, itemRow, firstMatch, ruleUsable, labelChangeFor, budgetFor, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
+import { runGmailTriage, inboxQueries, intentFor, itemRow, firstMatch, ruleUsable, labelChangeFor, budgetFor, LEDGER_RECHECK_EVERY, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
 
 // 05:00 ET on 2026-09-06 (EDT) -> 09:00Z (inside 04:30-05:30); 02:00 ET -> 06:00Z.
 const NOW = new Date('2026-09-06T09:00:00.000Z');
@@ -42,9 +42,12 @@ function gmailFactory({ labels = [{ id: 'L_receipts', name: 'Receipts', type: 'u
 /** DB stub scripted per table; records every call. */
 function db({ runs = [], labels = [], rules = RULES, absent = false, archived = [], pending = null, stamped = [], recheck = null, stampAnswer = null } = {}) {
   const calls = [];
+  let ledgerReads = 0;
+  let ownStamps = 0; // stamps this run landed (1-row answers), so a scripted ledger can include them like the real table does
   const sb = stubClient((table, ops) => {
     calls.push({ table, kind: ops[0].op, ops });
     if (absent) return MISSING;
+    if (ops[0].op === 'update' && 'action_taken_at' in ops[0].args[0]) { const id = ops.find((o) => o.op === 'eq' && o.args[0] === 'thread_id').args[1]; const ans = stampAnswer ? stampAnswer(id) : [{ thread_id: id }]; if (Array.isArray(ans) && ans.length === 1) ownStamps += 1; }
     if (ops[0].op === 'update' && 'action_taken_at' in ops[0].args[0]) { const th = ops.find((o) => o.op === 'eq' && o.args[0] === 'thread_id'); return { data: stampAnswer ? stampAnswer(th.args[1]) : [{ thread_id: th.args[1] }], error: null }; }
     if (ops[0].op !== 'select') return { data: null, error: null };
     if (table === 'michael_feeder_runs') return { data: runs, error: null };
@@ -54,7 +57,7 @@ function db({ runs = [], labels = [], rules = RULES, absent = false, archived = 
       // the prior-archived read is keyed by .in('thread_id', batch); the pending read by .is('action_taken_at', null)
       if (ops.some((o) => o.op === 'in')) return { data: archived, error: null };
       // the ledger read (two .not filters, no .is): today's stamped feeder intents
-      if (ops.filter((o) => o.op === 'not').length === 2) return { data: stamped.map((id) => ({ thread_id: id })), error: null };
+      if (ops.filter((o) => o.op === 'not').length === 2) { ledgerReads += 1; const s = typeof stamped === 'function' ? stamped(ledgerReads, ownStamps) : stamped; return { data: s.map((id) => ({ thread_id: id })), error: null }; }
       // the per-thread recheck right before a modify: eq thread_id with the intent/stamp/borderline select
       const th = ops.find((o) => o.op === 'eq' && o.args[0] === 'thread_id');
       if (th && ops.some((o) => o.op === 'select' && /action_intent,action_taken_at/.test(String(o.args[0])))) {
@@ -106,6 +109,8 @@ describe('pure helpers', () => {
     expect(budgetFor(60, [{ counts: { threads_modified: 70 } }])).toEqual({ used: 70, budget: 0 });
     // the ledger count wins over finished-run counts: a killed run leaves no count but its stamps are on the rows
     expect(budgetFor(60, [], 30)).toEqual({ used: 30, budget: 30 });
+    // an unrecorded modify of a finished run was still a Gmail call: it counts in the floor
+    expect(budgetFor(60, [{ counts: { threads_modified: 30, modified_unrecorded: 5 } }], 30)).toEqual({ used: 35, budget: 25 });
     expect(budgetFor(60, [{ counts: { threads_modified: 40 } }], 30)).toEqual({ used: 40, budget: 20 });
     // an unusable matching rule is skipped and LATER rules are still tried (spec skips the rule, not the thread)
     expect(firstMatch(RULES, meta, new Set(['newsletter']))).toEqual({ rule: null, match: null, skipped: 1 });
@@ -279,6 +284,21 @@ describe('runGmailTriage', () => {
     expect(r.counts).toMatchObject({ skipped_changed: 1, threads_modified: 1 });
     const zero = await runGmailTriage({ sb: db({ stampAnswer: () => [] }).sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory(), env });
     expect(zero).toMatchObject({ status: 'degraded', counts: { threads_modified: 0, modified_unrecorded: 2 } });
+  });
+  it('two live attempts cannot spend additively: the ledger is re-read every LEDGER_RECHECK_EVERY modifies and the run stops at the ceiling', async () => {
+    expect(LEDGER_RECHECK_EVERY).toBe(10);
+    const threads = Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`a${i}`, { from: 'alerts@exelon.com', subject: `d ${i}`, lastMessageId: `m${i}` }]));
+    const calls = [];
+    // first ledger read: nothing stamped; from the re-read after 10 own modifies the ledger carries 40 rows a
+    // concurrent attempt stamped PLUS this run's own stamps (as the real table would), so the date fills at 60
+    // after 20 own modifies: never 60 own on top of the other attempt's 40
+    const stamped = (n, own) => (n === 1 ? [] : Array.from({ length: 40 + own }, (_, i) => `x${i}`));
+    const r = await runGmailTriage({ sb: db({ stamped }).sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({ fresh: Object.keys(threads), sweep: [], threads }, calls), env });
+    expect(calls.filter((c) => c[0] === 'threads.modify')).toHaveLength(20);
+    expect(r).toMatchObject({ status: 'degraded', counts: { budget_before: 60, threads_modified: 20, ceiling_hit: true, ledger_rechecks: 2 } });
+    // a refused modify plus an unparseable intent: the run is failed only when every ATTEMPTED modify failed
+    const odd = await runGmailTriage({ sb: db({ pending: [{ thread_id: 't1', action_intent: 'archive' }, { thread_id: 't2', action_intent: 'bogus' }] }).sb, argv: ['--apply', '--modify'], now: NOW, auth: 'AUTH', gmail: gmailFactory({ reject: { modify: new Set(['t1']) } }), env });
+    expect(odd).toMatchObject({ status: 'failed', counts: { error_code: 'ALL_MODIFIES_FAILED', modify_failed: 2 } });
   });
   it('TS-6: a previously archived thread back with a newer last message is written borderline and not modified', async () => {
     const calls = [];
