@@ -424,12 +424,18 @@ async function emitOverdueSignal(row, evaluation) {
   const requiredInvocation = row.liveness_source_ref?.required_invocation;
   const invocationNote = requiredInvocation ? ` (requires invocation: '${requiredInvocation}')` : '';
 
+  // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-5): sender_session (mirroring the
+  // precedent in lib/periodic-liveness/owner-directive-writer.mjs) and a one-line body
+  // naming the process and state, so the lane-lint gauge stops counting this row as
+  // empty_sender_row/bodyless_row.
   // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A adds the expected_window_et check to evaluateRow above. target_session comes from resolveOwnerTarget (liveness-validated peer resolvers or the coordinator fallback), never an echoed field.
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
     target_session: ownerTarget.target,
     subject: `[PERIODIC-LIVENESS] ${row.display_name || row.process_key} is OVERDUE${invocationNote}`,
+    body: `${row.display_name || row.process_key} is OVERDUE${invocationNote}.`,
     sender_type: 'periodic-liveness-watcher',
+    sender_session: 'periodic-liveness-watcher',
     payload: {
       kind: 'periodic_liveness_flag',
       process_key: row.process_key,
@@ -450,12 +456,16 @@ async function emitOverdueSignal(row, evaluation) {
 async function emitPersistentUnverifiedSignal(row) {
   const ownerTarget = await resolveOwnerTarget(supabase, row.owner);
 
+  // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-5): same fix as emitOverdueSignal
+  // above — sender_session + a one-line body.
   // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan for the same reason as emitOverdueSignal above (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A touches evaluateRow, not this insert). target_session comes from resolveOwnerTarget.
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
     target_session: ownerTarget.target,
     subject: `[PERIODIC-LIVENESS] ${row.display_name || row.process_key} has been UNVERIFIED for over 7 days`,
+    body: `${row.display_name || row.process_key} has been UNVERIFIED for over 7 days.`,
     sender_type: 'periodic-liveness-watcher',
+    sender_session: 'periodic-liveness-watcher',
     payload: {
       kind: 'periodic_liveness_flag',
       process_key: row.process_key,

@@ -32,7 +32,7 @@ vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({
   escalateChairmanDecision: vi.fn(),
 }));
 
-const { emitOverdueSignal } = await import('../../../scripts/periodic-liveness-watcher.mjs');
+const { emitOverdueSignal, emitPersistentUnverifiedSignal } = await import('../../../scripts/periodic-liveness-watcher.mjs');
 
 describe('emitOverdueSignal (owner-first routing, latch-only-after-success)', () => {
   it('routes to the resolved owner target and reports success on a clean insert', async () => {
@@ -48,6 +48,12 @@ describe('emitOverdueSignal (owner-first routing, latch-only-after-success)', ()
     expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
       target_session: 'sess-owner-1',
       payload: expect.objectContaining({ process_key: 'p1', resolved_target_kind: 'session', state: 'OVERDUE' }),
+    }));
+    // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-5): sender_session and a non-empty
+    // body so the lane-lint gauge stops counting this row as empty_sender_row/bodyless_row.
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      sender_session: 'periodic-liveness-watcher',
+      body: expect.stringContaining('OVERDUE'),
     }));
   });
 
@@ -92,5 +98,48 @@ describe('emitOverdueSignal (owner-first routing, latch-only-after-success)', ()
     expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
       subject: '[PERIODIC-LIVENESS] P3 is OVERDUE',
     }));
+  });
+});
+
+// SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-5): emitPersistentUnverifiedSignal had NO
+// existing test coverage anywhere in the suite (only the OVERDUE path was tested) — this is new
+// coverage, not an extension, per PLAN-phase testing-agent review (3e0331d8-68ac-4027-a43f-8c795de07d1c).
+describe('emitPersistentUnverifiedSignal (owner-first routing, UNVERIFIED path)', () => {
+  it('routes to the resolved owner target, reports success, and stamps sender_session + a non-empty body', async () => {
+    insertMock.mockResolvedValue({ error: null });
+    const row = {
+      process_key: 'p4',
+      display_name: 'P4',
+      owner: 'adam-fleet',
+      last_state_changed_at: '2026-01-01T00:00:00Z',
+    };
+
+    const result = await emitPersistentUnverifiedSignal(row);
+
+    expect(result.emitted).toBe(true);
+    expect(result.error).toBeNull();
+    expect(result.ownerTarget).toEqual({ kind: 'session', target: 'sess-owner-1', resolvedPeer: 'adam', live: true });
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      target_session: 'sess-owner-1',
+      subject: '[PERIODIC-LIVENESS] P4 has been UNVERIFIED for over 7 days',
+      body: expect.stringContaining('UNVERIFIED'),
+      sender_session: 'periodic-liveness-watcher',
+      payload: expect.objectContaining({
+        kind: 'periodic_liveness_flag',
+        process_key: 'p4',
+        resolved_target_kind: 'session',
+        state: 'UNVERIFIED',
+      }),
+    }));
+  });
+
+  it('reports failure (not thrown) on an insert error', async () => {
+    insertMock.mockResolvedValue({ error: { message: 'insert failed: check constraint' } });
+    const row = { process_key: 'p5', display_name: 'P5', owner: 'coordinator-fleet', last_state_changed_at: '2026-01-01T00:00:00Z' };
+
+    const result = await emitPersistentUnverifiedSignal(row);
+
+    expect(result.emitted).toBe(false);
+    expect(result.error).toEqual({ message: 'insert failed: check constraint' });
   });
 });
