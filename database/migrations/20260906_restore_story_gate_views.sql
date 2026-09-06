@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- Restore v_story_verification_status and v_sd_release_gate (SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-B)
 --
 -- Both views are referenced from mounted, live code (src/api/stories.js, GET /api/stories
