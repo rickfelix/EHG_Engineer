@@ -15,6 +15,7 @@ import { describe, it, expect } from 'vitest';
 import {
   addedLinesForAmbiguityScan,
   stripGroundingValidationBlock,
+  isAmbiguityScanExemptTestFile,
 } from '../../../scripts/modules/implementation-fidelity/preflight/index.js';
 
 describe('SD-LEO-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 Finding A: stripGroundingValidationBlock', () => {
@@ -74,6 +75,28 @@ describe('SD-LEO-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 Finding A: stripGrounding
     ].join('\n');
     // Real PRD JSON is always well-formed (JSON.stringify) -- this is defensive-only coverage.
     expect(() => stripGroundingValidationBlock(diff)).not.toThrow();
+  });
+
+  it('isAmbiguityScanExemptTestFile: a real test file under tests/ with a recognized suffix is exempt', () => {
+    expect(isAmbiguityScanExemptTestFile('tests/unit/implementation-fidelity/foo.test.js')).toBe(true);
+  });
+
+  it('isAmbiguityScanExemptTestFile: a non-test file under tests/ (no .test./.spec. suffix) is NOT exempt', () => {
+    expect(isAmbiguityScanExemptTestFile('tests/fixtures/sample-data.js')).toBe(false);
+  });
+
+  it('isAmbiguityScanExemptTestFile: a file OUTSIDE tests/ cannot claim the exemption by filename alone (no copycat)', () => {
+    expect(isAmbiguityScanExemptTestFile('scripts/evil.test.js')).toBe(false);
+  });
+
+  it('a marker word inside an ADDED test fixture string is excluded from the scan (the self-referential FP this SD hit building its own PR)', () => {
+    const combinedDiff = [
+      'diff --git a/tests/unit/example.test.js b/tests/unit/example.test.js',
+      '+++ b/tests/unit/example.test.js',
+      "+  expect(check('This is ambiguous and unclear')).toBe(true);",
+    ].join('\n');
+    const result = addedLinesForAmbiguityScan(combinedDiff);
+    expect(result).not.toMatch(/ambiguous/);
   });
 
   it('addedLinesForAmbiguityScan applies the grounding_validation elision on top of the existing added-lines/exempt-file filtering', () => {

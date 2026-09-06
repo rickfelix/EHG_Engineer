@@ -52,6 +52,27 @@ const AMBIGUITY_SCAN_EXEMPT_FILES = [
   'database/schema-reference-snapshot.json',
 ];
 
+// SD-LEO-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 (4th FP family, discovered building this
+// very fix's own PR): a test file asserting that the scanner correctly matches/excludes a
+// marker word must contain that word literally as fixture DATA (e.g. a string like
+// "This is ambiguous and unclear" used to prove a regex works) -- that is not an
+// implementer's own unresolved uncertainty, it is the SAME class of "third-party DATA, not
+// this SD's decisions" already exempted for generated files above. `tests/` is this repo's
+// canonical, directory-enforced test root (mirrored by session-coordination-insert-
+// classguard-lint.mjs's own EXCLUDE_DIR_PREFIXES=['tests/']); requiring BOTH the tests/
+// prefix AND a recognized test-file suffix (not a bare prefix match) preserves the
+// no-copycat-filename hardening note above -- a non-test file cannot masquerade as exempt
+// just by living under tests/.
+const TEST_FILE_RE = /^tests\/.*\.(test|spec)\.(js|mjs|cjs|ts|tsx)$/;
+
+/**
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+export function isAmbiguityScanExemptTestFile(filePath) {
+  return TEST_FILE_RE.test(filePath);
+}
+
 // SD-LEO-FIX-GATE2-IMPLEMENTATION-FIDELITY-001 (Finding A): product_requirements_v2's
 // persisted metadata.grounding_validation is a DERIVED analysis cache computed once from
 // the PRD's authored text (scripts/prd/index.js), never re-synced when the authored text
@@ -117,7 +138,8 @@ export function addedLinesForAmbiguityScan(combinedDiff) {
       const filePath = line.replace(/^\+\+\+ [ab]\//, '').trim();
       // Exact canonical path only (security-agent c0582f56 hardening note 1):
       // a nested copycat filename must NOT inherit the exemption.
-      inExemptFile = AMBIGUITY_SCAN_EXEMPT_FILES.includes(filePath);
+      inExemptFile = AMBIGUITY_SCAN_EXEMPT_FILES.includes(filePath)
+        || isAmbiguityScanExemptTestFile(filePath);
       continue;
     }
     if (line.startsWith('+') && !inExemptFile) kept.push(line);
