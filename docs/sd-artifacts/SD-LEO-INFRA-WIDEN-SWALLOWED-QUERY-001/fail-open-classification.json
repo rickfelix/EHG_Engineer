@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-09-06T14:41:17.629Z",
+  "generated_at": "2026-09-06T14:46:09.005Z",
   "counts": {
     "has_catch": 115,
-    "no_catch": 15
+    "no_catch": 9
   },
   "results": [
     {
@@ -151,48 +151,6 @@
       "kind": "data",
       "snippet": "const { data: userStories } = await supabase",
       "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 177,
-      "kind": "data",
-      "snippet": "const { data: handoff } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 232,
-      "kind": "data",
-      "snippet": "const { data: typeProfile } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 258,
-      "kind": "data",
-      "snippet": "const { data: children } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 288,
-      "kind": "data",
-      "snippet": "const { data: directStories } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 329,
-      "kind": "data",
-      "snippet": "const { data: stories } = await supabase",
-      "classification": "no_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates.js",
-      "line": 1443,
-      "kind": "data",
-      "snippet": "const { data: children } = await supabase",
-      "classification": "no_catch"
     },
     {
       "file": "scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-criteria-traceability.js",
