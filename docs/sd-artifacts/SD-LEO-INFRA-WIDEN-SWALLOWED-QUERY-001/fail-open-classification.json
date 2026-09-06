@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T18:58:49.912Z",
+  "generated_at": "2026-09-06T19:01:25.684Z",
   "counts": {
-    "has_catch": 48
+    "has_catch": 45
   },
   "results": [
     {
@@ -135,27 +135,6 @@
       "line": 162,
       "kind": "data",
       "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/helpers.js",
-      "line": 41,
-      "kind": "data",
-      "snippet": "const { data: parentSD } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/helpers.js",
-      "line": 52,
-      "kind": "data",
-      "snippet": "const { data: siblings } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/helpers.js",
-      "line": 258,
-      "kind": "data",
-      "snippet": "const { data: handoffs } = await supabase",
       "classification": "has_catch"
     },
     {
