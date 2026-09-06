@@ -3,7 +3,8 @@
  * SD-LEO-FIX-LEAD-FINAL-APPROVAL-002.
  *
  * THE DEFECT THIS CLOSES: SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-ELEVEN-001 reached status='completed'
- * via LEAD-FINAL-APPROVAL while its own sole completion criterion (success_criteria[0]) still
+ * via LEAD-FINAL-APPROVAL while success_criteria[0] (its stage-23-walk completion criterion --
+ * one of 4 entries on the live row that carry the sentinel, not the array's only entry) still
  * carried measure:"[UNPOPULATED]" -- the literal sentinel lib/sd-fields/unpopulated.js defines
  * for "never actually measured". classifyEntry()/VALUE_KEY_BY_FIELD is already imported and run
  * over success_criteria.measure at LEAD-TO-PLAN (gates/placeholder-content.js), but only for
@@ -63,7 +64,7 @@ export function findUnpopulatedCriteria(successCriteria) {
 export function validateSuccessCriteriaMeasured(sd = {}, env = process.env) {
   console.log('   Checking success_criteria for unpopulated measures...');
 
-  const offending = findUnpopulatedCriteria(sd.success_criteria);
+  const offending = findUnpopulatedCriteria(sd?.success_criteria);
 
   if (offending.length === 0) {
     console.log('   ✅ success_criteria: no unpopulated measures found');

@@ -88,6 +88,11 @@ describe('validateSuccessCriteriaMeasured -- observe-only by default', () => {
     expect(result.passed).toBe(true);
     expect(result.warnings).toEqual([]);
   });
+
+  it('an explicit null sd (not just undefined) does not throw', () => {
+    expect(() => validateSuccessCriteriaMeasured(null, {})).not.toThrow();
+    expect(validateSuccessCriteriaMeasured(null, {}).passed).toBe(true);
+  });
 });
 
 describe('validateSuccessCriteriaMeasured -- BINDING mode', () => {

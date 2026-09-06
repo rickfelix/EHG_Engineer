@@ -52,6 +52,15 @@ const ENV_FLAG_GATES = {
     resolve: () => resolveSubagentEvidenceProvenanceMode() === 'block',
     disposition: 'ADVISORY (default) -- shared with subagent-evidence-gate.js, shipped by sibling A; flipping it is out of this SD\'s scope. Separately: this gate\'s own FR-D2 staleness sub-check has its own independent kill switch, LEO_DISABLE_LFA_STALENESS_CHECK, not tied to this flag.',
   },
+  // SECURITY finding (adversarial review, SD-LEO-FIX-LEAD-FINAL-APPROVAL-002): this census would
+  // otherwise report the new gate as unconditionally-required/fully-enforced with no flag and no
+  // disposition -- the same recurrence class as GATE_ACTIVATION_INVARIANT's own prior finding.
+  GATE_SUCCESS_CRITERIA_UNPOPULATED: {
+    env_flag: 'SUCCESS_CRITERIA_UNPOPULATED_GATE_BINDING',
+    polarity: 'opt-in',
+    resolve: () => process.env.SUCCESS_CRITERIA_UNPOPULATED_GATE_BINDING === 'true',
+    disposition: 'OBSERVE-ONLY (default) -- validation-agent measured an unconditional blocking version would fail 24/52 (46%) of live non-terminal SDs; binding is a future, separate rollout decision once the fleet backlog is worked down.',
+  },
 };
 
 /**
