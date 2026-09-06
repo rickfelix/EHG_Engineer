@@ -7,6 +7,7 @@
 // bullets" section. Ratifications: 2b14e48d, 42111a33, be6e9d73, c741130b, 1afdeaac.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -84,4 +85,6 @@ async function run() {
   console.log('✅ Section 629:', sec629.content.length, '->', content629.length, 'chars');
 }
 
-run().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  run().catch((e) => { console.error('FAILED:', e.message); process.exit(1); });
+}
