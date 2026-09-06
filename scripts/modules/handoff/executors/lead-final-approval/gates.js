@@ -174,15 +174,18 @@ export function createPlanToLeadHandoffGate(supabase) {
       console.log('\n🔒 GATE 1: PLAN-TO-LEAD Handoff Verification');
       console.log('-'.repeat(50));
 
-      const { data: handoff } = await supabase
-        .from('sd_phase_handoffs')
-        .select('id, status, validation_score, created_at')
-        .eq('sd_id', ctx.sd.id)
-        .eq('handoff_type', 'PLAN-TO-LEAD')
-        .eq('status', 'accepted')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const handoff = await safeQuery(
+        supabase
+          .from('sd_phase_handoffs')
+          .select('id, status, validation_score, created_at')
+          .eq('sd_id', ctx.sd.id)
+          .eq('handoff_type', 'PLAN-TO-LEAD')
+          .eq('status', 'accepted')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        { site: 'lead-final-approval/gates:plan_to_lead_handoff' }
+      );
 
       if (!handoff) {
         return {
@@ -229,11 +232,14 @@ export function createUserStoriesCompleteGate(supabase, prdRepo) {
 
       // SD-LEO-INFRA-TYPE-AWARE-GATE-001: SD type check — does this type require user stories/PRD?
       const sdType = ctx.sd.sd_type || 'feature';
-      const { data: typeProfile } = await supabase
-        .from('sd_type_validation_profiles')
-        .select('requires_prd, requires_user_stories')
-        .eq('sd_type', sdType)
-        .single();
+      const typeProfile = await safeQuery(
+        supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_prd, requires_user_stories')
+          .eq('sd_type', sdType)
+          .single(),
+        { site: 'lead-final-approval/gates:type_profile' }
+      );
 
       const prdRequired = typeProfile?.requires_prd ?? true;
       const storiesRequired = typeProfile?.requires_user_stories ?? true;
@@ -255,10 +261,13 @@ export function createUserStoriesCompleteGate(supabase, prdRepo) {
 
       if (!prd) {
         // For orchestrator SDs, no PRD is expected
-        const { data: children } = await supabase
-          .from('strategic_directives_v2')
-          .select('id')
-          .eq('parent_sd_id', ctx.sd.id);
+        const children = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('id')
+            .eq('parent_sd_id', ctx.sd.id),
+          { site: 'lead-final-approval/gates:children_no_prd' }
+        );
 
         if (children && children.length > 0) {
           console.log('   ℹ️  Orchestrator SD - no PRD (children have PRDs)');
@@ -285,10 +294,13 @@ export function createUserStoriesCompleteGate(supabase, prdRepo) {
         }
 
         // Check if user stories exist directly linked to SD
-        const { data: directStories } = await supabase
-          .from('user_stories')
-          .select('id, status')
-          .eq('sd_id', ctx.sd.id);
+        const directStories = await safeQuery(
+          supabase
+            .from('user_stories')
+            .select('id, status')
+            .eq('sd_id', ctx.sd.id),
+          { site: 'lead-final-approval/gates:direct_stories' }
+        );
 
         if (directStories && directStories.length > 0) {
           console.log(`   ℹ️  Found ${directStories.length} user stories directly linked to SD`);
@@ -326,10 +338,13 @@ export function createUserStoriesCompleteGate(supabase, prdRepo) {
       }
 
       // Check user stories
-      const { data: stories } = await supabase
-        .from('user_stories')
-        .select('id, title, status')
-        .eq('prd_id', prd.id);
+      const stories = await safeQuery(
+        supabase
+          .from('user_stories')
+          .select('id, title, status')
+          .eq('prd_id', prd.id),
+        { site: 'lead-final-approval/gates:stories_by_prd' }
+      );
 
       if (!stories || stories.length === 0) {
         console.log('   ⚠️  No user stories found');
@@ -1440,10 +1455,13 @@ async function runFRDeliveryVerification(ctx, supabase, prdRepo) {
   const prd = await prdRepo?.getBySdUuid(ctx.sd.id);
 
   if (!prd) {
-    const { data: children } = await supabase
-      .from('strategic_directives_v2')
-      .select('id')
-      .eq('parent_sd_id', ctx.sd.id);
+    const children = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('id')
+        .eq('parent_sd_id', ctx.sd.id),
+      { site: 'lead-final-approval/gates:fr_delivery_children' }
+    );
 
     // SD-FDBK-FIX-COMPLETION-FLAG-HARNESS-001: each of the three non-measurement paths below
     // used to emit its own unearned score (100 / 80 / 100), so "delegated to children",
