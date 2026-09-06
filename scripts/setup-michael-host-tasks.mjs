@@ -39,7 +39,8 @@
  *
  * Usage:
  *   node scripts/setup-michael-host-tasks.mjs                 # register/refresh (idempotent)
- *   node scripts/setup-michael-host-tasks.mjs --with-modify   # register gmail-triage with --apply --modify
+ *   node scripts/setup-michael-host-tasks.mjs --with-modify   # register gmail-triage with --apply --modify (re-runnable; /F overwrites, no --remove needed)
+ *   (a plain re-run after --with-modify DEMOTES gmail-triage back to the shadow phase and says so; --verify reads the promotion from the wrapper .cmd)
  *   node scripts/setup-michael-host-tasks.mjs --verify        # read the definitions back from the OS
  *   node scripts/setup-michael-host-tasks.mjs --status        # human-readable query
  *   node scripts/setup-michael-host-tasks.mjs --remove        # delete the tasks
@@ -106,7 +107,7 @@ function defaultRunSchtasks(args) {
 }
 
 export function parseArgs(argv) {
-  const args = { mode: 'register', dryRun: false, withModify: false, help: false };
+  const args = { mode: 'register', dryRun: false, withModify: false, help: false, unknown: [] };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--remove' || a === '--delete') args.mode = 'remove';
@@ -115,8 +116,20 @@ export function parseArgs(argv) {
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--with-modify') args.withModify = true;
     else if (a === '--help' || a === '-h') args.help = true;
+    // a mistyped flag must never fall through to the default (a LIVE register that owns the --modify promotion)
+    else args.unknown.push(a);
   }
   return args;
+}
+
+/** Pure: is the registered gmail-triage task promoted? Task Scheduler stores only the launcher; --modify lives in the wrapper .cmd, so that file is the readback. */
+export function wrapperPromoted(wrapperPath, fsx = fs) {
+  try { return fsx.existsSync(wrapperPath) && /(^|\s)--modify(\s|$)/.test(fsx.readFileSync(wrapperPath, 'utf8')); } catch { return false; }
+}
+
+/** Pure: the script file each plan entry launches (first token of its command line). */
+export function scriptFileOf(plan, repoRoot) {
+  return path.join(repoRoot, String(plan.script).split(/\s+/)[0]);
 }
 
 const USAGE = 'setup-michael-host-tasks [--with-modify|--verify|--status|--remove|--dry-run]  (host-local venue for the credentialed Michael feeders, hidden-window launch, no /RU /NP)';
@@ -129,6 +142,7 @@ export async function main(argv = process.argv, deps = {}) {
   const runSchtasks = deps.runSchtasks || defaultRunSchtasks;
   const tag = '[setup-michael-host-tasks]';
   if (args.help) { logger.log(USAGE); return { exitCode: 0, action: 'help' }; }
+  if (args.unknown.length) { logger.error(`${tag} unknown argument(s) ${args.unknown.join(' ')} — refusing (a typo must not become a live register). ${USAGE}`); return { exitCode: 2, action: 'unknown_flag', unknown: args.unknown }; }
 
   const platform = deps.platform || process.platform;
   if (platform !== 'win32') {
@@ -157,7 +171,8 @@ export async function main(argv = process.argv, deps = {}) {
         allOk = false; results.push({ taskName: t.taskName, ok: false }); continue;
       }
       const verdict = verifyHiddenLaunch(q.stdout);
-      const modify = /--modify/.test(q.stdout);
+      // the XML carries only the launcher and the wrapper path; the promotion is read from the wrapper itself
+      const modify = t.promotable ? wrapperPromoted(path.join(repoRoot, t.wrapperRelPath), fsx) : false;
       if (!verdict.ok) { for (const p of verdict.problems) logger.error(`${tag} VERIFY FAILED (${t.taskName}) — ${p}`); allOk = false; }
       else logger.log(`${tag} '${t.taskName}' VERIFIED — hidden-window launch, repeating, enabled${t.promotable ? (modify ? ', --modify PROMOTED' : ', shadow phase (no --modify)') : ''}`);
       results.push({ taskName: t.taskName, ok: verdict.ok, modify });
@@ -193,6 +208,14 @@ export async function main(argv = process.argv, deps = {}) {
     logger.error(`${tag} hidden-window launcher missing at ${plan[0].hiddenLauncherPath} — refusing to register a task that would fall back to a visible console.`);
     return { exitCode: 1, action: 'launcher_missing' };
   }
+  // every feeder script must exist before a 15-minute task is pointed at it (a missing one fails every fire, silently)
+  const missingScripts = plan.map((p) => scriptFileOf(p, repoRoot)).filter((f) => !fsx.existsSync(f));
+  if (missingScripts.length) {
+    logger.error(`${tag} feeder script(s) missing: ${missingScripts.join(', ')} — refusing to register a task that would fail every fire (merge the feeder PR first).`);
+    return { exitCode: 1, action: 'feeder_script_missing', missing: missingScripts };
+  }
+  // a plain re-run after a --with-modify promotion is a DEMOTION back to the shadow phase: say so, never silently
+  for (const p of plan) if (p.promotable && !args.withModify && wrapperPromoted(p.wrapperPath, fsx)) logger.warn(`${tag} '${p.taskName}' is currently PROMOTED (--modify in ${p.wrapperRelPath}); this register without --with-modify DEMOTES it to the shadow phase.`);
 
   let allOk = true;
   for (const p of plan) {
