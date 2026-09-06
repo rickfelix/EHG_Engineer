@@ -113,6 +113,32 @@ export async function main(argv = process.argv, deps = {}) {
     return { exitCode: 0, action: 'dry_run', summary: { dedupeKey, bodyLength: body.length } };
   }
 
+  // QF-20260905-284 (Solomon ranking #1 — per-kind dedupe): enqueueChairmanSms's dedupe is a
+  // flat dedupe_key string match, so a hand-sent 'heartbeat_status' brief never collides with
+  // this sweep's 'morning_brief:<date>' key even though both reach the chairman with the same
+  // morning-status content (recurrence #2: a 10:02Z hand-sent status was followed by an
+  // automated duplicate later the same ET morning). Before enqueueing, check whether the
+  // chairman was already reached today (ET) via either kind, and skip if so.
+  let alreadyCoveredToday = false;
+  try {
+    const sinceIso = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+    // Explicitly bounded (count-truncation-diff-lint): only "did anything land today" matters,
+    // and this obligation kind fires at most a handful of times per day.
+    const { data: recentStatus } = await supabase
+      .from('sms_outbound_obligations')
+      .select('kind, created_at')
+      .in('kind', ['morning_brief', 'heartbeat_status'])
+      .gte('created_at', sinceIso)
+      .limit(20);
+    const todayEt = etDateStr(now);
+    alreadyCoveredToday = (recentStatus || []).some((r) => etDateStr(new Date(r.created_at)) === todayEt);
+  } catch { /* fail-soft: falls through to the normal dedupe_key enqueue path */ }
+
+  if (alreadyCoveredToday) {
+    log({ action: 'already_covered', dedupe_key: dedupeKey });
+    return { exitCode: 0, action: 'already_covered', summary: { dedupeKey, reason: 'same_et_date_status_already_sent' } };
+  }
+
   // QF-20260722-277: the window can now open as early as 5:00 ET (inside the 10PM-6AM ET SMS
   // quiet window per lib/time/chairman-et-wall-clock.js), so notBefore must defer the actual
   // send to 6:00 AM ET — mirroring chairman-morning-review-sweep.mjs's et6amIso(now) usage. On
