@@ -46,9 +46,6 @@ const RECONCILIATION_MIGRATION_PATHS = [
   path.join(REPO_ROOT, 'database/migrations/20260906_role_drain_sets_add_worker_signal.sql'),
   // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G: the new michael_handoff kind, michael-only.
   path.join(REPO_ROOT, 'database/migrations/20260907_role_drain_sets_add_michael_handoff.sql'),
-  // QF-20260906-154: self_escalation and notification_permission_wait, coordinator-only (both
-  // were addressed to role=coordinator but absent from every drain set until now).
-  path.join(REPO_ROOT, 'database/migrations/20260907_role_drain_sets_add_self_escalation_notification_wait.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -187,9 +184,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('michael', 'michael_handoff',");
   });
 
-  it('total seed row count for solomon/adam/coordinator/worker/michael is exactly 118 (116 prior rows + 2 new coordinator rows, QF-20260906-154: self_escalation, notification_permission_wait)', () => {
+  it('total seed row count for solomon/adam/coordinator/worker/michael is exactly 116 (114 prior four-role rows + 1 pre-existing michael/worker_signal row, previously uncounted by this regex + 1 new michael/michael_handoff row, SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker|michael)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(118);
+    expect(matches.length).toBe(116);
   });
 });

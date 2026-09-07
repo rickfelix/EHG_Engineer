@@ -570,18 +570,10 @@ async function insertDeliveredRowIfRequested(supabase, sessionId, msg) {
       .eq('target_session', msg.sender_session)
       .limit(1);
     if (existing && existing.length > 0) return 'duplicate';
-    // transport-ack DELIVERED marker for msg.sender_session. QF-20260907-402 investigated
-    // routing this through insertCoordinationRow() and DECIDED AGAINST IT: a transport_ack is
-    // a best-effort, idempotent (deduped above via the existing-row check), fire-and-forget
-    // receipt that must never itself be blocked or parked — exactly the profile
-    // BACKPRESSURE_EXEMPT_KINDS' existing members (signal_receipt, capped_pool_broadcast) were
-    // added for. Routing through the choke point without also adding 'transport_ack' to that
-    // exempt set (+ its enforced worker-status.cjs DRAIN_SETS mirror,
-    // tests/unit/fleet/drain-sets-adam-reconciliation.test.js) would risk a delivery ack
-    // silently never landing under load — worse than today's raw insert, whose only downside
-    // is this lint suppression. This call site is also already best-effort itself (wrapped in
-    // the surrounding try/catch, logs and returns 'error' on any failure), so the raw insert's
-    // failure mode is no different from what routing through the choke point would produce.
+    // transport-ack DELIVERED marker for msg.sender_session; whether it should route through
+    // insertCoordinationRow() (which adds backpressure/target-validation semantics
+    // 'transport_ack' does not currently opt into via BACKPRESSURE_EXEMPT_KINDS) is a real
+    // design question, not a drive-by call in an unrelated PR — tracked at QF-20260907-402.
     // eslint-disable-next-line no-raw-session-coordination-insert -- see comment above
     await supabase
       .from('session_coordination')
