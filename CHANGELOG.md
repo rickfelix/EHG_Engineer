@@ -198,6 +198,12 @@
   - `scripts/stale-session-sweep.cjs`'s `isSweepResetAllowed()` and the end-of-tick WARNINGS/CONFLICTS reporting loops call `recordFinding()` alongside their existing `console.log`, so persisted/alerted findings never diverge from what an operator watching the console would have seen.
   - `lib/fleet/worker-status.cjs`'s `DRAIN_SETS.coordinator` recognizes the new `sweep_finding_alert` payload kind immediately via the JS floor; the corresponding DB-side `role_drain_sets` seed migration is chairman-gated and pending separately.
 
+- **Three read-side gauges prove `session_coordination` durability invariants hold, plus an archive-table scaffold** - SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D
+  - `lib/coordinator/backpressure-breach-gauge.cjs` structurally proves the insert-side backpressure guard (`assertSendBackpressure`) still holds against live data; `lib/coordinator/work-assignment-receipt-gauge.cjs` surfaces WORK_ASSIGNMENT rows delivered but never acknowledged past a 2h threshold; `lib/coordinator/expired-unread-missed-gauge.cjs` detects and idempotently stamps rows that expired before ever being read.
+  - Two live false-positive investigations shaped the final gauges: the backpressure gauge's naive query first flagged 46 unanswered rows before excluding `backpressure_parked` markers (proof the guard already works), and the expired-unread-missed gauge's naive query first flagged 682 rows before excluding `roll_call` presence-pings and broadcast-sentinel targets, down to 9 genuine misses (6 live-stamped and verified idempotent).
+  - `database/chairman-gated/20260907_session_coordination_archive.sql` (staged, not yet applied) adds a same-shaped archive table for a future retention job, plus `lib/coordination/query-with-archive.cjs` for callers needing historical + live visibility.
+  - Fixed an unanchored `.gitignore` glob (`query-*.cjs`) that was silently excluding a legitimate `lib/coordination/` file.
+
 ### Infrastructure
 
 - **Swallowed-query-error lint widened to 6 directories and flipped from advisory to enforcing; ~40 remaining sites converted** - SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001
