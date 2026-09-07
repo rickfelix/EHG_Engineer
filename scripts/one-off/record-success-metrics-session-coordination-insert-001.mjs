@@ -60,10 +60,16 @@ const success_metrics = [
 async function main() {
   const { data: sd, error: findErr } = await supabase
     .from('strategic_directives_v2')
-    .select('id')
+    .select('id, success_metrics')
     .eq('sd_key', SD_KEY)
     .single();
   if (findErr) throw findErr;
+
+  // Deliberate wholesale replacement, not a field merge: success_metrics is a single JSON array
+  // (no unrelated sibling data lives alongside it), and the pre-existing value is the generic
+  // buildDefaultSuccessMetrics() template written at PRD-creation time -- exactly what this
+  // script exists to replace with real, measured actuals. Logged for audit visibility only.
+  console.log(`Replacing ${sd.success_metrics?.length ?? 0} existing success_metrics entr${sd.success_metrics?.length === 1 ? 'y' : 'ies'} with ${success_metrics.length} measured ones`);
 
   const { error } = await supabase
     .from('strategic_directives_v2')
