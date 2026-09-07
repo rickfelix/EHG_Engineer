@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { isSdExecutableHere, normalizeAppName, appOfCwd } = require('../../../lib/fleet/sd-executable-here.cjs');
+const { isSdExecutableHere, normalizeAppName, appOfCwd, worktreeKeyOfCwd } = require('../../../lib/fleet/sd-executable-here.cjs');
 const { classifyDispatchIneligibility } = require('../../../lib/fleet/claim-eligibility.cjs');
 const { proposeUnfitDecomposition } = require('../../../lib/fleet/unfit-triage.cjs');
 
@@ -95,6 +95,49 @@ describe('isSdExecutableHere (FR-1)', () => {
   it('premise is checked before repo (a completed EHG SD reports premise_closed, not repo_mismatch)', () => {
     const v = isSdExecutableHere({ sd_key: 'SD-X', target_application: 'ehg', status: 'completed' }, ctx);
     expect(v.blockClass).toBe('premise_closed');
+  });
+});
+
+// QF-20260905-060: a worktree cwd is committed context only while its own SD/QF still has a LIVE
+// in-progress claim. Specimen: WA 89c1faec (a venture-targeted SD) purged repo_mismatch from a
+// leftover EHG_Engineer .worktrees path left over from the already-completed QF-20260903-347.
+describe('cwdWorktreeIsLiveClaim gate (QF-20260905-060)', () => {
+  const worktreeCtx = { cwd: 'C:/Users/x/Projects/_EHG/EHG_Engineer/.worktrees/qf/QF-999' };
+  const ventureSd = { sd_key: 'SD-MARKETLENS-1', target_application: 'MarketLens', status: 'draft' };
+
+  it('omitted (default): repo_mismatch still applies -- byte-identical to pre-fix behavior', () => {
+    const v = isSdExecutableHere(ventureSd, worktreeCtx);
+    expect(v.fit).toBe(false);
+    expect(v.blockClass).toBe('repo_mismatch');
+  });
+
+  it('cwdWorktreeIsLiveClaim:false (caller positively confirmed a leftover worktree): FIT', () => {
+    const v = isSdExecutableHere(ventureSd, { ...worktreeCtx, cwdWorktreeIsLiveClaim: false });
+    expect(v).toEqual({ fit: true, blockClass: null, reasons: [] });
+  });
+
+  it('cwdWorktreeIsLiveClaim:true (a genuinely live conflicting worktree): still refuses', () => {
+    const v = isSdExecutableHere(ventureSd, { ...worktreeCtx, cwdWorktreeIsLiveClaim: true });
+    expect(v.fit).toBe(false);
+    expect(v.blockClass).toBe('repo_mismatch');
+  });
+
+  it('ctx.currentApp (an explicit caller override) is never weakened by cwdWorktreeIsLiveClaim:false', () => {
+    const v = isSdExecutableHere(ventureSd, { currentApp: 'EHG_Engineer', cwdWorktreeIsLiveClaim: false });
+    expect(v.fit).toBe(false);
+    expect(v.blockClass).toBe('repo_mismatch');
+  });
+});
+
+describe('worktreeKeyOfCwd', () => {
+  it('extracts the SD/QF key from a worktree cwd, with or without the qf/ prefix', () => {
+    expect(worktreeKeyOfCwd('C:/Users/x/EHG_Engineer/.worktrees/SD-FOO-001')).toBe('SD-FOO-001');
+    expect(worktreeKeyOfCwd('C:/Users/x/EHG_Engineer/.worktrees/qf/QF-20260905-060')).toBe('QF-20260905-060');
+    expect(worktreeKeyOfCwd('C:/Users/x/EHG_Engineer/.worktrees/SD-FOO-001/nested/dir')).toBe('SD-FOO-001');
+  });
+  it('returns null for a bare shared-root cwd (no /.worktrees/ segment)', () => {
+    expect(worktreeKeyOfCwd('C:/Users/x/EHG_Engineer')).toBeNull();
+    expect(worktreeKeyOfCwd('')).toBeNull();
   });
 });
 
