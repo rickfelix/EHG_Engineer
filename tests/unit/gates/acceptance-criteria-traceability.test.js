@@ -23,6 +23,28 @@ function mockSupabase(visionData = null) {
 }
 
 describe('Acceptance Criteria Traceability Gate', () => {
+  // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 / FR-2: a genuine query FAULT (not a real "0 rows"
+  // absence) must never be reported as the benign "no vision document — advisory pass" branch.
+  // Before this fix, the try/catch swallowed ANY error identically, so a broken query (e.g. a
+  // bad column name) made this gate pass with a benign-sounding reason.
+  it('returns passed:false, not an advisory pass, when the primary lookup genuinely FAULTS and no metadata fallback exists', async () => {
+    const singleFn = vi.fn().mockResolvedValue({ data: null, error: { code: '42703', message: 'column "content" does not exist' } });
+    const limitFn = vi.fn().mockReturnValue({ single: singleFn });
+    const orderFn = vi.fn().mockReturnValue({ limit: limitFn });
+    const orFn = vi.fn().mockReturnValue({ order: orderFn });
+    const selectFn = vi.fn().mockReturnValue({ or: orFn });
+    const supabase = { from: vi.fn().mockReturnValue({ select: selectFn }) };
+    const gate = createAcceptanceCriteriaTraceabilityGate(supabase);
+
+    const result = await gate.validator({
+      sd: { id: 'test-uuid', sd_key: 'SD-TEST-001' }, // no metadata.vision_key -- single strategy only
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+    expect(result.issues.join(' ')).toMatch(/query fault, not an absent vision doc/);
+  });
+
   it('returns advisory pass when no vision document found', async () => {
     const supabase = mockSupabase(null);
     const gate = createAcceptanceCriteriaTraceabilityGate(supabase);
@@ -38,7 +60,7 @@ describe('Acceptance Criteria Traceability Gate', () => {
   });
 
   it('returns advisory pass when vision doc has no Success Criteria section', async () => {
-    const visionContent = `# Vision: Test\n\n## Problem Statement\nSome problem.\n\n## Overview\nNo criteria here.`;
+    const visionContent = '# Vision: Test\n\n## Problem Statement\nSome problem.\n\n## Overview\nNo criteria here.';
     const supabase = mockSupabase({ content: visionContent, vision_key: 'VISION-TEST-001' });
     const gate = createAcceptanceCriteriaTraceabilityGate(supabase);
 

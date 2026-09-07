@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-07T00:41:29.305Z",
+  "generated_at": "2026-09-07T00:46:35.552Z",
   "counts": {
-    "has_catch": 21
+    "has_catch": 19
   },
   "results": [
     {
@@ -21,20 +21,6 @@
     {
       "file": "lib/gates/operator-contract/harness-adapter.js",
       "line": 368,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-criteria-traceability.js",
-      "line": 142,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-criteria-traceability.js",
-      "line": 162,
       "kind": "data",
       "snippet": "const { data } = await supabase",
       "classification": "has_catch"
