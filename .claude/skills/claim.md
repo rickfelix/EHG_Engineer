@@ -215,7 +215,9 @@ Atomic release of current claim + acquisition of new claim. Prevents the window 
 4. Verify the switch completed
 
 ```bash
-# Release current
+# Release current -- QF-20260906-231: requireDeterministic:true so an unresolvable
+# identity (env/marker/terminal all missed) REFUSES rather than falling back to
+# whichever OTHER session heartbeated most recently.
 node --input-type=module -e "
 import { releaseClaim } from './lib/commands/claim-command.js';
 import { resolveOwnSession } from './lib/resolve-own-session.js';
@@ -223,7 +225,13 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config();
 const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const { data } = await resolveOwnSession(s, { select: 'session_id, sd_id' });
+const { data, source, conflicts, demotedMatches } = await resolveOwnSession(s, { select: 'session_id, sd_id', requireDeterministic: true });
+if (!data) {
+  console.error('REFUSED: identity not deterministic (source=' + source + ') -- no claim touched.');
+  if (conflicts) console.error('Conflicts:', JSON.stringify(conflicts));
+  if (demotedMatches) console.error('Demoted matches (set CLAUDE_SESSION_ID to one of these):', JSON.stringify(demotedMatches));
+  process.exit(1);
+}
 if (data?.sd_id) {
   await releaseClaim(data.session_id);
   console.log('Released: ' + data.sd_id);
@@ -238,7 +246,8 @@ if (data?.sd_id) {
 Release a claim. If no session-id given, release this session's own claim.
 
 ```bash
-# Release own claim
+# Release own claim -- QF-20260906-231: requireDeterministic:true; REFUSE rather
+# than releasing whichever OTHER session happens to have the freshest heartbeat.
 node --input-type=module -e "
 import { releaseClaim } from './lib/commands/claim-command.js';
 import { resolveOwnSession } from './lib/resolve-own-session.js';
@@ -246,8 +255,14 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 dotenv.config();
 const s = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const { data } = await resolveOwnSession(s, { select: 'session_id' });
-if (data) await releaseClaim(data.session_id);
+const { data, source, conflicts, demotedMatches } = await resolveOwnSession(s, { select: 'session_id', requireDeterministic: true });
+if (!data) {
+  console.error('REFUSED: identity not deterministic (source=' + source + ') -- no claim touched.');
+  if (conflicts) console.error('Conflicts:', JSON.stringify(conflicts));
+  if (demotedMatches) console.error('Demoted matches (set CLAUDE_SESSION_ID to one of these):', JSON.stringify(demotedMatches));
+  process.exit(1);
+}
+await releaseClaim(data.session_id);
 "
 
 # Release another session's claim
