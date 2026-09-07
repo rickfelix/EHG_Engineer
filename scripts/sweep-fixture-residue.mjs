@@ -29,7 +29,11 @@ const { createClient } = require('@supabase/supabase-js');
 /** Canary exclusion — the one sanctioned permanently-flagged is_demo venture. */
 export const CANARY_NAME = 'Canary Venture Probe';
 
-export const FIXTURE_CLASS_RE = /^(__e2e_|TEST-|parity-test-|test-stub|Test Venture for )/i;
+// QF-20260905-720: extended with 9 measured live test-name families that previously escaped this
+// predicate and were classified fixture ONLY via is_demo=true -- a row written with is_demo unset
+// (RealDB test suites; Adam's 09-07 stall-alert specimens) escaped the sweep AND reached the
+// venture stall detector's alarm path, escalating a fixture as if it were stalled product work.
+export const FIXTURE_CLASS_RE = /^(__e2e_|TEST-|parity-test-|test-stub|Test Venture for |HCGate-RealDB-|ProductReviewGate-RealDB-|StageArtifactGate-RealDB-|TS-fixture-|artifact-gate-test-|Pipeline-Test-|Critical Attention |Launch Checklist Test |Phase 6 Test Venture )/i;
 
 /** Pure: is this row a fixture-class venture (QF-435 predicate)? */
 export function isFixtureClassVenture(v) {

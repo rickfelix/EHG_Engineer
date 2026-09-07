@@ -21,6 +21,17 @@ describe('fixture-class predicate (QF-435 named classes)', () => {
     ['parity-test- prefix', { name: 'parity-test-foo' }],
     ['test-stub prefix', { name: 'test-stub-bar' }],
     ['Test Venture for prefix', { name: 'Test Venture for Owned-Audience Loop' }],
+    // QF-20260905-720: six RealDB test-suite families measured 09-05 (caught only via is_demo
+    // before this fix) plus three stall-alert specimens measured 09-07 (Adam's quiet tick).
+    ['HCGate-RealDB- prefix', { name: 'HCGate-RealDB-daemon-unclassified-1788745800000' }],
+    ['ProductReviewGate-RealDB- prefix', { name: 'ProductReviewGate-RealDB-adv-1788745800000' }],
+    ['StageArtifactGate-RealDB- prefix', { name: 'StageArtifactGate-RealDB-deviated-1788745800000' }],
+    ['TS-fixture- prefix', { name: 'TS-fixture-3f8e1c2a-9b4d-4a6e-8f1a-2c3d4e5f6a7b' }],
+    ['artifact-gate-test- prefix', { name: 'artifact-gate-test-1788745800000' }],
+    ['Pipeline-Test- prefix', { name: 'Pipeline-Test-1788745800000' }],
+    ['Critical Attention prefix', { name: 'Critical Attention 1788745814692' }],
+    ['Launch Checklist Test prefix', { name: 'Launch Checklist Test 1788745814737' }],
+    ['Phase 6 Test Venture prefix (medial "Test Venture", not the leading "Test Venture for " alternative)', { name: 'Phase 6 Test Venture 1788745824906' }],
   ])('matches %s', (_label, row) => {
     expect(isFixtureClassVenture(row)).toBe(true);
   });
