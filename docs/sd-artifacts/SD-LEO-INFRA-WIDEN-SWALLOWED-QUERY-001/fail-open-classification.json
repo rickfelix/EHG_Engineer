@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-07T00:24:31.327Z",
+  "generated_at": "2026-09-07T00:41:29.305Z",
   "counts": {
-    "has_catch": 28
+    "has_catch": 21
   },
   "results": [
     {
@@ -23,55 +23,6 @@
       "line": 368,
       "kind": "data",
       "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/performance-critical-gate.js",
-      "line": 99,
-      "kind": "data",
-      "snippet": "const { data: prdData } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/wireframe-qa-validation.js",
-      "line": 77,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/index.js",
-      "line": 105,
-      "kind": "data",
-      "snippet": "const { data: sdRecord } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/parent-orchestrator.js",
-      "line": 95,
-      "kind": "data",
-      "snippet": "const { data: freshSd } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/retrospective.js",
-      "line": 429,
-      "kind": "data",
-      "snippet": "const { data: existing } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/russian-judge.js",
-      "line": 27,
-      "kind": "data",
-      "snippet": "const { data: retrospective } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/exec-to-plan/test-evidence.js",
-      "line": 111,
-      "kind": "data",
-      "snippet": "const { data: userStories } = await supabase",
       "classification": "has_catch"
     },
     {
