@@ -1617,24 +1617,24 @@ async function printPredictions(d) {
 
     if (existingWarn && existingWarn.length > 0) continue;
 
-    // Pre-existing, unrelated to QF-20260907-306's own diff (surfaced only because this lint
-    // whole-file-scans any touched file); tracked for a real fix in QF-20260907-462.
-    // eslint-disable-next-line no-raw-session-coordination-insert -- see comment above
-    await supabase
-      .from('session_coordination')
-      .insert({
-        target_session: s.session_id,
-        target_sd: s.sd_key,
-        message_type: 'STALE_WARNING',
-        subject: 'Heartbeat aging on ' + s.sd_key.split('-').pop() + ' — approaching stale threshold',
-        body: 'Your session on ' + s.sd_key + ' has not heartbeated in ' + s.heartbeat_age_human + '. If you are still working, send a heartbeat. If stuck, consider releasing the claim.',
-        // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-6): payload.kind is purely
-        // additive (untyped_row fix); sender_session is a named system principal since
-        // sender_type='dashboard' is not in the gauge's LEGITIMATE_EMPTY_SENDER_TYPES.
-        payload: { kind: 'stale_heartbeat_warning', session_id: s.session_id, heartbeat_age: s.heartbeat_age_seconds, stale_threshold: STALE_THRESHOLD },
-        sender_type: 'dashboard',
-        sender_session: 'fleet-dashboard'
-      }).then(() => {}).catch(() => {}); // Non-blocking
+    // QF-20260907-462: routed through dispatchToWorker (the canonical choke point) instead of a
+    // raw .insert() -- target_session is s.session_id, freshly resolved from the aging-workers
+    // query just above, never an echoed prior-row field. dispatchToWorker/insertCoordinationRow
+    // can throw (e.g. on a validation failure); the original raw insert was fire-and-forget
+    // non-blocking with every error silently swallowed, preserved here via try/catch.
+    dispatchToWorker(supabase, {
+      target_session: s.session_id,
+      target_sd: s.sd_key,
+      message_type: 'STALE_WARNING',
+      subject: 'Heartbeat aging on ' + s.sd_key.split('-').pop() + ' — approaching stale threshold',
+      body: 'Your session on ' + s.sd_key + ' has not heartbeated in ' + s.heartbeat_age_human + '. If you are still working, send a heartbeat. If stuck, consider releasing the claim.',
+      // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-6): payload.kind is purely
+      // additive (untyped_row fix); sender_session is a named system principal since
+      // sender_type='dashboard' is not in the gauge's LEGITIMATE_EMPTY_SENDER_TYPES.
+      payload: { kind: 'stale_heartbeat_warning', session_id: s.session_id, heartbeat_age: s.heartbeat_age_seconds, stale_threshold: STALE_THRESHOLD },
+      sender_type: 'dashboard',
+      sender_session: 'fleet-dashboard'
+    }).catch(() => {}); // Non-blocking
   }
 
   // Print
