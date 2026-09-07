@@ -11,7 +11,15 @@
  * Bypass via SD metadata.grill_bypass=true plus metadata.grill_bypass_reason text.
  *
  * SD: SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-C
+ *
+ * SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-1: both bypass-quota counts route through safeCount,
+ * which throws COUNT_UNMEASURABLE on a null/unmeasurable count instead of the previous
+ * `(count || 0)` coercion — a broken query used to silently read as "quota not yet reached" and
+ * grant an unlimited bypass; now it fails the gate (ValidationOrchestrator catches the throw as
+ * passed:false) instead of granting one.
  */
+
+import { safeCount } from '../../../../../../lib/db/safe-query.mjs';
 
 const HARD_FAIL_MODE = process.env.LEO_GRILL_HARD_FAIL === 'true';
 const ARTIFACT_FRESHNESS_HOURS = 168; // 7 days
@@ -62,13 +70,16 @@ async function executeGrillConvergence(sd, supabase) {
         }
 
         // Per-SD quota: count prior bypass audit rows for this SD
-        const { count: sdBypassCount } = await supabase
-          .from('audit_log')
-          .select('id', { count: 'exact', head: true })
-          .eq('entity_type', 'strategic_directives_v2')
-          .eq('event_type', 'grill_bypass')
-          .eq('entity_id', sd.id);
-        if ((sdBypassCount || 0) >= BYPASS_QUOTA_PER_SD) {
+        const sdBypassCount = await safeCount(
+          supabase
+            .from('audit_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('entity_type', 'strategic_directives_v2')
+            .eq('event_type', 'grill_bypass')
+            .eq('entity_id', sd.id),
+          { site: 'grill-convergence:sd_bypass_count' }
+        );
+        if (sdBypassCount >= BYPASS_QUOTA_PER_SD) {
           return {
             name: 'GATE_GRILL_CONVERGENCE',
             score: 0,
@@ -81,12 +92,15 @@ async function executeGrillConvergence(sd, supabase) {
 
         // Per-day quota
         const dayStart = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { count: dayBypassCount } = await supabase
-          .from('audit_log')
-          .select('id', { count: 'exact', head: true })
-          .eq('event_type', 'grill_bypass')
-          .gte('created_at', dayStart);
-        if ((dayBypassCount || 0) >= BYPASS_QUOTA_PER_DAY) {
+        const dayBypassCount = await safeCount(
+          supabase
+            .from('audit_log')
+            .select('id', { count: 'exact', head: true })
+            .eq('event_type', 'grill_bypass')
+            .gte('created_at', dayStart),
+          { site: 'grill-convergence:day_bypass_count' }
+        );
+        if (dayBypassCount >= BYPASS_QUOTA_PER_DAY) {
           return {
             name: 'GATE_GRILL_CONVERGENCE',
             score: 0,
@@ -171,7 +185,7 @@ async function executeGrillConvergence(sd, supabase) {
           description: [
             `SD has ${openQuestions.length} open_questions_for_plan_phase but no fresh grill_convergence_artifacts row.`,
             `Run: node scripts/pocock/grill-runner.mjs --sd-id ${sd.id}`,
-            `Or bypass with metadata.grill_bypass=true and grill_bypass_reason text (≥10 chars).`,
+            'Or bypass with metadata.grill_bypass=true and grill_bypass_reason text (≥10 chars).',
           ].join('\n'),
           severity: HARD_FAIL_MODE ? 'high' : 'medium',
           category: 'grill_convergence_missing',

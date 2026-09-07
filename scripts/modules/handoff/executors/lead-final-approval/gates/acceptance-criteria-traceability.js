@@ -11,6 +11,7 @@
 
 import { readdirSync, readFileSync } from 'fs';
 import { join, relative } from 'path';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'ACCEPTANCE_CRITERIA_TRACEABILITY';
 
@@ -136,42 +137,85 @@ export function createAcceptanceCriteriaTraceabilityGate(supabase) {
       const sdId = ctx.sd?.id || ctx.sdId;
 
       // 1. Fetch vision document
+      // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 / FR-2: a FAILED LOOKUP IS NOT AN ABSENT VISION
+      // DOC. Routing the query through safeQuery is not sufficient alone -- a plain try/catch
+      // would swallow the throw and fall through to the same "advisory pass" a broken query
+      // would produce. Each strategy's own fault is tracked separately (not a single shared
+      // flag) so a fault in the PRIMARY (sd_id) lookup does not skip the SECONDARY (metadata
+      // vision_key) fallback -- both are independent ways to find the same doc, and either one
+      // succeeding cleanly is a real answer. safeQuery returns null for PGRST116 (.single()
+      // matched no rows -- a genuine absence) and throws for anything else.
       let visionContent = null;
+      let sdIdFault = null;
       try {
         // Try by sd_id first (may store sd_key or UUID)
-        const { data } = await supabase
-          .from('eva_vision_documents')
-          .select('content, vision_key')
-          .or(`sd_id.eq.${sdId},sd_id.eq.${sdKey}`)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+        const data = await safeQuery(
+          supabase
+            .from('eva_vision_documents')
+            .select('content, vision_key')
+            .or(`sd_id.eq.${sdId},sd_id.eq.${sdKey}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single(),
+          { site: 'acceptance-criteria-traceability:vision_doc_by_sd_id' }
+        );
 
         if (data) {
           visionContent = data.content;
           console.log(`   Vision doc: ${data.vision_key}`);
         }
       } catch (e) {
-        // Intentionally suppressed: No vision doc found
-        console.debug('[AcceptanceCriteriaTraceability] vision doc query suppressed:', e?.message || e);
+        sdIdFault = e;
+        console.log(`   ⚠️  Vision doc lookup (by sd_id) error: ${e.message}`);
       }
 
-      // Also check metadata for vision_key
-      if (!visionContent && ctx.sd?.metadata?.vision_key) {
+      // Also check metadata for vision_key -- tried regardless of a primary-lookup fault, since
+      // it is an independent strategy that can still answer cleanly.
+      const triedMetadataKey = Boolean(!visionContent && ctx.sd?.metadata?.vision_key);
+      let metadataFault = null;
+      if (triedMetadataKey) {
         try {
-          const { data } = await supabase
-            .from('eva_vision_documents')
-            .select('content, vision_key')
-            .eq('vision_key', ctx.sd.metadata.vision_key)
-            .single();
+          const data = await safeQuery(
+            supabase
+              .from('eva_vision_documents')
+              .select('content, vision_key')
+              .eq('vision_key', ctx.sd.metadata.vision_key)
+              .single(),
+            { site: 'acceptance-criteria-traceability:vision_doc_by_metadata_key' }
+          );
           if (data) {
             visionContent = data.content;
             console.log(`   Vision doc (via metadata): ${data.vision_key}`);
           }
         } catch (e) {
-          // Intentionally suppressed: Vision doc not found via metadata
-          console.debug('[AcceptanceCriteriaTraceability] vision metadata query suppressed:', e?.message || e);
+          metadataFault = e;
+          console.log(`   ⚠️  Vision doc lookup (by metadata key) error: ${e.message}`);
         }
+      }
+
+      // A lookup that COULD NOT ANSWER must not be reported as "no vision document". The
+      // predicate below requires BOTH primaryAnswered AND secondaryAnswered -- deliberately
+      // stricter than "either one clean answer suffices" (SECURITY sub-agent review, 2026-09-07,
+      // caught an earlier draft of this comment overstating the leniency: a clean "no data" from
+      // ONE strategy does NOT alone excuse a fault in the OTHER attempted strategy). This only
+      // reads as an advisory pass when every strategy actually attempted (not "attempted and
+      // succeeded" -- an untried strategy, e.g. no metadata.vision_key on the SD, correctly
+      // counts as answered) concluded WITHOUT a fault -- data or a genuine absence, never a fault.
+      const primaryAnswered = !sdIdFault;
+      const secondaryAnswered = !triedMetadataKey || !metadataFault;
+      if (!visionContent && !(primaryAnswered && secondaryAnswered)) {
+        console.log('   ❌ Vision doc lookup failed — cannot determine whether criteria traceability applies');
+        const faultMessages = [sdIdFault, metadataFault].filter(Boolean).map((e) => e.message).join('; ');
+        return {
+          passed: false,
+          score: 0,
+          max_score: 100,
+          issues: [
+            `${GATE_NAME} could not read the vision document: ${faultMessages}. `
+            + 'This is a query fault, not an absent vision doc — the gate refuses to advisory-pass on an unanswerable lookup.',
+          ],
+          warnings: [],
+        };
       }
 
       // No vision doc — advisory pass

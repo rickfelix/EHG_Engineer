@@ -7,6 +7,7 @@
  */
 
 import BaseExecutor from '../BaseExecutor.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 
 // Gate creators
 import {
@@ -102,11 +103,14 @@ async function populateSuccessMetrics(supabase, sdId, sd, testEvidenceResult) {
     console.log('\n📊 Step 3.5: Auto-Populate Success Metrics');
     console.log('-'.repeat(50));
 
-    const { data: sdRecord } = await supabase
-      .from('strategic_directives_v2')
-      .select('success_metrics')
-      .eq('id', sd.id)
-      .single();
+    const sdRecord = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('success_metrics')
+        .eq('id', sd.id)
+        .single(),
+      { site: 'exec-to-plan:populate_success_metrics' }
+    );
 
     const metrics = sdRecord?.success_metrics;
     if (!metrics || !Array.isArray(metrics) || metrics.length === 0) {

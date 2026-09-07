@@ -15,6 +15,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import { safeTruncate } from '../../../../lib/utils/safe-truncate.js';
 import ContentBuilder from '../content/ContentBuilder.js';
 import ValidationOrchestrator from '../validation/ValidationOrchestrator.js';
@@ -407,14 +408,17 @@ export class HandoffRecorder {
       // an SD is never marked completed on the executions-table write alone.
       if (isCompletionAction(handoffType)) {
         // Idempotency: a clean re-run after a prior accept must not duplicate the canonical row.
-        const { data: existingAccept } = await this.supabase
-          .from('sd_phase_handoffs')
-          .select('id')
-          .eq('sd_id', sdUuid)
-          .eq('handoff_type', handoffType)
-          .eq('status', 'accepted')
-          .limit(1)
-          .maybeSingle();
+        const existingAccept = await safeQuery(
+          this.supabase
+            .from('sd_phase_handoffs')
+            .select('id')
+            .eq('sd_id', sdUuid)
+            .eq('handoff_type', handoffType)
+            .eq('status', 'accepted')
+            .limit(1)
+            .maybeSingle(),
+          { site: 'HandoffRecorder:record_success_idempotency_check' }
+        );
         if (existingAccept) {
           console.log(`ℹ️  ${handoffType} canonical row already accepted (${existingAccept.id}) — skipping duplicate insert`);
         } else {
@@ -910,11 +914,14 @@ export class HandoffRecorder {
       const sdUuid = await this._resolveToUUID(sdId);
 
       // Get SD details (using UUID)
-      const { data: sd } = await this.supabase
-        .from('strategic_directives_v2')
-        .select('*')
-        .eq('id', sdUuid)
-        .single();
+      const sd = await safeQuery(
+        this.supabase
+          .from('strategic_directives_v2')
+          .select('*')
+          .eq('id', sdUuid)
+          .single(),
+        { site: 'HandoffRecorder:create_artifact_sd_lookup' }
+      );
 
       if (!sd) {
         console.warn('⚠️  Cannot create handoff artifact: SD not found');
@@ -922,12 +929,15 @@ export class HandoffRecorder {
       }
 
       // Get sub-agent results (using UUID)
-      const { data: subAgentResults } = await this.supabase
-        .from('sub_agent_execution_results')
-        .select('*')
-        .eq('sd_id', sdUuid)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      const subAgentResults = await safeQuery(
+        this.supabase
+          .from('sub_agent_execution_results')
+          .select('*')
+          .eq('sd_id', sdUuid)
+          .order('created_at', { ascending: false })
+          .limit(10),
+        { site: 'HandoffRecorder:create_artifact_subagent_results' }
+      );
 
       // Build content
       // SD-FDBK-FIX-LFA-ACCEPT-CANONICAL-001 FR-1: coerce 'APPROVAL'->'LEAD' exactly as
@@ -1007,11 +1017,14 @@ export class HandoffRecorder {
       // PAT-RETRO-BOILERPLATE-001: Include discovered issues in handoff metadata
       // Query issue_patterns for this SD to store in metadata
       try {
-        const { data: sdIssues } = await this.supabase
-          .from('issue_patterns')
-          .select('pattern_id, issue_summary, category, severity')
-          .or(`first_seen_sd_id.eq.${sdUuid},last_seen_sd_id.eq.${sdUuid}`)
-          .eq('status', 'active');
+        const sdIssues = await safeQuery(
+          this.supabase
+            .from('issue_patterns')
+            .select('pattern_id, issue_summary, category, severity')
+            .or(`first_seen_sd_id.eq.${sdUuid},last_seen_sd_id.eq.${sdUuid}`)
+            .eq('status', 'active'),
+          { site: 'HandoffRecorder:create_artifact_issue_patterns', tolerate: "Non-blocking (per catch comment below) — don't fail handoff if issue query fails" }
+        );
 
         if (sdIssues && sdIssues.length > 0) {
           metadata.discovered_issues = sdIssues.map(i => ({
@@ -1164,15 +1177,18 @@ export class HandoffRecorder {
         );
         if (isSessionClaimError) {
           console.log('   ℹ️  Session claim check failed — checking for pre-created artifact...');
-          const { data: existing } = await this.supabase
-            .from('sd_phase_handoffs')
-            .select('id')
-            .eq('sd_id', sdUuid)
-            .eq('from_phase', fromPhase)
-            .eq('to_phase', toPhase)
-            .eq('status', 'accepted')
-            .limit(1)
-            .single();
+          const existing = await safeQuery(
+            this.supabase
+              .from('sd_phase_handoffs')
+              .select('id')
+              .eq('sd_id', sdUuid)
+              .eq('from_phase', fromPhase)
+              .eq('to_phase', toPhase)
+              .eq('status', 'accepted')
+              .limit(1)
+              .single(),
+            { site: 'HandoffRecorder:create_artifact_precreated_lookup' }
+          );
           if (existing) {
             console.log('   ✅ Using pre-created artifact (orchestrator auto-completion):', existing.id);
             return existing.id;
@@ -1236,11 +1252,14 @@ export class HandoffRecorder {
           // enforce_handoff_creation) that write their own metadata keys (circuit_breaker_blocked,
           // blocked_at, etc.) on the just-inserted row. Overwriting from the pre-insert snapshot
           // would silently erase that trigger-written state.
-          const { data: currentRow } = await this.supabase
-            .from('sd_phase_handoffs')
-            .select('metadata')
-            .eq('id', handoffId)
-            .single();
+          const currentRow = await safeQuery(
+            this.supabase
+              .from('sd_phase_handoffs')
+              .select('metadata')
+              .eq('id', handoffId)
+              .single(),
+            { site: 'HandoffRecorder:preflight_remediation_stamp_current_row', tolerate: 'Fail-open and non-blocking (per comment above) — never let this lookup/stamp affect the accept path success' }
+          );
           await this.supabase
             .from('sd_phase_handoffs')
             .update({

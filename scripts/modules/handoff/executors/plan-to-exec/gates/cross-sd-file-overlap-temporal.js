@@ -21,6 +21,7 @@ import {
   parseAckFlags,
   validatePrdShape,
 } from '../../../../../../lib/cross-sd-overlap.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'CROSS_SD_FILE_OVERLAP_TEMPORAL_PLAN';
 
@@ -82,11 +83,14 @@ export function createCrossSdFileOverlapTemporalGate(supabase) {
       }
 
       // Pull current SD's PRD
-      const { data: currentPRD } = await supabase
-        .from('product_requirements_v2')
-        .select('*')
-        .eq('sd_id', sdUuid)
-        .single();
+      const currentPRD = await safeQuery(
+        supabase
+          .from('product_requirements_v2')
+          .select('*')
+          .eq('sd_id', sdUuid)
+          .single(),
+        { site: 'cross-sd-file-overlap-temporal:current_prd' }
+      );
 
       const prdShape = validatePrdShape(currentPRD);
       if (!prdShape.valid) {
@@ -111,11 +115,14 @@ export function createCrossSdFileOverlapTemporalGate(supabase) {
 
       const entries = [];
       for (const other of recent) {
-        const { data: otherPRD } = await supabase
-          .from('product_requirements_v2')
-          .select('*')
-          .eq('sd_id', other.id)
-          .single();
+        const otherPRD = await safeQuery(
+          supabase
+            .from('product_requirements_v2')
+            .select('*')
+            .eq('sd_id', other.id)
+            .single(),
+          { site: 'cross-sd-file-overlap-temporal:other_prd' }
+        );
         if (!otherPRD) continue;
         const otherFiles = extractTargetFiles(otherPRD);
         const overlap = [...currentFiles].filter(f => otherFiles.has(f));

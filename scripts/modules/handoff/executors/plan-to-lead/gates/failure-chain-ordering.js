@@ -14,6 +14,8 @@
  * Auto-passes for non-orchestrator SDs and non-pipeline SDs.
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 const PIPELINE_KEYWORDS = [
   'pipeline', 'orchestrat', 'stage-execution', 'stage_execution',
   'eva-orchestrator', 'reality-gate', 'reality_gate', 'lifecycle',
@@ -85,10 +87,13 @@ export function createFailureChainOrderingGate(supabase) {
       const sd = ctx.sd || {};
 
       // ONLY APPLIES TO ORCHESTRATOR SDs
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id, sd_key, title')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_key, title')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'failure-chain-ordering:child_sds' }
+      );
 
       if (!childSDs || childSDs.length === 0) {
         console.log('   ℹ️  Not an orchestrator SD — gate not applicable');
@@ -125,11 +130,14 @@ export function createFailureChainOrderingGate(supabase) {
         };
       }
 
-      const { data: archPlan } = await supabase
-        .from('eva_architecture_plans')
-        .select('plan_key, content')
-        .eq('plan_key', archKey)
-        .single();
+      const archPlan = await safeQuery(
+        supabase
+          .from('eva_architecture_plans')
+          .select('plan_key, content')
+          .eq('plan_key', archKey)
+          .single(),
+        { site: 'failure-chain-ordering:arch_plan' }
+      );
 
       if (!archPlan) {
         console.log(`   ⚠️  Architecture plan '${archKey}' not found`);

@@ -12,6 +12,7 @@ import {
   RequirementLevel,
   createSkippedResult
 } from '../validation/sd-type-applicability-policy.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 
 /** Patterns indicating wireframe-implementation alignment evidence */
 const ALIGNMENT_PATTERNS = [
@@ -77,12 +78,15 @@ export async function validateWireframeQA(context) {
 
   // Check existing handoff records for wireframe references
   if (supabase && sd_id) {
-    const { data: handoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('handoff_data, brief_data')
-      .eq('sd_id', sd_id)
-      .order('created_at', { ascending: false })
-      .limit(5);
+    const handoffs = await safeQuery(
+      supabase
+        .from('sd_phase_handoffs')
+        .select('handoff_data, brief_data')
+        .eq('sd_id', sd_id)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      { site: 'wireframe-qa-validator:handoffs' }
+    );
 
     if (handoffs) {
       for (const handoff of handoffs) {
@@ -92,10 +96,13 @@ export async function validateWireframeQA(context) {
     }
 
     // Check deliverables for wireframe references
-    const { data: deliverables } = await supabase
-      .from('sd_deliverables')
-      .select('title, description, evidence')
-      .eq('sd_id', sd_id);
+    const deliverables = await safeQuery(
+      supabase
+        .from('sd_deliverables')
+        .select('title, description, evidence')
+        .eq('sd_id', sd_id),
+      { site: 'wireframe-qa-validator:deliverables' }
+    );
 
     if (deliverables) {
       for (const d of deliverables) {

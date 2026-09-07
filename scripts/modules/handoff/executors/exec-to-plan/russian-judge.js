@@ -4,6 +4,7 @@
  *
  * AI-powered retrospective quality validation
  */
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 
 /**
  * Run Russian Judge AI quality assessment on retrospective
@@ -24,13 +25,16 @@ export async function runRussianJudgeAssessment(supabase, sdId, sd) {
     console.log('-'.repeat(50));
 
     // Fetch retrospective for this SD
-    const { data: retrospective } = await supabase
-      .from('retrospectives')
-      .select('*')
-      .eq('sd_id', sdId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const retrospective = await safeQuery(
+      supabase
+        .from('retrospectives')
+        .select('*')
+        .eq('sd_id', sdId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+      { site: 'russian-judge:fetch_retrospective' }
+    );
 
     if (retrospective) {
       const { RetrospectiveQualityRubric } = await import('../../../rubrics/retrospective-quality-rubric.js');
