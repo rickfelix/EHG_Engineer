@@ -35,8 +35,16 @@ if (!url) {
   const c = new Client({ connectionString: url });
   await c.connect();
   try {
+    // QF-20260904-619: a.attname is pg_catalog's `name` type; array_agg(a.attname) therefore
+    // produces `name[]`, an OID node-postgres has no built-in array parser for, so `pg` returns
+    // the raw Postgres array-literal TEXT ('{id,sd_key,deliverables_manifest}') instead of a JS
+    // array. schema-reference-extract.mjs's findViolations() then calls cols.includes(ref.column)
+    // expecting Array.prototype.includes (exact membership) but got String.prototype.includes
+    // (substring match) instead -- 'deliverables' silently matched inside 'deliverables_manifest',
+    // hiding 33 live phantom column refs across 18 tables. Casting to ::text makes array_agg
+    // produce `text[]`, an OID node-postgres DOES parse into a real array (confirmed live).
     const { rows } = await c.query(`
-      SELECT c.relkind AS kind, c.relname AS rel, array_agg(a.attname ORDER BY a.attnum) AS cols
+      SELECT c.relkind AS kind, c.relname AS rel, array_agg(a.attname::text ORDER BY a.attnum) AS cols
         FROM pg_attribute a
         JOIN pg_class c ON c.oid = a.attrelid
         JOIN pg_namespace n ON n.oid = c.relnamespace

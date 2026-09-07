@@ -1,0 +1,3369 @@
+{
+  "generated_at": "2026-09-07T14:29:01.977Z",
+  "source": "QF-20260904-619 -- measured post-fix (schema-reference-snapshot.mjs array_agg(a.attname::text) cast) full sweep via schema-reference-lint.mjs --all --json",
+  "fix": "array_agg(a.attname) returned raw Postgres array-literal TEXT (name[] OID has no node-postgres array parser) instead of a JS array, turning findViolations cols.includes(ref.column) into a substring test instead of exact membership. Cast to ::text (text[] OID IS parsed) fixes it at the source.",
+  "files_checked": 4443,
+  "violation_count": 351,
+  "tables_affected": 110,
+  "violations_by_table": {
+    "chairman_decisions": 8,
+    "ci_cd_pipeline_status": 1,
+    "ci_cd_pipeline_retries": 1,
+    "sub_agent_executions": 5,
+    "product_requirements_v2": 16,
+    "eva_architecture_plans": 3,
+    "eva_vision_documents": 2,
+    "app_rankings": 1,
+    "venture_artifacts": 4,
+    "eva_events_dlq": 6,
+    "_migrations_log": 1,
+    "sd_phase_handoffs": 7,
+    "sub_agent_activations": 2,
+    "human_like_e2e_runs": 1,
+    "human_like_e2e_test_metrics": 1,
+    "human_like_e2e_improvements": 1,
+    "continuous_execution_log": 3,
+    "sd_baseline_items": 5,
+    "leo_hook_feedback": 3,
+    "leo_kb_generation_log": 5,
+    "v_sd_test_readiness": 2,
+    "audit_log": 10,
+    "sub_agent_execution_results": 18,
+    "strategic_directives_v2": 14,
+    "leo_config": 1,
+    "aegis_rules": 2,
+    "leo_error_log": 1,
+    "gate_health_history": 6,
+    "agent_artifacts": 4,
+    "user_stories": 1,
+    "sd_type_validation_profiles": 1,
+    "validation_audit_log": 4,
+    "sd_deliverables": 2,
+    "issue_patterns": 15,
+    "test_runs": 4,
+    "story_test_mappings": 3,
+    "schema_migrations": 2,
+    "leo_compliance_reports": 1,
+    "bypass_ledger": 1,
+    "eva_vision_scores": 1,
+    "venture_separability_snapshots": 2,
+    "leo_session_tracking": 1,
+    "subagent_activations": 1,
+    "test_failures": 1,
+    "prds": 1,
+    "uat_reports": 1,
+    "uat_quality_gates_history": 1,
+    "uat_finding_actions": 2,
+    "venture_telemetry": 1,
+    "leo_proposals": 5,
+    "leo_vetting_rubrics": 9,
+    "generated_docs": 1,
+    "system_events": 28,
+    "agent_messages": 2,
+    "operations_audit_log": 2,
+    "managed_applications": 1,
+    "application_credentials": 1,
+    "genesis_deployments": 2,
+    "session_coordination_archive": 1,
+    "eva_youtube_intake": 1,
+    "claude_sessions": 1,
+    "eva_venture_stages": 2,
+    "venture_resources": 2,
+    "chairman_preferences": 4,
+    "governance_audit_log": 5,
+    "eva_stage_configs": 1,
+    "venture_stages": 3,
+    "venture_asset_registry": 1,
+    "venture_exit_profiles": 2,
+    "leo_prompts": 3,
+    "eva_friday_decisions": 2,
+    "key_results": 2,
+    "sd_key_result_alignment": 11,
+    "objectives": 1,
+    "eva_scheduler_heartbeat": 1,
+    "ventures": 2,
+    "eva_ventures": 1,
+    "quality_finding_patterns": 2,
+    "market_defense_strategies": 1,
+    "feature_coverage": 1,
+    "ops_customer_health_scores": 1,
+    "capital_transactions": 1,
+    "eva_event_log": 3,
+    "venture_legal_overrides": 1,
+    "execute_teams": 1,
+    "compliance_alerts": 2,
+    "venture_stage_work": 10,
+    "sd_impact_analyses": 1,
+    "metrics_poll_state": 2,
+    "marketing_metrics": 2,
+    "optimization_runs": 1,
+    "marketing_campaigns": 12,
+    "marketing_channel_metrics": 2,
+    "marketing_strategy_adjustments": 1,
+    "user_roles": 1,
+    "authz_audit_log": 1,
+    "eva_orchestration_events": 1,
+    "feedback": 4,
+    "session_learning_signals": 2,
+    "leo_validation_rules": 4,
+    "eva_vision_gaps": 5,
+    "eva_score_dimensions": 1,
+    "experiment_outcomes": 3,
+    "conversion_ledger": 1,
+    "human_review_requests": 1,
+    "migrations": 1,
+    "application_sync_history": 1,
+    "test_diagnoses": 1,
+    "vision_qa_sessions": 2,
+    "v_active_sessions": 1
+  },
+  "violations": [
+    {
+      "type": "column",
+      "table": "chairman_decisions",
+      "column": "metadata",
+      "line": 121,
+      "kind": "select",
+      "file": "scripts/decision-audit.js",
+      "embedded": false,
+      "missing": "chairman_decisions.metadata"
+    },
+    {
+      "type": "table",
+      "table": "ci_cd_pipeline_status",
+      "line": 118,
+      "kind": "from",
+      "file": "scripts/devops-platform-architect-enhanced.js",
+      "missing": "ci_cd_pipeline_status"
+    },
+    {
+      "type": "table",
+      "table": "ci_cd_pipeline_retries",
+      "line": 332,
+      "kind": "from",
+      "file": "scripts/devops-platform-architect-enhanced.js",
+      "missing": "ci_cd_pipeline_retries"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_executions",
+      "column": "sd_id",
+      "line": 622,
+      "kind": "insert",
+      "file": "scripts/devops-platform-architect-enhanced.js",
+      "missing": "sub_agent_executions.sd_id"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_executions",
+      "column": "triggered_by",
+      "line": 622,
+      "kind": "insert",
+      "file": "scripts/devops-platform-architect-enhanced.js",
+      "missing": "sub_agent_executions.triggered_by"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "dynamic_checklists",
+      "line": 489,
+      "kind": "update",
+      "file": "scripts/dynamic-checklist-generator.js",
+      "missing": "product_requirements_v2.dynamic_checklists"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "checklist_metadata",
+      "line": 489,
+      "kind": "update",
+      "file": "scripts/dynamic-checklist-generator.js",
+      "missing": "product_requirements_v2.checklist_metadata"
+    },
+    {
+      "type": "column",
+      "table": "eva_architecture_plans",
+      "column": "eva_vision_documents!inner",
+      "line": 284,
+      "kind": "select",
+      "file": "scripts/eva/seed-l1-vision.js",
+      "embedded": true,
+      "missing": "eva_architecture_plans.eva_vision_documents!inner"
+    },
+    {
+      "type": "column",
+      "table": "eva_vision_documents",
+      "column": "metadata",
+      "line": 196,
+      "kind": "select",
+      "file": "scripts/eva/srip/brand-interview.mjs",
+      "embedded": false,
+      "missing": "eva_vision_documents.metadata"
+    },
+    {
+      "type": "column",
+      "table": "eva_architecture_plans",
+      "column": "metadata",
+      "line": 208,
+      "kind": "select",
+      "file": "scripts/eva/srip/brand-interview.mjs",
+      "embedded": false,
+      "missing": "eva_architecture_plans.metadata"
+    },
+    {
+      "type": "column",
+      "table": "app_rankings",
+      "column": "metadata",
+      "line": 72,
+      "kind": "select",
+      "file": "scripts/eva/srip/srip-wireframe-generator.js",
+      "embedded": false,
+      "missing": "app_rankings.metadata"
+    },
+    {
+      "type": "column",
+      "table": "venture_artifacts",
+      "column": "artifact_id",
+      "line": 35,
+      "kind": "upsert",
+      "file": "scripts/eva/srip/venture-integration.mjs",
+      "missing": "venture_artifacts.artifact_id"
+    },
+    {
+      "type": "column",
+      "table": "venture_artifacts",
+      "column": "artifact_id",
+      "line": 91,
+      "kind": "select",
+      "file": "scripts/eva/srip/venture-integration.mjs",
+      "embedded": false,
+      "missing": "venture_artifacts.artifact_id"
+    },
+    {
+      "type": "column",
+      "table": "eva_events_dlq",
+      "column": "original_event_id",
+      "line": 33,
+      "kind": "select",
+      "file": "scripts/eva-dlq-replay.js",
+      "embedded": false,
+      "missing": "eva_events_dlq.original_event_id"
+    },
+    {
+      "type": "column",
+      "table": "eva_events_dlq",
+      "column": "replayed",
+      "line": 33,
+      "kind": "select",
+      "file": "scripts/eva-dlq-replay.js",
+      "embedded": false,
+      "missing": "eva_events_dlq.replayed"
+    },
+    {
+      "type": "column",
+      "table": "eva_events_dlq",
+      "column": "replayed",
+      "line": 129,
+      "kind": "select",
+      "file": "scripts/eva-dlq-replay.js",
+      "embedded": false,
+      "missing": "eva_events_dlq.replayed"
+    },
+    {
+      "type": "column",
+      "table": "eva_events_dlq",
+      "column": "replayed",
+      "line": 47,
+      "kind": "select",
+      "file": "scripts/eva-events-status.js",
+      "embedded": false,
+      "missing": "eva_events_dlq.replayed"
+    },
+    {
+      "type": "table",
+      "table": "_migrations_log",
+      "line": 118,
+      "kind": "from",
+      "file": "scripts/execute-manual-migrations.js",
+      "missing": "_migrations_log"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "last_validation",
+      "line": 534,
+      "kind": "update",
+      "file": "scripts/handoff-validator.js",
+      "missing": "product_requirements_v2.last_validation"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "validation_history",
+      "line": 534,
+      "kind": "update",
+      "file": "scripts/handoff-validator.js",
+      "missing": "product_requirements_v2.validation_history"
+    },
+    {
+      "type": "column",
+      "table": "sd_phase_handoffs",
+      "column": "from_agent",
+      "line": 261,
+      "kind": "insert",
+      "file": "scripts/hook-subagent-activator.js",
+      "missing": "sd_phase_handoffs.from_agent"
+    },
+    {
+      "type": "column",
+      "table": "sd_phase_handoffs",
+      "column": "to_agent",
+      "line": 261,
+      "kind": "insert",
+      "file": "scripts/hook-subagent-activator.js",
+      "missing": "sd_phase_handoffs.to_agent"
+    },
+    {
+      "type": "table",
+      "table": "sub_agent_activations",
+      "line": 466,
+      "kind": "from",
+      "file": "scripts/hook-subagent-activator.js",
+      "missing": "sub_agent_activations"
+    },
+    {
+      "type": "table",
+      "table": "human_like_e2e_runs",
+      "line": 238,
+      "kind": "from",
+      "file": "scripts/human-like-e2e-retrospective.js",
+      "missing": "human_like_e2e_runs"
+    },
+    {
+      "type": "table",
+      "table": "human_like_e2e_test_metrics",
+      "line": 286,
+      "kind": "from",
+      "file": "scripts/human-like-e2e-retrospective.js",
+      "missing": "human_like_e2e_test_metrics"
+    },
+    {
+      "type": "table",
+      "table": "human_like_e2e_improvements",
+      "line": 296,
+      "kind": "from",
+      "file": "scripts/human-like-e2e-retrospective.js",
+      "missing": "human_like_e2e_improvements"
+    },
+    {
+      "type": "column",
+      "table": "continuous_execution_log",
+      "column": "metadata",
+      "line": 250,
+      "kind": "insert",
+      "file": "scripts/leo-continuous.js",
+      "missing": "continuous_execution_log.metadata"
+    },
+    {
+      "type": "column",
+      "table": "continuous_execution_log",
+      "column": "metadata",
+      "line": 283,
+      "kind": "insert",
+      "file": "scripts/leo-continuous.js",
+      "missing": "continuous_execution_log.metadata"
+    },
+    {
+      "type": "column",
+      "table": "continuous_execution_log",
+      "column": "metadata",
+      "line": 301,
+      "kind": "insert",
+      "file": "scripts/leo-continuous.js",
+      "missing": "continuous_execution_log.metadata"
+    },
+    {
+      "type": "column",
+      "table": "sd_baseline_items",
+      "column": "sd_key",
+      "line": 373,
+      "kind": "select",
+      "file": "scripts/leo-continuous.js",
+      "embedded": false,
+      "missing": "sd_baseline_items.sd_key"
+    },
+    {
+      "type": "column",
+      "table": "sd_baseline_items",
+      "column": "sd_key",
+      "line": 373,
+      "kind": "select",
+      "file": "scripts/leo-continuous.js",
+      "embedded": false,
+      "missing": "sd_baseline_items.sd_key"
+    },
+    {
+      "type": "column",
+      "table": "sd_baseline_items",
+      "column": "title",
+      "line": 373,
+      "kind": "select",
+      "file": "scripts/leo-continuous.js",
+      "embedded": false,
+      "missing": "sd_baseline_items.title"
+    },
+    {
+      "type": "column",
+      "table": "sd_baseline_items",
+      "column": "status",
+      "line": 373,
+      "kind": "select",
+      "file": "scripts/leo-continuous.js",
+      "embedded": false,
+      "missing": "sd_baseline_items.status"
+    },
+    {
+      "type": "column",
+      "table": "sd_baseline_items",
+      "column": "current_phase",
+      "line": 373,
+      "kind": "select",
+      "file": "scripts/leo-continuous.js",
+      "embedded": false,
+      "missing": "sd_baseline_items.current_phase"
+    },
+    {
+      "type": "table",
+      "table": "leo_hook_feedback",
+      "line": 322,
+      "kind": "from",
+      "file": "scripts/leo-hook-feedback.js",
+      "missing": "leo_hook_feedback"
+    },
+    {
+      "type": "table",
+      "table": "leo_hook_feedback",
+      "line": 356,
+      "kind": "from",
+      "file": "scripts/leo-hook-feedback.js",
+      "missing": "leo_hook_feedback"
+    },
+    {
+      "type": "table",
+      "table": "leo_hook_feedback",
+      "line": 394,
+      "kind": "from",
+      "file": "scripts/leo-hook-feedback.js",
+      "missing": "leo_hook_feedback"
+    },
+    {
+      "type": "column",
+      "table": "leo_kb_generation_log",
+      "column": "protocol_id",
+      "line": 88,
+      "kind": "insert",
+      "file": "scripts/leo-refresh.js",
+      "missing": "leo_kb_generation_log.protocol_id"
+    },
+    {
+      "type": "column",
+      "table": "leo_kb_generation_log",
+      "column": "files_generated",
+      "line": 88,
+      "kind": "insert",
+      "file": "scripts/leo-refresh.js",
+      "missing": "leo_kb_generation_log.files_generated"
+    },
+    {
+      "type": "column",
+      "table": "leo_kb_generation_log",
+      "column": "generation_trigger",
+      "line": 88,
+      "kind": "insert",
+      "file": "scripts/leo-refresh.js",
+      "missing": "leo_kb_generation_log.generation_trigger"
+    },
+    {
+      "type": "column",
+      "table": "leo_kb_generation_log",
+      "column": "generation_duration_ms",
+      "line": 88,
+      "kind": "insert",
+      "file": "scripts/leo-refresh.js",
+      "missing": "leo_kb_generation_log.generation_duration_ms"
+    },
+    {
+      "type": "column",
+      "table": "leo_kb_generation_log",
+      "column": "generated_by",
+      "line": 88,
+      "kind": "insert",
+      "file": "scripts/leo-refresh.js",
+      "missing": "leo_kb_generation_log.generated_by"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "sections",
+      "line": 202,
+      "kind": "select",
+      "file": "scripts/lib/leo-checkpoint.js",
+      "embedded": false,
+      "missing": "product_requirements_v2.sections"
+    },
+    {
+      "type": "column",
+      "table": "sd_phase_handoffs",
+      "column": "transition_type",
+      "line": 234,
+      "kind": "select",
+      "file": "scripts/lib/leo-checkpoint.js",
+      "embedded": false,
+      "missing": "sd_phase_handoffs.transition_type"
+    },
+    {
+      "type": "table",
+      "table": "v_sd_test_readiness",
+      "line": 390,
+      "kind": "from",
+      "file": "scripts/lib/test-evidence-ingest.js",
+      "missing": "v_sd_test_readiness"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "action",
+      "line": 383,
+      "kind": "insert",
+      "file": "scripts/modules/auto-proceed/reprioritization-engine.js",
+      "missing": "audit_log.action"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "details",
+      "line": 383,
+      "kind": "insert",
+      "file": "scripts/modules/auto-proceed/reprioritization-engine.js",
+      "missing": "audit_log.details"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "sub_agent_id",
+      "line": 1419,
+      "kind": "insert",
+      "file": "scripts/modules/auto-trigger-stories.mjs",
+      "missing": "sub_agent_execution_results.sub_agent_id"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "version",
+      "line": 1419,
+      "kind": "insert",
+      "file": "scripts/modules/auto-trigger-stories.mjs",
+      "missing": "sub_agent_execution_results.version"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "sub_agent_id",
+      "line": 1455,
+      "kind": "insert",
+      "file": "scripts/modules/auto-trigger-stories.mjs",
+      "missing": "sub_agent_execution_results.sub_agent_id"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "version",
+      "line": 1455,
+      "kind": "insert",
+      "file": "scripts/modules/auto-trigger-stories.mjs",
+      "missing": "sub_agent_execution_results.version"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "execution_duration_seconds",
+      "line": 1486,
+      "kind": "update",
+      "file": "scripts/modules/auto-trigger-stories.mjs",
+      "missing": "sub_agent_execution_results.execution_duration_seconds"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "execution_duration_seconds",
+      "line": 1510,
+      "kind": "update",
+      "file": "scripts/modules/auto-trigger-stories.mjs",
+      "missing": "sub_agent_execution_results.execution_duration_seconds"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "phase",
+      "line": 422,
+      "kind": "select",
+      "file": "scripts/modules/decomposition-gate.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.phase"
+    },
+    {
+      "type": "column",
+      "table": "chairman_decisions",
+      "column": "metadata",
+      "line": 263,
+      "kind": "insert",
+      "file": "scripts/modules/governance/cascade-validator.js",
+      "missing": "chairman_decisions.metadata"
+    },
+    {
+      "type": "column",
+      "table": "chairman_decisions",
+      "column": "metadata",
+      "line": 289,
+      "kind": "select",
+      "file": "scripts/modules/governance/cascade-validator.js",
+      "embedded": false,
+      "missing": "chairman_decisions.metadata"
+    },
+    {
+      "type": "table",
+      "table": "leo_config",
+      "line": 23,
+      "kind": "from",
+      "file": "scripts/modules/governance/timeline-violation-handler.js",
+      "missing": "leo_config"
+    },
+    {
+      "type": "column",
+      "table": "aegis_rules",
+      "column": "rule_type",
+      "line": 61,
+      "kind": "select",
+      "file": "scripts/modules/guardrails/guardrail-validator.js",
+      "embedded": false,
+      "missing": "aegis_rules.rule_type"
+    },
+    {
+      "type": "column",
+      "table": "aegis_rules",
+      "column": "enforcement_level",
+      "line": 61,
+      "kind": "select",
+      "file": "scripts/modules/guardrails/guardrail-validator.js",
+      "embedded": false,
+      "missing": "aegis_rules.enforcement_level"
+    },
+    {
+      "type": "column",
+      "table": "chairman_decisions",
+      "column": "metadata",
+      "line": 162,
+      "kind": "insert",
+      "file": "scripts/modules/guardrails/guardrail-validator.js",
+      "missing": "chairman_decisions.metadata"
+    },
+    {
+      "type": "column",
+      "table": "chairman_decisions",
+      "column": "metadata",
+      "line": 188,
+      "kind": "select",
+      "file": "scripts/modules/guardrails/guardrail-validator.js",
+      "embedded": false,
+      "missing": "chairman_decisions.metadata"
+    },
+    {
+      "type": "column",
+      "table": "chairman_decisions",
+      "column": "metadata",
+      "line": 198,
+      "kind": "select",
+      "file": "scripts/modules/guardrails/guardrail-validator.js",
+      "embedded": false,
+      "missing": "chairman_decisions.metadata"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "executed_at",
+      "line": 168,
+      "kind": "select",
+      "file": "scripts/modules/handoff/auto-complete-deliverables.js",
+      "embedded": false,
+      "missing": "sub_agent_execution_results.executed_at"
+    },
+    {
+      "type": "column",
+      "table": "leo_error_log",
+      "column": "handoff_type",
+      "line": 112,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/loc-threshold-validation.js",
+      "missing": "leo_error_log.handoff_type"
+    },
+    {
+      "type": "column",
+      "table": "gate_health_history",
+      "column": "gate_name",
+      "line": 247,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.js",
+      "missing": "gate_health_history.gate_name"
+    },
+    {
+      "type": "column",
+      "table": "gate_health_history",
+      "column": "sd_key",
+      "line": 247,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.js",
+      "missing": "gate_health_history.sd_key"
+    },
+    {
+      "type": "column",
+      "table": "gate_health_history",
+      "column": "score",
+      "line": 247,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.js",
+      "missing": "gate_health_history.score"
+    },
+    {
+      "type": "column",
+      "table": "gate_health_history",
+      "column": "max_score",
+      "line": 247,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.js",
+      "missing": "gate_health_history.max_score"
+    },
+    {
+      "type": "column",
+      "table": "gate_health_history",
+      "column": "passed",
+      "line": 247,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.js",
+      "missing": "gate_health_history.passed"
+    },
+    {
+      "type": "column",
+      "table": "gate_health_history",
+      "column": "metadata",
+      "line": 247,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.js",
+      "missing": "gate_health_history.metadata"
+    },
+    {
+      "type": "column",
+      "table": "agent_artifacts",
+      "column": "title",
+      "line": 81,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/wireframe-qa-validation.js",
+      "embedded": false,
+      "missing": "agent_artifacts.title"
+    },
+    {
+      "type": "column",
+      "table": "agent_artifacts",
+      "column": "artifact_type",
+      "line": 81,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/gates/wireframe-qa-validation.js",
+      "embedded": false,
+      "missing": "agent_artifacts.artifact_type"
+    },
+    {
+      "type": "column",
+      "table": "user_stories",
+      "column": "story_id",
+      "line": 115,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/exec-to-plan/test-evidence.js",
+      "embedded": false,
+      "missing": "user_stories.story_id"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "branch_name",
+      "line": 73,
+      "kind": "update",
+      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/branch-preparation.js",
+      "missing": "strategic_directives_v2.branch_name"
+    },
+    {
+      "type": "column",
+      "table": "eva_architecture_plans",
+      "column": "dimensions",
+      "line": 47,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/architecture-requirement-trace.js",
+      "embedded": false,
+      "missing": "eva_architecture_plans.dimensions"
+    },
+    {
+      "type": "column",
+      "table": "sd_type_validation_profiles",
+      "column": "requires_deliverables_gate",
+      "line": 45,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/deliverables-planning.js",
+      "embedded": false,
+      "missing": "sd_type_validation_profiles.requires_deliverables_gate"
+    },
+    {
+      "type": "column",
+      "table": "validation_audit_log",
+      "column": "sd_key",
+      "line": 761,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/infrastructure-consumer-check.js",
+      "missing": "validation_audit_log.sd_key"
+    },
+    {
+      "type": "column",
+      "table": "validation_audit_log",
+      "column": "gate_name",
+      "line": 761,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/infrastructure-consumer-check.js",
+      "missing": "validation_audit_log.gate_name"
+    },
+    {
+      "type": "column",
+      "table": "validation_audit_log",
+      "column": "action",
+      "line": 761,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/infrastructure-consumer-check.js",
+      "missing": "validation_audit_log.action"
+    },
+    {
+      "type": "column",
+      "table": "validation_audit_log",
+      "column": "details",
+      "line": 761,
+      "kind": "insert",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/infrastructure-consumer-check.js",
+      "missing": "validation_audit_log.details"
+    },
+    {
+      "type": "table",
+      "table": "sd_deliverables",
+      "line": 264,
+      "kind": "from",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/migration-data-verification.js",
+      "missing": "sd_deliverables"
+    },
+    {
+      "type": "column",
+      "table": "agent_artifacts",
+      "column": "artifact_type",
+      "line": 51,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/wireframe-required.js",
+      "embedded": false,
+      "missing": "agent_artifacts.artifact_type"
+    },
+    {
+      "type": "column",
+      "table": "agent_artifacts",
+      "column": "title",
+      "line": 51,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/wireframe-required.js",
+      "embedded": false,
+      "missing": "agent_artifacts.title"
+    },
+    {
+      "type": "column",
+      "table": "sd_phase_handoffs",
+      "column": "score",
+      "line": 477,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/plan-to-exec/index.js",
+      "embedded": false,
+      "missing": "sd_phase_handoffs.score"
+    },
+    {
+      "type": "column",
+      "table": "eva_vision_documents",
+      "column": "title",
+      "line": 135,
+      "kind": "select",
+      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/acceptance-criteria-traceability.js",
+      "embedded": false,
+      "missing": "eva_vision_documents.title"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "pattern_name",
+      "line": 529,
+      "kind": "select",
+      "file": "scripts/modules/handoff/pre-checks/pending-migrations-check.js",
+      "embedded": false,
+      "missing": "issue_patterns.pattern_name"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "resolution_summary",
+      "line": 529,
+      "kind": "select",
+      "file": "scripts/modules/handoff/pre-checks/pending-migrations-check.js",
+      "embedded": false,
+      "missing": "issue_patterns.resolution_summary"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "resolution_steps",
+      "line": 529,
+      "kind": "select",
+      "file": "scripts/modules/handoff/pre-checks/pending-migrations-check.js",
+      "embedded": false,
+      "missing": "issue_patterns.resolution_steps"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "root_cause",
+      "line": 529,
+      "kind": "select",
+      "file": "scripts/modules/handoff/pre-checks/pending-migrations-check.js",
+      "embedded": false,
+      "missing": "issue_patterns.root_cause"
+    },
+    {
+      "type": "column",
+      "table": "sd_phase_handoffs",
+      "column": "quality_score",
+      "line": 653,
+      "kind": "select",
+      "file": "scripts/modules/handoff/retrospective-enricher.js",
+      "embedded": false,
+      "missing": "sd_phase_handoffs.quality_score"
+    },
+    {
+      "type": "column",
+      "table": "sd_phase_handoffs",
+      "column": "handoff_data",
+      "line": 84,
+      "kind": "select",
+      "file": "scripts/modules/handoff/validators/wireframe-qa-validator.js",
+      "embedded": false,
+      "missing": "sd_phase_handoffs.handoff_data"
+    },
+    {
+      "type": "column",
+      "table": "sd_phase_handoffs",
+      "column": "brief_data",
+      "line": 84,
+      "kind": "select",
+      "file": "scripts/modules/handoff/validators/wireframe-qa-validator.js",
+      "embedded": false,
+      "missing": "sd_phase_handoffs.brief_data"
+    },
+    {
+      "type": "table",
+      "table": "sd_deliverables",
+      "line": 101,
+      "kind": "from",
+      "file": "scripts/modules/handoff/validators/wireframe-qa-validator.js",
+      "missing": "sd_deliverables"
+    },
+    {
+      "type": "column",
+      "table": "test_runs",
+      "column": "test_framework",
+      "line": 559,
+      "kind": "select",
+      "file": "scripts/modules/human-verification-validator.js",
+      "embedded": false,
+      "missing": "test_runs.test_framework"
+    },
+    {
+      "type": "column",
+      "table": "test_runs",
+      "column": "commit_sha",
+      "line": 559,
+      "kind": "select",
+      "file": "scripts/modules/human-verification-validator.js",
+      "embedded": false,
+      "missing": "test_runs.commit_sha"
+    },
+    {
+      "type": "column",
+      "table": "test_runs",
+      "column": "ci_url",
+      "line": 559,
+      "kind": "select",
+      "file": "scripts/modules/human-verification-validator.js",
+      "embedded": false,
+      "missing": "test_runs.ci_url"
+    },
+    {
+      "type": "column",
+      "table": "test_runs",
+      "column": "metadata",
+      "line": 559,
+      "kind": "select",
+      "file": "scripts/modules/human-verification-validator.js",
+      "embedded": false,
+      "missing": "test_runs.metadata"
+    },
+    {
+      "type": "column",
+      "table": "story_test_mappings",
+      "column": "story_id",
+      "line": 593,
+      "kind": "select",
+      "file": "scripts/modules/human-verification-validator.js",
+      "embedded": false,
+      "missing": "story_test_mappings.story_id"
+    },
+    {
+      "type": "column",
+      "table": "story_test_mappings",
+      "column": "test_status",
+      "line": 593,
+      "kind": "select",
+      "file": "scripts/modules/human-verification-validator.js",
+      "embedded": false,
+      "missing": "story_test_mappings.test_status"
+    },
+    {
+      "type": "column",
+      "table": "story_test_mappings",
+      "column": "tested_at",
+      "line": 593,
+      "kind": "select",
+      "file": "scripts/modules/human-verification-validator.js",
+      "embedded": false,
+      "missing": "story_test_mappings.tested_at"
+    },
+    {
+      "type": "column",
+      "table": "schema_migrations",
+      "column": "version",
+      "line": 365,
+      "kind": "select",
+      "file": "scripts/modules/implementation-fidelity/sections/database-fidelity.js",
+      "embedded": false,
+      "missing": "schema_migrations.version"
+    },
+    {
+      "type": "column",
+      "table": "schema_migrations",
+      "column": "name",
+      "line": 365,
+      "kind": "select",
+      "file": "scripts/modules/implementation-fidelity/sections/database-fidelity.js",
+      "embedded": false,
+      "missing": "schema_migrations.name"
+    },
+    {
+      "type": "table",
+      "table": "leo_compliance_reports",
+      "line": 83,
+      "kind": "from",
+      "file": "scripts/modules/leo-orchestrator/compliance.js",
+      "missing": "leo_compliance_reports"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "consolidation_type",
+      "line": 27,
+      "kind": "select",
+      "file": "scripts/modules/orchestrator-generators.mjs",
+      "embedded": false,
+      "missing": "strategic_directives_v2.consolidation_type"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "sd_id",
+      "line": 712,
+      "kind": "select",
+      "file": "scripts/modules/rubrics/prd-quality-rubric.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.sd_id"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "problem_statement",
+      "line": 712,
+      "kind": "select",
+      "file": "scripts/modules/rubrics/prd-quality-rubric.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.problem_statement"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "business_context",
+      "line": 712,
+      "kind": "select",
+      "file": "scripts/modules/rubrics/prd-quality-rubric.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.business_context"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "sd_id",
+      "line": 478,
+      "kind": "select",
+      "file": "scripts/modules/rubrics/retrospective-quality-rubric.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.sd_id"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "overview",
+      "line": 461,
+      "kind": "select",
+      "file": "scripts/modules/rubrics/user-story-quality-rubric.js",
+      "embedded": false,
+      "missing": "product_requirements_v2.overview"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "technical_architecture",
+      "line": 461,
+      "kind": "select",
+      "file": "scripts/modules/rubrics/user-story-quality-rubric.js",
+      "embedded": false,
+      "missing": "product_requirements_v2.technical_architecture"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "priority_score",
+      "line": 234,
+      "kind": "update",
+      "file": "scripts/okr-priority-sync.js",
+      "missing": "strategic_directives_v2.priority_score"
+    },
+    {
+      "type": "column",
+      "table": "bypass_ledger",
+      "column": "verb",
+      "line": 74,
+      "kind": "select",
+      "file": "scripts/pocock/glossary-bypass-parity-check.mjs",
+      "embedded": false,
+      "missing": "bypass_ledger.verb"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "count",
+      "line": 191,
+      "kind": "select",
+      "file": "scripts/prd-diagnostic-toolkit.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.count"
+    },
+    {
+      "type": "column",
+      "table": "eva_vision_scores",
+      "column": "archPlanId",
+      "line": 132,
+      "kind": "insert",
+      "file": "scripts/programmatic/vision-scorer.js",
+      "missing": "eva_vision_scores.archPlanId"
+    },
+    {
+      "type": "table",
+      "table": "venture_separability_snapshots",
+      "line": 84,
+      "kind": "from",
+      "file": "scripts/separability-delta.js",
+      "missing": "venture_separability_snapshots"
+    },
+    {
+      "type": "table",
+      "table": "venture_separability_snapshots",
+      "line": 120,
+      "kind": "from",
+      "file": "scripts/separability-delta.js",
+      "missing": "venture_separability_snapshots"
+    },
+    {
+      "type": "table",
+      "table": "leo_session_tracking",
+      "line": 92,
+      "kind": "from",
+      "file": "scripts/session-manager-subagent.js",
+      "missing": "leo_session_tracking"
+    },
+    {
+      "type": "column",
+      "table": "subagent_activations",
+      "column": "agent_type",
+      "line": 545,
+      "kind": "select",
+      "file": "scripts/subagent-enforcement-system.js",
+      "embedded": false,
+      "missing": "subagent_activations.agent_type"
+    },
+    {
+      "type": "table",
+      "table": "sub_agent_activations",
+      "line": 283,
+      "kind": "from",
+      "file": "scripts/test-feedback-loop-integration.js",
+      "missing": "sub_agent_activations"
+    },
+    {
+      "type": "table",
+      "table": "test_failures",
+      "line": 241,
+      "kind": "from",
+      "file": "scripts/test-result-capture.js",
+      "missing": "test_failures"
+    },
+    {
+      "type": "column",
+      "table": "prds",
+      "column": "prd_id",
+      "line": 41,
+      "kind": "select",
+      "file": "scripts/trigger-stories-generation.mjs",
+      "embedded": false,
+      "missing": "prds.prd_id"
+    },
+    {
+      "type": "table",
+      "table": "uat_reports",
+      "line": 119,
+      "kind": "from",
+      "file": "scripts/uat-quality-gate-checker.js",
+      "missing": "uat_reports"
+    },
+    {
+      "type": "table",
+      "table": "uat_quality_gates_history",
+      "line": 344,
+      "kind": "from",
+      "file": "scripts/uat-quality-gate-checker.js",
+      "missing": "uat_quality_gates_history"
+    },
+    {
+      "type": "table",
+      "table": "uat_finding_actions",
+      "line": 439,
+      "kind": "from",
+      "file": "scripts/uat-to-strategic-directive-ai.js",
+      "missing": "uat_finding_actions"
+    },
+    {
+      "type": "table",
+      "table": "uat_finding_actions",
+      "line": 449,
+      "kind": "from",
+      "file": "scripts/uat-to-strategic-directive-ai.js",
+      "missing": "uat_finding_actions"
+    },
+    {
+      "type": "column",
+      "table": "venture_telemetry",
+      "column": "error",
+      "line": 183,
+      "kind": "insert",
+      "file": "scripts/venture-telemetry-pull.mjs",
+      "missing": "venture_telemetry.error"
+    },
+    {
+      "type": "column",
+      "table": "leo_proposals",
+      "column": "created_by",
+      "line": 70,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_proposals.created_by"
+    },
+    {
+      "type": "column",
+      "table": "leo_proposals",
+      "column": "summary",
+      "line": 70,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_proposals.summary"
+    },
+    {
+      "type": "column",
+      "table": "leo_proposals",
+      "column": "motivation",
+      "line": 70,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_proposals.motivation"
+    },
+    {
+      "type": "column",
+      "table": "leo_proposals",
+      "column": "risk_level",
+      "line": 70,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_proposals.risk_level"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "created_by",
+      "line": 123,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.created_by"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "weights",
+      "line": 123,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.weights"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "criteria",
+      "line": 123,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.criteria"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "scoring_scale",
+      "line": 123,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.scoring_scale"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "weights",
+      "line": 156,
+      "kind": "update",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.weights"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "created_by",
+      "line": 177,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.created_by"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "weights",
+      "line": 177,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.weights"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "criteria",
+      "line": 177,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.criteria"
+    },
+    {
+      "type": "column",
+      "table": "leo_vetting_rubrics",
+      "column": "scoring_scale",
+      "line": 177,
+      "kind": "insert",
+      "file": "scripts/verify/leo-data-contracts.js",
+      "missing": "leo_vetting_rubrics.scoring_scale"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "phase",
+      "line": 208,
+      "kind": "update",
+      "file": "scripts/verify-l2p/handoff-execution.js",
+      "missing": "strategic_directives_v2.phase"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "action",
+      "line": 106,
+      "kind": "insert",
+      "file": "scripts/wiring-validators/e2e-demo-recorder.js",
+      "missing": "audit_log.action"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "details",
+      "line": 106,
+      "kind": "insert",
+      "file": "scripts/wiring-validators/e2e-demo-recorder.js",
+      "missing": "audit_log.details"
+    },
+    {
+      "type": "table",
+      "table": "generated_docs",
+      "line": 902,
+      "kind": "from",
+      "file": "scripts/_deprecated/unified-handoff-system.js",
+      "missing": "generated_docs"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "event_source",
+      "line": 112,
+      "kind": "insert",
+      "file": "lib/agents/base-sub-agent/budget-manager.js",
+      "missing": "system_events.event_source"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "severity",
+      "line": 112,
+      "kind": "insert",
+      "file": "lib/agents/base-sub-agent/budget-manager.js",
+      "missing": "system_events.severity"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "event_data",
+      "line": 115,
+      "kind": "insert",
+      "file": "lib/agents/modules/venture-state-machine/handoff-operations.js",
+      "missing": "system_events.event_data"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "metadata",
+      "line": 115,
+      "kind": "insert",
+      "file": "lib/agents/modules/venture-state-machine/handoff-operations.js",
+      "missing": "system_events.metadata"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "event_data",
+      "line": 158,
+      "kind": "insert",
+      "file": "lib/agents/modules/venture-state-machine/handoff-operations.js",
+      "missing": "system_events.event_data"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "metadata",
+      "line": 158,
+      "kind": "insert",
+      "file": "lib/agents/modules/venture-state-machine/handoff-operations.js",
+      "missing": "system_events.metadata"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "event_data",
+      "line": 27,
+      "kind": "insert",
+      "file": "lib/agents/modules/venture-state-machine/truth-layer.js",
+      "missing": "system_events.event_data"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "metadata",
+      "line": 27,
+      "kind": "insert",
+      "file": "lib/agents/modules/venture-state-machine/truth-layer.js",
+      "missing": "system_events.metadata"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "event_data",
+      "line": 75,
+      "kind": "insert",
+      "file": "lib/agents/modules/venture-state-machine/truth-layer.js",
+      "missing": "system_events.event_data"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "metadata",
+      "line": 75,
+      "kind": "insert",
+      "file": "lib/agents/modules/venture-state-machine/truth-layer.js",
+      "missing": "system_events.metadata"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_executions",
+      "column": "strategic_directive_id",
+      "line": 444,
+      "kind": "insert",
+      "file": "lib/agents/parallel-executor.js",
+      "missing": "sub_agent_executions.strategic_directive_id"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_executions",
+      "column": "execution_mode",
+      "line": 444,
+      "kind": "insert",
+      "file": "lib/agents/parallel-executor.js",
+      "missing": "sub_agent_executions.execution_mode"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_executions",
+      "column": "metadata",
+      "line": 444,
+      "kind": "insert",
+      "file": "lib/agents/parallel-executor.js",
+      "missing": "sub_agent_executions.metadata"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "venture_personality",
+      "line": 263,
+      "kind": "select",
+      "file": "lib/agents/plan/styleTagger.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.venture_personality"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "venture_personality",
+      "line": 258,
+      "kind": "update",
+      "file": "lib/agents/plan/styleTagger.js",
+      "missing": "strategic_directives_v2.venture_personality"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "requirements",
+      "line": 314,
+      "kind": "select",
+      "file": "lib/agents/plan-verification-tool.js",
+      "embedded": false,
+      "missing": "product_requirements_v2.requirements"
+    },
+    {
+      "type": "column",
+      "table": "agent_messages",
+      "column": "metadata",
+      "line": 52,
+      "kind": "update",
+      "file": "lib/agents/venture-ceo/helpers.js",
+      "missing": "agent_messages.metadata"
+    },
+    {
+      "type": "column",
+      "table": "agent_messages",
+      "column": "metadata",
+      "line": 69,
+      "kind": "update",
+      "file": "lib/agents/venture-ceo/helpers.js",
+      "missing": "agent_messages.metadata"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "track",
+      "line": 149,
+      "kind": "select",
+      "file": "lib/analysis/scope-complexity-scorer.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.track"
+    },
+    {
+      "type": "column",
+      "table": "operations_audit_log",
+      "column": "operation_type",
+      "line": 303,
+      "kind": "insert",
+      "file": "lib/cleanup/archive.js",
+      "missing": "operations_audit_log.operation_type"
+    },
+    {
+      "type": "column",
+      "table": "operations_audit_log",
+      "column": "details",
+      "line": 303,
+      "kind": "insert",
+      "file": "lib/cleanup/archive.js",
+      "missing": "operations_audit_log.details"
+    },
+    {
+      "type": "table",
+      "table": "managed_applications",
+      "line": 39,
+      "kind": "from",
+      "file": "lib/cleanup/credentials.js",
+      "missing": "managed_applications"
+    },
+    {
+      "type": "table",
+      "table": "application_credentials",
+      "line": 50,
+      "kind": "from",
+      "file": "lib/cleanup/credentials.js",
+      "missing": "application_credentials"
+    },
+    {
+      "type": "column",
+      "table": "genesis_deployments",
+      "column": "deleted",
+      "line": 67,
+      "kind": "update",
+      "file": "lib/cleanup/vercel-provider.js",
+      "missing": "genesis_deployments.deleted"
+    },
+    {
+      "type": "column",
+      "table": "genesis_deployments",
+      "column": "deleted_at",
+      "line": 67,
+      "kind": "update",
+      "file": "lib/cleanup/vercel-provider.js",
+      "missing": "genesis_deployments.deleted_at"
+    },
+    {
+      "type": "column",
+      "table": "strategic_directives_v2",
+      "column": "progress_pct",
+      "line": 436,
+      "kind": "select",
+      "file": "lib/context/unified-state-manager.js",
+      "embedded": false,
+      "missing": "strategic_directives_v2.progress_pct"
+    },
+    {
+      "type": "table",
+      "table": "session_coordination_archive",
+      "line": 39,
+      "kind": "from",
+      "file": "lib/coordination/query-with-archive.cjs",
+      "missing": "session_coordination_archive"
+    },
+    {
+      "type": "column",
+      "table": "eva_youtube_intake",
+      "column": "summary",
+      "line": 70,
+      "kind": "select",
+      "file": "lib/discovery/source-registry.js",
+      "embedded": false,
+      "missing": "eva_youtube_intake.summary"
+    },
+    {
+      "type": "column",
+      "table": "claude_sessions",
+      "column": "error",
+      "line": 128,
+      "kind": "update",
+      "file": "lib/drain-progress.mjs",
+      "missing": "claude_sessions.error"
+    },
+    {
+      "type": "table",
+      "table": "eva_venture_stages",
+      "line": 132,
+      "kind": "from",
+      "file": "lib/eva/analysis-history.js",
+      "missing": "eva_venture_stages"
+    },
+    {
+      "type": "column",
+      "table": "venture_artifacts",
+      "column": "stage_id",
+      "line": 168,
+      "kind": "select",
+      "file": "lib/eva/artifact-versioning.js",
+      "embedded": false,
+      "missing": "venture_artifacts.stage_id"
+    },
+    {
+      "type": "column",
+      "table": "venture_artifacts",
+      "column": "stage_id",
+      "line": 197,
+      "kind": "select",
+      "file": "lib/eva/artifact-versioning.js",
+      "embedded": false,
+      "missing": "venture_artifacts.stage_id"
+    },
+    {
+      "type": "column",
+      "table": "venture_resources",
+      "column": "resource_url",
+      "line": 28,
+      "kind": "select",
+      "file": "lib/eva/bridge/github-sync-watcher.js",
+      "embedded": false,
+      "missing": "venture_resources.resource_url"
+    },
+    {
+      "type": "column",
+      "table": "venture_resources",
+      "column": "resource_url",
+      "line": 223,
+      "kind": "select",
+      "file": "lib/eva/bridge/replit-prompt-formatter.js",
+      "embedded": false,
+      "missing": "venture_resources.resource_url"
+    },
+    {
+      "type": "column",
+      "table": "chairman_decisions",
+      "column": "metadata",
+      "line": 176,
+      "kind": "update",
+      "file": "lib/eva/chairman-decision-timeout.js",
+      "missing": "chairman_decisions.metadata"
+    },
+    {
+      "type": "column",
+      "table": "chairman_preferences",
+      "column": "key",
+      "line": 150,
+      "kind": "upsert",
+      "file": "lib/eva/chairman-dfe-feedback-loop.js",
+      "missing": "chairman_preferences.key"
+    },
+    {
+      "type": "column",
+      "table": "chairman_preferences",
+      "column": "value",
+      "line": 150,
+      "kind": "upsert",
+      "file": "lib/eva/chairman-dfe-feedback-loop.js",
+      "missing": "chairman_preferences.value"
+    },
+    {
+      "type": "column",
+      "table": "chairman_preferences",
+      "column": "key",
+      "line": 223,
+      "kind": "select",
+      "file": "lib/eva/chairman-dfe-feedback-loop.js",
+      "embedded": false,
+      "missing": "chairman_preferences.key"
+    },
+    {
+      "type": "column",
+      "table": "chairman_preferences",
+      "column": "value",
+      "line": 223,
+      "kind": "select",
+      "file": "lib/eva/chairman-dfe-feedback-loop.js",
+      "embedded": false,
+      "missing": "chairman_preferences.value"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "emitted",
+      "line": 78,
+      "kind": "insert",
+      "file": "lib/eva/contracts/contract-coverage.js",
+      "missing": "audit_log.emitted"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "reason",
+      "line": 78,
+      "kind": "insert",
+      "file": "lib/eva/contracts/contract-coverage.js",
+      "missing": "audit_log.reason"
+    },
+    {
+      "type": "column",
+      "table": "eva_events_dlq",
+      "column": "replayed",
+      "line": 93,
+      "kind": "select",
+      "file": "lib/eva/error-recovery-orchestrator.js",
+      "embedded": false,
+      "missing": "eva_events_dlq.replayed"
+    },
+    {
+      "type": "column",
+      "table": "eva_events_dlq",
+      "column": "replayed",
+      "line": 177,
+      "kind": "select",
+      "file": "lib/eva/error-recovery-orchestrator.js",
+      "embedded": false,
+      "missing": "eva_events_dlq.replayed"
+    },
+    {
+      "type": "column",
+      "table": "governance_audit_log",
+      "column": "event_type",
+      "line": 70,
+      "kind": "insert",
+      "file": "lib/eva/event-bus/handlers/budget-exceeded.js",
+      "missing": "governance_audit_log.event_type"
+    },
+    {
+      "type": "column",
+      "table": "governance_audit_log",
+      "column": "severity",
+      "line": 70,
+      "kind": "insert",
+      "file": "lib/eva/event-bus/handlers/budget-exceeded.js",
+      "missing": "governance_audit_log.severity"
+    },
+    {
+      "type": "column",
+      "table": "governance_audit_log",
+      "column": "gate_name",
+      "line": 70,
+      "kind": "insert",
+      "file": "lib/eva/event-bus/handlers/budget-exceeded.js",
+      "missing": "governance_audit_log.gate_name"
+    },
+    {
+      "type": "column",
+      "table": "governance_audit_log",
+      "column": "sd_key",
+      "line": 70,
+      "kind": "insert",
+      "file": "lib/eva/event-bus/handlers/budget-exceeded.js",
+      "missing": "governance_audit_log.sd_key"
+    },
+    {
+      "type": "column",
+      "table": "governance_audit_log",
+      "column": "details",
+      "line": 70,
+      "kind": "insert",
+      "file": "lib/eva/event-bus/handlers/budget-exceeded.js",
+      "missing": "governance_audit_log.details"
+    },
+    {
+      "type": "table",
+      "table": "eva_stage_configs",
+      "line": 96,
+      "kind": "from",
+      "file": "lib/eva/event-bus/handlers/stage-completed.js",
+      "missing": "eva_stage_configs"
+    },
+    {
+      "type": "column",
+      "table": "venture_stages",
+      "column": "id",
+      "line": 110,
+      "kind": "select",
+      "file": "lib/eva/event-bus/handlers/stage-completed.js",
+      "embedded": false,
+      "missing": "venture_stages.id"
+    },
+    {
+      "type": "column",
+      "table": "venture_stages",
+      "column": "name",
+      "line": 110,
+      "kind": "select",
+      "file": "lib/eva/event-bus/handlers/stage-completed.js",
+      "embedded": false,
+      "missing": "venture_stages.name"
+    },
+    {
+      "type": "column",
+      "table": "venture_stages",
+      "column": "status",
+      "line": 110,
+      "kind": "select",
+      "file": "lib/eva/event-bus/handlers/stage-completed.js",
+      "embedded": false,
+      "missing": "venture_stages.status"
+    },
+    {
+      "type": "column",
+      "table": "venture_asset_registry",
+      "column": "metadata",
+      "line": 63,
+      "kind": "select",
+      "file": "lib/eva/exit/separation-rehearsal.js",
+      "embedded": false,
+      "missing": "venture_asset_registry.metadata"
+    },
+    {
+      "type": "column",
+      "table": "venture_exit_profiles",
+      "column": "exit_type",
+      "line": 77,
+      "kind": "select",
+      "file": "lib/eva/exit/separation-rehearsal.js",
+      "embedded": false,
+      "missing": "venture_exit_profiles.exit_type"
+    },
+    {
+      "type": "column",
+      "table": "venture_exit_profiles",
+      "column": "target_timeline",
+      "line": 77,
+      "kind": "select",
+      "file": "lib/eva/exit/separation-rehearsal.js",
+      "embedded": false,
+      "missing": "venture_exit_profiles.target_timeline"
+    },
+    {
+      "type": "column",
+      "table": "leo_prompts",
+      "column": "content",
+      "line": 68,
+      "kind": "insert",
+      "file": "lib/eva/experiments/meta-optimizer.js",
+      "missing": "leo_prompts.content"
+    },
+    {
+      "type": "column",
+      "table": "leo_prompts",
+      "column": "is_active",
+      "line": 68,
+      "kind": "insert",
+      "file": "lib/eva/experiments/meta-optimizer.js",
+      "missing": "leo_prompts.is_active"
+    },
+    {
+      "type": "column",
+      "table": "leo_prompts",
+      "column": "content",
+      "line": 128,
+      "kind": "select",
+      "file": "lib/eva/experiments/meta-optimizer.js",
+      "embedded": false,
+      "missing": "leo_prompts.content"
+    },
+    {
+      "type": "column",
+      "table": "eva_friday_decisions",
+      "column": "title",
+      "line": 78,
+      "kind": "select",
+      "file": "lib/eva/friday-chat-mode.js",
+      "embedded": false,
+      "missing": "eva_friday_decisions.title"
+    },
+    {
+      "type": "column",
+      "table": "eva_friday_decisions",
+      "column": "status",
+      "line": 78,
+      "kind": "select",
+      "file": "lib/eva/friday-chat-mode.js",
+      "embedded": false,
+      "missing": "eva_friday_decisions.status"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "pattern_key",
+      "line": 93,
+      "kind": "select",
+      "file": "lib/eva/friday-chat-mode.js",
+      "embedded": false,
+      "missing": "issue_patterns.pattern_key"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "description",
+      "line": 93,
+      "kind": "select",
+      "file": "lib/eva/friday-chat-mode.js",
+      "embedded": false,
+      "missing": "issue_patterns.description"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "frequency",
+      "line": 93,
+      "kind": "select",
+      "file": "lib/eva/friday-chat-mode.js",
+      "embedded": false,
+      "missing": "issue_patterns.frequency"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "pattern_description",
+      "line": 330,
+      "kind": "select",
+      "file": "lib/eva/jobs/okr-monthly-generator.js",
+      "embedded": false,
+      "missing": "issue_patterns.pattern_description"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "frequency_count",
+      "line": 330,
+      "kind": "select",
+      "file": "lib/eva/jobs/okr-monthly-generator.js",
+      "embedded": false,
+      "missing": "issue_patterns.frequency_count"
+    },
+    {
+      "type": "column",
+      "table": "key_results",
+      "column": "objectives!inner",
+      "line": 98,
+      "kind": "select",
+      "file": "lib/eva/jobs/okr-stale-kr-sd-creator.js",
+      "embedded": true,
+      "missing": "key_results.objectives!inner"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "strategic_directives_v2!inner",
+      "line": 123,
+      "kind": "select",
+      "file": "lib/eva/jobs/okr-stale-kr-sd-creator.js",
+      "embedded": true,
+      "missing": "sd_key_result_alignment.strategic_directives_v2!inner"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "strategic_directives_v2!inner",
+      "line": 52,
+      "kind": "select",
+      "file": "lib/eva/kr-reality-checker.js",
+      "embedded": true,
+      "missing": "sd_key_result_alignment.strategic_directives_v2!inner"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "key_results!inner",
+      "line": 148,
+      "kind": "select",
+      "file": "lib/eva/kr-reality-checker.js",
+      "embedded": true,
+      "missing": "sd_key_result_alignment.key_results!inner"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "code",
+      "line": 148,
+      "kind": "select",
+      "file": "lib/eva/kr-reality-checker.js",
+      "embedded": false,
+      "missing": "sd_key_result_alignment.code"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "title",
+      "line": 148,
+      "kind": "select",
+      "file": "lib/eva/kr-reality-checker.js",
+      "embedded": false,
+      "missing": "sd_key_result_alignment.title"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "current_value",
+      "line": 148,
+      "kind": "select",
+      "file": "lib/eva/kr-reality-checker.js",
+      "embedded": false,
+      "missing": "sd_key_result_alignment.current_value"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "target_value",
+      "line": 148,
+      "kind": "select",
+      "file": "lib/eva/kr-reality-checker.js",
+      "embedded": false,
+      "missing": "sd_key_result_alignment.target_value"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "baseline_value",
+      "line": 148,
+      "kind": "select",
+      "file": "lib/eva/kr-reality-checker.js",
+      "embedded": false,
+      "missing": "sd_key_result_alignment.baseline_value"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "unit",
+      "line": 148,
+      "kind": "select",
+      "file": "lib/eva/kr-reality-checker.js",
+      "embedded": false,
+      "missing": "sd_key_result_alignment.unit"
+    },
+    {
+      "type": "column",
+      "table": "objectives",
+      "column": "status",
+      "line": 30,
+      "kind": "select",
+      "file": "lib/eva/okr-cascade-resolver.js",
+      "embedded": false,
+      "missing": "objectives.status"
+    },
+    {
+      "type": "column",
+      "table": "key_results",
+      "column": "metric_name",
+      "line": 47,
+      "kind": "select",
+      "file": "lib/eva/okr-cascade-resolver.js",
+      "embedded": false,
+      "missing": "key_results.metric_name"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "alignment_weight",
+      "line": 62,
+      "kind": "select",
+      "file": "lib/eva/okr-cascade-resolver.js",
+      "embedded": false,
+      "missing": "sd_key_result_alignment.alignment_weight"
+    },
+    {
+      "type": "column",
+      "table": "sd_key_result_alignment",
+      "column": "alignment_weight",
+      "line": 48,
+      "kind": "select",
+      "file": "lib/eva/okr-priority-integrator.js",
+      "embedded": false,
+      "missing": "sd_key_result_alignment.alignment_weight"
+    },
+    {
+      "type": "column",
+      "table": "eva_scheduler_heartbeat",
+      "column": "last_heartbeat",
+      "line": 140,
+      "kind": "select",
+      "file": "lib/eva/operations/index.js",
+      "embedded": false,
+      "missing": "eva_scheduler_heartbeat.last_heartbeat"
+    },
+    {
+      "type": "column",
+      "table": "ventures",
+      "column": "completed_at",
+      "line": 262,
+      "kind": "update",
+      "file": "lib/eva/orchestrator-state-machine.js",
+      "missing": "ventures.completed_at"
+    },
+    {
+      "type": "column",
+      "table": "eva_ventures",
+      "column": "metadata",
+      "line": 327,
+      "kind": "update",
+      "file": "lib/eva/post-lifecycle-decisions.js",
+      "missing": "eva_ventures.metadata"
+    },
+    {
+      "type": "table",
+      "table": "quality_finding_patterns",
+      "line": 169,
+      "kind": "from",
+      "file": "lib/eva/quality-findings/aggregator.js",
+      "missing": "quality_finding_patterns"
+    },
+    {
+      "type": "table",
+      "table": "quality_finding_patterns",
+      "line": 183,
+      "kind": "from",
+      "file": "lib/eva/quality-findings/aggregator.js",
+      "missing": "quality_finding_patterns"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "details",
+      "line": 102,
+      "kind": "insert",
+      "file": "lib/eva/quality-findings/capability-gate.js",
+      "missing": "audit_log.details"
+    },
+    {
+      "type": "table",
+      "table": "market_defense_strategies",
+      "line": 142,
+      "kind": "from",
+      "file": "lib/eva/services/competitive-intelligence.js",
+      "missing": "market_defense_strategies"
+    },
+    {
+      "type": "table",
+      "table": "feature_coverage",
+      "line": 168,
+      "kind": "from",
+      "file": "lib/eva/services/competitive-intelligence.js",
+      "missing": "feature_coverage"
+    },
+    {
+      "type": "column",
+      "table": "ops_customer_health_scores",
+      "column": "health_score",
+      "line": 127,
+      "kind": "select",
+      "file": "lib/eva/services/friday-scorecard.js",
+      "embedded": false,
+      "missing": "ops_customer_health_scores.health_score"
+    },
+    {
+      "type": "column",
+      "table": "capital_transactions",
+      "column": "status",
+      "line": 44,
+      "kind": "select",
+      "file": "lib/eva/services/ops-revenue-collector.js",
+      "embedded": false,
+      "missing": "capital_transactions.status"
+    },
+    {
+      "type": "table",
+      "table": "eva_venture_stages",
+      "line": 77,
+      "kind": "from",
+      "file": "lib/eva/shared-services.js",
+      "missing": "eva_venture_stages"
+    },
+    {
+      "type": "column",
+      "table": "eva_event_log",
+      "column": "payload",
+      "line": 117,
+      "kind": "insert",
+      "file": "lib/eva/shared-services.js",
+      "missing": "eva_event_log.payload"
+    },
+    {
+      "type": "column",
+      "table": "chairman_decisions",
+      "column": "resolved_at",
+      "line": 512,
+      "kind": "update",
+      "file": "lib/eva/stage-templates/analysis-steps/stage-17-blueprint-review.js",
+      "missing": "chairman_decisions.resolved_at"
+    },
+    {
+      "type": "column",
+      "table": "venture_legal_overrides",
+      "column": "legal_templates!inner",
+      "line": 128,
+      "kind": "select",
+      "file": "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js",
+      "embedded": true,
+      "missing": "venture_legal_overrides.legal_templates!inner"
+    },
+    {
+      "type": "column",
+      "table": "eva_event_log",
+      "column": "severity",
+      "line": 179,
+      "kind": "insert",
+      "file": "lib/eva/unified-escalation-router.js",
+      "missing": "eva_event_log.severity"
+    },
+    {
+      "type": "column",
+      "table": "eva_event_log",
+      "column": "severity",
+      "line": 244,
+      "kind": "select",
+      "file": "lib/eva/unified-escalation-router.js",
+      "embedded": false,
+      "missing": "eva_event_log.severity"
+    },
+    {
+      "type": "column",
+      "table": "execute_teams",
+      "column": "error",
+      "line": 149,
+      "kind": "update",
+      "file": "lib/execute/execute-team-factory.mjs",
+      "missing": "execute_teams.error"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "event",
+      "line": 449,
+      "kind": "insert",
+      "file": "lib/gates/operator-contract/harness-adapter.js",
+      "missing": "audit_log.event"
+    },
+    {
+      "type": "column",
+      "table": "compliance_alerts",
+      "column": "oath",
+      "line": 507,
+      "kind": "insert",
+      "file": "lib/governance/four-oaths-enforcement.js",
+      "missing": "compliance_alerts.oath"
+    },
+    {
+      "type": "column",
+      "table": "compliance_alerts",
+      "column": "details",
+      "line": 507,
+      "kind": "insert",
+      "file": "lib/governance/four-oaths-enforcement.js",
+      "missing": "compliance_alerts.details"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "category",
+      "line": 332,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.category"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "severity",
+      "line": 332,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.severity"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "message",
+      "line": 332,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.message"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "metadata",
+      "line": 332,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.metadata"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "category",
+      "line": 443,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.category"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "severity",
+      "line": 443,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.severity"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "message",
+      "line": 443,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.message"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "metadata",
+      "line": 443,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.metadata"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "category",
+      "line": 559,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.category"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "severity",
+      "line": 559,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.severity"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "message",
+      "line": 559,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.message"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "metadata",
+      "line": 559,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.metadata"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "category",
+      "line": 625,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.category"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "severity",
+      "line": 625,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.severity"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "message",
+      "line": 625,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.message"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "metadata",
+      "line": 625,
+      "kind": "insert",
+      "file": "lib/governance/manifesto-mode.js",
+      "missing": "system_events.metadata"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "calibration_delta_raw",
+      "line": 339,
+      "kind": "update",
+      "file": "lib/governance/portfolio-calibrator.js",
+      "missing": "venture_stage_work.calibration_delta_raw"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "calibration_delta_normalized",
+      "line": 339,
+      "kind": "update",
+      "file": "lib/governance/portfolio-calibrator.js",
+      "missing": "venture_stage_work.calibration_delta_normalized"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "vertical_category",
+      "line": 339,
+      "kind": "update",
+      "file": "lib/governance/portfolio-calibrator.js",
+      "missing": "venture_stage_work.vertical_category"
+    },
+    {
+      "type": "table",
+      "table": "sd_impact_analyses",
+      "line": 347,
+      "kind": "from",
+      "file": "lib/intelligent-impact-analyzer.js",
+      "missing": "sd_impact_analyses"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "last_seen",
+      "line": 279,
+      "kind": "update",
+      "file": "lib/learning/pattern-to-subagent-mapper.js",
+      "missing": "issue_patterns.last_seen"
+    },
+    {
+      "type": "table",
+      "table": "metrics_poll_state",
+      "line": 49,
+      "kind": "from",
+      "file": "lib/marketing/ai/metrics-ingestor.js",
+      "missing": "metrics_poll_state"
+    },
+    {
+      "type": "table",
+      "table": "marketing_metrics",
+      "line": 90,
+      "kind": "from",
+      "file": "lib/marketing/ai/metrics-ingestor.js",
+      "missing": "marketing_metrics"
+    },
+    {
+      "type": "table",
+      "table": "metrics_poll_state",
+      "line": 98,
+      "kind": "from",
+      "file": "lib/marketing/ai/metrics-ingestor.js",
+      "missing": "metrics_poll_state"
+    },
+    {
+      "type": "table",
+      "table": "marketing_metrics",
+      "line": 155,
+      "kind": "from",
+      "file": "lib/marketing/ai/metrics-ingestor.js",
+      "missing": "marketing_metrics"
+    },
+    {
+      "type": "table",
+      "table": "optimization_runs",
+      "line": 198,
+      "kind": "from",
+      "file": "lib/marketing/ai/optimization-loop.js",
+      "missing": "optimization_runs"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "channel",
+      "line": 71,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.channel"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "budget",
+      "line": 71,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.budget"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "spend",
+      "line": 71,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.spend"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "impressions",
+      "line": 71,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.impressions"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "clicks",
+      "line": 71,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.clicks"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "conversions",
+      "line": 71,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.conversions"
+    },
+    {
+      "type": "table",
+      "table": "marketing_channel_metrics",
+      "line": 120,
+      "kind": "from",
+      "file": "lib/marketing/dashboard.js",
+      "missing": "marketing_channel_metrics"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "channel",
+      "line": 146,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.channel"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "budget",
+      "line": 146,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.budget"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "spend",
+      "line": 146,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.spend"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "impressions",
+      "line": 146,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.impressions"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "clicks",
+      "line": 146,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.clicks"
+    },
+    {
+      "type": "column",
+      "table": "marketing_campaigns",
+      "column": "conversions",
+      "line": 146,
+      "kind": "select",
+      "file": "lib/marketing/dashboard.js",
+      "embedded": false,
+      "missing": "marketing_campaigns.conversions"
+    },
+    {
+      "type": "table",
+      "table": "marketing_channel_metrics",
+      "line": 171,
+      "kind": "from",
+      "file": "lib/marketing/feedback-loop.js",
+      "missing": "marketing_channel_metrics"
+    },
+    {
+      "type": "table",
+      "table": "marketing_strategy_adjustments",
+      "line": 205,
+      "kind": "from",
+      "file": "lib/marketing/feedback-loop.js",
+      "missing": "marketing_strategy_adjustments"
+    },
+    {
+      "type": "table",
+      "table": "user_roles",
+      "line": 85,
+      "kind": "from",
+      "file": "lib/middleware/rbac.ts",
+      "missing": "user_roles"
+    },
+    {
+      "type": "table",
+      "table": "authz_audit_log",
+      "line": 248,
+      "kind": "from",
+      "file": "lib/middleware/rbac.ts",
+      "missing": "authz_audit_log"
+    },
+    {
+      "type": "column",
+      "table": "eva_orchestration_events",
+      "column": "id",
+      "line": 416,
+      "kind": "select",
+      "file": "lib/notifications/orchestrator.js",
+      "embedded": false,
+      "missing": "eva_orchestration_events.id"
+    },
+    {
+      "type": "column",
+      "table": "feedback",
+      "column": "ignored_by_pattern_id",
+      "line": 239,
+      "kind": "update",
+      "file": "lib/quality/ignore-patterns.js",
+      "missing": "feedback.ignored_by_pattern_id"
+    },
+    {
+      "type": "column",
+      "table": "feedback",
+      "column": "ignore_reason",
+      "line": 239,
+      "kind": "update",
+      "file": "lib/quality/ignore-patterns.js",
+      "missing": "feedback.ignore_reason"
+    },
+    {
+      "type": "column",
+      "table": "feedback",
+      "column": "assigned_at",
+      "line": 184,
+      "kind": "update",
+      "file": "lib/quality/triage-engine.js",
+      "missing": "feedback.assigned_at"
+    },
+    {
+      "type": "column",
+      "table": "feedback",
+      "column": "assignment_reason",
+      "line": 184,
+      "kind": "update",
+      "file": "lib/quality/triage-engine.js",
+      "missing": "feedback.assignment_reason"
+    },
+    {
+      "type": "table",
+      "table": "session_learning_signals",
+      "line": 150,
+      "kind": "from",
+      "file": "lib/retrospective-signals/storage.js",
+      "missing": "session_learning_signals"
+    },
+    {
+      "type": "table",
+      "table": "session_learning_signals",
+      "line": 193,
+      "kind": "from",
+      "file": "lib/retrospective-signals/storage.js",
+      "missing": "session_learning_signals"
+    },
+    {
+      "type": "column",
+      "table": "leo_validation_rules",
+      "column": "rule_code",
+      "line": 130,
+      "kind": "select",
+      "file": "lib/self-audit/routines/orphanRules.js",
+      "embedded": false,
+      "missing": "leo_validation_rules.rule_code"
+    },
+    {
+      "type": "column",
+      "table": "leo_validation_rules",
+      "column": "rule_type",
+      "line": 130,
+      "kind": "select",
+      "file": "lib/self-audit/routines/orphanRules.js",
+      "embedded": false,
+      "missing": "leo_validation_rules.rule_type"
+    },
+    {
+      "type": "column",
+      "table": "leo_validation_rules",
+      "column": "description",
+      "line": 130,
+      "kind": "select",
+      "file": "lib/self-audit/routines/orphanRules.js",
+      "embedded": false,
+      "missing": "leo_validation_rules.description"
+    },
+    {
+      "type": "column",
+      "table": "leo_validation_rules",
+      "column": "is_active",
+      "line": 130,
+      "kind": "select",
+      "file": "lib/self-audit/routines/orphanRules.js",
+      "embedded": false,
+      "missing": "leo_validation_rules.is_active"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "pattern_key",
+      "line": 70,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "issue_patterns.pattern_key"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "title",
+      "line": 70,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "issue_patterns.title"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "resolution",
+      "line": 70,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "issue_patterns.resolution"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "first_seen",
+      "line": 70,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "issue_patterns.first_seen"
+    },
+    {
+      "type": "column",
+      "table": "issue_patterns",
+      "column": "last_seen",
+      "line": 70,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "issue_patterns.last_seen"
+    },
+    {
+      "type": "column",
+      "table": "eva_vision_gaps",
+      "column": "dimension_label",
+      "line": 113,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "eva_vision_gaps.dimension_label"
+    },
+    {
+      "type": "column",
+      "table": "eva_vision_gaps",
+      "column": "current_score",
+      "line": 113,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "eva_vision_gaps.current_score"
+    },
+    {
+      "type": "column",
+      "table": "eva_vision_gaps",
+      "column": "target_score",
+      "line": 113,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "eva_vision_gaps.target_score"
+    },
+    {
+      "type": "column",
+      "table": "eva_vision_gaps",
+      "column": "gap_severity",
+      "line": 113,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "eva_vision_gaps.gap_severity"
+    },
+    {
+      "type": "column",
+      "table": "eva_vision_gaps",
+      "column": "corrective_sd_key",
+      "line": 113,
+      "kind": "select",
+      "file": "lib/services/dfe-escalation-service.js",
+      "embedded": false,
+      "missing": "eva_vision_gaps.corrective_sd_key"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "event_source",
+      "line": 152,
+      "kind": "insert",
+      "file": "lib/services/sovereign-alert.js",
+      "missing": "system_events.event_source"
+    },
+    {
+      "type": "column",
+      "table": "system_events",
+      "column": "severity",
+      "line": 152,
+      "kind": "insert",
+      "file": "lib/services/sovereign-alert.js",
+      "missing": "system_events.severity"
+    },
+    {
+      "type": "table",
+      "table": "eva_score_dimensions",
+      "line": 20,
+      "kind": "from",
+      "file": "lib/skunkworks/signal-readers/calibration.js",
+      "missing": "eva_score_dimensions"
+    },
+    {
+      "type": "column",
+      "table": "experiment_outcomes",
+      "column": "synthesis_score",
+      "line": 37,
+      "kind": "select",
+      "file": "lib/skunkworks/signal-readers/calibration.js",
+      "embedded": false,
+      "missing": "experiment_outcomes.synthesis_score"
+    },
+    {
+      "type": "column",
+      "table": "experiment_outcomes",
+      "column": "dimension_scores",
+      "line": 37,
+      "kind": "select",
+      "file": "lib/skunkworks/signal-readers/calibration.js",
+      "embedded": false,
+      "missing": "experiment_outcomes.dimension_scores"
+    },
+    {
+      "type": "column",
+      "table": "experiment_outcomes",
+      "column": "created_at",
+      "line": 37,
+      "kind": "select",
+      "file": "lib/skunkworks/signal-readers/calibration.js",
+      "embedded": false,
+      "missing": "experiment_outcomes.created_at"
+    },
+    {
+      "type": "column",
+      "table": "ventures",
+      "column": "current_stage",
+      "line": 26,
+      "kind": "select",
+      "file": "lib/skunkworks/signals/venture-portfolio-reader.js",
+      "embedded": false,
+      "missing": "ventures.current_stage"
+    },
+    {
+      "type": "column",
+      "table": "conversion_ledger",
+      "column": "rung",
+      "line": 225,
+      "kind": "select",
+      "file": "lib/sourcing-engine/dedup-autostamp.js",
+      "embedded": false,
+      "missing": "conversion_ledger.rung"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "artifacts",
+      "line": 167,
+      "kind": "select",
+      "file": "lib/sub-agents/financial.js",
+      "embedded": false,
+      "missing": "venture_stage_work.artifacts"
+    },
+    {
+      "type": "table",
+      "table": "human_review_requests",
+      "line": 481,
+      "kind": "from",
+      "file": "lib/sub-agents/judge/index.js",
+      "missing": "human_review_requests"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "action",
+      "line": 610,
+      "kind": "insert",
+      "file": "lib/sub-agents/judge/index.js",
+      "missing": "audit_log.action"
+    },
+    {
+      "type": "column",
+      "table": "audit_log",
+      "column": "details",
+      "line": 610,
+      "kind": "insert",
+      "file": "lib/sub-agents/judge/index.js",
+      "missing": "audit_log.details"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "stage_id",
+      "line": 177,
+      "kind": "select",
+      "file": "lib/sub-agents/marketing.js",
+      "embedded": false,
+      "missing": "venture_stage_work.stage_id"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "artifacts",
+      "line": 177,
+      "kind": "select",
+      "file": "lib/sub-agents/marketing.js",
+      "embedded": false,
+      "missing": "venture_stage_work.artifacts"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "artifacts",
+      "line": 136,
+      "kind": "select",
+      "file": "lib/sub-agents/pricing.js",
+      "embedded": false,
+      "missing": "venture_stage_work.artifacts"
+    },
+    {
+      "type": "table",
+      "table": "migrations",
+      "line": 56,
+      "kind": "from",
+      "file": "lib/sub-agents/testing/phases/phase1-preflight.js",
+      "missing": "migrations"
+    },
+    {
+      "type": "column",
+      "table": "leo_proposals",
+      "column": "aegis_compliance_notes",
+      "line": 705,
+      "kind": "update",
+      "file": "lib/sub-agents/vetting/index.js",
+      "missing": "leo_proposals.aegis_compliance_notes"
+    },
+    {
+      "type": "table",
+      "table": "application_sync_history",
+      "line": 44,
+      "kind": "from",
+      "file": "lib/sync/sync-manager.js",
+      "missing": "application_sync_history"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "status",
+      "line": 279,
+      "kind": "update",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.status"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "output_summary",
+      "line": 279,
+      "kind": "update",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.output_summary"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "execution_time_ms",
+      "line": 279,
+      "kind": "update",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.execution_time_ms"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "completed_at",
+      "line": 279,
+      "kind": "update",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.completed_at"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "error_message",
+      "line": 344,
+      "kind": "update",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.error_message"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "execution_time_ms",
+      "line": 344,
+      "kind": "update",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.execution_time_ms"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "completed_at",
+      "line": 344,
+      "kind": "update",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.completed_at"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "agent_code",
+      "line": 528,
+      "kind": "upsert",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.agent_code"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "status",
+      "line": 528,
+      "kind": "upsert",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.status"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "output_summary",
+      "line": 528,
+      "kind": "upsert",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.output_summary"
+    },
+    {
+      "type": "column",
+      "table": "sub_agent_execution_results",
+      "column": "completed_at",
+      "line": 528,
+      "kind": "upsert",
+      "file": "lib/tasks/subagent-orchestrator.js",
+      "missing": "sub_agent_execution_results.completed_at"
+    },
+    {
+      "type": "table",
+      "table": "v_sd_test_readiness",
+      "line": 390,
+      "kind": "from",
+      "file": "lib/test-evidence-ingest.js",
+      "missing": "v_sd_test_readiness"
+    },
+    {
+      "type": "table",
+      "table": "test_diagnoses",
+      "line": 423,
+      "kind": "from",
+      "file": "lib/testing/enhanced-testing-debugging/debugging-sub-agent.js",
+      "missing": "test_diagnoses"
+    },
+    {
+      "type": "table",
+      "table": "vision_qa_sessions",
+      "line": 326,
+      "kind": "from",
+      "file": "lib/testing/vision-qa-agent.js",
+      "missing": "vision_qa_sessions"
+    },
+    {
+      "type": "table",
+      "table": "vision_qa_sessions",
+      "line": 427,
+      "kind": "from",
+      "file": "lib/testing/vision-qa-agent.js",
+      "missing": "vision_qa_sessions"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "validation_status",
+      "line": 278,
+      "kind": "update",
+      "file": "lib/validation/validation-gate-enforcer.js",
+      "missing": "product_requirements_v2.validation_status"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "validation_blocker",
+      "line": 278,
+      "kind": "update",
+      "file": "lib/validation/validation-gate-enforcer.js",
+      "missing": "product_requirements_v2.validation_blocker"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "validation_message",
+      "line": 278,
+      "kind": "update",
+      "file": "lib/validation/validation-gate-enforcer.js",
+      "missing": "product_requirements_v2.validation_message"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "ui_complete",
+      "line": 278,
+      "kind": "update",
+      "file": "lib/validation/validation-gate-enforcer.js",
+      "missing": "product_requirements_v2.ui_complete"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "validation_status",
+      "line": 296,
+      "kind": "update",
+      "file": "lib/validation/validation-gate-enforcer.js",
+      "missing": "product_requirements_v2.validation_status"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "validation_blocker",
+      "line": 296,
+      "kind": "update",
+      "file": "lib/validation/validation-gate-enforcer.js",
+      "missing": "product_requirements_v2.validation_blocker"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "validation_message",
+      "line": 296,
+      "kind": "update",
+      "file": "lib/validation/validation-gate-enforcer.js",
+      "missing": "product_requirements_v2.validation_message"
+    },
+    {
+      "type": "column",
+      "table": "product_requirements_v2",
+      "column": "ui_complete",
+      "line": 296,
+      "kind": "update",
+      "file": "lib/validation/validation-gate-enforcer.js",
+      "missing": "product_requirements_v2.ui_complete"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "stage_number",
+      "line": 29,
+      "kind": "insert",
+      "file": "lib/venture-test-flowback.js",
+      "missing": "venture_stage_work.stage_number"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "status",
+      "line": 29,
+      "kind": "insert",
+      "file": "lib/venture-test-flowback.js",
+      "missing": "venture_stage_work.status"
+    },
+    {
+      "type": "column",
+      "table": "venture_stage_work",
+      "column": "work_data",
+      "line": 29,
+      "kind": "insert",
+      "file": "lib/venture-test-flowback.js",
+      "missing": "venture_stage_work.work_data"
+    },
+    {
+      "type": "column",
+      "table": "v_active_sessions",
+      "column": "branch",
+      "line": 1962,
+      "kind": "select",
+      "file": "lib/worktree-manager.js",
+      "embedded": false,
+      "missing": "v_active_sessions.branch"
+    }
+  ],
+  "note": "This measured list SUPERSEDES the originating RCA a4481013 estimate of 33 refs / 18 tables -- that estimate predated this fix and was scoped narrower than this full --all sweep. Follow-up triage SD should be minted from THIS list."
+}
