@@ -1188,6 +1188,59 @@ script's path, as a documentary record of what verifies the chain — that recor
 repair, not a live re-check: Child E is already `status=completed`, so no gate re-evaluates it
 against a fresh run of this script.
 
+## Applying `20260906_drop_anon_read_strategic_directives_v2.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260906_drop_anon_read_strategic_directives_v2.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-LEO-FIX-CLOSE-ANON-KEY-001, FR-3.) Drops `anon_read_strategic_directives_v2` (`FOR SELECT TO
+anon USING (true)`) from `public.strategic_directives_v2`, closing an unauthenticated read of all
+6176 rows on production. Keeps `strategic_directives_v2_service_role_access` and the other five
+live policies on this table untouched — see the file's own header for the full live-measured
+policy inventory.
+
+**MUST apply strictly AFTER FR-1 lands** (already true as of this SD's own PR — verify via `git
+log --oneline -- src/services/realtime-dashboard.js
+src/services/database-loader/connections.ts` before running the ceremony): the policy this file
+drops is what forced its own 2025-12-18 re-add, when a still-anon-keyed
+`src/services/realtime-dashboard.js` broke the moment it was dropped the day before. Re-run
+`node scripts/anon-read-strategic-directives-probe.mjs` as a smoke check on the realtime dashboard
+consumer after applying, per the SD's `smoke_test_steps`.
+
+**Run the dry-run proof before the ceremony, safe to re-run any time (runs the real UP body —
+precondition, DROP, verify — plus a same-transaction anon-visibility re-check, inside a
+transaction that always `ROLLBACK`s):**
+
+```
+node database/chairman-gated/20260906_drop_anon_read_strategic_directives_v2_dry_run.mjs
+```
+
+**FR-2 CI predicate** (`scripts/anon-read-strategic-directives-probe.mjs`,
+`.github/workflows/anon-read-strategic-directives-probe.yml`) is the pre/post acceptance signal:
+it FAILS against current production (this policy still live) and must PASS once this file is
+applied — run it once before the ceremony (expect exit 2) and once after (expect exit 0).
+
+**FR-2 was widened** (Solomon GO 8d0dead0 / ratification 49656c8c) to also enumerate every public
+table the anon role can read and assert it against `ANON_READ_ALLOWLIST` in the same probe script —
+a frozen, measured baseline of the ~135 other tables already anon-exposed today, none of which this
+migration touches. Those are explicitly out of scope for this SD (recorded as a follow-up finding,
+not fixed here) — `strategic_directives_v2` is the only entry deliberately absent from that
+allow-list, since it is the one this migration removes.
+
+**FR-4 (post-apply readback, separate action, not part of this file):** once applied, record a
+provenance-stamped readback on the SD — pg_policies for this table (expect the anon policy gone,
+the other six unchanged) plus a fresh anon-key count read (expect 0) — per ratification 6c263823
+(producer, run id, content hash).
+
+**Rollback**: re-create the dropped policy exactly as captured in this file's own header (`CREATE
+POLICY anon_read_strategic_directives_v2 ... FOR SELECT TO anon USING (true)`) — re-verify against
+live `pg_policies` before trusting that captured text as current, per this directory's standing
+caveat that a captured predicate is context to diff against, not an authority to restore from.
+
 ## Applying `20260906_strategic_directives_worktree_commit_pin.sql`
 
 ```
@@ -1238,3 +1291,51 @@ regex `CHECK` is default-deny TIER-2 regardless of how simple the accompanying `
 `scripts/sd-start.js`'s writer wraps the `worktree_commit_pin` write in its own try/catch and logs
 a warning, non-fatally, if the column does not yet exist — so the writer code can (and does) merge
 independently of this migration's apply timing, and no claim/handoff ever fails because of it.
+
+## Applying `20260907_feedback_immutability_trigger.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260907_feedback_immutability_trigger.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260907_feedback_immutability_trigger_DOWN.sql` (drops the three triggers + their
+functions only — never the `feedback` table itself, which pre-existed this migration).
+
+(SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, FR-2.) Adds an append-only guard (BEFORE UPDATE/DELETE
+row-level triggers + a BEFORE TRUNCATE statement-level trigger, all `ENABLE ALWAYS`) to the
+EXISTING `public.feedback` table — no `CREATE TABLE`, no grant/RLS change. Named directly in the
+parent orchestrator's (`SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001`) own exit test ("an update to a
+chairman-originated feedback row fails under the service role"). Per this SD's own write-caller
+census (`docs/audits/SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E-write-caller-census.md`), no
+application code path performs UPDATE/DELETE against `feedback` outside ad-hoc `.artifacts/*`
+one-off scripts, so this guard should not break any legitimate writer — INSERT is unaffected.
+`feedback` also carries an inbound FK (`feedback_sd_map.feedback_id`), which independently blocks
+TRUNCATE before this migration's own trigger gets a chance to fire; the verify block accepts either
+rejection path (see the file's own inline comment).
+
+## Applying `20260907_governance_audit_log_immutability_trigger.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260907_governance_audit_log_immutability_trigger.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260907_governance_audit_log_immutability_trigger_DOWN.sql` (drops the three triggers +
+their functions only — never the `governance_audit_log` table itself).
+
+(SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, FR-3.) Same append-only guard shape as the `feedback`
+migration above, applied to the EXISTING `public.governance_audit_log` table, which today has zero
+immutability triggers and full anon/authenticated/service_role grants (RLS is its only barrier per
+the CAPA-002E migration's own header). Does NOT modify the sibling CAPA-002E migration's
+`audit_trigger_generic()` INSERT-instrumenting trigger — this migration only protects rows already
+written here. `governance_audit_log` has no inbound or outbound foreign keys (measured live), so
+unlike `feedback`, TRUNCATE hits this migration's own trigger directly.
+
+**Both migrations depend on the same SD's FR-1 census** (the write-caller census document above) —
+review it before applying either, and before extending this pattern to any of the deferred
+candidate tables it names.

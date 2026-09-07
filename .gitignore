@@ -100,6 +100,11 @@ test-cicd/
 # and a `-*` suffix around "session-state", so it never matched the bare session-state.md this
 # repo's own hooks write, and a worker's chore commit re-tracked it 2026-09-02.
 .claude/session-state.md
+# SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A TR-4: Michael's seat file uses "-seat-state-", not
+# "-session-state-" (alpha-michael-seat-state-*.md) -- found untracked-but-UNIGNORED during
+# PLAN-phase re-verification, the same exposure class QF-20260902-429 closed for the other 3 seats.
+.claude/*-seat-state-*.md
+.claude/*-seat-state-*.md.bak
 .artifacts/_*
 .artifacts/PREREG-*
 
@@ -592,6 +597,7 @@ scratchpad/
 .artifacts/sms-status-relay-drain-tick.marker
 .artifacts/abnormal-exit-witness.ndjson
 .artifacts/sms-status-relay-drain-completions.ndjson
+.artifacts/michael-seat/
 
 # SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001 (security-agent OBS-1): a test-only chairman-gated
 # fixture is written+removed in tests/integration/migration-apply-state-ledger-wiring.test.js;

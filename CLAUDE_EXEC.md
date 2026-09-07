@@ -1,8 +1,8 @@
-<!-- file_content_hash: e2bbad23b8351ead -->
+<!-- file_content_hash: 112b344ffc6e941e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-09-06 5:12:08 AM
+**Generated**: 2026-09-07 11:05:58 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -2046,24 +2046,85 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 
 **CRITICAL**: These constraints are enforced by the database. Agents MUST use valid values to avoid insert failures.
 
+### leo_agents
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `agent_code` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC |
+
 ### leo_handoff_executions
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
 | `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
-| `status` | pending, accepted, rejected, failed | Use one of: pending, accepted, rejected, failed |
+| `status` | created, validated, accepted, rejected, superseded | Use one of: created, validated, accepted, rejected, superseded |
+
+### leo_process_scripts
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `argument_format` | positional, flags, mixed, none | Use one of: positional, flags, mixed, none |
+| `category` | handoff, prd, generation, validation, utility, migration | Use one of: handoff, prd, generation, validation, utility, migration |
+
+### leo_protocol_sections
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `context_tier` | ROUTER, CORE, PHASE_LEAD, PHASE_PLAN, PHASE_EXEC, REFERENCE | Use one of: ROUTER, CORE, PHASE_LEAD, PHASE_PLAN, PHASE_EXEC, REFERENCE |
+| `priority` | CORE, STANDARD, SITUATIONAL | Use one of: CORE, STANDARD, SITUATIONAL |
 
 ### leo_protocols
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | active, superseded, draft, deprecated | Use one of: active, superseded, draft, deprecated. Only ONE protocol can be "active" at a time. |
+| `status` | active, superseded, draft, deprecated | Use one of: active, superseded, draft, deprecated |
+
+### leo_schema_constraints
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `constraint_type` | check, enum, foreign_key, not_null, unique | Use one of: check, enum, foreign_key, not_null, unique |
+
+### leo_sub_agents
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `tool_policy_profile` | full, coding, readonly, minimal | Use one of: full, coding, readonly, minimal |
+| `thinking_effort` | low, medium, high | Use one of: low, medium, high |
+| `activation_type` | automatic, manual | Use one of: automatic, manual |
+| `model_tier` | haiku, sonnet, opus | Use one of: haiku, sonnet, opus |
+| `team_role` | leader, teammate | Use one of: leader, teammate |
+
+### leo_validation_rules
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `gate` | L, 0, 1, Q, 2A, 2B, 2C, 2D, 3, 4 | Use one of: L, 0, 1, Q, 2A, 2B, 2C, 2D, 3, 4 |
 
 ### product_requirements_v2
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | draft, planning, in_progress, testing, approved, completed, archived | Use one of: draft, planning, in_progress, testing, approved, completed, archived |
+| `status` | draft, planning, in_progress, testing, verification, approved, completed, archived, rejected, on_hold, cancelled | Use one of: draft, planning, in_progress, testing, verification, approved, completed, archived, rejected, on_hold, cancelled |
+| `reasoning_depth` | quick, standard, deep, ultra | Use one of: quick, standard, deep, ultra |
+| `document_type` | prd, refactor_brief, architecture_decision_record | Use one of: prd, refactor_brief, architecture_decision_record |
+
+### retrospectives
+
+| Column | Valid Values | Hint |
+|--------|--------------|------|
+| `learning_category` | APPLICATION_ISSUE, PROCESS_IMPROVEMENT, TESTING_STRATEGY, DATABASE_SCHEMA, DEPLOYMENT_ISSUE, PERFORMANCE_OPTIMIZATION, USER_EXPERIENCE, SECURITY_VULNERABILITY, DOCUMENTATION | Use one of: APPLICATION_ISSUE, PROCESS_IMPROVEMENT, TESTING_STRATEGY, DATABASE_SCHEMA, DEPLOYMENT_ISSUE, PERFORMANCE_OPTIMIZATION, USER_EXPERIENCE, SECURITY_VULNERABILITY, DOCUMENTATION |
+| `action_items` | array | Use one of: array |
+| `test_verdict` | PASS, FAIL, PARTIAL, ERROR | Use one of: PASS, FAIL, PARTIAL, ERROR |
+| `protocol_improvements` | array | Use one of: array |
+| `retrospective_type` | LEAD_TO_PLAN, PLAN_TO_EXEC, EXEC_TO_PLAN, SD_COMPLETION | Use one of: LEAD_TO_PLAN, PLAN_TO_EXEC, EXEC_TO_PLAN, SD_COMPLETION |
+| `test_evidence_freshness` | FRESH, AGING, STALE | Use one of: FRESH, AGING, STALE |
+| `retro_type` | SPRINT, SD_COMPLETION, INCIDENT, MILESTONE, WEEKLY, MONTHLY, ARCHITECTURE_DECISION, RELEASE, AUDIT, HANDOFF | Use one of: SPRINT, SD_COMPLETION, INCIDENT, MILESTONE, WEEKLY, MONTHLY, ARCHITECTURE_DECISION, RELEASE, AUDIT, HANDOFF |
+| `status` | DRAFT, PUBLISHED, ARCHIVED | Use one of: DRAFT, PUBLISHED, ARCHIVED |
+| `key_learnings` | array | Use one of: array |
+| `generated_by` | MANUAL, SUB_AGENT, TRIGGER, SCHEDULED | Use one of: MANUAL, SUB_AGENT, TRIGGER, SCHEDULED |
+| `what_went_well` | array | Use one of: array |
+| `what_needs_improvement` | array | Use one of: array |
 
 ### sd_backlog_map
 
@@ -2076,9 +2137,11 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `from_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
-| `status` | pending_acceptance, accepted, rejected | Use one of: pending_acceptance, accepted, rejected |
-| `to_phase` | LEAD, PLAN, EXEC | Use one of: LEAD, PLAN, EXEC (uppercase) |
+| `from_phase` | LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED | Use one of: LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED |
+| `validation_score` | N/A | Use one of: blocked |
+| `to_phase` | LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED | Use one of: LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED |
+| `status` | pending_acceptance, accepted, rejected, blocked | Use one of: pending_acceptance, accepted, rejected, blocked |
+| `handoff_type` | LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL, BYPASS-COMPLETION | Use one of: LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL, BYPASS-COMPLETION |
 
 ### sd_scope_deliverables
 
@@ -2090,25 +2153,46 @@ Both are read-only from the RCA retry-guard's perspective. `gh pr checks --watch
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `status` | draft, lead_review, plan_active, exec_active, completed, on_hold, cancelled | Use one of: draft, lead_review, plan_active, exec_active, completed, on_hold, cancelled |
+| `intensity_level` | cosmetic, structural, architectural | Use one of: cosmetic, structural, architectural |
+| `metadata` | do_not_advance_without_trigger, trigger_condition | Use one of: do_not_advance_without_trigger, trigger_condition |
+| `key_changes` | array | Use one of: array |
+| `sd_type` | feature, bugfix, database, infrastructure, security, refactor, documentation, orchestrator, performance, enhancement, docs, discovery_spike, implementation, ux_debt, uat | Use one of: feature, bugfix, database, infrastructure, security, refactor, documentation, orchestrator, performance, enhancement, docs, discovery_spike, implementation, ux_debt, uat |
+| `relationship_type` | standalone, parent, child | Use one of: standalone, parent, child |
+| `human_verification_status` | not_required, pending, in_progress, passed, failed | Use one of: not_required, pending, in_progress, passed, failed |
 | `priority` | critical, high, medium, low | Use one of: critical, high, medium, low |
+| `status` | draft, active, in_progress, planning, review, pending_approval, completed, deferred, cancelled | Use one of: draft, active, in_progress, planning, review, pending_approval, completed, deferred, cancelled |
+| `complexity_level` | simple, moderate, complex, critical | Use one of: simple, moderate, complex, critical |
+| `key_principles` | array | Use one of: array |
+| `vision_score_action` | accept, minor_sd, gap_closure_sd, escalate | Use one of: accept, minor_sd, gap_closure_sd, escalate |
+| `rolled_triage` | High, Medium, Low, Future | Use one of: High, Medium, Low, Future |
+| `success_criteria` | array | Use one of: array |
+| `success_metrics` | array | Use one of: array |
+| `lineage_verdict` | BACKFILLED_HIGH, BACKFILLED_LOW_CONFIDENCE, GRANDFATHERED_NO_VALIDATION | Use one of: BACKFILLED_HIGH, BACKFILLED_LOW_CONFIDENCE, GRANDFATHERED_NO_VALIDATION |
+| `current_phase` | LEAD, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, PLAN_PRD, PLAN_VERIFICATION, EXEC, EXEC_COMPLETE, COMPLETED, CANCELLED | Use one of: LEAD, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, PLAN_PRD, PLAN_VERIFICATION, EXEC, EXEC_COMPLETE, COMPLETED, CANCELLED |
 
 ### sub_agent_execution_results
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
+| `warnings` | array | Use one of: array |
+| `justification` | CONDITIONAL_PASS | Use one of: CONDITIONAL_PASS |
 | `status` | pending, running, completed, failed, skipped | Use one of: pending, running, completed, failed, skipped |
+| `critical_issues` | array | Use one of: array |
+| `verdict` | PASS, FAIL, BLOCKED, CONDITIONAL_PASS, WARNING, MANUAL_REQUIRED, PENDING, ERROR | Use one of: PASS, FAIL, BLOCKED, CONDITIONAL_PASS, WARNING, MANUAL_REQUIRED, PENDING, ERROR |
+| `conditions` | CONDITIONAL_PASS | Use one of: CONDITIONAL_PASS |
+| `validation_mode` | prospective, retrospective | Use one of: prospective, retrospective |
+| `recommendations` | array | Use one of: array |
 
 ### user_stories
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
-| `implementation_context` | ::text) AND (implementation_context <>  | Use one of: ::text) AND (implementation_context <>  |
 | `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
-| `priority` | critical, high, medium, low, minimal | Use one of: critical, high, medium, low, minimal |
-| `status` | draft, ready, in_progress, testing, completed, blocked | Use one of: draft, ready, in_progress, testing, completed, blocked |
 | `story_key` | ^[A-Z0-9-]+:US-[0-9]{3,}$ | Use one of: ^[A-Z0-9-]+:US-[0-9]{3,}$ |
+| `priority` | critical, high, medium, low, minimal | Use one of: critical, high, medium, low, minimal |
+| `implementation_context` | ::text) AND (implementation_context <>  | Use one of: ::text) AND (implementation_context <>  |
+| `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
+| `status` | draft, ready, in_progress, testing, completed, blocked | Use one of: draft, ready, in_progress, testing, completed, blocked |
 
 
 
@@ -2187,6 +2271,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-09-06*
+*Generated from database: 2026-09-07*
 *Protocol Version: 4.4.1*
 *Load when: User mentions EXEC, implementation, coding, or testing*

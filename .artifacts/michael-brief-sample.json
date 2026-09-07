@@ -1,0 +1,64 @@
+{
+  "schema": 2,
+  "date": "2026-09-07",
+  "lede": "Deep day. 2 calendar events, 1 unclassified gmail thread, 2 todoist items due.",
+  "headsUp": [
+    "1 gmail thread(s) need classification",
+    "1 todoist item(s) ungraded"
+  ],
+  "frontPage": {
+    "today": {
+      "event_count": 2,
+      "coded_count": 1,
+      "optional_open": 1,
+      "overlap_count": 1
+    },
+    "gmail": {
+      "handled": 1,
+      "needsYou": [
+        {
+          "thread_id": "t2",
+          "reason": "ambiguous sender"
+        }
+      ],
+      "unclassifiedCount": 1,
+      "call": "1 thread(s) unclassified — seat review needed"
+    },
+    "todoist": {
+      "state": "ok",
+      "window": [
+        {
+          "task_id": "x1",
+          "effort_grade": "S"
+        }
+      ],
+      "note": "1 item(s) ungraded — seat review needed",
+      "calls": [
+        "x2"
+      ]
+    },
+    "ehg": {
+      "shown": true,
+      "pointer": "EHG chairman project (Todoist)",
+      "handedCount": 1
+    },
+    "claudeCode": {
+      "feeders_ok": 4,
+      "feeders_degraded": 0,
+      "feeders_missing": []
+    }
+  },
+  "enrichment": {
+    "oracle": null,
+    "watchLater": null,
+    "body": null,
+    "yesterday": null,
+    "signals": []
+  },
+  "logs": {
+    "tasks-classifier": "r1",
+    "calendar-read": "r2",
+    "gmail-triage": "r3",
+    "todoist-brief": "r4"
+  }
+}

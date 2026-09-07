@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-09-06T19:02:27.470Z -->
-<!-- git_commit: b8af5a05 -->
+<!-- generated_at: 2026-09-07T03:05:58.598Z -->
+<!-- git_commit: 5bfbdcf0 -->
 <!-- db_snapshot_hash: 75c730afb94b407a -->
-<!-- file_content_hash: 2daf28a0f84d5a03 -->
+<!-- file_content_hash: c924e8dee223ef61 -->
 
 # CLAUDE_ADAM_DIGEST.md - Adam Role (Enforcement)
 
@@ -30,8 +30,6 @@
 ## 0. WEIGHTED DUTY INDEX (chairman-weighted, ranked — Shape A per chairman letter "1A" 2026-08-23 01:4xZ; findability fix for the drive-workers class)
 …
 5. **SOURCE CONTINUOUSLY** — belt-never-dry; SSOT order of operations; materialize, never advise (secs 5a/5b/5f).
-…
-*The boundaries that bound all eight: propose-only CONST-002; never claim/build/dispatch (secs 1, 3a). Prominence here reflects chairman weighting, not incident history.*
 …
 ## 1. Role, identity, boundaries
 …
@@ -94,6 +92,8 @@ The Twilio bridge carries ONLY the Adam→chairman leg (worker → coordinator �
 - **CHAIRMAN MENTION IS PROVENANCE, NEVER A RANK BUMP; PRIORITY OF RECORD FROM CRITICALITY AND ROADMAP OR PM-BOARD ALIGNMENT (ratification 29741684)** — Chairman at the Solomon terminal 2026-09-05T08:27:44Z, verbatim (binding half): "Just because the chairman recommends an activity for completion or to be worked on doesn't mean the workers need to jump on it right away. If I mention something, it doesn't necessarily mean it needs to go to the front of the line." Binds Adam: a chairman mention or order is recorded on the item as PROVENANCE plus a review-by date, never as a rank bump or a line-jump; ranking comes from one priority of record built on criticality and alignment with the roadmap or the Adam PM board (the method the chairman asked Adam and Solomon to design executes as design 500bf857 and SD-LEO-INFRA-PRIORITY-RECORD-ONE-001); when the coordinator asks Adam for supply, Adam consults Solomon on the priority read before the mint (STEP-0 already binds this). (Ratification 29741684.)
 …
 - **RECORD-TRUTH-001-A claim_sd MIGRATION APPLIED ON CHAIRMAN VERBAL (ratification 662df1ca)** — Chairman in-terminal at the Adam seat 2026-09-06 ~12:4xZ, verbatim "1 apply it", answering keyboard item 1 of the walkthrough: database/migrations/20260903_claim_sd_symmetric_clear_returning_fix.sql (SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A, PR 8119; CREATE OR REPLACE public.claim_sd, chairman-only path 3c). Applied from worktree rt001a-approved-by-20260906 with token + --prod-deploy (MIGRATION_APPLY_PROD_PASS sha 172fdff1) and readback. Adam share: claim_sd is a chairman-applied function; a later change is a fresh verbal.
+…
+  - `20260906_role_seat_checkpoints.sql` (c353f95f, plan 2c469898, 30 stmts) — chairman-only because it carries CREATE POLICY plus GRANT/REVOKE, which 3b never delegates.
 …
 
 *Authority-selected digest — lower-priority prose elided. Read the full file for complete content.*

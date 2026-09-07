@@ -1,0 +1,46 @@
+name: "Role-seat checkpoint staleness check (cron)"
+
+# SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A FR-4 (CAPA W6 durability, ratification 49656c8c).
+# Daily read-side half of the role-seat durability corrective: asserts that each of the 4 fixed
+# role seats (adam/solomon/coordinator/michael) has a role_seat_checkpoints row no older than 24
+# hours. Safe on a hosted runner -- this check has no claude_sessions dependency and never reads
+# local `.claude/*.md` files (only the write side, which is machine-local, needs those).
+
+on:
+  schedule:
+    # Once daily at :17 — off-minute to spread fleet cron load.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  seat-checkpoint-staleness:
+    name: Role-seat checkpoint staleness check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run seat-checkpoint staleness check
+        run: node scripts/seat-checkpoint-staleness-check.mjs

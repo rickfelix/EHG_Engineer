@@ -20,8 +20,11 @@ export class ConnectionManager {
   private isReady = false;
 
   constructor(config: ConnectionConfig = {}) {
+    // SD-LEO-FIX-CLOSE-ANON-KEY-001 (FR-1): prefer service-role key, matching the
+    // sibling connections.js -- this class runs server-side (test:loader:dry /
+    // build:loader), so it must not depend on the anon-read policy on strategic_directives_v2.
     const supabaseUrl = config.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = config.supabaseKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseKey = config.supabaseKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (supabaseUrl && supabaseKey) {
       this.supabase = createClient(supabaseUrl, supabaseKey);
@@ -32,7 +35,7 @@ export class ConnectionManager {
   initializeSupabase(): void {
     if (!this.supabase) {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
       if (supabaseUrl && supabaseKey) {
         this.supabase = createClient(supabaseUrl, supabaseKey);
