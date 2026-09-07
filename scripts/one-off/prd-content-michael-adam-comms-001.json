@@ -1,0 +1,95 @@
+{
+  "executive_summary": "michael-inbox.cjs's drainInbox() reads unread Michael-directed session_coordination rows but never writes back a lifecycle column -- the same rows resurface on every invocation forever. Its own would-be consumer, michael-quiet-tick.mjs's inbox-nudge counter, independently keys on a different column (acknowledged_at vs. read_at), so even after the write-back gap closes the two would still disagree. A third filed claim (no michael-advisory.cjs sender) is verified as deliberate, spec-documented design -- Michael is receive-only by §1.2 -- and is explicitly out of scope for this PRD.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "michael-inbox.cjs's drainInbox() stamps read_at on every surfaced recognized-kind row",
+      "description": "scripts/michael-inbox.cjs:48-93's drainInbox() SELECTs unread rows (read_at IS NULL) and prints them but contains no write-back. Add an UPDATE stamping read_at=now() on every row returned in `rows` (the recognized-kind set, not the `orphaned` set -- orphaned rows are surfaced-but-not-consumed by design and must stay visible/unread), mirroring scripts/solomon-advisory.cjs:532's exact pattern (`.update({ read_at: now }).in('id', ids).is('read_at', null)`). Do not stamp orphaned rows -- they are intentionally left for a human/future-kind-registration to resolve.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "drainInbox() stamps read_at on every row in the returned `rows` array (recognized-kind, matched rows) via a single batched UPDATE keyed by id, gated on read_at IS NULL (idempotent).",
+        "drainInbox() does NOT stamp read_at (or any other column) on rows in the returned `orphaned` array -- unrecognized/untyped rows must remain visible on the next drain, matching the file's own documented 'surface, never silently consume' contract for orphans.",
+        "A second call to drainInbox() immediately after a first, over the same fixture data, returns zero of the previously-drained `rows` (they no longer match `read_at IS NULL`).",
+        "The --json and --quiet output modes are unaffected in shape -- only the DB write-back is added, no output contract change."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Unify michael-quiet-tick.mjs's inbox-nudge column onto read_at",
+      "description": "scripts/michael-quiet-tick.mjs:113-115's inbox-nudge counter queries acknowledged_at IS NULL -- a different column than FR-1's read_at. Michael has no two-stage ack model (unlike Solomon) and no background/cron split (unlike Adam's SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 precedent), so read_at is the single correct lifecycle column for both the drain and the nudge. Switch the query to `.is('read_at', null)`, keeping the existing target_session and payload->>kind filters unchanged.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "michael-quiet-tick.mjs's inbox-nudge query is keyed on `.is('read_at', null)` instead of `.is('acknowledged_at', null)`, targeting the same `payload->>kind` in(inboxKinds) and target_session filters unchanged.",
+        "A test runs the quiet-tick's inbox count before and after a drainInbox() call over the same fixture rows and asserts the count drops to 0 post-drain (proving the two readers now agree).",
+        "No change to michael-quiet-tick.mjs's other counters (classify, grade, brief, feeder, rulings) or to the QUIET_TICK_INBOX_DIRECTIVE line's rendering logic beyond the underlying count now reflecting reality."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Correct the stale 'documented no-op' comment in michael-register.cjs",
+      "description": "scripts/michael-register.cjs:406-416's michaelReplyMirror() comment still says the drain 'is a documented no-op' (true when child G shipped only the function structure, false once FR-1 ships the write-back). Update the comment to describe the now-real drain behavior instead of leaving a misleading claim in the code future readers would trust.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "michaelReplyMirror()'s comment and/or returned string no longer states the drain is a 'documented no-op'.",
+        "A grep/diff check confirms the stale phrase is gone from michael-register.cjs.",
+        "The rest of michaelReplyMirror()'s output (the drain command hint, the 'Michael sends nothing' line) is unchanged -- only the now-inaccurate no-op claim is corrected."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "description": "No schema changes. session_coordination.read_at already exists and is already used by the exact analogous pattern in solomon-advisory.cjs." },
+    { "id": "TR-2", "description": "No new sender script (scripts/michael-advisory.cjs is explicitly out of scope per the LEAD premise correction -- Michael is receive-only by spec §1.2)." },
+    { "id": "TR-3", "description": "All three fixes are additive/behavioral-only inside existing functions -- no new production files beyond tests." }
+  ],
+  "test_scenarios": [
+    {
+      "scenario": "drainInbox() runs against a fixture with 2 recognized-kind unread rows and 1 orphaned (unrecognized-kind) unread row",
+      "expected": "The 2 recognized rows are returned in `rows` and get read_at stamped; the 1 orphaned row is returned in `orphaned` and does NOT get read_at stamped."
+    },
+    {
+      "scenario": "drainInbox() runs twice in a row against the same fixture data (no new rows inserted between calls)",
+      "expected": "First call returns and stamps the 2 recognized rows; second call returns zero rows in `rows` (they now fail the read_at IS NULL filter)."
+    },
+    {
+      "scenario": "runQuietTick()'s inbox count is checked before and after a drainInbox() call over the same fixture rows",
+      "expected": "Pre-drain: inbox count > 0. Post-drain: inbox count == 0 -- the nudge counter and the drain now agree because both key on read_at."
+    },
+    {
+      "scenario": "A row directed at the 'broadcast-michael' sentinel (not a specific session id) with a recognized kind",
+      "expected": "drainInbox() still surfaces and stamps it (the existing `.in('target_session', [sessionId, 'broadcast-michael'])` filter is unchanged by this PRD)."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Stamping read_at on the wrong row set (e.g. accidentally including orphaned rows) would silently hide unrecognized-kind directives from ever being seen by a human, defeating the file's own documented 'surface, never silently consume' contract for orphans.",
+      "mitigation": "FR-1's acceptance criteria explicitly requires a test proving orphaned rows are NEVER stamped, only rows in the recognized `rows` array."
+    },
+    {
+      "risk": "Switching michael-quiet-tick.mjs's column without also fixing drainInbox() would leave the nudge permanently at 0 (since nothing writes read_at either) -- silently hiding the very directives the nudge exists to surface, which is worse than today's honest-but-wrong acknowledged_at-based non-convergence.",
+      "mitigation": "FR-1 and FR-2 ship together in this PRD (not split across separate SDs) specifically so the column-unification never lands ahead of the write-back that makes it meaningful."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/michael-quiet-tick.mjs (reads the same session_coordination rows drainInbox() writes)", "Michael's own seat loop (reads the QUIET_TICK_INBOX_DIRECTIVE guidance line and runs the drain interactively)"],
+    "dependencies": ["session_coordination.read_at column (existing, already used by solomon-advisory.cjs)", "lib/fleet/drain-set-registry.js resolveRecognizedKinds (unchanged by this PRD)"],
+    "data_contracts": ["session_coordination row shape unchanged -- read_at is an existing nullable timestamp column, no new fields added"],
+    "runtime_config": ["No new env vars or config flags"],
+    "observability_rollout": ["No feature flag needed -- both fixes ship together in one deploy; the quiet-tick's printed QUIET_TICK_INBOX_DIRECTIVE line becomes accurate immediately post-merge"]
+  },
+  "system_architecture": {
+    "components": [
+      { "name": "scripts/michael-inbox.cjs", "role": "Drains Michael's inbox; gains the read_at write-back in FR-1" },
+      { "name": "scripts/michael-quiet-tick.mjs", "role": "Computes the inbox-nudge count Michael's loop reads; column unified in FR-2" },
+      { "name": "scripts/michael-register.cjs", "role": "Prints the inbox mirror on Michael startup; stale comment corrected in FR-3" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "FR-1 first (the write-back gap is the root cause), verified green in isolation, then FR-2 (the column unification, which only becomes meaningful once FR-1 exists), then FR-3 (the doc-comment fix). One combined PR expected given the small total diff (~20-30 LOC), per this session's small-PR guidance -- split into separate commits per FR for reviewability.",
+    "sequencing": ["FR-1", "FR-2", "FR-3"]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run node scripts/michael-inbox.cjs --json against a live/fixture unread row directed at the active Michael session.", "expected_outcome": "Row is printed/counted, and a follow-up direct DB check shows read_at is now stamped on that row." },
+    { "step_number": 2, "instruction": "Re-run node scripts/michael-inbox.cjs --json immediately after.", "expected_outcome": "The previously-drained row no longer appears (rows: 0 for that row)." },
+    { "step_number": 3, "instruction": "Run node scripts/michael-quiet-tick.mjs --json before and after the drain in steps 1-2.", "expected_outcome": "The `inbox` field drops from >0 to 0 after the drain." }
+  ]
+}

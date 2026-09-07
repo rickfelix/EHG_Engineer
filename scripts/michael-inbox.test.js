@@ -70,6 +70,71 @@ describe('drainInbox', () => {
     warnSpy.mockRestore();
   });
 
+  // SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001 FR-1: drainInbox() must stamp read_at on every
+  // recognized-kind row and NEVER on an orphaned row (isOrphanedMichaelRow's "surface, never
+  // silently consume" contract). Uses a stateful in-memory fixture (not the memory-less
+  // stubSupabase above) because the acceptance criterion is behavioral across two calls.
+  function statefulFixture(initialRows) {
+    const table = initialRows.map((r) => ({ ...r }));
+    return {
+      table,
+      from() {
+        let filterInIds = null;
+        let filterReadAtNull = false;
+        let updatePatch = null;
+        const chain = {
+          select() { return chain; },
+          in(col, vals) { if (col === 'target_session') return chain; filterInIds = vals; return chain; },
+          is(col) { if (col === 'read_at') filterReadAtNull = true; return chain; },
+          order() { return chain; },
+          update(patch) { updatePatch = patch; return chain; },
+          limit() {
+            const rows = table.filter((r) => (filterReadAtNull ? r.read_at == null : true));
+            return Promise.resolve({ data: rows, error: null });
+          },
+          then(res, rej) {
+            const targets = filterInIds
+              ? table.filter((r) => filterInIds.includes(r.id) && (!filterReadAtNull || r.read_at == null))
+              : [];
+            targets.forEach((r) => Object.assign(r, updatePatch));
+            return Promise.resolve({ data: targets, error: null }).then(res, rej);
+          },
+        };
+        return chain;
+      },
+    };
+  }
+
+  it('stamps read_at on every recognized-kind row, never on an orphaned row', async () => {
+    const sb = statefulFixture([
+      { id: 'r1', payload: { kind: 'michael_handoff', body: 'task A' }, created_at: new Date().toISOString(), read_at: null },
+      { id: 'r2', payload: { kind: 'michael_handoff', body: 'task B' }, created_at: new Date().toISOString(), read_at: null },
+      { id: 'r3', payload: { kind: 'some_unregistered_kind' }, created_at: new Date().toISOString(), read_at: null },
+    ]);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await drainInbox(sb, 'sess-1', { quiet: true });
+
+    const byId = Object.fromEntries(sb.table.map((r) => [r.id, r]));
+    expect(byId.r1.read_at).not.toBeNull();
+    expect(byId.r2.read_at).not.toBeNull();
+    expect(byId.r3.read_at).toBeNull();
+  });
+
+  it('is idempotent: a second drain over the same fixture returns zero of the already-drained rows', async () => {
+    const sb = statefulFixture([
+      { id: 'r1', payload: { kind: 'michael_handoff', body: 'task A' }, created_at: new Date().toISOString(), read_at: null },
+    ]);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const first = await drainInbox(sb, 'sess-1', { quiet: true });
+    expect(first.rows).toHaveLength(1);
+
+    const second = await drainInbox(sb, 'sess-1', { quiet: true });
+    expect(second.rows).toHaveLength(0);
+  });
+
   it('reports zero rows on a query error without throwing', async () => {
     const sb = stubSupabase({ selectError: { message: 'boom' } });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
