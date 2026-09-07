@@ -30,6 +30,8 @@ function applyingFake(tables, capture = {}) {
   return {
     from(table) {
       capture.table = table;
+      capture.tables = capture.tables || [];
+      capture.tables.push(table);
       let rows = (tables[table] || []).slice();
       const q = {
         select: (c) => { capture.columns = c; return q; },
@@ -43,6 +45,11 @@ function applyingFake(tables, capture = {}) {
         },
         gte: (col, val) => { capture.gte = { col, val }; rows = rows.filter((r) => String(r[col] ?? '') >= String(val)); return q; },
         not: (col, op, val) => { capture.not = { col, op, val }; if (op === 'is' && val === null) rows = rows.filter((r) => r[col] != null); return q; },
+        contains: (col, obj) => {
+          capture.contains = { col, obj };
+          rows = rows.filter((r) => r[col] && Object.keys(obj).every((k) => r[col][k] === obj[k]));
+          return q;
+        },
         limit: async (n) => { capture.limit = n; return { data: rows.slice(0, n), error: null }; },
         // THENABLE, because the real client is. A terminal await with no .limit() — which several
         // adapters use — resolved to the query OBJECT against the old fake, so `data` came back
@@ -632,24 +639,60 @@ describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTIO
 
   // ===== THE LOAD-BEARING CONSTRAINT =====
 
-  it('action_taken is UNVERIFIABLE on EVERY outcome — a bare self-stamp is not evidence of action', () => {
-    // Measured: 82 of 82 advisories retired, 78 recording no actor, 4 naming the measured party.
-    // If any path ever returns RECORDED, the axis is grading the coordinator on its own receipt.
+  it('action_taken is UNVERIFIABLE when no breach-advisory row names an outside actor', () => {
+    // QF-20260904-057: no longer a frozen 82/82 -- but a bare self-stamp (no breachAdvisories
+    // supplied, or rows with no attributed actor) is still not evidence of action.
     const paths = [
       coordAxis.classify({ snapshots: [{ score: 50, at: ago(1) }] }, NOW),
       coordAxis.classify({ snapshots: [{ score: 100, at: ago(1) }] }, NOW),
       coordAxis.classify({ snapshots: [] }, NOW),
       coordAxis.classify(null, NOW),
-      coordAxis.classify({ snapshots: [{ score: 100, at: ago(1) }], probe: { status: 'no_cohort' } }, NOW)
+      coordAxis.classify({ snapshots: [{ score: 100, at: ago(1) }], probe: { status: 'no_cohort' } }, NOW),
+      coordAxis.classify({
+        snapshots: [{ score: 50, at: ago(1) }],
+        breachAdvisories: { rows: [{ payload: { actioned_at: ago(1) } }, { payload: { actioned_by: 'coordinator 1449a046', actioned_at: ago(1) } }] }
+      }, NOW)
     ];
     for (const r of paths) expect(r.action_taken).toBe(ACTION.UNVERIFIABLE);
-    expect(paths.some((r) => r.action_taken === ACTION.RECORDED)).toBe(false);
   });
 
-  it('the citation states WHY action is unverifiable, with the counts', () => {
-    const r = coordAxis.classify({ snapshots: [{ score: 50, at: ago(1) }] }, NOW);
-    expect(r.citation).toMatch(/82 of 82/);
-    expect(r.citation).toMatch(/78 recording NO actor/);
+  it('action_taken flips to RECORDED live when a retired row names an outside actor', () => {
+    // QF-20260904-057: this is the defect fixed -- the 08-01 static census could never move no
+    // matter what the coordinator recorded. This asserts the SAME shape now can.
+    const r = coordAxis.classify({
+      snapshots: [{ score: 50, at: ago(1) }],
+      breachAdvisories: { rows: [
+        { payload: { actioned_at: ago(2), actioned_by: 'coordinator' } },       // self-attributed, not evidence
+        { payload: { actioned_at: ago(1), actioned_by: 'Alpha-5', action_note: 'root-caused and shipped' } },
+        { payload: {} }                                                         // open, not yet retired
+      ] }
+    }, NOW);
+    expect(r.action_taken).toBe(ACTION.RECORDED);
+    expect(r.citation).toMatch(/RECORDED/);
+    expect(r.citation).toMatch(/1 of 2 retired/);
+  });
+
+  it('the citation states the LIVE counts, not a frozen number', () => {
+    const r = coordAxis.classify({
+      snapshots: [{ score: 50, at: ago(1) }],
+      breachAdvisories: { rows: [
+        { payload: { actioned_at: ago(1) } },
+        { payload: { actioned_at: ago(1) } },
+        { payload: {} }
+      ] }
+    }, NOW);
+    expect(r.citation).toMatch(/2 of 3 breach advisories retired/);
+    expect(r.citation).toMatch(/1 open/);
+    expect(r.citation).not.toMatch(/82 of 82/);
+  });
+
+  it('a breach-advisory query failure falls back to UNVERIFIABLE, naming the failure', () => {
+    const r = coordAxis.classify({
+      snapshots: [{ score: 50, at: ago(1) }],
+      breachAdvisories: { error: 'relation does not exist' }
+    }, NOW);
+    expect(r.action_taken).toBe(ACTION.UNVERIFIABLE);
+    expect(r.citation).toMatch(/query failed \(relation does not exist\)/);
   });
 
   // ===== FRESHNESS: SILENCE IS NOT HEALTH =====
@@ -697,7 +740,9 @@ describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTIO
     const state = await coordAxis.fetch(applyingFake({
       codebase_health_snapshots: [{ score: 50, dimension: DIM, scanned_at: ago(1) }]
     }, cap), { now: NOW });
-    expect(cap.table).toBe('codebase_health_snapshots');
+    // QF-20260904-057: fetch() now ALSO queries session_coordination for breach advisories, so
+    // cap.table (last-write-wins) is no longer sufficient here -- assert against the accumulated list.
+    expect(cap.tables).toContain('codebase_health_snapshots');
     expect(state.snapshots.length).toBe(1);
   });
 
@@ -732,6 +777,38 @@ describe('AXIS 2 coordinator_performance — the breach is measurable, the ACTIO
     const state = await coordAxis.fetch(applyingFake({ session_coordination: [{ score: 100, at: ago(1) }] }), { now: NOW });
     expect(state.snapshots.length).toBe(0);
     expect(coordAxis.classify(state, NOW).state).toBe(STATE.UNMEASURABLE);
+  });
+
+  // QF-20260904-057 WIRING: fetch() must query the SAME population the header's static census
+  // once measured (kind='adam_advisory', sender_type='adam-coordinator-health') and filter out
+  // rows outside that shape — a discriminator test on classify() alone cannot catch a query that
+  // silently reads the wrong sender_type or kind.
+  it('fetch() reads session_coordination filtered to adam-coordinator-health breach advisories', async () => {
+    const cap = {};
+    const state = await coordAxis.fetch(applyingFake({
+      codebase_health_snapshots: [{ score: 50, dimension: DIM, scanned_at: ago(1) }],
+      session_coordination: [
+        { sender_type: 'adam-coordinator-health', payload: { kind: 'adam_advisory', actioned_at: ago(1), actioned_by: 'Alpha-5' }, created_at: ago(1) },
+        { sender_type: 'some-other-sender', payload: { kind: 'adam_advisory', actioned_at: ago(1) }, created_at: ago(1) }, // foreign sender, excluded
+        { sender_type: 'adam-coordinator-health', payload: { kind: 'other' }, created_at: ago(1) }                        // wrong kind, excluded
+      ]
+    }, cap), { now: NOW });
+    expect(state.breachAdvisories.rows.length).toBe(1);
+    expect(state.breachAdvisories.rows[0].payload.actioned_by).toBe('Alpha-5');
+    expect(coordAxis.classify(state, NOW).action_taken).toBe(ACTION.RECORDED);
+  });
+
+  it('fetch() does not throw when session_coordination is unreadable — classify sees the failure', async () => {
+    const brokenFake = { from: () => { throw new Error('connection refused'); } };
+    const mixedFake = {
+      from(table) {
+        if (table === 'session_coordination') return brokenFake.from();
+        return applyingFake({ codebase_health_snapshots: [{ score: 50, dimension: DIM, scanned_at: ago(1) }] }).from(table);
+      }
+    };
+    const state = await coordAxis.fetch(mixedFake, { now: NOW });
+    expect(state.breachAdvisories.error).toMatch(/connection refused/);
+    expect(coordAxis.classify(state, NOW).action_taken).toBe(ACTION.UNVERIFIABLE);
   });
 });
 
