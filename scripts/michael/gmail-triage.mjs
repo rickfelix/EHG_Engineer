@@ -44,10 +44,22 @@ export const ITEM_KEYS = Object.freeze(['et_date', 'thread_id', 'class', 'rule_k
 export const ITEM_UPDATE_KEYS = Object.freeze(['class', 'rule_key', 'action_intent', 'last_message_id', 'borderline']);
 export const LABEL_KEYS = Object.freeze(['label_id', 'name', 'last_seen_in_gmail_at']);
 
-/** Pure: the two inbox queries; keep_in_inbox label names are excluded from the fresh query. */
-export function inboxQueries(keepInInboxNames = []) {
+/**
+ * Pure: the three inbox queries, unread-first (CHAIRMAN RULING 2026-09-07: unread is the PRIORITY
+ * surface, never the only gate -- read is an accident, archived is a decision, so a stray glance
+ * marking a thread read must never silently drop it from the queue). keep_in_inbox label names are
+ * excluded from the fresh query only. The sweep leg is bounded by modifyCeiling (never above
+ * THREADS_MAX_RESULTS) so a slow archive day doesn't walk the whole aged inbox on every run.
+ */
+export function inboxQueries(keepInInboxNames = [], modifyCeiling = THREADS_MAX_RESULTS) {
   const excl = keepInInboxNames.filter(Boolean).map((n) => ` -label:"${String(n).replace(/"/g, '')}"`).join('');
-  return [`in:inbox newer_than:1d${excl}`, 'in:inbox older_than:1d'];
+  const n = Number(modifyCeiling);
+  const sweepMax = Number.isInteger(n) && n >= 1 ? Math.min(n, THREADS_MAX_RESULTS) : THREADS_MAX_RESULTS;
+  return [
+    { label: 'unread', q: 'is:unread in:inbox' },
+    { label: 'fresh', q: `in:inbox newer_than:1d${excl}` },
+    { label: 'sweep', q: 'in:inbox older_than:1d', maxResults: sweepMax },
+  ];
 }
 
 /**
@@ -187,10 +199,10 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
 
       // 3. threads: fresh inbox minus keep_in_inbox labels, plus the older-than-a-day sweep
       const ids = new Set();
-      for (const q of inboxQueries(keepNames)) {
-        const r = await listThreads({ q, maxResults: THREADS_MAX_RESULTS }, deps);
+      for (const entry of inboxQueries(keepNames, ceiling)) {
+        const r = await listThreads({ q: entry.q, maxResults: entry.maxResults }, deps);
         if (!r.ok) return { status: 'failed', counts: { ...counts, error_code: r.error.split(':')[0], phase: 'threads' } };
-        if (r.truncated) counts.truncated_query.push(q.startsWith('in:inbox newer') ? 'fresh' : 'sweep');
+        if (r.truncated) counts.truncated_query.push(entry.label);
         for (const t of r.threads) ids.add(t.id);
       }
       counts.threads_seen = ids.size;
