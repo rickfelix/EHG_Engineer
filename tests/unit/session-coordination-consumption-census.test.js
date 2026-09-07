@@ -34,6 +34,11 @@ const ALLOWED_WRITE_FILES = new Set([
   'scripts/stale-session-sweep.cjs',
   'scripts/hooks/coordination-inbox.cjs',
   'lib/coordinator/relay-queue.cjs',
+  // SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001 (FR-1): drainInbox() now stamps read_at on every
+  // recognized-kind row (mirrors solomon-advisory.cjs's stampSurfaced), closing the gap where
+  // the drain read unread rows but never wrote back -- the same rows resurfaced forever. See
+  // census entry in docs/protocol/coordinator-adam-comms.md.
+  'scripts/michael-inbox.cjs',
   // QF-20260830-084: stampActioned now also writes acknowledged_at (alongside its existing
   // payload.actioned_at write) so the lane-pending gauge and every other acknowledged_at
   // reader see the same retirement moment as the advisory selector — see census entry in
