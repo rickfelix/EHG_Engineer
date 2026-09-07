@@ -228,6 +228,10 @@
   - EXEC-phase re-verification against live main caught 3 of the originally-sourced specimens as already-fixed (stale) and 1 as premise-refuted (dropped), so those were corrected or removed before shipping rather than registered as false governance data.
   - New `getReaderClassification(entry)` getter (two-bucket `reader:NONE` vs `wired-but-blind`) is wired into its first production consumer, `scripts/orphan-writers-count.mjs`'s weekly summary — a LEAD-phase VALIDATION finding caught that the getter had zero callers before this SD.
 
+- **Two coordinator-addressed message kinds were delivered but structurally invisible to the coordinator's own inbox** - SD-LEO-FIX-TWO-SESSION-COORDINATION-001 (escalated from QF-20260906-154, PR #8493)
+  - `self_escalation` (`lib/fleet/self-wake-escalation.cjs`, `target_session='broadcast-coordinator'`) and `notification_permission_wait` (`lib/hooks/notification-permission-wait-core.cjs`) were absent from every coordinator drain set, surviving only via the `orphan-reroute-sweep` rescue path — measured: rerouted 2x each in a 14-day window. `lib/fleet/worker-status.cjs`'s `DRAIN_SETS.coordinator` now registers both as standalone literals (31 → 33), mirrored into a chairman-gated `role_drain_sets` seed migration for DB-side parity.
+  - Escalated to a full SD after the QF eligibility preflight refused autonomous completion — the diff touches `database/migrations/`, a sensitive path that forces Tier 3 routing regardless of the ~20 LOC size. A deep-tier adversarial `/ship` review and independent TESTING/SECURITY sub-agent passes (mutation-verified: reverting the two literals fails all 4 new tests) found no issues before merge.
+
 ### Infrastructure
 
 - **Playwright E2E runs now refuse to target the production Supabase project, before any network call** - SD-LEO-INFRA-E2E-DBTIER-PROD-REF-GUARD-001 (carved from SD-LEO-INFRA-E2E-REAL-TEST-001 FR-1; closes an active production-data-integrity incident)
