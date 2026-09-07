@@ -9,6 +9,7 @@ import {
   buildCreateArgs,
   buildRemoveArgs,
   buildQueryArgs,
+  buildDisableArgs,
   verifyHiddenLaunch,
   parseArgs,
   ALARM_TASKS,
@@ -120,6 +121,14 @@ describe('buildRemoveArgs / buildQueryArgs', () => {
   it('target the given task name', () => {
     expect(buildRemoveArgs('T')).toEqual(['/Delete', '/TN', 'T', '/F']);
     expect(buildQueryArgs('T')).toEqual(['/Query', '/TN', 'T', '/V', '/FO', 'LIST']);
+  });
+});
+
+// SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-I: step 1 of the Dropbox-folder retirement disables
+// (never deletes) any remaining Cowork-era scheduled tasks in place.
+describe('buildDisableArgs', () => {
+  it('targets the given task name with /Change /DISABLE, not /Delete', () => {
+    expect(buildDisableArgs('T')).toEqual(['/Change', '/TN', 'T', '/DISABLE']);
   });
 });
 
