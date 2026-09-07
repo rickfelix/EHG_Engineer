@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -110,4 +111,6 @@ async function main() {
   console.log('Criterion 4 corrected:', verify.success_criteria[3].criterion.includes('LEAD-CORRECTED'));
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}
