@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T23:18:32.596Z",
-  "git_commit": "6c43b2f6",
+  "generated_at": "2026-09-07T23:50:24.239Z",
+  "git_commit": "a5fa7e56",
   "db_snapshot_hash": "e8156a0352cac564",
   "files": {
     "CLAUDE.md": {
@@ -69,10 +69,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 117456,
-      "bytes": 118291,
-      "estimated_tokens": 29364,
-      "content_hash": "52263b51b32d165e",
+      "chars": 119761,
+      "bytes": 120608,
+      "estimated_tokens": 29941,
+      "content_hash": "023232c5b8b46c3c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260907-188\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -229,7 +229,7 @@
     }
   },
   "section_digests": {
-    "global": "28db6719ac1db738",
+    "global": "beed59b97c10878b",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -483,7 +483,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "fef84602aafbad2a",
+      "601": "13cbb7dd5f259b24",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "f5d0c5029c6a3524",

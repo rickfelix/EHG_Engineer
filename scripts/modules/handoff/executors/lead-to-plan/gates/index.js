@@ -115,3 +115,7 @@ export {
 // QF-20260727-982: an endorsement chain is not evidence — a spine naming a file+function
 // must name who read it and at what file:line.
 export { createMechanismClaimVerifierGate, validateMechanismClaims } from './mechanism-claim-verifier.js';
+
+// Parent-Exec Gate (QF-20260906-901): refuses LEAD-TO-PLAN for a child SD whose orchestrator
+// parent has not yet completed its own two setup handoffs (LEAD-TO-PLAN, PLAN-TO-EXEC).
+export { createParentExecGate, isParentReadyForChildren, isBindingEnabled as isParentExecGateBindingEnabled } from './parent-exec-gate.js';

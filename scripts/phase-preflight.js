@@ -361,7 +361,11 @@ async function detectParentChildHierarchy(sd) {
 
       // LEO Protocol rule: Parent must be in EXEC phase for child to be activated
       // (per PAT-PARENT-CHILD-001 in CLAUDE_LEAD.md)
-      if (parent.status !== 'in_progress' && parent.current_phase !== 'EXEC') {
+      // QF-20260906-901: was `&&` (AND), which only warns when BOTH conditions independently
+      // disqualify the parent -- a parent in_progress/LEAD or draft/EXEC silently passed. The
+      // parent is only ready when BOTH status AND phase agree, so the warning must fire
+      // whenever EITHER disagrees (`||`).
+      if (parent.status !== 'in_progress' || parent.current_phase !== 'EXEC') {
         console.log('\n   ⚠️  PARENT STATUS WARNING:');
         console.log('      LEO Protocol requires parent to be in EXEC phase');
         console.log('      before child SDs can be activated.');
@@ -441,7 +445,8 @@ function displayChildWorkflowGuidance(sd, parent, _currentPhase) {
   `);
 
   // Check if parent blocks child work
-  if (parent && parent.status !== 'in_progress' && parent.current_phase !== 'EXEC') {
+  // QF-20260906-901: was `&&` -- same bug as the sibling check above, same `||` fix.
+  if (parent && (parent.status !== 'in_progress' || parent.current_phase !== 'EXEC')) {
     console.log('  ⛔ BLOCKED: Parent is NOT in EXEC phase');
     console.log('     Child SDs cannot be activated until parent is in orchestrator state.');
     console.log('\n     TO UNBLOCK: Progress parent SD first:');
