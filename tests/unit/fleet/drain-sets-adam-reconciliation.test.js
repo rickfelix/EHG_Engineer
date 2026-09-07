@@ -66,9 +66,14 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // +1 to coordinator ONLY (31), the rest unchanged, as of QF-20260905-230: 'sweep_finding_alert'
     // added as a standalone literal — lib/fleet/sweep-findings-sink.cjs's only writer
     // (stale-session-sweep.cjs) only ever targets the coordinator.
+    // +2 to coordinator ONLY (33), the rest unchanged, as of QF-20260906-154: 'self_escalation'
+    // (lib/fleet/self-wake-escalation.cjs, target_session='broadcast-coordinator') and
+    // 'notification_permission_wait' (lib/hooks/notification-permission-wait-core.cjs) added as
+    // standalone literals — both were addressed to role=coordinator but absent from every drain
+    // set, invisible until orphan-reroute-sweep rescued them.
     expect(DRAIN_SETS.adam.length).toBe(32);
     expect(DRAIN_SETS.solomon.length).toBe(22);
-    expect(DRAIN_SETS.coordinator.length).toBe(31);
+    expect(DRAIN_SETS.coordinator.length).toBe(33);
     expect(DRAIN_SETS.worker.length).toBe(27);
   });
 
