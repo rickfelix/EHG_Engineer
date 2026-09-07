@@ -105,6 +105,26 @@ describe('assertSendBackpressure (unit)', () => {
     await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: {} }, silentLog)).resolves.toBeUndefined();
   });
 
+  // QF-20260904-695: a high-volume informational sender (roll_call chief among them) never sets
+  // acknowledged_at by design -- left uncounted, these permanently occupy the cap and refuse
+  // every OTHER routine send to the same target regardless of real backlog (measured live: the
+  // coordinator held 328 unanswered rows, all roll_call).
+  it('does not count INFORMATIONAL_KINDS rows in the candidate population (300 roll_call, 0 advisories does not park)', async () => {
+    const rows = Array.from({ length: 300 }, (_, i) => ({ id: `roll-call-${i}`, payload: { kind: 'roll_call' } }));
+    const { sb } = stubSupabase({ rows });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: { kind: 'coordinator_update' } }, silentLog)).resolves.toBeUndefined();
+  });
+
+  it('still refuses on 3 unanswered advisories mixed with a large informational backlog', async () => {
+    const rows = [
+      ...Array.from({ length: 300 }, (_, i) => ({ id: `roll-call-${i}`, payload: { kind: 'roll_call' } })),
+      ...Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT }, (_, i) => ({ id: `advisory-${i}`, payload: { kind: 'adam_advisory' } })),
+    ];
+    const { sb } = stubSupabase({ rows });
+    await expect(assertSendBackpressure(sb, { target_session: TARGET, payload: { kind: 'coordinator_update' } }, silentLog))
+      .rejects.toMatchObject({ code: 'DISPATCH_BACKPRESSURE' });
+  });
+
   // A solicited correlated reply IS an answer, not a fresh unanswered ask — must not count.
   it('does not count solicited correlated reply rows in the candidate population', async () => {
     const rows = Array.from({ length: BACKPRESSURE_UNANSWERED_LIMIT + 2 }, (_, i) => ({

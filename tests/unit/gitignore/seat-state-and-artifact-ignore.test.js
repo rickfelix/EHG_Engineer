@@ -50,4 +50,16 @@ describe('QF-20260902-429: seat-state and frozen-artifact gitignore patterns', (
   it('does NOT ignore an unrelated .claude/ file (pattern is scoped, not a blanket exclusion)', () => {
     expect(isIgnored('.claude/settings.json')).toBe(false);
   });
+
+  // QF-20260904-439: generated testing-evidence JSON dumps (raw vitest/testing-agent output)
+  // were untracked but NOT gitignored, so worktree-reaper's preserve-stage (git ls-files
+  // --others --exclude-standard) swept them into a WIP-preservation commit that merged to main
+  // (PR #8177, #8180) -- ignoring the shape stops the sweep at the source.
+  it('ignores a generated .artifacts/testing-*.json evidence dump', () => {
+    expect(isIgnored('.artifacts/testing-SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B-exec-to-plan.json')).toBe(true);
+  });
+
+  it('does NOT ignore an unrelated .artifacts/ file (pattern is scoped to testing-*.json)', () => {
+    expect(isIgnored('.artifacts/adam-seat-q1.cjs')).toBe(false);
+  });
 });
