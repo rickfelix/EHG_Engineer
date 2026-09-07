@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-07](#2026-09-07)
+  - [Infrastructure](#infrastructure)
 - [2026-09-06](#2026-09-06)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -183,6 +185,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-07
+
+### Infrastructure
+
+- **Michael gains his model-free overnight feeders in two venue halves, a host Task Scheduler registrar, and the seat verbs that close the classification queue** - SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D
+  - Shared harness lib/michael/feeder.mjs (ET window gate, single-flight per feeder and date, attempt allocation with unique-index retry, upstream readiness, assembleReadiness for child E) and lib/michael/rules-match.mjs; host feeders calendar-read, gmail-triage (rules-first, record-then-act, per-date modify ceiling bounded against the live ledger, borderline resurfacing) and tasks-classifier on the chairman grant; todoist-brief on GitHub Actions with a wiring-tested EDT/EST cron workflow; scripts/setup-michael-host-tasks.mjs registers the three host tasks hidden, without /RU /NP, verifying the launched wrapper from the OS XML; queue-read and classify-apply (provenance-checked verdict files, replay-inert seat metering) plus the role contract's overnight tick paragraph.
+  - Thirteen PRs, each through a deep-tier adversarial review; the michael_* tables stay chairman-gated (unapplied live), so every test injects its clients and the first real run is the chairman's post-migration host smoke.
 
 ## 2026-09-06
 
