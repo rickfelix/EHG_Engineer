@@ -172,6 +172,23 @@ describe('S2 STUCK_WITHOUT_HOLD_REASON predicate', () => {
     const notHeldChild = { sd_key: 'SD-CHILD-B', sd_type: 'bugfix', status: 'draft', metadata: {} };
     expect(lacksHoldReason(parent, NOW, 24, [heldChild, notHeldChild])).toBe(true);
   });
+  it('QF-20260904-578: a completed/cancelled (terminal) child counts as held -- nothing left to hold', () => {
+    const parent = sd({ status: 'in_progress', updated_at: daysAgo(5), sd_type: 'orchestrator', metadata: {} });
+    const completedChild = { sd_key: 'SD-CHILD-A', sd_type: 'bugfix', status: 'completed', metadata: {} };
+    const cancelledChild = { sd_key: 'SD-CHILD-B', sd_type: 'bugfix', status: 'cancelled', metadata: {} };
+    expect(lacksHoldReason(parent, NOW, 24, [completedChild, cancelledChild])).toBe(false);
+  });
+  it('QF-20260904-578: a deferred child carrying park_reason is exempt (SD-LEO-INFRA-E2E-VERIFICATION-ROBUSTNESS-001 specimen shape)', () => {
+    const parent = sd({ status: 'in_progress', updated_at: daysAgo(5), sd_type: 'orchestrator', metadata: {} });
+    const closedChild = { sd_key: 'SD-CHILD-B', sd_type: 'bugfix', status: 'completed', metadata: {} };
+    const parkedChild = { sd_key: 'SD-CHILD-C', sd_type: 'bugfix', status: 'deferred', metadata: { park_reason: 'target file only exists in an unmerged sibling worktree' } };
+    expect(lacksHoldReason(parent, NOW, 24, [closedChild, parkedChild])).toBe(false);
+  });
+  it('QF-20260904-578: a deferred child with NO park_reason does NOT satisfy the exemption — true-stuck fixture still fires', () => {
+    const parent = sd({ status: 'in_progress', updated_at: daysAgo(5), sd_type: 'orchestrator', metadata: {} });
+    const bareDeferredChild = { sd_key: 'SD-CHILD-D', sd_type: 'bugfix', status: 'deferred', metadata: {} };
+    expect(lacksHoldReason(parent, NOW, 24, [bareDeferredChild])).toBe(true);
+  });
   it('TS-7 regression: a stray falsy-but-not-strictly-false hold value (empty string) no longer counts as a hold', () => {
     const stale = sd({ status: 'in_progress', updated_at: daysAgo(2) });
     // Old check (!== false) treated '' as a hold (bug); new Boolean() check correctly does not.
