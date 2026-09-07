@@ -28,6 +28,7 @@ import {
 import { gracefulExit } from '../cron/eva-scheduler-watcher.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const HIDDEN_LAUNCHER_PATH = 'C:\\repo\\EHG\\scripts\\cron\\run-hidden.vbs';
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /** Minimal chainable heartbeat mock supporting select().eq().maybeSingle() and upsert(). */
@@ -184,12 +185,27 @@ describe('FR-1 setup-eva-watcher-task builders', () => {
   });
 
   it('schtasks argv schedules every 5 minutes and overwrites idempotently', () => {
-    const args = buildSchtasksArgs({ wrapperPath: 'C:\\repo\\EHG\\scripts\\cron\\eva-watcher-task.cmd' });
+    const args = buildSchtasksArgs({ wrapperPath: 'C:\\repo\\EHG\\scripts\\cron\\eva-watcher-task.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     expect(args.join(' ')).toContain('/SC MINUTE /MO 5');
     expect(args).toContain('/F');
     expect(args).toContain('/TN');
     expect(args[args.indexOf('/TN') + 1]).toBe(TASK_NAME);
     expect(args[args.indexOf('/TR') + 1]).toContain('eva-watcher-task.cmd');
+  });
+
+  // QF-20260904-169: MEASURED via live PowerShell readback (Get-ScheduledTask), the currently-
+  // registered task runs through wscript.exe //B run-hidden.vbs -- but this registrar's own
+  // buildSchtasksArgs did not build that action until this fix, so a re-run would have regressed
+  // the live task back to a bare, console-leaking /TR.
+  it('/TR is the hidden-window launcher, never the .cmd directly', () => {
+    const args = buildSchtasksArgs({ wrapperPath: 'C:\\repo\\EHG\\scripts\\cron\\eva-watcher-task.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
+    const trAction = args[args.indexOf('/TR') + 1];
+    expect(trAction).toContain('wscript.exe');
+    expect(trAction).toContain('run-hidden.vbs');
+  });
+
+  it('throws without hiddenLauncherPath', () => {
+    expect(() => buildSchtasksArgs({ wrapperPath: 'x' })).toThrow(/hiddenLauncherPath/);
   });
 
   // QF-20260726-677: without /RU, schtasks /Create registers LogonType=Interactive, which is what
@@ -198,7 +214,7 @@ describe('FR-1 setup-eva-watcher-task builders', () => {
   // cannot re-land silently — the generated wrapper .cmd is gitignored, so this test + the builder
   // are the only durable place the fix lives.
   it('schtasks argv carries a /RU principal by default (non-interactive S4U logon, not Interactive)', () => {
-    const args = buildSchtasksArgs({ wrapperPath: 'C:\\repo\\EHG\\scripts\\cron\\eva-watcher-task.cmd' });
+    const args = buildSchtasksArgs({ wrapperPath: 'C:\\repo\\EHG\\scripts\\cron\\eva-watcher-task.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     expect(args).toContain('/RU');
     const runAs = args[args.indexOf('/RU') + 1];
     expect(typeof runAs).toBe('string');
@@ -211,21 +227,21 @@ describe('FR-1 setup-eva-watcher-task builders', () => {
   });
 
   it('honors an explicit --ru override (e.g. SYSTEM) and skips /NP for well-known service accounts', () => {
-    const args = buildSchtasksArgs({ wrapperPath: 'x', runAs: 'SYSTEM' });
+    const args = buildSchtasksArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, runAs: 'SYSTEM' });
     expect(args[args.indexOf('/RU') + 1]).toBe('SYSTEM');
     expect(args).not.toContain('/NP');
   });
 
   it('honors an explicit --ru override to a named user and still appends /NP', () => {
-    const args = buildSchtasksArgs({ wrapperPath: 'x', runAs: 'CUSTOMUSER' });
+    const args = buildSchtasksArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, runAs: 'CUSTOMUSER' });
     expect(args[args.indexOf('/RU') + 1]).toBe('CUSTOMUSER');
     expect(args).toContain('/NP');
   });
 
   it('honors a custom interval and rejects an invalid one', () => {
-    expect(buildSchtasksArgs({ wrapperPath: 'x', intervalMinutes: 3 }).join(' ')).toContain('/MO 3');
-    expect(() => buildSchtasksArgs({ wrapperPath: 'x', intervalMinutes: 0 })).toThrow();
-    expect(() => buildSchtasksArgs({})).toThrow(/wrapperPath/);
+    expect(buildSchtasksArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, intervalMinutes: 3 }).join(' ')).toContain('/MO 3');
+    expect(() => buildSchtasksArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, intervalMinutes: 0 })).toThrow();
+    expect(() => buildSchtasksArgs({ hiddenLauncherPath: HIDDEN_LAUNCHER_PATH })).toThrow(/wrapperPath/);
   });
 
   it('TASK_ENV bakes exactly the two safety flags', () => {
