@@ -78,7 +78,7 @@ import { hasReapProtectedMarker, readReapProtectedMarker } from '../lib/worktree
 // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001: single-source reapability helpers.
 // These three used to be defined locally below; the canonical home is now
 // lib/worktree-reapability.js so every removal path shares one implementation.
-import { normalizePath, collectDirtyStatus, countUnpushedCommits } from '../lib/worktree-reapability.js';
+import { normalizePath, collectDirtyStatus, countUnpushedCommits, fetchUpstreamOnce } from '../lib/worktree-reapability.js';
 import {
   isZombieOnMain,
   isNested,
@@ -1511,6 +1511,16 @@ export async function main(argv = process.argv) {
 
   const idleThresholdMs = opts.days * 24 * 60 * 60 * 1000;
   const ctx = { repoRoot, claimMap, claimedKeySet, sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, orchestratorSdSet, idleThresholdMs };
+
+  // QF-20260906-756: fetch origin/main ONCE per run, here, before any per-worktree unpushed check —
+  // countUnpushedCommits's `git cherry origin/main HEAD` reads whatever local ref the last fetch
+  // left behind, and nothing on this path fetched, so a squash-merged worktree read unsafe-to-reap
+  // until an unrelated fetch happened to refresh it (PAT-LES-9256aa38dfc8). Read-only; runs in
+  // dry-run too. A failed fetch degrades to exactly today's pre-fix behavior (fail-closed).
+  const upstreamInfo = fetchUpstreamOnce('origin/main', { cwd: repoRoot });
+  if (!upstreamInfo.fetched) {
+    console.warn(JSON.stringify({ event: 'upstream_fetch_failed', ref: upstreamInfo.ref, error: upstreamInfo.error }));
+  }
 
   const header = humanTableHeader();
   const now = Date.now();
