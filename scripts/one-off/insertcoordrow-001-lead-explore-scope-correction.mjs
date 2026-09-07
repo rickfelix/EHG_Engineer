@@ -8,6 +8,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_KEY = 'SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001';
 
@@ -92,7 +93,9 @@ async function main() {
   console.log('Updated:', JSON.stringify(data, null, 2));
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  });
+}
