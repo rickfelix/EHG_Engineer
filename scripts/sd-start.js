@@ -1745,6 +1745,35 @@ async function main() {
       console.warn(`   ${colors.yellow}⚠️  Failed to persist worktree_path: ${e?.message || e}${colors.reset}`);
     }
 
+    // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B (FR-5): additionally persist a git-verified
+    // commit pin into worktree_commit_pin (a NEW sibling column — worktree_path above is
+    // left completely unchanged, since claim-validity-gate.js and 3 other files consume it
+    // as a literal, realpathSync-able filesystem path). Non-fatal: the column may not exist
+    // yet (FR-1's chairman-gated migration lands independently), and a detached/shallow
+    // checkout can make `git cat-file` unable to verify HEAD — log loudly, never write a
+    // silently-unverified value (TR-1).
+    try {
+      const { resolveWorktreePathTier } = await import('../lib/git/commit-pin-resolver.mjs');
+      const headSha = execSync('git rev-parse HEAD', { cwd: worktreeInfo.cwd, encoding: 'utf8' }).trim();
+      const pin = await resolveWorktreePathTier(
+        { path: worktreeInfo.cwd, recordedSha: headSha, recordedAt: new Date().toISOString() },
+        { repoRoot: worktreeInfo.cwd }
+      );
+      // worktree_commit_pin ships in a chairman-gated migration (database/chairman-gated/
+      // 20260906_strategic_directives_worktree_commit_pin.sql), staged not applied -- the
+      // try/catch above+below is this write's fail-soft contract for exactly that pre-apply
+      // window, so the column is intentionally absent from the live schema snapshot for now.
+      const { error: pinError } = await supabase
+        .from('strategic_directives_v2')
+        .update({ worktree_commit_pin: pin.value }) // schema-lint-disable-line: see comment above
+        .eq('sd_key', effectiveId);
+      if (pinError) {
+        console.warn(`   ${colors.yellow}⚠️  Failed to persist worktree_commit_pin: ${pinError.message}${colors.reset}`);
+      }
+    } catch (e) {
+      console.warn(`   ${colors.yellow}⚠️  Failed to compute/persist worktree_commit_pin: ${e?.message || e}${colors.reset}`);
+    }
+
     // QF-20260314-250: Child claim verification gate
     // Warn when orchestrator sd:start resolves to a child's worktree
     // SD-LEO-INFRA-CONSOLIDATE-DUAL-DETECTION-001 FR-2: use canonical helper.
