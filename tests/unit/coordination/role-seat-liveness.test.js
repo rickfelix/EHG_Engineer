@@ -7,10 +7,43 @@
 // absent from the process table (Get-Process -Id 57172 -> nothing).
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 const { isSeatProcessDead } = require('../../../lib/coordinator/role-seat-liveness.cjs');
 const adam = require('../../../lib/coordinator/adam-identity.cjs');
 const solomon = require('../../../lib/coordinator/solomon-identity.cjs');
+
+// QF-20260906-590: isSeatProcessDead's fail-closed input guards (row.hostname/row.pid, above)
+// return false ("cannot say") on any row missing either field -- which every row from these four
+// fetchers WAS, since none of them selected hostname/pid, so the dead-process bucket below could
+// never fire from a real DB read (only from the hand-built SPECIMEN fixture in this same file).
+// Source-pin, not a live/fixture-DB call (the shared postgrest fixture store used elsewhere in
+// this suite has no .filter() -- the PostgREST method these four fetchers all call): prove the
+// guard row actually carries both columns by asserting each select() lists them.
+describe('the four role-seat identity fetchers select hostname + pid (QF-20260906-590)', () => {
+  const adamSrc = readFileSync(require.resolve('../../../lib/coordinator/adam-identity.cjs'), 'utf8');
+  const solomonSrc = readFileSync(require.resolve('../../../lib/coordinator/solomon-identity.cjs'), 'utf8');
+
+  it('adam-identity.cjs: fetchFreshAdams and fetchAllAdamsStrict both select hostname, pid', () => {
+    const selects = [...adamSrc.matchAll(/\.select\('([^']*)'\)/g)].map((m) => m[1]);
+    const roleSeatSelects = selects.filter((s) => s.includes('heartbeat_at'));
+    expect(roleSeatSelects.length).toBe(2);
+    for (const s of roleSeatSelects) {
+      expect(s).toMatch(/\bhostname\b/);
+      expect(s).toMatch(/\bpid\b/);
+    }
+  });
+
+  it('solomon-identity.cjs: fetchFreshSolomons and fetchAllSolomonsStrict both select hostname, pid', () => {
+    const selects = [...solomonSrc.matchAll(/\.select\('([^']*)'\)/g)].map((m) => m[1]);
+    const roleSeatSelects = selects.filter((s) => s.includes('heartbeat_at'));
+    expect(roleSeatSelects.length).toBe(2);
+    for (const s of roleSeatSelects) {
+      expect(s).toMatch(/\bhostname\b/);
+      expect(s).toMatch(/\bpid\b/);
+    }
+  });
+});
 
 const HOST = 'Legion-Laptop';
 const NOW = Date.parse('2026-09-05T08:31:43.299Z');
