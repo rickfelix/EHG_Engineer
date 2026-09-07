@@ -17,7 +17,13 @@ function parseArgs(argv) {
 }
 
 /** Pure: validate + count entries in a quarantine document. Throws on structural violation
- * (a malformed entry is a defect in the list itself, not a count question). */
+ * (a malformed entry is a defect in the list itself, not a count question).
+ * KNOWN LIMITATION, disclosed rather than fixed here: this bounds a COUNT, not a SET. A PR that
+ * removes one genuinely-repaired spec and adds a different, newly-broken spec in the same change
+ * leaves the count flat and passes, even though outstanding e2e debt did not shrink -- it moved.
+ * Closing that needs per-spec set-membership tracking across base and current, which is a real
+ * enhancement beyond this SD's own promised scope (FR-2 asks only for a non-growth COUNT
+ * assertion) -- left as a follow-up rather than scope-creeping this guard. */
 export function countQuarantineEntries(doc) {
   if (doc == null) return 0;
   const entries = Array.isArray(doc) ? doc : doc.quarantined;
@@ -51,14 +57,33 @@ function readCurrentDoc() {
   return JSON.parse(readFileSync(QUARANTINE_PATH, 'utf8'));
 }
 
-function readBaseDoc(base) {
+/** Adversarial review finding (deep-tier /ship gate, PR #8382): the original version of this
+ * function caught EVERY failure of `git show` -- a legitimately-absent path on a brand-new base,
+ * but ALSO a bad/unresolvable --base ref, a transient git error, or a corrupt JSON file on the
+ * base ref -- identically, collapsing all of them to []. evaluateQuarantineGrowth() then reads a
+ * base count of 0 as "bootstrap" and unconditionally PASSes. The net effect: any error reading
+ * the base document made the one guard whose entire job is "never let this grow silently" fail
+ * OPEN instead of closed. Only "the path does not exist at this ref" (git's own message for that
+ * exact condition) is now treated as absence; every other git failure, and any JSON parse
+ * failure on a file that DOES exist at the base ref, throws and reaches main()'s existing
+ * catch -> exitCode=1 (fail closed), never a silent bootstrap-PASS. */
+export function readBaseDoc(base) {
+  let raw;
   try {
-    const raw = execFileSync('git', ['show', `${base}:${QUARANTINE_PATH}`], { encoding: 'utf8' });
+    raw = execFileSync('git', ['show', `${base}:${QUARANTINE_PATH}`], { encoding: 'utf8' });
+  } catch (e) {
+    const stderr = String(e.stderr ?? e.message ?? '');
+    if (/does not exist in|exists on disk, but not in/.test(stderr)) {
+      // The one legitimate case: quarantine.json genuinely does not exist yet at this ref
+      // (e.g. this SD's own first merge) -- 0 is the honest baseline, not an error.
+      return [];
+    }
+    throw new Error(`git show ${base}:${QUARANTINE_PATH} failed: ${stderr.trim() || e.message}`);
+  }
+  try {
     return JSON.parse(raw);
-  } catch {
-    // File does not exist on base ref yet (e.g. this SD's own first merge) -- 0 is the honest
-    // baseline, not an error; a brand-new quarantine list cannot "grow" against nothing.
-    return [];
+  } catch (e) {
+    throw new Error(`${base}:${QUARANTINE_PATH} is not valid JSON: ${e.message}`);
   }
 }
 
