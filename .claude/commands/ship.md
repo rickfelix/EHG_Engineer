@@ -479,6 +479,30 @@ This creates an audit record in `ship_review_findings` for every PR shipped thro
 
 ---
 
+### Step 5.7: If the PR Is CONFLICTING (QF-20260904-004)
+
+Check mergeable state before attempting Step 6's merge:
+```bash
+gh pr view <PR#> --json mergeable,mergeStateStatus
+```
+
+If `mergeStateStatus` is `CONFLICTING`, a worker seat in auto mode **cannot** resolve it with a
+force-push — `git push --force-with-lease` is denied by the Claude Code auto-mode classifier
+before any repo-side check runs, so a naive rebase-then-force-push strands the PR until a
+bypass-permissions seat intervenes. Two documented resolutions (CLAUDE_EXEC.md "5. When a PR
+Goes CONFLICTING (Post-Push)" has the full commands):
+
+1. **DEFAULT — merge-from-main on the same branch, then a plain push.** A merge never needs a
+   force-push (the branch's existing commits are untouched), only a normal fast-forward push.
+   Accepts a merge commit in the branch history as the tradeoff for staying unblocked without a
+   human seat.
+2. **ESCAPE HATCH — replay as a new branch** (`<branch>-r2`) when a genuine rebase/linear-history
+   is required: rebase locally, push the NEW branch (never the original), open a replacement PR
+   citing the original, close the original with a note. Precedent: PR #8189, #8190.
+
+Do not retry `git push --force-with-lease` on the existing branch — the denial is not
+retry-sensitive.
+
 ### Step 6: Ask About Merging (MANDATORY)
 
 **AUTO-PROCEED Detection**: Before asking, check if AUTO-PROCEED mode is active:

@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-09-05T21:36:10.125Z -->
-<!-- git_commit: ca3bb175 -->
+<!-- generated_at: 2026-09-07T07:04:46.713Z -->
+<!-- git_commit: 8827201c -->
 <!-- db_snapshot_hash: 75c730afb94b407a -->
-<!-- file_content_hash: 0946d60c70df5b10 -->
+<!-- file_content_hash: 314ffb786536ba65 -->
 
 # CLAUDE_EXEC_DIGEST.md - EXEC Phase (Enforcement)
 
@@ -188,23 +188,22 @@ EXEC MUST verify these branch hygiene requirements BEFORE starting implementatio
 | 10-14 days | 🔴 Must sync before any handoff |
 | >14 days | ❌ Create fresh branch, cherry-pick changes |
 
-### Branch Health Check Script
+### 5. When a PR Goes CONFLICTING (Post-Push)
 
-### Why This Matters
+QF-20260904-004: `git push --force-with-lease` is denied by the Claude Code auto-mode classifier
+before any repo-side check runs -- a worker seat cannot complete a REBASE-and-force-push cycle on
+its own branch, so a CONFLICTING PR strands until a bypass-permissions seat pushes for it.
 
-- **Prevents unsalvageable branches**: 13-day divergence = 450 file conflicts
-- **Isolates SD work**: One SD per branch = clean merges and rollbacks
-- **Catches conflicts early**: Regular syncing = smaller conflict resolution
-- **Maintains velocity**: Fresh branches = fast PRs and reviews
+**DEFAULT (no force-push ever needed): merge-from-main on the SAME branch.**
+This is why item 3 above ("Merge Main at Phase Transitions") already says `git merge`, not
+`rebase`, as the primary form -- a merge commit is the tradeoff (non-linear branch history), and
+it is accepted here specifically because it keeps the worker unblocked without any human seat.
 
-### EXEC Agent Action
+**ESCAPE HATCH (only if a genuine rebase/linear-history is required, or the merge itself cannot
+be resolved cleanly): replay as a new branch.**
+The original branch/PR is closed, never force-pushed. Used prec
 
-When starting implementation:
-1. Run branch health check
-2. If >7 days stale → merge main first
-3. If multiple SDs detected → split branches
-4. If >100 files changed → assess scope creep
-5. Document branch health in handoff notes
+*...truncated. Read full file for complete section.*
 
 ## ESCALATE TO FULL FILE WHEN
 
@@ -223,5 +222,5 @@ When starting implementation:
 
 ---
 
-*DIGEST generated: 2026-09-05 5:36:10 PM*
+*DIGEST generated: 2026-09-07 3:04:46 AM*
 *Protocol: 4.4.1*

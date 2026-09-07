@@ -1,8 +1,8 @@
-<!-- file_content_hash: 112b344ffc6e941e -->
+<!-- file_content_hash: 2f1cbacbb9fad538 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-09-07 11:03:53 PM
+**Generated**: 2026-09-07 3:04:46 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -1061,6 +1061,40 @@ git merge origin/main --no-edit  # Or rebase if preferred
 | 7-10 days | ⚠️ Warning - sync with main |
 | 10-14 days | 🔴 Must sync before any handoff |
 | >14 days | ❌ Create fresh branch, cherry-pick changes |
+
+### 5. When a PR Goes CONFLICTING (Post-Push)
+
+QF-20260904-004: `git push --force-with-lease` is denied by the Claude Code auto-mode classifier
+before any repo-side check runs -- a worker seat cannot complete a REBASE-and-force-push cycle on
+its own branch, so a CONFLICTING PR strands until a bypass-permissions seat pushes for it.
+
+**DEFAULT (no force-push ever needed): merge-from-main on the SAME branch.**
+```bash
+git fetch origin main
+git merge origin/main   # resolve any conflicts locally, then:
+git add -A && git commit
+git push   # plain push -- the branch's existing commits are untouched, so this is a fast-forward for origin, never a force-push
+```
+This is why item 3 above ("Merge Main at Phase Transitions") already says `git merge`, not
+`rebase`, as the primary form -- a merge commit is the tradeoff (non-linear branch history), and
+it is accepted here specifically because it keeps the worker unblocked without any human seat.
+
+**ESCAPE HATCH (only if a genuine rebase/linear-history is required, or the merge itself cannot
+be resolved cleanly): replay as a new branch.**
+```bash
+git rebase origin/main   # resolve conflicts locally
+git checkout -b <branch>-r2
+git push -u origin <branch>-r2   # plain push of a NEW branch -- never force
+gh pr create --title "..." --body "Replaces #<original-PR>, rebased for a clean merge."
+gh pr close <original-PR> --comment "Superseded by #<new-PR> (rebased, replay-as-new-branch per QF-20260904-004)"
+```
+The original branch/PR is closed, never force-pushed. Used precedent: PR #8189, #8190.
+
+**Do not attempt** `git push --force-with-lease` (or `--force`) on an existing branch from a
+worker seat -- it is denied by the classifier before any repo check runs, and retrying the
+identical command does not change the outcome. If a human operator wants worker seats to
+force-push their own `qf/`/`feat/` branches, that is a Bash permission-rule decision for the
+chairman, not something a worker session can grant itself.
 
 ### Branch Health Check Script
 
