@@ -1759,9 +1759,13 @@ async function main() {
         { path: worktreeInfo.cwd, recordedSha: headSha, recordedAt: new Date().toISOString() },
         { repoRoot: worktreeInfo.cwd }
       );
+      // worktree_commit_pin ships in a chairman-gated migration (database/chairman-gated/
+      // 20260906_strategic_directives_worktree_commit_pin.sql), staged not applied -- the
+      // try/catch above+below is this write's fail-soft contract for exactly that pre-apply
+      // window, so the column is intentionally absent from the live schema snapshot for now.
       const { error: pinError } = await supabase
         .from('strategic_directives_v2')
-        .update({ worktree_commit_pin: pin.value })
+        .update({ worktree_commit_pin: pin.value }) // schema-lint-disable-line: see comment above
         .eq('sd_key', effectiveId);
       if (pinError) {
         console.warn(`   ${colors.yellow}⚠️  Failed to persist worktree_commit_pin: ${pinError.message}${colors.reset}`);

@@ -30,6 +30,7 @@
 import 'dotenv/config';
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 import { resolveWorktreePathTier, TIER } from '../../lib/git/commit-pin-resolver.mjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const EXECUTE = process.argv.includes('--execute');
 const PAGE_SIZE = 500;
@@ -172,7 +173,9 @@ async function main() {
   if (failed > 0) process.exit(1);
 }
 
-main().catch((err) => {
-  console.error(`[reconcile-worktree-commit-pin] fatal: ${err.message}`);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(`[reconcile-worktree-commit-pin] fatal: ${err.message}`);
+    process.exit(1);
+  });
+}
