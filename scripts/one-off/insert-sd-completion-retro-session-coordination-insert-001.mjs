@@ -256,8 +256,8 @@ const row = {
   quality_score: 88,
   team_satisfaction: 8,
   business_value_delivered:
-    'A CI gate that had silently never blocked since it shipped (verified 41 undetected raw-' +
-    'insert violations across the codebase on live merged-PR evidence) now genuinely fails closed ' +
+    'A CI gate that had silently never blocked since it shipped (verified 41 undetected raw ' +
+    'session_coordination inserts across the codebase on live merged-PR evidence) now genuinely fails closed ' +
     'in CI, and the code-level hardening ensures a future regression to shallow-clone-without-' +
     'origin/main fails the job immediately instead of silently degrading to advisory mode again.',
   customer_impact:
