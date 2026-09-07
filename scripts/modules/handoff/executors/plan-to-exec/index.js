@@ -341,7 +341,10 @@ export class PlanToExecExecutor extends BaseExecutor {
             console.log(`   ✅ Populated ${deliverablesResult.count} deliverables`);
           }
         } else {
-          console.log('   ⚠️  Could not extract deliverables from PRD');
+          // QF-20260905-843: surface the real reason (e.g. "Database insert failed: <error>"),
+          // not a generic swallow -- a silent insert failure previously left an SD with zero
+          // sd_scope_deliverables rows and no trace of why (SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C/D).
+          console.log(`   ⚠️  Could not extract deliverables from PRD: ${deliverablesResult.message || 'unknown reason'}`);
         }
       } catch (error) {
         console.log(`   ⚠️  Deliverables extraction error: ${error.message}`);
