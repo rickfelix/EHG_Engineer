@@ -6,6 +6,7 @@
 - [2026-09-07](#2026-09-07)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
+  - [Documentation](#documentation)
 - [2026-09-06](#2026-09-06)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -204,6 +205,11 @@
   - `.github/workflows/swallowed-query-error-lint.yml` drops `continue-on-error` and runs with `--enforce`: `node scripts/lint/swallowed-query-error-lint.mjs` now reports 0 ungoverned findings, and a PR reintroducing a swallowed-error destructure in any scanned path fails CI instead of only logging a warning. The lint's own self-test suite was rewritten against fixture directories (`SWALLOWED_QUERY_LINT_ROOT` env override) so it stops reading the live tree once the ungoverned count reaches zero.
   - New `scripts/lint/swallowed-query-fail-open-classifier.mjs` does real AST analysis (espree) to classify each swallowed-query hit's enclosing try/catch as `fail_open` (catch returns `passed: true`, masking the fault as a benign pass), `has_catch`, or `no_catch` — replacing a no-brace-matching heuristic estimate with an enumerated, provenance-backed list.
   - Fixed two CI gates this SD's own conversions newly tripped: `count-truncation-diff-lint.mjs` was flagging ~69 pre-existing, unmodified `.select(...)` sites as "new" purely because wrapping them in `safeQuery(...)` reformatted the line git diffs as added; and `control-seed-test-lint.mjs` required (and now has, seed-trial-verified) detection specs for the two lint controls above.
+### Documentation
+
+- **Encode the twelve Foundation-audit lens PREDICATE + INSTRUMENT + CANARY texts into `CLAUDE_SOLOMON_MANUAL.md`, replacing the bare lens-name line** - SD-LEO-DOC-FOUNDATION-AUDIT-LENS-001
+  - The twelve lenses (A1-A6, B1-B6) previously existed only as names on one manual line; their predicates lived in a Solomon seat's session-local scratch file, one discard from zero. `scripts/one-off/qf-20260905-813-encode-lens-predicates.mjs` verified the old clause appeared exactly once in `leo_protocol_sections` (row id=629) before replacing it with the full verbatim text from feedback 5b18d8f4, then `node scripts/generate-claude-md-from-db.js` regenerated the manual from the DB.
+  - Origin: a chairman question ("would this have been caught in any of the six dimensions?") whose measured answer showed the predicates were not durably encoded anywhere the standing Friday foundation audit could read them.
 
 ## 2026-09-06
 
