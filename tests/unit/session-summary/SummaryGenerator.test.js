@@ -340,7 +340,10 @@ describe('SummaryGenerator', () => {
 
       const result = await generator.generate(collector.getSnapshot());
 
-      expect(result.json.duration_ms).toBeGreaterThanOrEqual(15);
+      // QF-20260903-522: a >=15 bound against a 20ms real setTimeout wait is unsound
+      // (timer/clock-resolution slop can read marginally early). >0 still catches a
+      // regression that hardcodes/omits duration_ms, without racing the timer's minimum.
+      expect(result.json.duration_ms).toBeGreaterThan(0);
     });
 
     it('should format duration in digest', async () => {

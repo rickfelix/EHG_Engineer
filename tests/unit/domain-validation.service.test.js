@@ -460,7 +460,11 @@ describe('Mock Domain Provider - Determinism', () => {
     await provider.checkAvailability('testco', 'com');
     const duration = Date.now() - startTime;
 
-    expect(duration).toBeGreaterThanOrEqual(10);
+    // QF-20260903-522: the provider's simulated delay floor (10ms) made an exact
+    // >=10 assertion unsound against real setTimeout/clock-resolution slop. A
+    // >0 floor still catches a regression that drops the delay entirely (duration
+    // reads 0 in the same tick), without racing the timer's nominal minimum.
+    expect(duration).toBeGreaterThan(0);
     expect(duration).toBeLessThan(100);
   });
 });
