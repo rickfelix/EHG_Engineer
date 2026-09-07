@@ -24,6 +24,7 @@ import { getVenturePath } from '../lib/venture-resolver.js';
 import { resolveVentureRepoRoot } from '../lib/venture-repo-root.js';
 import { resolveRepoPathDbFirst } from '../lib/repo-paths.js';
 import { sanitizeBranchName, checkDirtyWorktree, verifyGitignore, acquireWorktreeLock, releaseLock } from '../lib/worktree-guards.js';
+import { readReuseMarker } from '../lib/fleet/worktree-reuse-marker.js';
 import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from '../lib/worktree-quota.js';
 // SD-LEO-INFRA-START-WORKTREE-BRANCH-001: delegate base-ref resolution + fetch
 // to the single source of truth in lib/worktree-manager.js so this code path
@@ -125,6 +126,56 @@ function getWorktreeBranch(wtPath) {
     return execSync('git rev-parse --abbrev-ref HEAD', { cwd: wtPath, encoding: 'utf8', stdio: 'pipe' }).trim();
   } catch {
     return null;
+  }
+}
+
+/**
+ * QF-20260905-634: verify a worktree's checked-out branch actually belongs to sdKey before it
+ * is handed to a caller as that SD's workdir. Pre-fix, every read site (the reuse check in
+ * createWorktree, the DB path, and the scan path) logged and persisted whatever branch was
+ * checked out WITHOUT comparing it to feat/<sdKey> or the slot-free reuse marker -- a directory
+ * reused from a prior, already-merged SD (or mid-flight on a coordinator reuse handoff) was
+ * silently handed over on a stale/foreign branch, hiding real unmerged commits on feat/<sdKey>.
+ * On a mismatch: trust an unexpired reuse marker naming this sdKey (a mid-flight reuse handoff,
+ * not yet checked out); otherwise attempt a clean-tree checkout of feat/<sdKey> (fetching origin
+ * first when it is not local); refuse rather than attach silently when the tree is dirty or
+ * feat/<sdKey> is unavailable anywhere to check out.
+ * @returns {{ok:true, branch:string, corrected?:boolean}|{ok:false, foreign:string, expected:string}}
+ */
+async function assertWorktreeBranchMatches(sdKey, treePath, repoRoot) {
+  const expected = `feat/${sdKey}`;
+  const foundBranch = getWorktreeBranch(treePath);
+  if (foundBranch === expected) return { ok: true, branch: foundBranch };
+
+  const marker = readReuseMarker(treePath);
+  if (marker && marker.key === sdKey) return { ok: true, branch: foundBranch, markerKeyed: true };
+
+  emitLog({ event: 'worktree.branch_mismatch', sdKey, treePath, foundBranch, expected });
+
+  if (checkDirtyWorktree(treePath).dirty) {
+    return { ok: false, foreign: foundBranch, expected };
+  }
+
+  const hasLocal = (() => {
+    try { execSync(`git show-ref --verify --quiet refs/heads/${expected}`, { cwd: treePath, stdio: 'pipe' }); return true; }
+    catch { return false; }
+  })();
+  if (!hasLocal) {
+    try { execSync(`git fetch origin ${expected}`, { cwd: repoRoot, stdio: 'pipe' }); } catch { /* no remote branch either -- fall through to refuse */ }
+  }
+  const hasRemote = hasLocal || (() => {
+    try { execSync(`git show-ref --verify --quiet refs/remotes/origin/${expected}`, { cwd: treePath, stdio: 'pipe' }); return true; }
+    catch { return false; }
+  })();
+  if (!hasRemote) return { ok: false, foreign: foundBranch, expected };
+
+  try {
+    execSync(hasLocal ? `git checkout ${expected}` : `git checkout -B ${expected} origin/${expected}`, { cwd: treePath, stdio: 'pipe' });
+    emitLog({ event: 'worktree.branch_mismatch_corrected', sdKey, treePath, from: foundBranch, to: expected });
+    return { ok: true, branch: expected, corrected: true };
+  } catch (e) {
+    emitLog({ event: 'worktree.branch_mismatch_checkout_failed', sdKey, treePath, error: e.message });
+    return { ok: false, foreign: foundBranch, expected };
   }
 }
 
@@ -402,7 +453,12 @@ async function createWorktree(sdKey, repoRoot, opts = {}) {
   // Prevents silent-trample scenarios from prior failed runs.
   if (fs.existsSync(worktreePath)) {
     if (isValidWorktree(worktreePath)) {
-      const existingBranch = getWorktreeBranch(worktreePath);
+      const branchCheck = await assertWorktreeBranchMatches(sdKey, worktreePath, repoRoot);
+      if (!branchCheck.ok) {
+        const err = new Error(`Worktree ${worktreePath} is on foreign branch "${branchCheck.foreign}" (expected "${branchCheck.expected}"); tree is dirty or ${branchCheck.expected} is unavailable to check out. Refusing to attach silently.`);
+        err.errorCode = 'WORKTREE_BRANCH_MISMATCH';
+        throw err;
+      }
       // Patch up essentials (.env, node_modules) for pre-existing worktrees
       // that DB and scan paths missed. Without this, handoff.js and other
       // scripts run from the worktree fail with NEXT_PUBLIC_SUPABASE_URL
@@ -411,7 +467,7 @@ async function createWorktree(sdKey, repoRoot, opts = {}) {
       if (!essentials.ok) {
         emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'pre-existing', errors: essentials.errors });
       }
-      return { path: worktreePath, branch: existingBranch || `feat/${sdKey}`, created: false };
+      return { path: worktreePath, branch: branchCheck.branch, created: false };
     }
     // SD-FDBK-ENH-START-LEAVES-LOCKED-001: before refusing on an orphan husk
     // (dir exists, unregistered — often a reaper-removed registration whose dir is
@@ -796,13 +852,21 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
       emitLog({ event: 'worktree.db_path_rejected', sdKey, path: dbResult.path, errorCode: 'INVALID_WORKTREE_PATH', outcome: 'fall_through_to_scan' });
       // Fall through to scan (no return).
     } else {
-      const branch = getWorktreeBranch(dbResult.path);
+      const branchCheck = await assertWorktreeBranchMatches(sdKey, dbResult.path, repoRoot);
+      if (!branchCheck.ok) {
+        return {
+          sdKey, cwd: repoRoot, source: 'legacy', success: false,
+          worktree: { exists: false },
+          errorCode: 'WORKTREE_BRANCH_MISMATCH',
+          error: `DB-tracked worktree ${dbResult.path} is on foreign branch "${branchCheck.foreign}" (expected "${branchCheck.expected}"); tree is dirty or ${branchCheck.expected} is unavailable to check out. Refusing to attach silently.`
+        };
+      }
       emitLog({ event: 'worktree.resolved', sdKey, source: 'db', resolvedCwd: dbResult.path, outcome: 'success' });
       const dbEssentials = ensureWorktreeEssentials(dbResult.path, repoRoot, { activeSessionCount: _activeSessionCount });
       if (!dbEssentials.ok) emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'db', errors: dbEssentials.errors });
       return {
         sdKey, cwd: dbResult.path, source: 'db', success: true,
-        worktree: { exists: true, path: dbResult.path, branch },
+        worktree: { exists: true, path: dbResult.path, branch: branchCheck.branch },
         sessionId: dbResult.sessionId
       };
     }
@@ -811,17 +875,25 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
   // 2. Scan filesystem
   const scanResult = resolveFromScan(sdKey, repoRoot);
   if (scanResult) {
-    const branch = getWorktreeBranch(scanResult.path);
+    const branchCheck = await assertWorktreeBranchMatches(sdKey, scanResult.path, repoRoot);
+    if (!branchCheck.ok) {
+      return {
+        sdKey, cwd: repoRoot, source: 'legacy', success: false,
+        worktree: { exists: false },
+        errorCode: 'WORKTREE_BRANCH_MISMATCH',
+        error: `Scanned worktree ${scanResult.path} is on foreign branch "${branchCheck.foreign}" (expected "${branchCheck.expected}"); tree is dirty or ${branchCheck.expected} is unavailable to check out. Refusing to attach silently.`
+      };
+    }
     emitLog({ event: 'worktree.resolved', sdKey, source: 'scan', resolvedCwd: scanResult.path, outcome: 'success' });
 
     // Persist to DB for future lookups
-    await persistWorktreePath(sdKey, scanResult.path, branch);
+    await persistWorktreePath(sdKey, scanResult.path, branchCheck.branch);
 
     const scanEssentials = ensureWorktreeEssentials(scanResult.path, repoRoot, { activeSessionCount: _activeSessionCount });
     if (!scanEssentials.ok) emitLog({ event: 'worktree.essentials_partial', sdKey, source: 'scan', errors: scanEssentials.errors });
     return {
       sdKey, cwd: scanResult.path, source: 'scan', success: true,
-      worktree: { exists: true, path: scanResult.path, branch }
+      worktree: { exists: true, path: scanResult.path, branch: branchCheck.branch }
     };
   }
 
@@ -840,11 +912,12 @@ async function resolve(sdKey, mode, repoRoot, targetApp) {
         worktree: { exists: true, created: true, path: created.path, branch: created.branch }
       };
     } catch (err) {
-      emitLog({ event: 'worktree.create_failed', sdKey, error: err.message, errorCode: 'WORKTREE_CREATE_FAILED' });
+      const errorCode = err.errorCode || 'WORKTREE_CREATE_FAILED';
+      emitLog({ event: 'worktree.create_failed', sdKey, error: err.message, errorCode });
       return {
         sdKey, cwd: repoRoot, source: 'legacy', success: false,
         worktree: { exists: false },
-        errorCode: 'WORKTREE_CREATE_FAILED',
+        errorCode,
         error: err.message
       };
     }
@@ -922,4 +995,4 @@ if (isMainScript) {
 // anything — pinning it proves the rule, not that the rule RUNS. This is the same
 // verify-at-the-consumer-not-at-the-merge gap this SD keeps finding in other people's work, so it
 // is closed in its own.
-export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch, isValidWorktree, ensureWorktreeEssentials };
+export { resolve, resolveFromDB, resolveFromScan, validateWorktreePath, resolveVentureRepoRoot, resolveExistingBranch, rejectDescendantBranch, isValidWorktree, ensureWorktreeEssentials, assertWorktreeBranchMatches };
