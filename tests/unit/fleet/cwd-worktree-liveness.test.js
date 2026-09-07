@@ -1,12 +1,11 @@
 // QF-20260905-060 — isCwdWorktreeLiveClaim, DB-injected (hermetic: fake `sb`, no live DB).
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
-const { isCwdWorktreeLiveClaim } = require('../../../lib/fleet/cwd-worktree-liveness.cjs');
+const { isCwdWorktreeLiveClaim, readReuseMarkerKey } = require('../../../lib/fleet/cwd-worktree-liveness.cjs');
 
 function fakeSb(table, row, error = null) {
   return {
@@ -21,6 +20,17 @@ function fakeSb(table, row, error = null) {
       };
     },
   };
+}
+
+/** A fake worktree dir under a real .worktrees/<dirName> path, optionally with a reuse marker. */
+function makeWorktreeDir(dirName, markerFields) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwd-liveness-'));
+  const repoDir = path.join(dir, '.worktrees', dirName);
+  fs.mkdirSync(repoDir, { recursive: true });
+  if (markerFields) {
+    fs.writeFileSync(path.join(repoDir, '.worktree-reuse.json'), JSON.stringify(markerFields));
+  }
+  return repoDir;
 }
 
 describe('isCwdWorktreeLiveClaim', () => {
@@ -73,50 +83,107 @@ describe('isCwdWorktreeLiveClaim', () => {
   });
 });
 
-// Adversarial deep-tier review finding on this QF's own PR: worktreeKeyOfCwd parses the DIRECTORY
-// NAME only, and a reused slot's directory keeps its PREVIOUS occupant's name while a NEW branch
-// is checked out inside it (lib/fleet/worktree-reuse-marker.js's own header documents this exact
-// pattern). Real temp git repos, not fakes -- currentBranchOf shells out to real git.
-describe('slot-reuse sanity guard (adversarial review finding)', () => {
-  function makeRepo(dirName) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cwd-liveness-'));
-    const repoDir = path.join(dir, '.worktrees', dirName);
-    fs.mkdirSync(repoDir, { recursive: true });
-    execFileSync('git', ['init', '-q'], { cwd: repoDir });
-    execFileSync('git', ['config', 'user.email', 't@t.com'], { cwd: repoDir });
-    execFileSync('git', ['config', 'user.name', 't'], { cwd: repoDir });
-    fs.writeFileSync(path.join(repoDir, 'a.txt'), 'x');
-    execFileSync('git', ['add', 'a.txt'], { cwd: repoDir });
-    execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: repoDir });
-    return repoDir;
-  }
-
-  it('branch visibly diverges from the stale path-derived key: true, WITHOUT querying the DB', async () => {
-    // Directory still named after the OLD occupant (SD-OLD-001); the checked-out branch names
-    // the NEW one (SD-NEW-001) -- exactly the slot-reuse shape the review flagged.
-    const repoDir = makeRepo('SD-OLD-001');
-    execFileSync('git', ['checkout', '-q', '-b', 'feat/SD-NEW-001'], { cwd: repoDir });
-    const sb = { from: () => { throw new Error('must not query the DB on a detected path/branch divergence'); } };
-    await expect(isCwdWorktreeLiveClaim(sb, repoDir)).resolves.toBe(true);
+describe('readReuseMarkerKey', () => {
+  it('present, fresh, well-formed: returns the key', () => {
+    const dir = makeWorktreeDir('SD-OLD-001', { key: 'SD-NEW-001', writer_session: 's1', marked_at: new Date().toISOString() });
+    expect(readReuseMarkerKey(dir)).toBe('SD-NEW-001');
   });
 
-  it('branch matches the path-derived key: proceeds to the normal DB-backed check', async () => {
-    const repoDir = makeRepo('SD-SAME-001');
-    execFileSync('git', ['checkout', '-q', '-b', 'feat/SD-SAME-001'], { cwd: repoDir });
-    // If the guard incorrectly short-circuited here, the DB would never be queried and this
-    // fixture's terminal status (=> false) would never be observed.
+  it('absent: null', () => {
+    const dir = makeWorktreeDir('SD-OLD-001');
+    expect(readReuseMarkerKey(dir)).toBeNull();
+  });
+
+  it('corrupt JSON: null, never throws', () => {
+    const dir = makeWorktreeDir('SD-OLD-001');
+    fs.writeFileSync(path.join(dir, '.worktree-reuse.json'), '{not json');
+    expect(readReuseMarkerKey(dir)).toBeNull();
+  });
+
+  it('past its TTL (120min): null', () => {
+    const staleAt = new Date(Date.now() - 121 * 60 * 1000).toISOString();
+    const dir = makeWorktreeDir('SD-OLD-001', { key: 'SD-NEW-001', marked_at: staleAt });
+    expect(readReuseMarkerKey(dir)).toBeNull();
+  });
+
+  it('within its TTL: returns the key', () => {
+    const freshAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const dir = makeWorktreeDir('SD-OLD-001', { key: 'SD-NEW-001', marked_at: freshAt });
+    expect(readReuseMarkerKey(dir)).toBe('SD-NEW-001');
+  });
+
+  it('missing/invalid marked_at: null', () => {
+    const dir = makeWorktreeDir('SD-OLD-001', { key: 'SD-NEW-001' });
+    expect(readReuseMarkerKey(dir)).toBeNull();
+  });
+
+  it('missing/empty key field: null', () => {
+    const dir = makeWorktreeDir('SD-OLD-001', { marked_at: new Date().toISOString() });
+    expect(readReuseMarkerKey(dir)).toBeNull();
+  });
+});
+
+// Two rounds of adversarial deep-tier review on this QF's own PR. Round 1: worktreeKeyOfCwd parses
+// the DIRECTORY NAME only, and a reused slot's directory keeps its PREVIOUS occupant's name while a
+// NEW branch is checked out inside it. Round 2: a branch-substring sanity check (the round-1 fix)
+// is defeated when the stale key is a PREFIX of the new key -- routine in this codebase's own
+// parent/child SD naming (e.g. 'SD-X-001' -> 'SD-X-001-F'). Fixed with the purpose-built reuse
+// marker instead of a substring heuristic: it names the TRUE occupant directly, so a prefix
+// relationship between the old and new keys cannot fool it.
+describe('slot-reuse correction via the reuse marker (two rounds of adversarial review)', () => {
+  it('marker present, names a DIFFERENT key: the MARKER key is queried, not the stale path key', async () => {
+    // The exact round-2 collision shape: stale path key IS A PREFIX of the marker/new key.
+    const dir = makeWorktreeDir('SD-X-001', { key: 'SD-X-001-F', marked_at: new Date().toISOString() });
     const sb = {
       from: (t) => {
         expect(t).toBe('strategic_directives_v2');
-        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'completed', claiming_session_id: null }, error: null }) }) }) };
+        return {
+          select: () => ({
+            eq: (col, val) => {
+              expect(val).toBe('SD-X-001-F'); // the marker's key, NOT the stale 'SD-X-001' path key
+              return { maybeSingle: async () => ({ data: { status: 'in_progress', claiming_session_id: 'sess-1' }, error: null }) };
+            },
+          }),
+        };
       },
     };
-    await expect(isCwdWorktreeLiveClaim(sb, repoDir)).resolves.toBe(false);
+    await expect(isCwdWorktreeLiveClaim(sb, dir)).resolves.toBe(true);
   });
 
-  it('not a git repo at all (branch unresolvable): falls through to the normal DB-backed check, unaffected', async () => {
+  it('marker present, names the SAME key as the path: queries that key once, no behavior change', async () => {
+    const dir = makeWorktreeDir('SD-X-001', { key: 'SD-X-001', marked_at: new Date().toISOString() });
     const sb = fakeSb('strategic_directives_v2', { status: 'completed', claiming_session_id: null });
-    const notAGitRepoSdCwd = 'C:/Users/x/EHG_Engineer/.worktrees/SD-FOO-001';
-    await expect(isCwdWorktreeLiveClaim(sb, notAGitRepoSdCwd)).resolves.toBe(false); // same as the earlier terminal-status test
+    await expect(isCwdWorktreeLiveClaim(sb, dir)).resolves.toBe(false);
+  });
+
+  it('no marker present (the common, unreused case): resolves via the path-derived key exactly as before', async () => {
+    const dir = makeWorktreeDir('SD-X-001');
+    const sb = {
+      from: (t) => ({
+        select: () => ({
+          eq: (col, val) => {
+            expect(val).toBe('SD-X-001');
+            return { maybeSingle: async () => ({ data: { status: 'in_progress', claiming_session_id: 'sess-1' }, error: null }) };
+          },
+        }),
+      }),
+    };
+    await expect(isCwdWorktreeLiveClaim(sb, dir)).resolves.toBe(true);
+  });
+
+  it('DISCLOSED RESIDUAL, expressed as a test: an EXPIRED marker cannot correct a reuse -- falls back to the stale path key', async () => {
+    const staleAt = new Date(Date.now() - 121 * 60 * 1000).toISOString();
+    const dir = makeWorktreeDir('SD-X-001', { key: 'SD-X-001-F', marked_at: staleAt });
+    const sb = {
+      from: (t) => ({
+        select: () => ({
+          eq: (col, val) => {
+            expect(val).toBe('SD-X-001'); // marker expired -> the stale path key is used, as documented
+            return { maybeSingle: async () => ({ data: { status: 'completed', claiming_session_id: null }, error: null }) };
+          },
+        }),
+      }),
+    };
+    await expect(isCwdWorktreeLiveClaim(sb, dir)).resolves.toBe(false);
   });
 });
