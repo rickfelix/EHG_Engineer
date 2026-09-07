@@ -96,4 +96,9 @@ describe('runYoutubeDigest', () => {
     const src = (await import('node:fs')).readFileSync(new URL('./youtube-digest.mjs', import.meta.url), 'utf8');
     expect(src).not.toMatch(/from 'googleapis'|chairman-oauth|readHostKey|MICHAEL_ENCRYPTION_KEY/);
   });
+  it('never imports the pre-existing (unrelated) youtube playlist/OAuth modules or calls a playlist-write endpoint (FR-6 non-goal)', async () => {
+    const src = (await import('node:fs')).readFileSync(new URL('./youtube-digest.mjs', import.meta.url), 'utf8');
+    expect(src).not.toMatch(/oauth-manager|playlist-sync/);
+    expect(src).not.toMatch(/playlistItems\.(insert|delete|update)|videos\.insert|youtube\.force-ssl|youtube\.upload|youtubepartner/);
+  });
 });
