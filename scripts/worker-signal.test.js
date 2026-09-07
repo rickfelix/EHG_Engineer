@@ -158,4 +158,19 @@ describe('WS-13: reply_class stamping', () => {
     expect(p.reply_class).toBe('live-handshake');
     expect(p.reply_expected_by).toBeUndefined();
   });
+  // QF-20260907-273: a pre_send mirror must never read as an open reply-needed obligation --
+  // Solomon acks it but is contractually forbidden to reply, so stamping it reply-needed made
+  // every dutifully-acked mirror a false ping-on-silence/SLA-overdue candidate.
+  it('buildSolomonConsultPayload with consultPurpose=pre_send is informational: expects_reply false, no reply_expected_by', () => {
+    const p = buildSolomonConsultPayload({ correlationId: 'c4', body: 'fyi', consultPurpose: 'pre_send' });
+    expect(p.reply_class).toBe('informational');
+    expect(p.expects_reply).toBe(false);
+    expect(p.reply_expected_by).toBeUndefined();
+    expect(p.consult_purpose).toBe('pre_send');
+  });
+  it('consultPurpose=pre_send overrides isAwait=true -- still informational, not live-handshake', () => {
+    const p = buildSolomonConsultPayload({ correlationId: 'c5', body: 'fyi', consultPurpose: 'pre_send', isAwait: true });
+    expect(p.reply_class).toBe('informational');
+    expect(p.expects_reply).toBe(false);
+  });
 });
