@@ -1,4 +1,5 @@
 -- @chairman-gated: applied by the chairman after sign-off (Tier 3: schema; personal data)
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-B (Michael data model, FR-1) — docs/michael/02-SPEC.md §2.
 -- The eleven michael_* tables: Michael's database source of truth (spec §0: the seat reads rows,
 -- prose is generated only for the chairman's review). Natural keys per §2; NO streak columns
