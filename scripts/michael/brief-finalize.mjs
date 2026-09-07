@@ -62,7 +62,8 @@ export async function runBriefFinalize({ sb, argv = [], now = new Date() } = {})
   const patch = { data_json: data, rendered_html: html, verified: verdict.verified, verify_notes: verdict.verify_notes || null, rendered_at: nowIso };
   // Never stamp enriched_at on a failing render — that field is the "trust this enrichment" signal.
   if (verdict.verified) patch.enriched_at = nowIso;
-  const w = await writeRows(sb, 'michael_brief_runs', (t) => t.update(patch).eq('et_date', etDate).select('id'));
+  // et_date is uniquely indexed — exactly one row, bounded by design.
+  const w = await writeRows(sb, 'michael_brief_runs', (t) => t.update(patch).eq('et_date', etDate).select('id').single());
   if (!w.ok) return refusal(w.refusal, w.error);
   return { ok: true, action: 'run', et_date: etDate, verified: verdict.verified, enriched: verdict.verified };
 }

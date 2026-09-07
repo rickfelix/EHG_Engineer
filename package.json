@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "ack:advisory": "node scripts/worker-ack-advisory.cjs",
+    "michael:brief-assemble": "node scripts/michael/brief-assemble.mjs",
+    "michael:brief-finalize": "node scripts/michael/brief-finalize.mjs",
+    "michael:brief-doc": "node scripts/michael/brief-doc.mjs",
     "schema:snapshot:prd": "node scripts/snapshot-prd-schema.js",
     "schema:check-drift": "node scripts/snapshot-prd-schema.js --check-drift",
     "altifyai:fr7-fixture-drift": "node scripts/regen-fr7-source-material-fixture.mjs",

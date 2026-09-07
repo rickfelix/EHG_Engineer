@@ -427,6 +427,8 @@ module.exports.SESSION_SELECT_COLUMNS = SESSION_SELECT_COLUMNS;
 // call-graph builder can statically resolve the dependency on lib/coordinator/signal-router.cjs.
 const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
 const _coordEventsModule = require('../lib/coordinator/coordination-events.cjs'); // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4) — top-level require so WIRE_CHECK reaches detectors.cjs
+// QF-20260905-230 — top-level require so WIRE_CHECK reaches the findings sink.
+const { recordFinding } = require('../lib/fleet/sweep-findings-sink.cjs');
 // SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001 — top-level require so WIRE_CHECK reaches the
 // pending-question timer (auto-proceed on a stale, non-critical, unanswered operator question).
 const _pendingQuestionTimer = require('../lib/coordinator/pending-question-timer.cjs');
@@ -774,10 +776,10 @@ async function isSweepResetAllowed(sdKey, targetResetPhase, contextLabel) {
     return true;
   } catch (err) {
     if (err && err.code === 'ACCEPTED_HANDOFF_OVERRIDE') {
-      console.log(
-        '  SKIP_RESET: ' + sdKey + ' — ' + contextLabel +
-        ' — accepted handoff past ' + targetResetPhase + ' exists: ' + err.message
-      );
+      const summary = sdKey + ' — ' + contextLabel +
+        ' — accepted handoff past ' + targetResetPhase + ' exists: ' + err.message;
+      console.log('  SKIP_RESET: ' + summary);
+      await recordFinding(supabase, { findingClass: 'skip_reset', subject: sdKey, summary });
       return false;
     }
     // SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 (FR-1): a vanished SD (TOCTOU — a
@@ -789,10 +791,10 @@ async function isSweepResetAllowed(sdKey, targetResetPhase, contextLabel) {
     // it as a per-item skip: the SD is gone, so there is nothing to reset. Do NOT
     // swallow SCHEMA_ERROR (a genuine, permanent fault that must surface).
     if (err && err.code === 'SD_NOT_FOUND') {
-      console.log(
-        '  SKIP_RESET: ' + sdKey + ' — ' + contextLabel +
-        ' — SD vanished before handoff-gate lookup (TOCTOU); skipping reset (non-fatal)'
-      );
+      const summary = sdKey + ' — ' + contextLabel +
+        ' — SD vanished before handoff-gate lookup (TOCTOU); skipping reset (non-fatal)';
+      console.log('  SKIP_RESET: ' + summary);
+      await recordFinding(supabase, { findingClass: 'skip_reset', subject: sdKey, summary });
       return false;
     }
     // SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 (FR-2): any other unexpected error
@@ -4251,25 +4253,33 @@ async function main() {
     console.log('');
   }
 
-  // Warnings
+  // Warnings — QF-20260905-230: each finding also persisted (jsonl always; a directed
+  // coordinator alert deduped per-warning-text within a 6h window).
   if (warnings.length > 0) {
     console.log('WARNINGS (' + warnings.length + '):');
-    warnings.forEach(w => console.log('  ! ' + w));
+    for (const w of warnings) {
+      console.log('  ! ' + w);
+      await recordFinding(supabase, { findingClass: 'warning', subject: w.slice(0, 200), summary: w });
+    }
     console.log('');
   }
 
   // Conflicts — SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001: "None" only when BOTH directions are empty.
   if (conflicts.length > 0 || multiClaimSessions.length > 0) {
     console.log('CONFLICTS DETECTED: ' + (conflicts.length + multiClaimSessions.length));
-    conflicts.forEach(([sdId, arr]) => {
-      console.log('  ' + sdId + ': ' + arr.map(s => s.session_id.substring(0, 20) + '(' + s.status + ')').join(' vs '));
-    });
-    multiClaimSessions.forEach(m => {
+    for (const [sdId, arr] of conflicts) {
+      const summary = sdId + ': ' + arr.map(s => s.session_id.substring(0, 20) + '(' + s.status + ')').join(' vs ');
+      console.log('  ' + summary);
+      await recordFinding(supabase, { findingClass: 'conflict', subject: sdId, summary });
+    }
+    for (const m of multiClaimSessions) {
       const all = m.claims.map(c => c.kind + ':' + c.key).join(' + ');
       const invisible = m.unpointed.map(c => c.kind + ':' + c.key).join(', ') || '(mirror names none)';
-      console.log('  ' + m.session_id.substring(0, 20) + ' holds ' + m.claims.length + ' claims: ' + all
-        + ' — UN-POINTED (invisibly blocked): ' + invisible);
-    });
+      const summary = m.session_id.substring(0, 20) + ' holds ' + m.claims.length + ' claims: ' + all
+        + ' — UN-POINTED (invisibly blocked): ' + invisible;
+      console.log('  ' + summary);
+      await recordFinding(supabase, { findingClass: 'conflict', subject: m.session_id, summary });
+    }
     console.log('');
   } else {
     console.log('CONFLICTS: None');
