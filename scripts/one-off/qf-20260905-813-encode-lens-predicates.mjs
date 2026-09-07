@@ -11,6 +11,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const SECTION_ID = 629;
@@ -72,7 +73,9 @@ async function main() {
   console.log(`Section ${SECTION_ID} updated.`);
 }
 
-main().catch((err) => {
-  console.error(`[qf-20260905-813] fatal: ${err.message}`);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(`[qf-20260905-813] fatal: ${err.message}`);
+    process.exit(1);
+  });
+}
