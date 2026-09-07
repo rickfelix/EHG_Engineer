@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  runRetireCowork, runStep1, runStep2, runStep3Archive, runStep3Verify, runStep4,
+  runRetireCowork, runStep1, runStep2, runStep3Archive, runStep3Verify, runStep4, runStep5,
   classifySchtasksResult, assertTaskName, parseCliArgs,
 } from './retire-cowork.mjs';
 
@@ -261,6 +261,15 @@ describe('runStep4 — gated, irreversible deletion', () => {
   });
 });
 
+describe('runStep5 — the retirement grep is clean (live re-check of the static test predicate)', () => {
+  it('reports clean when scanForCoworkReferences finds no violations', () => {
+    // Points at THIS repo's real tree — the static test already proves it's clean.
+    const r = runStep5({ repoRoot: process.cwd() });
+    expect(r).toMatchObject({ ok: true, outcome: 'clean' });
+    expect(r.hitCount).toBeGreaterThan(0);
+  });
+});
+
 describe('parseCliArgs', () => {
   it('never exposes a --required-days flag — the 14-day floor is not CLI-settable', () => {
     const parsed = parseCliArgs(['--apply-deletion', '--window-start', '2026-01-01']);
@@ -324,6 +333,12 @@ describe('runRetireCowork — orchestration, dry-run by default, tiered apply ga
     });
     const persisted = JSON.parse(fsx._files['/state.json']);
     expect(persisted).toMatchObject({ step1: 'ok', step2: 'ok', step3: 'ok' });
+  });
+
+  it('--check-step5 runs the live grep re-check and never requires --cowork-root', async () => {
+    const r = await runRetireCowork({ sb: {}, argv: ['--check-step5'], repoRoot: process.cwd(), fsImpl: fakeFs() });
+    expect(r.action).toBe('check_step5');
+    expect(r.ok).toBe(true);
   });
 
   it('a corrupt state file with NO steps run in the same call (verify-step3 mode) never crashes the process', async () => {

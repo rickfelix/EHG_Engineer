@@ -45,6 +45,7 @@
 //   node scripts/michael/retire-cowork.mjs --cowork-root "<path>" --apply --archive-date 2026-11-10 # + create the local archive zip
 //   node scripts/michael/retire-cowork.mjs --verify-step3 --archive-date 2026-11-10                 # verify the manual Drive upload landed (read-only)
 //   node scripts/michael/retire-cowork.mjs --cowork-root "<path>" --apply --apply-deletion --window-start <et_date>  # attempt step 4 (refuses unless the window is real)
+//   node scripts/michael/retire-cowork.mjs --check-step5                                             # re-run the same predicate tests/unit/michael-cowork-retirement-grep.test.js enforces, live
 //   node scripts/michael/retire-cowork.mjs --cowork-root "<path>" --json
 import 'dotenv/config';
 import fs from 'node:fs';
@@ -55,6 +56,8 @@ import { createMichaelClient, parseArgs, readRows, refusal, emit, todayEt } from
 import { buildDisableArgs, TASK_NAME_ILLEGAL_CHARS } from '../setup-alarm-cron-tasks.mjs';
 import { computeRetirementWindow } from '../../lib/michael/retirement-window.mjs';
 import { listDriveFiles } from '../../lib/michael/google-clients.mjs';
+import { scanForCoworkReferences } from '../../lib/michael/cowork-retirement-grep.mjs';
+import { getRepoRoot } from '../../lib/repo-paths.js';
 
 export const DEFAULT_STATE_PATH = path.join('.artifacts', 'michael-cowork-retirement-state.json');
 export const CHAIRMAN_FOLDER_ID = '1_Ui4ckZLtIUi3Sm9W_y41eEDHEnNIwDP';
@@ -199,6 +202,17 @@ export async function runStep4({
   return { ok: true, step: 4, outcome: 'deleted', window };
 }
 
+/** Step 5: the retirement grep is clean — a live re-check of the same predicate the static test
+ * (tests/unit/michael-cowork-retirement-grep.test.js) enforces, so a CLI run can confirm step 5 the
+ * same way it confirms steps 1-4, without duplicating the scan logic. */
+export function runStep5({ repoRoot = getRepoRoot() } = {}) {
+  const result = scanForCoworkReferences(repoRoot);
+  if (result.violations.length) {
+    return { ok: false, step: 5, outcome: 'violations_found', violations: result.violations };
+  }
+  return { ok: true, step: 5, outcome: 'clean', hitCount: result.hits.length };
+}
+
 /** Pure: parses this script's own flags (never a bare --required-days — the 14-day floor is not a CLI-settable value). */
 export function parseCliArgs(argv) {
   const a = parseArgs(argv);
@@ -211,16 +225,17 @@ export function parseCliArgs(argv) {
     windowStart: typeof a['window-start'] === 'string' ? a['window-start'] : null,
     coworkRoot: typeof a['cowork-root'] === 'string' ? a['cowork-root'] : null,
     taskNames: typeof a['task-names'] === 'string' ? a['task-names'].split(',').map((s) => s.trim()).filter(Boolean) : [...DEFAULT_CANDIDATE_TASK_NAMES],
+    checkStep5: a['check-step5'] === true,
     json: a.json === true,
   };
 }
 
-/** deps: { sb, argv, now, fsImpl, runSchtasks, runPowershell, listDrive, statePath, coworkRoot }.
+/** deps: { sb, argv, now, fsImpl, runSchtasks, runPowershell, listDrive, statePath, coworkRoot, repoRoot }.
  * coworkRoot, if supplied by a caller, always wins over --cowork-root (tests inject it directly);
  * otherwise it comes from the CLI flag. Never throws. */
 export async function runRetireCowork({
   sb, argv = [], now = new Date(), fsImpl = fs, runSchtasks = defaultRunSchtasks, runPowershell = defaultRunPowershell,
-  listDrive = listDriveFiles, statePath = DEFAULT_STATE_PATH, coworkRoot,
+  listDrive = listDriveFiles, statePath = DEFAULT_STATE_PATH, coworkRoot, repoRoot,
 } = {}) {
   const args = parseCliArgs(argv);
   const apply = args.apply;
@@ -233,6 +248,11 @@ export async function runRetireCowork({
   if (args.verifyStep3) {
     const v = await runStep3Verify({ archiveDate: args.archiveDate, listDrive });
     return { ok: v.ok, action: 'verify_step3', result: v };
+  }
+
+  if (args.checkStep5) {
+    const v = runStep5(repoRoot ? { repoRoot } : {});
+    return { ok: v.ok, action: 'check_step5', result: v };
   }
 
   if (!root) return refusal('COWORK_ROOT_REQUIRED', '--cowork-root is required (no default — the literal path never appears hardcoded in this repo)');
