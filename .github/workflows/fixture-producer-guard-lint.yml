@@ -38,6 +38,14 @@ on:
       - 'scripts/canary/**/*.js'
       - 'scripts/canary/**/*.mjs'
       - 'scripts/canary/**/*.cjs'
+      # SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-1): tests/e2e added to SCAN_ROOTS, one
+      # entry per extension (never a brace-glob, per this file's own header).
+      - 'tests/e2e/**/*.js'
+      - 'tests/e2e/**/*.mjs'
+      - 'tests/e2e/**/*.cjs'
+      - 'tests/e2e/**/*.ts'
+      - 'tests/e2e/**/*.tsx'
+      - 'tests/e2e/**/*.mts'
       - 'lib/governance/fixture-producer-guard.mjs'
       - 'scripts/lint/fixture-producer-guard-lint.mjs'
       - 'scripts/lint/fixture-producer-guard-allowlist.json'

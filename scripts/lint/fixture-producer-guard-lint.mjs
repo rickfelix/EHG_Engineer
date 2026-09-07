@@ -59,9 +59,18 @@ const HERE = fileURLToPath(new URL('.', import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
 export const ALLOWLIST_PATH = join(HERE, 'fixture-producer-guard-allowlist.json');
 
-/** The producer roots this SD scoped. Named, not globbed, so the boundary is deliberate. */
+/**
+ * The producer roots this SD scoped. Named, not globbed, so the boundary is deliberate.
+ *
+ * SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-1) adds tests/e2e -- measured: 48-of-53
+ * unguarded ventures-insert producers live there. tests/ddl is deliberately NOT added (measured:
+ * 0 producers, a pure no-op today). tests/unit is deliberately NOT added (measured: its only
+ * findings are string-literal fixtures inside this lint's own positive-control test file,
+ * false-positived by stripNonCode() not stripping string bodies -- fixing that extractor bug is
+ * out of this SD's scope).
+ */
 export const SCAN_ROOTS = Object.freeze([
-  'tests/integration', 'tests/database', 'scripts/harness', 'scripts/canary',
+  'tests/integration', 'tests/database', 'scripts/harness', 'scripts/canary', 'tests/e2e',
 ]);
 
 /** Only `ventures` has a row-shaped predicate today; the rest are FK-derived or unscoped. */
@@ -142,7 +151,9 @@ const walk = (dir, out = []) => {
     let st;
     try { st = statSync(full); } catch { continue; }
     if (st.isDirectory()) walk(full, out);
-    else if (/\.(mjs|js|cjs)$/.test(n)) out.push(full);
+    // SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-1): widened from mjs|js|cjs to also match
+    // .ts/.tsx/.mts -- 29 of 31 tests/e2e producer files are .spec.ts, invisible to the old filter.
+    else if (/\.(mjs|js|cjs|ts|tsx|mts)$/.test(n)) out.push(full);
   }
   return out;
 };

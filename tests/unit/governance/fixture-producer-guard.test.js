@@ -51,7 +51,7 @@ describe('the guard OWNS the write — the object-identity seam is closed by con
     expect(sb.inserted[0].row).toBe(row);
   });
 
-  it('issues NO insert at all when the assert fails', () => {
+  it('issues NO insert at all when the assert fails (also pins the ASSERT-BEFORE-STAMP ordering, SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 FR-2)', () => {
     const sb = mkSupabase();
     expect(() => insertGuarded(sb, 'ventures', REAL_ROW, {
       classification: CLASSIFICATION.FIXTURE, source: 'test',
@@ -59,6 +59,50 @@ describe('the guard OWNS the write — the object-identity seam is closed by con
     // The point of assert-BEFORE-insert is that the write never happens. Asserting only that it
     // threw would pass even if the row had already landed.
     expect(sb.inserted).toEqual([]);
+    // THE INVARIANT THIS TEST GUARDS AGAINST REGRESSING: isFixtureVenture is flag-first
+    // (is_demo===true short-circuits to true). If a future edit stamps is_demo:true onto `row`
+    // BEFORE calling evaluateDeclaration (instead of after, as FR-2 requires), REAL_ROW would
+    // trip canonical via the flag and this exact test would go from throwing to silently
+    // succeeding -- the guard's entire refusal behavior would be voided repo-wide. If you are
+    // reading this because this test just turned red: the fix is almost certainly restoring the
+    // stamp to AFTER the verdict.ok check in insertGuarded, not touching this test.
+    expect(REAL_ROW.is_demo).toBe(false);
+  });
+});
+
+describe('SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-2): insertGuarded stamps is_demo:true on FIXTURE rows', () => {
+  it('stamps is_demo:true even when the caller omits it entirely', () => {
+    const sb = mkSupabase();
+    const row = { ...NAME_BRANCH_FIXTURE }; // is_demo absent
+    insertGuarded(sb, 'ventures', row, { classification: CLASSIFICATION.FIXTURE, source: 'test' });
+    expect(sb.inserted[0].row.is_demo).toBe(true);
+  });
+
+  it('stamps in place, not via a spread copy — the written row is reference-identical to the caller\'s object', () => {
+    const sb = mkSupabase();
+    const row = { ...NAME_BRANCH_FIXTURE };
+    insertGuarded(sb, 'ventures', row, { classification: CLASSIFICATION.FIXTURE, source: 'test' });
+    // toBe: a spread copy (`{...row, is_demo:true}`) would satisfy the value assertion above while
+    // breaking this one, which is exactly the class of regression the object-identity describe
+    // block at the top of this file exists to prevent.
+    expect(sb.inserted[0].row).toBe(row);
+    expect(row.is_demo).toBe(true);
+  });
+
+  it('does NOT stamp for DELIBERATELY_REAL or SANCTIONED_PERMANENT rows', () => {
+    const sb = mkSupabase();
+    const realRow = { ...REAL_ROW };
+    insertGuarded(sb, 'ventures', realRow, {
+      classification: CLASSIFICATION.DELIBERATELY_REAL, source: 'test', reason: 'exercises the real path',
+    });
+    expect(sb.inserted[0].row.is_demo).toBe(false);
+
+    const canaryRow = { name: CANARY_NAME, is_demo: true };
+    const sb2 = mkSupabase();
+    insertGuarded(sb2, 'ventures', canaryRow, {
+      classification: CLASSIFICATION.SANCTIONED_PERMANENT, source: 'test', reason: 'the live canary',
+    });
+    expect(sb2.inserted[0].row).toBe(canaryRow);
   });
 });
 
@@ -69,7 +113,10 @@ describe('FIXTURE — the incumbent rule, now reachable at the NAME branch', () 
   // is_demo:true and short-circuits before the name is ever consulted.
   it('accepts a row that trips canonical via the NAME, with is_demo absent', () => {
     const sb = mkSupabase();
-    insertGuarded(sb, 'ventures', NAME_BRANCH_FIXTURE, {
+    // SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-2): a fresh copy -- insertGuarded now
+    // stamps is_demo:true onto FIXTURE rows in place, so passing the shared NAME_BRANCH_FIXTURE
+    // constant directly would permanently mutate it for every later test in this file.
+    insertGuarded(sb, 'ventures', { ...NAME_BRANCH_FIXTURE }, {
       classification: CLASSIFICATION.FIXTURE, source: 'test',
     });
     expect(sb.inserted).toHaveLength(1);
@@ -129,7 +176,8 @@ describe('the opt-out NAMES ITSELF every time it fires', () => {
   it('stays SILENT for a plain FIXTURE — the normal path is not noise', () => {
     const sb = mkSupabase();
     const logger = mkLogger();
-    insertGuarded(sb, 'ventures', NAME_BRANCH_FIXTURE, {
+    // Fresh copy -- see the FR-2 note above on why NAME_BRANCH_FIXTURE is never passed directly.
+    insertGuarded(sb, 'ventures', { ...NAME_BRANCH_FIXTURE }, {
       classification: CLASSIFICATION.FIXTURE, source: 'test', logger,
     });
     // Two-sided: without this, "log everything" would pass the test above while destroying the
