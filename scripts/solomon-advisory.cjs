@@ -1428,6 +1428,14 @@ async function main() {
     if (error) { console.error('ERROR: failed to insert advisory:', error.message); process.exit(1); }
     inserted = data;
   } catch (e) {
+    // QF-20260902-160 (ported from adam-advisory.cjs under QF-20260906-523): a landed:true error
+    // means the content already reached the target (parked or a same-correlation dupe) — this is
+    // DELIVERED, not a failure. Exiting 1 here is what trained callers to resend and duplicate an
+    // ask that already landed.
+    if (e && e.landed) {
+      console.error(`[solomon-advisory] DELIVERED (not a failure) — ${e.message}`);
+      process.exit(0);
+    }
     const code = e && e.code ? `${e.code}: ` : '';
     console.error(`ERROR: advisory not sent — ${code}${(e && e.message) || e}`);
     process.exit(1);

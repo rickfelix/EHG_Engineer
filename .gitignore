@@ -115,10 +115,13 @@ tests/e2e/visual/**/*-snapshots/
 scripts/temp/
 scripts/tmp/
 
-# One-off debugging and query scripts (temporary investigation tools)
-query-*.cjs
-create-auth-lesson-learned*.cjs
-reset-test-user-password.cjs
+# One-off debugging and query scripts (temporary investigation tools). Anchored to the repo
+# root (leading /) -- SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D found the unanchored form silently
+# gitignoring lib/coordination/query-with-archive.cjs, a legitimate permanent library file, since
+# an unanchored gitignore glob matches at any directory depth.
+/query-*.cjs
+/create-auth-lesson-learned*.cjs
+/reset-test-user-password.cjs
 
 # One-off SD creation scripts (use process scripts instead)
 scripts/create-prd-sd-*.js

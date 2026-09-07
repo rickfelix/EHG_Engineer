@@ -49,6 +49,14 @@ function makeFakeSupabase(seed = {}) {
         if (op === 'not_is_null') return row[col] !== null && row[col] !== undefined;
         if (op === 'in') return Array.isArray(val) && val.includes(row[col]);
         if (op === 'is') return (row[col] ?? null) === val;
+        // QF-20260905-781: minimal .or() support for the one shape this suite needs —
+        // "col.not.is.null" clauses, ORed together (mirrors the real PostgREST filter string).
+        if (op === 'or_group') {
+          return val.some((clause) => {
+            const m = /^([a-z_]+)\.not\.is\.null$/.exec(clause);
+            return m ? row[m[1]] !== null && row[m[1]] !== undefined : false;
+          });
+        }
         return true;
       })
     );
@@ -81,6 +89,7 @@ function makeFakeSupabase(seed = {}) {
       not(col, _op, _val) { ctx.filters.push([col, 'not_is_null', null]); return api; },
       in(col, arr) { ctx.filters.push([col, 'in', arr]); return api; },
       is(col, val) { ctx.filters.push([col, 'is', val]); return api; },
+      or(filterStr) { ctx.filters.push(['__or__', 'or_group', String(filterStr).split(',').map((c) => c.trim())]); return api; },
       order(col, { ascending } = {}) { ctx.order = { col, ascending: !!ascending }; return api; },
       limit(n) { ctx.limitN = n; return api; },
       async maybeSingle() {
@@ -143,7 +152,7 @@ describe('PARK_OUTCOMES contract', () => {
 });
 
 describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
-  it('TS-1: chairman no_match parks (parked_at set; drained_at remains set from the claim)', async () => {
+  it('TS-1/QF-20260905-781: chairman no_match ROUTES (routed_at set), never parks — routing is what happens, not a park-then-route sequence (drained_at remains set from the claim)', async () => {
     // Deliberately reformatted vs. the stored from_phone — proves phoneKey() normalization is
     // doing the match, not raw string equality (the reason phoneKey exists: provider format drift).
     process.env.CHAIRMAN_PHONE = '+1 613-555-0100';
@@ -155,11 +164,12 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     const result = await drainSmsRelayStaging(sb);
     expect(result.results.find((r) => r.id === 'stg-park-1').outcome).toBe('no_match');
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-1');
-    expect(row.parked_at).toBeTruthy();
+    expect(row.parked_at).toBeFalsy();
+    expect(row.routed_at).toBeTruthy();
     expect(row.drained_at).toBeTruthy();
   });
 
-  it('SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001: chairman no_match is ALSO mechanically routed to Adam (adam_action_required) and stamped routed_at (NOT resolved_at) in the same tick', async () => {
+  it('SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001 / QF-20260905-781: chairman no_match is mechanically routed to Adam (adam_action_required) and stamped routed_at (NOT parked_at, NOT resolved_at) in the same tick', async () => {
     insertCoordinationRow.mockClear();
     getActiveAdamId.mockClear();
     process.env.CHAIRMAN_PHONE = CHAIR;
@@ -171,7 +181,10 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     const result = await drainSmsRelayStaging(sb);
     expect(result.results.find((r) => r.id === 'stg-nomatch-adam').outcome).toBe('no_match');
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-nomatch-adam');
-    expect(row.parked_at).toBeTruthy();
+    // QF-20260905-781: a verified chairman sender is structurally unparkable once routing
+    // lands — a genuine route success must NEVER also write parked_at (that was the recurrence
+    // #2 bug: park-then-route on every Adam-routable outcome, live specimen 5b6c5141).
+    expect(row.parked_at).toBeFalsy();
     // SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001: routing is not handling. resolved_at must stay
     // null so surfaceParkedChairmanSms's interrupt keeps firing until genuine handling.
     expect(row.routed_at).toBeTruthy();
@@ -211,7 +224,7 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     expect(row.routed_at).toBeFalsy();
   });
 
-  it('QF-20260831-346: chairman rate_limited now ALSO routes to Adam and stamps routed_at (NOT resolved_at) — closes the lane-divergence that let rate_limited rows resolve without ever being routed', async () => {
+  it('QF-20260831-346 / QF-20260905-781: chairman rate_limited routes to Adam and stamps routed_at (NOT parked_at, NOT resolved_at) — closes the lane-divergence that let rate_limited rows resolve without ever being routed', async () => {
     insertCoordinationRow.mockClear();
     process.env.CHAIRMAN_PHONE = CHAIR;
     const now = new Date().toISOString();
@@ -227,7 +240,7 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     const result = await drainSmsRelayStaging(sb);
     expect(result.results.find((r) => r.id === 'stg-ratelimit-adam').outcome).toBe('rate_limited');
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-ratelimit-adam');
-    expect(row.parked_at).toBeTruthy();
+    expect(row.parked_at).toBeFalsy();
     expect(row.routed_at).toBeTruthy();
     expect(row.resolved_at).toBeFalsy();
     expect(insertCoordinationRow).toHaveBeenCalledTimes(1);
@@ -235,7 +248,7 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     expect(args.payload.body).toContain('outcome=rate_limited');
   });
 
-  it('TS-2: chairman rate_limited parks (and, since QF-20260831-346, also routes — see the dedicated test above)', async () => {
+  it('TS-2/QF-20260905-781: chairman rate_limited ROUTES (routed_at set), never parks — see the dedicated test above for the routing details', async () => {
     process.env.CHAIRMAN_PHONE = CHAIR;
     const now = new Date().toISOString();
     const priorLog = Array.from({ length: 5 }, (_, i) => ({
@@ -249,7 +262,45 @@ describe('drainSmsRelayStaging — chairman parking (FR-1)', () => {
     });
     const result = await drainSmsRelayStaging(sb);
     expect(result.results.find((r) => r.id === 'stg-park-2').outcome).toBe('rate_limited');
-    expect(sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-2').parked_at).toBeTruthy();
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-2');
+    expect(row.parked_at).toBeFalsy();
+    expect(row.routed_at).toBeTruthy();
+  });
+
+  it('QF-20260905-781 FIXTURE (ambiguous, verified): an ambiguous verified-chairman row still parks — never Adam-routable, so the old park-only behavior is unchanged', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const sb = makeFakeSupabase({
+      chairman_decisions: [
+        { id: 'dec-amb-1', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(Date.now() + 600_000).toISOString() },
+        { id: 'dec-amb-2', status: 'pending', brief_data: {}, sms_reply_token_expires_at: new Date(Date.now() + 600_000).toISOString() },
+      ],
+      chairman_notifications: [
+        { id: 'n-amb-1', channel: 'sms', recipient_phone: CHAIR, decision_id: 'dec-amb-1', created_at: new Date(Date.now() - 60_000).toISOString() },
+        { id: 'n-amb-2', channel: 'sms', recipient_phone: CHAIR, decision_id: 'dec-amb-2', created_at: new Date(Date.now() - 30_000).toISOString() },
+      ],
+      sms_relay_staging: [
+        { id: 'stg-ambiguous-1', provider_message_id: 'SM-ambiguous-1', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'yes', signature_valid: true, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(result.results.find((r) => r.id === 'stg-ambiguous-1').outcome).toBe('ambiguous');
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-ambiguous-1');
+    expect(row.parked_at).toBeTruthy();
+    expect(row.routed_at).toBeFalsy();
+  });
+
+  it('QF-20260905-781 FIXTURE (no_match, unverified/invalid signature): an invalid-signature row from the chairman NUMBER neither routes nor parks — isVerifiedChairman is signature-independent by design (phone match only), but invalid_signature itself is not in PARK_OUTCOMES', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIR;
+    const sb = makeFakeSupabase({
+      sms_relay_staging: [
+        { id: 'stg-badsig-1', provider_message_id: 'SM-badsig-1', from_phone: CHAIR, to_phone: '+15559999999', body_raw: 'is anyone there?', signature_valid: false, received_at: new Date().toISOString(), drained_at: null },
+      ],
+    });
+    const result = await drainSmsRelayStaging(sb);
+    expect(result.results.find((r) => r.id === 'stg-badsig-1').outcome).toBe('invalid_signature');
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-badsig-1');
+    expect(row.parked_at).toBeFalsy();
+    expect(row.routed_at).toBeFalsy();
   });
 
   it('TS-3: non-chairman no_match still terminal-drains exactly as before this PRD (no parking)', async () => {
@@ -391,10 +442,11 @@ describe('checkAndApplyAutoSuspend — invalid_signature counter unaffected by F
 
 describe('FR-4: chained drainSmsRelayStaging -> surfaceParkedChairmanSms on the same state', () => {
   it('a chairman rate_limited row drained now, surfaces on the very next tick — the two halves are wired, not just independently correct', async () => {
-    // QF-20260828-188 leg 3 / SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001: a no_match (and, since
-    // QF-20260831-346, rate_limited) chairman row is mechanically routed to Adam (routed_at
-    // stamped) but resolved_at stays null -- it WOULD still surface here too. This test only
-    // asserts surfacing (parked_at/resolved_at), not routed_at, so it holds unchanged.
+    // QF-20260828-188 leg 3 / SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001 / QF-20260905-781: a no_match
+    // (and, since QF-20260831-346, rate_limited) chairman row is mechanically routed to Adam
+    // (routed_at stamped, parked_at left NULL since QF-20260905-781) but resolved_at stays null
+    // -- it surfaces here via routed_at, not parked_at. This test only asserts surfacing by id,
+    // not which column matched, so it holds unchanged.
     process.env.CHAIRMAN_PHONE = CHAIR;
     const OTHER = '+15127770000';
     const priorLog = Array.from({ length: 5 }, (_, i) => ({
@@ -425,8 +477,8 @@ describe('FR-4: chained drainSmsRelayStaging -> surfaceParkedChairmanSms on the 
   });
 });
 
-describe('SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001 regression guard: routed_at is never resolved_at', () => {
-  it('a no_match chairman row never has resolved_at set (routed_at is set instead), and stays surfaced', async () => {
+describe('SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001 / QF-20260905-781 regression guard: routed_at is never resolved_at, and a routed-not-parked row still escalates', () => {
+  it('QF-20260905-781 ACCEPTANCE (5b6c5141 shape): a no_match chairman row routes WITHOUT parking, never has resolved_at set, and still escalates every tick via routed_at — no Adam action for the interval must never go silently unwatched', async () => {
     process.env.CHAIRMAN_PHONE = CHAIR;
     const sb = makeFakeSupabase({
       sms_relay_staging: [
@@ -435,12 +487,15 @@ describe('SD-LEO-INFRA-CHAIRMAN-SMS-RELAY-001 regression guard: routed_at is nev
     });
     await drainSmsRelayStaging(sb);
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-guard-1');
-    // THE INVARIANT ITSELF: the mechanical route write path must NEVER also write resolved_at
-    // in the same tick. If a future edit re-fuses the two, this fails immediately.
+    // THE INVARIANT ITSELF: a genuinely-routed verified-chairman row must NEVER also write
+    // parked_at (QF-20260905-781) NOR resolved_at (pre-existing SD-LEO-INFRA-CHAIRMAN-SMS-
+    // RELAY-001 guard) in the same tick. If a future edit re-fuses any of these, this fails.
+    expect(row.parked_at).toBeFalsy();
     expect(row.routed_at).toBeTruthy();
     expect(row.resolved_at).toBeFalsy();
-    // ...and the interrupt (keyed on resolved_at IS NULL) still surfaces it -- routing alone
-    // never silences the alarm.
+    // ...and the escalation surface (keyed on resolved_at IS NULL, matching parked_at OR
+    // routed_at) still surfaces it -- routing alone never silences the alarm, and the row is
+    // never dropped just because it has no parked_at to match on.
     const surfaced = await surfaceParkedChairmanSms(sb);
     expect(surfaced.rows.map((r) => r.id)).toContain('stg-guard-1');
   });
