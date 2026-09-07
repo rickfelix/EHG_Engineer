@@ -12,6 +12,12 @@ import dotenv from 'dotenv';
 import { warnIfTempFilesExceedThreshold } from '../../../lib/root-temp-checker.mjs';
 import { checkUncommittedChanges, getAffectedRepos } from '../../../lib/multi-repo/index.js';
 import { checkDependencyStatus } from '../../child-sd-preflight.js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+// QF-20260904-708: a parent's metadata.mandatory_child_order (structured or free-text) had no
+// reader on the sd:next display path either -- CJS module, bridged the same way other ESM
+// callers in this repo import lib/fleet/claim-eligibility.cjs.
+const { mandatoryChildOrderPending } = require('../../../lib/fleet/claim-eligibility.cjs');
 import { VentureContextManager } from '../../../lib/eva/venture-context-manager.js';
 import { normalizeVenturePrefix } from '../sd-key-generator.js';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 4: the queue display feeds
@@ -907,15 +913,19 @@ export class SDNextSelector {
 
       const depsResolved = await checkDependenciesResolved(this.supabase, sd.dependencies);
       let childDepStatus = null;
+      let childOrderHold = null;
       if (sd.parent_sd_id) {
         try {
           childDepStatus = await checkDependencyStatus(sd.sd_key || sd.id);
         } catch {
           // Silently ignore errors
         }
+        // QF-20260904-708: fail-open inside mandatoryChildOrderPending; a lookup error here
+        // must never demote a legitimately-claimable child.
+        childOrderHold = await mandatoryChildOrderPending(this.supabase, sd);
       }
 
-      enrichedSDs.push({ ...sd, deps_resolved: depsResolved, childDepStatus });
+      enrichedSDs.push({ ...sd, deps_resolved: depsResolved, childDepStatus, childOrderHold });
     }
 
     // SD-LEO-INFRA-UNIFY-QUICK-FIX-001 Phase 3: classify QFs, tag with kind='qf',

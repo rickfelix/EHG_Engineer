@@ -60,7 +60,7 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 const { fetchOutstandingSignals, formatOutstandingWarning } = require('../lib/fleet/outstanding-signals.cjs');
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
-const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, parentLeadPending, liveClaimWriteFenceReason } = require('../lib/fleet/claim-eligibility.cjs');
+const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, parentLeadPending, liveClaimWriteFenceReason, mandatoryChildOrderPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-1/FR-2): the auto-start predicate moved
 // to lib/fleet/qf-auto-start.cjs so belt-depth.cjs can share it (previously duplicated by
 // nothing — belt-depth used the looser qf-supply-predicate.cjs instead). Imported here in
@@ -1072,6 +1072,10 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
   // SD-REFILL-00SO4HZY: skip an orchestrator child whose parent has not yet passed LEAD (a worker would
   // otherwise drive PLAN then hit the hard EXEC-transition block). Fail-open inside parentLeadPending.
   if (await parentLeadPending(sb, d)) return null;
+  // QF-20260904-708: a parent's metadata.mandatory_child_order names an intended dispatch
+  // sequence (e.g. E -> A -> B); self-claim must not pick a child ahead of a non-terminal
+  // predecessor (out-of-order dispatch ships a dead guard). Fail-open inside the gate.
+  if ((await mandatoryChildOrderPending(sb, d)).held) return null;
   if (await isSdInFlight(sb, d.sd_key, sessionId)) return null; // dedup: started or live-foreign-held
   // SD-ARCH-HOTSPOT-SD-START-001 FR-7 (D8 placement): AFTER every other gate, immediately
   // BEFORE the claim write — so the observe-mode WOULD-DENY set equals exactly the set
