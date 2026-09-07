@@ -36,6 +36,13 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { execFileSync } from 'child_process';
 import { getRepoRoot } from '../lib/repo-paths.js';
+// QF-20260904-169: MEASURED via live PowerShell readback (Get-ScheduledTask), the currently-
+// registered 'EHG EVA Scheduler Watcher' task DOES run through wscript.exe //B run-hidden.vbs —
+// but this registrar's own buildSchtasksArgs did not build that action, so a future re-run of
+// THIS script would regress the live task back to a bare, console-leaking /TR (the same defect
+// this QF exists to fix in the other five/six registrars). Not one of the originally-named "six"
+// — found while fixing them, via the same pattern. Reuse the SECURITY-reviewed action builder.
+import { buildHiddenTrAction, HIDDEN_LAUNCHER_REL_PATH } from './setup-alarm-cron-tasks.mjs';
 
 export const TASK_NAME = 'EHG EVA Scheduler Watcher';
 export const NPM_COMMAND = 'eva:scheduler:watch:cron';
@@ -94,11 +101,13 @@ export function buildWrapperScript({ repoRoot, npmCommand = NPM_COMMAND, env = T
  * containing spaces). Every-N-minutes trigger via /SC MINUTE /MO <n>; /F overwrites an existing
  * task so re-running is idempotent. The /TR target is the wrapper batch (which carries the env).
  */
-export function buildSchtasksArgs({ taskName = TASK_NAME, wrapperPath, intervalMinutes = DEFAULT_INTERVAL_MINUTES, runAs = DEFAULT_RUN_AS, extraArgs = [] } = {}) {
+export function buildSchtasksArgs({ taskName = TASK_NAME, wrapperPath, hiddenLauncherPath, intervalMinutes = DEFAULT_INTERVAL_MINUTES, runAs = DEFAULT_RUN_AS, extraArgs = [] } = {}) {
   if (!wrapperPath) throw new Error('buildSchtasksArgs: wrapperPath required');
+  if (!hiddenLauncherPath) throw new Error('buildSchtasksArgs: hiddenLauncherPath required');
   const mo = parseInt(intervalMinutes, 10);
   if (!Number.isFinite(mo) || mo < 1) throw new Error(`buildSchtasksArgs: invalid intervalMinutes ${intervalMinutes}`);
-  const args = ['/Create', '/TN', taskName, '/TR', wrapperPath, '/SC', 'MINUTE', '/MO', String(mo), '/F'];
+  const trAction = buildHiddenTrAction({ hiddenLauncherPath, wrapperPath });
+  const args = ['/Create', '/TN', taskName, '/TR', trAction, '/SC', 'MINUTE', '/MO', String(mo), '/F'];
   // QF-20260726-677: without /RU, schtasks registers LogonType=Interactive and every fire opens a
   // visible console. /RU <user> /NP is an S4U logon (non-interactive, session 0, no window, keeps the
   // profile/PATH this wrapper's `call npm run` needs) — /NP is skipped for well-known service accounts
@@ -151,6 +160,7 @@ export async function main(argv = process.argv, deps = {}) {
   const platform = deps.platform || process.platform;
   const repoRoot = deps.repoRoot || getRepoRoot();
   const wrapperPath = path.join(repoRoot, WRAPPER_REL_PATH);
+  const hiddenLauncherPath = path.join(repoRoot, HIDDEN_LAUNCHER_REL_PATH);
 
   if (platform !== 'win32') {
     logger.error(`${tag} win32-only (schtasks). On POSIX, add a 5-minute cron line instead:`);
@@ -175,13 +185,18 @@ export async function main(argv = process.argv, deps = {}) {
 
   // register (default): write the wrapper, then create/refresh the task.
   const wrapperContent = buildWrapperScript({ repoRoot });
-  const schtasksArgs = buildSchtasksArgs({ wrapperPath, runAs: args.runAs });
+  const schtasksArgs = buildSchtasksArgs({ wrapperPath, hiddenLauncherPath, runAs: args.runAs });
   const effectiveRunAs = args.runAs || DEFAULT_RUN_AS;
   if (args.dryRun) {
     logger.log(`${tag} DRY RUN — would write wrapper ${wrapperPath}:`);
     logger.log(wrapperContent.replace(/\r\n/g, '\n'));
     logger.log(`${tag} would run: schtasks ${schtasksArgs.join(' ')}`);
     return { exitCode: 0, action: 'dry_run_register', wrapperPath };
+  }
+
+  if (!fs.existsSync(hiddenLauncherPath)) {
+    logger.error(`${tag} hidden-window launcher missing at ${hiddenLauncherPath} — refusing to register a task that would fall back to a visible console.`);
+    return { exitCode: 1, action: 'launcher_missing' };
   }
 
   try {
