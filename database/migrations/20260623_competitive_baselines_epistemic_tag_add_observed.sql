@@ -1,3 +1,5 @@
+-- CHAIRMAN CEREMONY MARKER (2026-08-30, scribe Adam a78170fa): false-completion specimen — SD completed 2026-06-24, DDL never applied (live constraint still 4-value at 17:43:26Z; blocks Hotel-4 FR-7). Delegation guard refuses (classifier has no CHECK-widen rule; DROP CONSTRAINT = tier-2) so this goes through the chairman path.
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-COMPETITIVE-OBSERVED-TAG-MIGRATION-001 (FR-1)
 -- ADDITIVE, REVERSIBLE constraint widen. No data backfill, no row changes.
 --
