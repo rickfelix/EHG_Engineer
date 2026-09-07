@@ -1,0 +1,59 @@
+name: "Michael brief-doc (durable cron)"
+
+# SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-E (FR-7) — spec docs/michael/02-SPEC.md §6.
+#
+# Every 15 minutes inside the 05:15-06:00 ET window (same window as brief-assemble, so the doc
+# lands shortly after the row does), no Claude session: gated on today's michael_brief_runs row
+# having assembled_at set. Runs the daily-review pre-ship gate before ANY write, then writes a
+# private Google Doc into the chairman-owned folder via the service account.
+#
+# THIS IS THE ONLY WORKFLOW IN THIS CHILD THAT REFERENCES GOOGLE_SERVICE_ACCOUNT_JSON — kept out of
+# michael-brief-assemble-cron.yml on purpose (LEAD correction after VALIDATION 0adb8248: this
+# secret is GHA-only, unrelated to the chairman's host-only OAuth grant) so that workflow's
+# credential-free wiring test stays clean regardless of what this one does.
+#
+# Secrets: the already-provisioned SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and
+# GOOGLE_SERVICE_ACCOUNT_JSON (already provisioned for the daily-review Drive path).
+# tests/unit/cron/michael-brief-doc-wiring.test.js pins that the set of secrets referenced here is
+# EXACTLY those three.
+
+on:
+  schedule:
+    - cron: '*/15 9-10 * * *'    # 05:00-06:45 EDT (summer) — window 05:15-06:00 ET
+    - cron: '*/15 10-11 * * *'   # 05:00-06:45 EST (winter) — window 05:15-06:00 ET
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  michael-brief-doc-apply:
+    name: Michael brief-doc feeder (pre-ship gate, Drive doc write)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run brief-doc (dry-run is the default; --apply executes)
+        run: node scripts/michael/brief-doc.mjs --apply
