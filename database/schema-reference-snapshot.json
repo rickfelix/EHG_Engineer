@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-09-07T14:27:42.139Z",
+ "generated_at": "2026-09-07T14:53:55.640Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
  "table_count": 887,
  "view_count": 196,

@@ -19,30 +19,64 @@
  *
  * Usage: npm run schema:snapshot:lint   (requires SUPABASE_POOLER_URL)
  * Run after applying migrations so the lint sees the new schema.
+ *
+ * QF-20260904-619: pg_catalog's `name` type (e.g. a.attname) has no node-postgres array parser,
+ * so array_agg(a.attname) silently returned raw Postgres array-literal TEXT instead of a JS
+ * array. schema-reference-extract.mjs's findViolations() then called cols.includes(ref.column)
+ * expecting Array.prototype.includes (exact membership) but got String.prototype.includes
+ * (substring match) instead -- 'deliverables' silently matched inside 'deliverables_manifest',
+ * hiding 33 live phantom column refs across 18 tables. The query below casts to ::text (an OID
+ * node-postgres DOES parse into a real array) AND assertParsedColumnArray() below enforces the
+ * invariant at runtime, so a DIFFERENT unparsed-array OID introduced by a future edit to this
+ * query fails loudly instead of reproducing the identical silent failure mode.
+ *
+ * KNOWN LIMITATION: assertParsedColumnArray() only proves the aggregate arrived as a JS array
+ * (Array.isArray) -- it does not validate that every element is a string, or that the array is
+ * non-empty. A relation whose column list somehow aggregates to an array of non-string values
+ * would pass this guard and could still defeat downstream cols.includes(ref.column) checks in a
+ * different, unenforced way.
  */
 import { Client } from 'pg';
 import { writeFileSync } from 'node:fs';
 import { config } from 'dotenv';
-config();
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const OUT = 'database/schema-reference-snapshot.json';
 
-const url = process.env.SUPABASE_POOLER_URL;
-if (!url) {
-  console.error('SUPABASE_POOLER_URL not set — cannot snapshot the live schema.');
-  process.exitCode = 1;
-} else {
+/**
+ * QF-20260904-619: pure, exported so it is directly unit-testable without a live DB connection.
+ * Throws when `cols` did not arrive as a parsed JS array -- the exact failure mode a future
+ * unparsed-array OID (any pg type without a node-postgres array parser) would reproduce.
+ *
+ * @param {unknown} cols - the aggregated column-list value from a query row
+ * @param {string} relName - the relation name, for a useful error message
+ * @returns {string[]} cols, unchanged, when it is a real array
+ */
+export function assertParsedColumnArray(cols, relName) {
+  if (!Array.isArray(cols)) {
+    throw new Error(
+      `schema-reference-snapshot: expected a parsed array of columns for relation "${relName}" ` +
+      `but got ${typeof cols} (value: ${JSON.stringify(cols)}). The aggregating query must ` +
+      'explicitly cast the aggregated column to a type node-postgres has an array parser for ' +
+      "(e.g. ::text) -- pg_catalog's `name` type does not have one, and a silently-unparsed " +
+      'array-literal string here turns every downstream cols.includes(column) membership check ' +
+      'into a substring test instead.'
+    );
+  }
+  return cols;
+}
+
+async function main() {
+  config();
+  const url = process.env.SUPABASE_POOLER_URL;
+  if (!url) {
+    console.error('SUPABASE_POOLER_URL not set — cannot snapshot the live schema.');
+    process.exitCode = 1;
+    return;
+  }
   const c = new Client({ connectionString: url });
   await c.connect();
   try {
-    // QF-20260904-619: a.attname is pg_catalog's `name` type; array_agg(a.attname) therefore
-    // produces `name[]`, an OID node-postgres has no built-in array parser for, so `pg` returns
-    // the raw Postgres array-literal TEXT ('{id,sd_key,deliverables_manifest}') instead of a JS
-    // array. schema-reference-extract.mjs's findViolations() then calls cols.includes(ref.column)
-    // expecting Array.prototype.includes (exact membership) but got String.prototype.includes
-    // (substring match) instead -- 'deliverables' silently matched inside 'deliverables_manifest',
-    // hiding 33 live phantom column refs across 18 tables. Casting to ::text makes array_agg
-    // produce `text[]`, an OID node-postgres DOES parse into a real array (confirmed live).
     const { rows } = await c.query(`
       SELECT c.relkind AS kind, c.relname AS rel, array_agg(a.attname::text ORDER BY a.attnum) AS cols
         FROM pg_attribute a
@@ -58,8 +92,9 @@ if (!url) {
     const tables = {};
     const views = {};
     for (const r of rows) {
-      if (r.kind === 'v' || r.kind === 'm') views[r.rel] = r.cols;
-      else tables[r.rel] = r.cols;
+      const cols = assertParsedColumnArray(r.cols, r.rel);
+      if (r.kind === 'v' || r.kind === 'm') views[r.rel] = cols;
+      else tables[r.rel] = cols;
     }
 
     const { rows: checkRows } = await c.query(`
@@ -88,4 +123,8 @@ if (!url) {
   } finally {
     await c.end();
   }
+}
+
+if (isMainModule(import.meta.url)) {
+  await main();
 }

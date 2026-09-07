@@ -1,5 +1,21 @@
 [
  {
+  "name": "schema-reference-snapshot",
+  "script": "scripts/lint/schema-reference-snapshot.mjs",
+  "rootFlag": null,
+  "seedTest": "tests/unit/lint/schema-reference-snapshot.test.js",
+  "neuter": {
+   "find": "if (!Array.isArray(cols)) {",
+   "replace": "if (false) {",
+   "why": "Disables assertParsedColumnArray()'s only branch, so it silently returns whatever it was given -- string, array, or otherwise -- instead of throwing on a non-array. This is the exact QF-20260904-619 defect shape reintroduced: array_agg(a.attname) on pg_catalog's `name` type (or any future column aggregated without an explicit parseable-array cast) returns raw Postgres array-literal TEXT, and a neutered guard would let that string flow into database/schema-reference-snapshot.json unnoticed, silently turning every downstream cols.includes(ref.column) exact-membership check in schema-reference-extract.mjs's findViolations() back into a substring test -- the same hidden-phantom-column-ref failure this QF fixed."
+  },
+  "note": "QF-20260904-619. Uses the seedTest form, not fixtures, DELIBERATELY: this control's main() connects to a live Postgres database via SUPABASE_POOLER_URL and writes directly to the fixed, committed path database/schema-reference-snapshot.json -- there is no injectable target and no way to fixture-trial it without either exposing real DB credentials to the seed-test harness or overwriting the real committed snapshot as a side effect of merely being run. assertParsedColumnArray() was extracted specifically to make the actual defect-class-catching logic (the array-vs-string runtime guard) independently unit-testable without a DB connection; main()'s query/write logic itself is gated behind isMainModule() so importing the module for the seed-test never attempts to connect.",
+  "observability_proof": {
+   "input": "Each query row's `cols` field (array_agg(a.attname::text ORDER BY a.attnum) from pg_attribute/pg_class/pg_namespace, schema public) -- the parsed-or-not shape of exactly this value is what assertParsedColumnArray() checks before it is written into the tables/views snapshot that schema-reference-extract.mjs's findViolations() later reads.",
+   "seen": "Real positive observed live against the production pooler on 2026-09-07 (this QF's own root-cause investigation, before the ::text cast existed): array_agg(a.attname ORDER BY a.attnum) against strategic_directives_v2's real columns returned typeof 'string' ('{id,title,version,status,...}'), confirmed via a direct node -e query against SUPABASE_POOLER_URL; the same query with ::text added returned a real JS array. Post-fix, npm run schema:snapshot:lint against the live database wrote 887 tables / 196 views / 1575 checks with zero assertParsedColumnArray() throws, and the corrected full schema-reference-lint sweep (measured, not the RCA's 33/18 estimate) surfaced 351 violations across 110 tables, written to .artifacts/schema-reference-census-2026-09-07.json."
+  }
+ },
+ {
   "name": "generate-one-off-mutate-key-manifest",
   "script": "scripts/lint/generate-one-off-mutate-key-manifest.mjs",
   "rootFlag": null,
