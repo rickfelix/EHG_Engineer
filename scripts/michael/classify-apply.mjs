@@ -14,7 +14,7 @@
 // outside .artifacts/michael-seat/ (PATH_NOT_ALLOWED), or any item / task carries a key outside its
 // allow-list (FIELD_NOT_WRITABLE — the seat writes class, needs_you, needs_you_reason, borderline,
 // verified_by, action_intent on items and effort_grade, est_minutes, proposed_date, role_tag on tasks;
-// never summary, never chosen_action, never action_taken_at). Rows are updated by natural key and ONLY
+// never action_intent, never summary, never chosen_action, never action_taken_at). Rows are updated by natural key and ONLY
 // while still queued (class NULL / effort_grade NULL) and untouched (action_taken_at NULL / chosen_action
 // and moved_back_at NULL); a verdict for a row that moved on is counted skipped, never overwritten.
 // Metering lands on ONE seat run row per ET date — (et_date, 'seat-classify', attempt 1), venue 'seat' —
@@ -43,13 +43,12 @@ export const ROLE_TAG_MAX = 40;
 export const RUN_IDS_KEPT = 50;
 export const PRODUCED_AT_MAX_AGE_MS = 3 * 60 * 60 * 1000;
 export const NEEDS_YOU_REASON_MAX = 240;
-export const ITEM_WRITABLE = Object.freeze(['class', 'needs_you', 'needs_you_reason', 'borderline', 'verified_by', 'action_intent']);
+// never action_intent (PLAN amendment, SECURITY F-2): intents come from auto_apply rules in gmail-triage, never from a model verdict
+export const ITEM_WRITABLE = Object.freeze(['class', 'needs_you', 'needs_you_reason', 'borderline', 'verified_by']);
 export const TASK_WRITABLE = Object.freeze(['effort_grade', 'est_minutes', 'proposed_date', 'role_tag']);
 export const ENVELOPE_KEYS = Object.freeze(['producer', 'run_id', 'produced_at', 'et_date', 'model_used', 'tokens_in', 'tokens_out', 'counts', 'items', 'tasks', 'content_hash']);
 export const RUN_COUNT_KEYS = Object.freeze(['classified', 'needs_you', 'borderline', 'graded', 'opus_rejudged', 'sample']);
 const CLASS_RE = /^[a-z][a-z0-9_-]{0,39}$/;
-// unarchive is a chairman verb owned by gmail-act.mjs (which stamps action_taken_at itself); the feeder cannot execute it
-const INTENT_RE = /^(archive|label:[A-Za-z0-9_-]{1,64})$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Pure: the hash the runner writes and this script recomputes — sha256 over canonicalJson(envelope minus content_hash). */
@@ -73,7 +72,6 @@ export function itemProblem(it) {
   if ('borderline' in it && typeof it.borderline !== 'boolean') return 'ITEM_INVALID';
   if ('needs_you_reason' in it && (!strOrNull(it.needs_you_reason) || (it.needs_you_reason && it.needs_you_reason.length > NEEDS_YOU_REASON_MAX))) return 'REASON_INVALID';
   if ('verified_by' in it && !strOrNull(it.verified_by, VERIFIED_BY_MAX)) return 'ITEM_INVALID';
-  if ('action_intent' in it && it.action_intent !== null && !(typeof it.action_intent === 'string' && INTENT_RE.test(it.action_intent))) return 'INTENT_INVALID';
   return null;
 }
 

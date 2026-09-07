@@ -17,7 +17,7 @@ function envelope(over = {}) {
     producer: PRODUCER, run_id: 'run-1', produced_at: '2026-09-06T08:55:00.000Z', et_date: '2026-09-06',
     model_used: 'claude-sonnet-5', tokens_in: 1200, tokens_out: 300, counts: { opus_rejudged: 1, sample: 0 },
     items: [
-      { thread_id: 't1', class: 'newsletter', needs_you: false, borderline: false, action_intent: 'archive' },
+      { thread_id: 't1', class: 'newsletter', needs_you: false, borderline: false },
       { thread_id: 't2', class: 'personal', needs_you: true, needs_you_reason: 'A friend asks about Saturday', borderline: true, verified_by: 'claude-opus-5' },
     ],
     tasks: [{ task_id: 'k1', effort_grade: 'M', est_minutes: 45, proposed_date: null, role_tag: 'home' }],
@@ -86,7 +86,7 @@ describe('validation (pure)', () => {
     expect(validateEnvelope([], { etDate: '2026-09-06', now: NOW })).toMatchObject({ refusal: 'FILE_INVALID' });
   });
   it('items and tasks: allow-lists, class shape, bounded reason, intent shape, grades', () => {
-    expect(ITEM_WRITABLE).toEqual(['class', 'needs_you', 'needs_you_reason', 'borderline', 'verified_by', 'action_intent']);
+    expect(ITEM_WRITABLE).toEqual(['class', 'needs_you', 'needs_you_reason', 'borderline', 'verified_by']);
     expect(TASK_WRITABLE).toEqual(['effort_grade', 'est_minutes', 'proposed_date', 'role_tag']);
     expect(itemProblem({ thread_id: 't1', class: 'newsletter' })).toBe(null);
     expect(itemProblem({ thread_id: 't1', class: 'newsletter', summary: 'x' })).toBe('FIELD_NOT_WRITABLE');
@@ -94,10 +94,8 @@ describe('validation (pure)', () => {
     expect(itemProblem({ thread_id: 't1', class: null })).toBe('CLASS_INVALID');
     expect(itemProblem({ thread_id: 't1', class: 'Has Spaces' })).toBe('CLASS_INVALID');
     expect(itemProblem({ thread_id: 't1', class: 'x', needs_you_reason: 'r'.repeat(241) })).toBe('REASON_INVALID');
-    expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: 'delete' })).toBe('INTENT_INVALID');
-    // unarchive belongs to gmail-act (chairman verb); a seat intent the feeder cannot execute would re-degrade every fire
-    expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: 'unarchive' })).toBe('INTENT_INVALID');
-    expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: 'label:L_1' })).toBe(null);
+    // a model verdict never carries an intent: gmail-triage's modify loop reads action_intent, and intents come only from auto_apply rules
+    for (const intent of ['archive', 'label:L_1', 'unarchive', null]) expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: intent })).toBe('FIELD_NOT_WRITABLE');
     expect(itemProblem({ thread_id: '', class: 'x' })).toBe('ITEM_INVALID');
     expect(itemProblem({ thread_id: 't1', class: 'x', verified_by: 'v'.repeat(65) })).toBe('ITEM_INVALID');
     expect(taskProblem({ task_id: 'k1', effort_grade: 'S', role_tag: 'r'.repeat(41) })).toBe('TASK_INVALID');
@@ -132,7 +130,7 @@ describe('runClassifyApply', () => {
     expect(r).toMatchObject({ ok: true, action: 'run', feeder: FEEDER, et_date: '2026-09-06', run_id: 'run-1', status: 'ok', run_row_ok: true, counts: { classified: 2, needs_you: 1, borderline: 1, graded: 1, opus_rejudged: 1, sample: 0, items_skipped: 0, tasks_skipped: 0 } });
     const updates = calls.filter((c) => c.kind === 'update');
     expect(updates.map((u) => u.table)).toEqual(['michael_gmail_triage_items', 'michael_gmail_triage_items', 'michael_todoist_snapshot']);
-    expect(updates[0].ops[0].args[0]).toEqual({ class: 'newsletter', needs_you: false, borderline: false, action_intent: 'archive' });
+    expect(updates[0].ops[0].args[0]).toEqual({ class: 'newsletter', needs_you: false, borderline: false });
     expect(updates[0].ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is', 'select']);
     expect(updates[0].ops.slice(1, 5).map((o) => o.args)).toEqual([['et_date', '2026-09-06'], ['thread_id', 't1'], ['class', null], ['action_taken_at', null]]);
     expect(updates[1].ops[0].args[0]).toEqual({ class: 'personal', needs_you: true, needs_you_reason: 'A friend asks about Saturday', borderline: true, verified_by: 'claude-opus-5' });
