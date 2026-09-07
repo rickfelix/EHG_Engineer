@@ -236,10 +236,27 @@ p_action)`, the function `fn_chairman_decide` calls to translate an `approved`/`
 into a `chairman_decisions.decision` verb, had no branch for it. A `chairman_approval` row could be
 surfaced and acted on, but never actually **closed** through the sanctioned decide path — verified
 live against specimen `644a861f` before fixing.
-`database/chairman-gated/20260907_add_chairman_approval_to_decision_value.sql` (chairman-applied)
-adds `chairman_approval` to the existing APPROVAL-SHAPED bucket alongside `ddl_approval`,
+`database/chairman-gated/20260907_add_chairman_approval_to_decision_value.sql` adds
+`chairman_approval` to the existing APPROVAL-SHAPED bucket alongside `ddl_approval`,
 `gate_approval`, `outbound_publish_approval`, `ratified_deviation`, `migration_apply`, and
 `credential_scope` — no new bucket, no new verb.
+
+**Correction, found by `/heal` (2026-09-07):** `CHAIRMAN_APPLY_VERIFICATION` reported this
+migration APPLIED at LEAD-FINAL-APPROVAL time, but a direct live read
+(`pg_get_functiondef('public.fn_chairman_decision_value'::regproc)`, both project keys) shows no
+`chairman_approval` branch — `fn_chairman_decision_value('chairman_approval','approved')` still
+returns `NULL`. The migration was never actually run against either live database; row `644a861f`
+remains genuinely unclosable today, unchanged from before this SD. Root cause:
+`scripts/verify-migration-apply-state.mjs`'s `resolveLive()` classifies a
+`CREATE OR REPLACE FUNCTION` migration as `APPLIED` by checking `pg_proc` only for the function
+NAME's existence — satisfied trivially here because `fn_chairman_decision_value` already existed
+under its OLD body from a prior migration. The classifier has no content/body check, so it cannot
+tell "the function exists" apart from "this migration's specific replacement body actually ran."
+This is a systemic false-positive affecting every chairman-gated `CREATE OR REPLACE FUNCTION`
+migration, not specific to this one — tracked separately for a real fix (compare
+`pg_get_functiondef()` against migration-declared content, not name-only `pg_proc` presence). Until
+that lands, chairman apply-ceremony verification for function-replacement migrations cannot be
+trusted from the gate alone and needs a direct live-definition check.
 
 Separately, some `chairman_decisions`/`chairman_approval` rows are linked to a fixture/demo venture
 (`ventures.is_demo=true`) and were never going to receive a genuine chairman merits ruling — they
