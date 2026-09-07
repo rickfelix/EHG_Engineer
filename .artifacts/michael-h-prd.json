@@ -1,0 +1,161 @@
+{
+  "executive_summary": "Build /admin/michael in the EHG frontend: a real dashboard replacing the interim Google-Doc brief copy, JSON-rendering Michael's two-zone brief via bearer-authenticated calls to EHG_Engineer's existing API.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Register /admin/michael and /admin/michael/:date routes through the standard admin shell",
+      "description": "Create src/pages/admin/MichaelBrief.tsx modeled on src/pages/admin/ProtocolLint.tsx. Register both routes in src/routes/adminRoutes.tsx through the existing AdminRoute -> ProtectedRouteWrapper -> Suspense -> AdminLayout chain (mirroring the ~190-203 param-route pattern), lazy-imported. Add a nav entry to ADMIN_NAV_ITEMS in src/components/admin/AdminLayout.tsx.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "Navigating to /admin/michael as an authenticated admin renders the page inside the standard AdminLayout shell",
+        "/admin/michael/:date renders the same page for a specific ET date",
+        "A nav link to the page appears in the admin sidebar"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Fetch and render Michael's brief as structured JSON, never the pre-rendered HTML document",
+      "description": "Add getMichaelBriefLatest()/getMichaelBrief(date) methods to src/services/adminApi.ts (or a new michaelApi.ts) calling GET /api/michael/brief/latest and /:date, which return exactly {data_json, verified, enriched_at, assembled_at}. Never request or embed the ?format=html response -- it returns a complete HTML document (<!DOCTYPE html>...</html>) with no safe embed path in this repo (no iframe precedent, dangerouslySetInnerHTML only used for sanitized fragments elsewhere).",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "The page's network calls target the default (non-html) JSON endpoint only",
+        "grep for dangerouslySetInnerHTML or iframe in the new files returns nothing",
+        "TypeScript types for MichaelBriefData mirror data_json's frozen schema-2 shape (frontPage, enrichment, lede, headsUp, logs)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Render the two-zone layout: must-act front page and skippable enrichment zone",
+      "description": "Build FrontPageZone.tsx rendering data_json.frontPage {today, gmail, todoist, ehg, claudeCode} above the fold, and EnrichmentZone.tsx rendering data_json.enrichment (v1 renders signals only, per spec). Render lede and headsUp prominently at the top.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "FrontPageZone renders today/gmail/todoist/claudeCode sections from fixture data_json without transformation",
+        "EnrichmentZone renders only the signals array in v1; other enrichment fields (oracle, watchLater, body, yesterday) are not yet rendered but the component accepts them without erroring",
+        "The enrichment zone is visually/structurally distinct and skippable (e.g. collapsed by default or below a clear divider)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Render the EHG block as a verbatim pointer, never a re-summary",
+      "description": "Build EhgPointerCard.tsx rendering data_json.frontPage.ehg.pointer and handedCount exactly as returned by the API (buildEhgBlock's output shape: {shown, pointer, handedCount}), hiding the card entirely when shown === false. No client-side text generation or fleet-event summarization of any kind.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "A unit test asserts the rendered EHG card's displayed text equals fixture data_json.frontPage.ehg.pointer verbatim, character for character",
+        "A unit test asserts the card is absent from the DOM when frontPage.ehg.shown is false",
+        "No code in EhgPointerCard.tsx references any fleet/coordinator/adam data source other than the passed-in frontPage.ehg object"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Attach a valid bearer token to every Michael API call and handle auth/data-absence failures explicitly",
+      "description": "Route the new Michael API methods through src/lib/authedFetch.ts (which attaches Authorization: Bearer <supabase session.access_token>) rather than adminApi.ts's cookie-only apiFetch, which sends no Authorization header and would 401 against EHG_Engineer's requireAuth-gated /api/michael routes. Follow the precedent in src/hooks/useChairmanDashboardData.ts (authedFetch + explicit 401 handling), consumed by src/components/chairman-v3/BriefingDashboard.tsx. The page must render distinct, honest states for: 401 (not authenticated), 403 (authenticated but not admin -- covers the known user_metadata.role vs app_metadata.role mismatch risk), no brief today (empty/NO_ROW), and 503/tables-absent (michael_brief_runs migration not yet applied).",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "Every Michael API call carries an Authorization: Bearer header sourced from the live Supabase session",
+        "A unit test mocks each of 401, 403, empty-brief, and 503 responses and asserts the page renders a distinct, correctly-labeled state for each -- never a blank screen or a false-success render",
+        "No EHG_Engineer-side code is modified to make this work (CORS already permits the EHG origin with credentials and the Authorization header)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "requirement": "New tests follow this repo's actual conventions: Vitest + @testing-library/react + jsdom under tests/**, modeled on tests/unit/protocol-lint-dashboard.test.tsx's vi.mock('@/services/adminApi') pattern; Playwright E2E under tests/e2e/admin/, modeled on tests/e2e/admin/admin-protocol-lint.spec.ts's login->navigate->role-assertion shape", "rationale": "This is the EHG repo, not EHG_Engineer -- its own test tooling and conventions apply, confirmed by direct inspection of vitest.config.ts and playwright.config.ts rather than assumed from the LEO protocol repo's setup." },
+    { "id": "TR-2", "requirement": "No change to EHG_Engineer's server/routes/michael.js or server/index.js CORS configuration", "rationale": "VALIDATION confirmed CORS already allows the EHG origin with credentials:true and Authorization in allowedHeaders -- this SD's scope is entirely frontend, cross-repo coordination is read-only against an already-correct backend contract." },
+    { "id": "TR-3", "requirement": "data_json field access is fully typed (MichaelBriefData interface mirrors lib/michael/brief-model.mjs's frozen SCHEMA_VERSION=2 field lists), not accessed via untyped object indexing", "rationale": "The schema is explicitly frozen and versioned upstream (TOP_LEVEL_KEYS, FRONT_PAGE_KEYS, ENRICHMENT_KEYS) -- typed access lets a future schema bump fail at compile time rather than silently rendering undefined." }
+  ],
+  "system_architecture": {
+    "overview": "A read-only admin dashboard page in the EHG frontend fetching Michael's daily brief JSON from EHG_Engineer's already-shipped API, rendering it through typed React components mirroring the frozen two-zone schema, authenticated via bearer token rather than the cookie-based pattern most other admin pages in this repo use.",
+    "components": [
+      { "name": "MichaelBrief.tsx (page)", "responsibility": "Route entry, orchestrates data fetching, loading/error/empty states, and zone composition", "technology": "React function component, react-router-dom useParams for :date" },
+      { "name": "FrontPageZone.tsx", "responsibility": "Renders the must-act front page (today, gmail, todoist, claudeCode)", "technology": "React, shadcn/Tailwind" },
+      { "name": "EnrichmentZone.tsx", "responsibility": "Renders the skippable enrichment zone (signals in v1)", "technology": "React, shadcn/Tailwind, collapsible" },
+      { "name": "EhgPointerCard.tsx", "responsibility": "Verbatim render of the EHG pointer block, never a re-summary", "technology": "React" },
+      { "name": "michaelApi (adminApi.ts extension or new module)", "responsibility": "Typed fetch methods for the brief endpoints, routed through authedFetch for bearer-token auth", "technology": "TypeScript, src/lib/authedFetch.ts" }
+    ],
+    "data_flow": "Page mount -> michaelApi.getMichaelBriefLatest() (or getMichaelBrief(date) for the dated route) -> authedFetch attaches Authorization: Bearer <session.access_token> -> GET EHG_Engineer's /api/michael/brief/latest or /:date -> JSON {data_json, verified, enriched_at, assembled_at} -> page renders FrontPageZone(data_json.frontPage), EnrichmentZone(data_json.enrichment), EhgPointerCard(data_json.frontPage.ehg), or an explicit 401/403/empty/503 state on failure.",
+    "integration_points": [
+      "EHG_Engineer server/routes/michael.js GET /api/michael/brief/latest and /:date (read-only consumer, no backend change)",
+      "src/lib/authedFetch.ts (reused, not modified, for bearer-token attachment)",
+      "src/routes/adminRoutes.tsx and src/components/admin/AdminLayout.tsx (route and nav registration)"
+    ]
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Route renders inside the admin shell", "test_type": "unit", "given": "An authenticated admin user navigates to /admin/michael", "when": "The route resolves", "then": "MichaelBrief.tsx renders inside AdminLayout, nav shows the Michael entry" },
+    { "id": "TS-2", "scenario": "Front page and enrichment zones render fixture data_json without transformation", "test_type": "unit", "given": "A mocked successful API response with a fixture data_json (schema 2)", "when": "The page renders", "then": "FrontPageZone and EnrichmentZone display the fixture's today/gmail/todoist/claudeCode and signals fields verbatim" },
+    { "id": "TS-3", "scenario": "EHG pointer renders verbatim and hides when shown is false", "test_type": "unit", "given": "Two fixtures: one with frontPage.ehg.shown=true and a pointer string, one with shown=false", "when": "EhgPointerCard renders each", "then": "The first shows the exact pointer text and handedCount; the second renders nothing for the EHG block" },
+    { "id": "TS-4", "scenario": "401 unauthenticated state", "test_type": "unit", "given": "The mocked API call returns 401", "when": "The page renders", "then": "A distinct 'not authenticated' state is shown, not a blank screen or the front-page zones" },
+    { "id": "TS-5", "scenario": "403 authenticated-but-not-admin state", "test_type": "unit", "given": "The mocked API call returns 403", "when": "The page renders", "then": "A distinct 'not authorized' state is shown" },
+    { "id": "TS-6", "scenario": "No brief today", "test_type": "unit", "given": "The mocked API call returns an empty/NO_ROW response", "when": "The page renders", "then": "A distinct 'no brief for this date' state is shown, never claiming a brief exists" },
+    { "id": "TS-7", "scenario": "503 tables-absent (michael_brief_runs migration not yet applied)", "test_type": "unit", "given": "The mocked API call returns 503 or a tables_absent-shaped error", "when": "The page renders", "then": "A distinct 'brief pipeline not yet live' state is shown, not treated as a generic error" },
+    { "id": "TS-8", "scenario": "E2E: login, navigate, verify admin-only access", "test_type": "e2e", "given": "A logged-in chairman/admin session and a separate non-admin session", "when": "Each navigates to /admin/michael", "then": "The admin session sees the dashboard; the non-admin session is denied, mirroring admin-protocol-lint.spec.ts's role-boundary assertion" }
+  ],
+  "acceptance_criteria": [
+    "The page is reachable at /admin/michael and /admin/michael/:date through the standard admin shell",
+    "All Michael API calls carry a bearer token via authedFetch, never the cookie-only adminApi.apiFetch path",
+    "The rendered EHG block is a byte-verbatim display of frontPage.ehg.pointer, never client-derived text",
+    "401/403/empty/503 states are all explicitly and distinctly handled -- no blank screens, no false-success renders",
+    "Zero EHG_Engineer-side code changes"
+  ],
+  "risks": [
+    { "risk": "Using adminApi.ts's cookie-only apiFetch by habit (since it is the more commonly used helper in this repo) instead of authedFetch, silently shipping a page that 401s for every real user", "probability": "MEDIUM", "impact": "HIGH", "mitigation": "FR-5's acceptance criteria requires a unit test asserting the Authorization header is present on every Michael API call; code review should explicitly check the import is from authedFetch.ts", "rollback_plan": "Revert to a feature-flagged state hiding the nav entry until the auth path is fixed; no data or migration involved" },
+    { "risk": "The frontend user_metadata.role vs backend app_metadata.role mismatch causes a real admin to see the page shell but get 403 on every API call, with no clear explanation", "probability": "MEDIUM", "impact": "MEDIUM", "mitigation": "FR-5 explicitly requires a distinct 403 state with a clear message, rather than a generic error; this SD does not attempt to fix the role-shape mismatch itself (out of scope, a cross-cutting concern), only to fail legibly", "rollback_plan": "N/A -- the 403 state is a UI-only safeguard, not a functional dependency" },
+    { "risk": "Embedding the HTML-format brief instead of JSON-rendering, drifting from FR-2's explicit decision under time pressure since it looks like less work", "probability": "LOW", "impact": "MEDIUM", "mitigation": "FR-2's acceptance criteria includes a grep-based check for dangerouslySetInnerHTML/iframe returning nothing", "rollback_plan": "Delete the offending embed code and rebuild from data_json; no external dependency to unwind" }
+  ],
+  "implementation_approach": {
+    "phases": [
+      { "phase": "Phase 1", "description": "Route/nav/page skeleton (FR-1) plus typed API client with bearer auth (FR-5's plumbing)", "deliverables": ["src/pages/admin/MichaelBrief.tsx", "adminRoutes.tsx + AdminLayout.tsx registration", "michaelApi methods via authedFetch"] },
+      { "phase": "Phase 2", "description": "Zone components rendering fixture data (FR-2, FR-3, FR-4)", "deliverables": ["FrontPageZone.tsx", "EnrichmentZone.tsx", "EhgPointerCard.tsx", "unit tests for verbatim EHG rendering"] },
+      { "phase": "Phase 3", "description": "Explicit failure-state handling (FR-5's UX half) and E2E coverage", "deliverables": ["401/403/empty/503 state components", "unit tests TS-4 through TS-7", "E2E spec TS-8"] }
+    ],
+    "technical_decisions": [
+      "JSON-render over data_json rather than embedding the HTML-format response, because the HTML is a complete document with no safe embed path in this repo (no iframe precedent, dangerouslySetInnerHTML reserved for sanitized fragments)",
+      "Route API calls through authedFetch.ts (bearer token) rather than adminApi.ts's cookie-only apiFetch, following the useChairmanDashboardData.ts/BriefingDashboard.tsx precedent rather than the more commonly copied but auth-incompatible protocol-lint pattern",
+      "Explicit, distinct UI states for 401/403/empty/503 rather than a single generic error boundary, since each represents a materially different situation the chairman needs to distinguish (not logged in vs not admin vs no brief yet vs backend not live)"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      { "name": "The chairman (admin user)", "interaction": "Views the morning brief on the admin dashboard instead of the interim Google Doc copy", "frequency": "Daily, replacing child E's interim surface" }
+    ],
+    "dependencies": [
+      { "name": "EHG_Engineer GET /api/michael/brief/latest and /:date", "type": "upstream", "contract": "Read-only JSON fetch, {data_json, verified, enriched_at, assembled_at}, bearer-token authenticated", "failure_handling": "401/403/empty/503 states rendered explicitly per FR-5, never a blank page" },
+      { "name": "src/lib/authedFetch.ts", "type": "upstream", "contract": "Reused unmodified for bearer-token attachment", "failure_handling": "N/A -- existing, tested helper" }
+    ],
+    "data_contracts": [
+      { "contract_name": "Michael brief data_json (schema 2)", "schema": "frontPage{today,gmail,todoist,ehg,claudeCode}, enrichment{oracle,watchLater,body,yesterday,signals}, lede, headsUp, logs -- frozen at lib/michael/brief-model.mjs", "validation": "TypeScript interface mirrors the frozen key lists; a schema-version mismatch would be a visible compile-time concern for future maintainers", "versioning": "Upstream-owned; this page reads schema:2 only, does not negotiate versions" }
+    ],
+    "runtime_config": {
+      "environment_variables": ["VITE_ENGINEER_URL (existing, used by authedFetch.ts to target the EHG_Engineer backend)"],
+      "feature_flags": [],
+      "deployment_considerations": "No new environment variables or deployment steps; reuses existing cross-app auth plumbing"
+    },
+    "observability_rollout": {
+      "monitoring": ["Standard frontend error boundary logging for unexpected (non-401/403/503) failures"],
+      "alerts": ["None new"],
+      "rollout_strategy": "Standard PR merge; nav entry visible immediately to all admins once merged",
+      "rollback_trigger": "A regression in the page's own test suite on main, or a chairman report of broken/blank rendering",
+      "rollback_procedure": "Revert the merge commit; entirely additive frontend code, no data migration to unwind"
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "src/pages/admin/ProtocolLint.tsx", "src/routes/adminRoutes.tsx", "src/components/admin/AdminLayout.tsx",
+      "src/services/adminApi.ts", "src/lib/authedFetch.ts", "src/components/auth/AdminRoute.tsx",
+      "src/hooks/useChairmanDashboardData.ts", "src/components/chairman-v3/BriefingDashboard.tsx",
+      "server/routes/michael.js", "server/middleware/auth.js", "server/routes/protocol-lint.js", "server/index.js",
+      "lib/michael/render-brief.js", "lib/michael/brief-model.mjs",
+      "vitest.config.ts", "playwright.config.ts", "tests/unit/protocol-lint-dashboard.test.tsx", "tests/e2e/admin/admin-protocol-lint.spec.ts",
+      "docs/michael/02-SPEC.md"
+    ],
+    "patterns_identified": [
+      "Admin page/route/nav registration pattern (ProtocolLint.tsx + adminRoutes.tsx + AdminLayout.tsx)",
+      "Two competing frontend-to-EHG_Engineer auth patterns in this repo: cookie-only (adminApi.ts, incompatible with the michael API) and bearer-token (authedFetch.ts, compatible)",
+      "Verbatim-passthrough rendering as the mechanism enforcing 'never re-summarize' constraints upstream already relied on (buildEhgBlock)"
+    ],
+    "key_decisions": [
+      "JSON-render over HTML-embed for the brief content",
+      "authedFetch.ts over adminApi.ts's apiFetch for the API client, following the useChairmanDashboardData.ts precedent rather than protocol-lint's cookie-based one",
+      "Explicit distinct failure states (401/403/empty/503) rather than a generic error boundary"
+    ],
+    "exploration_date": "2026-09-07"
+  }
+}
