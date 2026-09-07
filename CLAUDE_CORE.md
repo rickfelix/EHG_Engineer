@@ -2,7 +2,7 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-09-07 10:35:19 PM
+**Generated**: 2026-09-07 11:03:53 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)

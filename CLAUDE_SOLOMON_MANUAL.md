@@ -2,7 +2,7 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-07 10:35:19 PM
+**Generated**: 2026-09-07 11:03:53 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
