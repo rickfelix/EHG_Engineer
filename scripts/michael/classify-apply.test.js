@@ -85,7 +85,7 @@ describe('validation (pure)', () => {
     expect(at({ counts: { classified: 3 } })).toMatchObject({ refusal: 'FILE_INVALID' });
     expect(validateEnvelope([], { etDate: '2026-09-06', now: NOW })).toMatchObject({ refusal: 'FILE_INVALID' });
   });
-  it('items and tasks: allow-lists, class shape, bounded reason, intent shape, grades', () => {
+  it('items and tasks: allow-lists, class shape, bounded reason, no intent, grades', () => {
     expect(ITEM_WRITABLE).toEqual(['class', 'needs_you', 'needs_you_reason', 'borderline', 'verified_by']);
     expect(TASK_WRITABLE).toEqual(['effort_grade', 'est_minutes', 'proposed_date', 'role_tag']);
     expect(itemProblem({ thread_id: 't1', class: 'newsletter' })).toBe(null);

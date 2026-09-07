@@ -13,7 +13,7 @@
 // hours (PRODUCED_AT_INVALID), the file's et_date is not the run's (ET_DATE_MISMATCH), the path is
 // outside .artifacts/michael-seat/ (PATH_NOT_ALLOWED), or any item / task carries a key outside its
 // allow-list (FIELD_NOT_WRITABLE — the seat writes class, needs_you, needs_you_reason, borderline,
-// verified_by, action_intent on items and effort_grade, est_minutes, proposed_date, role_tag on tasks;
+// verified_by on items and effort_grade, est_minutes, proposed_date, role_tag on tasks;
 // never action_intent, never summary, never chosen_action, never action_taken_at). Rows are updated by natural key and ONLY
 // while still queued (class NULL / effort_grade NULL) and untouched (action_taken_at NULL / chosen_action
 // and moved_back_at NULL); a verdict for a row that moved on is counted skipped, never overwritten.

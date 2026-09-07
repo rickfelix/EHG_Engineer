@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-07T00:39:42.352Z",
-  "git_commit": "25e92767",
+  "generated_at": "2026-09-07T00:46:44.041Z",
+  "git_commit": "fdf2344e",
   "db_snapshot_hash": "75c730afb94b407a",
   "files": {
     "CLAUDE.md": {
@@ -149,10 +149,10 @@
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 20736,
-      "bytes": 20814,
-      "estimated_tokens": 5184,
-      "content_hash": "092f2937e66d32a9",
+      "chars": 20785,
+      "bytes": 20863,
+      "estimated_tokens": 5197,
+      "content_hash": "238a0e9679b19771",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
@@ -229,7 +229,7 @@
     }
   },
   "section_digests": {
-    "global": "6cb38fdafb02c6c5",
+    "global": "550d6dc28906241c",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -513,7 +513,7 @@
       "655": "59137a758bb13a65",
       "656": "d2ccb43f1edf9602",
       "657": "11c9181c9e30ef9c",
-      "658": "1fa2a5a034dcce1a",
+      "658": "2bb59a1b81f76a38",
       "659": "f07759022446ffb1"
     },
     "meta": {
