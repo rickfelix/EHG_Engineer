@@ -11,7 +11,7 @@ import {
   extractDdlFacts, orderMigrations, foldLifecycle, classifyFiles, ARTIFACT_RE,
   isRecent, partitionRecentGaps, migrationDateToken, RETIRED_BEFORE,
   hasAnyDbCredential, OUTCOME, summarizeResults, DEFAULT_EXTRA_ROOTS,
-  partitionBlockingFailSet,
+  partitionBlockingFailSet, extractFunctionBodies, normalizeSqlBody,
 } from '../scripts/verify-migration-apply-state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -70,7 +70,14 @@ describe('preprocessing — DDL-looking text never false-positives', () => {
       DO $$ BEGIN PERFORM 'CREATE TRIGGER ghost_trg'; END $$;
     `;
     const { creates } = extractDdlFacts(sql);
-    expect(creates).toEqual([{ cls: 'function', name: 'real_fn' }]);
+    expect(creates).toHaveLength(1);
+    expect(creates[0].cls).toBe('function');
+    expect(creates[0].name).toBe('real_fn');
+    // SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 (FR-2): the body itself IS now captured (from the
+    // raw SQL, not the stripped text) -- this positively proves the named $body$ tag was matched
+    // to its own closer and not to the unrelated anonymous `DO $$ ... $$` block that follows it.
+    expect(creates[0].body).toContain('phantom_inside_body');
+    expect(creates[0].body).toContain('also_phantom');
   });
 
   it('strips line and block comments', () => {
@@ -275,6 +282,84 @@ describe('CEREMONY_PENDING classification (chairman-gated)', () => {
   });
 });
 
+describe('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 — function body-aware classification', () => {
+  it('TS-3a: extracts a bare $$ ... $$ body', () => {
+    const bodies = extractFunctionBodies(
+      'CREATE OR REPLACE FUNCTION f() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;'
+    );
+    expect(bodies.get('f')).toContain('BEGIN RETURN; END');
+  });
+
+  it('TS-3b: extracts a named $tag$ ... $tag$ body, distinct from a bare-$$ body elsewhere in the same file', () => {
+    const bodies = extractFunctionBodies(`
+      CREATE OR REPLACE FUNCTION g() RETURNS void LANGUAGE plpgsql AS $g_body$ BEGIN PERFORM 1; END $g_body$;
+      DO $$ BEGIN PERFORM 2; END $$;
+    `);
+    expect(bodies.get('g')).toContain('PERFORM 1');
+    expect(bodies.get('g')).not.toContain('PERFORM 2');
+  });
+
+  it('normalizeSqlBody collapses whitespace and strips comments so cosmetic reformatting does not register as a mismatch', () => {
+    const a = normalizeSqlBody('BEGIN\n  -- a comment\n  RETURN 1;\nEND');
+    const b = normalizeSqlBody('BEGIN RETURN 1; END');
+    expect(a).toBe(b);
+  });
+
+  it('TS-1: live body matches migration body (post-normalization) -> still APPLIED, unchanged', () => {
+    const sql = 'CREATE OR REPLACE FUNCTION fn_match() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['function:fn_match']);
+    const liveFunctionBodies = new Map([['fn_match', ' BEGIN\n RETURN;\nEND ']]); // reformatted, semantically identical
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, liveFunctionBodies);
+    expect(row.status).toBe('APPLIED');
+    expect(row.body_mismatches).toBeUndefined();
+  });
+
+  it('TS-2: live function exists but its body diverges from the migration -> distinct non-APPLIED status', () => {
+    const sql = 'CREATE OR REPLACE FUNCTION fn_stale() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN \'new\'; END $$;';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['function:fn_stale']); // name resolves live...
+    const liveFunctionBodies = new Map([['fn_stale', "BEGIN RETURN 'old'; END"]]); // ...but body is stale
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, liveFunctionBodies);
+    expect(row.status).not.toBe('APPLIED');
+    expect(row.status).not.toBe('NOT_APPLIED');
+    expect(row.status).toBe('BODY_MISMATCH');
+    expect(row.body_mismatches).toEqual(['fn_stale']);
+  });
+
+  it('TS-4 (regression): a function that genuinely does not exist live stays NOT_APPLIED, not BODY_MISMATCH', () => {
+    const sql = 'CREATE OR REPLACE FUNCTION fn_absent() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, new Set(), undefined, new Map());
+    expect(row.status).toBe('NOT_APPLIED');
+    expect(row.body_mismatches).toBeUndefined();
+  });
+
+  it('a non-function object class is completely unaffected by liveFunctionBodies (TR-1)', () => {
+    const ff = [{ file: 'm.sql', ...extractDdlFacts('CREATE VIEW v AS SELECT 1;') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['view:v']);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, new Map([['v', 'garbage']]));
+    expect(row.status).toBe('APPLIED');
+  });
+
+  it('BODY_MISMATCH feeds summarizeResults() gaps and its own summary counter', () => {
+    const sql = 'CREATE OR REPLACE FUNCTION fn_stale() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN \'new\'; END $$;';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['function:fn_stale']);
+    const liveFunctionBodies = new Map([['fn_stale', "BEGIN RETURN 'old'; END"]]);
+    const results = classifyFiles(['m.sql'], expected, perFile, live, undefined, liveFunctionBodies);
+    const { summary, gaps } = summarizeResults(results, { scanned: 1 });
+    expect(summary.body_mismatch).toBe(1);
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0].status).toBe('BODY_MISMATCH');
+  });
+});
+
 // TS-5: CEREMONY_PENDING must flow through summarizeResults into `gaps`, not just the
 // dedicated counter — otherwise the OUTCOME marker (main(): failSet.length ? GAPS : PASS)
 // would silently read PASS for a run that in fact contains an unapplied chairman-gated file.
@@ -345,6 +430,23 @@ describe('partitionBlockingFailSet — CEREMONY_PENDING warns, does not block (Q
     const failSet = [{ file: '20260824_half_applied.sql', status: 'PARTIAL', missing: [{ cls: 'table', name: 'x' }] }];
     const { blockingFailSet } = partitionBlockingFailSet(failSet);
     expect(blockingFailSet).toHaveLength(1);
+  });
+
+  it('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001: BODY_MISMATCH warns, does not block, like CEREMONY_PENDING', () => {
+    const failSet = [{ file: '20260824_stale_fn.sql', status: 'BODY_MISMATCH', missing: [], body_mismatches: ['f'] }];
+    const { bodyMismatchFailSet, blockingFailSet } = partitionBlockingFailSet(failSet);
+    expect(blockingFailSet).toHaveLength(0);
+    expect(bodyMismatchFailSet).toHaveLength(1);
+  });
+
+  it('a MIX of CEREMONY_PENDING, BODY_MISMATCH and a real gap: only the real gap blocks', () => {
+    const failSet = [
+      { file: 'database/chairman-gated/20260824_gated.sql', status: 'CEREMONY_PENDING', missing: [] },
+      { file: '20260824_stale_fn.sql', status: 'BODY_MISMATCH', missing: [], body_mismatches: ['f'] },
+      { file: '20260824_ordinary.sql', status: 'NOT_APPLIED', missing: [] },
+    ];
+    const { blockingFailSet } = partitionBlockingFailSet(failSet);
+    expect(blockingFailSet.map((g) => g.file)).toEqual(['20260824_ordinary.sql']);
   });
 });
 
