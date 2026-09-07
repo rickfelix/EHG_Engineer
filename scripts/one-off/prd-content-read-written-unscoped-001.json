@@ -1,0 +1,84 @@
+{
+  "executive_summary": "fleet-dashboard.cjs's printInbox() (the coordinator-audience inbox render) stamps read_at on every render with no idempotency gate, unlike every other write site cataloged in the consumption-semantics census -- so read_at drifts from 'first delivered' to 'most recently rendered' for this one site. Separately, the fleet-worker-loop-directive.md's 'READ-ONLY VIEW... stamps NOTHING' framing, while textually naming the worker-only renderer, invites a reader to generalize to the whole inbox command, which is false for the coordinator-audience path. Both are fixed here; verified safe (the SELECT no longer depends on read_at, so gating the UPDATE cannot reopen the RCA this write's own header comment cites).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "printInbox() stamps read_at idempotently, once per row",
+      "description": "scripts/fleet-dashboard.cjs:1911-1916's UPDATE currently has no read_at IS NULL gate. Add one, matching the established pattern at every other census-cataloged write site (solomon-advisory.cjs, adam-advisory.cjs, michael-inbox.cjs). Register the site in docs/protocol/coordinator-adam-comms.md's consumption-semantics census AND its regression-guard test's allowlist proactively, in the same PR -- learned directly from this session's own CI-caught miss on SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001, where skipping this step failed session-coordination-consumption-census.test.js only after a push.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "printInbox's UPDATE gates on `.is('read_at', null)` in addition to `.in('id', ids)`.",
+        "A test asserts a fixture row already carrying a read_at value keeps that exact value after printInbox renders it again -- the timestamp is never overwritten.",
+        "A test asserts a fixture row with read_at NULL gets it stamped on first render (first-delivery semantics preserved)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Register the write site in the consumption-semantics census before pushing",
+      "description": "docs/protocol/coordinator-adam-comms.md's consumption-semantics census and its regression-guard test (session-coordination-consumption-census.test.js) require every session_coordination read_at/acknowledged_at write site to be pre-classified. scripts/fleet-dashboard.cjs already appears in the census for other functions; verify whether printInbox's write is already covered by that existing entry or needs its own row, and add one if not -- learned directly from this session's own CI-caught miss on SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001, where skipping this step failed the regression guard only after a push.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "session-coordination-consumption-census.test.js passes locally BEFORE the branch is pushed, not discovered as a CI failure.",
+        "docs/protocol/coordinator-adam-comms.md's census table documents printInbox's write (either via an existing fleet-dashboard.cjs row's scope, or a new dedicated row) with a citation to this SD and the FR-1 rationale (now-idempotent, not unconditional)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Correct the fleet-worker-loop-directive.md 'stamps nothing' framing to be precise",
+      "description": "docs/protocol/fleet-worker-loop-directive.md:55 states the inbox command 'is a READ-ONLY VIEW' and that printWorkerInbox 'stamps NOTHING' -- accurate for printWorkerInbox specifically, but the surrounding framing invites generalizing to the whole command, which is false for the coordinator-audience path (printInbox, reached whenever resolveInboxAudience() does not resolve to worker mode). Reword to name the coordinator-audience exception explicitly.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "The directive's wording for line 55 (or its replacement) names the coordinator-audience write path as the exception to the read-only framing, not just printWorkerInbox by name without context.",
+        "A diff review confirms the worker-facing guidance (use /checkin to drain, dashboard for viewing) is otherwise unchanged -- this is a precision correction, not a behavior change to the directive's actual instructions."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "description": "No schema changes. session_coordination.read_at already exists and the idempotent-stamp pattern is already established elsewhere in this exact file family." },
+    { "id": "TR-2", "description": "Verified safe: the SELECT feeding printInbox (fleet-dashboard.cjs:1814) gates on acknowledged_at, not read_at, so gating the UPDATE on read_at IS NULL cannot reopen the RCA (SD-LEO-INFRA-SIGNAL-INBOX-DRAIN-ON-DISPLAY-001) the write's header comment cites." },
+    { "id": "TR-3", "description": "Both fixes are additive/behavioral-only inside existing functions plus one doc-file edit -- no new production files beyond tests." }
+  ],
+  "test_scenarios": [
+    {
+      "scenario": "printInbox renders a row whose read_at is already set to a known past timestamp",
+      "expected": "The row's read_at is unchanged after the render -- the UPDATE's read_at IS NULL gate excludes it."
+    },
+    {
+      "scenario": "printInbox renders a row whose read_at is NULL",
+      "expected": "read_at is stamped to now() -- first-delivery semantics preserved, matching every other census site."
+    },
+    {
+      "scenario": "The session-coordination-consumption-census.test.js regression guard runs against the post-fix source",
+      "expected": "Passes -- the write site is classified in both the test's allowlist and the doc's census table before the PR is pushed, not discovered as a CI failure."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Gating the UPDATE on read_at IS NULL could theoretically reopen the 'filtered/parked render silently hides an unacked signal' bug this write's header comment cites as the reason it was made unconditional.",
+      "mitigation": "TR-2 verifies this is safe: that bug was fixed by changing the SELECT's gating column from read_at to acknowledged_at (fleet-dashboard.cjs:1814), so the read path no longer depends on read_at at all -- confirmed by reading the SELECT directly before scoping this SD."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Any coordinator-audience run of `node scripts/fleet-dashboard.cjs inbox` or `all` (the command that calls printInbox)"],
+    "dependencies": ["session_coordination.read_at column (existing, already used by the idempotent pattern elsewhere)"],
+    "data_contracts": ["session_coordination row shape unchanged -- read_at is an existing nullable timestamp column"],
+    "runtime_config": ["No new env vars or config flags"],
+    "observability_rollout": ["No feature flag needed -- ships in one deploy; read_at becomes a stable first-delivery timestamp for this site immediately post-merge"]
+  },
+  "system_architecture": {
+    "components": [
+      { "name": "scripts/fleet-dashboard.cjs", "role": "printInbox() gains the read_at IS NULL gate in FR-1" },
+      { "name": "docs/protocol/coordinator-adam-comms.md", "role": "Consumption-semantics census gains a row for this write site" },
+      { "name": "docs/protocol/fleet-worker-loop-directive.md", "role": "Line 55's wording corrected in FR-2" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "FR-1 first (the code + census classification, shipped together in one commit to avoid the CI-discovery pattern this session already hit once), then FR-2 (the directive wording fix). One combined PR expected given the small total diff.",
+    "sequencing": ["FR-1", "FR-2"]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Insert a fixture session_coordination row with signal_type set and read_at already stamped to a known past timestamp.", "expected_outcome": "Row exists with the known read_at value." },
+    { "step_number": 2, "instruction": "Run node scripts/fleet-dashboard.cjs inbox as the coordinator session (resolves to coordinator-audience) so the fixture row renders.", "expected_outcome": "printInbox renders the row but does NOT overwrite its read_at -- a direct DB check shows the original timestamp unchanged." },
+    { "step_number": 3, "instruction": "Repeat with a fixture row whose read_at is NULL.", "expected_outcome": "read_at is stamped for the first time (DELIVERED)." }
+  ]
+}
