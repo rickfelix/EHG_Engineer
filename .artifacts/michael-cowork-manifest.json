@@ -1,0 +1,2211 @@
+{
+  "files": [
+    {
+      "path": "CLAUDE.md",
+      "hash_sha256": "a177d073c9b265eae63c45ae762cbe1ce46ae62ef386e1d41d8ad8b447adcb4a",
+      "size_bytes": 65130
+    },
+    {
+      "path": "TASKS.md",
+      "hash_sha256": "79463345daff03273e7d87d8a9b384705004332ecc7a3bbcf4fe1d562dbff0e7",
+      "size_bytes": 210
+    },
+    {
+      "path": "data/check-in-log.jsonl",
+      "hash_sha256": "2044111309d2adbe99da4f36212f3b57a8ca15628ef39e415b0b0e5fea090c98",
+      "size_bytes": 40739
+    },
+    {
+      "path": "data/health-2026-05-22.json",
+      "hash_sha256": "687af48eab943b59e48318c11273e499d4333745e004112befede9fbe48324ea",
+      "size_bytes": 842
+    },
+    {
+      "path": "data/health-2026-05-23.json",
+      "hash_sha256": "808f1671aad12638febed02e5e78aefccfdeb74843baa6a1be10e3d5a5a2d1f5",
+      "size_bytes": 1017
+    },
+    {
+      "path": "data/health-2026-05-24.json",
+      "hash_sha256": "fe32d3748e8fe39a6908e4fe7bee4425851953b8750b8a8707f85d7b9995ed59",
+      "size_bytes": 847
+    },
+    {
+      "path": "data/health-2026-05-25.json",
+      "hash_sha256": "94db69e46fb645f4e9b971c94506cd0175b18a467c267df7322f6c70b88febb1",
+      "size_bytes": 847
+    },
+    {
+      "path": "data/health-2026-05-26.json",
+      "hash_sha256": "df98f78d7d0a3add60f62729f6f46f307669857d1bed3a1c6886904f4a72b306",
+      "size_bytes": 848
+    },
+    {
+      "path": "data/health-2026-05-27.json",
+      "hash_sha256": "6d71c9831a7c18eafe0c980062454acaf24e0ab585fc891ad0c15bb536b8ca84",
+      "size_bytes": 850
+    },
+    {
+      "path": "data/health-2026-05-28.json",
+      "hash_sha256": "005209565c597aa9b54df5015b563a70914b33d6149d28a03f173872bafc642b",
+      "size_bytes": 847
+    },
+    {
+      "path": "data/health-2026-05-29.json",
+      "hash_sha256": "349749bcfa851a178e5c9f559cf4df9ceadc05c6448829e635b5a184c8b77cf7",
+      "size_bytes": 669
+    },
+    {
+      "path": "data/health-2026-05-30.json",
+      "hash_sha256": "cedacd4f3d081bbca746cfa38c32b1150d6dd70e1e6570a99d77508116908141",
+      "size_bytes": 749
+    },
+    {
+      "path": "data/health-2026-05-31.json",
+      "hash_sha256": "4028fbe802265436f4744cafec3968fe6521ec7cbd5d9f277d28376f01dfbe28",
+      "size_bytes": 891
+    },
+    {
+      "path": "data/health-2026-06-02.json",
+      "hash_sha256": "6df151cf4d6edf503b1b3be1051c0d467e8ab75e3a6196d00c9363263a92473e",
+      "size_bytes": 993
+    },
+    {
+      "path": "data/health-2026-06-03.json",
+      "hash_sha256": "9f6085d86dc03686095cecb6deb75fb9088e2dcecead1ae4c409c256abf55c6f",
+      "size_bytes": 1287
+    },
+    {
+      "path": "data/health-2026-06-04.json",
+      "hash_sha256": "833e6049722f63662da5d6be0c1b17ef9de3a5f1a073a4f9fdc7ed07caa1a6f8",
+      "size_bytes": 1139
+    },
+    {
+      "path": "data/health-2026-06-05.json",
+      "hash_sha256": "e39d138c82d0bd19ce5cd2c285e7e6e5f182de657a4eed303d6bc8354136b336",
+      "size_bytes": 1088
+    },
+    {
+      "path": "data/health-2026-06-06.json",
+      "hash_sha256": "40c069b4a080127fcbe4b96bbcea21d3363bb74179bee61305051e3af34a845d",
+      "size_bytes": 1528
+    },
+    {
+      "path": "data/health-2026-06-07.json",
+      "hash_sha256": "8b85ed7d22e0267459b3abdcbdcabeedb4a90ad3cf178caa5af0e5ca235060a8",
+      "size_bytes": 692
+    },
+    {
+      "path": "data/health-2026-06-09.json",
+      "hash_sha256": "1c557c5d3526fd3876ea6e4809c2cdea1354b69efb377f81bc0ac6c27476cbd3",
+      "size_bytes": 893
+    },
+    {
+      "path": "data/health-2026-06-23.json",
+      "hash_sha256": "35219eae5240cdf112f00dc4261b992b41f02989807e75128cfc5043f5a4be11",
+      "size_bytes": 894
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/RUNNING 2026.06.06 10.23 Samsung Health.csv",
+      "hash_sha256": "88bfbd068011ad67d05da31cd72e9cb92b78c8fb2ca6fa07819d58a1eb8788dc",
+      "size_bytes": 286
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/TRAINING 2026.06.06 10.23.csv",
+      "hash_sha256": "a92654a1e7293d2b971d6195871681d215daf1cff79142fb3d56f69541d6acde",
+      "size_bytes": 305
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/TRAINING 2026.06.07 10.22.csv",
+      "hash_sha256": "44c7f18ffa9321a86832a0bf61bb1142cb469cf1680551b9ebdce5ba8d05e093",
+      "size_bytes": 303
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.05.28 06.56 Samsung Health.csv",
+      "hash_sha256": "0d5c43443a1bbb5ed902ad73bc31e9a3a1795e7e4154919095b63ae9f1f3b04a",
+      "size_bytes": 285
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.05.28 18.18 Samsung Health.csv",
+      "hash_sha256": "679448c605bd0933b11557223ab6acabcf768a7f8fedd5e6c4de4fb4ca0ee583",
+      "size_bytes": 284
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.05.31 13.14 Samsung Health.csv",
+      "hash_sha256": "f35d954de6f6bbbf4478781d776bde71aa93df5933c3e74dafb58658a3bde495",
+      "size_bytes": 287
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.01 07.06 Samsung Health.csv",
+      "hash_sha256": "00408e279cc770289ecbb479b8172fa42e250c2f6264d71acbbe08e9f174e410",
+      "size_bytes": 285
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.02 06.37 Samsung Health.csv",
+      "hash_sha256": "8926f066b02988a3d0238ffd293fecf58b41abb670341881796e38c7bb7712ac",
+      "size_bytes": 286
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.03 06.42 Samsung Health.csv",
+      "hash_sha256": "1e351ce3f4f6f070ff2350e9f032d404638db708c1b4f1b67d848c7c35581bff",
+      "size_bytes": 287
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.03 20.47 Samsung Health.csv",
+      "hash_sha256": "32e055f9011dcdfc39c4105aa9ed9f1ff62f5a66679f40dc2e8fa5c07f252e7d",
+      "size_bytes": 285
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.04 06.56 Samsung Health.csv",
+      "hash_sha256": "6f5729dddc212302dc76854d3e41a09c5133e383c955104fc418018781622073",
+      "size_bytes": 287
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.05 08.15 Samsung Health.csv",
+      "hash_sha256": "6df39d0e5e7c5d44039d493840aa38d0515496346fdd241254408c7e424824fa",
+      "size_bytes": 285
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.05 08.15 Withings.csv",
+      "hash_sha256": "b3028608f735649cecc867621dfb48e50300001b0af105f70075948bd9114166",
+      "size_bytes": 279
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.06 17.31 Samsung Health.csv",
+      "hash_sha256": "dfffecebde5e01f8f9ca10e5eb35ba0e7ba84925e544818137d9ba5903e32182",
+      "size_bytes": 283
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.06 18.31 Samsung Health.csv",
+      "hash_sha256": "4a5ebda2f3d5cd62d575e755c41596e577686c61a02d3df1e9014c521c41513b",
+      "size_bytes": 283
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.07 10.22 Samsung Health.csv",
+      "hash_sha256": "6b5eedf8a13fee97699619329fcba2ff493d93d24bd35a451ea9f1730a0ef023",
+      "size_bytes": 284
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.08 06.48 Samsung Health.csv",
+      "hash_sha256": "5c60e604472f8e36045330efb19403afeae9dd789faac7b717c555c285fc0f8a",
+      "size_bytes": 284
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.09 06.53 Samsung Health.csv",
+      "hash_sha256": "e10c11587a2eac705d4d27bf5f3d740fbbc034482147d8631ba8e1c0cd672b22",
+      "size_bytes": 285
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.11 07.08 Samsung Health.csv",
+      "hash_sha256": "92b9ed0fa3eb16cc8815fcee86afc403b781b50812868c06601af25ffbac6aa5",
+      "size_bytes": 283
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.12 05.52 Samsung Health.csv",
+      "hash_sha256": "30fd68d3e3a9041d048db0beac42b64a94deab532f93300700225fdf701ea343",
+      "size_bytes": 284
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.21 12.40 Samsung Health.csv",
+      "hash_sha256": "92d24a21480a85646a05362be1a5d0acae1f31b140c344d40ed992dfe76669b7",
+      "size_bytes": 284
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.21 12.40 Withings.csv",
+      "hash_sha256": "f8390f5cd00e7bb0e67f976f9a93bdc59499f97877f100f38d5b8a6125eb50bb",
+      "size_bytes": 278
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.21 13.08 Samsung Health.csv",
+      "hash_sha256": "29246f276bc4a524e7920ff0d196546a846c0ebdcd91281e48a9938e3385b8be",
+      "size_bytes": 285
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.21 13.08 Withings.csv",
+      "hash_sha256": "318fa4e055a621dcc7312a49d2cd8feaea5bb78ba9d26028c3ce07e905bb5f9f",
+      "size_bytes": 279
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.22 07.04 Samsung Health.csv",
+      "hash_sha256": "62a15a00f5de389bcf12976178a56fa7ab1b8e8f01493cba638ff97259bb09d9",
+      "size_bytes": 286
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.22 07.04 Withings.csv",
+      "hash_sha256": "c643ac03e38a9082e74e494b88c865bb1f47b93ce50a78a40c3d4be2697793a7",
+      "size_bytes": 280
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.23 07.36 Samsung Health.csv",
+      "hash_sha256": "4d74eb58afd2f462c8b21c8bb97eb72646f5f4cf382b3676c05448b66fb9f71a",
+      "size_bytes": 284
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Activities/WALKING 2026.06.24 07.36 Samsung Health.csv",
+      "hash_sha256": "7710ec0ef3be4c04e5725cf1db4283c21341651eab103b5cf2518b4a2e94f580",
+      "size_bytes": 286
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Heart rate/Heart rate 2026.05.28 Health Connect.csv",
+      "hash_sha256": "ef8ebefea6fdc966ef2cfbb2474109e8e69d8ba9a1a232ae0c7a663c7633a761",
+      "size_bytes": 150733
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Heart rate/Heart rate 2026.05.29 Health Connect.csv",
+      "hash_sha256": "e7f7265e9dd9b2ccca33af0ac5d5d40f833dadf1a52208941c07ab3d5d63967c",
+      "size_bytes": 130306
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.05.28 000000 Health Connect.csv",
+      "hash_sha256": "d55931f8432c92f37163fba757ee4c4682110b9e6753a249d32cf41e3c77cc89",
+      "size_bytes": 99
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.01 000000 Health Connect.csv",
+      "hash_sha256": "3ca59de1a473c2e8c91a985fd4c45bab58940bfae57a30da6f2558ad0244b70e",
+      "size_bytes": 5599
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.02 000000 Health Connect.csv",
+      "hash_sha256": "7229829b69fff080119c2b38712515ed90809300c1514238114d966d53e12236",
+      "size_bytes": 4863
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.03 000000 Health Connect.csv",
+      "hash_sha256": "4d0cbd800f49f271784d95e514413e25ada2deca1fc144709c6d5587acbd5d6a",
+      "size_bytes": 3782
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.04 000000 Health Connect.csv",
+      "hash_sha256": "5de1b148ab5d6e92286717b0c85e619e10cf10a12657cceb27775a87ed4285a0",
+      "size_bytes": 4413
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.06 000000 Health Connect.csv",
+      "hash_sha256": "544b65cba49477519f181266d6eb6648581e63e3af1448c596f9f7b750701991",
+      "size_bytes": 4201
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.07 000000 Health Connect.csv",
+      "hash_sha256": "6fa866872c13aa9dddae740330aee14757dbd89762526dae5bb912db799a4a76",
+      "size_bytes": 42
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.09 000000 Health Connect.csv",
+      "hash_sha256": "a3e125221df247c6d05bf7c1a61bd9a30531ac5ff65e99871cd2dd89a76fc1cb",
+      "size_bytes": 3749
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.17 000000 Health Connect.csv",
+      "hash_sha256": "6fa866872c13aa9dddae740330aee14757dbd89762526dae5bb912db799a4a76",
+      "size_bytes": 42
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.21 000000 Health Connect.csv",
+      "hash_sha256": "12b2e562b1e5ed1fc5015293896f1eb872f788c9050a288c80994aa3948bd63e",
+      "size_bytes": 8982
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Sleep/Sleep 2026.06.23 000000 Health Connect.csv",
+      "hash_sha256": "01893eeb5dd7a0679748566bba06a32099d00b63519c190ccb6bd500047ec54e",
+      "size_bytes": 4487
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.05.28 Health Connect.csv",
+      "hash_sha256": "6aad1d8f99d8be4fa9af9b503e3823287d73cd4a319850dd62294165e6f8b2bf",
+      "size_bytes": 2777
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.05.29 Health Connect.csv",
+      "hash_sha256": "11f8cacd136905ea5c46a77bae36fb235f0c9f28a1162f22aa545aba4cd225af",
+      "size_bytes": 681
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.05.31 Health Connect.csv",
+      "hash_sha256": "3bea3c0503631f8477cebc15a551a48c4117d38884041994e16468570c4ecdc7",
+      "size_bytes": 3687
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.01 Health Connect.csv",
+      "hash_sha256": "790f80388a5e285c723fc15d33b310617cd47dddc3f7446aee2fac96618226a1",
+      "size_bytes": 1196
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.02 Health Connect.csv",
+      "hash_sha256": "f36e7ecf02cae617f5d089d1675e0ed57ddd65d37fc83c786c099fcdbc06c66a",
+      "size_bytes": 2810
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.03 Health Connect.csv",
+      "hash_sha256": "5eae1ece04886fd75eead2c4e5ed8a7237581acdfe05845f07d9c7fe0d31b15b",
+      "size_bytes": 3337
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.04 Health Connect.csv",
+      "hash_sha256": "9e6440d4103ed727bd131e2e76b43af94a58e5a1035c63d783f71c54b76672f8",
+      "size_bytes": 2372
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.05 Health Connect.csv",
+      "hash_sha256": "40ef68574c32efdf1990ab8d43cb9979bb03a7b0bd4074e1ac986152810cd589",
+      "size_bytes": 2078
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.06 Health Connect.csv",
+      "hash_sha256": "320b42011b4d874c47b043debff097015df35e2c63e5a7961bfb8f7e89673e8d",
+      "size_bytes": 4973
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.07 Health Connect.csv",
+      "hash_sha256": "0e64a66184c6bacb0b6b8b591fa8266a5f5085335a4a356182f0ccb904253e7f",
+      "size_bytes": 2801
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.08 Health Connect.csv",
+      "hash_sha256": "a5f120bb8a1ef49ebf6cc1b738a20b8c09285989f176603c035ebcdd946f16b6",
+      "size_bytes": 1065
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.09 Health Connect.csv",
+      "hash_sha256": "004cf43e271cabfea5603245a2983eacb0b5882212efb1e23d695f8616008f85",
+      "size_bytes": 2700
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.10 Health Connect.csv",
+      "hash_sha256": "8d99bf6e4a0fa2d6e3338bdcefb3a596bb7da7caa408f4b2edf8fb618bd908ea",
+      "size_bytes": 778
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.11 Health Connect.csv",
+      "hash_sha256": "928a4c03cb76b229f6eb4c334c2b72547cbeea2f7d3dc28d175d1f4ce41e71d7",
+      "size_bytes": 2268
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.12 Health Connect.csv",
+      "hash_sha256": "3472ef80c83059af6bb4bcee0033f23cc203d4ca86a557318767717f26720a71",
+      "size_bytes": 842
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.17 Health Connect.csv",
+      "hash_sha256": "784e97b3b82a1496915494554ff8568eb5bc8bf8d27c90aaec4354c8246d33eb",
+      "size_bytes": 2398
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.18 Health Connect.csv",
+      "hash_sha256": "9d1a9b93212e6ad996f08291ecdbc180689447c019bf39162ee31ed6da07919e",
+      "size_bytes": 1322
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.21 Health Connect.csv",
+      "hash_sha256": "b49f1de151e44d918a8f0ad2fde5a4739774823de3a00533bc371cbfc81fb767",
+      "size_bytes": 3071
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.22 Health Connect.csv",
+      "hash_sha256": "0d706f7522c66e2d1e1a442c62ea87f0fbb26a6f113d21f0b8835c81d2b5a91a",
+      "size_bytes": 1287
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.23 Health Connect.csv",
+      "hash_sha256": "027d2f04ba4737542ce536dd249d1453a2495c5532831084d55ba9a76e8d0fd8",
+      "size_bytes": 2935
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Steps/Steps 2026.06.24 Health Connect.csv",
+      "hash_sha256": "249b9a8c5fe3e0f7d2fc9ef22306bce4c609fc05a89a1df9e0489a37f289dce1",
+      "size_bytes": 2348
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.01 Health Connect.csv",
+      "hash_sha256": "f4ab106c3495cd52e3f30884638fdb73219cf85a8d2f01603dfbf4a3096365da",
+      "size_bytes": 319
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.04 Health Connect.csv",
+      "hash_sha256": "793eac6a5477365438bbcaf934ad0c08e04757188d68449dee18529c009d6315",
+      "size_bytes": 320
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.05 Google Fit.csv",
+      "hash_sha256": "61a72a3f97d9e2d0039a0da9ab948cd31dde404228d21cb99f64f404c18b2fa1",
+      "size_bytes": 319
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.05 Health Connect.csv",
+      "hash_sha256": "21936a5efd4aa09a7afbc3bcf39becc2310bd39e1db992578c4a2418d8c9115c",
+      "size_bytes": 320
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.06 Google Fit.csv",
+      "hash_sha256": "cc0152b743b4d091ba050f2ff1d7639c5998d2bd7f8aa33bf469242c9fe15289",
+      "size_bytes": 320
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.07 Google Fit.csv",
+      "hash_sha256": "c68166be684d76474d0a4993bda1482201a08e2598f927069d899b5968134b1f",
+      "size_bytes": 319
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.08 Google Fit.csv",
+      "hash_sha256": "5992977245105d4ef6a54dca1548d4c1ffd44edaba7e672927dfa4119bb141f6",
+      "size_bytes": 320
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.10 Google Fit.csv",
+      "hash_sha256": "3f9009f8adce42c41fd7e5d99045c1e08ed2629dee88022295469dfac3de7c33",
+      "size_bytes": 319
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.12 Google Fit.csv",
+      "hash_sha256": "1279eae750eefe7a30dad3e844ad9a729642a59154a7d0a36d019433368b598f",
+      "size_bytes": 319
+    },
+    {
+      "path": "data/health-sync-cache/Health Sync Weight/Weight 2026.06.21 Health Connect.csv",
+      "hash_sha256": "1317a17cd4a6ced779e44c48db99d37aa82507f914fb1a23105c88e217f5cdcb",
+      "size_bytes": 320
+    },
+    {
+      "path": "data/staged-ambiguous-tasks.json",
+      "hash_sha256": "af878bb271033236c2f62c57c0ff58c13efe7c1c082c89d379a615214bb77444",
+      "size_bytes": 1447
+    },
+    {
+      "path": "data/staged-ambiguous-tasks.json.tmp.45264.a6dd8a555653",
+      "hash_sha256": "bd127637354b42729ebd2963d04267d4509be3460581e2cbac47804863269d58",
+      "size_bytes": 53
+    },
+    {
+      "path": "data/staged-topic-deltas.json",
+      "hash_sha256": "1b05d10ddfa6bf728287fe70bf2428536cbc8fe3b7ce831a9ba10fe0b24ceb14",
+      "size_bytes": 59
+    },
+    {
+      "path": "data/staged-topic-deltas.json.tmp.5980.0f9ea9c5c8f6",
+      "hash_sha256": "73506eede49549eccc5b353661c94d7d9fcbe56667df83f7d3bc71612bc7f4f8",
+      "size_bytes": 653
+    },
+    {
+      "path": "inbox/research/2026-05-20-health-data-baseline.md",
+      "hash_sha256": "812d5c80101cb676f71696b7195e6f27a24809aff603db36f6eeac978a3dba79",
+      "size_bytes": 12571
+    },
+    {
+      "path": "inbox/research/2026-05-20-oracle-determinism-scan.md",
+      "hash_sha256": "d72d72591a97fba01c6cd317c79bc782117800efa48491f9522fe425b9399248",
+      "size_bytes": 8880
+    },
+    {
+      "path": "logs/2026-05-14-gmail-triage.md",
+      "hash_sha256": "3047626f53718a77bd95218374854fcc5d01d0aaa4f417530c44d7a6304554c1",
+      "size_bytes": 2980
+    },
+    {
+      "path": "logs/2026-05-14-todoist-brief.md",
+      "hash_sha256": "c63593eb48e7f5b889eaf8b381b22cc5236b1d699495e0af40cdec11e0f84134",
+      "size_bytes": 9124
+    },
+    {
+      "path": "logs/2026-05-14-youtube-digest.md",
+      "hash_sha256": "6470fa8c54926fa63050051c5c5fc4b58a2fdae3e4e302dc94d4a491fb966d6f",
+      "size_bytes": 1364
+    },
+    {
+      "path": "logs/2026-05-15-gmail-triage.md",
+      "hash_sha256": "ed487de4d4a9f8ad94048190b8ac9017bd0b03d785f055518b6264abc144e4c3",
+      "size_bytes": 6129
+    },
+    {
+      "path": "logs/2026-05-15-morning-brief.md",
+      "hash_sha256": "40a8ff49a34cd7c57f6465cd7ea47d627eef2f22597c71f18e21fb2be74c7f8a",
+      "size_bytes": 9278
+    },
+    {
+      "path": "logs/2026-05-15-todoist-brief.md",
+      "hash_sha256": "fe71c0c4537ce585287ebb65c210b1ca3432d09ec700a7aafd10a74246b492e6",
+      "size_bytes": 12722
+    },
+    {
+      "path": "logs/2026-05-15-youtube-digest.md",
+      "hash_sha256": "759fc74b4b0711491aa98f4a0248d3543a4bf460fa597c471dd77d8d9dad082b",
+      "size_bytes": 1693
+    },
+    {
+      "path": "logs/2026-05-16-gmail-triage.md",
+      "hash_sha256": "726fa1ec151c13e795ac5a5bb298bb7b7e410089e3856d5201dabbbc1f73230a",
+      "size_bytes": 5415
+    },
+    {
+      "path": "logs/2026-05-16-morning-brief.md",
+      "hash_sha256": "3b2fa02bb99496eb3579f9b9c5aa81733cc5db99a64d87fe5c03d7dca77f4286",
+      "size_bytes": 11625
+    },
+    {
+      "path": "logs/2026-05-16-todoist-brief.md",
+      "hash_sha256": "730b0ace39c1b7e1a4d57e0a8abed7bfb3abb9326ed1205f8a04694aa9116514",
+      "size_bytes": 14164
+    },
+    {
+      "path": "logs/2026-05-16-youtube-digest.md",
+      "hash_sha256": "46e1efe0cdb7b461a38706be8ac740a24f941f467859ee787ac5117fd0ca97f4",
+      "size_bytes": 5314
+    },
+    {
+      "path": "logs/2026-05-17-gmail-triage.md",
+      "hash_sha256": "a4a0dae62af93447e545968ff739c7c8170be68bf9f370ae883db9ee61f2f9d8",
+      "size_bytes": 7981
+    },
+    {
+      "path": "logs/2026-05-17-morning-brief.md",
+      "hash_sha256": "73261e4da3b930cc9901ea8c03384afe6c4b0b87eb6c2e28cce7b2b55051da50",
+      "size_bytes": 18710
+    },
+    {
+      "path": "logs/2026-05-17-oracle.md",
+      "hash_sha256": "3e5ac63a8145c6cbdcf7237c318189008ccd6719fe37090731ebe0a7e44ddcd9",
+      "size_bytes": 5955
+    },
+    {
+      "path": "logs/2026-05-17-todoist-brief.md",
+      "hash_sha256": "d33654c710c7a74858f76d752a2ef70be6af678f980c15cc6fede05752a581b8",
+      "size_bytes": 2513
+    },
+    {
+      "path": "logs/2026-05-17-youtube-digest.md",
+      "hash_sha256": "93961fa979ee9628a292b211dd707d3cdc491d5cdcf977dd25325fb31e122bbc",
+      "size_bytes": 8089
+    },
+    {
+      "path": "logs/2026-05-18-exelon-bridge.md",
+      "hash_sha256": "d189744ffb79fa5d149b4ef104078e955bf5f96da9e6671d48254325b509baff",
+      "size_bytes": 8807
+    },
+    {
+      "path": "logs/2026-05-18-gmail-triage.md",
+      "hash_sha256": "51af6e4f3d13935675365fc9bbaf9844adcf845e8c66a3b4fc95a8d64e2c52d9",
+      "size_bytes": 5427
+    },
+    {
+      "path": "logs/2026-05-18-morning-brief-data.json",
+      "hash_sha256": "58feb409ad1a21806a9c7452d1f31b2f9a2a4fd2b459870aabdeacf62748d3a3",
+      "size_bytes": 44700
+    },
+    {
+      "path": "logs/2026-05-18-morning-brief.md",
+      "hash_sha256": "8fc761fd831774ac98c7aecf2f406684530dca3a9b33f09d6c9f079cd8c95adb",
+      "size_bytes": 19985
+    },
+    {
+      "path": "logs/2026-05-18-oracle.md",
+      "hash_sha256": "6a659c65fbc85f11e1ac37c1da1b1fe0f56198b7834df98c8ab8687f12dd4d5a",
+      "size_bytes": 5127
+    },
+    {
+      "path": "logs/2026-05-18-todoist-brief.md",
+      "hash_sha256": "bc14033e4de8db030f2c4ffb7aae730178c315141c54c68bbb392890ced80a41",
+      "size_bytes": 3135
+    },
+    {
+      "path": "logs/2026-05-18-youtube-digest.md",
+      "hash_sha256": "92ca93b19507de98eb5019964f40609b9e2f62509f56612f6eaee19f332304bc",
+      "size_bytes": 8577
+    },
+    {
+      "path": "logs/2026-05-19-gmail-triage.md",
+      "hash_sha256": "7e8f83d72a5bb33b4e7f3a72c4427142c83ef75bca2251f96a1a34282863527c",
+      "size_bytes": 6162
+    },
+    {
+      "path": "logs/2026-05-19-morning-brief-data.json",
+      "hash_sha256": "34651b1b142b2c626cd2994800253edea2da2bed7122f200715239ab59d13447",
+      "size_bytes": 48816
+    },
+    {
+      "path": "logs/2026-05-19-morning-brief.md",
+      "hash_sha256": "1c78db43591feea712aaea171764c1c66cd6b6a584aba7e7e6b4a07ff190c973",
+      "size_bytes": 22169
+    },
+    {
+      "path": "logs/2026-05-19-oracle.md",
+      "hash_sha256": "c3d7bba71bd429a0249602153ad4368bc6ad4b410b447ba58129568fa238453a",
+      "size_bytes": 5640
+    },
+    {
+      "path": "logs/2026-05-19-skill-sync.md",
+      "hash_sha256": "a5ea6cca6806c8ca80ad056c8eafe8105bdef887931a25666b6a18ffb5b413e9",
+      "size_bytes": 16379
+    },
+    {
+      "path": "logs/2026-05-19-todoist-brief.md",
+      "hash_sha256": "342a3b5204fb567cfb650a96d18242f5214ea63c7e5dc0f7e1d591c78874a741",
+      "size_bytes": 5341
+    },
+    {
+      "path": "logs/2026-05-19-youtube-digest.md",
+      "hash_sha256": "96e34b9c45248618816c69f77c2135310ffed4e4bea301d6b846f7f1d3776ed0",
+      "size_bytes": 5786
+    },
+    {
+      "path": "logs/2026-05-20-gmail-triage.md",
+      "hash_sha256": "790e6f7f4d1a4104d7cecbf9605d189b083bbfc455bae0ca232908e7ec28927a",
+      "size_bytes": 6637
+    },
+    {
+      "path": "logs/2026-05-20-morning-brief-data.json",
+      "hash_sha256": "b8f2d65a21cc164bc649de64a0f5be6dcc2a213f131e5c77db136ad725f2c0f8",
+      "size_bytes": 50935
+    },
+    {
+      "path": "logs/2026-05-20-morning-brief.md",
+      "hash_sha256": "ae6e9ef9cf15c0e5432626af6e8be111ebf57bc948f46e1df7763fe05ddd59b0",
+      "size_bytes": 19985
+    },
+    {
+      "path": "logs/2026-05-20-oracle-phase1-variance.md",
+      "hash_sha256": "e82e00cbf9a60ecc4e66e4ccdd7c828c48040f99a987d8edcd68596ec661e0c4",
+      "size_bytes": 4816
+    },
+    {
+      "path": "logs/2026-05-20-oracle-phase3-variance.md",
+      "hash_sha256": "60325cdde12a4ec6e78872aaa24f4a7526f68bbac5589dbb04d6a5456a8eeec4",
+      "size_bytes": 3561
+    },
+    {
+      "path": "logs/2026-05-20-oracle.md",
+      "hash_sha256": "0f8e02c60bd978ea8aa25ebf0ca44cf66b90161dd62821d6e7ba4dbc9aad62a9",
+      "size_bytes": 5574
+    },
+    {
+      "path": "logs/2026-05-20-skill-sync.md",
+      "hash_sha256": "a37192a5b483ddcf68d4e7217c93ef3aabae3f9cff48373c4316377d7a988f05",
+      "size_bytes": 6607
+    },
+    {
+      "path": "logs/2026-05-20-todoist-brief.md",
+      "hash_sha256": "1111ee41392ac20788a9b77d5929f1c052b82962f296e43647209a52f558f3ea",
+      "size_bytes": 4707
+    },
+    {
+      "path": "logs/2026-05-20-youtube-digest.md",
+      "hash_sha256": "07d43c789ee6409cc3218fcfcc5242492ddad085bdd446866f82bed833103635",
+      "size_bytes": 5323
+    },
+    {
+      "path": "logs/2026-05-21-gmail-triage.md",
+      "hash_sha256": "261b4ea1c196f4325cd78fb8d942760aaa6fb55527087f642d29ffd7d84449b0",
+      "size_bytes": 7103
+    },
+    {
+      "path": "logs/2026-05-21-morning-brief-data.json",
+      "hash_sha256": "0ef06825062d9cff13d540315974c3a93bd7886befe46b5e7a1d723b327319b1",
+      "size_bytes": 48891
+    },
+    {
+      "path": "logs/2026-05-21-morning-brief.md",
+      "hash_sha256": "f2e617ef3458fd995a8411524b9293f88abf9444021307094010e0ce44a306e7",
+      "size_bytes": 25122
+    },
+    {
+      "path": "logs/2026-05-21-oracle.md",
+      "hash_sha256": "1be439d3aea11d565d8ca6001478d24ff6e12afb490cc099c84dd1b3d2b561b9",
+      "size_bytes": 5357
+    },
+    {
+      "path": "logs/2026-05-21-todoist-brief.md",
+      "hash_sha256": "e5fd94313bf55a33dc89260336e2f2a6e57e01835b96cf14ce9e9806d71334eb",
+      "size_bytes": 3385
+    },
+    {
+      "path": "logs/2026-05-21-youtube-digest.md",
+      "hash_sha256": "81524344b4adfd3fbb2c197a2239b51dea9e1684b65a647869828a846ffb190a",
+      "size_bytes": 5750
+    },
+    {
+      "path": "logs/2026-05-22-gmail-triage.md",
+      "hash_sha256": "cb69d49445852695e4d3b83166287aa7e4b4940a40315eb43a4f91669c53719e",
+      "size_bytes": 5150
+    },
+    {
+      "path": "logs/2026-05-22-morning-brief-data.json",
+      "hash_sha256": "8f5dfae9c075bbf062b9bfee0366b5548fa21c9c0321e4957e67eb7f2616f8ca",
+      "size_bytes": 50742
+    },
+    {
+      "path": "logs/2026-05-22-morning-brief.md",
+      "hash_sha256": "9fe61c20be8fa642d610e56fa4ffd9dbded0e2bd635baeaf8ae9747f1cb2e9df",
+      "size_bytes": 28682
+    },
+    {
+      "path": "logs/2026-05-22-oracle.md",
+      "hash_sha256": "9dbaf90a842e0efae2442829f8d7b5a45ace5c46853980bef32be2767284469f",
+      "size_bytes": 5554
+    },
+    {
+      "path": "logs/2026-05-22-todoist-brief.md",
+      "hash_sha256": "fc3292934c9bbce54198ebc1328dce21b93f691676ea3a065f8bc49ffc8c485d",
+      "size_bytes": 6798
+    },
+    {
+      "path": "logs/2026-05-22-youtube-digest.md",
+      "hash_sha256": "b1fa920704b2cd01aa952e678ff4a6151df2c34ca2dc45703dc2f993c1fc5d04",
+      "size_bytes": 5765
+    },
+    {
+      "path": "logs/2026-05-23-gmail-triage.md",
+      "hash_sha256": "4b4d2ef9435ca9d4ca3ffbebd1c3f0948007b58abb7fe903ee1a58e977db19e3",
+      "size_bytes": 7157
+    },
+    {
+      "path": "logs/2026-05-23-morning-brief-data.json",
+      "hash_sha256": "907370c937f8dc532cd6b9bff09c9dd5b118b3c188fb482630218d65a9643c28",
+      "size_bytes": 50330
+    },
+    {
+      "path": "logs/2026-05-23-morning-brief.md",
+      "hash_sha256": "9f7b7b3f30f0d00780c758e6563898c099d4ab63c0f46516c2a35cc925e38e44",
+      "size_bytes": 28468
+    },
+    {
+      "path": "logs/2026-05-23-oracle.md",
+      "hash_sha256": "7cdd1971dc93ad3083365e8af3c4dbb927a1750210866938a55c407ca76f0f62",
+      "size_bytes": 5720
+    },
+    {
+      "path": "logs/2026-05-23-tasks-classifier.md",
+      "hash_sha256": "a183df098568cfc44cd60c9608851e81edb5f5ccf2f441585ba8a260b907a3b2",
+      "size_bytes": 2681
+    },
+    {
+      "path": "logs/2026-05-23-todoist-brief.md",
+      "hash_sha256": "15c79e0664fc82405849a3fe04b061c0d84737e250910b820f6551fd9b6befac",
+      "size_bytes": 3843
+    },
+    {
+      "path": "logs/2026-05-23-youtube-digest.md",
+      "hash_sha256": "1f495e4204987c666100e7dbb8912e0a50d050406c1b1de1cc40117e0219728e",
+      "size_bytes": 5074
+    },
+    {
+      "path": "logs/2026-05-24-artifact-push.md",
+      "hash_sha256": "d7fabf68dda5fbe69ff6ebec301956af878842806ad2f8651ea5824e22d639af",
+      "size_bytes": 1401
+    },
+    {
+      "path": "logs/2026-05-24-gmail-triage.md",
+      "hash_sha256": "79ff0c38ddae9e265f8d54202d1ed737844a805904141ecaedd4a4ca7695633d",
+      "size_bytes": 6192
+    },
+    {
+      "path": "logs/2026-05-24-health-sync-cache.md",
+      "hash_sha256": "68228f93e64a7a129cc6390cc6f8f88e52ece6de6f888161ddf466c3738a8041",
+      "size_bytes": 1290
+    },
+    {
+      "path": "logs/2026-05-24-morning-brief-data.json",
+      "hash_sha256": "0e71e031fac9e188cc0cb68f993a193fa44a5303816747f709d27b621f8d3b2d",
+      "size_bytes": 49372
+    },
+    {
+      "path": "logs/2026-05-24-morning-brief.md",
+      "hash_sha256": "42f2cc64c84d8cb5c2dfe13b8c6e19a9c4b6a6af4afdb71dd628f2081ee939df",
+      "size_bytes": 29687
+    },
+    {
+      "path": "logs/2026-05-24-oracle.md",
+      "hash_sha256": "8750b05a0eb93d7bf90c9ae0902ae293745de6fe0c43a64c9930bda6d5a21609",
+      "size_bytes": 5216
+    },
+    {
+      "path": "logs/2026-05-24-tasks-classifier.md",
+      "hash_sha256": "290720981f8774d88c6f9bd69de50743f21c92e88d3596c540bbb3a9323a70c0",
+      "size_bytes": 3636
+    },
+    {
+      "path": "logs/2026-05-24-todoist-brief.md",
+      "hash_sha256": "b313294460144b66528e6917a88ecd5a2d1a0dc440bccbf8a3b16d3b39a9ce04",
+      "size_bytes": 4413
+    },
+    {
+      "path": "logs/2026-05-24-youtube-digest.md",
+      "hash_sha256": "f0251588c70cdc63335d32d5189202f34d2a69ac2c05fa27a5ef148ecd435d82",
+      "size_bytes": 6092
+    },
+    {
+      "path": "logs/2026-05-25-exelon-bridge.md",
+      "hash_sha256": "aa81599afa0cb471f0f9f3c028d9c4b36c75fcda93eb5a676d227c5419130432",
+      "size_bytes": 907
+    },
+    {
+      "path": "logs/2026-05-25-gmail-triage.md",
+      "hash_sha256": "06496ccc0e55eff230b470ef50acb852781bc8f19aa895485b7167c379540a94",
+      "size_bytes": 5877
+    },
+    {
+      "path": "logs/2026-05-25-health-sync-cache.md",
+      "hash_sha256": "46cdcb0a85ce0d305df3209c2bd2a15ee1e88c79d88b481580a5176de09c0995",
+      "size_bytes": 1850
+    },
+    {
+      "path": "logs/2026-05-25-morning-brief-data.json",
+      "hash_sha256": "426350708c6d82d8b1c6d97801c77b8fd19caa30ef54823b26bb4fe86abf8980",
+      "size_bytes": 49457
+    },
+    {
+      "path": "logs/2026-05-25-morning-brief.md",
+      "hash_sha256": "49ebbdc572ab6396671d0f932d45171ad7461a11835cfc6029e970d076382420",
+      "size_bytes": 29559
+    },
+    {
+      "path": "logs/2026-05-25-oracle.md",
+      "hash_sha256": "a64e0ede856c1723b9439aa20c20a7076032401cddf32a2e676f5aa1fc05d0a9",
+      "size_bytes": 5093
+    },
+    {
+      "path": "logs/2026-05-25-tasks-classifier.md",
+      "hash_sha256": "e3ece5103f7e6e172b5e9744a432745ab345aebdf786aafd174bb9a619ed3d00",
+      "size_bytes": 1516
+    },
+    {
+      "path": "logs/2026-05-25-todoist-brief.md",
+      "hash_sha256": "29137874559a5025616e29ced2365682e519815202ec2c46b0f8776e9fe20c2d",
+      "size_bytes": 5737
+    },
+    {
+      "path": "logs/2026-05-25-youtube-digest.md",
+      "hash_sha256": "f2c1dda956f9a7f32c7a4d328a33b671f4f97c9675fa03c20a470b4365c3fd73",
+      "size_bytes": 5758
+    },
+    {
+      "path": "logs/2026-05-26-artifact-push.md",
+      "hash_sha256": "187846b93168f0fed1b78b504805fbde7012d8324853e55d556c12970e7157fd",
+      "size_bytes": 1602
+    },
+    {
+      "path": "logs/2026-05-26-gmail-triage.md",
+      "hash_sha256": "1faa376029990fa874bfc93546391c5646eb9c1597327b954cba202d0261d7bf",
+      "size_bytes": 5803
+    },
+    {
+      "path": "logs/2026-05-26-health-sync-cache.md",
+      "hash_sha256": "f246e288dd4d7a4c640a4b698cd867b658da43081c1f6b3e3fb00f136d426da1",
+      "size_bytes": 2672
+    },
+    {
+      "path": "logs/2026-05-26-morning-brief.md",
+      "hash_sha256": "15474e262f364dfc48122c740d45c521babba837581d0514559d867d1608fe97",
+      "size_bytes": 1072
+    },
+    {
+      "path": "logs/2026-05-26-oracle.md",
+      "hash_sha256": "e1ef6ae87f2c8dc85d8cbc45a6545fa280867558c7e0c30656e6f5c5413c584e",
+      "size_bytes": 5442
+    },
+    {
+      "path": "logs/2026-05-26-todoist-brief.md",
+      "hash_sha256": "8c4b9a0edf4fc8877c96518156aa0e45b2d2d7d0784464bd9e262f20b1543707",
+      "size_bytes": 3333
+    },
+    {
+      "path": "logs/2026-05-26-youtube-digest.md",
+      "hash_sha256": "2e934b041829e69e5ea66d03609c135bab71c0b0cf5c797618e5faaf860230c9",
+      "size_bytes": 6127
+    },
+    {
+      "path": "logs/2026-05-27-artifact-push.md",
+      "hash_sha256": "ace2c91612615ca720a2ebb0e6f06961406022f2ca731bd5a6b4ae764f436101",
+      "size_bytes": 1568
+    },
+    {
+      "path": "logs/2026-05-27-brief-qa.md",
+      "hash_sha256": "cadb35f46f95752192f80ebcec7e16d81da9372725a3d8f7f5e56f5db86d262a",
+      "size_bytes": 8505
+    },
+    {
+      "path": "logs/2026-05-27-gmail-triage.md",
+      "hash_sha256": "58b20b9d47222ff906bfd8a0610e5fe8bebf8d8210cca2a7364e34430a7ba5ff",
+      "size_bytes": 7644
+    },
+    {
+      "path": "logs/2026-05-27-health-sync-cache.md",
+      "hash_sha256": "f1414087ed70eb654a5cd4e682aaf6b17bf8c94adb9a52689b6b89c145ac152a",
+      "size_bytes": 2614
+    },
+    {
+      "path": "logs/2026-05-27-morning-brief-data.json",
+      "hash_sha256": "9af80e6776d7dd75aa8b12de02ddff82e9ab02ca8f60084d93b16d846dc10275",
+      "size_bytes": 49457
+    },
+    {
+      "path": "logs/2026-05-27-morning-brief.md",
+      "hash_sha256": "dc80603902ba3ee61b86fd55d9c85a7195655fabe499966264db3885d7394691",
+      "size_bytes": 24985
+    },
+    {
+      "path": "logs/2026-05-27-oracle.md",
+      "hash_sha256": "de968bf918d238691c7d02215794670fb730bc7e0ba9e1405e0f6420e9b6862f",
+      "size_bytes": 5343
+    },
+    {
+      "path": "logs/2026-05-27-tasks-classifier.md",
+      "hash_sha256": "52451cc1bb5a09ebc4957dc7c48b88fbb7e9a7524032e1e8bb6650501225f8f4",
+      "size_bytes": 1311
+    },
+    {
+      "path": "logs/2026-05-27-todoist-brief.md",
+      "hash_sha256": "07e35b3436a39dff5faeae25d3339c334058a028657d51ccf8026fa2d70a3614",
+      "size_bytes": 4034
+    },
+    {
+      "path": "logs/2026-05-27-youtube-digest.md",
+      "hash_sha256": "df2acdb9673f60d81a85c3688d07f40578e16e95331a34cb396541a43e940f3b",
+      "size_bytes": 7278
+    },
+    {
+      "path": "logs/2026-05-28-artifact-push.md",
+      "hash_sha256": "5f60996ae359e0b73c27a719165dea82e12f10877565ed2fd57641fc0b9dc6f9",
+      "size_bytes": 2044
+    },
+    {
+      "path": "logs/2026-05-28-brief-qa.md",
+      "hash_sha256": "a5e3649af5e4d8d989cdfeda971109347f27d1e9a63f085785ddacf5ac5d42d5",
+      "size_bytes": 14611
+    },
+    {
+      "path": "logs/2026-05-28-gmail-triage.md",
+      "hash_sha256": "c5e228fa92939c57921473bf26c115eb93319333744f988043accbb200a692f3",
+      "size_bytes": 7471
+    },
+    {
+      "path": "logs/2026-05-28-health-sync-cache.md",
+      "hash_sha256": "1724a7dde936e4139b83cf3791229191c0655a1fc7989084472213898852ad63",
+      "size_bytes": 1919
+    },
+    {
+      "path": "logs/2026-05-28-morning-brief-data.json",
+      "hash_sha256": "dca96c23b12bdf1a0e20582671ce4f5628de388949644c7d3d057aad47b435cd",
+      "size_bytes": 28709
+    },
+    {
+      "path": "logs/2026-05-28-morning-brief.md",
+      "hash_sha256": "fc6dda32e115ce3196bd0919ae1c574f1e341b695c2052cc9dd40fb275bcc126",
+      "size_bytes": 20294
+    },
+    {
+      "path": "logs/2026-05-28-oracle.md",
+      "hash_sha256": "145d6f196921fdf223e88a66e770066d52a4098e0150a6b749d2f7c24fa75b66",
+      "size_bytes": 5437
+    },
+    {
+      "path": "logs/2026-05-28-tasks-classifier.md",
+      "hash_sha256": "d639fa8b622e360addc5b5429f7a26784707df6ff2ae3ad00adac1d751be245e",
+      "size_bytes": 1185
+    },
+    {
+      "path": "logs/2026-05-28-todoist-brief.md",
+      "hash_sha256": "aac0e521fafbdb94bbcd20189f660b2a46bcd2a0ea5be8116b17b6f87792dff3",
+      "size_bytes": 5899
+    },
+    {
+      "path": "logs/2026-05-28-youtube-digest.md",
+      "hash_sha256": "6fc1b0f0dead84c24f4a768425432191172e7b0e4ff0072819feb002ea25fdf1",
+      "size_bytes": 6542
+    },
+    {
+      "path": "logs/2026-05-29-brief-qa.md",
+      "hash_sha256": "960bc4bd6ce2d3ddd385aa2738e433a328b203b1e68073d2147e75efee006091",
+      "size_bytes": 9838
+    },
+    {
+      "path": "logs/2026-05-29-gmail-triage.md",
+      "hash_sha256": "955b8a8bc745e2e473881f8ccf3be4a635e5dd9069cb4c71576d54634a4e3494",
+      "size_bytes": 5080
+    },
+    {
+      "path": "logs/2026-05-29-health-sync-cache.md",
+      "hash_sha256": "46168ed7a14ec0bcc8b6dc4f68898c3ff0d39b1a2a297bfa19fb1baabde4c0fa",
+      "size_bytes": 2758
+    },
+    {
+      "path": "logs/2026-05-29-morning-brief-data.json",
+      "hash_sha256": "0b24b6f4fd644bc38ae7691534155322d84505eeb054d3e2de210e9ec160d8f4",
+      "size_bytes": 36975
+    },
+    {
+      "path": "logs/2026-05-29-morning-brief.md",
+      "hash_sha256": "020319aa4fe0dd0d8e363f977149b3912162de1226ee4a9267f9a540a718d34b",
+      "size_bytes": 20591
+    },
+    {
+      "path": "logs/2026-05-29-oracle.md",
+      "hash_sha256": "2325fedc9789279026e0fada76d5e854955b3775334285721a5ac6c0e6b7cf49",
+      "size_bytes": 5431
+    },
+    {
+      "path": "logs/2026-05-29-tasks-classifier.md",
+      "hash_sha256": "76b750024634cc92fb73bf706538635f9f2718d84cf97a579a4cbcf4fcfdfb79",
+      "size_bytes": 1211
+    },
+    {
+      "path": "logs/2026-05-29-todoist-brief.md",
+      "hash_sha256": "4492c246e7fe5dac6ce7511f06de8e6c180b950d7165ef00a7c6c38e793b717d",
+      "size_bytes": 2902
+    },
+    {
+      "path": "logs/2026-05-29-youtube-digest.md",
+      "hash_sha256": "9d7eed010dcea1a4bfeb8cb3a1823788450fb2d2fbfad69cdf0e03af5d467405",
+      "size_bytes": 4862
+    },
+    {
+      "path": "logs/2026-05-30-artifact-push.md",
+      "hash_sha256": "a89f75e1721be9157f4eabcf8cda2d0f7df258633979240113a390585e3eaa29",
+      "size_bytes": 832
+    },
+    {
+      "path": "logs/2026-05-30-gmail-triage.md",
+      "hash_sha256": "67b48055c790711e28f5f93d3b98082c9d02b8794c1632076aa3c5e5041c40a9",
+      "size_bytes": 4788
+    },
+    {
+      "path": "logs/2026-05-30-health-sync-cache.md",
+      "hash_sha256": "d50e1f6fd539f01415b781b9b6439098688fbfec18bbb86f27fb3603825d8f55",
+      "size_bytes": 1781
+    },
+    {
+      "path": "logs/2026-05-30-morning-brief-data.json",
+      "hash_sha256": "be32a7f8d6f196a604c9d06cb42f27d44b7440daeb1cbdd94133723fae50c6a4",
+      "size_bytes": 22986
+    },
+    {
+      "path": "logs/2026-05-30-morning-brief.md",
+      "hash_sha256": "8597519755469331ef3d16a8ecc370300509b47f54e0011c0ceb1630ea710da9",
+      "size_bytes": 20294
+    },
+    {
+      "path": "logs/2026-05-30-oracle.md",
+      "hash_sha256": "1698717d6174b5b327ce25f2ab1c24ac14c925b040aabfa70d9bfc7a840b6582",
+      "size_bytes": 5262
+    },
+    {
+      "path": "logs/2026-05-30-tasks-classifier.md",
+      "hash_sha256": "bbac40adde4ee0b43e42a07c2d0724c961b776347842f530028305cd2465ea10",
+      "size_bytes": 1164
+    },
+    {
+      "path": "logs/2026-05-30-todoist-brief.md",
+      "hash_sha256": "a2147d37328ff258209aba214407e5caa57ffa5922ca5934dfd3e5a8a77479e5",
+      "size_bytes": 4180
+    },
+    {
+      "path": "logs/2026-05-30-youtube-digest.md",
+      "hash_sha256": "40e983ddd3722ad850e21191d5e8afca8c402ec53f16c0d32089615a13928171",
+      "size_bytes": 5508
+    },
+    {
+      "path": "logs/2026-05-31-gmail-triage.md",
+      "hash_sha256": "f7822076bb2c1906d3bd4f7d0d700e3c92c7568c09d05873bc094b0439d945bf",
+      "size_bytes": 4848
+    },
+    {
+      "path": "logs/2026-05-31-health-sync-cache.md",
+      "hash_sha256": "0fd367083775563e5d71809f4aba82ba4340e81de1d6f63e6edb2b05e7fb822a",
+      "size_bytes": 1202
+    },
+    {
+      "path": "logs/2026-05-31-morning-brief-data.json",
+      "hash_sha256": "e631cc004bb076b1f714a37819f153ade473af1dc300e045ae5cdc592f5c30cc",
+      "size_bytes": 26641
+    },
+    {
+      "path": "logs/2026-05-31-morning-brief.md",
+      "hash_sha256": "d31de025fe67921aa143f31c495abd48c229b70e0429794c9b6d1c07c7538bfb",
+      "size_bytes": 4748
+    },
+    {
+      "path": "logs/2026-05-31-oracle.md",
+      "hash_sha256": "2a8f36ae5f5f3e2b9b25f3b8d2ef8b4ef1d5813c75f66cf5df76db3a17c84248",
+      "size_bytes": 5209
+    },
+    {
+      "path": "logs/2026-05-31-tasks-classifier.md",
+      "hash_sha256": "621f7d179422205fce268b1c478a1ec034e3ac29eed9822858da9dc9d5658f34",
+      "size_bytes": 1049
+    },
+    {
+      "path": "logs/2026-05-31-todoist-brief.md",
+      "hash_sha256": "3a39499d4877aa85439a0849f50e02af35af050b4b19d6a405c7bf127cae21a9",
+      "size_bytes": 5962
+    },
+    {
+      "path": "logs/2026-05-31-youtube-digest.md",
+      "hash_sha256": "532a5a6eab0a830503caaf60e2ce2de411d10b7fbc09bd30edb813fc04c84520",
+      "size_bytes": 3889
+    },
+    {
+      "path": "logs/2026-06-01-exelon-bridge.md",
+      "hash_sha256": "a280ea980bb95fdb501e34f9fc81e357fb3fc2ea5aedaf36ad20e921ba4c9418",
+      "size_bytes": 9583
+    },
+    {
+      "path": "logs/2026-06-01-gmail-triage.md",
+      "hash_sha256": "3fca18aa0e9be0da7e24554389cb64ba8a36500877a236e837cbe5fdc8deda07",
+      "size_bytes": 4493
+    },
+    {
+      "path": "logs/2026-06-01-health-sync-cache.md",
+      "hash_sha256": "c871aa6c922fcfe3686be7c2dc3180de16d7fce9bdf5fb41c4b98ec1c315fce5",
+      "size_bytes": 1521
+    },
+    {
+      "path": "logs/2026-06-01-morning-brief-data.json",
+      "hash_sha256": "84ff3466f7886af07a044b6769a6a47efee004fffc2f3bc235a3fb706145629e",
+      "size_bytes": 22473
+    },
+    {
+      "path": "logs/2026-06-01-morning-brief.md",
+      "hash_sha256": "2d0ebf854d6473fc51753e6cce2b03f20e8f692f722678452a9d1a9131cd8780",
+      "size_bytes": 4748
+    },
+    {
+      "path": "logs/2026-06-01-oracle.md",
+      "hash_sha256": "c948decd2a7ec27bbe77ccf621df0a76d80216886b2b141b7cdd99139e14ed98",
+      "size_bytes": 5408
+    },
+    {
+      "path": "logs/2026-06-01-tasks-classifier.md",
+      "hash_sha256": "4e4f3a785e270be99588abc02eaf109ecdf7639d2b5eb06c74c6d1d2239504e1",
+      "size_bytes": 1292
+    },
+    {
+      "path": "logs/2026-06-01-todoist-brief.md",
+      "hash_sha256": "2fc7e3dee08ae041760c21a58b8db5515d279d0a6462e113bd09eb6783a803d6",
+      "size_bytes": 1718
+    },
+    {
+      "path": "logs/2026-06-01-youtube-digest.md",
+      "hash_sha256": "7c1463835f702059e9f506356e0427f25641da3ec10a6f697ac9d16c3ecd4f7e",
+      "size_bytes": 4524
+    },
+    {
+      "path": "logs/2026-06-02-gmail-triage.md",
+      "hash_sha256": "77db63420385bbf70a8fe58c74362fcdaede09afb54cede66cb2604e1851640b",
+      "size_bytes": 5108
+    },
+    {
+      "path": "logs/2026-06-02-health-sync-cache.md",
+      "hash_sha256": "de630a193b7532318c88cb3a73bb4111232e27cc9d62ca32b2f393bc4b715bbd",
+      "size_bytes": 2555
+    },
+    {
+      "path": "logs/2026-06-02-morning-brief.md",
+      "hash_sha256": "333c7893c1d81e341f50fde4f5946218e813c8ffe7dfa9a4917001a7a22362c4",
+      "size_bytes": 4748
+    },
+    {
+      "path": "logs/2026-06-02-oracle.md",
+      "hash_sha256": "baaa877cd6f19de76bd3daf542fa3adf6cd27a4d249d84e9a905f8dcca9f7501",
+      "size_bytes": 5477
+    },
+    {
+      "path": "logs/2026-06-02-tasks-classifier.md",
+      "hash_sha256": "8de6429e6bee4df3b266e500a6d7a425965749eebead84fec4f4ae9eecd43e39",
+      "size_bytes": 1343
+    },
+    {
+      "path": "logs/2026-06-02-todoist-brief.md",
+      "hash_sha256": "1edc6ab77f521099e7cb96668ae36b5dabbcc8367228dd8ba8326f737e08d871",
+      "size_bytes": 3348
+    },
+    {
+      "path": "logs/2026-06-02-youtube-digest.md",
+      "hash_sha256": "e3a2667fddc1faa05e89cf6c25d3a7b702027807320433465c3404f41cdde339",
+      "size_bytes": 4884
+    },
+    {
+      "path": "logs/2026-06-03-gmail-triage.md",
+      "hash_sha256": "79bca867889fc57444535f0bbd2bdbc15ef1d6dfa2d349e1a63b13e9f6711840",
+      "size_bytes": 6346
+    },
+    {
+      "path": "logs/2026-06-03-morning-brief-data.json",
+      "hash_sha256": "c20f95ff41e8e4e0684cf9aae5013bae383b65fd985a42bf98e42f736773f966",
+      "size_bytes": 6184
+    },
+    {
+      "path": "logs/2026-06-03-morning-brief.md",
+      "hash_sha256": "5559ef9300a0e9ff1dfeea48389073622a6c5f5b0fb7a654472e2da1dfe54035",
+      "size_bytes": 5419
+    },
+    {
+      "path": "logs/2026-06-03-oracle.md",
+      "hash_sha256": "9bf51edc015c89c2cbef2aa5f55c48951dbb812b21d344488d2b07ba95cf0623",
+      "size_bytes": 5182
+    },
+    {
+      "path": "logs/2026-06-03-todoist-brief.md",
+      "hash_sha256": "4d6d164f304ac3e523758ae60552f2d74a6e0f599a9e3538bd201fd2b9aeaebe",
+      "size_bytes": 4483
+    },
+    {
+      "path": "logs/2026-06-03-youtube-digest.md",
+      "hash_sha256": "9556c1df6be6d798e218ac6cee1cadb5f0f0f54018b5b46ef55cd48b3b8b090c",
+      "size_bytes": 4877
+    },
+    {
+      "path": "logs/2026-06-04-gmail-triage.md",
+      "hash_sha256": "851d4c9c5b53ea879b1cf09bb7724802028ac97ca5f074ea7657eda3ee06e9d1",
+      "size_bytes": 4881
+    },
+    {
+      "path": "logs/2026-06-04-health-sync-cache.md",
+      "hash_sha256": "ac10718c8f5da57d1f5fd82673db39ccd41a2a2d18018a9df12d37db2b3f22e0",
+      "size_bytes": 1843
+    },
+    {
+      "path": "logs/2026-06-04-morning-brief-data.json",
+      "hash_sha256": "5d722b4bb94b0fc5ff9044e19b097ca134bd2ce823830d08fed0e7f758905e51",
+      "size_bytes": 7592
+    },
+    {
+      "path": "logs/2026-06-04-morning-brief.md",
+      "hash_sha256": "58c82e465485c5f84a228186919be1bb43fc8aaa9510b67673b37817a8a400d3",
+      "size_bytes": 5419
+    },
+    {
+      "path": "logs/2026-06-04-oracle.md",
+      "hash_sha256": "c900b3fae588eec33ec776a3c287e3ce083f0ebba0e74a22c783b45c6b38bb42",
+      "size_bytes": 5517
+    },
+    {
+      "path": "logs/2026-06-04-tasks-classifier.md",
+      "hash_sha256": "5cbe18d5e7c164cc126f35dc0c72136e669cc62281452a06d03203c08676b92e",
+      "size_bytes": 1333
+    },
+    {
+      "path": "logs/2026-06-04-todoist-brief.md",
+      "hash_sha256": "46787b66b1f6d4b7c210ad1d03a8458e2bf723f1387f0ce060b971a320b47bd3",
+      "size_bytes": 4141
+    },
+    {
+      "path": "logs/2026-06-04-youtube-digest.md",
+      "hash_sha256": "0c868d849ccf76298b0dfb60e37ad277a91af8284585c4824df86ab62d0f142a",
+      "size_bytes": 5938
+    },
+    {
+      "path": "logs/2026-06-05-gmail-triage.md",
+      "hash_sha256": "32567642fce68679d31616c83ecd63e4d3fa20a3729097e2652d21103b21d363",
+      "size_bytes": 3896
+    },
+    {
+      "path": "logs/2026-06-05-health-sync-cache.md",
+      "hash_sha256": "5e75e9a449f0a66451098280f0dde9e6dee6174902e87c6cbbe24875cc8a313a",
+      "size_bytes": 2119
+    },
+    {
+      "path": "logs/2026-06-05-morning-brief-data.json",
+      "hash_sha256": "9f249d8b4c7d8edb6884fd8cd8d657444d1393feebd39c544260c11cbf2aeafd",
+      "size_bytes": 7357
+    },
+    {
+      "path": "logs/2026-06-05-morning-brief.md",
+      "hash_sha256": "3db122f2fa75de14664f44b4a1fdfe2c9ec8ea85691a185cf52e56e091eea5de",
+      "size_bytes": 5419
+    },
+    {
+      "path": "logs/2026-06-05-oracle.md",
+      "hash_sha256": "d595c5157d546c5def6893c6b9401db69bd1246865ef999eaf74221e7ad7ca2a",
+      "size_bytes": 5036
+    },
+    {
+      "path": "logs/2026-06-05-tasks-classifier.md",
+      "hash_sha256": "b60ca0ada25b68159c753cd6ca87e866bdfa97f4fabeb6df56f8cc7a74a114f3",
+      "size_bytes": 1355
+    },
+    {
+      "path": "logs/2026-06-05-todoist-brief.md",
+      "hash_sha256": "b74785844c36c4c56d6067cb01b0821d0f3d6319f6c2451b753b9ffc7d120659",
+      "size_bytes": 4623
+    },
+    {
+      "path": "logs/2026-06-05-youtube-digest.md",
+      "hash_sha256": "d8760b0052f6fabb4db2bfc6ea81ee7e86f49bc88ce1ef3476059c179c4d1309",
+      "size_bytes": 5325
+    },
+    {
+      "path": "logs/2026-06-06-morning-brief-data.json",
+      "hash_sha256": "a2ddd34deb1dd218442a7d2ebba0154bffaa9c11d6a4e73180d5cc06b1a3d52d",
+      "size_bytes": 7965
+    },
+    {
+      "path": "logs/2026-06-06-morning-brief.md",
+      "hash_sha256": "585410a0122bf169c292c5200132ec0f1895cf649c5a699990905fd7cb0b5dc7",
+      "size_bytes": 5951
+    },
+    {
+      "path": "logs/2026-06-06-tasks-classifier.md",
+      "hash_sha256": "83ddd21b47f72934831cfcd5c459d858e49c419a2b82ecb259583a0f09a2f5c8",
+      "size_bytes": 938
+    },
+    {
+      "path": "logs/2026-06-07-gmail-triage.md",
+      "hash_sha256": "b1513a630b2479c86b01f81235aed08a3292676a9fd5205314d7b762999bccee",
+      "size_bytes": 5067
+    },
+    {
+      "path": "logs/2026-06-07-health-sync-cache.md",
+      "hash_sha256": "895ea01905b9643816a58e92a3ef26b3b272cae8f135b9fb3124d597784ccc9d",
+      "size_bytes": 2521
+    },
+    {
+      "path": "logs/2026-06-07-morning-brief-data.json",
+      "hash_sha256": "366f3c291797920781baeb1077cb2afabe94f506446ec49d0dbf276709c79845",
+      "size_bytes": 7020
+    },
+    {
+      "path": "logs/2026-06-07-morning-brief.md",
+      "hash_sha256": "236a7808889cfdfb742720e7dfa9bb067a7d1beed8d3eb77da1948eebf505483",
+      "size_bytes": 5951
+    },
+    {
+      "path": "logs/2026-06-07-oracle.md",
+      "hash_sha256": "013573a2ccffbdc2df77ba7911fdf8bedfc7ed8671890524ec2a1c4ce7456395",
+      "size_bytes": 5059
+    },
+    {
+      "path": "logs/2026-06-07-todoist-brief.md",
+      "hash_sha256": "0ad41cdcc7296cbf98dd2a55a5e9ea49a417b267f5f1da908473aa945456a762",
+      "size_bytes": 5664
+    },
+    {
+      "path": "logs/2026-06-07-youtube-digest.md",
+      "hash_sha256": "9d9293b9244ca2549caf6a7b0e70911af28c3a6f02e649e67e12137da2a3d8f5",
+      "size_bytes": 4122
+    },
+    {
+      "path": "logs/2026-06-08-gmail-triage.md",
+      "hash_sha256": "8cb228c3ad21bdeaee0eb5933cdb352cbd111da599902bcc899f342d983b81ad",
+      "size_bytes": 5271
+    },
+    {
+      "path": "logs/2026-06-08-health-sync-cache.md",
+      "hash_sha256": "7b36875e7cdbce33c0384abce57cae4175744194eb9199bd29657104050421ee",
+      "size_bytes": 2903
+    },
+    {
+      "path": "logs/2026-06-08-morning-brief-data.json",
+      "hash_sha256": "043d22708e468b73339b9ca3e5fc08f5dacd0e39981b6a6a7047aa65d5345a97",
+      "size_bytes": 6997
+    },
+    {
+      "path": "logs/2026-06-08-morning-brief.md",
+      "hash_sha256": "21cdcfb8a136932a789a0f53c6df89a8388d80da60cd0f9bff81b19fd9cf86ec",
+      "size_bytes": 5951
+    },
+    {
+      "path": "logs/2026-06-08-oracle.md",
+      "hash_sha256": "2b3d1e2c658fd2f12666f76b87d33969fb346eab42fda311ea67425c4b1745d8",
+      "size_bytes": 5175
+    },
+    {
+      "path": "logs/2026-06-08-tasks-classifier.md",
+      "hash_sha256": "c9300cb12aa49998213a02af750e9d25804c57608b48cbe92d48009ee6f723ea",
+      "size_bytes": 2267
+    },
+    {
+      "path": "logs/2026-06-08-todoist-brief.md",
+      "hash_sha256": "0f365a2563eb25625df46c1ecb00e7ae35c566238d2371993a1c9b9929855113",
+      "size_bytes": 6313
+    },
+    {
+      "path": "logs/2026-06-08-youtube-digest.md",
+      "hash_sha256": "b66b5224401cef80df1a7402720b242cc4505ebea9af6870bc500120544b0f20",
+      "size_bytes": 4444
+    },
+    {
+      "path": "logs/2026-06-09-gmail-triage.md",
+      "hash_sha256": "77406553e178cc869dd01b2f72c977aa12e5aa06b9abaaeec6af13778b94e2b5",
+      "size_bytes": 4002
+    },
+    {
+      "path": "logs/2026-06-09-health-sync-cache.md",
+      "hash_sha256": "ba6947202d61a5709c7763c6028ec55a1174cd4b2b7fdb70fc7e80c421074bdd",
+      "size_bytes": 2607
+    },
+    {
+      "path": "logs/2026-06-09-oracle.md",
+      "hash_sha256": "15a870b5c657bbc77a670d09180dde1f4519c1a7ca7356149aed02b50b85cba5",
+      "size_bytes": 5180
+    },
+    {
+      "path": "logs/2026-06-09-tasks-classifier.md",
+      "hash_sha256": "0a6fc42046e6321bdf08eda3ee90bc5a7af5bdfc036199220695397ba85cb195",
+      "size_bytes": 1812
+    },
+    {
+      "path": "logs/2026-06-09-todoist-brief.md",
+      "hash_sha256": "4af1080bcdbc8c3b58f64c0af0a495be683c91e5b5b6ccabe4eee1bc7ae081e1",
+      "size_bytes": 3643
+    },
+    {
+      "path": "logs/2026-06-09-youtube-digest.md",
+      "hash_sha256": "a902500dd719fdbc557255c279c82f79d8a677ab3277ca70842368c0474ed52f",
+      "size_bytes": 3926
+    },
+    {
+      "path": "logs/2026-06-10-gmail-triage.md",
+      "hash_sha256": "53836bc7c805741abd24a716be9f6509f192a732f2723228d61a3aa0aeec6185",
+      "size_bytes": 3364
+    },
+    {
+      "path": "logs/2026-06-10-health-sync-cache.md",
+      "hash_sha256": "32b54ce539c24965ab7c4521f51400d35e7d065c12877f4e4d7ed2b8e365f136",
+      "size_bytes": 1780
+    },
+    {
+      "path": "logs/2026-06-10-morning-brief-data.json",
+      "hash_sha256": "357647ef7805dca4f04d17061666c4fab7f2d48f00440cad8e40f854a0149dc7",
+      "size_bytes": 6158
+    },
+    {
+      "path": "logs/2026-06-10-morning-brief.md",
+      "hash_sha256": "6fe723ff90e82f154169df728065b58d6afc375bb66c747ae4ba971e8d94843b",
+      "size_bytes": 5403
+    },
+    {
+      "path": "logs/2026-06-10-oracle.md",
+      "hash_sha256": "43ff4555e0d66ab0dd6db5495cdb455b4cec431f3e887b0e84651437439c7945",
+      "size_bytes": 5261
+    },
+    {
+      "path": "logs/2026-06-10-tasks-classifier.md",
+      "hash_sha256": "aec1e1772688055ddd8879088986f1c6d0fb0cc790caf516f956306fa8e98778",
+      "size_bytes": 1429
+    },
+    {
+      "path": "logs/2026-06-10-tasks-classifier.md.tmp.45264.b3303cf9f931",
+      "hash_sha256": "aec1e1772688055ddd8879088986f1c6d0fb0cc790caf516f956306fa8e98778",
+      "size_bytes": 1429
+    },
+    {
+      "path": "logs/2026-06-10-todoist-brief.md",
+      "hash_sha256": "fa1c36317311be44f40b4845897ec11e49d2e04b417f16674fad70459d4e8ba3",
+      "size_bytes": 5005
+    },
+    {
+      "path": "logs/2026-06-10-youtube-digest.md",
+      "hash_sha256": "b7351633c904ff3fefefa07783a648bf3fdd6b847df03c5d25a376551ad1ec9b",
+      "size_bytes": 5346
+    },
+    {
+      "path": "logs/2026-06-10-youtube-digest.md.tmp.5980.82d4222cd34f",
+      "hash_sha256": "b7351633c904ff3fefefa07783a648bf3fdd6b847df03c5d25a376551ad1ec9b",
+      "size_bytes": 5346
+    },
+    {
+      "path": "logs/2026-06-11-gmail-triage.md",
+      "hash_sha256": "9f0d566d9327a756a87d1f24c5e82f6e505df20043a7675a9944c2bf2afe9677",
+      "size_bytes": 3913
+    },
+    {
+      "path": "logs/2026-06-11-health-sync-cache.md",
+      "hash_sha256": "7e2452545b9504de91790a2508deb43898ee0e7ad4fa32db7a9610db17fbb52c",
+      "size_bytes": 3400
+    },
+    {
+      "path": "logs/2026-06-11-oracle.md",
+      "hash_sha256": "c0924e5dd60bdf25bf6d1f7aed5849ef22261aed133dea3535a57b2d645726bf",
+      "size_bytes": 5115
+    },
+    {
+      "path": "logs/2026-06-11-tasks-classifier.md",
+      "hash_sha256": "dd901f1a20aa838e44e9c3a148d6d4fc4fce6d3fa13fed63667602695811dd25",
+      "size_bytes": 2337
+    },
+    {
+      "path": "logs/2026-06-11-todoist-brief.md",
+      "hash_sha256": "2377de678165b0b3a8ae6b96cbc131161c5a82ecae16efce0db8d9e62a1a4b51",
+      "size_bytes": 4756
+    },
+    {
+      "path": "logs/2026-06-11-youtube-digest.md",
+      "hash_sha256": "210d8f557b85738bdbe9f2fdc4551386ae8dd91bd34bbf7a8191ef6935213cee",
+      "size_bytes": 4568
+    },
+    {
+      "path": "logs/2026-06-22-gmail-triage-sweep.md",
+      "hash_sha256": "ef1562b17e01053cdb34ec621ae9e77ef7cca9b01a576230e8836f1b75e73482",
+      "size_bytes": 9047
+    },
+    {
+      "path": "logs/2026-06-22-gmail-triage.md",
+      "hash_sha256": "35e8a89768a439440c418d376311b1d7826c0795fb83be07208925e88063ff2c",
+      "size_bytes": 8183
+    },
+    {
+      "path": "logs/2026-06-22-gmail-triage.md.tmp.26668.483bd902f102",
+      "hash_sha256": "35e8a89768a439440c418d376311b1d7826c0795fb83be07208925e88063ff2c",
+      "size_bytes": 8183
+    },
+    {
+      "path": "logs/2026-06-22-health-sync-cache.md",
+      "hash_sha256": "441035f5130055a769fc5fbf3bc259d4770760a938eef85e0121e9dd135efcd7",
+      "size_bytes": 4564
+    },
+    {
+      "path": "logs/2026-06-22-morning-brief-data.json",
+      "hash_sha256": "55024815fa468cd58ab24c45ceb2a5e1d4fa34e966674d8578704ed418f51516",
+      "size_bytes": 11316
+    },
+    {
+      "path": "logs/2026-06-22-morning-brief-rendered.html",
+      "hash_sha256": "693c94f48e966c2747e6e7d98d07e9fec7d5d2fbda25beabeb3e90633f951995",
+      "size_bytes": 19832
+    },
+    {
+      "path": "logs/2026-06-22-morning-brief.md",
+      "hash_sha256": "e2ded5378d3783349264c1740b9095528150401604a45c14141ce8f1fa909ee5",
+      "size_bytes": 6071
+    },
+    {
+      "path": "logs/2026-06-22-oracle.md",
+      "hash_sha256": "7ed29165bf5f39c22719e0c5d713659ced7cfa15b596b395dacf26b3236fa8d8",
+      "size_bytes": 5389
+    },
+    {
+      "path": "logs/2026-06-22-todoist-brief.md",
+      "hash_sha256": "61030d032b55046ddff02fc6855ff0d057ecf6ea6ea91aa5b1a58baddd1b8ca1",
+      "size_bytes": 11339
+    },
+    {
+      "path": "logs/2026-06-22-youtube-digest.md",
+      "hash_sha256": "5a57075cfd863c45c80162152adb14fabda47a516e1406fe6e2c654cb2a8cf6c",
+      "size_bytes": 7779
+    },
+    {
+      "path": "logs/2026-06-24-morning-brief-data.json",
+      "hash_sha256": "3a18f6953d6d1ff4a01545f43f4b20747f8b41f4150dec11221ad420eda75ff3",
+      "size_bytes": 11104
+    },
+    {
+      "path": "logs/2026-06-24-morning-brief.md",
+      "hash_sha256": "b38552b1acd00dad63b3cccbb4b0d3513691079cab2a09c482b0284588ad912e",
+      "size_bytes": 8727
+    },
+    {
+      "path": "logs/2026-08-01-gmail-triage.md",
+      "hash_sha256": "5caa57bba1350852577e7e116d4b623956629149dcbdafa54f37bc6ca192a4bd",
+      "size_bytes": 3966
+    },
+    {
+      "path": "logs/2026-08-01-morning-brief-data.json",
+      "hash_sha256": "5289b8b78ba92f6aee0018f8595e3c1f57a35769f2ef123faa42168e553fa9b6",
+      "size_bytes": 10613
+    },
+    {
+      "path": "logs/2026-08-01-morning-brief.md",
+      "hash_sha256": "dd40af59014be7533af62db03bfb46012f331ffa433dffab85575337c533bf04",
+      "size_bytes": 7029
+    },
+    {
+      "path": "logs/2026-08-01-todoist-brief.md",
+      "hash_sha256": "bf9239bc0728974619b95b5065ce4247fdd74b620bc75ce35390a19ba28a0ef7",
+      "size_bytes": 2556
+    },
+    {
+      "path": "logs/2026-21-week-rollup.md",
+      "hash_sha256": "2eced1f0e1fb0774a60b53dd155c156136d550cb9725591132d34ea2a9d5928f",
+      "size_bytes": 23986
+    },
+    {
+      "path": "logs/2026-22-week-rollup.md",
+      "hash_sha256": "ba91a2bc41964faafe8fa765018c3c6247ad976704c15bc561e326b0970bdf72",
+      "size_bytes": 16814
+    },
+    {
+      "path": "logs/2026-23-week-rollup.md",
+      "hash_sha256": "0fb1458aacc50aeddc60c156f4642f45e14e54f1a34c8d6c9f08173a0380e953",
+      "size_bytes": 22218
+    },
+    {
+      "path": "memory/README.md",
+      "hash_sha256": "e8da65c28bae06ef558cb9e6d7c7822f062a31d11f47bae8ebcfc987b3f671b7",
+      "size_bytes": 3193
+    },
+    {
+      "path": "memory/brief-feedback.md",
+      "hash_sha256": "29f5803da247ff41637d83e0037fb41346d862100325b9387572e2dd4778e98a",
+      "size_bytes": 8627
+    },
+    {
+      "path": "memory/closures.md",
+      "hash_sha256": "c6f444522ce0eca8bdfda22af78e1d25cb67f395f293f694b66f8a5fef806845",
+      "size_bytes": 9702
+    },
+    {
+      "path": "memory/content/README.md",
+      "hash_sha256": "b6ae73b8c67c3517d6e8836b4056b481697ce693fa8fe42235de1fb0e5d132f8",
+      "size_bytes": 1942
+    },
+    {
+      "path": "memory/content/_template.md",
+      "hash_sha256": "beeddb544fe49678e1d9d696f63f3b791132e41c922f6666a93fa67c1fd48d97",
+      "size_bytes": 928
+    },
+    {
+      "path": "memory/decisions/README.md",
+      "hash_sha256": "febdc435c2933fb66e2f83ce6ba8e986e94a2edfdda6884d65b3ca02b988b98d",
+      "size_bytes": 2388
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-15-cowork-memory-architecture.md",
+      "hash_sha256": "88f23555e7989bf8ce1575aa452f4edcb3a4f45e0c2c84e15f80cbc29d0100ad",
+      "size_bytes": 2703
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-15-doctrine-seeds-proposed.md",
+      "hash_sha256": "09883bca6f043e0871a87327f48afc5a22fe653c5f6a0e587a8e7c319560304a",
+      "size_bytes": 11914
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-15-keep-account-selection.md",
+      "hash_sha256": "c54a34f8ae728fa15b8593d15d6a7dfe623523ce977222aafad6713d4feb82dc",
+      "size_bytes": 5051
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-15-keep-mcp-selection.md",
+      "hash_sha256": "3b6df80df57d8fb3d9b4ea27b613105b63610aba34e597031eca025b62b5407a",
+      "size_bytes": 2548
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-20-eva-todoist-scheduling-investigation.md",
+      "hash_sha256": "ae23c4fa77871b9703a73e36a9052c8ef64c1d303595e6febe9f14312d976267",
+      "size_bytes": 7935
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-20-health-connect-export-path.md",
+      "hash_sha256": "06990ffd3ebd23a816a33b78114baa1167c5b836ba5056972b4829a9c813acd7",
+      "size_bytes": 12169
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-20-notebooklm-pilot-scope.md",
+      "hash_sha256": "a1fc6332281467be10d9dfd65b45d9583db4a0375ac341001b9c320789998103",
+      "size_bytes": 11218
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-20-youtube-watchtime-feedback.md",
+      "hash_sha256": "535bbb3b97569b0884f73a77fa2f8afb7db7ff8008dfceffc84e11e0242e6b1d",
+      "size_bytes": 6735
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-21-mothers-day-gift-given.md",
+      "hash_sha256": "ea1bf3711a2570c5ea6ebfad711d1e70bbd911325f08a849385919c1c12b3afc",
+      "size_bytes": 2437
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-22-capture-path-revisit.md",
+      "hash_sha256": "f98b290e286b1ed85bba92a3635d87cc9fdf911eb7d1324ce89cb6882b9b6a75",
+      "size_bytes": 14259
+    },
+    {
+      "path": "memory/decisions/personal/2026-05-28-scheduled-task-reliability-rca.md",
+      "hash_sha256": "d7d81802d87f4cdcbef72c6d934a049e9dc9ba33ae52f90fdd54c24228d53e4a",
+      "size_bytes": 19694
+    },
+    {
+      "path": "memory/doctrine.md",
+      "hash_sha256": "7ccebedbd5df18b3865b388db11fbb37a522188f9e34494a75a1ffe167f101d0",
+      "size_bytes": 23697
+    },
+    {
+      "path": "memory/learning/2026-06-03-proactive-agents-video.md",
+      "hash_sha256": "60a8eaa80ef55a26a4c5263a86f419f26b3d0f897f410b8c2ed11fdbc599fcf7",
+      "size_bytes": 4041
+    },
+    {
+      "path": "memory/learning/2026-06-05-samsung-modes-routines.md",
+      "hash_sha256": "b0c1234c5f598c8275152dd7a1c7ea2157b0156e904fb1d994c1ebf531193418",
+      "size_bytes": 4130
+    },
+    {
+      "path": "memory/learning/README.md",
+      "hash_sha256": "fd501dfebe10aa4ceaa90f152a7b5b8d5b9fdfc81d3bc2d6059f1e95220a0a16",
+      "size_bytes": 1393
+    },
+    {
+      "path": "memory/learning/_template.md",
+      "hash_sha256": "e975ac77a04ded824c327bd64cb0ec33bbefebb7e22e5d9377e3729131fe1a2f",
+      "size_bytes": 744
+    },
+    {
+      "path": "memory/oracle/alignment.md",
+      "hash_sha256": "c7960abb2ca5b11fb4817bce9d13489647dbaf168841a578b9083a7a78f2b87f",
+      "size_bytes": 32670
+    },
+    {
+      "path": "memory/oracle/history.md",
+      "hash_sha256": "690958b0fd2d9039e897984b1043b840433aa54b480d520891554b4a5a1a11a6",
+      "size_bytes": 74808
+    },
+    {
+      "path": "memory/people.md",
+      "hash_sha256": "c343dca2cd94483d069cb36182ddf90ea22ec429a514081e9251928c8da64762",
+      "size_bytes": 7024
+    },
+    {
+      "path": "memory/preferences/body-section.md",
+      "hash_sha256": "385120495d5827e82b57393e6a356bed0390a5b8cfc09b7c86da0dfbdb09650e",
+      "size_bytes": 27573
+    },
+    {
+      "path": "memory/preferences/gmail.md",
+      "hash_sha256": "2cc5c2af4f64f75685c56d259bb5dbaabacdacbb29598d5d5333c7e53604b73a",
+      "size_bytes": 54878
+    },
+    {
+      "path": "memory/preferences/google-keep.md",
+      "hash_sha256": "9b2397c2269e37a05a35d232e1c03f1bb7a99206650f07140485d44bf26a13b6",
+      "size_bytes": 6083
+    },
+    {
+      "path": "memory/preferences/morning-brief-distillation.md",
+      "hash_sha256": "148c22bd5f5e30c115e05bef022636ca76582e80c138c10484fbdf641d9c6df1",
+      "size_bytes": 19466
+    },
+    {
+      "path": "memory/preferences/morning-brief-v1.md",
+      "hash_sha256": "a8d6deed8f4c85f21abae60aa4f601bd3408ea673e97f9f3e5a66998fb961804",
+      "size_bytes": 5868
+    },
+    {
+      "path": "memory/preferences/morning-brief-v2.md",
+      "hash_sha256": "d723e58014ee692eea6841dda91080a91ca62b5a9553d6de6bf3e1e00fcc4433",
+      "size_bytes": 10656
+    },
+    {
+      "path": "memory/preferences/todoist.md",
+      "hash_sha256": "1a01d3b04d1f9fde3d0e3126f6b536eac3e415918077959f9950c5712aafc693",
+      "size_bytes": 26516
+    },
+    {
+      "path": "memory/preferences/youtube-rss-fallback-design.md",
+      "hash_sha256": "b7432706f61d06f80d8a008640e9267b8fc776c2e5fb6fb47a03d2e5a58eafd6",
+      "size_bytes": 4452
+    },
+    {
+      "path": "memory/preferences/youtube.md",
+      "hash_sha256": "b069a32b541510e81521f60196f3292ec02a7c36624afb9e540c652ee774feb7",
+      "size_bytes": 131056
+    },
+    {
+      "path": "memory/preferences/youtube.md.tmp.5980.8abb26c97961",
+      "hash_sha256": "0e84435b828230efb17b453a29b345ab5c55cf39088db62b22b86cdfe05b6e9c",
+      "size_bytes": 126806
+    },
+    {
+      "path": "memory/projects.md",
+      "hash_sha256": "d54611b71642bc7d0e34d00cef63cfe4c49fcc1618ac2d7c0edc5863764b0911",
+      "size_bytes": 8102
+    },
+    {
+      "path": "memory/reflections/README.md",
+      "hash_sha256": "24b9f6ad8b6dc149d3a448e7dfb67b7afac37d507029aeefee60094c390d2e6e",
+      "size_bytes": 1730
+    },
+    {
+      "path": "memory/reflections/_template-daily.md",
+      "hash_sha256": "3c2a16b5ed64dcb932cc279f9c232a328f23e3d6fac202c144a59e119ee29136",
+      "size_bytes": 570
+    },
+    {
+      "path": "memory/reflections/_template-weekly.md",
+      "hash_sha256": "fb8ddd3de8ed529ebf4162b64b284a2e0f9f9844e951b04a4bb16fa3da2cf5d9",
+      "size_bytes": 737
+    },
+    {
+      "path": "memory/shorthand.md",
+      "hash_sha256": "960bc0fd74c24f80f43c478cd953f2fdf66aad10d3093657d475d5fd2c5ddde2",
+      "size_bytes": 2118
+    },
+    {
+      "path": "outputs/.gitkeep",
+      "hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "path": "outputs/2026-05-20-unsubscribe-list.md",
+      "hash_sha256": "5f76484c63a390ce2540d358812228907c1c53149f8674ca67db1074d35aca42",
+      "size_bytes": 6301
+    },
+    {
+      "path": "outputs/2026-05-21-session-handoff.md",
+      "hash_sha256": "d5ed42506e4b120b63c907e547c4d79c62d194d062b0619a9c1e2fa91acf2c3d",
+      "size_bytes": 12318
+    },
+    {
+      "path": "outputs/2026-05-24-morning-brief-build-quality-audit.md",
+      "hash_sha256": "055fb9d23df7e6f2d71c949c8560ecaff846fff02ec3c7b9cfa4015ecc34f604",
+      "size_bytes": 26218
+    },
+    {
+      "path": "outputs/2026-05-24-morning-brief-layout-audit.md",
+      "hash_sha256": "ad349bf5cbb53208f57d60eabf7332309d1390e98c5666de1e03c03ebdd68e1a",
+      "size_bytes": 25685
+    },
+    {
+      "path": "outputs/2026-05-24-morning-brief-stitch-final.html",
+      "hash_sha256": "ada1bf0c28cb44e81ab658f52af03c2d30974b87e6560e86af90766dca412b0c",
+      "size_bytes": 18084
+    },
+    {
+      "path": "outputs/2026-05-24-morning-brief-stitch-prompt-rev1.md",
+      "hash_sha256": "ad4ce154dbae451187f2808b1b9b06e8e182422e562deb3d80554b3cc023689e",
+      "size_bytes": 12238
+    },
+    {
+      "path": "outputs/2026-05-24-morning-brief-stitch-prompt-rev2.md",
+      "hash_sha256": "c6bfb79e5a308faf20653c0aebf3bdfcd1e3ab3c4904716f79a3e01b0d58b369",
+      "size_bytes": 13140
+    },
+    {
+      "path": "outputs/2026-05-24-morning-brief-stitch-prompt-rev3.md",
+      "hash_sha256": "7dd439becd783e530aa13b886da4840837f03f340d58f387b67cbfc81bab4875",
+      "size_bytes": 4734
+    },
+    {
+      "path": "outputs/2026-05-24-morning-brief-stitch-prompt.md",
+      "hash_sha256": "508ce7d82e4259a08e53bb5109697e4ea3eb9290eb4b867f2f7aa98a8218bf50",
+      "size_bytes": 15055
+    },
+    {
+      "path": "outputs/2026-05-24-morning-brief-typography-audit.md",
+      "hash_sha256": "b799fef4df0f1e36e18b4eb3f384769da163b679b6a3a2cb4efc861ed49569a8",
+      "size_bytes": 20926
+    },
+    {
+      "path": "outputs/2026-05-26-cursor-meetup-decline-draft.md",
+      "hash_sha256": "d6b630fcac2e08e31364266a6437e807227fd5ee73ffd2023a36b69c7382fa40",
+      "size_bytes": 1494
+    },
+    {
+      "path": "outputs/_build-data-0519.py",
+      "hash_sha256": "908a1765eb194d0035e396481f73a9376229a9159d71388dd2b279fa526e4bc6",
+      "size_bytes": 26210
+    },
+    {
+      "path": "outputs/_build-data.py",
+      "hash_sha256": "1adf54e8e66ff45e207b02c0c8acfb065d54aa73b4ed969bbe6fe9af617bd109",
+      "size_bytes": 23102
+    },
+    {
+      "path": "outputs/_build_brief_json.py",
+      "hash_sha256": "273cbb6af79ce0abdce81912020dd6b6507981cc16e00c2d291e21d573d64040",
+      "size_bytes": 22239
+    },
+    {
+      "path": "outputs/_substitute.py",
+      "hash_sha256": "848c83857f8c433f8e775765626feeae9443c2610d39649e0ed5f3f2a1642de4",
+      "size_bytes": 1364
+    },
+    {
+      "path": "outputs/build_artifact.py",
+      "hash_sha256": "2c3cd178ad0c7371728727c353efb1753ce9a14084fee11b2722095c05d81f65",
+      "size_bytes": 33593
+    },
+    {
+      "path": "outputs/cowork-bootstrap-v3-final.skill",
+      "hash_sha256": "f5dc81a2e4de99363b370b7ca59846c1f3f1f598928d30650c88cbac7fee2be9",
+      "size_bytes": 41600
+    },
+    {
+      "path": "outputs/cowork-bootstrap-v3.skill",
+      "hash_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    {
+      "path": "outputs/cowork-bootstrap.skill",
+      "hash_sha256": "23952f00bef7019820f9af0e010ac771cf2c217740d071713e880a4f000ea485",
+      "size_bytes": 42948
+    },
+    {
+      "path": "outputs/cowork-phase-1-plan.md",
+      "hash_sha256": "4ae8e46abaf5d9ca99e7dfe6489e2ac161df9ec646160c1a423f88131c155f67",
+      "size_bytes": 16866
+    },
+    {
+      "path": "outputs/cowork-phase-2-plan.md",
+      "hash_sha256": "0050009c370c4193f2e14d42636c44a367f6364e41aecc1115e4d007d553d9de",
+      "size_bytes": 9229
+    },
+    {
+      "path": "outputs/health-pipeline-deploy-runbook.md",
+      "hash_sha256": "8b0824fe8564f9264b8a3302d08831d03b257649b7a861ec5982bd03f14ac7ea",
+      "size_bytes": 8646
+    },
+    {
+      "path": "outputs/morning-brief-data.json",
+      "hash_sha256": "5289b8b78ba92f6aee0018f8595e3c1f57a35769f2ef123faa42168e553fa9b6",
+      "size_bytes": 10613
+    },
+    {
+      "path": "outputs/morning-brief-rendered.html",
+      "hash_sha256": "5a9a38e45143c46d7c312f80471ac871ffc053f4b12fd82114b36e1a43aab8fb",
+      "size_bytes": 18810
+    },
+    {
+      "path": "outputs/morning-brief.md",
+      "hash_sha256": "dd40af59014be7533af62db03bfb46012f331ffa433dffab85575337c533bf04",
+      "size_bytes": 7029
+    },
+    {
+      "path": "outputs/morning-brief.md.tmp.26668.02fec62818a8",
+      "hash_sha256": "f890ce61c53b9be9fb90446701eb0024ba1120a6a03304ea69a781a7a7fda56e",
+      "size_bytes": 6071
+    },
+    {
+      "path": "outputs/notebooklm-pilot-design.md",
+      "hash_sha256": "e41ef76a061684e30d95bbc0029dc69b5479983866e8c53f3d80f9c1fa6adec3",
+      "size_bytes": 8716
+    },
+    {
+      "path": "outputs/oracle-baseline-helper.gs",
+      "hash_sha256": "da26963073e9ca38d67507af020e32e2ef56e37d023be0008fb0e2888f6b2c2d",
+      "size_bytes": 2253
+    },
+    {
+      "path": "outputs/oracle-phase3/01-astronomy.gs",
+      "hash_sha256": "a9d46936385a2b649ec2eef80e7eade2ed7a54ddac6d0cbdd0a9c90e98f4cd1b",
+      "size_bytes": 116985
+    },
+    {
+      "path": "outputs/oracle-phase3/02-cosmic-context.gs",
+      "hash_sha256": "0c912c031b0f232fc874e8bf30277b9d35ef99168e9b4753757d13efa9083c52",
+      "size_bytes": 7502
+    },
+    {
+      "path": "outputs/oracle-phase3/03-oracle-daily-v82.gs",
+      "hash_sha256": "9fa322898e1335903799aea98cecbeffc564b492de0585bba773175c0b1469af",
+      "size_bytes": 12402
+    },
+    {
+      "path": "outputs/oracle-phase3/DEPLOY.md",
+      "hash_sha256": "45dc05e655eee927898ea9ceda1cb4f5bfa6aa099e36f79fcef4b6aa2ed861de",
+      "size_bytes": 16373
+    },
+    {
+      "path": "outputs/oracle-variance-analyzer.py",
+      "hash_sha256": "d690ad14168219755abcec7eebbf87a1075bbc7a6785b0fb8c60f65ca42ce500",
+      "size_bytes": 6695
+    },
+    {
+      "path": "outputs/tasks-bridge-phase-a/04-tasks-sync.gs",
+      "hash_sha256": "4156bb854b3cd9a6338bf4757bf0304c8961c984f8b4ed813bf567b0aed0292d",
+      "size_bytes": 9065
+    },
+    {
+      "path": "outputs/video-digest-apps-script.gs",
+      "hash_sha256": "9e02f5fc665a70baadf334f82315c2c58deaa8e31c7e77cd84a0c5c5d6b86ca5",
+      "size_bytes": 6370
+    },
+    {
+      "path": "outputs/youtube-digest-2026-05-14.md",
+      "hash_sha256": "aad1bb5f67c44317e903f7a24237813fd61e35aa8d1d17829ddb70d4752ea7c4",
+      "size_bytes": 768
+    },
+    {
+      "path": "scripts/README.md",
+      "hash_sha256": "6868a63dfcddfa5f14011602e28e8c7735dca1a4a0acf1fc9e8b6e7760d6a35f",
+      "size_bytes": 1540
+    },
+    {
+      "path": "scripts/_build_brief_json_20260529.py",
+      "hash_sha256": "26702566083ef6f44c650ed6949ddb8bbd55f4d39cecdc0a879b6c2d25af341c",
+      "size_bytes": 18537
+    },
+    {
+      "path": "scripts/_build_brief_json_20260530.py",
+      "hash_sha256": "2e9cbbc8f1dce684d5060b7ab32915c73a702e4bb4d2048a82bc2bd9c63769d6",
+      "size_bytes": 19151
+    },
+    {
+      "path": "scripts/_build_brief_json_v2_20260530.py",
+      "hash_sha256": "b4e9e0ae3d62b6d04953ba6334aecc5de8be6b3cc328d608cf1c3609c01dd40c",
+      "size_bytes": 3623
+    },
+    {
+      "path": "scripts/folder-maintenance.py",
+      "hash_sha256": "cffb459598f59072dad7fa1f198779e0d9af84fd5838c8565ffda09a90507904",
+      "size_bytes": 5051
+    },
+    {
+      "path": "scripts/health-sync-parser.py",
+      "hash_sha256": "56e63ddaa41949d650d3c7b3e61bf890970bb46f6a63471cccb73accdddf9677",
+      "size_bytes": 18210
+    },
+    {
+      "path": "scripts/render-brief-artifact.py",
+      "hash_sha256": "5d28e414ace10c89ff0afd795673d4a61d118d33ca3191942069c84bb0913de8",
+      "size_bytes": 8450
+    },
+    {
+      "path": "scripts/validation-report.md",
+      "hash_sha256": "a82b1e52a85cecbfed36802cf9ab299265a194aaa81cf2d3da0eec65c6f5dac1",
+      "size_bytes": 6906
+    },
+    {
+      "path": "skills/cowork-bootstrap.zip",
+      "hash_sha256": "02e65d07d2ff126378435ffb620e892ffdd99787f466a0b21657f26ee1d04d7e",
+      "size_bytes": 31756
+    },
+    {
+      "path": "skills/cowork-bootstrap/SKILL.md",
+      "hash_sha256": "31a66b0bc2833194f1bf4e98100e9f2d67e40f9963cb77159b433fceb9ac6702",
+      "size_bytes": 30091
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/ARTIFACTS.md",
+      "hash_sha256": "44a135dba4d7ebd9b3c384c96f82e0ef9693182d93eec2277b4d8a7434f7c982",
+      "size_bytes": 6041
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/CONVENTIONS.md",
+      "hash_sha256": "123fa1bb808630f8c16c242e6325f9c75aadd718062a63fc380c3c6a15cdee37",
+      "size_bytes": 4983
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/OPERATIONS.md",
+      "hash_sha256": "392fe48acee7c09ed1e6d391b644500f490f1becd1c88cad7799f78b52db2669",
+      "size_bytes": 5604
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/interactive-triage.md",
+      "hash_sha256": "c619baba1e71aaa7c23c15bab4a413566f716a72c3e40d9c089a65deddf8511f",
+      "size_bytes": 6884
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/subsystems/gmail-triage.md",
+      "hash_sha256": "02d89a906966ce1eeb7a92458c6f5886ac4b8e1b91309a449ac32d31d6c1505c",
+      "size_bytes": 9821
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/subsystems/morning-brief.md",
+      "hash_sha256": "ce95944d1e3e3326ac14fcc8a977ecf61654ddca11b9e1ed497ba23352217e3c",
+      "size_bytes": 9513
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/subsystems/todoist-brief.md",
+      "hash_sha256": "5fdf4a219e22ceae02aa743decdb99c3922e26d283b0c24f5b257e68cb354767",
+      "size_bytes": 6803
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/subsystems/weekly-rollup.md",
+      "hash_sha256": "150f061df0686faadab513ce3516be7ec4cb83409dbbf42ac8dbfaaa56ecdace",
+      "size_bytes": 6440
+    },
+    {
+      "path": "skills/cowork-bootstrap/references/subsystems/youtube-digest.md",
+      "hash_sha256": "f31b0e7be0effefadd913e5a8303f93206f5589c288f120eb02f9c4b70e36619",
+      "size_bytes": 14278
+    },
+    {
+      "path": "skills/evening-reflection/SKILL.md",
+      "hash_sha256": "01d3bd23eaaa10d67b6c1f67f6e85453ed8484141f7a1f61d8a6294dd4fdd403",
+      "size_bytes": 5873
+    },
+    {
+      "path": "skills/exelon-bridge-processor/SKILL.md",
+      "hash_sha256": "0e8930d1c4f7f253457b084726b5e82d56516402cfb478cba9f700f1b9301d3b",
+      "size_bytes": 17192
+    },
+    {
+      "path": "skills/gmail-daily-triage/SKILL.md",
+      "hash_sha256": "51dea3385099ffd6f6f1905a3785b617748dca237f6316c7fd24e6457799ca11",
+      "size_bytes": 13480
+    },
+    {
+      "path": "skills/health-sync-cache-sync/SKILL.md",
+      "hash_sha256": "d37048e1adfbb28db3f6ca34c50b0028a6cd66ae14491fac0bf5fdcdd780502d",
+      "size_bytes": 8679
+    },
+    {
+      "path": "skills/morning-artifact-push/SKILL.md",
+      "hash_sha256": "2315cbdd7146fa97c88a44906e25f4ec99b5de4c635d67172dd0b7e3229f4b63",
+      "size_bytes": 6265
+    },
+    {
+      "path": "skills/morning-brief-qa/SKILL.md",
+      "hash_sha256": "f3dd464f0cf00c102dfc9c563e238ad03c1c1480fad845551e0424d84787a81f",
+      "size_bytes": 20906
+    },
+    {
+      "path": "skills/morning-briefing/SKILL.md",
+      "hash_sha256": "26c7f3988bc656d21b43fbfd9e3d18df50708cfd01be1af0921ffcc107a3d05c",
+      "size_bytes": 23097
+    },
+    {
+      "path": "skills/morning-briefing/_SKILL_complete.md",
+      "hash_sha256": "5cc25640b79d37448af375e62c399edda7c87fba243fa949f74d739ac0ffcb2c",
+      "size_bytes": 48289
+    },
+    {
+      "path": "skills/morning-briefing/_SKILL_v3.md",
+      "hash_sha256": "91710c81863d24e8f167f28acdc908e744593a0fbd056900cfc18aff06976b4a",
+      "size_bytes": 47177
+    },
+    {
+      "path": "skills/morning-briefing/_step65.md",
+      "hash_sha256": "d282e2df63008e9cb166022b7311f001d81155ce39aff584724bb591d77abf26",
+      "size_bytes": 6484
+    },
+    {
+      "path": "skills/skill-sync-watcher/SKILL.md",
+      "hash_sha256": "91ec21c66ef48b560e080172e6770573e1d446ccb419387422737aab855939f6",
+      "size_bytes": 14990
+    },
+    {
+      "path": "skills/tasks-daily-classifier/SKILL.md",
+      "hash_sha256": "d271250220e94fc4bf8c439bdbee68fd1995dd3f05a604a8f4897f6eddb87ba5",
+      "size_bytes": 15081
+    },
+    {
+      "path": "skills/todoist-daily-brief/SKILL.md",
+      "hash_sha256": "fcb5de8e4f12e83eaff7d26c045e0f3fff7853eba3c6865b5dce698f8d2a5b92",
+      "size_bytes": 13166
+    },
+    {
+      "path": "skills/unsubscribe-sweep-monthly/SKILL.md",
+      "hash_sha256": "e1635269badab0a91ea0d13b70c06117deed81037d122f0054966019658f137e",
+      "size_bytes": 5866
+    },
+    {
+      "path": "skills/weekly-memory-rollup/SKILL.md",
+      "hash_sha256": "7fdb8f84f6721244a734be523b9a01939cec9d8a879a5d9d987f8b4fad082d6f",
+      "size_bytes": 17544
+    },
+    {
+      "path": "skills/youtube-daily-digest/SKILL.md",
+      "hash_sha256": "df9a9a9a63fb59311a0ed02a12adef678c59e3730e0a78991eea04f9be54ae18",
+      "size_bytes": 48101
+    },
+    {
+      "path": "system/project-instructions.md",
+      "hash_sha256": "1b45dd4d6a98cde35ea56d6911a8735e227d66eaa39b9c371a02894ab601cfef",
+      "size_bytes": 1301
+    },
+    {
+      "path": "system/skill-sync-state.json",
+      "hash_sha256": "3b5244ddbb960aa32740bd8477e9cb445c8182fd76659014e4f18b0dbe25cdce",
+      "size_bytes": 2530
+    },
+    {
+      "path": "templates/morning-brief-data.schema.md",
+      "hash_sha256": "81a772035956dbdedd948f27cba37e77aca0ce9f4e1c300388c3020f47833db5",
+      "size_bytes": 14724
+    },
+    {
+      "path": "templates/morning-brief-rebuild-template.html",
+      "hash_sha256": "ce0d57e54e53453e1fbcf059ba0edc299301bc8803f3b34243d381ac5dfd742f",
+      "size_bytes": 7792
+    }
+  ],
+  "aggregate_hash": "cde758e1f017be2fd390e764dad95cf6d5daee5dca282d34f5983214a89d13e8",
+  "generated_at": "2026-09-07T17:11:19.947Z"
+}
