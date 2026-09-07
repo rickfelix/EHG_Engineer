@@ -206,10 +206,15 @@ export function validateTypeScript(tscResult) {
 /**
  * Validate UAT verification
  * @param {boolean} uatVerified - Whether UAT was verified
+ * @param {object} [flags] - {forceComplete, reason} bypass, mirrors validateTests
  * @returns {boolean} True if UAT is verified
  */
-export function validateUAT(uatVerified) {
+export function validateUAT(uatVerified, flags = {}) {
   if (!uatVerified) {
+    if (flags.forceComplete) {
+      console.log(`\n⚠️  --force-complete: UAT-not-verified gate bypassed (reason="${flags.reason}")\n`);
+      return true;
+    }
     console.log('\n❌ CANNOT COMPLETE - UAT NOT VERIFIED\n');
     console.log('   Quick-fixes REQUIRE manual UAT verification.\n');
     console.log('📋 Next steps:');
