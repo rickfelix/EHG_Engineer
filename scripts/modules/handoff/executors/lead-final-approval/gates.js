@@ -962,14 +962,42 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
                   // dual failure mode in SD-MAN-ORCH-S18-S26-PIPELINE-001-A: branch
                   // existed on origin but rev-list/gh-pr-list either errored or was
                   // skipped on the LEAD host, leaving the branch unverified yet allowed.
-                  console.log(`   ⚠️  Could not verify ${cleanBranch}: ${e?.message || e}`);
-                  unmergedBranches.push({
-                    branch: cleanBranch,
-                    repo: repo,
-                    commits: null,
-                    unverified: true,
-                    reason: e?.message || String(e)
-                  });
+                  //
+                  // QF-20260904-533: the failure above (typically `git rev-list`, timeout=10000)
+                  // is a LOCAL git call in the shared root — a concurrent session's index lock or
+                  // a slow fetch produces ETIMEDOUT with zero relation to whether the PR actually
+                  // merged. Before concluding unverified/blocking, ask the GitHub API directly (no
+                  // local git dependency) the SAME question the happy path already asks a few
+                  // lines up: is there a merged PR for this branch? UNMEASURABLE locally + API-
+                  // confirmed-merged is a PASS (mergeEvidence, same skip path as the happy case);
+                  // UNMEASURABLE locally + no API confirmation stays a FAIL, reason preserved.
+                  let apiConfirmedMerged = false;
+                  let apiCheckError = null;
+                  try {
+                    const prStatus = execFileSync(
+                      'gh',
+                      ['pr', 'list', '--head', cleanBranch, '--state', 'merged', '--json', 'number', '--limit', '1'],
+                      { encoding: 'utf8', cwd: repoPath, timeout: 15000 }
+                    ).trim();
+                    const mergedPrs = JSON.parse(prStatus || '[]');
+                    if (mergedPrs.length > 0) {
+                      apiConfirmedMerged = true;
+                      mergeEvidence.push({ branch: cleanBranch, repo, prNumber: mergedPrs[0].number });
+                      console.log(`   ✅ ${cleanBranch} UNMEASURABLE locally (${e?.message || e}) but GitHub API confirms merged PR #${mergedPrs[0].number} — treating as verified`);
+                    }
+                  } catch (apiErr) {
+                    apiCheckError = apiErr?.message || String(apiErr);
+                  }
+                  if (!apiConfirmedMerged) {
+                    console.log(`   ⚠️  Could not verify ${cleanBranch}: ${e?.message || e}${apiCheckError ? ` (API confirmation also failed: ${apiCheckError})` : ''}`);
+                    unmergedBranches.push({
+                      branch: cleanBranch,
+                      repo: repo,
+                      commits: null,
+                      unverified: true,
+                      reason: e?.message || String(e)
+                    });
+                  }
                 }
               }
             }
