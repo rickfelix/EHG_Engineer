@@ -131,6 +131,20 @@ describe('findViolations — comparator', () => {
     expect(v).toHaveLength(1);
     expect(v[0].missing).toBe('ghost_tbl');
   });
+
+  // QF-20260904-619: a phantom ref that is a SUBSTRING of a real column name (e.g. 'deliverables'
+  // vs. the real 'deliverables_manifest') must still be flagged. This only holds when the snapshot's
+  // column list is a genuine string[]; the regression this guards against was upstream in
+  // schema-reference-snapshot.mjs (array_agg(a.attname) producing raw Postgres array-literal TEXT,
+  // not a parsed array, because node-postgres has no built-in parser for the `name[]` OID), which
+  // turned cols.includes(ref.column) into a String.prototype substring test instead of
+  // Array.prototype exact-membership -- hiding 33 live phantom column refs across 18 tables.
+  it('flags a phantom ref that is a substring of a real column (string-vs-array snapshot regression guard)', () => {
+    const snapshot = { tables: { sd_scope_deliverables: ['id', 'deliverables_manifest'] } };
+    const refs = extractReferences('supabase.from(\'sd_scope_deliverables\').select(\'id, deliverables\')');
+    const v = findViolations(refs, snapshot);
+    expect(v.map(x => x.missing)).toContain('sd_scope_deliverables.deliverables');
+  });
 });
 
 // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-C (FR-1) — the extractor used to match RAW text, so it reported
