@@ -45,7 +45,7 @@ import { resolveIdleCtx } from '../lib/fleet/idle-ctx-population.mjs';
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { logCoordinationEvent } = require('../lib/coordinator/coordination-events.cjs');
-const { isAutoStartableQF, isClaimableWithVerify, sortQfCandidatesBySeverity } = require('./worker-checkin.cjs');
+const { isAutoStartableQF, isClaimableWithVerify, sortQfCandidatesBySeverity, isSelfClaimDisabled } = require('./worker-checkin.cjs');
 const { resolveWorkerTierRank } = require('../lib/fleet/tier-ladder.cjs');
 const { workClassIneligibilityReason } = require('../lib/fleet/work-class.cjs');
 
@@ -225,6 +225,15 @@ export async function emitDeliveryAlarm(supabase, {
 export const SD_HOLDER_FRESHNESS_WINDOW_MS = 15 * 60 * 1000; // 15 min
 // QF-20260905-755: opt-in, default-no-op (matches every other axis's convention) — a caller that
 // omits this parameter is byte-identical to before this QF.
+//
+// QF-20260906-196: seatIdleVerdict answers "is this seat doing nothing", not "may this seat
+// self-claim" — a seat with metadata.self_claim=false / availability=idle_only /
+// coordinator_stand_down=true is still genuinely idle (it still accepts roll_call, resume,
+// directed WORK_ASSIGNMENT and recovery per lib/checkin/steps/self-claim-gates.cjs), so that
+// axis deliberately does not belong on the shared idle predicate. It DOES belong here: hinting
+// a QF is exactly the self-initiated-claim path the check-in gate blocks. Import the check-in
+// gate's own predicate (isSelfClaimDisabled, exported from ./worker-checkin.cjs) rather than
+// re-copying its flag list — one function, two callers, per the Solomon-shaped fix.
 export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null, tailInFlightSessionIds = new Set()) {
   return (liveWorkers || []).filter((w) => seatIdleVerdict(w, {
     nowMs,
@@ -235,7 +244,7 @@ export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new
     recentlyReleasedWindowMs: RECENTLY_RELEASED_WINDOW_MS,
     spinUpGraceMs: SPIN_UP_GRACE_MS,
     sdHolderFreshnessWindowMs: SD_HOLDER_FRESHNESS_WINDOW_MS,
-  }).idle);
+  }).idle && !isSelfClaimDisabled(w.metadata));
 }
 
 /** Pure: the ranked, eligible-for-hint QF candidate list (belt-and-suspenders governance applied). */
