@@ -225,6 +225,17 @@ describe('orphan-writers-registry: getReaderClassification (QF-20260904-116, Sol
       expect(['reader:NONE', 'wired-but-blind']).toContain(classification);
     }
   });
+
+  // LEAD-phase VALIDATION finding (SD-LEO-FIX-ORPHAN-WRITERS-REGISTRY-001): getReaderClassification
+  // was exported with zero production consumers -- the exact writer-with-no-reader pattern this
+  // registry catalogues. Wired into scripts/orphan-writers-count.mjs's weekly summary; this test
+  // guards the import so a future refactor cannot silently drop the consumer again.
+  it('is imported by scripts/orphan-writers-count.mjs (not test-only)', async () => {
+    const fs = await import('node:fs');
+    const source = fs.readFileSync(new URL('../../../scripts/orphan-writers-count.mjs', import.meta.url), 'utf8');
+    expect(source).toMatch(/import\s*\{[^}]*getReaderClassification[^}]*\}\s*from\s*['"]\.\.\/lib\/governance\/orphan-writers-registry\.js['"]/);
+    expect(source).toMatch(/getReaderClassification\(/);
+  });
 });
 
 describe('orphan-writers-registry: QF-20260904-116 specimen mechanism mapping (Solomon rulings 18f04802 + 47cd9f79)', () => {
