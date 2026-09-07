@@ -118,6 +118,33 @@ function isExcluded(relPath) {
   return EXCLUDE_DIR_PREFIXES.some((prefix) => relPath.startsWith(prefix));
 }
 
+/**
+ * QF-20260907-023: NEW-file line numbers actually added/changed for `file` per `git diff -U0`,
+ * so findings can be scoped to the real diff hunks instead of the whole file. Without this,
+ * candidateFilesDiff() below selects whole FILES (any line touched), then main() re-lints each
+ * file's ENTIRE current content — every pre-existing violation anywhere in a touched file reports
+ * as "new", defeating this lint's own stated purpose (measured on PR #8538: 11 violations, none
+ * on a line the PR changed). Mirrors scripts/lint/unsafe-sd-metadata-full-blob-write-lint.mjs's
+ * changedLineNumbers() — same proven pattern, same program (SD-LEO-INFRA-SESSION-IDENTITY-
+ * MARKER-CALLERS-001). Returns null (caller falls back to unfiltered) when the diff is unavailable.
+ */
+function changedLineNumbers(file, base, repoRoot) {
+  try {
+    const out = execSync(`git diff -U0 --diff-filter=ACMR ${base}...HEAD -- ${file}`, { encoding: 'utf8', timeout: 30000, cwd: repoRoot });
+    const lines = new Set();
+    for (const line of out.split('\n')) {
+      const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+      if (!m) continue;
+      const start = Number(m[1]);
+      const count = m[2] === undefined ? 1 : Number(m[2]);
+      for (let i = 0; i < count; i += 1) lines.add(start + i);
+    }
+    return lines;
+  } catch {
+    return null;
+  }
+}
+
 /** Files changed vs the merge base (+ staged/working-tree, empty in CI) — --diff mode candidates. */
 function candidateFilesDiff(repoRoot) {
   const base = process.env.SESSION_COORD_LINT_BASE || 'origin/main';
@@ -202,11 +229,34 @@ function main() {
   }
 
   const linter = new Linter({ cwd: scanRoot });
-  const violations = scanned.flatMap((f) => lintFile(linter, f));
+  let violations = scanned.flatMap((f) => lintFile(linter, f));
   // Only true diff mode blocks. Both explicit --all (advisory full sweep, per this file's own
   // docstring) and a degraded diff->all fallback (re-surfaces the pre-existing backlog, not new
   // drift introduced by this PR) must never fire a false block.
   const blocking = mode === 'diff';
+
+  // QF-20260907-023: scope violations to lines this diff actually changed — candidateFilesDiff
+  // selects whole files, so without this a pre-existing violation anywhere else in a touched file
+  // would block. Only applies in true diff mode; --all/degraded modes are advisory full sweeps by
+  // design and stay whole-file.
+  if (blocking) {
+    const diffBase = process.env.SESSION_COORD_LINT_BASE || 'origin/main';
+    // lintFile() reports v.filePath relative to this module's own REPO_ROOT, regardless of
+    // --root — so the git pathspec passed to changedLineNumbers must be computed relative to
+    // scanRoot (where the diff/HEAD actually live), then keyed by that same REPO_ROOT-relative
+    // string for the lookup below. In production scanRoot === REPO_ROOT and the two coincide;
+    // this split only matters under --root (this file's own test suite uses it against a temp repo).
+    const lineCache = new Map();
+    for (const absPath of scanned) {
+      const repoRelKey = path.relative(REPO_ROOT, absPath).split(path.sep).join('/');
+      const scanRootRelPathspec = path.relative(scanRoot, absPath).split(path.sep).join('/');
+      lineCache.set(repoRelKey, changedLineNumbers(scanRootRelPathspec, diffBase, scanRoot));
+    }
+    violations = violations.filter((v) => {
+      const allowed = lineCache.get(v.filePath);
+      return !allowed || allowed.has(v.line); // diff unavailable for this file -> fail open, unfiltered
+    });
+  }
 
   if (jsonMode) {
     console.log(JSON.stringify({ mode, scanned: scanned.length, violations, blocking }, null, 2));
