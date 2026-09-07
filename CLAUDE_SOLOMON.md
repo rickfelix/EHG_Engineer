@@ -1,8 +1,8 @@
-<!-- file_content_hash: bf9d316b2427507e -->
+<!-- file_content_hash: e3f095adc6f8f3c0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-06 7:12:51 PM
+**Generated**: 2026-09-07 10:35:19 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -373,6 +373,6 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 
 ---
 
-*Generated from database: 2026-09-06*
+*Generated from database: 2026-09-07*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*

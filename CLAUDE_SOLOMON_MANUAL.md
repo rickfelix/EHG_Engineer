@@ -1,8 +1,8 @@
-<!-- file_content_hash: cf3ebeac1fc14d26 -->
+<!-- file_content_hash: 47113a5ce1544e0b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-06 7:12:51 PM
+**Generated**: 2026-09-07 10:35:19 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -181,7 +181,44 @@ decision_requested is derived from a DECLARED shape, never from the sender's dou
 
 Standing Friday foundation audit (611 STANDING FOUNDATION AUDIT DUTY; ratifications b259e739, 7473142c, 71e2e871):
 - Cadence: every Friday after the week reset. (The sixty-percent headroom precondition f7303528 and its Headroom-read bullet were REPEALED by ratification 584e3e0e, 2026-09-03, verbatim "Please remove the headroom rule."; no automated launch condition remains, the chairman governs capacity at the keyboard. SITE-EDIT per c44cd9d8.)
-- Friday plan of record: launch after the Deep Soul weekly reset (03:59 ET); Code Street Labs frees 3:00 pm ET; the chairman rotates accounts at the keyboard. six lenses per week, the full twelve every two weeks. Lens halves — A: sd-state, qf-state, liveness, gate-evidence, writers, comms; B: ratification, durability, roadmap, gauges-learn, instruments, worker-loop.
+- Friday plan of record: launch after the Deep Soul weekly reset (03:59 ET); Code Street Labs frees 3:00 pm ET; the chairman rotates accounts at the keyboard. six lenses per week, the full twelve every two weeks. Lens halves and predicates (verbatim, feedback 5b18d8f4-cf39-44a7-8812-ff242933f010):
+
+FOUNDATION AUDIT LENS PREDICATES v1 — Solomon seat a531d943, written 2026-09-05 10:4xZ. Precondition for the 2026-09-11 run. Propose-only (CONST-002). Encode target: CLAUDE_SOLOMON_MANUAL "Foundation audit — procedure", single scribe (c44cd9d8). Origin: chairman question 09-05 08:5xZ ("would this have been caught in any of the six dimensions?") — measured answer: the twelve lenses existed as NAMES on one manual line; their predicates lived in this seat's session-local scratch (agent-preamble.md, verify-predicates-B3a/b), one discard from zero. This row is the first durable copy.
+
+RULE. A lens is a PREDICATE (what a zero reading asserts) + an INSTRUMENT (where the number is read, key literal at its write site) + a CANARY (a control row that must trip). A reading missing any of the three is narration. A zero reading counts toward closure only under byte-identical predicate text to the prior week; a predicate change ships with its named cause and restarts the two-week count.
+
+HALF A (ran 2026-09-04; next 2026-09-18)
+
+A1 sd-state. P: every SD past LEAD has a live holder or a fence row naming why not; parent metadata.children[].status agrees with the child rows read by parent_sd_id; no SD reads completed while a MEASURED success criterion sits at or above its own baseline. I: strategic_directives_v2 x sd_phase_handoffs x claude_sessions. Canary: the event-gated AltifyAI hold (must read FENCED, never NEGLECTED). Specimens 09-04: seven CAPA children completed at baseline (gatherers A1/A3/A4, re-derived by Solomon).
+
+A2 qf-state. P: no open QF older than its band's promotion age without a stamped reason; zero escalated-while-shipped; every open QF's premise reproduces on current main. I: quick_fixes x git log. Canary: one QF known shipped before mint (two found 09-04). Specimens: 755 escalated-while-shipped; QF-992 medium, 2 days unclaimed while 29 younger completed.
+
+A3 liveness. P: (a) no seat released while its process was alive (sweep file-leg vs DB heartbeat); (b) heartbeat_at and last_tool_at are read as a PAIR and a fresh heartbeat with a frozen tool clock is a THIRD STATE, ALIVE-BUT-STUCK, reported beside dead and alive with the waiting reason if a row exists; (c) every marker-directory caller reads the union. I: claude_sessions, session_lifecycle_events, the sweep's persisted findings (QF-230). Canary: a fixture seat with a dead pid must read DEAD; a fixture seat blocked on a prompt must read STUCK. Specimens: F-B one-way door; permission-prompt stall (QF-646/346); MARKER-CALLERS-001; sweep file-leg release 09-04.
+
+A4 gate-evidence. P: (a) every artifact a gate reads carries producer, run id and content hash (6c263823) and the hash verifies on read-back; (b) GUARD INTERACTION: for each guard, the guard that can starve it is named, and the layer it binds at (prompt / JS / DB) is named; a guard bound only at prompt or JS with a service-role writer behind it reads ABSENT. I: sub_agent_execution_results, sd_phase_handoffs, guard-wiring registry. Canary: a known JS-only guard (isSafeToWriteRetro) must read ABSENT. Specimens: 755/755 handoffs without provenance; hash mismatch on 73% of rows (QF-437); worktree quota starving the reclaim that lowers the count; published retro written around by a service-role sub-agent.
+
+A5 writers. P: (a) R1 registry: every writer has a reader (reader:NONE / WIRED-BUT-BLIND); (b) DETECTOR-WITH-NO-SINK: every detector that prints a finding also persists it to a row or file with a named reader; (c) READS-BUT-NEVER-COMPARES: a value read and returned but never compared to its expected form (read present, predicate absent). I: orphan-writers registry; grep of console-only emitters; resolver call sites. Canary: stale-session-sweep.cjs :4189 (sink) and resolve-sd-workdir.js :814 (compare) must trip until their QFs merge. Specimens: sweep CONFLICTS/WARNINGS/SKIP_RESET (QF-230/594); scan resolver (Adam pre-fill ed89bbbc).
+
+A6 comms. P: (a) parked fraction of the lane per 24h with the counter's population named (roll_call in or out); (b) every send prints its resolved target, and a fallback target is a REFUSAL, never a silent re-route; (c) every lane row carries a recognised kind and a sender_session; (d) no inbox reader filters NOT-IN on a nullable kind. I: session_coordination, dispatch.cjs, every inbox reader. Canary: a fixture row with kind null must appear in every inbox listing. Specimens: broadcast-adam fallback (QF-225); backpressure floor 328 (QF-695/935); ten worker signals hidden for two hours.
+
+HALF B (runs 2026-09-11)
+
+B1 ratification. P: every chairman_ratifications row encoded at EVERY named site within 24h, marker literal present in the section; a ruling spoken in the terminal is a row by end of day (LEG-D review queue). I: chairman_ratifications x leo_protocol_sections. Canary: 584e3e0e (encoded at one of three sites on 09-04) must read PARTIAL until the other two land.
+
+B2 durability. P: (a) no seat state, ledger or evidence lives only in untracked root files or session-local scratch; a lane row cited in a decision exists in retention_archive by source_id; (b) RECOVERY PATHS: restart, reboot and compaction each have a re-run fixture (re-register inside the singleton guard window; pre-boot pid reads dead without the sampler; file-leg heartbeat re-armed; compaction recorded by the recorder, not by hand). I: git status of the root; retention_archive; each seat's recorders. Canary: kill and re-register a fixture seat inside 10 minutes. Specimens: Adam re-register refused 10 min (QF-201); post-reboot pids; sweep file-leg after reboot; this seat's compaction recorder miss; these predicates themselves.
+
+B3 roadmap. P: (a) every belt refill classified to one of the three legitimate sources (889dcaa0), busy-work presumption on none; (b) roadmap-link exceptions carry reasons (133 reasonless on 09-04 is the number); (c) waves advanced this week; (d) STARVATION BY BAND: age of the oldest unclaimed item per severity band, with the 7-day promotion applied to QFs as rank-items.js:92 applies it to SDs. I: plan_adherence join, quick_fixes, rank-items.js, worker-checkin.cjs. Canary: one chairman-ordered item with a review-by must read as a label, never a rank bump (chairman ruling 09-05). Specimens: QF-992; SD-LEO-INFRA-PRIORITY-RECORD-ONE-001.
+
+B4 gauges-learn. P: (a) every gauge number cited for the first time has its key literal read at the write site and three records hand-inspected (a236d122); (b) every retrospective and /learn row has a named consumer (issue_patterns reader); (c) KEYWORD MATCHERS ON CODE TOKENS: every keyword classifier carries a fixture of code-token false positives and prints the matched segment on a hit (Adam's class, 09-05). I: gauge write sites; retrospectives; the QF/handoff classifiers. Canary: QF-868's phrase must match the scanner's own matcher, not a grep. Specimens: QF-868/476/722; checkin count vs payload.
+
+B5 instruments. P: (a) every instrument agrees with a second instrument on one control row (two answers sharing an instrument are ONE measurement); (b) SILENT FALLBACK ON NULL: for every resolver of a target, a holder, a fence or a coverage row, the null branch is enumerated and the caller can tell it from a real value; (c) a probe never writes (an auto-posting probe is a writer and is registered as one). I: the resolver list (adam-identity.cjs getActiveAdamId, the not_before reader, marker readers, classifyRowCoverage, inbox filters). Canary: pass null through each resolver and read the return. Specimens: five this week (broadcast fallback; not_before object = NaN = no hold, QF-599; empty marker dir = dead; null coverage row = unfilled with zero grace; NOT-IN on nullable kind); coordinator health script posting on every run.
+
+B6 worker-loop. P: (a) pick reason stamped on every claim; (b) the selection order in code (directed assignment, critical jump, resume, self-claim) matches the documented order; (c) no worker waits on a refused or blocked tool call beyond N minutes without a row (ties to A3 STUCK). I: worker-checkin.cjs, claims, permission_audit_log, the Notification-hook row once QF-346 lands. Canary: a fixture claim with a stamped reason.
+
+CLOSURE. Two consecutive weekly zero readings under byte-identical predicate text plus a recurrence row. Findings rank: blocks-live-gate > chairman-facing truth > destructive > durability > efficiency.
+
+RECOMMENDED AGAINST: a thirteenth lens (every new class above is folded under the lens that owns its instrument); a new audit script (the predicates run as gatherer prompts against existing instruments; encode the TEXT, not a tool); changing any predicate after seeing a reading.
+
 - Scope: EHG_Engineer (harness), EHG (platform app), live ventures only — never cancelled or deferred ventures.
 - Execution: batched fan-out ≤4 on the fleet's own account, never a separate account; per-slice reproduce, capped refute, non-fatal critic; a control canary per lens; budget-at-entry with measured spend.
 - Output: findings ranked by chairman-facing truth loss against the LEO roadmap, with a recommended-against list; sequencing by Solomon with the capacity read as input (evidence-backed completions, session window, encode-pipeline throughput as a resource); one durable row and one sourcing hand-off to Adam per run; decisions reach the chairman as needed, never batched; silence when clean.
@@ -340,6 +377,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-09-06*
+*Generated from database: 2026-09-07*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_manual). Do not hand-edit — edit the DB section and regenerate.*

@@ -1,8 +1,8 @@
-<!-- file_content_hash: c15cdde80257d6ec -->
+<!-- file_content_hash: 5e344b8fb11dab39 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-09-06 5:01:25 AM
+**Generated**: 2026-09-07 10:35:19 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -210,6 +210,6 @@ Chairman at the Solomon terminal 2026-09-05T08:27:44Z, verbatim (binding half): 
 
 ---
 
-*Generated from database: 2026-09-06*
+*Generated from database: 2026-09-07*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_provenance). Do not hand-edit — edit the DB section and regenerate.*

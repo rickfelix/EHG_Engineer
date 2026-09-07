@@ -1,8 +1,8 @@
-<!-- file_content_hash: b279b9477d71f084 -->
+<!-- file_content_hash: 891cced6e91e65e2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR_PROVENANCE.md — Coordinator Provenance (dated rationale)
 
-**Generated**: 2026-09-06 3:47:38 PM
+**Generated**: 2026-09-07 10:35:19 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — dated operator/chairman directives, live incidents, superseded cadences
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -74,6 +74,6 @@ Joint rationale (coordinator source request cfa06ecd on Golf-3 row 316c7b65; Ada
 
 ---
 
-*Generated from database: 2026-09-06*
+*Generated from database: 2026-09-07*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_provenance). Do not hand-edit — edit the DB section and regenerate.*
