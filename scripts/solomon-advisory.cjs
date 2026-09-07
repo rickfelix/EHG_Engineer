@@ -1333,6 +1333,16 @@ async function main() {
   const coordinatorId = await getActiveCoordinatorId(supabase);
   const toAdam = peerArg === 'adam';
   const adamId = toAdam && twoWayV1On ? await getActiveAdamId(supabase).catch(() => null) : null;
+  // QF-20260907-834: getActiveAdamId returns null whenever the Adam heartbeat exceeds
+  // ADAM_FRESH_MS (10 min), but Adam idles between ticks for longer than that by design --
+  // resolveSolomonAdvisoryTarget then falls back to the broadcast-adam sentinel with no
+  // caller-visible signal that identity resolution failed. Only adam-advisory.cjs's inbox
+  // drain reads that lane (a session-keyed sweep does not), so a silent fallback here is a
+  // silent dead-drop risk. Make the fallback visible instead of eliminating it (widening the
+  // freshness window is out of scope -- it mirrors a shared coordinator/detector convention).
+  if (toAdam && twoWayV1On && !adamId) {
+    console.error('WARN: [ADAM_IDENTITY_STALE] no Adam session has a heartbeat inside the freshness window -- falling back to the broadcast-adam sentinel. Only adam-advisory.cjs\'s inbox drain reads that lane; a session-keyed sweep does not.');
+  }
   const { target, via } = resolveSolomonAdvisoryTarget({ toAdam, flagOn: twoWayV1On, coordinatorId, adamId });
   // QF-20260719-387: read back the resolved target's registered role and hard-error on a
   // recipient-class mismatch (--to adam -> role=adam; default -> the active coordinator).
