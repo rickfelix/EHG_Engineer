@@ -129,7 +129,8 @@ describe('orphan-writers-registry: known-orphan count baseline (QF-20260831-821)
   // 12 plus base entries, so no entry_type loses coverage). 15 candidates - 1 dropped = 14 added.
   // The feedback-sla-categories entry was also reclassified wired-but-blind -> writer-with-no-reader
   // (ruling 18f04802 item 2) — a re-type, not a new row, so it does not add to this count.
-  const PINNED_TOTAL_ENTRIES = 34;
+  // QF-20260906-590 added one entry (role-seat-liveness-hostname-pid-not-selected): 34 -> 35.
+  const PINNED_TOTAL_ENTRIES = 35;
 
   it('total entry count matches the pinned baseline -- update PINNED_TOTAL_ENTRIES with a reason if this genuinely changed', () => {
     expect(ORPHAN_ENTRIES.length).toBe(PINNED_TOTAL_ENTRIES);
