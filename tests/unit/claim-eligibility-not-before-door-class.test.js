@@ -63,6 +63,33 @@ describe('classifyDispatchIneligibility — not_before coordinator-fence object 
   });
 });
 
+describe('classifyDispatchIneligibility — not_before hold release via unfenced_at (QF-20260907-395)', () => {
+  // QF-20260705-585's not_before axis ignored metadata.unfenced_at entirely, unlike
+  // humanActionRequired -- a releaseHold() write (chairman GO) stamped release provenance while
+  // this axis kept returning not_before_hold forever against a future-dated placeholder fence.
+  // Live specimen: SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-I/-002-J.
+  it('a future not_before PLUS a valid unfenced_at is released (the exact regression: chairman GO must actually clear dispatch)', () => {
+    const future = new Date(Date.now() + 86400000).toISOString();
+    const unfencedAt = new Date(Date.now() - 3600000).toISOString();
+    expect(classifyDispatchIneligibility({
+      sd_key: 'SD-X',
+      metadata: { not_before: future, not_before_reason: 'placeholder fence until the chairman says go', unfenced_at: unfencedAt, unfenced_reason: 'chairman GO' },
+    })).toBeNull();
+  });
+  it('a future not_before with NO unfenced_at is still held (baseline unchanged)', () => {
+    const future = new Date(Date.now() + 86400000).toISOString();
+    expect(classifyDispatchIneligibility({ sd_key: 'SD-X', metadata: { not_before: future } })).toBe('not_before_hold');
+  });
+  it('an unfenced_at that predates an UNRELATED requires_human_action_at does not fool the not_before release (isHoldReleased default-field semantics: absent field always resolves released)', () => {
+    const future = new Date(Date.now() + 86400000).toISOString();
+    const unfencedAt = new Date(Date.now() - 3600000).toISOString();
+    expect(classifyDispatchIneligibility({
+      sd_key: 'SD-X',
+      metadata: { not_before: future, unfenced_at: unfencedAt },
+    })).toBeNull();
+  });
+});
+
 describe('classifyDispatchIneligibility — door_class_note axis (QF-20260705-585)', () => {
   it('door_class_note "one_way" is NOT self-claimable (one_way_door_requires_supervision)', () => {
     expect(classifyDispatchIneligibility({ sd_key: 'SD-X', metadata: { door_class_note: 'one_way' } }))
