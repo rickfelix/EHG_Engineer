@@ -86,6 +86,7 @@ function fakeClient({ signalRows = [], liveSessions = [] } = {}) {
           },
           is(col, val) { filters.push((row) => evalClause(row, col, 'is', val)); return builder; },
           neq(col, val) { filters.push((row) => evalClause(row, col, 'neq', val)); return builder; },
+          eq(col, val) { filters.push((row) => evalClause(row, col, 'eq', val)); return builder; },
           gte(col, val) { filters.push((row) => { const v = readPath(row, col); return v != null && v >= val; }); return builder; },
           // PostgREST .or('col.op.val,col2.op2.val2') -- an ANY-of predicate, itself NULL-safe
           // per clause (see evalClause). This is the exact form the real code uses to fix the
@@ -176,6 +177,64 @@ describe('SD-LEO-INFRA-SIGNAL-LANE-PER-001 FR-4 TS-6: POSITIVE control — a lon
     expect(result.dropped).toBe(1);
     expect(c.inserts).toHaveLength(0);
     expect(c.getRow('sig-1').payload.signal_resolved_dropped).toBe(true);
+  });
+});
+
+describe('QF-20260905-666: the disposition notice embeds the coordinator_reply verdict when one exists', () => {
+  const CORRELATION_ID = 'corr-abc-123';
+
+  const coordinatorReply = (overrides = {}) => ({
+    id: 'reply-1',
+    sender_type: 'coordinator',
+    payload: { kind: 'coordinator_reply', reply_to: CORRELATION_ID, correlation_id: CORRELATION_ID },
+    body: 'Stamped=852 Failed=0',
+    ...overrides,
+  });
+
+  it('ACCEPTANCE: a signal with a reply produces one notice containing the reply text', async () => {
+    const sig = dispositionedSignal('sig-1', {
+      payload: { signal_type: 'harness-bug', sender_callsign: 'Golf-4', correlation_id: CORRELATION_ID },
+    });
+    const c = fakeClient({ signalRows: [sig, coordinatorReply()], liveSessions: [LIVE_GOLF4] });
+    const result = await notifySignalResolvedByDisposition(c);
+    expect(result.notified).toBe(1);
+    expect(c.inserts).toHaveLength(1);
+    expect(c.inserts[0].payload.reply_body).toBe('Stamped=852 Failed=0');
+    expect(c.inserts[0].payload.reply_row_id).toBe('reply-1');
+    expect(c.inserts[0].body).toContain('Stamped=852 Failed=0');
+  });
+
+  it('the reply lookup keys on payload.reply_to = the SIGNAL correlation_id, not the signal row id', async () => {
+    const sig = dispositionedSignal('sig-1', {
+      payload: { signal_type: 'harness-bug', sender_callsign: 'Golf-4', correlation_id: CORRELATION_ID },
+    });
+    // A reply row whose reply_to equals the SIGNAL ROW ID (the wrong field) must NOT match.
+    const wronglyKeyedReply = coordinatorReply({ id: 'reply-2', payload: { kind: 'coordinator_reply', reply_to: 'sig-1' }, body: 'should not surface' });
+    const c = fakeClient({ signalRows: [sig, wronglyKeyedReply], liveSessions: [LIVE_GOLF4] });
+    const result = await notifySignalResolvedByDisposition(c);
+    expect(result.notified).toBe(1);
+    expect(c.inserts[0].payload.reply_body).toBeUndefined();
+    expect(c.inserts[0].body).not.toContain('should not surface');
+  });
+
+  it('ANTI-VACUITY: a signal with a correlation_id but NO matching reply leaves the notice unchanged', async () => {
+    const sig = dispositionedSignal('sig-1', {
+      payload: { signal_type: 'harness-bug', sender_callsign: 'Golf-4', correlation_id: CORRELATION_ID },
+    });
+    const c = fakeClient({ signalRows: [sig], liveSessions: [LIVE_GOLF4] });
+    const result = await notifySignalResolvedByDisposition(c);
+    expect(result.notified).toBe(1);
+    expect(c.inserts[0].payload.reply_body).toBeUndefined();
+    expect(c.inserts[0].payload.reply_row_id).toBeUndefined();
+    expect(c.inserts[0].body).toBe('Your earlier signal ("a lone signal that was individually dispositioned") has been dispositioned by the coordinator.');
+  });
+
+  it('a signal with NO correlation_id at all (unreplyable) skips the lookup, notice unchanged', async () => {
+    const sig = dispositionedSignal('sig-1'); // default fixture carries no correlation_id
+    const c = fakeClient({ signalRows: [sig, coordinatorReply()], liveSessions: [LIVE_GOLF4] });
+    const result = await notifySignalResolvedByDisposition(c);
+    expect(result.notified).toBe(1);
+    expect(c.inserts[0].payload.reply_body).toBeUndefined();
   });
 });
 

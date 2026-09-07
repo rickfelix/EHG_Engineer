@@ -2162,6 +2162,27 @@ async function notifySignalResolvedByDisposition(supabase) {
         continue;
       }
 
+      // QF-20260905-666: coordinator-ack-signal.cjs --reply writes the verdict as a SEPARATE
+      // coordinator_reply row (payload.reply_to = the signal's payload.correlation_id, NOT
+      // sig.id — buildReplyPayload in scripts/coordinator-reply.cjs), unlinked from this notice.
+      // Look it up and embed the verdict here so the worker doesn't have to re-query the DB.
+      const correlationId = sig.payload?.correlation_id;
+      let replyBody = null;
+      let replyRowId = null;
+      if (correlationId) {
+        const { data: replyRows } = await supabase
+          .from('session_coordination')
+          .select('id, body')
+          .eq('payload->>kind', 'coordinator_reply')
+          .eq('payload->>reply_to', correlationId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (replyRows && replyRows[0]) {
+          replyRowId = replyRows[0].id;
+          replyBody = (replyRows[0].body || '').slice(0, 500);
+        }
+      }
+
       // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-4): sender_session is a named
       // system principal (not null) so the lane-lint gauge stops counting this row as
       // empty_sender_row. sender_type stays 'coordinator' deliberately — michael-identity.cjs,
@@ -2173,7 +2194,9 @@ async function notifySignalResolvedByDisposition(supabase) {
         target_session: owner.session_id,
         message_type: 'INFO',
         subject: `[SIGNAL_RESOLVED] ${sig.payload?.signal_type || 'signal'} → dispositioned`,
-        body: `Your earlier signal ("${(sig.body || '').slice(0, 200)}") has been dispositioned by the coordinator.`,
+        body: replyBody
+          ? `Your earlier signal ("${(sig.body || '').slice(0, 200)}") has been dispositioned by the coordinator: ${replyBody}`
+          : `Your earlier signal ("${(sig.body || '').slice(0, 200)}") has been dispositioned by the coordinator.`,
         payload: {
           // QF-20260830-144: kind must be an ADVISORY_KIND (lib/fleet/worker-status.cjs) so
           // worker-ack-advisory.cjs can retire this row — without it the row was unackable by
@@ -2184,6 +2207,7 @@ async function notifySignalResolvedByDisposition(supabase) {
           original_body: (sig.body || '').slice(0, 500),
           original_signal_id: sig.id,
           resolution_kind: 'disposition',
+          ...(replyBody ? { reply_body: replyBody, reply_row_id: replyRowId } : {}),
         },
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       });
