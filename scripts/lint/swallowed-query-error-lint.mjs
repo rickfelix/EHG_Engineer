@@ -22,6 +22,12 @@
 //   • it routes through lib/db/fetch-all-paginated.mjs fetchAllPaginated(), which already throws.
 // Anything else is a latent silent no-op. Fix it (route through safeQuery, or bind error) or
 // allowlist it with a REASON — a boolean-style silence is exactly what this SD exists to prevent.
+//
+// KNOWN LIMITATION: DATA_ONLY/COUNT_ONLY match only a single-line `const { data } = await ...` /
+// `const { count } = await ...` destructure. A multi-line destructure (`const {\n  data\n} =
+// await ...`) or a `.then(({ data }) => ...)` callback-style consumption swallows an error
+// identically but is invisible to this control — neither regex matches across a line break or a
+// non-`const {...} = await` shape, so those sites report as clean with no allowlist entry needed.
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { resolve, join, extname } from 'path';
 import { fileURLToPath } from 'url';

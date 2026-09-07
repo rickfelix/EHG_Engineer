@@ -16,6 +16,13 @@
 //                 class FR-2 exists for.
 //   no_catch    — not inside any try block at the hit line.
 //
+// KNOWN LIMITATION: returnsPassedTrue() only recognizes a LITERAL `passed: true` (or
+// `passed: true` inside a helper-wrapped return). A catch that returns `passed: someFlag` where
+// `someFlag` is a variable/expression that evaluates to true at runtime (e.g. `const ok = true;
+// return { passed: ok };`, or `passed: !err` on a path where `err` is always falsy) is classified
+// as `has_catch`, not `fail_open` — the same benign-looking pass this whole SD exists to catch,
+// one level of indirection away from the literal this classifier can see.
+//
 // Usage: node scripts/lint/swallowed-query-fail-open-classifier.mjs [--json out.json]
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
