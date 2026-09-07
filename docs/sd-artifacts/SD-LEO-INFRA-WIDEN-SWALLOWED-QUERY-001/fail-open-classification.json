@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-07T00:56:13.143Z",
+  "generated_at": "2026-09-07T01:01:07.684Z",
   "counts": {
-    "has_catch": 10
+    "has_catch": 5
   },
   "results": [
     {
@@ -23,41 +23,6 @@
       "line": 368,
       "kind": "data",
       "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/sub-agent-orchestration.js",
-      "line": 27,
-      "kind": "data",
-      "snippet": "const { data: validationProfile } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/gates/success-metrics-verification.js",
-      "line": 63,
-      "kind": "data",
-      "snippet": "const { data: parentCheck } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-lead/index.js",
-      "line": 131,
-      "kind": "data",
-      "snippet": "const { data: plan } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/failure-pattern-capture.js",
-      "line": 73,
-      "kind": "data",
-      "snippet": "const { data: existing } = await sb",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/gates/multi-session-claim-gate.js",
-      "line": 79,
-      "kind": "data",
-      "snippet": "const { data: staleClaims } = await supabase",
       "classification": "has_catch"
     },
     {

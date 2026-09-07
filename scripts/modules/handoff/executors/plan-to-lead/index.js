@@ -128,11 +128,14 @@ async function preCheckSmokeTestReadiness(supabase, sd, sdId) {
   }
 
   try {
-    const { data: plan } = await supabase
-      .from('eva_architecture_plans')
-      .select('content, sections')
-      .eq('plan_key', archKey)
-      .single();
+    const plan = await safeQuery(
+      supabase
+        .from('eva_architecture_plans')
+        .select('content, sections')
+        .eq('plan_key', archKey)
+        .single(),
+      { site: 'plan-to-lead:smoke_test_readiness_precheck' }
+    );
 
     if (!plan) return;
 

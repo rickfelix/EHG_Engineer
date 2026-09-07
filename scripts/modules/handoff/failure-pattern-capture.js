@@ -12,6 +12,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -70,11 +71,14 @@ export async function captureFailurePattern(sdId, handoffType, options = {}) {
     const patternId = `PAT-HF-${handoffType.replace(/-/g, '')}-${sdId.substring(0, 8)}`;
 
     // Check if pattern already exists (idempotent)
-    const { data: existing } = await sb
-      .from('issue_patterns')
-      .select('pattern_id')
-      .eq('pattern_id', patternId)
-      .limit(1);
+    const existing = await safeQuery(
+      sb
+        .from('issue_patterns')
+        .select('pattern_id')
+        .eq('pattern_id', patternId)
+        .limit(1),
+      { site: 'failure-pattern-capture:existing_pattern_check' }
+    );
 
     if (existing && existing.length > 0) {
       // Update occurrence count instead of creating duplicate

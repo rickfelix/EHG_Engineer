@@ -60,14 +60,19 @@ export function createSuccessMetricsVerificationGate(supabase) {
       // like "test pass rate" or "coverage %"). Treat as advisory.
       let isChildSD = false;
       try {
-        const { data: parentCheck } = await supabase
-          .from('strategic_directives_v2')
-          .select('parent_sd_id')
-          .eq('id', sdUuid)
-          .single();
+        const parentCheck = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('parent_sd_id')
+            .eq('id', sdUuid)
+            .single(),
+          { site: 'success-metrics-verification:parent_check' }
+        );
         isChildSD = !!parentCheck?.parent_sd_id;
       } catch {
-        // Fail-open: if check fails, treat as standalone
+        // NOT fail-open despite the old label here: isChildSD staying false makes
+        // isAdvisory more likely to be false too (REQUIRED, not advisory) below --
+        // a query fault makes verification MORE strict, never less.
       }
 
       // SD type check — disabled types auto-pass

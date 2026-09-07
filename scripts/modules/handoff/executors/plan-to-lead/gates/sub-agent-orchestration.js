@@ -5,6 +5,7 @@
  *
  * Orchestrates LEAD_FINAL phase sub-agents
  */
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Create the SUB_AGENT_ORCHESTRATION gate validator
@@ -24,11 +25,14 @@ export function createSubAgentOrchestrationGate(supabase) {
         const sdType = (ctx.sd?.sd_type || '').toLowerCase();
 
         try {
-          const { data: validationProfile } = await supabase
-            .from('sd_type_validation_profiles')
-            .select('requires_sub_agents')
-            .eq('sd_type', sdType)
-            .single();
+          const validationProfile = await safeQuery(
+            supabase
+              .from('sd_type_validation_profiles')
+              .select('requires_sub_agents')
+              .eq('sd_type', sdType)
+              .single(),
+            { site: 'sub-agent-orchestration:sd_type_validation_profile' }
+          );
 
           const skipSubAgents = validationProfile?.requires_sub_agents === false;
 

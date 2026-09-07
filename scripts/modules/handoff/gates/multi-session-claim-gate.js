@@ -29,6 +29,7 @@ import os from 'os';
 // PAT-SESSION-IDENTITY-003: Centralized terminal identity
 // Import from single source of truth to prevent duplication cascade
 import { getTerminalId } from '../../../../lib/terminal-identity.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 
 // RCA-TERMINAL-IDENTITY-CHAIN-BREAK-001: Three-case terminal_id matching
 // Handles ambiguous case where one terminal_id has PID suffix and the other doesn't
@@ -76,12 +77,15 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
       });
     } catch (_) {
       // RPC may not exist yet — fall back to direct cleanup
-      const { data: staleClaims } = await supabase
-        .from('claude_sessions')
-        .select('session_id, hostname, terminal_id')
-        .eq('sd_key', sdId)
-        .eq('status', 'active')
-        .eq('hostname', currentHostname);
+      const staleClaims = await safeQuery(
+        supabase
+          .from('claude_sessions')
+          .select('session_id, hostname, terminal_id')
+          .eq('sd_key', sdId)
+          .eq('status', 'active')
+          .eq('hostname', currentHostname),
+        { site: 'multi-session-claim-gate:stale_same_conversation_claims' }
+      );
 
       const toRelease = (staleClaims || []).filter(s => {
         if (s.session_id === currentSessionId) return false;
