@@ -1,0 +1,82 @@
+{
+  "functional_requirements": [
+    {
+      "id": "FR-0",
+      "title": "Capture the already-computed 'git worktree prune' set instead of discarding it",
+      "description": "lib/worktree-reaper/orphan-sweep.js (~lines 225-228) already runs `git worktree prune` best-effort and discards its output. That command's dry-run output names exactly the class this SD needs to detect: a REGISTERED worktree entry whose gitdir target no longer exists (measured live 2026-09-07: 'worktrees/SD-LEO-DOC-FOUNDATION-AUDIT-LENS-001: gitdir file points to non-existent location', 29 registered vs 36 on-disk dirs). Capture and parse this output into a distinct bucket at the sweep's existing call site -- do NOT modify lib/worktree-quota.js's classifyOrphanDirs predicate itself, which is reached on every `git worktree add` via emitOrphanWarningIfAny and must stay zero-extra-I/O (validation-agent finding, evidence 69a19709). Keep the new bucket SEPARATE from reapableDirs/orphan classification so the existing orphan gauge is not distorted.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "A pure-function test constructs a fixture matching real `git worktree prune --dry-run -v` output (a registered entry with a missing gitdir target) and asserts it lands in the new distinct bucket",
+        "The SAME fixture, run through the unmodified classifyOrphanDirs predicate, is confirmed to NOT appear there (proving the new bucket is additive, not a duplicate of existing classification)",
+        "No new git subprocess call is added to the hot `git worktree add` / emitOrphanWarningIfAny path -- the capture happens only at orphan-sweep.js's existing prune call site"
+      ]
+    },
+    {
+      "id": "FR-1",
+      "title": "Route the new prune-set bucket through the existing durable audit sink",
+      "description": "Route entries from FR-0's new bucket through lib/worktree-reaper/audit-sink.js's writeAuditSink(supabase, records, {runId, logger}) into the audit_log table, mirroring the existing call convention at scripts/worktree-reaper.mjs:1751/:1955. Use a distinct event_type/reason value (never overload the existing 'worktree_reaper_classification' or 'worktree_orphan_sweep' values) so a reader can tell this class apart from ordinary orphan/reclaim rows.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "After a sweep run against a fixture containing a prune-set entry, a row is READ BACK from audit_log with the new distinct event_type/reason -- never just 'writeAuditSink returned ok' (validation-agent hazard: audit_log_severity_check silently rejects an out-of-enum severity and writeAuditSink never throws on that rejection)",
+        "The severity value used maps to one of audit_log_severity_check's allowed values ({info, warning, error, critical}) -- verified by a live insert+readback, not assumed"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Give the ship-path worktree.husk_detected event a durable consumer",
+      "description": "scripts/modules/shipping/post-merge-worktree-cleanup.js:393-400 emits worktree.husk_detected (this repo's OWN definition of husk: git-deregistered, directory survives -- confirmed identical in lib/worktree-reaper/close-husk.js:4 and lib/worktree-manager.js:1867-1870) via console.warn with ZERO consumers, on the /ship path specifically (cleanupWorktreeByPath, line 315). This is a DIFFERENT residue class from FR-0/FR-1's prune-set. Note: LEAD-FINAL-APPROVAL's own cleanupWorktree() path already gets remediation via closeHusk (lead-final-approval/index.js:1168) but still no durable record -- this FR targets the SHIP path specifically, which gets neither today. Route this event through the same writeAuditSink mechanism as FR-1, using its own distinct event_type/reason so it is never conflated with the prune-set class.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "A simulated husk-detected event on the ship path (repo's real husk definition: deregistered, directory survives) produces a readable row in audit_log",
+        "The event_type/reason used is distinct from FR-1's prune-set event_type, so the two residue classes remain distinguishable in the durable record"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Terminology precision: never call the new (FR-0/FR-1) class a 'husk'",
+      "description": "This repo's own code consistently defines 'husk' as git-deregistered-but-directory-survives (close-husk.js:4, worktree-manager.js:1867-1870, post-merge-worktree-cleanup.js:381-386) -- the class classifyOrphanDirs ALREADY detects. The class this SD adds detection for (FR-0) is the OPPOSITE: registered-in-git but gitdir-target-missing (the `git worktree prune` set). Naming FR-0's class 'husk' would make any test built against the repo's real husk shape pass vacuously against unmodified code (validation-agent finding, HIGH severity). All code, comments, event_type/reason strings, and tests for FR-0/FR-1 must use 'registered entry with a missing gitdir target' / 'prune-set' terminology, never 'husk'.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "No new identifier, event_type value, or code comment introduced by FR-0/FR-1 uses the word 'husk'",
+        "A code reviewer (or the retrospective) can confirm the two residue classes (prune-set vs. this repo's husk) are never conflated in naming, tests, or the durable record's event_type values"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Unit fixtures for both residue classes, in the process file(s) actually changed",
+      "description": "Add unit fixtures covering: (a) FR-0's prune-set capture and bucket classification (using the real prune-set fixture shape, per FR-3), (b) FR-1's audit_log routing for a prune-set entry with a live-shape readback assertion, (c) FR-2's audit_log routing for a ship-path husk_detected event with a live-shape readback assertion, and (d) a negative fixture proving a HEALTHY registered worktree (gitdir target exists) is classified into NEITHER new bucket.",
+      "priority": "P1",
+      "acceptance_criteria": [
+        "All 4 fixture classes above exist and pass",
+        "Full existing worktree-reaper/worktree-quota test suites still pass with zero regressions"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "requirement": "FR-0's capture must not add any new git subprocess invocation -- it consumes orphan-sweep.js's EXISTING `git worktree prune` call output only", "rationale": "orphan-sweep.js already pays this cost and discards the result; adding a second independent prune call would double the I/O for no benefit" },
+    { "requirement": "FR-1/FR-2 both write through lib/worktree-reaper/audit-sink.js's writeAuditSink -- never a hand-rolled supabase.from('audit_log').insert() call", "rationale": "writeAuditSink is the single canonical writer for this family (used at worktree-reaper.mjs:1751/:1955); a second hand-rolled writer would drift from its severity-mapping and buildAuditRows conventions" },
+    { "requirement": "Acceptance tests for FR-1/FR-2 must assert on a value READ BACK from audit_log, never on writeAuditSink's return value alone", "rationale": "audit_log_severity_check silently rejects an out-of-enum severity and writeAuditSink does not throw on that rejection (validation-agent finding) -- a return-value-only assertion would pass even if the row never landed" }
+  ],
+  "test_scenarios": [
+    { "scenario": "Prune-set fixture is captured and bucketed (FR-0)", "steps": "Construct a fixture matching real `git worktree prune --dry-run -v` output for a registered-but-missing-gitdir entry; assert it lands in the new distinct bucket and is absent from classifyOrphanDirs's existing orphan set" },
+    { "scenario": "Prune-set entry reaches audit_log (FR-1)", "steps": "Run the sweep against the FR-0 fixture; read back audit_log and assert a row exists with the new distinct event_type/reason and an in-enum severity" },
+    { "scenario": "Ship-path husk_detected reaches audit_log (FR-2)", "steps": "Simulate a ship-path husk-detected event (this repo's real husk shape); read back audit_log and assert a row exists with its own distinct event_type/reason" },
+    { "scenario": "Healthy worktree is classified into neither new bucket (FR-4 negative case)", "steps": "Construct a fixture for a registered worktree whose gitdir target exists; assert it appears in neither the FR-0 prune-set bucket nor the repo's husk detection" }
+  ],
+  "risks": [
+    { "risk": "Naming the new class 'husk' (matching the RCA's own wording) would make a test built to the repo's real husk definition pass vacuously against unmodified code", "mitigation": "FR-3 mandates 'registered entry with missing gitdir target' / 'prune-set' terminology throughout; verified by the validation-agent's independent re-check of close-husk.js/worktree-manager.js/post-merge-worktree-cleanup.js's shared definition" },
+    { "risk": "Modifying classifyOrphanDirs's predicate directly would add I/O to a hot path reached on every `git worktree add`", "mitigation": "FR-0 explicitly captures from the EXISTING orphan-sweep.js prune call instead of touching classifyOrphanDirs or its call sites" },
+    { "risk": "writeAuditSink silently drops a row on an out-of-enum severity, making a 'the write succeeded' assertion falsely pass", "mitigation": "FR-1/FR-2 acceptance criteria and technical requirements both mandate a live readback from audit_log, never a return-value-only check" }
+  ],
+  "system_architecture": {
+    "components": [
+      "lib/worktree-reaper/orphan-sweep.js (~lines 225-228) -- FR-0 target: existing `git worktree prune` call, currently discarded",
+      "lib/worktree-quota.js classifyOrphanDirs (lines 279-411) -- read-only reference point, NOT modified (confirms the existing orphan class is disjoint from the new prune-set class)",
+      "lib/worktree-reaper/audit-sink.js writeAuditSink -- FR-1/FR-2 target: existing durable sink, audit_log table",
+      "scripts/modules/shipping/post-merge-worktree-cleanup.js:393-400 (cleanupWorktreeByPath, ship path) -- FR-2 target",
+      "lib/worktree-reaper/close-husk.js -- existing husk-removal composition, explicitly OUT of scope (detection+durable-recording only, no new removal wiring in this SD)"
+    ],
+    "data_flow": "orphan-sweep.js's existing `git worktree prune --dry-run` call (FR-0) -> parsed into a distinct prune-set bucket, kept separate from reapableDirs -> routed via writeAuditSink into audit_log with a distinct event_type (FR-1). Separately, the ship path's cleanupWorktreeByPath (post-merge-worktree-cleanup.js) hits its existing worktree.husk_detected console.warn on a failed rm -> now ALSO routed via the same writeAuditSink into audit_log with its own distinct event_type (FR-2)."
+  },
+  "exploration_summary": "VALIDATION and Explore sub-agents (LEAD phase, this session) corrected the RCA's own terminology: this repo's code defines 'husk' as git-deregistered-but-directory-survives (the class classifyOrphanDirs already detects), the OPPOSITE of the 'registered but gitdir-target-missing' class the RCA actually measured and wants surfaced. The validation-agent also found that lib/worktree-reaper/orphan-sweep.js already runs `git worktree prune` and discards its output -- the exact information FR-0 needs is already computed, making capture-and-route far cheaper and lower-risk than modifying classifyOrphanDirs's hot-path predicate. Confirmed the durable sink (writeAuditSink -> audit_log) is live (rows observed landing 2026-09-07T05:11:04Z) and flagged that audit_log_severity_check silently rejects out-of-enum severities without writeAuditSink throwing, so acceptance criteria are written against a live readback, never a return-value check. Confirmed no sibling SD (A-G under the same parent) or in-flight PR overlaps this scope; separately signaled to the coordinator that fix shape 2 (cadence-schedule restoration) is UNSOURCED and needs its own ticket."
+}
