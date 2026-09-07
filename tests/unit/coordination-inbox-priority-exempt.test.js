@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { classifyInboxMessage, mergePriorityExempt, oldestBatchExcludedKinds } = require('../../scripts/hooks/coordination-inbox.cjs');
-const { DIRECTIVE_KINDS, PRIORITY_EXEMPT_DIRECTIVE_KINDS } = require('../../lib/fleet/worker-status.cjs');
+const { DIRECTIVE_KINDS, PRIORITY_EXEMPT_DIRECTIVE_KINDS, REPLY_CORRELATED_KINDS } = require('../../lib/fleet/worker-status.cjs');
 
 describe('mergePriorityExempt (FR-1 starvation fix)', () => {
   it('places priority rows ahead of the oldest batch', () => {
@@ -77,8 +77,8 @@ describe('fence_notice classification (FR-2)', () => {
 });
 
 describe('oldestBatchExcludedKinds (QF-20260815-659 FIX HALF 2: reply-starvation root cause)', () => {
-  it('excludes coordinator_reply from the oldest-5 fetch when two-way is on for a non-Adam session', () => {
-    expect(oldestBatchExcludedKinds({ twoWayOn: true, amAdam: false })).toEqual(['coordinator_reply']);
+  it('excludes coordinator_reply AND adam_advisory from the oldest-5 fetch when two-way is on for a non-Adam session (QF-20260904-748: generalized via REPLY_CORRELATED_KINDS)', () => {
+    expect(oldestBatchExcludedKinds({ twoWayOn: true, amAdam: false })).toEqual(['coordinator_reply', 'adam_advisory']);
   });
 
   it('excludes nothing when two-way is off (coordinator_reply is not skip:true there — must still be fetchable)', () => {
@@ -154,6 +154,65 @@ describe('classifyInboxMessage: coordinator_reply with payload.reply_to (QF-2026
     const msg = { message_type: 'INFO', payload: { kind: 'coordinator_directive', reply_to: 'signal-abc-123' } };
     const v = classifyInboxMessage(msg, { twoWayOn: true, amAdam: false });
     expect(v.markDelivered).toBe(true);
+    expect(v.skip).toBe(false);
+  });
+});
+
+describe('classifyInboxMessage: adam_advisory with payload.reply_to (QF-20260904-748)', () => {
+  it('is a member of REPLY_CORRELATED_KINDS alongside coordinator_reply', () => {
+    expect(REPLY_CORRELATED_KINDS).toEqual(expect.arrayContaining(['coordinator_reply', 'adam_advisory']));
+  });
+
+  it('a Solomon reply (kind=adam_advisory, reply_to set — the kind EVERY Solomon answer travels under, incl. a worker\'s own solomon_consult answer) surfaces now, drained on display', () => {
+    const msg = { message_type: 'INFO', payload: { kind: 'adam_advisory', reply_to: 'consult-abc-123' } };
+    const v = classifyInboxMessage(msg, { twoWayOn: true, amAdam: false });
+    expect(v).toEqual({ skip: false, markRead: true, markAck: true });
+  });
+
+  it('a bare adam_advisory (no reply_to — Adam\'s own fresh outbound advisory, routed to the coordinator inbox) is UNCHANGED: still skip:true', () => {
+    const msg = { message_type: 'INFO', payload: { kind: 'adam_advisory' } };
+    const v = classifyInboxMessage(msg, { twoWayOn: true, amAdam: false });
+    expect(v).toEqual({ skip: true });
+  });
+
+  it('an Adam session is unaffected by the reply_to carve-out either way (amAdam excluded — line 185\'s unconditional skip still governs)', () => {
+    const withReplyTo = classifyInboxMessage(
+      { message_type: 'INFO', payload: { kind: 'adam_advisory', reply_to: 'consult-abc-123' } },
+      { twoWayOn: true, amAdam: true }
+    );
+    expect(withReplyTo).toEqual({ skip: true });
+  });
+
+  it('the reply_to carve-out applies even when two-way is off — unlike coordinator_reply, adam_advisory\'s base branch has no twoWayOn gate', () => {
+    const msg = { message_type: 'INFO', payload: { kind: 'adam_advisory', reply_to: 'consult-abc-123' } };
+    const v = classifyInboxMessage(msg, { twoWayOn: false, amAdam: false });
+    expect(v).toEqual({ skip: false, markRead: true, markAck: true });
+  });
+});
+
+describe('the QF-20260904-748 acceptance scenario: a Solomon reply behind 5 older rows surfaces on the same tick', () => {
+  it('an adam_advisory reply (reply_to set) is excluded from the capped oldest-5 fetch and recovered by the uncapped replyToSignalRows-equivalent query, merging ahead of 5 older unread rows', () => {
+    // Mirrors the oldestBatchExcludedKinds "starvation scenario this fixes" test above, but for
+    // the Solomon-reply case this QF adds. Before the fix, oldestBatchExcludedKinds only named
+    // 'coordinator_reply', so an adam_advisory reply behind 5 older unread rows would never even
+    // be FETCHED (let alone surfaced) until it aged into the oldest-5 window itself.
+    const fiveOlderRows = Array.from({ length: 5 }, (_, i) => ({ id: `old-${i}`, payload: { kind: 'work_assignment' } }));
+    const solomonReply = { id: 'solomon-reply-1', payload: { kind: 'adam_advisory', reply_to: 'consult-xyz' } };
+
+    const excluded = new Set(oldestBatchExcludedKinds({ twoWayOn: true, amAdam: false }));
+    expect(excluded.has('adam_advisory')).toBe(true);
+
+    // The row would be excluded from the capped oldest-batch fetch (a real DB query, not
+    // reproducible here without a supabase mock) — it is recovered by the separate,
+    // uncapped replyToSignalRows-equivalent query instead, then merged AHEAD of the oldest
+    // batch by mergePriorityExempt, exactly like a priority-exempt directive.
+    const merged = mergePriorityExempt([solomonReply], fiveOlderRows);
+    expect(merged[0].id).toBe('solomon-reply-1');
+    expect(merged).toHaveLength(6);
+
+    // And once surfaced, classifyInboxMessage actually renders it (skip:false) — the second
+    // half of "surfaces", not just "gets fetched".
+    const v = classifyInboxMessage({ message_type: 'INFO', payload: solomonReply.payload }, { twoWayOn: true, amAdam: false });
     expect(v.skip).toBe(false);
   });
 });
