@@ -13,7 +13,7 @@ vi.mock('../../../lib/vision/vdr-registry.js', () => ({
   })),
 }));
 
-import { checkAlreadyBuilt } from '../../../lib/sourcing-engine/manual-precheck.js';
+import { checkAlreadyBuilt, isCitableMatch } from '../../../lib/sourcing-engine/manual-precheck.js';
 
 function makeSupabaseMock(sds, qfs = []) {
   const from = (table) => {
@@ -223,6 +223,42 @@ describe('checkAlreadyBuilt — QF-20260903-254: predicate 2 also reads the quic
     expect(result.result).toBe('ALREADY-BUILT');
     expect(result.citedQfKey).toBe('QF-UNRELATED-000');
     expect(result.citedSdKey).toBe('SD-EHG-COCKPIT-VENTPERF-BUILD-001');
+  });
+
+  // QF-20260906-868 (cite-or-NOT-FOUND, fail-closed): specimen was checkAlreadyBuilt citing an
+  // ACTUALLY UNRELATED completed QF (QF-20260725-096, 'Stop serving the superseded /fleet-ui
+  // session view') for an RLS anon-read candidate, 2026-09-06 19:43Z.
+  describe('isCitableMatch (pure, exported) -- unit test on a null-cite match and on a low-score match', () => {
+    it('null match is never citable', () => {
+      expect(isCitableMatch(null)).toBe(false);
+    });
+
+    it('a match with no sd_key (null-cite) is never citable, even if it somehow carries a score', () => {
+      expect(isCitableMatch({ sd_key: null, reason: 'jaccard', score: 0.95 })).toBe(false);
+    });
+
+    it('an unscored match (source_id / exact_title) is always citable -- deterministic, "exact beats fuzzy"', () => {
+      expect(isCitableMatch({ sd_key: 'QF-X', reason: 'source_id' })).toBe(true);
+      expect(isCitableMatch({ sd_key: 'QF-X', reason: 'exact_title' })).toBe(true);
+    });
+
+    it('a jaccard match at or above DEFAULT_JACCARD_THRESHOLD (0.8) is citable', () => {
+      expect(isCitableMatch({ sd_key: 'QF-X', reason: 'jaccard', score: 0.8 })).toBe(true);
+      expect(isCitableMatch({ sd_key: 'QF-X', reason: 'jaccard', score: 0.95 })).toBe(true);
+    });
+
+    it('a low-score jaccard match below 0.8 is NOT citable (fails closed)', () => {
+      expect(isCitableMatch({ sd_key: 'QF-X', reason: 'jaccard', score: 0.79 })).toBe(false);
+    });
+
+    it('a semantic match at or above ITS OWN floor (0.6) is citable, even below the stricter jaccard floor (0.8) -- the QF-20260902-724 regression shape (score 0.76)', () => {
+      expect(isCitableMatch({ sd_key: 'QF-X', reason: 'semantic', score: 0.6 })).toBe(true);
+      expect(isCitableMatch({ sd_key: 'QF-X', reason: 'semantic', score: 0.76 })).toBe(true);
+    });
+
+    it('a low-score semantic match below 0.6 is NOT citable (fails closed) -- the actual specimen shape', () => {
+      expect(isCitableMatch({ sd_key: 'QF-X', reason: 'semantic', score: 0.59 })).toBe(false);
+    });
   });
 
   it('a quick_fixes read failure is FAIL-LOUD -- never silently returns a clean NOT-FOUND', async () => {
