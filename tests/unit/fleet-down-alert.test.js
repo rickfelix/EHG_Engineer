@@ -16,6 +16,7 @@ import {
   evaluatePerHostFreezePredicate, buildPerHostFreezeMessage, checkPerHostFreeze, recordFleetDeadManVerdict,
   fetchEligibleHosts, runAlertArms,
   evaluateFleetLivenessPredicate, buildFleetLivenessMessage, buildWatchdogCannotMeasureMessage, checkFleetLiveness,
+  evaluateStuckPermissionWait, buildStuckPermissionWaitMessage, checkStuckPermissionWaits,
 } from '../../scripts/fleet-down-alert.mjs';
 
 // Helper: build a newest-first pulse list from active_count values.
@@ -810,7 +811,7 @@ describe('recordFleetDeadManVerdict host-parameter backward compatibility (FR-3)
 // this SD exists precisely because an alert arm didn't reliably fire, a source-text pin closes
 // that gap without needing to invoke main() itself (which would require a live-shaped db/env).
 describe('main() wiring (source-text pin — TESTING sub-agent finding)', () => {
-  it('runAlertArms([...]) in main() includes all five arms, dead-coordinator-pager first (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2 added fleet-dead-man-per-host-pager; SD-LEO-INFRA-OFF-HOST-FLEET-001 added fleet-liveness-pager)', () => {
+  it('runAlertArms([...]) in main() includes all six arms, dead-coordinator-pager first (SD-LEO-INFRA-FLEET-DOWN-ALERT-001 FR-2 added fleet-dead-man-per-host-pager; SD-LEO-INFRA-OFF-HOST-FLEET-001 added fleet-liveness-pager; QF-20260905-884 added stuck-permission-wait-pager)', () => {
     const src = readFileSync(fileURLToPath(new URL('../../scripts/fleet-down-alert.mjs', import.meta.url)), 'utf8');
     const match = src.match(/const \{ failed \} = await runAlertArms\(\[([\s\S]*?)\]\);/);
     expect(match).not.toBeNull();
@@ -820,7 +821,7 @@ describe('main() wiring (source-text pin — TESTING sub-agent finding)', () => 
     // a commented-out arm is correctly seen as ABSENT, not present.
     const armsBlock = match[1].split('\n').map((line) => line.replace(/\/\/.*$/, '')).join('\n');
     const armNames = [...armsBlock.matchAll(/\[\s*'([^']+)'/g)].map((m) => m[1]);
-    expect(armNames).toEqual(['dead-coordinator-pager', 'fleet-dead-man-pager', 'fleet-dead-man-per-host-pager', 'worker-fleet-email', 'fleet-liveness-pager']);
+    expect(armNames).toEqual(['dead-coordinator-pager', 'stuck-permission-wait-pager', 'fleet-dead-man-pager', 'fleet-dead-man-per-host-pager', 'worker-fleet-email', 'fleet-liveness-pager']);
   });
 
   it('is comment-blind-proof: a commented-out arm entry is correctly seen as absent, not present', () => {
@@ -1115,6 +1116,187 @@ describe('checkFleetLiveness (SD-LEO-INFRA-OFF-HOST-FLEET-001 FR-1..FR-4 integra
     ]);
     expect(otherArm).toHaveBeenCalledTimes(1); // still ran despite the earlier arm's failure
     expect(failed.map((f) => f.name)).toEqual(['fleet-liveness-pager']);
+    errSpy.mockRestore();
+  });
+});
+
+// QF-20260905-884 — chairman-SMS page for a seat stuck on a Notification permission-wait
+// prompt with no further tool activity. Independent predicate from every arm above: reads
+// claude_sessions.last_tool_at (NOT heartbeat_at, which a background timer keeps advancing
+// even on a frozen seat) against the notification_permission_wait row's created_at. Reuses
+// the pre-existing DEAD_COORDINATOR_STALE_MIN/CRON_INTERVAL_MIN thresholds by design (QF
+// scope explicitly said not to introduce a new constant), so the edge-trigger dedup shape
+// mirrors evaluateDeadCoordinatorAlert's above exactly.
+describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-884)', () => {
+  const NOW = new Date('2026-09-07T08:00:00.000Z');
+  const minutesAgo = (m) => new Date(NOW.getTime() - m * 60000).toISOString();
+
+  it('fires exactly once per stuck wait — first tick past the threshold alerts', () => {
+    const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(16), lastToolAt: minutesAgo(16), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    expect(r.alert).toBe(true);
+    expect(r.reason).toMatch(/STUCK SEAT/);
+  });
+
+  it('does not re-fire on a later tick while still stuck (edge-trigger dedup)', () => {
+    const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(45), lastToolAt: minutesAgo(45), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    expect(r.alert).toBe(false);
+    expect(r.reason).toMatch(/already past the first alertable tick/);
+  });
+
+  it('a wait within the staleness window does not fire', () => {
+    const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(5), lastToolAt: minutesAgo(5), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    expect(r.alert).toBe(false);
+    expect(r.reason).toMatch(/within the/);
+  });
+
+  it('a wait exactly at the staleness boundary fires (>=)', () => {
+    const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(15), lastToolAt: minutesAgo(15), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    expect(r.alert).toBe(true);
+  });
+
+  it('recovers when last_tool_at advances past the notification — no alert even past threshold', () => {
+    const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(20), lastToolAt: minutesAgo(2), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    expect(r.alert).toBe(false);
+    expect(r.reason).toMatch(/recovered on its own/);
+  });
+
+  it('a null/missing last_tool_at (never any tool activity this session) is treated as not-recovered', () => {
+    const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(16), lastToolAt: null, now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    expect(r.alert).toBe(true);
+  });
+
+  it('is total / fail-safe on odd input', () => {
+    expect(evaluateStuckPermissionWait().alert).toBe(false);
+    expect(evaluateStuckPermissionWait({ notifiedAt: null, now: NOW }).alert).toBe(false);
+    expect(evaluateStuckPermissionWait({ notifiedAt: 'not-a-date', now: NOW }).alert).toBe(false);
+  });
+
+  it('buildStuckPermissionWaitMessage names the session and the stuck-permission-wait condition, not a dead-coordinator/fleet-down one', () => {
+    const verdict = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(16), lastToolAt: minutesAgo(16), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    const msg = buildStuckPermissionWaitMessage(verdict, 'abcdef12-3456-7890', NOW);
+    expect(msg.body).toMatch(/STUCK SEAT/);
+    expect(msg.body).toMatch(/abcdef12-345/); // shortId prefix (first 12 chars of the session id)
+    expect(msg.body).not.toMatch(/DEAD COORDINATOR|FLEET DOWN/);
+    expect(msg.kind).toBe('stuck_permission_wait_alert');
+    expect(msg.dedupeKey).toBe(`stuck-permission-wait-abcdef12-345-${NOW.toISOString().slice(0, 13)}`);
+  });
+
+  it('buildStuckPermissionWaitMessage appends "Blocked on: <tool> <detail>" when blockedAction is present, omits it when absent/null', () => {
+    const verdict = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(16), lastToolAt: minutesAgo(16), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    const withAction = buildStuckPermissionWaitMessage(verdict, 'sess-1', NOW, { tool: 'Edit', detail: '/repo/lib/foo.js' });
+    expect(withAction.body).toMatch(/Blocked on: Edit \/repo\/lib\/foo\.js\./);
+    const withoutAction = buildStuckPermissionWaitMessage(verdict, 'sess-1', NOW, null);
+    expect(withoutAction.body).not.toMatch(/Blocked on:/);
+  });
+
+  it('buildStuckPermissionWaitMessage only asserts "waiting on a permission prompt" when blockedAction corroborates it; falls back to neutral wording otherwise (adversarial review finding)', () => {
+    const verdict = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(16), lastToolAt: minutesAgo(16), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    const withAction = buildStuckPermissionWaitMessage(verdict, 'sess-1', NOW, { tool: 'Bash', detail: 'npm test' });
+    expect(withAction.body).toMatch(/waiting on a permission prompt/);
+    const withoutAction = buildStuckPermissionWaitMessage(verdict, 'sess-1', NOW, null);
+    expect(withoutAction.body).not.toMatch(/waiting on a permission prompt/);
+    expect(withoutAction.body).toMatch(/no further tool activity.*Notification event/);
+  });
+
+  // Stub db supporting exactly the two query shapes checkStuckPermissionWaits issues:
+  //   session_coordination: .select().eq().gte().order() -> { data: waitRows }
+  //   claude_sessions:      .select().in()                -> { data: sessionRows }
+  function makeStuckWaitDb({ waitRows = [], sessionRows = [] } = {}) {
+    return {
+      from(table) {
+        if (table === 'session_coordination') {
+          return { select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: waitRows, error: null }) }) }) }) }) };
+        }
+        if (table === 'claude_sessions') {
+          return { select: () => ({ in: () => ({ limit: async () => ({ data: sessionRows, error: null }) }) }) };
+        }
+        throw new Error(`unexpected table: ${table}`);
+      },
+    };
+  }
+
+  it('checkStuckPermissionWaits() threads payload.blocked_action into the page body when present (QF-20260905-884 second half)', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1', blocked_action: { tool: 'Bash', detail: 'git push --force-with-lease origin main' } }, created_at: minutesAgo(16) }],
+      sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(16) }],
+    });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    const [message] = sendChairmanSMSFn.mock.calls[0];
+    expect(message.body).toMatch(/Blocked on: Bash git push --force-with-lease origin main/);
+  });
+
+  it('checkStuckPermissionWaits() pages once for a genuinely stuck session, with the stuck-permission-wait message', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1' }, created_at: minutesAgo(16) }],
+      sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(16) }],
+    });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    const [message] = sendChairmanSMSFn.mock.calls[0];
+    expect(message.kind).toBe('stuck_permission_wait_alert');
+    expect(message.body).toMatch(/STUCK SEAT/);
+  });
+
+  it('checkStuckPermissionWaits() does NOT page a session that recovered (last_tool_at advanced past the wait)', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1' }, created_at: minutesAgo(20) }],
+      sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(2) }],
+    });
+    const sendChairmanSMSFn = vi.fn();
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled();
+  });
+
+  it('checkStuckPermissionWaits() does NOT page a session still within the staleness window', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1' }, created_at: minutesAgo(5) }],
+      sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(5) }],
+    });
+    const sendChairmanSMSFn = vi.fn();
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled();
+  });
+
+  it('checkStuckPermissionWaits() pages each distinct stuck session independently, using only the latest row per session', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [
+        // newest-first, as the real ORDER BY created_at DESC returns
+        { payload: { kind: 'notification_permission_wait', session_id: 'sess-a' }, created_at: minutesAgo(16) },
+        { payload: { kind: 'notification_permission_wait', session_id: 'sess-a' }, created_at: minutesAgo(40) }, // older dup for the same session, ignored
+        { payload: { kind: 'notification_permission_wait', session_id: 'sess-b' }, created_at: minutesAgo(2) }, // within window, no page
+      ],
+      sessionRows: [
+        { session_id: 'sess-a', last_tool_at: minutesAgo(16) },
+        { session_id: 'sess-b', last_tool_at: minutesAgo(2) },
+      ],
+    });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('checkStuckPermissionWaits() in DRY mode never calls sendChairmanSMS', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1' }, created_at: minutesAgo(16) }],
+      sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(16) }],
+    });
+    const sendChairmanSMSFn = vi.fn();
+    await checkStuckPermissionWaits(db, true, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled();
+  });
+
+  it('a throw inside checkStuckPermissionWaits is caught by runAlertArm and does not prevent other arms from running (TR-4 isolation)', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const throwingArm = () => checkStuckPermissionWaits({ from() { throw new Error('boom'); } }, false, vi.fn(), NOW);
+    const otherArm = vi.fn().mockResolvedValue(undefined);
+    const { failed } = await runAlertArms([
+      ['stuck-permission-wait-pager', throwingArm],
+      ['other-arm', otherArm],
+    ]);
+    expect(otherArm).toHaveBeenCalledTimes(1);
+    expect(failed.map((f) => f.name)).toEqual(['stuck-permission-wait-pager']);
     errSpy.mockRestore();
   });
 });
