@@ -20,6 +20,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -63,9 +64,7 @@ async function createTestVenture(data: Partial<{
   dwell_days: number;
   company_id: string;
 }>): Promise<TestVenture | null> {
-  const { data: venture, error } = await supabase
-    .from('ventures')
-    .insert({
+  const { data: venture, error } = await insertGuarded(supabase, 'ventures', {
       name: data.name || `Test Venture ${timestamp}`,
       problem_statement: data.problem_statement || 'Test problem statement',
       solution: data.solution || 'Test solution',
@@ -73,7 +72,8 @@ async function createTestVenture(data: Partial<{
       current_lifecycle_stage: data.current_lifecycle_stage || 1,
       dwell_days: data.dwell_days,
       company_id: data.company_id || TEST_COMPANY_ID,
-    })
+      is_demo: true,
+    }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/venture-launch/protocol-validation.spec.ts' })
     .select()
     .single();
 
@@ -432,7 +432,7 @@ test.describe('Data Persistence', () => {
     const finalTitle = await page.locator('h1, h2').first().textContent();
 
     // Both navigations should result in the same page structure
-    expect(finalTitle).toBeTruthy();
+    expect(finalTitle?.length).toBeGreaterThan(0);
     // Either same title or both are truthy (page loaded)
     if (initialTitle && finalTitle) {
       expect(typeof initialTitle).toBe('string');

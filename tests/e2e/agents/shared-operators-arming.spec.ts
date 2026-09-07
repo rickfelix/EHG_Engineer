@@ -16,6 +16,7 @@ import { teardownRun } from '../../../scripts/harness/spine-verify-first-run.mjs
 import { VentureFactory, EHG_SHARED_OPERATORS } from '../../../lib/agents/venture-ceo-factory.js';
 import { checkFinanceBillingIdle } from '../../../lib/agents/finance-billing-idle-check.js';
 import { buildFixtureVentureRow } from '../../../scripts/harness/s20-fixture.mjs';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -118,7 +119,7 @@ test.describe('Shared-operator holdco arming', () => {
     const runId = `e2e-shared-op-unaffected-${Date.now()}`;
     const uniqueSuffix = randomUUID().replace(/-/g, '').slice(0, 10);
     const ventureRow = { ...buildFixtureVentureRow(`SD-A-${runId}`), name: `TEST-${uniqueSuffix}-SD-A` };
-    const { data: venture } = await supabase.from('ventures').insert(ventureRow).select('id, name').single();
+    const { data: venture } = await insertGuarded(supabase, 'ventures', ventureRow, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/shared-operators-arming.spec.ts' }).select('id, name').single();
 
     const factory = new VentureFactory(supabase);
     const result = await factory.instantiateVenture({ ventureName: venture!.name, ventureId: venture!.id, totalTokenBudget: 25000 });

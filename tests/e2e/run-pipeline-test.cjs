@@ -79,8 +79,10 @@ async function run() {
       if (ce) throw new Error(ce.message);
       testData.companyId = company.id;
 
-      const { data: venture, error: ve } = await supabase.from('ventures')
-        .insert({ name: `E2E Pipeline Venture ${Date.now()}`, company_id: company.id, current_lifecycle_stage: 1, status: 'active', orchestrator_state: 'idle', description: 'E2E pipeline test', problem_statement: 'E2E pipeline test problem' })
+      const { insertGuarded, CLASSIFICATION } = await import('../../lib/governance/fixture-producer-guard.mjs');
+      const { data: venture, error: ve } = await insertGuarded(supabase, 'ventures',
+        { name: `E2E Pipeline Venture ${Date.now()}`, company_id: company.id, current_lifecycle_stage: 1, status: 'active', orchestrator_state: 'idle', description: 'E2E pipeline test', problem_statement: 'E2E pipeline test problem', is_demo: true },
+        { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/run-pipeline-test.cjs' })
         .select('id, current_lifecycle_stage, status, orchestrator_state').single();
       if (ve) throw new Error(ve.message);
       testData.ventureId = venture.id;

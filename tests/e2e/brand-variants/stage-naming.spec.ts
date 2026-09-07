@@ -14,6 +14,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -29,15 +30,14 @@ test.describe('Stage Transition Naming', () => {
 
   test.beforeAll(async () => {
     // Create venture at Stage 3
-    const { data: venture, error } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture, error } = await insertGuarded(supabase, 'ventures', {
         name: `Stage Naming Test ${timestamp}`,
         problem_statement: 'Test problem for stage naming',
         solution: 'Test solution',
         target_market: 'Test market',
-        stage: 3
-      })
+        stage: 3,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/stage-naming.spec.ts' })
       .select()
       .single();
 

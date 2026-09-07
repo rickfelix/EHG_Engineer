@@ -2,6 +2,14 @@
 /**
  * backfill-fixture-venture-flags.mjs — SD-LEO-INFRA-CHAIRMAN-DECISION-QUEUE-002 (FR-3)
  *
+ * HISTORICAL-ONLY as of SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-4). Cleans up rows
+ * written BEFORE that SD's producer-side fix (lib/governance/fixture-producer-guard.mjs's
+ * insertGuarded() now stamps is_demo:true at INSERT time, and every tests/e2e/tests/integration/
+ * tests/database/scripts/harness/scripts/canary producer routes through it, enforced by
+ * scripts/lint/fixture-producer-guard-lint.mjs). This is no longer the primary mechanism for
+ * keeping is_demo correct — it is a one-time-per-legacy-row mop-up, not an ongoing process. Do
+ * NOT build new reliance on this script; fix the producer instead.
+ *
  * Flags leaked fixture ventures (created is_demo=false by test suites/harnesses)
  * as is_demo=true so every chairman surface excludes them STRUCTURALLY instead of
  * by name-regex alone. Targets only ventures whose name matches the canonical
@@ -50,6 +58,7 @@ try {
 
 const candidates = ventures.filter((v) => isFixtureVenture({ ...v, is_demo: false }));
 
+console.log('HISTORICAL-ONLY (SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 FR-4): producers now stamp is_demo:true at insert time via insertGuarded(); this script only mops up legacy rows.');
 console.log(`${candidates.length} unflagged fixture venture(s) matching canonical name patterns:`);
 for (const v of candidates) console.log(`  ${v.id}  ${v.created_at}  ${v.name}`);
 

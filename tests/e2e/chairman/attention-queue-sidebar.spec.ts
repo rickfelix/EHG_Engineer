@@ -18,6 +18,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -58,9 +59,9 @@ test.describe('Attention Queue Sidebar', () => {
     ];
 
     for (const venture of ventures) {
-      const { data } = await supabase
-        .from('ventures')
-        .insert(venture)
+      const { data } = await insertGuarded(supabase, 'ventures', { ...venture, is_demo: true }, {
+        classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/chairman/attention-queue-sidebar.spec.ts',
+      })
         .select()
         .single();
 
