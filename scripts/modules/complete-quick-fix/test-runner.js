@@ -4,10 +4,73 @@
  */
 
 import { execSync } from 'child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { TEST_TIMEOUT_UNIT, TEST_TIMEOUT_E2E } from './constants.js';
 
 /** Whole no-DB unit suite (used only when the diff can't be resolved to tests). */
 export const WHOLE_SUITE_UNIT_COMMAND = 'npm run test:unit';
+
+/**
+ * QF-20260906-859: a node:test file (e.g. auto-validate-user-stories-draft.test.js) is
+ * vitest-excluded, so a scoped `vitest run` on it false-FAILs ("No test files found") even
+ * though it passes under `node --test`. Detected by CONTENT so a real vitest file (which
+ * never imports node:test) is never misrouted.
+ *
+ * Anchored (^ + multiline) to a real top-level import/require -- not the bare substring, which a
+ * fixture-writing string literal can also contain (dogfood bug: this file's own test misdetected
+ * itself before the anchor -- see test-runner-node-test-detection.test.js).
+ */
+export function isNodeTestFile(filePath, testDir) {
+  const NODE_TEST_IMPORT_RE = /^\s*import\s.*from\s+['"]node:test['"]|^\s*(?:const|let|var)\s.*require\(\s*['"]node:test['"]\s*\)/m;
+  try {
+    const abs = path.isAbsolute(filePath) ? filePath : path.join(testDir || process.cwd(), filePath);
+    return NODE_TEST_IMPORT_RE.test(fs.readFileSync(abs, 'utf8'));
+  } catch { return false; }
+}
+
+/** Split a change-scoped unit-test file list into vitest vs node:test buckets. */
+export function partitionTestFiles(testFiles, testDir) {
+  const vitestFiles = [], nodeTestFiles = [];
+  for (const f of testFiles || []) (isNodeTestFile(f, testDir) ? nodeTestFiles : vitestFiles).push(f);
+  return { vitestFiles, nodeTestFiles };
+}
+
+/** Parse node's built-in test-runner summary lines ("ℹ tests N", "ℹ pass N", ...). */
+export function extractNodeTestSummary(output) {
+  const num = (re) => { const m = output.match(re); return m ? parseInt(m[1], 10) || 0 : 0; };
+  const summary = { passed: num(/[ℹI]\s*pass\s+(\d+)/i), failed: num(/[ℹI]\s*fail\s+(\d+)/i), skipped: num(/[ℹI]\s*skipped\s+(\d+)/i), total: 0 };
+  summary.total = num(/[ℹI]\s*tests\s+(\d+)/i) || summary.passed + summary.failed + summary.skipped;
+  return summary;
+}
+
+/** Run node:test files via `node --test`, using its own exit code as the verdict. */
+export function runNodeTestFiles(files, testDir, timeout) {
+  const command = `node --test ${files.map(f => `"${f.replace(/"/g, '\\"')}"`).join(' ')}`;
+  try {
+    const output = execSync(command, { encoding: 'utf-8', timeout, stdio: 'pipe', cwd: testDir });
+    const summary = extractNodeTestSummary(output);
+    return { passed: summary.total > 0 && summary.failed === 0, output: output.substring(0, 2000), exitCode: 0, summary };
+  } catch (err) {
+    if (err.killed || err.signal === 'SIGTERM') {
+      return { passed: false, output: `Test timed out after ${timeout / 1000}s`, exitCode: 124, timedOut: true };
+    }
+    const output = (err.stdout?.toString() || err.stderr?.toString() || err.message).substring(0, 2000);
+    return { passed: false, output, exitCode: err.status || 1, summary: extractNodeTestSummary(output) };
+  }
+}
+
+/** Combine a vitest-bucket result and a node:test-bucket result into one verdict. */
+export function combineUnitResults(v, n) {
+  const sum = (k) => (v.summary?.[k] || 0) + (n.summary?.[k] || 0);
+  return {
+    passed: v.passed && n.passed,
+    output: `${v.output || ''}\n--- node --test ---\n${n.output || ''}`.substring(0, 2000),
+    exitCode: v.exitCode === 0 && n.exitCode === 0 ? 0 : (v.exitCode || n.exitCode),
+    summary: { passed: sum('passed'), failed: sum('failed'), skipped: sum('skipped'), total: sum('total') },
+    timedOut: Boolean(v.timedOut || n.timedOut)
+  };
+}
 
 /**
  * Build the unit-test command, change-scoped to the QF's own unit-test files.
@@ -66,6 +129,17 @@ export function buildUnitTestCommand(testFiles) {
  * @returns {object} Test results with passed, output, exitCode
  */
 export function runTests(testType, options = {}) {
+  const testDir = options.testDir || process.cwd();
+
+  if (testType === 'unit' && Array.isArray(options.testFiles) && options.testFiles.length > 0) {
+    const { vitestFiles, nodeTestFiles } = partitionTestFiles(options.testFiles, testDir);
+    if (nodeTestFiles.length > 0) {
+      console.log(`   🎯 ${nodeTestFiles.length} node:test file(s) detected -- running via 'node --test' (vitest cannot collect them)`);
+      const nodeResult = runNodeTestFiles(nodeTestFiles, testDir, TEST_TIMEOUT_UNIT);
+      if (vitestFiles.length === 0) return nodeResult;
+      return combineUnitResults(runTests('unit', { ...options, testFiles: vitestFiles }), nodeResult);
+    }
+  }
   const testCommands = {
     unit: buildUnitTestCommand(options.testFiles),
     e2e: 'npm run test:e2e -- --grep="smoke" --reporter=list'
@@ -78,7 +152,6 @@ export function runTests(testType, options = {}) {
 
   const command = testCommands[testType];
   const timeout = timeouts[testType];
-  const testDir = options.testDir || process.cwd();
 
   if (!command) {
     return { passed: false, output: `Unknown test type: ${testType}`, exitCode: 1 };
