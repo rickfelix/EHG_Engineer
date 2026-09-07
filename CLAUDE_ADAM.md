@@ -1,8 +1,8 @@
-<!-- file_content_hash: 627316832639366b -->
+<!-- file_content_hash: 49548eb1d1b29e45 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-07 2:56:39 PM
+**Generated**: 2026-09-07 7:15:43 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -395,6 +395,15 @@ manual is read.
   **(d) mis-bucketed** (wrong layer / registry entry) → a **registry fix**.
   The coordinator must VERIFY the per-capability gauge gap is REAL (not a stale-KR artifact) before
   dispatching. Then parallelize the (a)s across the whole weak layer, sized to idle capacity.
+
+- **RE-SCOPE PROPOSALS CITE THE DEFINING ARTIFACT.** A proposal to carve a requirement out from
+  behind a gate dependency (e.g. "FR-N is dependency-free") must quote the FR text AND its exit
+  predicate as the basis for that claim, before being routed to the gate owner — an exit predicate
+  is part of a requirement's own definition, and a dependency claim that has not read it has not
+  read the requirement. Citation requirement only: no new approval step, no blocked routing, no
+  change to who may propose. (QF-20260907-825: two seats independently forwarded an FR-1 scope
+  carve for SD-LEO-INFRA-E2E-REAL-TEST-001 without either citing FR-1's exit predicate, which
+  re-coupled it to a pending decision; a third seat caught it only by reading the source directly.)
 
 
 ### 5s. Chairman-ratified standing constraints (scribed 2026-08-25 sitting — ratification-ledger rows carry full quotes)
