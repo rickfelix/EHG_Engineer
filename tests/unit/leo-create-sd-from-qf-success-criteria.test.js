@@ -1,5 +1,5 @@
 /**
- * QF-20260902-866
+ * QF-20260902-866 + SD-LEO-FIX-ESCALATION-COPIES-EXPECTED-001
  *
  * lib/sd-creation/source-adapters/qf.js's createFromQF() never passed an explicit
  * success_criteria argument to createSD(), so every escalated SD fell through to
@@ -12,22 +12,42 @@
  * buildMeasuredSuccessCriteria() is the pure, extracted fix: derives criteria from the QF's
  * own expected_behavior / actual_behavior / steps_to_reproduce fields, falling back to the
  * QF's own title (never a generated template) when none of those are present.
+ *
+ * SD-LEO-FIX-ESCALATION-COPIES-EXPECTED-001: the expected_behavior-derived entry is now an
+ * OBJECT {criterion, measure, origin:{producer, source_qf_id, content_hash}} rather than a
+ * plain string, so origin-criterion-gate.js can detect the entry being silently deleted or
+ * reworded later. The other two possible entries (actual_behavior, steps_to_reproduce) are
+ * unaffected and remain plain strings.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 
 // ── Pure-function tests: no mocking required ──────────────────────────────────────────
 const { buildMeasuredSuccessCriteria } = await import('../../lib/sd-creation/source-adapters/qf.js');
 
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex');
+}
+
 describe('buildMeasuredSuccessCriteria (QF-20260902-866)', () => {
   it('derives criteria from expected_behavior, actual_behavior, and steps_to_reproduce', () => {
     const criteria = buildMeasuredSuccessCriteria({
+      id: 'QF-TEST-1',
       title: 'x',
       expected_behavior: 'The write succeeds and is reported as ok.',
       actual_behavior: 'The write succeeds but is reported as a failure.',
       steps_to_reproduce: '1. Run the writer. 2. Read back the row.',
     });
     expect(criteria).toEqual([
-      'Expected behavior achieved: The write succeeds and is reported as ok.',
+      {
+        criterion: 'Expected behavior achieved: The write succeeds and is reported as ok.',
+        measure: 'Origin text preserved verbatim (content-hash checked at LEAD-FINAL by origin-criterion-gate)',
+        origin: {
+          producer: 'qf_escalation_writer',
+          source_qf_id: 'QF-TEST-1',
+          content_hash: sha256('The write succeeds and is reported as ok.'),
+        },
+      },
       'Defective behavior no longer occurs: The write succeeds but is reported as a failure.',
       'Reproduction steps no longer trigger the defect: 1. Run the writer. 2. Read back the row.',
     ]);
@@ -35,12 +55,14 @@ describe('buildMeasuredSuccessCriteria (QF-20260902-866)', () => {
 
   it('never returns the generic pipeline.js template ("Code passes lint and type checks", etc.)', () => {
     const criteria = buildMeasuredSuccessCriteria({
+      id: 'QF-TEST-1',
       title: 'x',
       expected_behavior: 'A specific, measured expectation.',
     });
-    expect(criteria.join(' ')).not.toMatch(/Code passes lint and type checks/);
-    expect(criteria.join(' ')).not.toMatch(/PR reviewed and approved/);
-    expect(criteria.join(' ')).not.toMatch(/All implementation items from scope are complete/);
+    const asText = criteria.map((c) => (typeof c === 'string' ? c : c.criterion)).join(' ');
+    expect(asText).not.toMatch(/Code passes lint and type checks/);
+    expect(asText).not.toMatch(/PR reviewed and approved/);
+    expect(asText).not.toMatch(/All implementation items from scope are complete/);
   });
 
   it('falls back to the QF title (its own content, not a generated template) when no behavior fields exist', () => {
@@ -129,10 +151,19 @@ describe('createFromQF carries the QF measured criteria verbatim into createSD (
     await createFromQF('QF-TEST-1');
     expect(h.createSDArgs).not.toBeNull();
     expect(h.createSDArgs.success_criteria).toEqual([
-      'Expected behavior achieved: The recorder reports ok because the row persisted with the same instant.',
+      {
+        criterion: 'Expected behavior achieved: The recorder reports ok because the row persisted with the same instant.',
+        measure: 'Origin text preserved verbatim (content-hash checked at LEAD-FINAL by origin-criterion-gate)',
+        origin: {
+          producer: 'qf_escalation_writer',
+          source_qf_id: 'QF-TEST-1',
+          content_hash: sha256('The recorder reports ok because the row persisted with the same instant.'),
+        },
+      },
       'Defective behavior no longer occurs: The recorder reports readback_mismatch on every write although the row is present.',
     ]);
-    expect(h.createSDArgs.success_criteria.join(' ')).not.toMatch(/Code passes lint and type checks/);
+    const asText = h.createSDArgs.success_criteria.map((c) => (typeof c === 'string' ? c : c.criterion)).join(' ');
+    expect(asText).not.toMatch(/Code passes lint and type checks/);
   });
 
   it('a QF with no behavior fields still carries its own title, never a fabricated template', async () => {

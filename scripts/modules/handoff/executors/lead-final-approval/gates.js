@@ -99,6 +99,8 @@ export { createSuccessCriteriaUnpopulatedGate };
 // default (SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B)
 import { createAcceptanceArtifactGate } from './gates/acceptance-artifact-gate.js';
 export { createAcceptanceArtifactGate };
+import { createOriginCriterionGate } from './gates/origin-criterion-gate.js';
+export { createOriginCriterionGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
 // SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B: block completion of a
@@ -2199,6 +2201,11 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // by default (SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B)
   gates.push(createAcceptanceArtifactGate(supabase));
 
+  // Origin-Criterion Gate — for a QF-escalated carrier SD, refuses completion when the
+  // escalation-time origin criterion (stamped from the QF's own expected_behavior) was
+  // silently deleted or reworded, observe-only by default (SD-LEO-FIX-ESCALATION-COPIES-EXPECTED-001)
+  gates.push(createOriginCriterionGate());
+
   // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: GATE4_WORKFLOW_ROI is intentionally NOT pushed here —
   // it already runs at LEAD-FINAL via the validator-registry DB rules (see header note). The (A)
   // fix is the PLAN-TO-LEAD removal + the (B) gate1 key-drift fix so the LFA computation scores
@@ -2229,5 +2236,6 @@ export default {
   createActivationInvariantGate,
   createSuccessCriteriaUnpopulatedGate,
   createAcceptanceArtifactGate,
+  createOriginCriterionGate,
   getRequiredGates
 };
