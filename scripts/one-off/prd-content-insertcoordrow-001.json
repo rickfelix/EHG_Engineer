@@ -1,0 +1,146 @@
+{
+  "executive_summary": "insertCoordinationRow (lib/coordinator/dispatch.cjs) signals a DELIVERED-but-parked outcome by THROWING an error carrying landed=true and parkedRowId, at TWO call sites (DISPATCH_BACKPRESSURE line 1321, and DISPATCH_ALREADY_DELIVERED line 1565 -- the QF-20260902-160 dedup guard). A caller that treats any thrown error as \"nothing landed\" resends, duplicating a row that already delivered. This has caused measured production duplicates: 6 duplicate message bodies / 13 rows in 24h, 4 pairs under 3 seconds apart. Of 25 durable callers (LEAD-phase VALIDATION-confirmed count; 38 invocation lines), only 3 correctly branch on the thrown flag, and 11 are CLI entrypoints whose process.exit(1) path is the actual mechanism that produced the original incident (a shell || fallback resending on exit status, not on message text). This PRD delivers an ADDITIVE result-field fix scoped strictly to the two landed=true throw sites (every other throw path in the function must keep throwing, per the LEAD-phase VALIDATION inverse-hazard finding), migrates the CLI exit-code mapping at all 11 entrypoints, and propagates the new field to the remaining 8 non-CLI lib/ callers.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Additive result fields on insertCoordinationRow + shared isDeliveredDispatchError predicate",
+      "description": "insertCoordinationRow currently returns the raw PostgREST {data,error} object (dispatch.cjs:1730) for the ordinary success/DB-error path, and THROWS for the two landed=true cases (DISPATCH_BACKPRESSURE at line ~1321, DISPATCH_ALREADY_DELIVERED at line ~1565), each carrying error.code, error.landed=true, error.parkedRowId. Change ONLY these two throw sites to instead RETURN an object that ADDS landed/parkedRowId/code fields onto the existing {data,error} shape -- never restructure or replace it, since 16 durable callers depend on the current {data,error} shape for the ordinary path. Export a new isDeliveredDispatchError(resultOrError) predicate (usable against either the new returned shape or, defensively, a legacy caught exception during the migration window) that both codes satisfy. Every OTHER throw path in insertCoordinationRow (the ~6 other error codes and ~6 fail-closed assert* guards) is explicitly OUT OF SCOPE and must continue to throw unchanged -- a blanket throw-to-return migration would silently convert genuine failures into accepted return values for the 22 non-branching durable callers, inverting this SD's own defect (duplicated content) into a worse one (silently dropped content).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "insertCoordinationRow no longer throws for DISPATCH_BACKPRESSURE or DISPATCH_ALREADY_DELIVERED; both return an object with the existing {data,error} fields plus landed=true and parkedRowId, verified by reading the post-fix source at both call sites",
+        "Every other throw path in insertCoordinationRow (confirmed via the LEAD-phase Explore exit-path inventory: ~13 distinct throw codes plus 6 fail-closed assert* guards) is unchanged and still throws -- verified by a diff review showing no other throw statement was touched",
+        "isDeliveredDispatchError() is exported from dispatch.cjs and returns true for both codes, false for every other throw code and for the ordinary success/DB-error return shape",
+        "The 3 durable callers that already branch correctly (scripts/adam-advisory.cjs, scripts/solomon-advisory.cjs, scripts/worker-signal.cjs's shared reportDispatchError, 4 call sites) are migrated from catching e.landed on a thrown exception to reading result.landed on the returned object, with no change to their observable delivered/not-delivered outcome",
+        "tests/unit/coordinator/dispatch-send-backpressure.test.js and dispatch-correlation-dedupe.test.js (existing coverage for both throw paths) are updated to assert the new return shape and pass; a mutation test that reverts one call site back to throwing is caught by at least one updated test"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "CLI exit-code mapping for the 11 CLI-entrypoint durable callers",
+      "description": "11 of the 25 durable insertCoordinationRow callers are CLI entrypoints with process.exit(1) paths on a caught error; only the 3 already-correct files map a delivered/parked outcome to exit 0. This is the actual mechanism that produced the original incident: the observed production resend fired on a shell || fallback reading the EXIT STATUS, never on the thrown message text. Using FR-1's isDeliveredDispatchError() predicate, update all 11 CLI entrypoints to exit 0 when the result is a delivered/parked outcome, collapsing the 3 existing hand-rolled if(e.landed) exit(0) copies onto the shared predicate.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "All 11 CLI-entrypoint durable callers exit 0 (not 1) when insertCoordinationRow reports a delivered/parked outcome via FR-1's new return shape, verified by a synthetic-outcome test per entrypoint or a shared harness covering all 11",
+        "The 3 existing hand-rolled if(e.landed) exit(0) implementations are refactored to call the shared isDeliveredDispatchError() predicate instead of duplicating the check",
+        "A regression test reproduces the original incident's shape (a delivered/parked outcome followed by a check of process.exitCode) and asserts exit 0 across all 11 sites -- closing the exact defect class that caused the measured 6 duplicate bodies / 13 rows in the original 24h window"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "lib/ propagation for the 8 non-CLI durable callers",
+      "description": "Propagate FR-1's additive result fields into the 8 non-CLI durable lib/ callers (no exit code involved, no migration needed for CLI semantics). This includes 3 files currently mis-surfacing a successful park as an outright failure today -- not merely failing to detect it, but actively reporting the wrong outcome: coordinator-capacity-forecast.mjs (catch -> return false / process.exitCode=1 on any throw), coordination-events.cjs's emitInertWorkerAlert, and sweep-findings-sink.cjs (both collapse to {ok:false,error} on any throw) -- plus kill-switch-writer.cjs, which does not even catch today and propagates the exception uncaught.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "All 8 non-CLI durable lib/ callers correctly distinguish a delivered/parked outcome from a genuine failure using FR-1's return shape / isDeliveredDispatchError() predicate",
+        "coordinator-capacity-forecast.mjs, coordination-events.cjs's emitInertWorkerAlert, and sweep-findings-sink.cjs no longer report {ok:false,error} for a delivered/parked outcome -- verified by a test asserting each returns/reports success (or an equivalent non-failure signal) for that case",
+        "kill-switch-writer.cjs adds a catch (or equivalent handling) so a delivered/parked outcome from insertCoordinationRow no longer propagates as an uncaught exception"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Return contract is additive-only, never a restructure",
+      "description": "insertCoordinationRow's existing {data,error} return shape (dispatch.cjs:1730) must remain byte-for-byte compatible for every non-landed-true code path. FR-1's new fields are added alongside it, never replacing it. 16 durable callers depend on the current shape and are out of migration scope for this SD."
+    },
+    {
+      "id": "TR-2",
+      "title": "Scope strictly bounded to the two landed=true throw sites",
+      "description": "DISPATCH_BACKPRESSURE and DISPATCH_ALREADY_DELIVERED are the ONLY two throw sites in scope for the throw-to-return migration. The ~6 other error codes and ~6 fail-closed assert* guards in the same function must continue to throw, unchanged, for the life of this SD -- confirmed by the LEAD-phase VALIDATION inverse-hazard analysis (evidence ede9ddad-ecc2-4239-adef-908000ed0e0b)."
+    },
+    {
+      "id": "TR-3",
+      "title": "No schema/migration, no new table",
+      "description": "This is a pure application-layer signaling-shape change inside lib/coordinator/dispatch.cjs and its 25 durable callers. No database schema change is required or in scope."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "A blanket throw-to-return migration across ALL of insertCoordinationRow's throw codes (not just the two landed=true ones) would silently convert genuine failures into accepted return values for the 22 non-branching durable callers -- inverting this SD's defect (duplicated content) into a worse one (silently dropped content).",
+      "mitigation": "TR-2 scopes the migration strictly to DISPATCH_BACKPRESSURE and DISPATCH_ALREADY_DELIVERED; every other throw path is explicitly excluded and verified unchanged in code review."
+    },
+    {
+      "risk": "Restructuring insertCoordinationRow's return shape (rather than adding fields) would silently break the 16 durable callers that depend on the current raw {data,error} shape for the ordinary success/DB-error path.",
+      "mitigation": "TR-1 mandates additive-only fields; a diff review confirms the existing {data,error} keys are untouched."
+    },
+    {
+      "risk": "Fixing only the JS-level throw/return shape without updating the 11 CLI entrypoints' exit-code mapping would leave the original incident's actual trigger mechanism (a shell || fallback reading exit status) unaddressed.",
+      "mitigation": "FR-2 makes the CLI exit-code mapping a first-class, independently-verified functional requirement, not a trivial follow-on."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "scenario": "A caller hits DISPATCH_BACKPRESSURE (target already at the unanswered-directed-row limit)",
+      "expected": "insertCoordinationRow returns (does not throw) with landed=true and a parkedRowId; a CLI-entrypoint caller exits 0; a lib/ caller does not report a failure."
+    },
+    {
+      "scenario": "A caller retries with the SAME correlation_id as an already-delivered row (DISPATCH_ALREADY_DELIVERED)",
+      "expected": "insertCoordinationRow returns (does not throw) with landed=true and a parkedRowId pointing at the existing delivered row; behavior mirrors the DISPATCH_BACKPRESSURE case."
+    },
+    {
+      "scenario": "A caller hits any OTHER throw code (e.g. a kill-switch code, a target-validation code) or a fail-closed assert* guard",
+      "expected": "insertCoordinationRow still throws, unchanged from today; a CLI-entrypoint caller still exits 1; a lib/ caller still reports the failure."
+    },
+    {
+      "scenario": "The ordinary success or DB-error path (no landed=true condition)",
+      "expected": "insertCoordinationRow returns the same {data,error} shape as today, byte-for-byte, for every field a caller currently reads."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "25 durable callers of insertCoordinationRow across scripts/ and lib/ (11 CLI entrypoints, 8 non-CLI lib/ modules, 3 already-correct callers, plus 3 non-branching lib/ modules that currently mis-surface a delivered/parked outcome as a failure)",
+      "The broader fleet coordination-delivery pipeline: every worker/coordinator/Adam/Solomon send path that routes through insertCoordinationRow"
+    ],
+    "dependencies": [
+      "QF-20260902-160's existing correlation_id dedup guard (dispatch.cjs:1555-1569), which this SD's DISPATCH_ALREADY_DELIVERED fix builds directly on top of",
+      "The 2 existing test files (tests/unit/coordinator/dispatch-send-backpressure.test.js, dispatch-correlation-dedupe.test.js) that already cover both throw paths structurally"
+    ],
+    "data_contracts": [
+      "insertCoordinationRow's return shape: additive fields only (landed, parkedRowId) alongside the existing {data,error} object -- no restructure, no schema/migration change"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Verified via the existing session_coordination duplicate-body detection method (group rows by exact body text within a 24h window) used to originally measure this defect -- a post-ship absence of new duplicate pairs is the rollout signal",
+      "The 11 CLI entrypoints' exit-code behavior is directly observable via their existing process exit codes in fleet worker/coordinator logs"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A single shared function (lib/coordinator/dispatch.cjs's insertCoordinationRow) changes its signaling shape for exactly two outcome codes from throw to additive-return; 25 durable callers across scripts/ and lib/ are migrated to consume the new field via a shared predicate.",
+    "components": [
+      { "name": "lib/coordinator/dispatch.cjs", "change": "Two throw sites (DISPATCH_BACKPRESSURE, DISPATCH_ALREADY_DELIVERED) become additive returns; new exported isDeliveredDispatchError() predicate." },
+      { "name": "scripts/adam-advisory.cjs, scripts/solomon-advisory.cjs, scripts/worker-signal.cjs", "change": "Migrate from catching e.landed to reading result.landed (3 already-correct files, 6 call sites)." },
+      { "name": "11 CLI-entrypoint durable callers", "change": "Exit 0 (not 1) on a delivered/parked result via the shared predicate." },
+      { "name": "8 non-CLI lib/ durable callers", "change": "Propagate/consume the new result fields; 4 of these currently mis-surface or drop the outcome entirely." }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Land FR-1 first (the core signaling-shape change plus the 3 already-correct callers' migration) as an independently shippable PR, then FR-2 (CLI exit-code mapping) and FR-3 (lib/ propagation) as separate, smaller PRs consuming FR-1's exported predicate.",
+    "steps": [
+      "FR-1: change the two throw sites to additive returns; export isDeliveredDispatchError(); migrate the 3 already-correct callers; update/extend the two existing dispatch test files.",
+      "FR-2: update the 11 CLI entrypoints' exit-code mapping using the shared predicate; add regression coverage reproducing the original incident's shape.",
+      "FR-3: propagate the new fields into the 8 non-CLI lib/ callers, correcting the 4 that currently mis-surface or drop a delivered/parked outcome."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run tests/unit/coordinator/dispatch-send-backpressure.test.js and dispatch-correlation-dedupe.test.js after the FR-1 change",
+      "expected_outcome": "Both suites pass, now asserting a returned object rather than a caught exception for the two landed=true codes."
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run the new FR-2 regression harness covering all 11 CLI entrypoints against a synthetic delivered/parked outcome",
+      "expected_outcome": "All 11 processes exit 0."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Run the new FR-3 tests for coordinator-capacity-forecast.mjs, coordination-events.cjs's emitInertWorkerAlert, sweep-findings-sink.cjs, and kill-switch-writer.cjs against a synthetic delivered/parked outcome",
+      "expected_outcome": "None of the 4 report a failure or throw uncaught; each correctly surfaces the outcome as non-failure."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001"
+  }
+}
