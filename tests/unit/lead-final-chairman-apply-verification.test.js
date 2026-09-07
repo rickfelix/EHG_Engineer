@@ -464,4 +464,41 @@ describe('SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 FR-1: PR-file-list is a
     expect(r.details.migrationless).not.toBe(true);
     expect(r.wait_reason).toContain('20260901_supabase_only_thing.sql');
   });
+
+  // QF-20260906-413: missingDeclared did an EXACT-STRING match against files[].file, with no
+  // basename fallback -- unlike prFileSet just above, which is explicitly dual-indexed for this
+  // exact classifier inconsistency (primary-root entries are basename-only). A declared FULL
+  // repo-relative path for an APPLIED primary-root migration was reported "not found in the
+  // migration corpus" and fail-closed the gate, even though the same file (basename form) was
+  // right there in files[] with status APPLIED. Measured live on
+  // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A.
+  it('QF-20260906-413: a declared FULL path matches an APPLIED primary-root corpus entry recorded by BASENAME only', async () => {
+    classifyMigrationApplyState.mockResolvedValue({
+      files: [{ file: '20260906_role_seat_checkpoints.sql', status: 'APPLIED', missing: [] }],
+      error: null,
+    });
+    const r = await gate().validator(sdWith({
+      requires_chairman_apply: true,
+      migration_files: [
+        '20260906_role_seat_checkpoints.sql',
+        'database/migrations/20260906_role_seat_checkpoints.sql',
+      ],
+    }));
+    expect(r.passed).toBe(true);
+    expect(r.details?.migrationless).not.toBe(true);
+  });
+
+  it('QF-20260906-413: an entry that truly is NOT in the corpus, under either form, still fails closed', async () => {
+    classifyMigrationApplyState.mockResolvedValue({
+      files: [{ file: '20260102_unrelated.sql', status: 'APPLIED' }],
+      error: null,
+    });
+    const r = await gate().validator(sdWith({
+      requires_chairman_apply: true,
+      migration_files: ['database/migrations/20260999_does_not_exist.sql'],
+    }));
+    expect(r.passed).toBe(false);
+    expect(r.wait).not.toBe(true);
+    expect(`${r.issues || ''}`).toContain('20260999_does_not_exist.sql');
+  });
 });
