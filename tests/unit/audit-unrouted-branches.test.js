@@ -10,7 +10,7 @@
  * Pure functions only — no git, no gh, no network, no DB.
  */
 import { describe, it, expect } from 'vitest';
-import { classifyBranch, withinAgeWindow } from '../../scripts/audit-unrouted-branches.mjs';
+import { classifyBranch, withinAgeWindow, isPreserveRef, partitionPreserveCandidates } from '../../scripts/audit-unrouted-branches.mjs';
 
 const NOW = Date.parse('2026-07-25T18:00:00Z');
 const hoursAgo = (h) => new Date(NOW - h * 3_600_000).toISOString();
@@ -77,6 +77,36 @@ describe('classifyBranch — merged-by-any-route detection', () => {
     expect(hit).not.toBeNull();
     expect(hit.age_hours).toBeNull();
     expect(hit.newest_commit).toBeNull();
+  });
+});
+
+describe('isPreserveRef / partitionPreserveCandidates — QF-20260904-422', () => {
+  it('recognizes a reaper PRESERVE recovery ref by its namespace', () => {
+    expect(isPreserveRef('wip/reclaim/SD-EXAMPLE-001/2026-09-04T12-00-00-000Z')).toBe(true);
+    expect(isPreserveRef('feat/SD-EXAMPLE-001')).toBe(false);
+    expect(isPreserveRef(null)).toBe(false);
+  });
+
+  it('excludes preserve refs from otherCandidates and reports a distinct-tree count, leaving a genuine unrouted branch untouched', () => {
+    const candidates = [
+      { branch: 'wip/reclaim/foo/2026-09-01T00-00-00-000Z', ref: 'origin/wip/reclaim/foo/2026-09-01T00-00-00-000Z', newestCommitISO: '2026-09-01T00:00:00Z' },
+      { branch: 'wip/reclaim/foo/2026-09-02T00-00-00-000Z', ref: 'origin/wip/reclaim/foo/2026-09-02T00-00-00-000Z', newestCommitISO: '2026-09-02T00:00:00Z' },
+      { branch: 'wip/reclaim/bar/2026-09-03T00-00-00-000Z', ref: 'origin/wip/reclaim/bar/2026-09-03T00-00-00-000Z', newestCommitISO: '2026-09-03T00:00:00Z' },
+      { branch: 'fix/spawn-inherits-child-session-marker', ref: 'origin/fix/spawn-inherits-child-session-marker', newestCommitISO: '2026-09-04T00:00:00Z' },
+    ];
+
+    const { otherCandidates, preserve } = partitionPreserveCandidates(candidates);
+
+    expect(preserve).toEqual({ count: 3, distinct_trees: 2 });
+    expect(otherCandidates).toHaveLength(1);
+    expect(otherCandidates[0].branch).toBe('fix/spawn-inherits-child-session-marker');
+  });
+
+  it('reports zero preserve refs and passes every candidate through when none are present', () => {
+    const candidates = [{ branch: 'feat/whatever', ref: 'origin/feat/whatever', newestCommitISO: null }];
+    const { otherCandidates, preserve } = partitionPreserveCandidates(candidates);
+    expect(preserve).toEqual({ count: 0, distinct_trees: 0 });
+    expect(otherCandidates).toEqual(candidates);
   });
 });
 
