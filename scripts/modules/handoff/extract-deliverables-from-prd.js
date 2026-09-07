@@ -103,8 +103,16 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
     } catch { /* fail-open: no SD type -> full checklist (no filtering) */ }
     const execChecklist = filterChecklistForTier(prd.exec_checklist, sdTypeForTier);
 
+    // QF-20260905-843: a checklist item is only a real per-story authoring signal when it
+    // carries user_story_ids. The generic default checklist (e.g. "Core functionality
+    // implemented") never does, but was previously pushed unconditionally -- making
+    // deliverables.length non-zero and silently skipping Option 2 (functional_requirements)
+    // below, so real FR titles never became rows even when the checklist was pure boilerplate.
+    const hasStoryLinkedChecklist = Array.isArray(execChecklist)
+      && execChecklist.some((item) => Array.isArray(item?.user_story_ids) && item.user_story_ids.length > 0);
+
     // PRIORITY: Extract from exec_checklist with user_story_ids (SD-DELIVERABLES-V2-001 Phase 2)
-    if (execChecklist && Array.isArray(execChecklist)) {
+    if (hasStoryLinkedChecklist) {
       let linkedCount = 0;
 
       execChecklist.forEach((item, index) => {
@@ -174,6 +182,31 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
         if (!silent) {
           console.log(`   Extracted ${deliverables.length} deliverables from functional_requirements`);
         }
+      }
+    }
+
+    // Option 2b: exec_checklist as a LAST-RESORT fallback (unlinked items included) -- only
+    // reached when the checklist had no story-linked items AND functional_requirements produced
+    // nothing, so this never shadows real FRs but still avoids "no deliverables" for a PRD whose
+    // only content is the generic default checklist.
+    if (deliverables.length === 0 && Array.isArray(execChecklist) && execChecklist.length > 0) {
+      execChecklist.forEach((item, index) => {
+        deliverables.push({
+          sd_id: sdId,
+          deliverable_type: inferDeliverableType(item.text),
+          deliverable_name: item.text || `Checklist Item ${index + 1}`,
+          description: item.evidence ? `Evidence: ${item.evidence}` : undefined,
+          extracted_from: 'prd',
+          priority: 'required',
+          completion_status: item.checked ? 'completed' : 'pending',
+          completion_evidence: item.evidence || null,
+          user_story_id: null,
+          metadata: {}
+        });
+      });
+
+      if (!silent) {
+        console.log(`   Extracted ${deliverables.length} deliverables from exec_checklist (fallback, unlinked)`);
       }
     }
 
