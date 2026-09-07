@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveChildIndex, generateChildKey } from '../../scripts/modules/sd-key-generator.js';
+import { deriveChildIndex, generateChildKey, parseChildIndexArg } from '../../scripts/modules/sd-key-generator.js';
 
 // QF-20260610-473: --child suffix derivation — max-existing-suffix+1 (not count),
 // explicit 0 honored, collisions self-heal by bumping to the next free letter.
@@ -56,5 +56,30 @@ describe('deriveChildIndex (QF-20260610-473)', () => {
     const r = deriveChildIndex(P, keys, null);
     expect(r.index).toBe(0);
     expect(r.takenIndexes).toEqual([]);
+  });
+});
+
+describe('parseChildIndexArg (QF-20260905-562)', () => {
+  it('accepts a letter (case-insensitive), converting to its 0-based index', () => {
+    expect(parseChildIndexArg('A')).toEqual({ ok: true, index: 0 });
+    expect(parseChildIndexArg('a')).toEqual({ ok: true, index: 0 });
+    expect(parseChildIndexArg('C')).toEqual({ ok: true, index: 2 });
+  });
+  it('accepts a 0-based integer string', () => {
+    expect(parseChildIndexArg('0')).toEqual({ ok: true, index: 0 });
+    expect(parseChildIndexArg('5')).toEqual({ ok: true, index: 5 });
+  });
+  it('the live specimen: "A" no longer silently derives the next free letter (was NaN -> null -> derived -L)', () => {
+    const r = parseChildIndexArg('A');
+    expect(r.ok).toBe(true);
+    expect(r.index).toBe(0); // -A, not a silently-derived far letter
+  });
+  it('fails loud (not NaN-silent) on a non-letter, non-integer argument', () => {
+    const r = parseChildIndexArg('!!');
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Invalid child index/);
+  });
+  it('fails loud on a negative integer', () => {
+    expect(parseChildIndexArg('-1').ok).toBe(false);
   });
 });

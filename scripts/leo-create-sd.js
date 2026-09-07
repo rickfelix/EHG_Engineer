@@ -9,7 +9,7 @@
  * - --from-feedback <id>: Create from /inbox feedback item
  * - --from-roadmap-item <id>: Promote a roadmap_wave_items row to an SD (register-first two-way stamp)
  * - --from-qf <QF-ID>: Escalate open quick-fix to SD (Tier 3 routing)
- * - --child <parent-key> <index>: Create child SD
+ * - --child <parent-key> [index]: Create child SD (index is a letter A-Z or 0-based integer; omit to derive the next free letter)
  * - --vision-key <key>: Link to EVA vision document
  * - --arch-key <key>: Link to EVA architecture plan
  *
@@ -29,6 +29,7 @@
 import {
   SD_SOURCES,
   SD_TYPES,
+  parseChildIndexArg,
 } from './modules/sd-key-generator.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import {
@@ -118,7 +119,7 @@ Usage:
   node scripts/leo-create-sd.js --proposal-b64 <base64> [--dry-run]      # file-free DB-direct sourcing
   cat PROPOSAL.json | node scripts/leo-create-sd.js --proposal-stdin [--dry-run]
   node scripts/leo-create-sd.js --from-plan [path] [--type <type>] [--title "<title>"]
-  node scripts/leo-create-sd.js --child <parent-key> [index] [--type <type>] [--title "<title>"]
+  node scripts/leo-create-sd.js --child <parent-key> [A-Z|0-based-integer] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js <source> <type> "<title>"
 
 Sources: ${Object.keys(SD_SOURCES).join(', ')}
@@ -565,7 +566,19 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       );
       // QF-20260610-473: pass null when no explicit index (so an EXPLICIT 0 is honored
       // and the absent case derives from max existing suffix instead of count).
-      const childRes = await createChild(childParentKey, childIndexArg != null ? parseInt(childIndexArg, 10) : null, childOverrides);
+      // QF-20260905-562: a letter (A-Z) or invalid index used to parseInt() to NaN and
+      // silently derive the next free letter — fail loud instead, mirroring
+      // sd-key-generator.js's own --child CLI convention.
+      let parsedChildIndex = null;
+      if (childIndexArg != null) {
+        const parsed = parseChildIndexArg(childIndexArg);
+        if (!parsed.ok) {
+          console.error(`\n❌ ${parsed.error}`);
+          process.exit(1);
+        }
+        parsedChildIndex = parsed.index;
+      }
+      const childRes = await createChild(childParentKey, parsedChildIndex, childOverrides);
       exitFromResult(childRes);
     } else {
       // Direct creation lane: <source> <type> "<title>" — moved verbatim to

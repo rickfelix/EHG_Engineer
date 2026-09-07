@@ -2,8 +2,8 @@
   "entries": [
     {
       "file": "scripts/leo-create-sd.js",
-      "line": 177,
-      "note": "CLI help text: '--min-tier-rank <N>' is an argv placeholder, not a numeric comparison of a worker rank against a floor."
+      "line": 178,
+      "note": "CLI help text: '--min-tier-rank <N>' is an argv placeholder, not a numeric comparison of a worker rank against a floor. QF-20260905-562 shifted this line from 177 -> 178 by adding an import earlier in the file."
     }
   ]
 }
