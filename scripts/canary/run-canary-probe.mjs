@@ -193,6 +193,7 @@ async function fileAlert(stageResult, runId, ventureId, now) {
   // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: no sender_type/sender_session/body -- empty_sender_row
   // + bodyless_row (kind canary_probe_alert was already set, so not untyped_row).
   const alertBody = `Canary probe stage ${stageResult.stage} failed: ${String(stageResult.error || '').slice(0, 200)}`;
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because SD-LEO-INFRA-LANE-HYGIENE-OVER-001 adds sender_type/sender_session/body fields to this existing insert. No target_session on this row (broadcast alert, not caller-directed), so the choke point's assertValidTarget would need a synthetic target this row doesn't have; converting it is a separate, larger change than this SD's scope.
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
     body: alertBody,

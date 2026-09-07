@@ -546,10 +546,12 @@ export function buildPlanDriftAdvisoryRows(result, { coordinatorId, adamId }) {
 export async function pushPlanDriftAdvisory(supabase, result, recipients) {
   const { coordinatorRow, adamRow } = buildPlanDriftAdvisoryRows(result, recipients);
 
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because SD-LEO-INFRA-LANE-HYGIENE-OVER-001 modifies buildPlanDriftAdvisoryRows above in this same file (this line itself is unchanged). Row shape is fully owned by the pure builder above; routing through insertCoordinationRow is a separate, larger change out of this SD's scope.
   const { error: coordErr } = await supabase.from('session_coordination').insert(coordinatorRow);
   if (coordErr) console.error(`[gauge-runner] plan-drift advisory (coordinator) failed (non-fatal): ${coordErr.message}`);
 
   if (adamRow) {
+    // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- same rationale as the coordinator leg above.
     const { error: adamErr } = await supabase.from('session_coordination').insert(adamRow);
     if (adamErr) console.error(`[gauge-runner] plan-drift advisory (Adam) failed (non-fatal): ${adamErr.message}`);
   } else {
