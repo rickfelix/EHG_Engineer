@@ -577,8 +577,10 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
     }
 
     // Verify the progress breakdown was updated
-    const { data: breakdown } = await supabase
-      .rpc('get_progress_breakdown', { sd_id_param: sdId });
+    const breakdown = await safeQuery(
+      supabase.rpc('get_progress_breakdown', { sd_id_param: sdId }),
+      { site: 'auto-complete-deliverables:progress_breakdown' }
+    );
 
     if (breakdown) {
       const execPhase = breakdown.phases?.EXEC_implementation;

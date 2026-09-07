@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-06T19:50:11.129Z",
+  "generated_at": "2026-09-07T00:24:31.327Z",
   "counts": {
-    "has_catch": 32
+    "has_catch": 28
   },
   "results": [
     {
@@ -23,34 +23,6 @@
       "line": 368,
       "kind": "data",
       "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/auto-complete-deliverables.js",
-      "line": 580,
-      "kind": "data",
-      "snippet": "const { data: breakdown } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/auto-proceed-state.js",
-      "line": 193,
-      "kind": "data",
-      "snippet": "const { data: existing } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/child-sd-selector.js",
-      "line": 156,
-      "kind": "data",
-      "snippet": "const { data: claimer } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/continuation-state.js",
-      "line": 261,
-      "kind": "data",
-      "snippet": "const { data: existing } = await supabase",
       "classification": "has_catch"
     },
     {
