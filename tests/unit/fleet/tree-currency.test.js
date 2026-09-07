@@ -188,10 +188,16 @@ describe('TS-3: the decision table (injected runner)', () => {
     expect(r.selfHealable).toBe(true);
   });
 
-  it('behind + DIRTY => NOT-CURRENT and NOT self-healable (never mutate a dirty tree)', () => {
+  // QF-20260905-611: dirt alone no longer disqualifies self-heal eligibility — only the
+  // branch does. `git pull --ff-only` is itself the safety check (it refuses cleanly on a
+  // real collision; the enforcement layer's try/catch around the pull covers that case).
+  // Gating eligibility on `!dirty` pre-empted a decision git already makes safely, on EVERY
+  // porcelain line including untracked files with zero relation to the incoming diff.
+  it('behind + DIRTY + on-main => NOT-CURRENT but SELF-HEALABLE (dirt no longer blocks eligibility)', () => {
     const r = assessTreeCurrency({ dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a.txt\n' }) });
     expect(r.current).toBe(false);
-    expect(r.selfHealable).toBe(false);
+    expect(r.selfHealable).toBe(true);
+    expect(r.dirty).toBe(true);
   });
 
   // QF-20260726-423(b): DIRT IS NOT THE FAULT — BEING BEHIND IS.
@@ -231,12 +237,20 @@ describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
   const { enforceTreeCurrency, TreeStaleError, BYPASS_REASON_ENV } = require('../../../lib/fleet/tree-currency.cjs');
   const silent = { warn() {} };
 
-  const runnerFor = ({ branch = 'main', behind = '0', dirty = '', calls = [], healTo = '0' }) => {
+  const runnerFor = ({ branch = 'main', behind = '0', dirty = '', calls = [], healTo = '0', pullFails = false }) => {
     let pulled = false;
     return (args) => {
       calls.push(args.join(' '));
       if (args[0] === 'fetch') return '';
-      if (args[0] === 'pull') { pulled = true; return ''; }
+      if (args[0] === 'pull') {
+        // QF-20260905-611: simulates git's OWN ff-only refusal on a genuine collision — the
+        // tracked-modification or untracked-file-would-be-overwritten case. No code in
+        // tree-currency.cjs decides this; git does, and the existing try/catch around the
+        // pull call converts the failure into a TreeStaleError.
+        if (pullFails) throw new Error('Your local changes to the following files would be overwritten by merge');
+        pulled = true;
+        return '';
+      }
       if (args.includes('--abbrev-ref')) return `${branch}\n`;
       if (args[0] === 'status') return dirty;
       if (args[0] === 'rev-list') return `${pulled ? healTo : behind}\n`;
@@ -260,13 +274,29 @@ describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
     expect(calls.some((c) => c.startsWith('pull --ff-only'))).toBe(true);
   });
 
-  it('behind + DIRTY REFUSES and never issues a pull', () => {
+  // QF-20260905-611: THE MEASURED DEFECT this closes — a dirty-but-non-colliding tree used
+  // to refuse unconditionally; it now self-heals, because git's own ff-only pull is the
+  // safety check and this fixture's pull succeeds (no collision).
+  it('behind + DIRTY (no collision) SELF-HEALS — the pull IS issued and the spawn proceeds', () => {
+    const calls = [];
+    const r = enforceTreeCurrency({
+      dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a.txt\n', calls }), env: {}, logger: silent,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.healed).toBe(true);
+    expect(calls.some((c) => c.startsWith('pull --ff-only'))).toBe(true);
+  });
+
+  // The genuine hazard case: git ITSELF detects a real collision (a local modification or
+  // untracked file the incoming commits would overwrite) and refuses the ff-only pull. This
+  // is where the peer-worktree clobber protection now actually lives — in git's own merge
+  // safety, not in a pre-emptive `!dirty` gate.
+  it('behind + DIRTY WITH a genuine ff-only collision REFUSES — the tree is never left half-mutated', () => {
     const calls = [];
     expect(() => enforceTreeCurrency({
-      dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a.txt\n', calls }), env: {}, logger: silent,
+      dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a.txt\n', calls, pullFails: true }), env: {}, logger: silent,
     })).toThrow(TreeStaleError);
-    // The tree must not be mutated — that is the peer-worktree clobber hazard.
-    expect(calls.some((c) => c.startsWith('pull'))).toBe(false);
+    expect(calls.some((c) => c.startsWith('pull --ff-only'))).toBe(true); // the attempt DID happen
   });
 
   it('behind + OFF-MAIN REFUSES and never issues a pull', () => {
@@ -277,22 +307,19 @@ describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
     expect(calls.some((c) => c.startsWith('pull'))).toBe(false);
   });
 
-  // QF-20260726-423(b): the refusal message must SEPARATE the fault from the remedy-blocker.
-  // The old wording ran them together and read as though dirt failed the check; that misreading
-  // is on the record — it is how the commissioning row framed the whole problem.
-  it('the DIRTY refusal names BEING BEHIND as the fault and says dirt alone never fails the check', () => {
+  // QF-20260905-611: dirt is no longer a named blocker at all (it never gates eligibility),
+  // so a genuine ff-only collision on a dirty tree now surfaces as a fast-forward FAILURE
+  // message (from the try/catch around the pull), not a "the tree is DIRTY" refusal.
+  it('a genuine ff-only collision names the fast-forward failure, not dirt, as the reason', () => {
     let msg = '';
     try {
       enforceTreeCurrency({
-        dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a.txt\n' }), env: {}, logger: silent,
+        dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a.txt\n', pullFails: true }), env: {}, logger: silent,
       });
     } catch (e) { msg = e.message; }
-    expect(msg).toContain('THE FAULT IS BEING BEHIND');
     expect(msg).toContain('4 commit(s) behind');
-    expect(msg).toContain('the tree is DIRTY');            // named as the BLOCKER, not the fault
-    expect(msg).toContain('dirt alone never fails this check');
-    // still states the real hazard it refuses to risk
-    expect(msg).toContain('clobbering a peer worktree');
+    expect(msg).toContain('the fast-forward failed');
+    expect(msg).not.toContain('the tree is DIRTY'); // dirt is no longer named as a blocker
   });
 
   // Caught in self-review of this very change: the clean+on-main fall-through is reached ONLY
@@ -345,7 +372,12 @@ describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
   it('the refusal message names the behind-count and the remedy', () => {
     let msg = '';
     try {
-      enforceTreeCurrency({ dir: '/x', runner: runnerFor({ behind: '7', dirty: ' M a\n' }), env: {}, logger: silent });
+      // QF-20260905-611: this full remedy text (including the bypass hatch) is the FALLTHROUGH
+      // refusal, reached when self-heal is not attempted at all — off-branch, here. A dirty
+      // tree with no collision now self-heals (see the dedicated test above); a dirty tree
+      // WITH a genuine collision throws earlier, at the pull's own catch, with a shorter
+      // fast-forward-failure message (covered by its own dedicated test above).
+      enforceTreeCurrency({ dir: '/x', runner: runnerFor({ behind: '7', branch: 'feat/x' }), env: {}, logger: silent });
     } catch (e) { msg = e.message; }
     expect(msg).toMatch(/7 commit/);
     expect(msg).toMatch(/git pull --ff-only/);
@@ -354,7 +386,7 @@ describe('FR-2: enforceTreeCurrency self-heals or REFUSES', () => {
 
   it('the escape hatch is DEFAULT-OFF — a blank reason is not a bypass', () => {
     expect(() => enforceTreeCurrency({
-      dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a\n' }), env: { [BYPASS_REASON_ENV]: '   ' }, logger: silent,
+      dir: '/x', runner: runnerFor({ behind: '4', dirty: ' M a\n', pullFails: true }), env: { [BYPASS_REASON_ENV]: '   ' }, logger: silent,
     })).toThrow(TreeStaleError);
   });
 
