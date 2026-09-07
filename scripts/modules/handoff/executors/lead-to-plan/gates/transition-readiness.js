@@ -11,6 +11,7 @@ import { CANONICAL_WRITER_STAMP } from '../../../lib/canonical-writer-stamp.js';
 // SD-LEO-INFRA-STRUCTURED-FIELDS-HONEST-001 / FR-2a: recognise the explicit unpopulated marker so
 // an acknowledged-empty field is not silently counted as a valid metric.
 import { isUnpopulated } from '../../../../../../lib/sd-fields/unpopulated.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Validate SD Transition Readiness for LEAD→PLAN
@@ -89,15 +90,18 @@ export async function validateTransitionReadiness(sd, supabase) {
   // PAT-HANDOFF-PHZ-001 FIX: Query correct table (sd_phase_handoffs) with correct case.
   // RCA-MULTI-SESSION-CASCADE-001: Only check UNRESOLVED failures.
   try {
-    const { data: previousHandoffs } = await supabase
-      .from('sd_phase_handoffs')
-      .select('id, status, created_at, rejection_reason, resolved_at')
-      .eq('sd_id', sd.id)
-      .eq('handoff_type', 'LEAD-TO-PLAN')
-      .in('status', ['rejected', 'failed', 'blocked'])
-      .is('resolved_at', null)
-      .order('created_at', { ascending: false })
-      .limit(5);
+    const previousHandoffs = await safeQuery(
+      supabase
+        .from('sd_phase_handoffs')
+        .select('id, status, created_at, rejection_reason, resolved_at')
+        .eq('sd_id', sd.id)
+        .eq('handoff_type', 'LEAD-TO-PLAN')
+        .in('status', ['rejected', 'failed', 'blocked'])
+        .is('resolved_at', null)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      { site: 'transition-readiness:previous_failed_handoffs' }
+    );
 
     if (previousHandoffs && previousHandoffs.length > 0) {
       const failedCount = previousHandoffs.length;

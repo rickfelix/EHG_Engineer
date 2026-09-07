@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-07T00:46:35.552Z",
+  "generated_at": "2026-09-07T00:52:06.121Z",
   "counts": {
-    "has_catch": 19
+    "has_catch": 15
   },
   "results": [
     {
@@ -23,34 +23,6 @@
       "line": 368,
       "kind": "data",
       "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/sd-type-validation.js",
-      "line": 54,
-      "kind": "data",
-      "snippet": "const { data: prd } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/transition-readiness.js",
-      "line": 92,
-      "kind": "data",
-      "snippet": "const { data: previousHandoffs } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/gates/translation-fidelity.js",
-      "line": 102,
-      "kind": "data",
-      "snippet": "const { data: sibRows } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/lead-to-plan/retrospective.js",
-      "line": 313,
-      "kind": "data",
-      "snippet": "const { data: existing } = await supabase",
       "classification": "has_catch"
     },
     {
