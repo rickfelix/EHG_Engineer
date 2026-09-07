@@ -126,7 +126,8 @@ export const COMPOSED_CORES = [
   // a branch is most likely to be sitting unnoticed (live incident: one pushed commit
   // was THE root blocker of the whole LEO chain for 7 hours while every board looked
   // clean). Default 3d window runs in ~5s, well inside the 90s core timeout.
-  { key: 'unrouted-branches', script: 'audit-unrouted-branches.mjs', args: ['scripts/audit-unrouted-branches.mjs'], quiescentSkip: false },
+  // timeoutMs: walks every worktree; ~99s at 129 trees, over the 90s default. Scales with the pool.
+  { key: 'unrouted-branches', script: 'audit-unrouted-branches.mjs', args: ['scripts/audit-unrouted-branches.mjs'], quiescentSkip: false, timeoutMs: 240_000 },
   // SD-LEO-INFRA-RELAY-QUEUE-CONFIRM-ON-RELAY-DELIVERY-GUARANTEE-001 / FR-1/FR-2: NOT
   // quiescentSkip -- a queued relay-request is exactly as urgent when the fleet is
   // otherwise quiet (a quiet fleet is precisely when a relay is most likely to sit
@@ -175,11 +176,11 @@ export const COMPOSED_CORES = [
 
 /** Build the fail-soft core list for the current mode (quiescent skips the expensive cores). */
 export function buildCores(quiescent) {
-  return COMPOSED_CORES.map((c) => scriptCore(c.key, c.args, { skip: quiescent && c.quiescentSkip }));
+  return COMPOSED_CORES.map((c) => scriptCore(c.key, c.args, { skip: quiescent && c.quiescentSkip, timeoutMs: c.timeoutMs }));
 }
 
 /** A core that shells the existing tested CLI script, fail-soft. */
-function scriptCore(key, args, { skip = false } = {}) {
+function scriptCore(key, args, { skip = false, timeoutMs = 90_000 } = {}) {
   return {
     key,
     skip,
@@ -187,7 +188,12 @@ function scriptCore(key, args, { skip = false } = {}) {
       // --dry-run composes + lists WITHOUT executing the (side-effectful) cores,
       // so the tick can be smoke-tested without reaping claims / dispatching.
       if (DRY_RUN) return 'dry';
-      const { stdout } = await execFileAsync('node', args, { cwd: REPO_ROOT, timeout: 90_000, maxBuffer: 8 * 1024 * 1024 });
+      // SD-note (coordinator 6acf5a48, 2026-09-07): the 90s budget was FIXED across cores whose
+      // cost scales with the worktree pool. `unrouted-branches` walks every tree (129 trees / 338
+      // preserve refs) and now takes ~99s, so the tick SIGTERM'd a script that exits 0 on its own
+      // and reported `unrouted-branches:fail` on every tick. The audit was never broken; the
+      // budget was. Cores may now declare their own `timeoutMs`.
+      const { stdout } = await execFileAsync('node', args, { cwd: REPO_ROOT, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 });
       const tail = String(stdout || '').trim().split('\n').slice(-1)[0] || 'ok';
       return tail.slice(0, 100);
     },
