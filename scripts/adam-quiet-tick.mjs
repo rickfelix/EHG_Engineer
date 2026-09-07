@@ -1585,7 +1585,7 @@ async function main() {
     // QF-20260823-131 (re-tuned 2026-08-28, ratification 9eebe200: cadence now EVERY 3 HOURS):
     // re-checks the SAME >=175min measured-gap bar the durable cron uses, every 15min via this tick.
     const heartbeatCadence = await checkHeartbeatCadence(sb);
-    const heartbeatCadenceLine = formatHeartbeatCadenceLine(heartbeatCadence.overdueMin, inQuietHours());
+    const heartbeatCadenceLine = formatHeartbeatCadenceLine(heartbeatCadence.overdueMin, inQuietHours({ now: Date.now() }));
     if (heartbeatCadenceLine) console.log(heartbeatCadenceLine);
     // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: THE STANDING PRIORITY IS PRINTED HERE, ABOVE THE
     // INBOX LOOP BELOW, AND THE POSITION IS THE POINT. The measured failure was the queue setting
