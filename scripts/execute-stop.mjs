@@ -95,11 +95,17 @@ async function fetchWorkerWorktrees(workerSessionIds) {
 }
 
 async function emitCoordinationMessage(targetSession, messageType, subject, payload = {}) {
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: this insert had none of sender_type, sender_session,
+  // or a body/payload.kind -- a triple-class violation (untyped_row + empty_sender_row +
+  // bodyless_row). subject already carries a human-readable description, so it doubles as body.
   const { error } = await supabase.from('session_coordination').insert({
     target_session: targetSession,
     message_type: messageType,
     subject,
-    payload
+    body: subject,
+    sender_type: 'execute-stop',
+    sender_session: 'execute-stop',
+    payload: { kind: messageType.toLowerCase(), ...payload }
   });
   if (error) {
     console.error(`[execute-stop] Failed to emit ${messageType} for ${targetSession}: ${error.message}`);

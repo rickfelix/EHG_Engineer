@@ -84,6 +84,73 @@ const MANIFEST = [
     mustContain: [
       "kind: 'stale_heartbeat_warning'",
       "sender_session: 'fleet-dashboard'",
+      // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: writeSignalReceipts (51% of all live gauge
+      // violations, bodyless_row -- sender_session was already correct, body was missing).
+      'body: `Signal receipted: ${disposition}`',
+    ],
+    expectedInsertOccurrences: null, // this file has many unrelated raw inserts; not whole-file-pinned
+  },
+  {
+    // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: two solomon_consult/account_switch_notice inserts,
+    // both missing sender_session (empty_sender_row).
+    file: 'scripts/adam-quiet-tick.mjs',
+    mustContain: [
+      "sender_session: 'adam-quiet-tick'",
+    ],
+    expectedLiteralCount: { literal: "sender_session: 'adam-quiet-tick'", count: 2 },
+  },
+  {
+    // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sibling-divergence bug -- this function's twin in
+    // scripts/periodic-liveness-watcher.mjs already had the FR-5 fix; this one didn't.
+    file: 'lib/periodic-liveness/ladder-escalation.mjs',
+    mustContain: [
+      "sender_session: 'periodic-liveness-watcher'",
+      'body: `${row.display_name || row.process_key} still OVERDUE (2nd consecutive miss).`',
+    ],
+    expectedInsertOccurrences: 1,
+  },
+  {
+    file: 'scripts/execute-stop.mjs',
+    mustContain: [
+      "sender_session: 'execute-stop'",
+      'payload: { kind: messageType.toLowerCase(), ...payload }',
+    ],
+    expectedInsertOccurrences: 1,
+  },
+  {
+    // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: two sites (sendCoaching, sendDeconflictionReply),
+    // both sender_type='coaching' (not gauge-exempt) with no sender_session or payload.kind.
+    file: 'scripts/fleet-coaching.cjs',
+    mustContain: [
+      "sender_session: 'fleet-coaching'",
+      "kind: 'coaching'",
+    ],
+    expectedLiteralCount: { literal: "sender_session: 'fleet-coaching'", count: 2 },
+  },
+  {
+    file: 'scripts/canary/run-canary-probe.mjs',
+    mustContain: [
+      "sender_session: 'run-canary-probe'",
+    ],
+    expectedInsertOccurrences: 1,
+  },
+  {
+    // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: fixed in the pure row builder (buildPlanDriftAdvisoryRows)
+    // so it propagates to both downstream insert call sites (coordinator + Adam legs).
+    file: 'scripts/gauge-runner.mjs',
+    mustContain: [
+      "sender_session: 'gauge-runner'",
+    ],
+    expectedLiteralCount: { literal: "sender_session: 'gauge-runner'", count: 2 },
+  },
+  {
+    // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sibling-divergence bug -- assign-fleet-identities.cjs's
+    // own SET_IDENTITY rebroadcast already set payload.kind + sender_session; this checkin-time
+    // SET_IDENTITY insert never did (largest single untyped_row source measured, 23 rows).
+    file: 'scripts/worker-checkin.cjs',
+    mustContain: [
+      "sender_session: 'worker-checkin'",
+      "payload: { kind: 'SET_IDENTITY', color, callsign, display_name, tier_rank: tierRankOf({ metadata: myMeta }) }",
     ],
     expectedInsertOccurrences: null, // this file has many unrelated raw inserts; not whole-file-pinned
   },

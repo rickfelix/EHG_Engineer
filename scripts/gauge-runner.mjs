@@ -523,8 +523,11 @@ export function buildPlanDriftAdvisoryRows(result, { coordinatorId, adamId }) {
   const subject = `[PLAN-DRIFT] Dispatch mix drifted from active-wave demand (active-rung share ${mixPct}%)`;
   const body = `Sustained dispatch-mix drift detected across ${result?.streak ?? '?'} consecutive gauge-runner cycles. Active-rung share of last-N dispatched work: ${mixPct}% (mix: ${JSON.stringify(result?.mix?.mix || {})}). Coverage floor is currently clear (not starved), so this is a genuine mix drift, not a linkage-starvation false trip.`;
   const payload = { kind: 'coordinator_advisory', gauge_id: 'plan-drift-mix', body, mix: result?.mix, streak: result?.streak };
-  const coordinatorRow = { message_type: 'INFO', target_session: coordinatorId || 'broadcast-coordinator', subject, sender_type: 'gauge-runner', payload };
-  const adamRow = adamId ? { message_type: 'INFO', target_session: adamId, subject, sender_type: 'gauge-runner', payload } : null;
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sender_type 'gauge-runner' is not gauge-exempt and
+  // neither row set sender_session -- empty_sender_row on both. Fixed in the builder so it
+  // propagates to both downstream insert call sites (pushPlanDriftAdvisory below).
+  const coordinatorRow = { message_type: 'INFO', target_session: coordinatorId || 'broadcast-coordinator', subject, sender_type: 'gauge-runner', sender_session: 'gauge-runner', payload };
+  const adamRow = adamId ? { message_type: 'INFO', target_session: adamId, subject, sender_type: 'gauge-runner', sender_session: 'gauge-runner', payload } : null;
   return { coordinatorRow, adamRow };
 }
 

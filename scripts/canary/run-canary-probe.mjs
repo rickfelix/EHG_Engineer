@@ -190,8 +190,14 @@ async function fileAlert(stageResult, runId, ventureId, now) {
     .limit(1);
   if (existing && existing.length > 0) return { filed: false, dedup };
 
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: no sender_type/sender_session/body -- empty_sender_row
+  // + bodyless_row (kind canary_probe_alert was already set, so not untyped_row).
+  const alertBody = `Canary probe stage ${stageResult.stage} failed: ${String(stageResult.error || '').slice(0, 200)}`;
   const { error } = await supabase.from('session_coordination').insert({
     message_type: 'INFO',
+    body: alertBody,
+    sender_type: 'system',
+    sender_session: 'run-canary-probe',
     payload: {
       kind: 'canary_probe_alert',
       dedup_key: dedup,
@@ -200,6 +206,7 @@ async function fileAlert(stageResult, runId, ventureId, now) {
       venture_id: ventureId,
       error: String(stageResult.error || '').slice(0, 500),
       sd: 'SD-LEO-INFRA-SYNTHETIC-CANARY-VENTURE-001',
+      body: alertBody,
     },
   });
   return { filed: !error, dedup, error: error?.message };

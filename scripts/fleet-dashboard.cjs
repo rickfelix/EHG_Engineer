@@ -1760,6 +1760,11 @@ async function writeSignalReceipts(supabase, coordinatorId, signals) {
           enumerated_row_id: s.id,
           correlation_id: s.id,
           receipt: disposition,
+          // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: readCanonicalBody() (lane-contract.cjs)
+          // reads payload.body first -- this row had none, so it counted as bodyless_row
+          // (51% of all live lane-lint-gauge violations, QF-20260907-462's own comment
+          // above already deferred this exact site).
+          body: `Signal receipted: ${disposition}`,
         },
       });
       written++;

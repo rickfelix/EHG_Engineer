@@ -1806,8 +1806,13 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
         body: `The coordinator assigned you callsign "${callsign}" with color "${color}" at check-in. Your statusline will update automatically.`,
         // QF-20260829-312: tier_rank rides alongside the identity as a CURRENT ATTRIBUTE for
         // display only — it never feeds back into whether this worker gets renamed.
-        payload: { color, callsign, display_name, tier_rank: tierRankOf({ metadata: myMeta }) },
+        // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sibling-divergence bug -- assign-fleet-identities.cjs's
+        // own SET_IDENTITY rebroadcast already sets payload.kind + sender_session, this one (fired
+        // at checkin time rather than rename time) never did, making it BOTH untyped_row and
+        // empty_sender_row (23 rows each, largest untyped_row source measured).
+        payload: { kind: 'SET_IDENTITY', color, callsign, display_name, tier_rank: tierRankOf({ metadata: myMeta }) },
         sender_type: 'coordinator',
+        sender_session: 'worker-checkin',
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       });
     } catch { /* best-effort: cron re-emits within 5 min */ }
