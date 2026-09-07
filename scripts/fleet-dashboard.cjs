@@ -2436,12 +2436,11 @@ async function printAdamInbox() {
   // but NEVER actioned_at — the advisory is retired ONLY by coordinator-ack-adam.cjs. So a
   // parked-cron render can no longer silently hide an unactioned advisory; it re-surfaces
   // (gate above is payload.actioned_at IS NULL) until the coordinator explicitly acks it.
-  if (ids.length > 0) {
-    await supabase
-      .from('session_coordination')
-      .update({ read_at: new Date().toISOString() })
-      .in('id', ids);
-  }
+  // SD-LEO-INFRA-READ-WRITTEN-UNSCOPED-001: this was the SECOND unscoped write site the SD's
+  // filing named (fleet-dashboard.cjs's "advisory render") — reuses stampInboxReadAt (same
+  // idempotent read_at IS NULL gate as printInbox's fix; the SELECT above already gates on
+  // payload->>actioned_at, not read_at, per adam-advisory-store.cjs:49, so this is safe).
+  await stampInboxReadAt(supabase, ids);
 
   console.log('');
 }
