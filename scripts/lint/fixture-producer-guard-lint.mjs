@@ -36,9 +36,10 @@
  *      and it is not hypothetical — it is ordinary refactoring.
  *   2. A WRITE BEHIND A WRAPPER. `db.createVenture(row)` or any helper that owns the .from() call
  *      emits no `.from('ventures')` token at the call site, so the producer is unseen.
- *   3. PRODUCERS OUTSIDE THE FOUR NAMED ROOTS. SCAN_ROOTS is enumerated, not globbed, so a
+ *   3. PRODUCERS OUTSIDE THE NAMED ROOTS. SCAN_ROOTS is enumerated, not globbed, so a
  *      ventures write in lib/, scripts/one-off/, or any new directory is out of scope by
- *      construction — deliberate, but it means "0 unguarded" is a statement about four roots.
+ *      construction — deliberate, but it means "0 unguarded" is a statement about the five roots
+ *      currently named (SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 added tests/e2e as the fifth).
  *   4. FK-DERIVED CHILD ROWS. Only `ventures` has a row-shaped predicate; venture_id- and
  *      sd_key-keyed children are excluded, so a synthetic child under a real parent is unseen.
  *   5. ANYTHING NOT IN SOURCE TEXT. Rows created by RPC, raw SQL, a migration, or a fixture
