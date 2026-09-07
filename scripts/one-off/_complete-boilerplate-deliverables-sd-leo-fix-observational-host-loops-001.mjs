@@ -39,11 +39,20 @@ const updates = [
   },
 ];
 
+// Adversarial review finding (deep-tier /ship gate): supabase-js's default
+// `Prefer: return=minimal` means .update() on a zero-match id returns no error, so a
+// stale/typo'd UUID would silently no-op while this script still printed "completed" --
+// false completion evidence on a gate-relevant table. .select() forces the matched row(s)
+// back so a zero-length result is caught explicitly.
 for (const u of updates) {
   const { id, ...patch } = u;
-  const { error } = await sb.from('sd_scope_deliverables').update(patch).eq('id', id);
+  const { data, error } = await sb.from('sd_scope_deliverables').update(patch).eq('id', id).select('id');
   if (error) {
     console.error('FAILED for', id, error.message);
+    process.exit(1);
+  }
+  if (!data || data.length === 0) {
+    console.error('FAILED for', id, '-- update matched 0 rows (stale id?)');
     process.exit(1);
   }
   console.log('completed:', id);
