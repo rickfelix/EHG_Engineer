@@ -13,6 +13,7 @@ import {
   stampCandidate,
   ledgerLaneColumnExists,
   autostampLedgerCandidates,
+  loadDedupContext,
 } from '../../../lib/sourcing-engine/dedup-autostamp.js';
 
 /**
@@ -80,6 +81,92 @@ describe('FR-2: deriveOutcomeRealizedKeys (VDR built-status drives realization)'
     expect(deriveOutcomeRealizedKeys([{ sd_key: 'SD-X', capability: 'Unmapped cap' }], gauge).has('SD-X')).toBe(false);
     expect(deriveOutcomeRealizedKeys([{ sd_key: 'SD-Y' }], gauge).has('SD-Y')).toBe(false); // missing capability
     expect(deriveOutcomeRealizedKeys([], gauge).size).toBe(0);
+  });
+});
+
+describe('SD-LEO-FIX-SOURCING-DEDUP-PRIORITY-001: loadDedupContext computes outcomeRealizedKeys directly, without the VDR gauge', () => {
+  it('a shipped SD with a registered capability (real top-level delivers_capabilities shape) IS realized', async () => {
+    const sb = makeSupabaseMock({
+      laneColumnExists: true,
+      sds: [
+        {
+          sd_key: 'SD-SHIPPED-WITH-CAP-001',
+          title: 'Shipped SD with a registered capability',
+          status: 'completed',
+          delivers_capabilities: [{ capability_key: 'gate0-workflow-enforcement', capability_type: 'tool' }],
+        },
+      ],
+    });
+    const { shippedInfraKeys, outcomeRealizedKeys } = await loadDedupContext({ supabase: sb });
+    expect(shippedInfraKeys.has('SD-SHIPPED-WITH-CAP-001')).toBe(true);
+    expect(outcomeRealizedKeys.has('SD-SHIPPED-WITH-CAP-001')).toBe(true);
+  });
+
+  it('a shipped SD with NO registered capability is NOT realized (safe direction: re_emit still fires)', async () => {
+    const sb = makeSupabaseMock({
+      laneColumnExists: true,
+      sds: [
+        {
+          sd_key: 'SD-SHIPPED-NO-CAP-001',
+          title: 'Shipped SD with no registered capability',
+          status: 'completed',
+          delivers_capabilities: [],
+        },
+      ],
+    });
+    const { shippedInfraKeys, outcomeRealizedKeys } = await loadDedupContext({ supabase: sb });
+    expect(shippedInfraKeys.has('SD-SHIPPED-NO-CAP-001')).toBe(true);
+    expect(outcomeRealizedKeys.has('SD-SHIPPED-NO-CAP-001')).toBe(false);
+  });
+
+  it('an in-progress SD with a registered capability is NOT realized (not shipped yet)', async () => {
+    const sb = makeSupabaseMock({
+      laneColumnExists: true,
+      sds: [
+        {
+          sd_key: 'SD-IN-PROGRESS-WITH-CAP-001',
+          title: 'In-progress SD with a registered capability',
+          status: 'in_progress',
+          delivers_capabilities: [{ capability_key: 'stories-agent', capability_type: 'agent' }],
+        },
+      ],
+    });
+    const { outcomeRealizedKeys } = await loadDedupContext({ supabase: sb });
+    expect(outcomeRealizedKeys.has('SD-IN-PROGRESS-WITH-CAP-001')).toBe(false);
+  });
+
+  it('ignores the legacy metadata.delivers_capabilities field entirely (it was always empty in production)', async () => {
+    const sb = makeSupabaseMock({
+      laneColumnExists: true,
+      sds: [
+        {
+          sd_key: 'SD-LEGACY-METADATA-ONLY-001',
+          title: 'A row with only the old metadata field populated',
+          status: 'completed',
+          metadata: { delivers_capabilities: ['See distance-to-broke'] }, // old, always-empty-in-prod shape
+          delivers_capabilities: [], // real top-level column: empty
+        },
+      ],
+    });
+    const { outcomeRealizedKeys } = await loadDedupContext({ supabase: sb });
+    expect(outcomeRealizedKeys.has('SD-LEGACY-METADATA-ONLY-001')).toBe(false);
+  });
+
+  it('an extra io argument (legacy gauge test-seam) is harmlessly ignored -- no gauge call is made', async () => {
+    const sb = makeSupabaseMock({
+      laneColumnExists: true,
+      sds: [
+        {
+          sd_key: 'SD-IO-ARG-IGNORED-001',
+          title: 'Caller still passes io for backward compatibility',
+          status: 'completed',
+          delivers_capabilities: [{ capability_key: 'github-agent', capability_type: 'agent' }],
+        },
+      ],
+    });
+    // Passing a deliberately broken `io` proves no gauge/io-dependent code path runs.
+    const { outcomeRealizedKeys } = await loadDedupContext({ supabase: sb, io: null });
+    expect(outcomeRealizedKeys.has('SD-IO-ARG-IGNORED-001')).toBe(true);
   });
 });
 

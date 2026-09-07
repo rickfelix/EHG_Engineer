@@ -4,14 +4,16 @@
  * The dry-run replay named in the SD's own success criteria: given the exact 2026-08-29
  * distance-to-broke ask, checkAlreadyBuilt must return ALREADY-BUILT citing
  * SD-EHG-COCKPIT-DTB-BUILD-001 — the class of re-mint this SD exists to prevent.
+ *
+ * SD-LEO-FIX-SOURCING-DEDUP-PRIORITY-001: fixtures below use the REAL, populated shape —
+ * a TOP-LEVEL delivers_capabilities array on the SD row (not metadata.delivers_capabilities,
+ * which is populated on 0 of 6213 live SD rows) — matching loadDedupContext's corrected read.
+ * The previous fixtures here used the wrong field AND mocked a VDR gauge whose vocabulary never
+ * overlaps with real capability keys in production; that combination masked the live defect this
+ * SD fixes rather than testing it. No gauge mock is needed any more — "realized" is now
+ * status='completed' AND a non-empty delivers_capabilities, with no gauge lookup involved.
  */
-import { describe, it, expect, vi } from 'vitest';
-
-vi.mock('../../../lib/vision/vdr-registry.js', () => ({
-  computeBuildGauge: vi.fn(async () => ({
-    components: [{ capability: 'See distance-to-broke', status: 'built' }],
-  })),
-}));
+import { describe, it, expect } from 'vitest';
 
 import { checkAlreadyBuilt, isCitableMatch } from '../../../lib/sourcing-engine/manual-precheck.js';
 
@@ -40,7 +42,7 @@ describe('checkAlreadyBuilt', () => {
         sd_key: 'SD-EHG-COCKPIT-DTB-BUILD-001',
         title: 'Realize the distance-to-broke read: cash burn survivability cockpit',
         status: 'completed',
-        metadata: { delivers_capabilities: ['See distance-to-broke'] },
+        delivers_capabilities: [{ capability_key: 'see-distance-to-broke', capability_type: 'application' }],
       },
     ]);
 
@@ -59,7 +61,7 @@ describe('checkAlreadyBuilt', () => {
 
   it('returns NOT-FOUND when no existing SD matches (genuinely unbuilt)', async () => {
     const supabase = makeSupabaseMock([
-      { sd_key: 'SD-UNRELATED-001', title: 'Something totally different', status: 'completed', metadata: {} },
+      { sd_key: 'SD-UNRELATED-001', title: 'Something totally different', status: 'completed', delivers_capabilities: [] },
     ]);
 
     const result = await checkAlreadyBuilt({
@@ -79,7 +81,7 @@ describe('checkAlreadyBuilt', () => {
         sd_key: 'SD-EHG-COCKPIT-VENTPERF-BUILD-001',
         title: 'Venture performance read cockpit surface',
         status: 'completed',
-        metadata: { delivers_capabilities: ['Venture-performance read'] },
+        delivers_capabilities: [], // shipped, but no capability was ever registered as delivered
       },
     ]);
 
@@ -90,8 +92,7 @@ describe('checkAlreadyBuilt', () => {
       description: 'Reconcile the venture performance read',
     });
 
-    // Capability 'Venture-performance read' has no gauge entry in this test's mocked
-    // computeBuildGauge (only 'See distance-to-broke' is 'built') -- so it is NOT realized.
+    // status='completed' but delivers_capabilities is empty -- not realized (safe direction).
     expect(result.result).toBe('NOT-FOUND');
     expect(result.re_emit).toBe(true);
     expect(result.citedSdKey).toBe('SD-EHG-COCKPIT-VENTPERF-BUILD-001');
@@ -139,7 +140,7 @@ describe('checkAlreadyBuilt — QF-20260903-254: predicate 2 also reads the quic
         sd_key: 'SD-EHG-COCKPIT-DTB-BUILD-001',
         title: 'Realize the distance-to-broke read: cash burn survivability cockpit',
         status: 'completed',
-        metadata: { delivers_capabilities: ['See distance-to-broke'] },
+        delivers_capabilities: [{ capability_key: 'see-distance-to-broke', capability_type: 'application' }],
       }],
       [{ id: 'QF-UNRELATED-000', title: 'Some other quick fix entirely', status: 'completed' }],
     );
@@ -158,7 +159,7 @@ describe('checkAlreadyBuilt — QF-20260903-254: predicate 2 also reads the quic
 
   it('genuinely novel work matches neither lane: NOT-FOUND with both cited keys null', async () => {
     const supabase = makeSupabaseMock(
-      [{ sd_key: 'SD-UNRELATED-001', title: 'Something totally different', status: 'completed', metadata: {} }],
+      [{ sd_key: 'SD-UNRELATED-001', title: 'Something totally different', status: 'completed', delivers_capabilities: [] }],
       [{ id: 'QF-UNRELATED-000', title: 'Some other quick fix entirely', status: 'completed' }],
     );
 
@@ -208,7 +209,7 @@ describe('checkAlreadyBuilt — QF-20260903-254: predicate 2 also reads the quic
         sd_key: 'SD-EHG-COCKPIT-VENTPERF-BUILD-001',
         title: 'Venture performance read cockpit surface',
         status: 'completed',
-        metadata: { delivers_capabilities: ['Venture-performance read'] }, // not realized by this test's mocked gauge
+        delivers_capabilities: [], // shipped, but no capability registered as delivered -- not realized
       }],
       [{ id: 'QF-UNRELATED-000', title: 'Venture performance read cockpit surface', status: 'completed' }], // exact_title match
     );
