@@ -21,6 +21,9 @@ import {
   defaultRemoveOrphan,
   resolveMinAgeMs,
   DEFAULT_ORPHAN_MIN_AGE_MS,
+  parsePruneCandidates,
+  detectPruneCandidates,
+  runOrphanSweep,
 } from '../../../lib/worktree-reaper/orphan-sweep.js';
 import { classifyOrphanDirs } from '../../../lib/worktree-quota.js';
 
@@ -319,5 +322,93 @@ describe('resolveMinAgeMs', () => {
     expect(resolveMinAgeMs({})).toBe(DEFAULT_ORPHAN_MIN_AGE_MS);
     expect(resolveMinAgeMs({ WORKTREE_ORPHAN_MIN_AGE_MS: '60000' })).toBe(60000);
     expect(resolveMinAgeMs({ WORKTREE_ORPHAN_MIN_AGE_MS: 'garbage' })).toBe(DEFAULT_ORPHAN_MIN_AGE_MS);
+  });
+});
+
+// SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F (FR-0): the prune-candidate class -- a REGISTERED
+// worktree whose gitdir target is missing (the `git worktree prune` set). This is the OPPOSITE
+// of this repo's own "husk" definition (deregistered-from-git, directory survives, which
+// classifyOrphanDirs already detects) -- fixtures here use the real `git worktree prune
+// --dry-run -v` output shape (reproduced live during PLAN: "Removing worktrees/<name>: gitdir
+// file points to non-existent location"), never the repo's husk shape, per FR-3.
+describe('parsePruneCandidates() (pure)', () => {
+  it('parses a single real prune-set line into a structured candidate', () => {
+    const output = 'Removing worktrees/SD-LEO-DOC-FOUNDATION-AUDIT-LENS-001: gitdir file points to non-existent location\n';
+    expect(parsePruneCandidates(output)).toEqual([
+      { name: 'SD-LEO-DOC-FOUNDATION-AUDIT-LENS-001', reason: 'gitdir file points to non-existent location' },
+    ]);
+  });
+
+  it('parses multiple lines, ignoring blank lines and unrelated output', () => {
+    const output = [
+      'Removing worktrees/SD-A: gitdir file points to non-existent location',
+      '',
+      'some unrelated git chatter',
+      'Removing worktrees/qf/QF-B: gitdir file points to non-existent location',
+    ].join('\n');
+    expect(parsePruneCandidates(output)).toEqual([
+      { name: 'SD-A', reason: 'gitdir file points to non-existent location' },
+      { name: 'qf/QF-B', reason: 'gitdir file points to non-existent location' },
+    ]);
+  });
+
+  it('returns an empty array for empty/undefined output (the healthy-tree case -- FR-4 negative)', () => {
+    expect(parsePruneCandidates('')).toEqual([]);
+    expect(parsePruneCandidates(undefined)).toEqual([]);
+    expect(parsePruneCandidates('   \n  \n')).toEqual([]);
+  });
+});
+
+describe('detectPruneCandidates()', () => {
+  it('uses an injected gitRunner (args, cwd) -> {code, stdout} and parses its output', () => {
+    const calls = [];
+    const gitRunner = (args, cwd) => {
+      calls.push({ args, cwd });
+      return { code: 0, stdout: 'Removing worktrees/SD-X: gitdir file points to non-existent location\n' };
+    };
+    const result = detectPruneCandidates({ repoRoot: '/repo', gitRunner });
+    expect(result).toEqual([{ name: 'SD-X', reason: 'gitdir file points to non-existent location' }]);
+    expect(calls).toEqual([{ args: ['worktree', 'prune', '--dry-run', '-v'], cwd: '/repo' }]);
+  });
+
+  it('never mutates -- injected gitRunner is only ever called with --dry-run', () => {
+    const gitRunner = (args) => { expect(args).toContain('--dry-run'); return { code: 0, stdout: '' }; };
+    detectPruneCandidates({ repoRoot: '/repo', gitRunner });
+  });
+
+  it('returns an empty array when the gitRunner reports a non-zero exit code', () => {
+    const result = detectPruneCandidates({ repoRoot: '/repo', gitRunner: () => ({ code: 1, stdout: '' }) });
+    expect(result).toEqual([]);
+  });
+
+  it('returns an empty array without invoking any subprocess when repoRoot is missing', () => {
+    const gitRunner = () => { throw new Error('must not be called'); };
+    expect(detectPruneCandidates({ gitRunner })).toEqual([]);
+    expect(detectPruneCandidates({})).toEqual([]);
+  });
+
+  it('fails soft to an empty array if the gitRunner itself throws', () => {
+    const result = detectPruneCandidates({ repoRoot: '/repo', gitRunner: () => { throw new Error('git exploded'); } });
+    expect(result).toEqual([]);
+  });
+});
+
+describe('runOrphanSweep() surfaces pruneCandidates alongside the existing selection/reclamation result', () => {
+  it('includes an empty pruneCandidates array when no repoRoot is supplied (matches this suite\'s existing calls)', async () => {
+    const result = await runOrphanSweep({ worktreesDir });
+    expect(result.pruneCandidates).toEqual([]);
+  });
+
+  it('includes detected prune candidates when a repoRoot + gitRunner are supplied', async () => {
+    const gitRunner = (args) => {
+      if (args[0] === 'worktree' && args[1] === 'prune') {
+        return { code: 0, stdout: 'Removing worktrees/SD-STALE: gitdir file points to non-existent location\n' };
+      }
+      return { code: 0, stdout: '' };
+    };
+    const result = await runOrphanSweep({ repoRoot: '/repo', worktreesDir, gitRunner });
+    expect(result.pruneCandidates).toEqual([{ name: 'SD-STALE', reason: 'gitdir file points to non-existent location' }]);
+    // FR-0: kept separate from the existing orphan classification -- never folded into reapableDirs.
+    expect(result.selection.reapableDirs.find((d) => d.dir === 'SD-STALE')).toBeUndefined();
   });
 });
