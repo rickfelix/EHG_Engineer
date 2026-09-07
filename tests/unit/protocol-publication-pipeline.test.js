@@ -143,6 +143,52 @@ describe('FR-4: --only scoped regeneration', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  // QF-20260906-456: a scoped --only run used to WRITE a manifest holding ONLY the scoped
+  // entries (measured live: 124 -> 3), dropping every other generated file's entry -- readers
+  // (markRatificationEncoded section digests, drift checks, single-read-fit gauges) then saw
+  // those files as absent. seedManifestFromDiskIfScoped() is the fix: called at the top of
+  // generate(), before generateFile()'s per-file loop.
+  it('seedManifestFromDiskIfScoped preserves unrelated on-disk entries; the scoped file still gets a fresh one', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pubpipe-'));
+    try {
+      const manifestPath = path.join(dir, 'claude-generation-manifest.json');
+      fs.writeFileSync(manifestPath, JSON.stringify({
+        generated_at: 'stale',
+        files: {
+          'CLAUDE_UNRELATED.md': { type: 'full', chars: 10, bytes: 10, estimated_tokens: 3, content_hash: 'old', path: '/old/path' },
+          'CLAUDE_KEEP.md': { type: 'full', chars: 4, bytes: 4, estimated_tokens: 1, content_hash: 'stale-hash', path: '/old/path' },
+        },
+      }));
+      const gen = new CLAUDEMDGeneratorV3({}, dir, path.join(dir, 'nope.json'), { only: ['CLAUDE_KEEP.md'] });
+      gen.seedManifestFromDiskIfScoped();
+      expect(Object.keys(gen.manifest.files).sort()).toEqual(['CLAUDE_KEEP.md', 'CLAUDE_UNRELATED.md']);
+      expect(gen.manifest.files['CLAUDE_UNRELATED.md'].content_hash).toBe('old');
+      gen.generateFile('CLAUDE_KEEP.md', {}, () => 'fresh body', 'full');
+      expect(Object.keys(gen.manifest.files).sort()).toEqual(['CLAUDE_KEEP.md', 'CLAUDE_UNRELATED.md']);
+      expect(gen.manifest.files['CLAUDE_UNRELATED.md'].content_hash).toBe('old'); // untouched
+      expect(gen.manifest.files['CLAUDE_KEEP.md'].content_hash).not.toBe('stale-hash'); // refreshed
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('seedManifestFromDiskIfScoped is a no-op for a full (non-scoped) regen', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pubpipe-'));
+    try {
+      fs.writeFileSync(path.join(dir, 'claude-generation-manifest.json'), JSON.stringify({ files: { 'X.md': {} } }));
+      const gen = new CLAUDEMDGeneratorV3({}, dir, path.join(dir, 'nope.json')); // no `only` option
+      gen.seedManifestFromDiskIfScoped();
+      expect(gen.manifest.files).toEqual({});
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('seedManifestFromDiskIfScoped fails open (no throw, empty manifest.files) when no on-disk manifest exists', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pubpipe-'));
+    try {
+      const gen = new CLAUDEMDGeneratorV3({}, dir, path.join(dir, 'nope.json'), { only: ['CLAUDE_KEEP.md'] });
+      expect(() => gen.seedManifestFromDiskIfScoped()).not.toThrow();
+      expect(gen.manifest.files).toEqual({});
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
   it('KNOWN_GENERATED_FILES covers the 23 generated files', () => {
     // Grew 12 -> 14 (Coordinator) -> 16 (Solomon: CLAUDE_SOLOMON.md + CLAUDE_SOLOMON_DIGEST.md)
     // -> 18 (SD-LEO-INFRA-ADAM-CONTRACT-READABLE-001: the two Adam companions, which the chairman

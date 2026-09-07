@@ -434,6 +434,8 @@ class CLAUDEMDGeneratorV3 {
     try {
       const { data, digestMetadata, protocol } = await this.loadData();
 
+      this.seedManifestFromDiskIfScoped();
+
       console.log('=== GENERATING FILES (FULL + DIGEST) ===\n');
       // SD-LEO-INFRA-PROTOCOL-DOC-DRIFT-GUARD-001 (FR-1b): iterate the single getFileSpecs()
       // list so the write path and the drift-check render path never diverge.
@@ -492,6 +494,29 @@ class CLAUDEMDGeneratorV3 {
       console.error('Generation failed:', error);
       throw error;
     }
+  }
+
+  /**
+   * QF-20260906-456: generateFile() below SKIPS (never renders, never writes to
+   * this.manifest.files) anything outside options.only -- and this.manifest.files starts empty
+   * (constructor), so a scoped --only run used to WRITE a manifest holding ONLY the scoped
+   * entries, dropping every other file's entry entirely (measured: 124 -> 3). Seed
+   * this.manifest.files from the on-disk manifest FIRST so a file the loop skips keeps its
+   * existing entry; only the scoped files get a fresh one from generateFile() below. Fail-open:
+   * an unreadable/missing on-disk manifest (first run) leaves this.manifest.files empty, i.e.
+   * today's unscoped behavior, unchanged. No-op when options.only is not set (full regen).
+   * Own method (not inlined in generate()) so it is unit-testable without generate()'s 13+ live
+   * DB calls.
+   */
+  seedManifestFromDiskIfScoped() {
+    if (!Array.isArray(this.options.only) || this.options.only.length === 0) return;
+    try {
+      const manifestPath = path.join(this.baseDir, 'claude-generation-manifest.json');
+      const onDisk = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      if (onDisk && onDisk.files && typeof onDisk.files === 'object') {
+        this.manifest.files = { ...onDisk.files };
+      }
+    } catch { /* leave this.manifest.files as-is (empty), same as before this fix */ }
   }
 
   /**
