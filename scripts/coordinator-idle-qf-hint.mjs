@@ -223,12 +223,15 @@ export async function emitDeliveryAlarm(supabase, {
 // RECENTLY_RELEASED_WINDOW_MS and the coordinator-idle-qf-hint cron cadence (backlog-rank-cron.yml,
 // every 15min) -- the same "check interval" this fleet already uses elsewhere for seat liveness.
 export const SD_HOLDER_FRESHNESS_WINDOW_MS = 15 * 60 * 1000; // 15 min
-export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null) {
+// QF-20260905-755: opt-in, default-no-op (matches every other axis's convention) — a caller that
+// omits this parameter is byte-identical to before this QF.
+export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null, tailInFlightSessionIds = new Set()) {
   return (liveWorkers || []).filter((w) => seatIdleVerdict(w, {
     nowMs,
     sdHolderSessionIds,
     qfHolderSessionIds,
     seatBusySessionIds,
+    tailInFlightSessionIds,
     recentlyReleasedWindowMs: RECENTLY_RELEASED_WINDOW_MS,
     spinUpGraceMs: SPIN_UP_GRACE_MS,
     sdHolderFreshnessWindowMs: SD_HOLDER_FRESHNESS_WINDOW_MS,
@@ -293,10 +296,10 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // (qfHolderSessionIds/seatBusySessionIds/sdHolderSessionIds) are now the shared
   // lib/fleet/idle-ctx-population.mjs resolver -- lifted verbatim, so this remains the reference
   // ctx-population the other three consumers import, not a fourth independent copy.
-  const { qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds, undeliveredReasons } =
+  const { qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds, tailInFlightSessionIds, undeliveredReasons } =
     await resolveIdleCtx(supabase, { nowMs });
   summary.undeliveredReasons.push(...undeliveredReasons);
-  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds);
+  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds, tailInFlightSessionIds);
   summary.idleWorkers = idle.length;
   if (idle.length === 0) return summary;
 

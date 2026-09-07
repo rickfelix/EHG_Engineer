@@ -158,6 +158,15 @@ describe('opt-in axes: QF holder, SD holder, directed work, recently-released, s
   it('excludes a seat with a live directed-work reservation when the axis is supplied', () => {
     expect(seatIdleVerdict(session(), { seatBusySessionIds: new Set(['s1']) }).reason).toBe('directed-work');
   });
+  it('QF-20260905-755: a seat holding an open, CI-pending tail PR on its just-completed SD is non-idle', () => {
+    expect(seatIdleVerdict(session(), { tailInFlightSessionIds: new Set(['s1']) }).reason).toBe('post-completion-tail');
+  });
+  it('QF-20260905-755: the same seat reads idle once its tail PR is no longer in the set (e.g. it merged)', () => {
+    expect(isSeatIdle(session(), { tailInFlightSessionIds: new Set(['some-other-session']) })).toBe(true);
+  });
+  it('QF-20260905-755: the axis is a true no-op when omitted -- matches every existing consumer, none of which is tail-aware today', () => {
+    expect(isSeatIdle(session())).toBe(true);
+  });
   it('excludes a recently-released seat, computed from its own released_at, when the window is supplied', () => {
     const recent = new Date(Date.now() - 60_000).toISOString();
     expect(seatIdleVerdict(session({ released_at: recent }), { recentlyReleasedWindowMs: 15 * 60_000 }).reason).toBe('recently-released');

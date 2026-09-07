@@ -137,6 +137,27 @@ describe('eligibleIdleWorkers — sd_key staleness against the authoritative tab
   });
 });
 
+// QF-20260905-755: a seat whose just-completed SD still has an open, CI-pending docs(<SD-KEY>)
+// tail PR (the /document CHANGELOG follow-up) is still finishing that SD -- reference-consumer
+// wiring of seat-idle-predicate.mjs's new post-completion-tail axis via resolveIdleCtx's
+// tailInFlightSessionIds.
+describe('eligibleIdleWorkers — post-completion tail-PR exclusion (QF-20260905-755)', () => {
+  it('excludes a seat with an open, CI-pending tail PR on its just-completed SD when the axis is supplied', () => {
+    const w = worker({ session_id: 'tail-seat' });
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), null, new Set(['tail-seat']))).toEqual([]);
+  });
+
+  it('[TWO-SIDED] includes a session NOT in tailInFlightSessionIds — unaffected by the new gate', () => {
+    const w = worker({ session_id: 'w-idle' });
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), null, new Set(['some-other-session'])).map((x) => x.session_id)).toEqual(['w-idle']);
+  });
+
+  it('defaults to an empty tailInFlightSessionIds when omitted — backward compatible with every pre-QF caller', () => {
+    const w = worker();
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), null).map((x) => x.session_id)).toEqual([w.session_id]);
+  });
+});
+
 // QF-20260830-454: a seat executing dispatched work has no sd_key/qf-holder row, so it must be
 // excludable on the seat_busy_reservation kind alone (Hotel-5 specimen, directive 98f2a4b5).
 describe('eligibleIdleWorkers — seat_busy_reservation exclusion (Hotel-5 dispatched-work regression)', () => {
