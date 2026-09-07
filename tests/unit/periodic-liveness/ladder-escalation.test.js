@@ -3,6 +3,7 @@
  * lib/periodic-liveness/ladder-escalation.mjs.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createRequire } from 'node:module';
 import {
   incrementConsecutiveMiss,
   resetConsecutiveMiss,
@@ -11,6 +12,9 @@ import {
   emitLadderDigest,
   decideLadderRoute,
 } from '../../../lib/periodic-liveness/ladder-escalation.mjs';
+
+const require = createRequire(import.meta.url);
+const { computeRowViolationCounts } = require('../../../lib/coordination/lane-lint-gauge.cjs');
 
 // SD-LEO-INFRA-LIVENESS-LADDER-OWNER-ROUTING-001 / FR-1, FR-1b, FR-2(b).
 describe('decideLadderRoute', () => {
@@ -191,6 +195,27 @@ describe('emitCoordinatorRung', () => {
     const result = await emitCoordinatorRung(supabase, { process_key: 'p1' }, { kind: 'session', target: 'sess-adam', resolvedPeer: 'adam' }, { getCoordinatorId });
     expect(result.emitted).toBe(false);
     expect(result.error).toBeInstanceOf(Error);
+  });
+
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001 (TS-3): the row this function inserts was missing both
+  // sender_session and a body, matching its sibling scripts/periodic-liveness-watcher.mjs's
+  // pre-fix state -- invoke the REAL exported function (not a hand-built row literal) and run
+  // the gauge's own computeRowViolationCounts classifier over the captured row to prove the fix
+  // actually clears both violation classes, not just that specific fields are present.
+  it('the inserted row is gauge-clean (0 empty_sender_row, 0 bodyless_row) per computeRowViolationCounts', async () => {
+    let capturedRow = null;
+    const insert = vi.fn((row) => { capturedRow = row; return Promise.resolve({ error: null }); });
+    const supabase = { from: () => ({ insert }) };
+    const getCoordinatorId = vi.fn().mockResolvedValue('sess-coord');
+    const result = await emitCoordinatorRung(
+      supabase,
+      { process_key: 'p1', display_name: 'P1', owner: 'adam-fleet' },
+      { kind: 'session', target: 'sess-adam', resolvedPeer: 'adam' },
+      { getCoordinatorId }
+    );
+    expect(result.emitted).toBe(true);
+    const counts = computeRowViolationCounts([capturedRow]);
+    expect(counts).toEqual({ untyped_row: 0, bodyless_row: 0, empty_sender_row: 0 });
   });
 });
 

@@ -91,6 +91,10 @@ async function sendCoaching(sessionId, coachingType, subject, body, extraPayload
 
   const expiresAt = new Date(Date.now() + EXPIRE_MINUTES * 60 * 1000).toISOString();
 
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sender_type 'coaching' is not gauge-exempt
+  // (LEGITIMATE_EMPTY_SENDER_TYPES only covers 'sweep'/'system'), and neither sender_session
+  // nor payload.kind was set -- untyped_row + empty_sender_row.
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because SD-LEO-INFRA-LANE-HYGIENE-OVER-001 adds sender_session/payload.kind to this existing insert. sessionId here is a caller-supplied target, not fresh identity-resolver output; routing through insertCoordinationRow is a separate, larger change out of this SD's scope.
   const { error } = await supabase
     .from('session_coordination')
     .insert({
@@ -98,8 +102,9 @@ async function sendCoaching(sessionId, coachingType, subject, body, extraPayload
       message_type: 'COACHING',
       subject,
       body,
-      payload: { coaching_type: coachingType, ...extraPayload },
+      payload: { kind: 'coaching', coaching_type: coachingType, ...extraPayload },
       sender_type: 'coaching',
+      sender_session: 'fleet-coaching',
       expires_at: expiresAt
     });
 
@@ -174,6 +179,9 @@ async function sendDeconflictionReply(client, {
   }
 
   const expiresAt = new Date(Date.now() + EXPIRE_MINUTES * 60 * 1000).toISOString();
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: same untyped_row + empty_sender_row gap as
+  // sendCoaching above (sender_type 'coaching' is not gauge-exempt).
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because this SD adds sender_session/payload.kind to this existing insert. Same rationale as sendCoaching above.
   const { error: insErr } = await client
     .from('session_coordination')
     .insert({
@@ -182,6 +190,7 @@ async function sendDeconflictionReply(client, {
       subject: subject || '[DECONFLICTION] coordination notice',
       body: body || null,
       payload: {
+        kind: 'coaching',
         coaching_type: coachingType,
         deconfliction: true,
         reply_to_signal_id: replyToSignalId || null,
@@ -189,6 +198,7 @@ async function sendDeconflictionReply(client, {
         ...extraPayload
       },
       sender_type: 'coaching',
+      sender_session: 'fleet-coaching',
       expires_at: expiresAt
     });
 

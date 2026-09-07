@@ -523,8 +523,11 @@ export function buildPlanDriftAdvisoryRows(result, { coordinatorId, adamId }) {
   const subject = `[PLAN-DRIFT] Dispatch mix drifted from active-wave demand (active-rung share ${mixPct}%)`;
   const body = `Sustained dispatch-mix drift detected across ${result?.streak ?? '?'} consecutive gauge-runner cycles. Active-rung share of last-N dispatched work: ${mixPct}% (mix: ${JSON.stringify(result?.mix?.mix || {})}). Coverage floor is currently clear (not starved), so this is a genuine mix drift, not a linkage-starvation false trip.`;
   const payload = { kind: 'coordinator_advisory', gauge_id: 'plan-drift-mix', body, mix: result?.mix, streak: result?.streak };
-  const coordinatorRow = { message_type: 'INFO', target_session: coordinatorId || 'broadcast-coordinator', subject, sender_type: 'gauge-runner', payload };
-  const adamRow = adamId ? { message_type: 'INFO', target_session: adamId, subject, sender_type: 'gauge-runner', payload } : null;
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sender_type 'gauge-runner' is not gauge-exempt and
+  // neither row set sender_session -- empty_sender_row on both. Fixed in the builder so it
+  // propagates to both downstream insert call sites (pushPlanDriftAdvisory below).
+  const coordinatorRow = { message_type: 'INFO', target_session: coordinatorId || 'broadcast-coordinator', subject, sender_type: 'gauge-runner', sender_session: 'gauge-runner', payload };
+  const adamRow = adamId ? { message_type: 'INFO', target_session: adamId, subject, sender_type: 'gauge-runner', sender_session: 'gauge-runner', payload } : null;
   return { coordinatorRow, adamRow };
 }
 
@@ -543,10 +546,12 @@ export function buildPlanDriftAdvisoryRows(result, { coordinatorId, adamId }) {
 export async function pushPlanDriftAdvisory(supabase, result, recipients) {
   const { coordinatorRow, adamRow } = buildPlanDriftAdvisoryRows(result, recipients);
 
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because SD-LEO-INFRA-LANE-HYGIENE-OVER-001 modifies buildPlanDriftAdvisoryRows above in this same file (this line itself is unchanged). Row shape is fully owned by the pure builder above; routing through insertCoordinationRow is a separate, larger change out of this SD's scope.
   const { error: coordErr } = await supabase.from('session_coordination').insert(coordinatorRow);
   if (coordErr) console.error(`[gauge-runner] plan-drift advisory (coordinator) failed (non-fatal): ${coordErr.message}`);
 
   if (adamRow) {
+    // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- same rationale as the coordinator leg above.
     const { error: adamErr } = await supabase.from('session_coordination').insert(adamRow);
     if (adamErr) console.error(`[gauge-runner] plan-drift advisory (Adam) failed (non-fatal): ${adamErr.message}`);
   } else {

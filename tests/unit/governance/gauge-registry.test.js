@@ -7,7 +7,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { createRequire } from 'node:module';
 import { GAUGE_REGISTRY } from '../../../lib/governance/gauge-registry.js';
+
+const require = createRequire(import.meta.url);
+const { computeRowViolationCounts } = require('../../../lib/coordination/lane-lint-gauge.cjs');
 import {
   selectEnabledEntries, tripsThreshold, buildFindingRow,
   shapeRelayDropResult, shapeStaleTreeResult, shapeUnreceiptedOverdueResult,
@@ -418,6 +422,16 @@ describe('buildPlanDriftAdvisoryRows / pushPlanDriftAdvisory (SD-LEO-INFRA-PLAN-
 
     const withoutAdam = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: 'coord-1', adamId: null });
     expect(withoutAdam.adamRow).toBeNull();
+  });
+
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001 (TS-4): both rows were missing sender_session
+  // (sender_type='gauge-runner' is not gauge-exempt) -- assert via the gauge's own
+  // computeRowViolationCounts classifier that both the coordinator and Adam rows this
+  // pure builder produces are now gauge-clean, not just that a field is present.
+  it('both built rows are gauge-clean (0 empty_sender_row) per computeRowViolationCounts', () => {
+    const { coordinatorRow, adamRow } = buildPlanDriftAdvisoryRows(sampleResult, { coordinatorId: 'coord-1', adamId: 'adam-1' });
+    const counts = computeRowViolationCounts([coordinatorRow, adamRow]);
+    expect(counts).toEqual({ untyped_row: 0, bodyless_row: 0, empty_sender_row: 0 });
   });
 
   it('pushPlanDriftAdvisory inserts exactly one coordinator row and one Adam row when both are resolved', async () => {
