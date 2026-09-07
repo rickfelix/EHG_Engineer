@@ -227,3 +227,48 @@ decision verified, so only the genuinely-covered finding closes. Dedup (`already
 on `(sd_key, kind, file)`, not just `(sd_key, kind)`, so a second distinct unapplied migration on
 the same SD still surfaces instead of being permanently masked by an earlier row for a different
 file.
+
+## `chairman_approval` was listed as "Covered" but had no value mapping; a new withdrawal path for fixture-venture decisions (SD-LEO-INFRA-CHAIRMAN-DECISION-VALUE-001, 2026-09-07)
+
+The row-1 table above (branch 4, `chairman_approval`) reads "Covered" because the queue view
+correctly *surfaces* `chairman_approval` rows — but `fn_chairman_decision_value(p_decision_type,
+p_action)`, the function `fn_chairman_decide` calls to translate an `approved`/`rejected` action
+into a `chairman_decisions.decision` verb, had no branch for it. A `chairman_approval` row could be
+surfaced and acted on, but never actually **closed** through the sanctioned decide path — verified
+live against specimen `644a861f` before fixing.
+`database/chairman-gated/20260907_add_chairman_approval_to_decision_value.sql` adds
+`chairman_approval` to the existing APPROVAL-SHAPED bucket alongside `ddl_approval`,
+`gate_approval`, `outbound_publish_approval`, `ratified_deviation`, `migration_apply`, and
+`credential_scope` — no new bucket, no new verb.
+
+**Correction, found by `/heal` (2026-09-07):** `CHAIRMAN_APPLY_VERIFICATION` reported this
+migration APPLIED at LEAD-FINAL-APPROVAL time, but a direct live read
+(`pg_get_functiondef('public.fn_chairman_decision_value'::regproc)`, both project keys) shows no
+`chairman_approval` branch — `fn_chairman_decision_value('chairman_approval','approved')` still
+returns `NULL`. The migration was never actually run against either live database; row `644a861f`
+remains genuinely unclosable today, unchanged from before this SD. Root cause:
+`scripts/verify-migration-apply-state.mjs`'s `resolveLive()` classifies a
+`CREATE OR REPLACE FUNCTION` migration as `APPLIED` by checking `pg_proc` only for the function
+NAME's existence — satisfied trivially here because `fn_chairman_decision_value` already existed
+under its OLD body from a prior migration. The classifier has no content/body check, so it cannot
+tell "the function exists" apart from "this migration's specific replacement body actually ran."
+This is a systemic false-positive affecting every chairman-gated `CREATE OR REPLACE FUNCTION`
+migration, not specific to this one — tracked separately for a real fix (compare
+`pg_get_functiondef()` against migration-declared content, not name-only `pg_proc` presence). Until
+that lands, chairman apply-ceremony verification for function-replacement migrations cannot be
+trusted from the gate alone and needs a direct live-definition check.
+
+Separately, some `chairman_decisions`/`chairman_approval` rows are linked to a fixture/demo venture
+(`ventures.is_demo=true`) and were never going to receive a genuine chairman merits ruling — they
+needed to leave the queue without asserting `approve`/`reject`. `lib/chairman/fixture-hygiene-
+withdrawal.mjs`'s `planFixtureHygieneWithdrawal(row, venture, {decidedBy, reason})` is a pure
+planner (reusing `decision-retirement.mjs`'s existing `applyRetirement()` writer, never a new write
+path) that moves such a row to `status='cancelled'` with `retirementBasis.disposition
+='fixture_hygiene_withdrawal'` — a third terminal state, structurally distinct from `approve`/
+`reject`, so a hygiene cleanup can never be misread later as a merits decision. Gated on:
+`status='pending'`, both `decidedBy` and `reason` present (never defaulted), and the venture
+actually carrying `is_demo=true` (refuses for a real venture, or when the venture lookup itself
+failed). Exposed as `node scripts/chairman-decisions.mjs withdraw <id> --reason "<why>"
+[--decided-by <name>]`. `decision-retirement.mjs`'s `armOf()` gained a `review` → `arm4` mapping to
+route the acceptance specimen (`chairman_decisions` row `d87a7018`, `decision_type='review'`,
+fixture venture `8344c34b`).
