@@ -220,3 +220,22 @@ describe('FR-2: the DEFAULT paths, which production actually uses', () => {
     expect(h.insert).not.toHaveBeenCalled();
   });
 });
+
+describe('SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-3: a delivered/parked outcome resolves, never propagates uncaught', () => {
+  it('resolves (does not reject) when insertCoordinationRow reports a delivered/parked outcome', async () => {
+    const delivered = { data: null, error: null, landed: true, parkedRowId: 'park-1', code: 'DISPATCH_ALREADY_DELIVERED' };
+    const h = harness({ insert: vi.fn(async () => delivered) });
+    // fireFleetEnforcementKill has no catch of its own — it simply returns whatever
+    // insertCoordinationRow returns. Before FR-1, the equivalent case would have THROWN and this
+    // await would have rejected; now it must resolve with the additive shape.
+    const result = await fireFleetEnforcementKill(h.deps, { actor: COORD_ID, reason: 'runaway spawn loop' });
+    expect(result).toEqual(delivered);
+    expect(result.landed).toBe(true);
+  });
+
+  it('still rejects for a genuine (non-landed) insert failure — the fix does not swallow real errors', async () => {
+    const genuineFailure = Object.assign(new Error('enum violation'), { code: 'DISPATCH_INVALID_MESSAGE_TYPE' });
+    const h = harness({ insert: vi.fn(async () => { throw genuineFailure; }) });
+    await expect(fireFleetEnforcementKill(h.deps, { actor: COORD_ID, reason: 'r' })).rejects.toBe(genuineFailure);
+  });
+});

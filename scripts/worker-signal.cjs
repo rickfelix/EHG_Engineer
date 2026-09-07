@@ -843,7 +843,10 @@ module.exports = {
   // FR-7 (SD-LEO-INFRA-COMPLETE-TWO-WAY-001) — request/await round-trip
   buildRequestPayload, awaitCoordinatorReply, REQUEST_DEFAULT_TIMEOUT_MS, REQUEST_DEFAULT_POLL_MS,
   // SD-LEO-INFRA-SOLOMON-CONSULT-001D — Solomon oracle consult lane (flag-gated dormant)
-  isSolomonConsultEnabled, buildSolomonConsultPayload, solomonConsultMain
+  isSolomonConsultEnabled, buildSolomonConsultPayload, solomonConsultMain,
+  // SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-2 — exported so a behavioral test can
+  // drive the delivered/failure branches directly instead of spawning the CLI process.
+  reportDispatchError, reportIfAlreadyDelivered,
 };
 
 // QF-20260830-948: main() can make several SEQUENTIAL bounded Supabase calls (coordinator
