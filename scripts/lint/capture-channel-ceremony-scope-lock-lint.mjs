@@ -101,7 +101,9 @@ async function fetchRatificationRow(supabase, ratificationId) {
   // ~~* unknown" -- PostgREST's embedded id::text cast syntax did not help either), so this reads
   // the small (append-only, ~100-row) ledger and does the prefix match client-side instead of
   // fighting a cast in the query string.
-  const { data, error } = await supabase.from('chairman_ratifications').select('id, quote, source');
+  // count-truncation-diff-lint: explicit visible bound (must be < 1000). Measured live headroom
+  // is ample (92 rows on an append-only ledger that grows one row per ratification event).
+  const { data, error } = await supabase.from('chairman_ratifications').select('id, quote, source').limit(500);
   if (error) {
     console.error(`⚠️  ceremony-scope-lock-lint: chairman_ratifications read failed (${error.message}) -- treating citation as unverified`);
     return null;
