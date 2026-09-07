@@ -1,0 +1,12 @@
+import dotenv from 'dotenv'; dotenv.config();
+import { createClient } from '@supabase/supabase-js';
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await sb.from('sub_agent_execution_results').select('id,sub_agent_code,verdict,confidence,phase,created_at,metadata,executed_from_cwd').eq('id','5afd2c6f-7052-440c-9ff4-45b41be0df25').single();
+console.log('code=%s verdict=%s conf=%s phase=%s', data.sub_agent_code, data.verdict, data.confidence, data.phase);
+console.log('created_at=', data.created_at);
+console.log('metadata.repo_path=', data.metadata?.repo_path, '| repo_resolved=', data.metadata?.repo_resolved, '| registry_source=', data.metadata?.registry_source);
+console.log('executed_from_cwd col=', data.executed_from_cwd);
+console.log('warnings=', data.metadata ? undefined : '');
+const { data: all } = await sb.from('sub_agent_execution_results').select('sub_agent_code,verdict,phase,created_at').eq('sd_id','89c9c119-611f-4801-bf19-9a9d98751bfe').eq('phase','PLAN_VERIFY').order('created_at');
+console.log('\nPLAN_VERIFY evidence for this SD:');
+all.forEach(r=>console.log(`  ${r.sub_agent_code.padEnd(12)} ${r.verdict.padEnd(18)} ${r.created_at}`));
