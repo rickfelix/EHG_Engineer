@@ -60,6 +60,33 @@ describe('printWorkerInbox (TS-1, TS-5, TR-3)', () => {
     expect(cap.text()).toContain('WORK ASSIGNMENT: SD-X');
   });
 
+  // QF-20260907-306: payload.backpressure_parked had no reader anywhere in lib/ or scripts/
+  // before this test's fix -- a row a sender's send was refused-and-parked on delivered
+  // normally but was indistinguishable from any other row in the very inbox a recipient checks.
+  test('a backpressure-parked row is visibly marked [PARKED] (QF-20260907-306)', async () => {
+    const client = mockSessionCoordination({
+      rows: [{
+        id: 'row-1', sender_session: COORD_ID, subject: 'routine update', body: null,
+        payload: { kind: 'coordinator_update', backpressure_parked: true, backpressure_parked_at: new Date().toISOString() },
+        message_type: 'INFO', created_at: new Date().toISOString(), read_at: null, acknowledged_at: null,
+      }],
+    });
+    await printWorkerInbox(WORKER_ID, client);
+    expect(cap.text()).toContain('[PARKED]');
+  });
+
+  test('a normal (non-parked) row carries no [PARKED] marker', async () => {
+    const client = mockSessionCoordination({
+      rows: [{
+        id: 'row-1', sender_session: COORD_ID, subject: 'routine update', body: null,
+        payload: { kind: 'coordinator_update' },
+        message_type: 'INFO', created_at: new Date().toISOString(), read_at: null, acknowledged_at: null,
+      }],
+    });
+    await printWorkerInbox(WORKER_ID, client);
+    expect(cap.text()).not.toContain('[PARKED]');
+  });
+
   test('empty inbox prints the worker-scoped empty state, not coordinator rows (TS-5)', async () => {
     const client = mockSessionCoordination({ rows: [] });
     await printWorkerInbox(WORKER_ID, client);
