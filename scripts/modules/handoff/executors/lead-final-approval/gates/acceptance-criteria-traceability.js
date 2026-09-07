@@ -193,10 +193,14 @@ export function createAcceptanceCriteriaTraceabilityGate(supabase) {
         }
       }
 
-      // A lookup that COULD NOT ANSWER must not be reported as "no vision document" -- but only
-      // when EVERY strategy actually attempted ended in a fault, never data. If the primary
-      // (sd_id) lookup cleanly and conclusively found nothing, that stands as a real answer even
-      // if the secondary (metadata-key) fallback then faulted, and vice versa.
+      // A lookup that COULD NOT ANSWER must not be reported as "no vision document". The
+      // predicate below requires BOTH primaryAnswered AND secondaryAnswered -- deliberately
+      // stricter than "either one clean answer suffices" (SECURITY sub-agent review, 2026-09-07,
+      // caught an earlier draft of this comment overstating the leniency: a clean "no data" from
+      // ONE strategy does NOT alone excuse a fault in the OTHER attempted strategy). This only
+      // reads as an advisory pass when every strategy actually attempted (not "attempted and
+      // succeeded" -- an untried strategy, e.g. no metadata.vision_key on the SD, correctly
+      // counts as answered) concluded WITHOUT a fault -- data or a genuine absence, never a fault.
       const primaryAnswered = !sdIdFault;
       const secondaryAnswered = !triedMetadataKey || !metadataFault;
       if (!visionContent && !(primaryAnswered && secondaryAnswered)) {
