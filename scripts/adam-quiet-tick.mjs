@@ -720,16 +720,21 @@ export async function surfaceSmsInbound(sb) {
  * verified-chairman-number message that resolved to a PARK_OUTCOMES value (no_match/
  * rate_limited/expired/ambiguous, per lib/chairman/sms-bridge.js) and already terminal-
  * drained (drained_at is set) — surfaceSmsInbound's received_at window above will never show it
- * again once it ages out. This detector has NO time window: `parked_at IS NOT NULL AND
- * resolved_at IS NULL` IS the queue, so a parked row re-fires every tick for as long as it stays
- * unaddressed — that persistence (not a decaying window) is the FR-2 acceptance criterion.
+ * again once it ages out. This detector has NO time window: `(parked_at IS NOT NULL OR
+ * routed_at IS NOT NULL) AND resolved_at IS NULL` IS the queue, so a parked/routed row re-fires
+ * every tick for as long as it stays unaddressed — that persistence (not a decaying window) is
+ * the FR-2 acceptance criterion.
+ * QF-20260905-781: an Adam-routable verified-chairman row (no_match/rate_limited) no longer
+ * ever writes parked_at when routing succeeds (see drainSmsRelayStaging) — routed_at IS NOT
+ * NULL must ALSO keep this detector firing, or a row Adam never acts on goes silently unwatched
+ * (the exact "worse than a false park" regression this QF's own acceptance criteria forbids).
  */
 export async function surfaceParkedChairmanSms(sb) {
   try {
     const { data, error } = await sb
       .from('sms_relay_staging')
-      .select('id, from_phone, body_raw, parked_at')
-      .not('parked_at', 'is', null)
+      .select('id, from_phone, body_raw, parked_at, routed_at')
+      .or('parked_at.not.is.null,routed_at.not.is.null')
       .is('resolved_at', null)
       .order('parked_at', { ascending: true })
       .limit(SMS_INBOUND_CAP);
@@ -738,7 +743,9 @@ export async function surfaceParkedChairmanSms(sb) {
     const rows = (data || []).map((r) => ({
       id: r.id,
       fromPhone: r.from_phone,
-      ageMin: Math.floor((Date.now() - new Date(r.parked_at).getTime()) / 60_000),
+      // parked_at is the primary age anchor; a routed-only row (no parked_at) falls back to
+      // routed_at — both mark "since when this row has needed attention".
+      ageMin: Math.floor((Date.now() - new Date(r.parked_at || r.routed_at).getTime()) / 60_000),
       clipped: isPossiblyClippedSmsBody(r.body_raw),
       body: String(r.body_raw || '').replace(/\s+/g, ' ').slice(0, 120),
     }));
