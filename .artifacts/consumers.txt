@@ -1,0 +1,40 @@
+lib/adam/scope-registry.js:38:    .eq('is_demo', false)
+lib/agents/modules/venture-state-machine/stage-gates.js:776:    return data ? { is_demo: data.is_demo === true, is_scaffolding: data.is_scaffolding === true } : null;
+lib/chairman/chairman-actionable.mjs:85:  if (venture.is_demo === true) return true;
+lib/creative/asset-view-gate.test.js:119:  it('TS-5: S23 approved, is_demo=true venture below S24 is STILL blocked (regression test: predicate returns OUT_OF_SCOPE for is_demo even with armed:true, this gate must not treat that as authorized)', async () => {
+lib/eva/chairman-decision-watcher.js:55:  if (venture.is_demo === true) return true;
+lib/eva/clean-clone/launch.js:273:    const nonClone = v && v.seeded_from_venture_id == null && v.is_demo !== true && v.is_scaffolding !== true;
+lib/eva/lifecycle-sd-bridge.js:381:  return flags.is_scaffolding === true || flags.is_demo === true;
+lib/eva/lifecycle-sd-bridge.js:416:        return data ? { is_demo: data.is_demo === true, is_scaffolding: data.is_scaffolding === true, seeded_from_venture_id: data.seeded_from_venture_id ?? null } : null;
+lib/eva/uat-stage-migration/parked-venture-classifier.mjs:27:  const real = inRange.filter((v) => v?.is_demo !== true);
+lib/eva/uat-stage-migration/parked-venture-classifier.mjs:28:  const demo = inRange.filter((v) => v?.is_demo === true);
+lib/governance/fixture-exclusion.mjs:116:  if (v.is_demo === true) return true;
+lib/governance/stage-gate-predicate.js:272:  if (venture && venture.is_demo === true) {
+lib/governance/venture-capability-populator.js:47:  if (v.is_demo === true) return false;
+scripts/adam-quiet-tick.mjs:326:      .eq('is_demo', false)
+scripts/audit/count-truncation-overrides.json:4100:  "note": "pending chairman_decisions for the single permanently-isolated canary venture (is_demo=true) — operationally tiny, never real-portfolio scale"
+scripts/backfill-fixture-venture-flags.mjs:44:    .not('is_demo', 'is', true)
+scripts/backfill-fixture-venture-flags.mjs:57:  console.log(candidates.length ? '\nDry-run only — re-run with --apply to set is_demo=true on the rows above.' : '\nNothing to do.');
+scripts/backfill-fixture-venture-flags.mjs:79:console.log(`Flagged ${candidates.length} venture(s) is_demo=true.`);
+scripts/backfill-fixture-venture-is-demo.mjs:51:  return (data || []).filter((v) => v.is_demo !== true && isFixtureVenture(v));
+scripts/backfill-fixture-venture-is-demo.mjs:63:    console.log('\nNo writes performed. Re-run with --apply to set is_demo=true on the rows above.');
+scripts/backfill-fixture-venture-is-demo.mjs:79:      .not('is_demo', 'is', true)
+scripts/canary/run-canary-probe.mjs:76:    .eq('is_demo', true)
+scripts/cron/venture-ops-actuals-sweep.mjs:320:      const terminalDeployed = ventures.filter((v) => TERMINAL_STATUSES.includes(v.status) && v.is_demo === false);
+scripts/cron/venture-ops-actuals-sweep.mjs:518:      const realVentures = allVentures.filter((v) => v.is_demo === false);
+scripts/cron/venture-ops-actuals-sweep.mjs:559:        if (v.is_demo !== false) continue;
+scripts/eva/portfolio-review-round.mjs:46:  if (!v || v.is_demo === true) return false;
+scripts/eva/stage-keyed-data-ts3-check-enforcement-probe.mjs:58:      `SELECT id FROM public.ventures WHERE current_lifecycle_stage BETWEEN 23 AND 26 AND is_demo IS NOT TRUE`
+scripts/eva/stage-keyed-data-ts3-check-enforcement-probe.mjs:61:      await client.query(`UPDATE public.ventures SET is_demo = true WHERE id = ANY($1::uuid[])`, [blockers.map((b) => b.id)]);
+scripts/eva/stage-keyed-data-ts4-stage23-artifact-gate-probe.mjs:50:      `SELECT id FROM public.ventures WHERE current_lifecycle_stage BETWEEN 23 AND 26 AND is_demo IS NOT TRUE`
+scripts/eva/stage-keyed-data-ts4-stage23-artifact-gate-probe.mjs:53:      await client.query(`UPDATE public.ventures SET is_demo = true WHERE id = ANY($1::uuid[])`, [blockers.map((b) => b.id)]);
+scripts/eva/stage-keyed-data-ts5-shared-preflight-parity-probe.mjs:44:      `SELECT id FROM public.ventures WHERE current_lifecycle_stage BETWEEN 23 AND 26 AND is_demo IS NOT TRUE`
+scripts/eva/stage-keyed-data-ts5-shared-preflight-parity-probe.mjs:53:    await client.query(`UPDATE public.ventures SET is_demo = true WHERE id = ANY($1::uuid[])`, [realIds]);
+scripts/eva/stage-keyed-data-ts5-shared-preflight-parity-probe.mjs:58:    await client.query(`UPDATE public.ventures SET is_demo = false WHERE id = ANY($1::uuid[])`, [realIds]);
+scripts/eva/stage-keyed-data-ts7-eva-ventures-mirror-sync-probe.mjs:62:      `SELECT id FROM public.ventures WHERE current_lifecycle_stage BETWEEN 23 AND 26 AND is_demo IS NOT TRUE`
+scripts/eva/stage-keyed-data-ts7-eva-ventures-mirror-sync-probe.mjs:66:      await client.query(`UPDATE public.ventures SET is_demo = true WHERE id = ANY($1::uuid[])`, [realVentures.map((v) => v.id)]);
+scripts/eva/stage-keyed-data-v2-dryrun-probe.mjs:65:      `SELECT id, name FROM public.ventures WHERE current_lifecycle_stage BETWEEN 23 AND 26 AND is_demo IS NOT TRUE`
+scripts/eva/stage-keyed-data-v2-dryrun-probe.mjs:69:      await client.query(`UPDATE public.ventures SET is_demo = true WHERE id = ANY($1::uuid[])`, [blockers.map((b) => b.id)]);
+scripts/harness/spine-verify-first-run.mjs:160:    console.log(`[3/6] fixture-scoped ${allAgentIds.length} agents (status=standby, verified via read-after-write; venture_id already points at is_demo=true fixture venture)`);
+scripts/reconciliation-packet-generator.mjs:44:    .eq('is_demo', false)
+scripts/sweep-fixture-residue.mjs:38:  if (v.is_demo === true) return true;
