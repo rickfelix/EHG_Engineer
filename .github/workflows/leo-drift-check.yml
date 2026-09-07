@@ -58,16 +58,23 @@ jobs:
           npx tsc tools/gates/drift-check.ts --outDir dist/tools/gates --module es2020 --target es2020 --moduleResolution node --esModuleInterop --skipLibCheck
 
       - name: Run drift detection
+        # QF-20260903-055: this step used to carry BOTH an exit-zero fallback AND
+        # continue-on-error, so a red "Check for Filesystem Drift" job could never mean
+        # drift -- only checkout/setup/install/compile could fail it, and today's own
+        # measured red run was a CDN connection reset during an unrelated postinstall, not
+        # drift. The check's name asserts a subject (drift) it never actually evaluated.
+        # PROMOTED, not renamed: drift-check.ts's own internal severity model already only
+        # exits 1 for prd_files/handoff_files (both are database-first migrations
+        # completed long ago -- `git ls-files` finds zero tracked matches for either
+        # pattern today), so this promotion is currently a no-op on a clean repo, not a
+        # newly-blocking gate. "Check for Filesystem Drift" is also NOT a required
+        # branch-protection status check (verified: only "Run Unit Tier (quarantine-aware)"
+        # is), so this cannot newly block any PR -- it only makes the job's own red/green
+        # status honestly reflect what it measured.
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-        run: |
-          node dist/tools/gates/drift-check.js || {
-            echo "Warning: Drift detection encountered an error"
-            echo "This is informational - workflow will continue"
-            exit 0
-          }
-        continue-on-error: true  # Informational only during development
+        run: node dist/tools/gates/drift-check.js
 
       - name: Upload drift report
         if: failure()
