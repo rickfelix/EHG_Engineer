@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { classifyDispatchIneligibility } = require('../../lib/fleet/claim-eligibility.cjs');
+const { classifyDispatchIneligibility, classifyAllDispatchIneligibility } = require('../../lib/fleet/claim-eligibility.cjs');
 
 describe('classifyDispatchIneligibility — not_before axis (QF-20260705-585)', () => {
   it('a future not_before is NOT self-claimable (not_before_hold)', () => {
@@ -24,6 +24,42 @@ describe('classifyDispatchIneligibility — not_before axis (QF-20260705-585)', 
   });
   it('an unparseable not_before fails open (never blocks on a malformed timestamp)', () => {
     expect(classifyDispatchIneligibility({ sd_key: 'SD-X', metadata: { not_before: 'not-a-date' } })).toBeNull();
+  });
+});
+
+describe('classifyDispatchIneligibility — not_before coordinator-fence object shape (QF-20260905-599)', () => {
+  // The exact live shape found on SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C: the coordinator wrote the
+  // fence OBJECT directly onto metadata.not_before (no future timestamp at all — Date.parse(object)
+  // is NaN), so the pre-fix axis read it as unheld and 5 self-claims landed against a standing fence.
+  const liveObjectSpecimen = {
+    at: '2026-09-05T04:39:08.752Z',
+    by: 'coordinator-9097ea31',
+    kind: 'coordinator_fence',
+    reason: 'W5 GATE-EVIDENCE-001 children are dispatched by hand in parent mandatory order',
+    clear_when: 'coordinator keyed dispatch of this child',
+  };
+  it('the exact live coordinator-fence object on not_before is HELD (not_before_hold)', () => {
+    expect(classifyDispatchIneligibility({ sd_key: 'SD-X', metadata: { not_before: liveObjectSpecimen } })).toBe('not_before_hold');
+  });
+  it('a not_before object with a future `until` is HELD', () => {
+    const future = new Date(Date.now() + 86400000).toISOString();
+    expect(classifyDispatchIneligibility({ sd_key: 'SD-X', metadata: { not_before: { until: future, kind: 'coordinator_fence' } } })).toBe('not_before_hold');
+  });
+  it('a not_before object with a PAST `until` is claimable (time-boxed fence has elapsed)', () => {
+    const past = new Date(Date.now() - 86400000).toISOString();
+    expect(classifyDispatchIneligibility({ sd_key: 'SD-X', metadata: { not_before: { until: past, kind: 'coordinator_fence' } } })).toBeNull();
+  });
+  it('an ISO string in the past is claimable (unaffected — QF-20260705-585 baseline)', () => {
+    const past = new Date(Date.now() - 86400000).toISOString();
+    expect(classifyDispatchIneligibility({ sd_key: 'SD-X', metadata: { not_before: past } })).toBeNull();
+  });
+  it('an expired ISO not_before alongside an active not_before_fence object is still HELD (the live interim shape: not_before=past ISO, not_before_fence=coordinator_fence object with no until)', () => {
+    const past = new Date(Date.now() - 86400000).toISOString();
+    expect(classifyDispatchIneligibility({ sd_key: 'SD-X', metadata: { not_before: past, not_before_fence: liveObjectSpecimen } })).toBe('not_before_hold');
+  });
+  it('the same fence is refused on the ALL-MATCH classifier the same way requires_human_action is (self-claim fallback shares this SSOT)', () => {
+    expect(classifyAllDispatchIneligibility({ sd_key: 'SD-X', metadata: { not_before: liveObjectSpecimen } })).toContain('not_before_hold');
+    expect(classifyAllDispatchIneligibility({ sd_key: 'SD-X', metadata: { requires_human_action: true } })).toContain('human_action_required');
   });
 });
 
