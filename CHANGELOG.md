@@ -198,6 +198,12 @@
   - `scripts/stale-session-sweep.cjs`'s `isSweepResetAllowed()` and the end-of-tick WARNINGS/CONFLICTS reporting loops call `recordFinding()` alongside their existing `console.log`, so persisted/alerted findings never diverge from what an operator watching the console would have seen.
   - `lib/fleet/worker-status.cjs`'s `DRAIN_SETS.coordinator` recognizes the new `sweep_finding_alert` payload kind immediately via the JS floor; the corresponding DB-side `role_drain_sets` seed migration is chairman-gated and pending separately.
 
+- **Three read-side gauges prove `session_coordination` durability invariants hold, plus an archive-table scaffold** - SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D
+  - `lib/coordinator/backpressure-breach-gauge.cjs` structurally proves the insert-side backpressure guard (`assertSendBackpressure`) still holds against live data; `lib/coordinator/work-assignment-receipt-gauge.cjs` surfaces WORK_ASSIGNMENT rows delivered but never acknowledged past a 2h threshold; `lib/coordinator/expired-unread-missed-gauge.cjs` detects and idempotently stamps rows that expired before ever being read.
+  - Two live false-positive investigations shaped the final gauges: the backpressure gauge's naive query first flagged 46 unanswered rows before excluding `backpressure_parked` markers (proof the guard already works), and the expired-unread-missed gauge's naive query first flagged 682 rows before excluding `roll_call` presence-pings and broadcast-sentinel targets, down to 9 genuine misses (6 live-stamped and verified idempotent).
+  - `database/chairman-gated/20260907_session_coordination_archive.sql` (staged, not yet applied) adds a same-shaped archive table for a future retention job, plus `lib/coordination/query-with-archive.cjs` for callers needing historical + live visibility.
+  - Fixed an unanchored `.gitignore` glob (`query-*.cjs`) that was silently excluding a legitimate `lib/coordination/` file.
+
 ### Infrastructure
 
 - **Swallowed-query-error lint widened to 6 directories and flipped from advisory to enforcing; ~40 remaining sites converted** - SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001
@@ -205,6 +211,12 @@
   - `.github/workflows/swallowed-query-error-lint.yml` drops `continue-on-error` and runs with `--enforce`: `node scripts/lint/swallowed-query-error-lint.mjs` now reports 0 ungoverned findings, and a PR reintroducing a swallowed-error destructure in any scanned path fails CI instead of only logging a warning. The lint's own self-test suite was rewritten against fixture directories (`SWALLOWED_QUERY_LINT_ROOT` env override) so it stops reading the live tree once the ungoverned count reaches zero.
   - New `scripts/lint/swallowed-query-fail-open-classifier.mjs` does real AST analysis (espree) to classify each swallowed-query hit's enclosing try/catch as `fail_open` (catch returns `passed: true`, masking the fault as a benign pass), `has_catch`, or `no_catch` — replacing a no-brace-matching heuristic estimate with an enumerated, provenance-backed list.
   - Fixed two CI gates this SD's own conversions newly tripped: `count-truncation-diff-lint.mjs` was flagging ~69 pre-existing, unmodified `.select(...)` sites as "new" purely because wrapping them in `safeQuery(...)` reformatted the line git diffs as added; and `control-seed-test-lint.mjs` required (and now has, seed-trial-verified) detection specs for the two lint controls above.
+
+- **Michael's legacy Dropbox `_Cowork` folder can now be imported into `michael_rules`/`michael_gmail_labels`/`michael_closures`/`michael_feedback_ledger`, verified, and chairman-ratified once** - SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-F
+  - `scripts/michael/import-cowork-memory.mjs --root "<path>" [--apply] [--verify] [--ratify]` runs on the host (it reads a local folder outside repo/CI reach; `--root` is required with no hardcoded default). Dry-run by default: previews parsed content and unparsed lines per source file before any row lands. Step 0 always manifests `--root` (`lib/michael/cowork-manifest.mjs`) and refuses with `ROOT_DRIFTED` if the folder changed since the last recorded manifest.
+  - `lib/michael/cowork-parse.mjs` parses the five rule-source files, the Gmail label table, `memory/closures.md`, and `memory/brief-feedback.md` into structured rows; `lib/michael/cowork-write.mjs` writes them — a first-time import is a plain insert, a re-import whose content differs from an existing active rule refuses via `needsVerifier` (`scripts/michael/rule-encode.mjs`) rather than silently overwriting an Opus-verified rule.
+  - `database/chairman-gated/20260907_chairman_ratifications_add_michael_target.sql` (staged, pending chairman approval) widens `chairman_ratifications`'s `cr_target_contracts_valid` CHECK to accept `'michael'`, closing a gap where the JS-layer writer already allowed it but a live INSERT would have been rejected by Postgres.
+
 ### Documentation
 
 - **Encode the twelve Foundation-audit lens PREDICATE + INSTRUMENT + CANARY texts into `CLAUDE_SOLOMON_MANUAL.md`, replacing the bare lens-name line** - SD-LEO-DOC-FOUNDATION-AUDIT-LENS-001

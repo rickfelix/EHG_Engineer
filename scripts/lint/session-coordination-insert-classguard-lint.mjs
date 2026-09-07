@@ -178,7 +178,23 @@ function main() {
     try {
       scanned = candidateFilesDiff(scanRoot);
     } catch (e) {
-      // Fail-soft: no diff base resolvable -> advisory full sweep instead of a false block.
+      // QF-20260905-934: this exact silent degrade is HOW the gate went zero-yield for months
+      // (looked genuinely blocking, never once actually was) -- actions/checkout@v4's default
+      // shallow clone left origin/main unresolvable, this branch fired every CI run, and the
+      // resulting 'all (degraded)' mode is explicitly advisory below. Now that the workflow
+      // fetches full history (fetch-depth: 0), a CI run reaching this branch means the base is
+      // STILL unresolvable despite that -- a genuine misconfiguration regression, not the
+      // expected path. Fail LOUD in CI so a future regression to this exact defect is caught
+      // immediately instead of silently reopening the hole. Local/non-CI use (no CI env var,
+      // e.g. a bare clone or intentional standalone run) keeps the original advisory fallback --
+      // this mirrors the same local-dev leniency the sibling count-truncation-diff-lint.mjs
+      // already accepts, unchanged.
+      if (process.env.CI === 'true') {
+        console.error(`❌ session-coordination-insert-classguard-lint: diff base unavailable in CI (${e.message.split('\n')[0]})`);
+        console.error('   This means the checkout step lost fetch-depth: 0 / origin/main tracking.');
+        console.error('   Fix the workflow. Do NOT let this silently degrade to advisory mode again.');
+        process.exit(1);
+      }
       console.warn(`⚠️  diff base unavailable (${e.message.split('\n')[0]}) — falling back to --all (advisory)`);
       mode = 'all (degraded)';
       scanned = candidateFilesAll(scanRoot);

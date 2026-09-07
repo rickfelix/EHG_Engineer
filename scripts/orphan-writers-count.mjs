@@ -16,7 +16,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
-import { ORPHAN_ENTRIES } from '../lib/governance/orphan-writers-registry.js';
+import { ORPHAN_ENTRIES, getReaderClassification } from '../lib/governance/orphan-writers-registry.js';
 import { DRAIN_DESCRIPTORS } from '../lib/governance/gauge-registry.js';
 import { classifyStructural } from '../lib/governance/drain-inventory.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
@@ -141,6 +141,13 @@ async function main() {
   const manualCheckCount = results.filter((r) => r.verdict === 'MANUAL_CHECK_REQUIRED').length;
   const unavailableCount = results.filter((r) => r.verdict === 'UNAVAILABLE').length;
 
+  // QF-20260904-116 / Solomon ruling 18f04802 item 3: the derived reader-presence
+  // classification is computed here (not stored per-entry) so this weekly summary and
+  // a future retire-check read the SAME function -- the getter this ruling introduced
+  // had zero production consumers before this line (LEAD-phase VALIDATION finding).
+  const readerNoneCount = ORPHAN_ENTRIES.filter((e) => getReaderClassification(e) === 'reader:NONE').length;
+  const wiredButBlindCount = ORPHAN_ENTRIES.length - readerNoneCount;
+
   // FR-5: self-stamp AFTER measuring.
   const stampResult = await stampLastFired(supabase, SELF_PROCESS_KEY).catch((err) => ({ stamped: false, reason: err.message }));
 
@@ -150,6 +157,7 @@ async function main() {
     orphaned_count: orphanedCount,
     manual_check_required_count: manualCheckCount,
     unavailable_count: unavailableCount,
+    reader_classification: { 'reader:NONE': readerNoneCount, 'wired-but-blind': wiredButBlindCount },
     self_stamp: stampResult,
     results,
   };
@@ -159,6 +167,7 @@ async function main() {
   } else {
     console.log(`\nOrphan-writers count: ${orphanedCount} ORPHANED / ${results.length} evaluated`);
     console.log(`  (${manualCheckCount} require manual check, ${unavailableCount} unavailable)`);
+    console.log(`  Reader classification: ${readerNoneCount} reader:NONE, ${wiredButBlindCount} wired-but-blind`);
     for (const r of results) {
       console.log(`  [${r.verdict}] ${r.id} (${r.entry_type})${r.reason ? ` — ${r.reason}` : ''}`);
     }
