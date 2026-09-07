@@ -386,4 +386,31 @@ describe('resend-adapter', () => {
       expect(result.errorMessage).toBe('ECONNREFUSED');
     });
   });
+
+  // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C: shared transport-layer test-isolation guard.
+  // Every other test in this file relies on global.fetch being replaced with mockFetch (a
+  // vi.fn()) in the top-level beforeEach -- that IS the "mocked" case the guard must pass
+  // through, which the 55 pre-existing tests already prove stays green. This block covers the
+  // OTHER branch: what happens when the real fetch is still in place (the actual 2026-09-03
+  // incident shape -- a caller/test that never mocked fetch at all).
+  describe('test-isolation guard (SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C)', () => {
+    it('refuses a real send and never calls fetch when VITEST is set but fetch is unmocked', async () => {
+      // A plain (non-vi.fn()) wrapper -- deliberately NOT a mock, so it carries no `.mock`
+      // property and isFetchMocked() correctly reports "unmocked", the actual incident shape.
+      // Using vi.spyOn/vi.fn() here would itself be detected as mocked and defeat the test.
+      let callCount = 0;
+      global.fetch = (...args) => { callCount++; return originalFetch(...args); };
+
+      const sendEmail = await importSendEmail();
+      const result = await sendEmail(basePayload, { now: SAFE_DAYTIME_NOW });
+
+      expect(result).toEqual({
+        success: true,
+        suppressed: true,
+        errorCode: 'SUPPRESSED_TEST_ENV',
+        errorMessage: expect.stringContaining('refused to send a real email')
+      });
+      expect(callCount).toBe(0);
+    });
+  });
 });
