@@ -353,6 +353,14 @@ ALTER TABLE public.venture_artifacts
 ALTER TABLE public.venture_artifacts
   ADD CONSTRAINT venture_artifacts_artifact_type_check
   CHECK (artifact_type::text = ANY (ARRAY[
+    -- AMENDED 2026-09-07 by Adam (session bc762fa4) on the chairman's instruction "amend it":
+    -- these six values are allowed by the LIVE constraint (137 values) but were absent from this
+    -- file's staged list (132), because they were added by later migrations after this file was
+    -- authored on 2026-08-26. Applying the unamended list would have REVOKED them, and 40 live
+    -- rows use three of them (build_deviation_record 35, distribution_block_marker 3,
+    -- blueprint_user_journey 2), so the ADD would have failed and rolled the whole migration back.
+    -- Same-constraint coordination check, CLAUDE_ADAM.md section 3c precondition 4.
+    'blueprint_user_journey', 'build_deviation_record', 'distribution_block_marker', 'stage_17_refined', 'stage_27_analysis', 'truth_demand_thesis',
     'blueprint_api_contract', 'blueprint_data_model', 'blueprint_erd_diagram',
     'blueprint_financial_projection', 'blueprint_launch_readiness', 'blueprint_positioning_brief',
     'blueprint_product_roadmap', 'blueprint_project_plan', 'blueprint_promotion_gate',
