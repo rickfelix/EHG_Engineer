@@ -21,15 +21,25 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 30 seed entries (29 prior + unreceipted-signals-overdue, SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 FR-5(d))', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(30);
+  it('exports exactly 41 seed entries (30 prior + 11 Michael spec-§9 gauges, SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(41);
   });
 
-  it('27 entries are activated; the 3 self-score-age entries ship as stubs (writers default-OFF)', () => {
+  it('27 entries are activated; the 3 self-score-age entries plus the 11 Michael gauges ship as stubs (writers/detectors default-OFF)', () => {
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
     expect(live).toHaveLength(27);
-    expect(stubs.map((e) => e.id).sort()).toEqual(['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age']);
+    expect(stubs.map((e) => e.id).sort()).toEqual([
+      'adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age',
+      'michael-account-independence', 'michael-brief-landed', 'michael-classifier-drift',
+      'michael-feeder-health', 'michael-gmail-modify-ceiling', 'michael-ledger-gap',
+      'michael-overdue-cleared', 'michael-oauth-health', 'michael-reopen-rate',
+      'michael-seat-uptime', 'michael-surface-rate',
+    ].sort());
+  });
+
+  it('michael-token-budget is explicitly deferred and NOT registered (spec §9)', () => {
+    expect(GAUGE_REGISTRY.find((e) => e.id === 'michael-token-budget')).toBeUndefined();
   });
 
   it('every entry has a non-null, non-empty detectorFn key', () => {

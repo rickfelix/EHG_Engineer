@@ -44,6 +44,8 @@ const RECONCILIATION_MIGRATION_PATHS = [
   // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001: the new worker_signal kind, registered for
   // coordinator/solomon/michael/adam (not worker — worker-signal.cjs never targets that role).
   path.join(REPO_ROOT, 'database/migrations/20260906_role_drain_sets_add_worker_signal.sql'),
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G: the new michael_handoff kind, michael-only.
+  path.join(REPO_ROOT, 'database/migrations/20260907_role_drain_sets_add_michael_handoff.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -172,9 +174,19 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('solomon', 'solomon_systemic_finding',");
   });
 
-  it('total seed row count is exactly 114 (113 prior + 1: sweep_finding_alert for coordinator, QF-20260905-230)', () => {
-    const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker)',/gm;
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G (FR-3): a TARGETED check rather than adding
+  // 'michael' to the strict per-kind loop above -- DRAIN_SETS.michael spreads DIRECTIVE_KINDS and
+  // BACKPRESSURE_EXEMPT_KINDS, most of which have NO seed row for role=michael today (only
+  // worker_signal did, pre-existing debt from child A, confirmed by grep across every migration in
+  // RECONCILIATION_MIGRATION_PATHS). Backfilling that gap is out of this SD's scope; this check
+  // targets only the one kind this SD actually registers.
+  it("the michael_handoff seed row this SD adds is present for role='michael'", () => {
+    expect(migrationText).toContain("('michael', 'michael_handoff',");
+  });
+
+  it('total seed row count for solomon/adam/coordinator/worker/michael is exactly 116 (114 prior four-role rows + 1 pre-existing michael/worker_signal row, previously uncounted by this regex + 1 new michael/michael_handoff row, SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G)', () => {
+    const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker|michael)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(114);
+    expect(matches.length).toBe(116);
   });
 });
