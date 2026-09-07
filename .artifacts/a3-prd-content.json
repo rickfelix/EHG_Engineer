@@ -1,0 +1,196 @@
+{
+  "executive_summary": "Widen worker-signal receipts to all signal types, replace the dead broadcast target with a per-seat fan-out, and stamp a CONSTRAINTS block on every WORK_ASSIGNMENT dispatch.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Widen the existing signal-receipt write site to every worker /signal row and render a disposition line",
+      "description": "QF-20260906-162 shipped writeSignalReceipts() in scripts/fleet-dashboard.cjs, gated to payload.signal_type==='stuck' AND payload.severity==='high'. Remove that filter so every worker signal enumerated by printInbox() (and every coordinator_request row in the same batch) gets one signal_receipt row via dispatchToWorker, still correlation_id-idempotent. Add a rendered disposition line ('queued' | 'routed:<target>' | 'needs-decision:<who>') into the row's subject/body text, because scripts/hooks/coordination-inbox.cjs's render is a fixed payload-field allowlist and a payload-only field never displays. Add 'signal_receipt' to INFORMATIONAL_KINDS (lib/fleet/worker-status.cjs) alongside its existing BACKPRESSURE_EXEMPT_KINDS membership, closing STEP-0 rider (a) regardless of QF-20260904-695's landing order. Adam-advisory receipts are explicitly OUT of this FR (see risk R-3) because printAdamInbox's 200-row fetch behind a 50-row existence-check window would duplicate-write on every render.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: a worker signal of any signal_type/severity enumerated by printInbox() produces exactly one signal_receipt row correlated to it, verified by re-running printInbox() on the same batch and asserting the receipt count is unchanged",
+        "AC-2: the receipt row's rendered body/subject contains one of 'queued', 'routed:', or 'needs-decision:' as a literal substring, verified against scripts/hooks/coordination-inbox.cjs's actual render output, not the payload object",
+        "AC-3: signal_receipt is present in BOTH lib/fleet/worker-status.cjs INFORMATIONAL_KINDS and BACKPRESSURE_EXEMPT_KINDS, and a stub-supabase test with 3 pre-existing unanswered rows on a target plus a new signal_receipt send does not trigger DISPATCH_SEND_BACKPRESSURE_REFUSED"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Replace the dead target_session='broadcast' capped-pool-broadcast mechanism with a per-live-seat directed fan-out",
+      "description": "The originally-specified target_session='broadcast' sentinel has zero worker readers (scripts/hooks/coordination-inbox.cjs:668/690/719 and lib/fleet/worker-status.cjs:565 all match an exact session id or a role-scoped sentinel; the only NULL-target reader, lib/checkin/steps/drain-reservations.cjs:58, is scoped to reservation kinds; lib/fleet/orphan-reroute-sweep.js:69 skips informational kinds so there is no rescue path). Build a new module (e.g. lib/coordinator/capped-pool-broadcast.cjs) that: (a) reads the live worktree count via countActiveWorktrees()/MAX_WORKTREE_COUNT (lib/worktree-quota.js, ESM, imported dynamically from the CJS coordinator tick); (b) when over cap for more than 30 minutes (configurable), enumerates live seats via liveFleetSessions() (lib/fleet/live-fleet-sessions.cjs) and sends ONE directed INFO row per seat, all sharing one run_id, payload.kind='capped_pool_broadcast', naming the DB-resident LEAD/PLAN work that is slot-free-safe and the reuse-by-checkout procedure; (c) dedupes fire-once per target using the same pattern as emitReaperStarvationAlert (lib/coordinator/coordination-events.cjs:855) -- select an existing unacknowledged unexpired row of the same kind for that target before sending -- giving a natural re-emit window via expires_at (6h default); (d) emits one additional 'cleared' notice (same dedupe, distinct kind or a payload.cleared=true discriminator) the first tick the condition resolves. Add capped_pool_broadcast to INFORMATIONAL_KINDS (no migration required) and to BACKPRESSURE_EXEMPT_KINDS (requires a role_drain_sets migration mirroring 20260906_role_drain_sets_add_signal_receipt.sql, plus updates to the seed-count assertion and RECONCILIATION_MIGRATION_PATHS in tests/unit/fleet/drain-set-registry.test.js and the per-role counts in tests/unit/fleet/drain-sets-adam-reconciliation.test.js).",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-4: with a live worktree count above MAX_WORKTREE_COUNT for a simulated 31 minutes, exactly one directed INFO row per currently-live seat is produced, and a second tick within the 6h window produces zero additional rows for the same condition",
+        "AC-5: when the over-cap condition clears, exactly one additional per-seat notice is sent on the next tick, and zero further notices after that",
+        "AC-6: tests/unit/fleet/drain-set-registry.test.js's exact seed-row-count assertion and tests/unit/fleet/drain-sets-adam-reconciliation.test.js's per-role count assertions are updated to the new totals and pass"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Land QF-20260904-724's resolveHoldProvenance key-widening as a prerequisite for FR-4",
+      "description": "FR-4's CONSTRAINTS block depends on resolveHoldProvenance (lib/fleet/claim-eligibility.cjs:718) correctly resolving a hold's reason text. QF-20260904-724 (open, unclaimed) found that resolveHoldProvenance's key list omits human_action_note, human_action_required, human_action_reason, and needs_coordinator_review_reason, causing 5 of 10 documented holds to render as 'no reason recorded (bare flag)'. Widen resolveHoldProvenance's key-check chain to also resolve these four keys (in addition to its existing requires_human_action_reason / not_worker_claimable_reason / review_hold_reason / dispatch_ineligible_reason / pilot_throwaway / deferred_by chain), preserving its existing precedence order and its isHoldReleased() release-check behavior. Per QF-724's own fix shape, also add a self-detecting test asserting no live SD carries a reason-shaped metadata key the resolver does not read.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-7: resolveHoldProvenance(metadata) returns a non-null reason for a metadata object carrying only human_action_note, human_action_required, human_action_reason, or needs_coordinator_review_reason (one test per key)",
+        "AC-8: the 5 previously-false-bare SDs named in QF-20260904-724 (or their current-state equivalents) resolve to a real reason via formatHoldProvenance(), not 'no reason recorded'",
+        "AC-9: a new drift-detection test scans live strategic_directives_v2 metadata for reason-shaped keys absent from resolveHoldProvenance's key list and asserts zero, so a future writer/reader divergence fails CI instead of silently recurring"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Stamp a CONSTRAINTS block on every WORK_ASSIGNMENT dispatch at the insertCoordinationRow choke point",
+      "description": "buildWorkAssignment does not exist in the codebase; the real choke point is insertCoordinationRow (lib/coordinator/dispatch.cjs:1214), which already runs three fail-soft stamper guards keyed on message_type==='WORK_ASSIGNMENT' (stampEffortRecommendation, stampModelRecommendation, stampPremiseMeasurement). Add a fourth, stampConstraintsBlock(supabase, row, logger), following the identical pattern: resolve the target SD's ratifications_cited, any forbidden-framings text, hold provenance via resolveHoldProvenance/formatHoldProvenance (post-FR-3), and any Solomon-ruling text recorded in metadata; render as a 'CONSTRAINTS:' block appended to the WORK_ASSIGNMENT body BEFORE the existing body/payload.body fill-if-absent mirror at line 1468 (appending after it would desynchronize the two copies for payload-side readers per TST-B4), and apply the existing capBodySafe (lib/shared/body-cap.cjs) since insertCoordinationRow applies no body cap today. When no constraint resolves, the block reads 'CONSTRAINTS: none recorded' -- never omitted, and never rendered when the resolver genuinely found nothing (as opposed to a key that merely did not match, which must never render as 'none recorded').",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-10: a WORK_ASSIGNMENT dispatched for an SD carrying metadata.ratifications_cited and a review_hold_reason produces a body containing a 'CONSTRAINTS:' section naming both, verified against the actual inserted row (not a mocked stamper call)",
+        "AC-11: a WORK_ASSIGNMENT dispatched for an SD with no constraint-bearing metadata keys produces a body containing 'CONSTRAINTS: none recorded'",
+        "AC-12: the constraints stamp runs and is visible in row.payload.body BEFORE the existing mirror-fill-if-absent logic executes, verified by asserting row.body and row.payload.body are identical after insertCoordinationRow returns",
+        "AC-13: a constraints block exceeding lib/shared/body-cap.cjs's BODY_HARD_CAP (4096 chars) is rejected the same way any oversized body is today, not silently truncated"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "CI fixtures asserting each mechanism above, plus a zero-asserted unreceipted-signal gauge",
+      "description": "Per ratification 49656c8c's preventive-exit-predicate requirement: (a) a drain fixture (extending tests/unit/coordinator/fleet-dashboard-signal-receipt.test.js) asserting one receipt per drained worker-signal row of ANY type/severity, and that the target's backpressure count is unchanged after N receipts; (b) a pool-over-cap fixture (new, mirroring scripts/fleet/worktree-reaper-tick.cjs's own test conventions) asserting one fan-out broadcast then silence for the 6h re-emit window, and one 'cleared' notice on resolution; (c) an assignment fixture with a review-held SD asserting the CONSTRAINTS block names the hold, using the permissive-double pattern from fleet-dashboard-signal-receipt.test.js (dispatchToWorker/insertCoordinationRow cannot be vi.mock'd across a CJS-CJS require boundary); (d) a gauge (extending lib/fleet/outstanding-signals.cjs's existing 'received' predicate) counting worker signals older than 30 minutes with no correlated signal_receipt row, asserted at zero from the merge commit, with its existence-check query bound sized to cover the FULL enumerated batch (never a fixed 20/50 regardless of batch size) and its fail-soft catch reporting unknown/error rather than a false-pass zero on a lookup failure.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-14: `npx vitest run --project unit` passes with the new fixtures included, and the existing 113-test baseline (captured in .artifacts/testing-receipts-broadcast-baseline.json) still passes unchanged",
+        "AC-15: the FR-5(d) gauge reports 0 unreceipted signals older than 30 minutes when run against a fixture with N synthetic signals all carrying receipts, and reports N (not 0) when the receipts are removed from the fixture, and reports 'unknown' (not 0) when the query is made to throw",
+        "AC-16: tests/unit/coordination/kind-classification.test.js's informational/actionable disjointness assertion still passes after signal_receipt and capped_pool_broadcast are added to INFORMATIONAL_KINDS"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "stampConstraintsBlock must execute before dispatch.cjs's body/payload.body fill-if-absent mirror (line 1468), not after",
+      "rationale": "TST-B4 found the mirror is fill-if-absent in BOTH directions; a stamper appending to row.body after the mirror already ran leaves row.payload.body stale for any reader keyed on the payload side, silently diverging the two copies of the same message."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "Any new BACKPRESSURE_EXEMPT_KINDS entry (capped_pool_broadcast) must ship its role_drain_sets migration, seed-count test update, and per-role count test update in the SAME PR as the code change",
+      "rationale": "INFORMATIONAL_KINDS changes need no migration (that list is not spread into role_drain_sets), but BACKPRESSURE_EXEMPT_KINDS IS spread into every role's drain set (worker-status.cjs DRAIN_SETS), so a code-only change without the migration+test updates leaves the four per-role counts and the exact-106 seed-row assertion failing, exactly as QF-20260906-162's own migration (20260906_role_drain_sets_add_signal_receipt.sql) had to do."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "lib/worktree-quota.js (ESM) must be read via dynamic import() from the CommonJS coordinator tick, never duplicated as a second MAX_WORKTREE_COUNT constant",
+      "rationale": "scripts/fleet/worktree-reaper-tick.cjs already duplicates this constant as a documented workaround ('cannot require the ESM quota module'); FR-2's new module should use dynamic import instead so the two constants cannot drift, which is the exact defect class (a coalescer's key list and its writers' keys diverging) this whole SD exists to close elsewhere."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "The FR-2 fan-out must reuse liveFleetSessions() (lib/fleet/live-fleet-sessions.cjs), not re-derive a live-seat set independently",
+      "rationale": "A second live-seat enumeration with even slightly different freshness-window semantics than the one used elsewhere in the fleet (worker-status.cjs FLEET_ACTIVE_WINDOW_MS-based checks) would broadcast to a subtly different seat population than every other liveness-gated surface, reintroducing the exact instrument-disagreement class this SD's rationale names."
+    }
+  ],
+  "system_architecture": {
+    "overview": "Four independent write-path changes converge on the coordinator's existing coordination_row dispatch machinery: FR-1 widens an existing enumeration-time write site, FR-2 adds a new tick-driven fan-out writer, FR-3 patches a shared read helper, and FR-4 adds a fourth stamper guard at the one choke point every dispatch already passes through. No new tables, no new comms lane -- every write still lands in session_coordination via the existing insertCoordinationRow/dispatchToWorker path.",
+    "components": [
+      { "name": "writeSignalReceipts (widened)", "responsibility": "Enumerate every worker signal in the current printInbox() batch and write one correlation_id-idempotent signal_receipt row per signal via dispatchToWorker, with a rendered disposition line", "technology": "Node.js CJS, scripts/fleet-dashboard.cjs" },
+      { "name": "capped-pool-broadcast module (new)", "responsibility": "Tick-driven: read live worktree count vs cap, and when over-cap past the hold window, fan out one directed INFO row per live seat with fire-once dedupe and a cleared-notice transition", "technology": "Node.js CJS, new lib/coordinator/capped-pool-broadcast.cjs, invoked from scripts/stale-session-sweep.cjs's existing tick" },
+      { "name": "resolveHoldProvenance (widened)", "responsibility": "Resolve a hold's reason text from any of the now-10 documented metadata keys, in a fixed precedence order, respecting release state", "technology": "Node.js CJS, lib/fleet/claim-eligibility.cjs" },
+      { "name": "stampConstraintsBlock (new)", "responsibility": "Fourth stamper guard at insertCoordinationRow: render ratifications, holds, and rulings into the WORK_ASSIGNMENT body before the body-mirror fill-if-absent runs, capped by capBodySafe", "technology": "Node.js CJS, lib/coordinator/dispatch.cjs" }
+    ],
+    "data_flow": "A worker signal or advisory lands in session_coordination -> the coordinator's inbox-core render (printInbox/printAdamInbox) enumerates it each tick -> writeSignalReceipts fires a correlated signal_receipt row back to the sender, exempt from backpressure and drain-set-recognized as informational on all four roles. Separately, the coordinator's periodic sweep tick reads the live worktree count -> capped-pool-broadcast decides whether to fan out, using the existing session_coordination table itself (via an existing-unacknowledged-row select) as its own dedupe state, no new table. Separately again, any WORK_ASSIGNMENT insert passes through insertCoordinationRow -> the new stampConstraintsBlock reads the target SD's metadata -> resolveHoldProvenance (widened) resolves any hold -> the rendered CONSTRAINTS text is merged into the body before the existing mirror runs.",
+    "integration_points": ["session_coordination (all four write paths share this one table)", "role_drain_sets (migration path for the new BACKPRESSURE_EXEMPT_KINDS entry)", "strategic_directives_v2.metadata (read by both resolveHoldProvenance and stampConstraintsBlock)"]
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "A worker signal of signal_type='need-sweep' and severity='medium' (previously excluded by the stuck+high filter) is enumerated by printInbox()", "test_type": "unit", "given": "printInbox() enumerates a batch containing one signal_type=need-sweep, severity=medium row with no existing receipt", "when": "writeSignalReceipts runs on that batch", "then": "exactly one signal_receipt row is written, correlated to the signal's id, and re-running on the same batch writes zero additional rows" },
+    { "id": "TS-2", "scenario": "A busy target with 3 pre-existing unanswered directed rows receives a new signal_receipt send", "test_type": "unit", "given": "a stub target session already at BACKPRESSURE_UNANSWERED_LIMIT (3) unanswered rows", "when": "dispatchToWorker sends a signal_receipt-kind row to that target", "then": "the send succeeds (not refused), because signal_receipt is in BACKPRESSURE_EXEMPT_KINDS" },
+    { "id": "TS-3", "scenario": "Worktree pool is simulated over MAX_WORKTREE_COUNT for 31 simulated minutes with 4 live seats registered", "test_type": "integration", "given": "countActiveWorktrees() returns a value above MAX_WORKTREE_COUNT, over-cap-since timestamp is 31 minutes in the past, 4 live seats from liveFleetSessions()", "when": "the capped-pool-broadcast tick runs", "then": "exactly 4 directed INFO rows are inserted (one per live seat), all sharing one run_id, and a second tick within 6h inserts zero more" },
+    { "id": "TS-4", "scenario": "Worktree pool count drops back under cap on the tick immediately following an active broadcast window", "test_type": "integration", "given": "the prior tick emitted a capped_pool_broadcast fan-out and the condition has now cleared", "when": "the capped-pool-broadcast tick runs again", "then": "exactly one cleared-notice row per live seat is sent, and the next tick after that sends zero" },
+    { "id": "TS-5", "scenario": "resolveHoldProvenance is called against metadata carrying only human_action_note (no requires_human_action_reason)", "test_type": "unit", "given": "metadata = { human_action_note: 'awaiting chairman ceremony' }", "when": "resolveHoldProvenance(metadata) is called", "then": "it returns a non-null { reason: 'awaiting chairman ceremony', source_key: 'human_action_note', ... } instead of null" },
+    { "id": "TS-6", "scenario": "A WORK_ASSIGNMENT is dispatched for an SD with review_hold_reason set and no other constraint keys", "test_type": "integration", "given": "target SD metadata has review_hold_reason='awaiting Solomon review' and no ratifications_cited", "when": "insertCoordinationRow processes the WORK_ASSIGNMENT row", "then": "the inserted row's body contains 'CONSTRAINTS:' followed by the review hold reason text, and row.body === row.payload.body" },
+    { "id": "TS-7", "scenario": "A WORK_ASSIGNMENT is dispatched for an SD with a constraints render exceeding the body hard cap", "test_type": "unit", "given": "the rendered CONSTRAINTS text plus the existing body would exceed 4096 chars", "when": "insertCoordinationRow processes the row", "then": "the same oversized-body handling that governs any other over-cap body today applies (error, not silent truncation)" },
+    { "id": "TS-8", "scenario": "FR-5(d)'s unreceipted-signal gauge is run against a fixture where the correlated-receipt lookup query throws", "test_type": "unit", "given": "the receipt-existence-check query is stubbed to reject", "when": "the gauge computes its count", "then": "it reports an explicit 'unknown'/error state, never a numeric 0" }
+  ],
+  "acceptance_criteria": [
+    "Every worker signal enumerated by the coordinator's inbox core receives exactly one correlation_id-idempotent signal_receipt row, regardless of signal_type/severity, with zero effect on the target's send-backpressure count",
+    "The over-cap fleet-wide notice reaches every live worker seat directly (not via an unread sentinel), fires at most once per 6h re-emit window while the condition holds, and fires exactly once more when it clears",
+    "Every WORK_ASSIGNMENT dispatch carries a CONSTRAINTS block naming every resolvable ratification/hold/ruling on the target SD, rendering 'none recorded' only when genuinely none exist",
+    "QF-20260904-724's resolver-widening lands as a verified prerequisite, with a drift-detection test preventing the same reader/writer-key divergence from recurring"
+  ],
+  "risks": [
+    {
+      "risk": "The over-cap trigger's own state (over-cap-since timestamp) could double-count or reset incorrectly across coordinator restarts if implemented as an in-memory value instead of a durable marker",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Mirror scripts/fleet/worktree-reaper-tick.cjs's own readState/writeState JSON-file pattern (already reviewed, already in production) rather than inventing new persistence; the state file survives process restarts by design.",
+      "rollback_plan": "Delete the state file to reset the over-cap timer to 'not yet over cap'; the fan-out logic recomputes from a clean slate on the next tick with no data loss, since the fan-out rows themselves (not the timer) are the durable side-effect."
+    },
+    {
+      "risk": "Widening BACKPRESSURE_EXEMPT_KINDS with a second entry (capped_pool_broadcast) in the same PR cycle as QF-20260904-695's counter fix could land in the wrong order and silently regress the exemption for one kind while fixing it for the other",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "This SD adds capped_pool_broadcast to BOTH BACKPRESSURE_EXEMPT_KINDS and INFORMATIONAL_KINDS independent of QF-20260904-695's landing order (mirroring how signal_receipt already sits in both after this SD's FR-1), so the exemption holds regardless of which PR merges first.",
+      "rollback_plan": "Revert the single migration + the two constant additions; no other code path depends on capped_pool_broadcast existing, so the revert is self-contained."
+    },
+    {
+      "risk": "Adam-advisory receipts were cut from FR-1's scope (TST-B3's unbounded duplicate-write finding) but the underlying gap (Adam's signals also going un-receipted) remains open and could recur as a chairman-facing complaint before its own follow-up QF is filed",
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "mitigation": "File the follow-up QF for Adam-advisory receipts as part of this SD's own completion tail, explicitly scoped to fix the write-site's query-window mismatch (raise the existence-check limit to match the 200-row fetch, or bound both to the same window) before shipping, rather than leaving it as an unowned gap.",
+      "rollback_plan": "N/A -- this is a scope-cut, not a shipped mechanism; there is nothing to roll back."
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      { "phase": "Phase 1", "description": "Land QF-20260904-724's resolveHoldProvenance widening plus its drift-detection test (FR-3), since FR-4 depends on it", "deliverables": ["resolveHoldProvenance key-list widening", "drift-detection test", "QF-20260904-724 marked completed"] },
+      { "phase": "Phase 2", "description": "Widen writeSignalReceipts (FR-1) and add the INFORMATIONAL_KINDS entry for signal_receipt", "deliverables": ["all-signal-types receipt write path", "rendered disposition line", "INFORMATIONAL_KINDS update"] },
+      { "phase": "Phase 3", "description": "Build the capped-pool-broadcast module (FR-2) and its role_drain_sets migration", "deliverables": ["lib/coordinator/capped-pool-broadcast.cjs", "state-file persistence", "migration + seed-count test updates"] },
+      { "phase": "Phase 4", "description": "Add the fourth stamper guard (FR-4) at insertCoordinationRow, ordered before the body mirror", "deliverables": ["stampConstraintsBlock", "capBodySafe integration", "CONSTRAINTS rendering"] },
+      { "phase": "Phase 5", "description": "CI fixtures for all four mechanisms plus the FR-5(d) gauge (FR-5)", "deliverables": ["updated fleet-dashboard-signal-receipt.test.js", "new capped-pool-broadcast test", "new constraints-block dispatch test", "unreceipted-signal gauge + test"] }
+    ],
+    "technical_decisions": [
+      "Keep the receipt shape as a NEW ROW (matching QF-20260906-162's shipped behavior) rather than the STEP-0 rider's originally-preferred UPDATE-with-receipted_at shape, since reverting merged production code to relitigate a shape preference is not warranted",
+      "Reuse lib/coordinator/coordination-events.cjs's fire-once dedupe pattern for FR-2 instead of inventing new dedupe machinery, per the SD's own 'no new machinery' rationale",
+      "Sequence FR-3 (the QF-724 prerequisite) before FR-4 within this SD's own EXEC rather than waiting on another session to pick up the unclaimed QF"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      { "name": "Fleet worker sessions", "interaction": "Receive signal_receipt rows (FR-1), capped_pool_broadcast rows (FR-2), and CONSTRAINTS-bearing WORK_ASSIGNMENT bodies (FR-4) via their existing /checkin and coordination-inbox.cjs drain paths", "frequency": "Every check-in cycle / every dispatch" },
+      { "name": "Coordinator sweep tick (scripts/stale-session-sweep.cjs)", "interaction": "Invokes the new capped-pool-broadcast module once per tick", "frequency": "Per sweep cycle (~5 min)" }
+    ],
+    "dependencies": [
+      { "name": "QF-20260904-695 (backpressure counter fix)", "type": "upstream", "contract": "Independent -- this SD's exempt-kind additions work regardless of whether QF-695 has landed, per the technical decision above", "failure_handling": "No action needed if QF-695 lands late; the dual INFORMATIONAL_KINDS+BACKPRESSURE_EXEMPT_KINDS membership is self-sufficient" },
+      { "name": "QF-20260904-724 (resolveHoldProvenance widening)", "type": "upstream", "contract": "Landed as this SD's own Phase 1, not awaited externally", "failure_handling": "N/A -- absorbed into this SD" }
+    ],
+    "data_contracts": [
+      { "contract_name": "session_coordination.payload.kind='signal_receipt'", "schema": "{ kind, producer, run_id, enumerated_row_id, correlation_id, receipt: 'queued'|'routed:<target>'|'needs-decision:<who>' }", "validation": "Existing correlation_id-based idempotency check, extended to cover all signal types", "versioning": "Additive field (receipt); existing consumers of the row shape are unaffected" },
+      { "contract_name": "session_coordination.payload.kind='capped_pool_broadcast'", "schema": "{ kind, run_id, over_cap_since, pool_used, pool_cap, cleared: boolean }", "validation": "Fire-once dedupe by existing-unacknowledged-row-of-same-kind-per-target", "versioning": "New kind, no prior version to migrate" }
+    ],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": ["Reuses WORKTREE_POOL_WATCHDOG-style off-switch convention if a kill-switch is warranted at EXEC time"],
+      "deployment_considerations": "Migration (role_drain_sets INSERT) must be applied before the code that adds capped_pool_broadcast to BACKPRESSURE_EXEMPT_KINDS ships, mirroring QF-20260906-162's own sequencing"
+    },
+    "observability_rollout": {
+      "monitoring": ["FR-5(d) unreceipted-signal-count gauge", "capped_pool_broadcast row count per over-cap episode"],
+      "alerts": ["None new -- reuses existing dashboard/inbox surfaces"],
+      "rollout_strategy": "Direct merge, no phased flag -- all four FRs are additive stamper/write-path changes with existing fail-soft guards",
+      "rollback_trigger": "Any CI fixture regression or a live false-bare CONSTRAINTS render on a documented hold",
+      "rollback_procedure": "Revert the specific FR's commit(s); each FR is independently revertable since none share mutable state beyond the migration (which is additive and safe to leave applied even if the code is reverted)"
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "scripts/fleet-dashboard.cjs", "lib/fleet/worker-status.cjs", "lib/coordinator/dispatch.cjs",
+      "lib/fleet/claim-eligibility.cjs", "scripts/hooks/coordination-inbox.cjs", "lib/checkin/steps/drain-reservations.cjs",
+      "lib/fleet/live-fleet-sessions.cjs", "lib/coordinator/coordination-events.cjs", "scripts/fleet/worktree-reaper-tick.cjs",
+      "lib/worktree-quota.js", "lib/shared/body-cap.cjs", "tests/unit/coordinator/dispatch-send-backpressure.test.js",
+      "tests/unit/coordinator/fleet-dashboard-signal-receipt.test.js", "lib/fleet/outstanding-signals.cjs",
+      "tests/unit/fleet/drain-set-registry.test.js", "tests/unit/fleet/drain-sets-adam-reconciliation.test.js",
+      "database/migrations/20260906_role_drain_sets_add_signal_receipt.sql"
+    ],
+    "patterns_identified": [
+      "Fail-soft stamper guards at insertCoordinationRow, keyed on message_type==='WORK_ASSIGNMENT' (stampEffortRecommendation/stampModelRecommendation/stampPremiseMeasurement)",
+      "Fire-once dedupe by selecting an existing unacknowledged unexpired row of the same payload.kind before writing a new alert (emitReaperStarvationAlert)",
+      "A dual-list membership contract: INFORMATIONAL_KINDS (no migration) vs BACKPRESSURE_EXEMPT_KINDS (migration + seed-count test updates required, since it is spread into role_drain_sets)"
+    ],
+    "key_decisions": [
+      "Cut Adam-advisory receipts from FR-1 (unbounded duplicate-write risk found by prospective TESTING)",
+      "Redesigned FR-2's target from the dead 'broadcast' sentinel to a per-seat directed fan-out",
+      "Redirected FR-4's anchor from the nonexistent buildWorkAssignment to insertCoordinationRow",
+      "Folded QF-20260904-724 into this SD's own EXEC as a sequencing prerequisite rather than waiting on an unclaimed QF"
+    ],
+    "exploration_date": "2026-09-06T11:40:00.000Z"
+  }
+}

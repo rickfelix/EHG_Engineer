@@ -1,0 +1,58 @@
+{
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 88,
+  "phase": "VERIFY",
+  "supersedes_provisional_row": "4080181d-56b0-4117-8306-3291fb6a0038",
+  "baseline_method": "git diff origin/main...HEAD (merge-base 9126e8903f2), 8 commits, 16 files, +1148/-41",
+  "test_results": {
+    "targeted_suites": "9 files / 103 tests passed",
+    "consumer_regression_run": "tests/unit/coordination + tests/unit/fleet + tests/unit/coordinator = 409 files, 4929 passed, 0 failed tests, 1 expected-fail, 18 skipped",
+    "one_suite_collect_failure": "tests/unit/fleet/source-tree-identity-realgit.test.js failed to collect in the parallel run; passes 17/17 in isolation (22.8s real-git suite). Untouched by this SD (last commit f932435ad4f, SD-LEO-INFRA-SCHEDULED-WORKTREE-REAPER-001). Classified PRE-EXISTING parallel-run timing flake, not a regression."
+  },
+  "checks": {
+    "resolveHoldProvenance_revert_clean": {
+      "result": "PASS",
+      "evidence": "lib/fleet/claim-eligibility.cjs diff vs origin/main is +15/-0 -- ZERO deleted lines. The entire delta is a docblock inserted above the function. Function body, the 6-key source chain, the sanitizer helper, and isHoldReleased are byte-identical to main. The revert of commit 34c218e4d12 by e330cd72fab was clean, not partial or lossy. All existing consumers (lib/fleet/belt-census.cjs:187, scripts/lib/claimable-leaves.mjs:122, scripts/modules/handoff/executors/lead-final-approval/index.js:222, and post-merge-handoff-orchestrator classifyState) are behavior-identical to main. The 64-SD / 11-non-terminal auto-handoff stall the widening caused is fully backed out."
+    },
+    "drain_set_count_assertions": {
+      "result": "PASS -- incremented, not loosened",
+      "evidence": "drain-set-registry.test.js: exact-equality 106 -> 110, still toBe, still an exact count, not a range or a >=. drain-sets-adam-reconciliation.test.js: per-role 30/20/28/26 -> 31/21/29/27, i.e. +1 each. Both deltas are arithmetically forced by adding exactly ONE kind (capped_pool_broadcast) to BACKPRESSURE_EXEMPT_KINDS, which is spread into all four DRAIN_SETS. Migration 20260906_role_drain_sets_add_capped_pool_broadcast.sql contains exactly 4 seed rows (verified by grep -c), matching 110 minus 106. No assertion was weakened."
+    },
+    "disjointness_test_updated_correctly": {
+      "result": "PASS -- strengthened",
+      "evidence": "The pre-existing tests/unit/coordination/kind-classification.test.js disjointness assertion passes VACUOUSLY for dual-membership kinds, because INFORMATIONAL_KINDS wins on precedence before the DRAIN_SETS union in classifyCoordinationRow, so the overlap is unobservable there. Rather than loosen it, the SD added a NEW test (tests/unit/fleet/informational-drain-set-overlap.test.js) asserting the overlap is CONFINED to BACKPRESSURE_EXEMPT_KINDS, with roll_call named as an explicit pre-existing, out-of-scope exception. Net effect is more coverage, not less."
+    },
+    "api_export_signature_compat": {
+      "result": "PASS -- all additive",
+      "evidence": "writeSignalReceipts(supabase, coordinatorId, signals) returning {written, skipped} has an unchanged signature and return shape; 1 production caller (scripts/fleet-dashboard.cjs:1813 printInbox) plus the module.exports test hook. insertCoordinationRow(supabase, row, opts) signature unchanged across all call sites; only an added internal await. fetchAllOutstandingSignals(sb, opts) signature unchanged, return object gains one additive field received_check_reliable; 1 production caller (fleet-dashboard.cjs:1858). resolveHoldProvenance(metadata) unchanged. New exports countUnreceiptedOverdue and stampConstraintsBlock are purely additive. No export was removed or renamed."
+    },
+    "receipt_subject_string_consumers": {
+      "result": "PASS",
+      "evidence": "Subject changed from a fixed stuck/high sentence to a disposition-interpolated form. Repo-wide grep for the old text and for the SIGNAL_RECEIPT subject prefix finds exactly ONE hit: the write site itself (fleet-dashboard.cjs:1738). No reader parses this subject, so the wording change breaks nothing."
+    },
+    "existence_check_bound_widening": {
+      "result": "PASS",
+      "evidence": "Both widenings replace a fixed literal with a batch-derived bound: fleet-dashboard.cjs limit 50 becomes batch.length + 50; outstanding-signals.cjs limit 20 becomes rows.length + 50. Strictly more permissive, so the receipt id sets can only become MORE complete. The only directional effect on existing callers is fewer duplicate receipts and more accurate received=true. No path becomes less correct."
+    }
+  },
+  "findings": [
+    {
+      "id": "REG-1",
+      "severity": "MEDIUM",
+      "title": "signal_receipt is a PRE-EXISTING kind that silently changed classification, altering two lane gauges",
+      "detail": "lib/fleet/worker-status.cjs adds signal_receipt to INFORMATIONAL_KINDS. Unlike capped_pool_broadcast, signal_receipt is NOT new -- it shipped to main in QF-20260906-162. Because classifyCoordinationRow checks INFORMATIONAL_KINDS before the DRAIN_SETS union, every pre-existing signal_receipt row flips from classification actionable (basis drain_set) to informational (basis informational_registry). Two consumers were not updated and were not in the SD's enumerated intended-change set: (a) lib/coordination/lane-pending-gauge.cjs:61, where receipts move out of the actionable count into informational and stop contributing to oldestActionableAgeMs; (b) lib/coordination/lane-dead-letter-gauge.cjs:75, where expired-unread receipts move from expired_unread into structurally_artifact_prone, LOWERING the reported dead-letter rate for whichever lane they map to.",
+      "assessment": "Direction of change is defensible and arguably desirable, since a delivery receipt is not an open ask and should not inflate an actionable-pending gauge or a dead-letter rate, and it is explicitly documented in the FR-1 docblock. But it is a real, measurable, cross-module change to an EXISTING kind, so gauge readings will shift discontinuously at merge. Flagged, not failed.",
+      "secondary": "lane-dead-letter-gauge.cjs's inline rationale for the else-branch reads that no DRAIN_SET ever owns this kind, so read_at was structurally never going to be stamped. That premise is now FALSE for signal_receipt and capped_pool_broadcast, which sit in all four DRAIN_SETS. The number it produces is still the intended one, but the comment justifying it has gone stale and will mislead the next reader.",
+      "recommended_followup": "Non-blocking: correct the lane-dead-letter-gauge else-branch comment, and note the expected one-time gauge step-change in the SD retro so the shift is not later mis-triaged as a delivery-failure improvement."
+    },
+    {
+      "id": "REG-2",
+      "severity": "LOW",
+      "title": "Every WORK_ASSIGNMENT body is now mutated, and existing dispatch tests likely cover it vacuously",
+      "detail": "stampConstraintsBlock runs inside insertCoordinationRow for all WORK_ASSIGNMENT rows and always appends a block, including a none-recorded placeholder when nothing is found, mutating BOTH row.body and row.payload.body in place, and adding one strategic_directives_v2 read per WORK_ASSIGNMENT insert. Under the existing dispatch suites' supabase mocks the SD lookup throws and is swallowed by the fail-soft catch, so those 409 passing files do not by themselves prove body compatibility for a live dispatch; the dedicated tests/unit/coordinator/stamp-constraints-block.test.js (183 lines) is what actually covers the stamper.",
+      "assessment": "Low risk. In-place row mutation is the established pattern of three sibling stampers (stampEffortRecommendation, stampModelRecommendation, stampPremiseMeasurement) at the same choke point. Repo-wide grep finds NO consumer that parses a WORK_ASSIGNMENT body for a CONSTRAINTS block or asserts exact body equality; the only other hits are unrelated prompt templates under scripts/archive/. Oversize renders fail soft via capBodySafe -- the stamp is dropped with a warning, never truncated, never thrown, and the un-stamped assignment still inserts."
+    }
+  ],
+  "verdict_rationale": "CONDITIONAL_PASS, not PASS: zero test regressions, a clean and fully verified resolveHoldProvenance revert, exact-count assertions incremented rather than loosened, and all export signatures backward compatible. Withheld from PASS solely because REG-1 changes the classification of signal_receipt, a kind that already existed on main, which shifts two lane-gauge readings that the SD did not enumerate as intended changes and whose consumers were not updated. The change is documented and directionally correct, so it warrants a flag and a retro note rather than a block.",
+  "summary": "REGRESSION validation of SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 against origin/main. 4929 consumer tests pass with zero failures; the single non-collecting suite is an untouched pre-existing parallel-run flake that passes 17/17 in isolation. resolveHoldProvenance revert confirmed byte-clean at +15/-0, comment only. Drain-set counts incremented by the arithmetically-forced delta and backed by a 4-row migration. Disjointness coverage strengthened, not loosened. Two findings raised: signal_receipt's classification flip shifting the pending and dead-letter lane gauges (MEDIUM), and universal WORK_ASSIGNMENT body mutation with vacuous existing-test coverage (LOW)."
+}

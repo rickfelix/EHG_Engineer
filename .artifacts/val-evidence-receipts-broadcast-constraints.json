@@ -1,0 +1,75 @@
+{
+  "verdict": "CONDITIONAL_PASS",
+  "sub_agent": "VALIDATION (Principal Systems Analyst)",
+  "sd_id": "SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001",
+  "phase": "VERIFY (PLAN-TO-LEAD gate)",
+  "validated_against": "product_requirements_v2 PRD-SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001 as of updated_at 2026-09-06T13:18:31.501328 (read fresh, post-amendment)",
+  "branch": "feat/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001",
+  "merge_base": "9126e8903f285d0350b0841f6162a0e4d7334c72",
+  "real_diff_scope": "16 files, +1148/-41 vs merge-base (the vs-main-tip diffstat is misleading: main advanced 5 commits after the branch point)",
+  "gate4_checklist": {
+    "implementation_matches_final_prd": "PASS",
+    "no_scope_creep": "PASS - every changed file traces to FR-1..FR-5; no unrelated edits",
+    "integration_with_existing_systems": "CONDITIONAL - 2 of 3 mechanisms have live production callers, FR-5(d) gauge has none",
+    "duplicate_check": "PASS - no duplicate or competing implementation found"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "PASS",
+      "title": "FR-3 correction landed cleanly and completely",
+      "evidence": "lib/fleet/claim-eligibility.cjs: resolveHoldProvenance retains exactly the original 6-key precedence chain (requires_human_action_reason, not_worker_claimable_reason, review_hold_reason, dispatch_ineligible_reason, pilot_throwaway, deferred_by). Grep for the 4 keys inside the function body returns zero hits; the only branch change to this file is a 15-line explanatory comment block (git diff vs merge-base is comment-only). HOLD_REASON_KEYS is absent from module.exports. tests/unit/fleet/claim-eligibility-hold-scope-guard.test.js is a 6-assertion AC-20 regression guard asserting null for each of the 4 keys alone, precedence unchanged, and HOLD_REASON_KEYS undefined. Consumers scripts/post-merge-handoff-orchestrator.js classifyState() and lib/fleet/belt-census.cjs therefore see byte-identical behavior."
+    },
+    {
+      "id": "F2",
+      "severity": "PASS",
+      "title": "stampConstraintsBlock reads all four keys directly, with sanitization on every rendered field",
+      "evidence": "lib/coordinator/dispatch.cjs:728 stampConstraintsBlock reads metadata.human_action_note, .human_action_reason, .human_action_required===true, .needs_coordinator_review_reason directly (lines ~789-800), each rendered as its own CONSTRAINTS line. The SECURITY fix (commit 4aa9c8ece56) adds a sanitize() helper stripping control chars, applied to ratifications_cited, the four FR-3 keys, all four solomon_* keys, and forbidden_framing(s). Wired at dispatch.cjs:1488, before both body mirrors (1592, 1601), with a structural wiring test asserting the call precedes both. Writes row.body and row.payload.body directly. capBodySafe error path drops the stamp fail-soft with a warning naming the SD and byte length."
+    },
+    {
+      "id": "F3",
+      "severity": "PASS",
+      "title": "QF-20260904-724 remains open and unclaimed by this SD",
+      "evidence": "quick_fixes id=QF-20260904-724: status=open, pr_url=null, commit_sha=null, disposition=null, created 2026-09-04T08:29:35Z. PRD FR-3 AC-9 explicitly scopes the dashboard bare-flag fix out; code comments and the SD make no completion claim. Consistent."
+    },
+    {
+      "id": "F4",
+      "severity": "PASS_WITH_FLAKE",
+      "title": "Unit suite: zero assertion failures; one environmental hook-timeout flake confirmed by isolation",
+      "evidence": "npx vitest run --project unit -> Test Files 1 failed | 3915 passed | 15 skipped (3931); Tests 48029 passed | 1 expected fail | 226 skipped | 2 todo (48258); duration 514.49s. ZERO failing test assertions. The single failed suite is tests/unit/fleet/source-tree-identity-realgit.test.js, failing in beforeAll with 'Hook timed out in 10000ms' while doing real git init/clone in a tmpdir - an IO-timing flake under heavy parallel-agent load, not an assertion failure. Isolation re-run of that file plus the two files flagged by the lead (tests/unit/scripts/lint-repo-resolution-drift.test.js, tests/unit/validation/hallucination-check.test.js): 3 files passed, 43 tests passed, exit 0. NOTE: the two lead-flagged flaky files PASSED in the full run as well; the flake surfaced in a third, different file. No file in this SD's 16-file diff is imported by source-tree-identity-realgit.test.js. AC-14 baseline artifact .artifacts/testing-plan-to-exec-receipts-broadcast-run.json present (46114 bytes)."
+    },
+    {
+      "id": "F5",
+      "severity": "FINDING_CONDITIONAL",
+      "title": "FR-5(d) unreceipted-signal gauge has zero production callers and is not in the invariant gauge registry",
+      "evidence": "countUnreceiptedOverdue (lib/fleet/outstanding-signals.cjs:217, exported line 276) is referenced ONLY by its own definition, its own comment, and tests/unit/fleet/count-unreceipted-overdue.test.js. Repo-wide grep across .js/.cjs/.mjs finds no production caller. It is also absent from lib/governance/gauge-registry.js, the canonical Invariant Gauges Registry (SD-LEO-INFRA-INVARIANT-GAUGES-FRAMEWORK-001) holding ~25 named live gauges. AC-15 as literally worded is fully met (0 with receipts, N without, unknown on throw - all three asserted). But FR-5(d) states its purpose as 'asserted at zero from the merge commit' per ratification 49656c8c's preventive-exit-predicate requirement, and that is NOT operational: a pure function nobody invokes cannot assert anything against live data. Contrast with the other two mechanisms, which ARE wired: capped-pool-broadcast tick() is called at scripts/stale-session-sweep.cjs:4424-4441, and stampConstraintsBlock at lib/coordinator/dispatch.cjs:1488 with a structural wiring test. This is the zero-yield / dead-by-construction-while-reading-as-wired pattern. RECOMMENDATION: either register the gauge in lib/governance/gauge-registry.js (or call it from a coordinator health surface), or amend the PRD to record FR-5(d) as forward-capacity rather than a live exit predicate. Not a FAIL because every enumerated AC passes; the gap is between AC-15 and FR-5(d)'s prose."
+    },
+    {
+      "id": "F6",
+      "severity": "FINDING_MINOR",
+      "title": "Stale docblock contradicts the FR-3 correction",
+      "evidence": "lib/coordinator/dispatch.cjs:713 still reads 'ratifications, resolvable holds (via resolveHoldProvenance, widened by FR-3)'. resolveHoldProvenance was NOT widened - it was reverted. The contradiction sits ~15 lines above the corrected implementation and its own accurate correction comment. One-line doc fix; a future reader auditing the FR-3 revert could be misled into believing the widening shipped."
+    },
+    {
+      "id": "F7",
+      "severity": "FINDING_MINOR",
+      "title": "FR-5(d) prose specified fapPaginate; implementation uses a length-derived limit",
+      "evidence": "lib/fleet/outstanding-signals.cjs uses .limit(rows.length + 50) rather than the fapPaginate helper named in FR-5(d). The binding rule (bound derived from the enumerated result set's own length, never a fixed literal) IS satisfied, and FR-1 explicitly permits this alternative form. scripts/fleet-dashboard.cjs writeSignalReceipts uses the same batch.length + 50 form. Consistent and defensible; recorded only so the wording deviation is not mistaken later for an unmet requirement."
+    },
+    {
+      "id": "F8",
+      "severity": "PASS",
+      "title": "No duplicate or competing work; no concurrent drift on the touched files",
+      "evidence": "SD-LEO-FIX-DELIVERY-RECEIPT-SEVERITY-001 (escalated from the same QF-20260906-162) is status=cancelled/CANCELLED as of 2026-09-06T13:36:54Z with dedup_match_sd_key=none - it was claimed at 13:27Z then cancelled, leaving this SD the sole implementation; no code shipped from it. QF-20260906-162 is status=escalated with its PR already merged to main (commits 98c3e7f78d8, 77158a9ce41), which this SD widens rather than re-implements - consistent with the FR-1 docblock. Scanned 400 SDs and 400 QFs updated/created since 2026-08-25 for overlapping terms: remaining hits are unrelated concerns (QF-20260905-599 not_before fence shape; QF-20260905-230/594/761 stale-sweep logging) or already-completed prior work. git log merge-base..origin/main shows 0 commits touching lib/coordinator/dispatch.cjs, lib/fleet/claim-eligibility.cjs, lib/fleet/outstanding-signals.cjs, lib/fleet/worker-status.cjs, scripts/fleet-dashboard.cjs, scripts/stale-session-sweep.cjs. git merge-tree against origin/main: no conflict."
+    },
+    {
+      "id": "F9",
+      "severity": "PASS",
+      "title": "Acceptance-criteria coverage is explicit and near-complete",
+      "evidence": "Named tests exist for AC-1, AC-2 (all three disposition literals), AC-4, AC-5, AC-7 (all four keys separately), AC-10, AC-11, AC-12, AC-13, AC-15, AC-17, AC-19, AC-20, plus 3 SEC-1 injection tests. AC-3 first half verified directly in lib/fleet/worker-status.cjs (signal_receipt in both INFORMATIONAL_KINDS and BACKPRESSURE_EXEMPT_KINDS); second half is covered by the pre-existing parameterized tests/unit/coordinator/dispatch-send-backpressure.test.js:74, which iterates every BACKPRESSURE_EXEMPT_KINDS member - broader coverage than a bespoke test. AC-6 satisfied: seed count assertion updated 106 -> 110 and database/migrations/20260906_role_drain_sets_add_capped_pool_broadcast.sql added to RECONCILIATION_MIGRATION_PATHS. AC-16/AC-18 satisfied by tests/unit/fleet/informational-drain-set-overlap.test.js, which confines the INFORMATIONAL_KINDS/DRAIN_SET overlap to BACKPRESSURE_EXEMPT_KINDS plus a documented PRE_EXISTING_EXCEPTIONS set for roll_call."
+    }
+  ],
+  "blocking_issues": [],
+  "recommendation": "CONDITIONAL_PASS - proceed to LEAD. No blocking defect. Two non-blocking items for LEAD disposition: (F5) the FR-5(d) gauge is fixture-only with no production caller and is absent from lib/governance/gauge-registry.js, so the ratification-49656c8c preventive exit predicate is not live - either register/call it or amend the PRD to record it as forward-capacity; (F6) a one-line stale docblock at lib/coordinator/dispatch.cjs:713 contradicts the FR-3 revert. The FR-3 correction itself is verified complete and the fleet-wide auto-handoff regression is provably guarded against.",
+  "confidence": 88
+}

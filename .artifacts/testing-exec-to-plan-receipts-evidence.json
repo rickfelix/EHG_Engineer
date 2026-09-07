@@ -1,0 +1,100 @@
+{
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 88,
+  "phase": "EXEC-TO-PLAN",
+  "summary": "All 5 PRD functional requirements are implemented and every SD-owned test passes (63 tests across 6 new files plus 4 updated fixtures). Full unit suite: 47963 passed, 23 failed across 11 files. All 11 are pre-existing Windows git-tmp-repo hook timeouts, none imports any module this SD changed, and the failure count varies run-to-run (25 then 23) on the identical commit, proving flake not regression. 19 of 20 acceptance criteria have a passing test. Three findings hold this back from PASS: the AC-9 db-tier drift test cannot execute and would fail if it did; the FR-3 resolver widening changes the refuse_held gate in post-merge-handoff-orchestrator.js whose existing 9-test suite exercises only 2 pre-existing source keys and so passes unchanged; and that widening moves against VAL-1 (evidence cc6f72a7), a measurement the codebase already recorded showing this same reader over-matching 42 completed SDs.",
+  "critical_issues": [
+    "AC-9 db-half is non-viable as written. tests/unit/fleet/claim-eligibility-hold-reason-keys-drift.db.test.js asserts that unrecognized reason-shaped metadata keys equal the empty list. Replaying its exact predicate against the live table yields 147 unrecognized keys (min_tier_rank_reason 140 rows, deferred_reason 111, cancellation_reason 83, review_reason 43, blocked_reason 34). KNOWN_BENIGN_EXCLUSIONS holds only 4 entries. The test is currently masked because the db project skips at runtime (no designated non-production ref), so it has never actually run. It will fail on first real execution.",
+    "FR-3 widening changes a hard gate whose existing coverage does not reach the new keys. scripts/post-merge-handoff-orchestrator.js line 24 imports resolveHoldProvenance, classifyState calls it at line 69, and line 72 returns refuse_held whenever a reason resolves. The gate itself IS tested: tests/unit/ship-auto-handoff-hold-refusal.test.js has 9 tests covering refuse_held. What is untested is the WIDENING. That suite exercises only 2 resolved source keys, requires_human_action_reason and not_worker_claimable_reason, both pre-existing. None of the four new keys has coverage, so the suite passes unchanged while behavior moves underneath it. Measured consequence: 64 live SDs newly resolve a hold, 11 of them non-terminal, and those would now be refused by post-merge auto-handoff where they previously advanced.",
+    "The widening moves against a measurement the codebase already recorded. lib/fleet/claim-eligibility.cjs lines 806-812 document VAL-1 (evidence cc6f72a7): resolveHoldProvenance was measured over-matching 42 completed SDs across 6 source keys, and deferred_by, not_worker_claimable_reason, dispatch_ineligible_reason and pilot_throwaway were recorded as legitimately compatible with completion. Only requires_human_action_reason and review_hold_reason mean chairman-must-act, and only while unreleased. FR-3 widened that same reader from 6 keys to 10. The 64-SD number is that recorded over-match reproduced in production, one widening later."
+  ],
+  "warnings": [
+    "AC-20 compounds the classifyState finding: the four new keys are deliberately not gated by isHoldReleased(), so an SD whose human_action hold was released (unfenced_at stamped) still resolves a reason and stays refused indefinitely. One live SD already carries unfenced_at alongside a new key.",
+    "lib/fleet/belt-census.cjs:187 passes resolveHoldProvenance output to bucketFor(), so the same 64 SDs shift toward the gated bucket. Belt counts will move. No test pins the old counts, so nothing breaks, but fleet capacity readings change.",
+    "PRD text error, implementation is correct: AC-9 states nine keys (5 pre-existing + 4 new). HOLD_REASON_KEYS actually exports 10 (6 pre-existing + 4 new), matching QF-20260904-724's own wording that the coalescer reads six metadata keys while writers stamp four others. The test correctly asserts 10. Only the PRD sentence is wrong.",
+    "FR-3 fixes 4 keys but the drift scan shows the reader/writer divergence is far wider. Several unrecognized keys look genuinely hold-shaped: do_not_auto_dispatch_reason (19 rows), blocked_reason (34), shelved_reason (17), park_reason (16), coordinator_wait_reason, chairman_gate_reason. Note that deferred_reason (111 rows) is unrecognized while HOLD_REASON_KEYS carries deferred_by.",
+    "PR size: production diff is +480/-20 LOC (tests +709/-22, total +1189/-42), over the 100 LOC target and above the 400 LOC documented maximum. The 5 FRs are independent and already commit-aligned; splitting per FR would have produced roughly 100 LOC production PRs each. Informational only, not blocking.",
+    "Justification gap worth raising with PLAN: the comment at post-merge-handoff-orchestrator.js lines 64-68 justifies choosing resolveHoldProvenance over classifyDispatchIneligibility on the grounds that the claim question is the wrong question. That reasoning is sound but never considers isUnreleasedChairmanHold, the narrow predicate purpose-built for completion-writer refusal in LeadFinalApprovalExecutor and complete_orchestrator_sd. Auto-handoff asks the same should-this-be-allowed-to-complete question, so the narrow predicate is the closer fit and is the one alternative the comment does not address."
+  ],
+  "recommendations": [
+    "Before merge, either populate KNOWN_BENIGN_EXCLUSIONS from the measured 147-key set or narrow the drift predicate to a hold-intent allowlist. Shipping an assertion that cannot pass converts a future db-tier enablement into an unexplained red build.",
+    "Extend the EXISTING suite rather than instrumenting a new one: tests/unit/ship-auto-handoff-hold-refusal.test.js already covers refuse_held with 9 tests. Add cases for an SD carrying only a new key, and for one carrying a released (unfenced_at) new key. Scoping this as a from-scratch gate test would oversize the fix.",
+    "Decide explicitly whether classifyState should refuse on the widened key set. The codebase already answered the adjacent question: isUnreleasedChairmanHold (claim-eligibility.cjs) is the narrow completion-class predicate built after VAL-1 measured resolveHoldProvenance over-matching. Switching classifyState to it, or to an explicit narrow key list, follows both that precedent and the one at lead-final-approval/index.js:573 which uses resolveHoldProvenance for display text only.",
+    "Correct AC-9 nine keys to ten in the PRD so the doc matches the shipped constant.",
+    "Triage the hold-shaped keys among the 147 as a follow-up. FR-3 closes the QF's named four but not the class."
+  ],
+  "metrics": {
+    "full_suite_tests_passed": 47963,
+    "full_suite_tests_failed": 23,
+    "full_suite_files_failed": 11,
+    "full_suite_files_passed": 3905,
+    "full_suite_duration_sec": 504,
+    "sd_owned_tests_passing": 63,
+    "sd_owned_test_files_passing": 6,
+    "acceptance_criteria_total": 20,
+    "acceptance_criteria_with_passing_test": 19,
+    "acceptance_criteria_unverifiable": 1,
+    "prod_loc_added": 480,
+    "test_loc_added": 709,
+    "sds_newly_resolving_hold": 64,
+    "sds_non_terminal_newly_refused": 11,
+    "drift_unrecognized_keys": 147,
+    "existing_refuse_held_tests": 9,
+    "source_keys_covered_by_existing_suite": 2,
+    "source_keys_total": 10
+  },
+  "detailed_analysis": {
+    "ac_coverage": {
+      "AC-1": "PASS - fleet-dashboard-signal-receipt.test.js writes a receipt for every signal in the batch regardless of signal_type/severity, plus the idempotent second-run no-op test",
+      "AC-2": "PASS - three explicit AC-2 tests assert the disposition substring on the inserted subject field. Verified sound: coordination-inbox.cjs:822 prints msg.subject verbatim, so the subject column is the real render path.",
+      "AC-3": "PASS - membership asserted in informational-drain-set-overlap.test.js. The behavioral half is covered parametrically by dispatch-send-backpressure.test.js:74, which loops every BACKPRESSURE_EXEMPT_KINDS value at LIMIT+5 unanswered and asserts no refusal, so signal_receipt is covered automatically.",
+      "AC-4": "PASS - capped-pool-broadcast.test.js hold-window, re-emit-window and fan-out tests",
+      "AC-5": "PASS - clear-transition tests at both decide() and tick() level",
+      "AC-6": "PASS - drain-set-registry.test.js 106 to 110, per-role 30/20/28/26 to 31/21/29/27, migration added to RECONCILIATION_MIGRATION_PATHS. Both files pass.",
+      "AC-7": "PASS - five parameterized cases including the human_action_required=false negative case",
+      "AC-8": "PASS - re-measured live. Four of the five QF-20260904-724 SDs now resolve a real reason. The fifth (SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A) correctly returns null because its hold was genuinely cleared at 2026-09-06T12:39:31Z with requires_human_action=false and human_action_cleared_at/by/reason stamped. Satisfied via the AC's own current-state-equivalents clause.",
+      "AC-9": "PARTIAL - unit half passes, asserting 10 keys and that the list is frozen. The db half exists and is correctly describeDb-gated but skips at runtime and would fail with 147 unrecognized keys. See critical_issues.",
+      "AC-10": "PASS",
+      "AC-11": "PASS",
+      "AC-12": "PASS",
+      "AC-13": "PASS",
+      "AC-14": "PASS - suite runs green for all touched files; baseline artifact .artifacts/testing-plan-to-exec-receipts-broadcast-run.json present",
+      "AC-15": "PASS - the 0, N and unknown cases are all asserted, including the never-false-zero fetch-failure case",
+      "AC-16": "PASS - kind-classification.test.js (21 tests) still passes and informational-drain-set-overlap.test.js adds the compensating overlap check",
+      "AC-17": "PASS - explicit batch-derived existence-check bound test",
+      "AC-18": "PASS - explicit allowlist test",
+      "AC-19": "PASS - decide() takes no acknowledged_at input at all, plus a tick()-level acked-target test",
+      "AC-20": "PASS as specified, but see warnings. This is what makes the classifyState side effect permanent."
+    },
+    "failing_files_all_preexisting": [
+      "lib/gates/operator-contract/__tests__/harness-adapter-shell-injection.test.js",
+      "lib/singleton-relaunch.test.js",
+      "scripts/modules/complete-quick-fix/working-tree-fallback-fence.test.js",
+      "scripts/modules/handoff/executors/plan-to-lead/gates/heal-before-complete.test.js",
+      "scripts/modules/shipping/__tests__/post-merge-worktree-cleanup-claim-protect.test.js",
+      "scripts/modules/shipping/__tests__/post-merge-worktree-cleanup.test.js",
+      "scripts/safe-worktree-remove.test.js",
+      "tests/unit/append-fleet-commit-trailer.test.js",
+      "tests/unit/docmon-shell-injection.test.js",
+      "tests/unit/fleet/source-tree-identity-realgit.test.js",
+      "tests/unit/fleet/tree-currency.test.js"
+    ],
+    "failure_isolation_method": "Each of the 11 files was grepped for imports of claim-eligibility, worker-status, outstanding-signals, coordinator/dispatch, capped-pool-broadcast, fleet-dashboard and stale-session-sweep. All 11 are clean. The dominant cause is Hook timed out in 10000ms inside git-tmp-repo beforeEach setup, plus one perf-budget assertion (expected 1997 to be less than 1000).",
+    "regression_sweep": "writeSignalReceipts has exactly one production caller (fleet-dashboard.cjs:1813 printInbox) so the widening is contained. insertCoordinationRow gains a fourth fail-soft stamper that no-ops on non-WORK_ASSIGNMENT rows, asserted by test. resolveHoldProvenance has four production callers: dispatch.cjs (new, intended), belt-census.cjs:187 (bucket shift, warning), lead-final-approval/index.js:579 (display text only, gating uses a separate narrow predicate, safe), and post-merge-handoff-orchestrator.js:69 (hard gate, critical finding; covered by a 9-test suite that exercises only 2 pre-existing source keys, so it passes unchanged while behavior moves).",
+    "test_runs": "Two independent full-suite runs on commit e586f98c623: run 1 gave 25 failed / 47932 passed / 11 files failed; run 2 gave 23 failed / 47963 passed / 11 files failed. Same 11 files both times, differing test counts, confirming timeout flake."
+  },
+  "metadata": {
+    "test_execution": {
+      "tests_executed": 48261,
+      "tests_passed": 47963,
+      "tests_failed": 23,
+      "tests_skipped": 272,
+      "artifact_sha": "13ef66c3a78f525bdacaa6288a404408addaf7b9b3ead8733601dd12d1138917",
+      "runner": "npx vitest run --project unit",
+      "artifact_path": ".artifacts/testing-fullsuite-run2.log",
+      "source": "fresh"
+    },
+    "amends_row": "4298bd82-d59d-4ac6-b585-eb6aaf206915",
+    "amendment_reason": "Corrects an imprecision in the superseded row, which framed post-merge-handoff-orchestrator classifyState as an untested gate. The gate has 9 existing tests; the untested surface is the widening (2 of 10 resolved source keys covered, none of them new). Correction raised by test-receipts-lead and independently verified here. Adds the VAL-1/cc6f72a7 corroboration and the isUnreleasedChairmanHold remedy."
+  }
+}

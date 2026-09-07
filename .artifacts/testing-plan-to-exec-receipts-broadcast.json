@@ -1,0 +1,138 @@
+{
+  "verdict": "CONDITIONAL_PASS",
+  "sd_id": "SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001",
+  "prd_id": "PRD-SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001",
+  "phase": "PLAN",
+  "gate": "PLAN-TO-EXEC",
+  "agent": "testing-agent",
+  "model": "Opus 5 (claude-opus-5[1m])",
+  "scope": "Testability/implementability review of the PRD's 16 acceptance criteria and 8 test scenarios, plus a baseline suite re-run against the fresh worktree branch.",
+  "baseline": {
+    "command": "npx vitest run --project unit tests/unit/coordinator/fleet-dashboard-signal-receipt.test.js tests/unit/fleet/outstanding-signals.test.js lib/coordinator/dispatch.test.js tests/unit/fleet/drain-set-registry.test.js tests/unit/fleet/drain-sets-adam-reconciliation.test.js tests/unit/coordination/kind-classification.test.js tests/unit/fleet/orphan-reroute-sweep.test.js",
+    "test_files_passed": 7,
+    "tests_passed": 113,
+    "tests_failed": 0,
+    "duration_ms": 833,
+    "matches_lead_baseline_artifact": true,
+    "lead_baseline_artifact": ".artifacts/testing-receipts-broadcast-baseline.json (numTotalTests=113, success=true)",
+    "drift_since_lead": "none",
+    "note": "The task's last path lib/fleet/orphan-reroute-sweep.js is a source module, not a test file; substituted tests/unit/fleet/orphan-reroute-sweep.test.js. Also --reporter=basic no longer resolves under vitest 4.1.4 (startup error); default reporter used."
+  },
+  "findings": [
+    {
+      "id": "TST-P1",
+      "severity": "MEDIUM",
+      "ac": "AC-13 / TS-7",
+      "title": "Oversized-CONSTRAINTS handling names a behavior that does not exist today, and contradicts the fail-soft stamper contract",
+      "detail": "AC-13 requires an over-cap body be rejected 'the same way any oversized body is today', but FR-4 itself states insertCoordinationRow applies no body cap today, so there is no existing behavior to mirror. Separately, capBodySafe (lib/shared/body-cap.cjs) does not throw and does not truncate: it returns {value:null, error} with error.code=BODY_TOO_LONG. FR-4 also specifies stampConstraintsBlock be fail-soft like the other three stampers. Fail-soft and reject-the-insert are mutually exclusive.",
+      "required_correction": "PRD must state which of three behaviors is correct when the rendered CONSTRAINTS block pushes the body over BODY_HARD_CAP (4096): (a) drop the stamp and insert the un-stamped row with a warn (fail-soft, consistent with the sibling stampers), (b) stamp a truncated summary line, or (c) throw and refuse the insert. TS-7 currently asserts (c) while FR-4's prose implies (a)."
+    },
+    {
+      "id": "TST-P2",
+      "severity": "MEDIUM",
+      "ac": "AC-12 / TS-6",
+      "title": "The body===payload.body assertion is only discriminating for callers that set exactly one of the two fields, and there are TWO mirrors not one",
+      "detail": "lib/coordinator/dispatch.cjs has two fill-if-absent mirrors: line 1468 (payload.body to body) and line 1477 (body to payload.body). The PRD names only 1468. Both are fill-if-absent, so if a caller sets BOTH fields and stampConstraintsBlock mutates only row.body, the two copies diverge and neither mirror repairs them: AC-12 fails even with correct ordering, and payload.body-keyed readers never see the CONSTRAINTS block.",
+      "required_correction": "FR-4 must state that the stamp runs before BOTH mirrors (1468 and 1477), and must name which field it mutates. If it mutates only row.body, add an AC covering the caller-sets-both case, or specify that the stamp writes both copies."
+    },
+    {
+      "id": "TST-P3",
+      "severity": "MEDIUM",
+      "ac": "AC-4 / AC-5 / FR-2",
+      "title": "The acknowledged_at-based fire-once dedupe self-clears once capped_pool_broadcast becomes drainable",
+      "detail": "emitReaperStarvationAlert's dedupe selects on payload->>kind + acknowledged_at IS NULL + expires_at > now (lib/coordinator/coordination-events.cjs:864-871). FR-2 also requires capped_pool_broadcast join BACKPRESSURE_EXEMPT_KINDS, and lib/fleet/worker-status.cjs spreads that constant into EVERY role's DRAIN_SET (lines 375-455), making the kind drainable and ackable by every seat. A seat that drains its broadcast row stamps acknowledged_at, clears its own dedupe, and gets a duplicate on the next tick. A unit fixture that never acks passes anyway, so AC-4/AC-5 would go green while production re-emits.",
+      "required_correction": "Dedupe on created_at > now minus the re-emit window (or on a last-emit timestamp in the reaper-tick-style state file), not on acknowledged_at. Add an AC/TS covering: target acked the broadcast, next tick still emits zero."
+    },
+    {
+      "id": "TST-P4",
+      "severity": "MEDIUM",
+      "ac": "AC-9 / FR-3",
+      "title": "The drift-detection test has no concrete predicate, no key list to diff against, and no tier assignment",
+      "detail": "Three gaps block implementation as written. (1) 'reason-shaped key' is undefined; the test needs a literal predicate plus an explicit known-benign allowlist. (2) resolveHoldProvenance (lib/fleet/claim-eligibility.cjs:718) hardcodes its keys in an inline if-chain and exports no key list, so nothing exists to diff against. (3) It reads live strategic_directives_v2, but AC-14 asserts the suite passes under 'vitest run --project unit', and this repo routes DB-dependent suites to the opt-in db project or self-skips them via describeDb (tests/helpers/db-available.js). As a unit test it would fail on a data change made by an unrelated PR, not on a code change.",
+      "required_correction": "FR-3 must add: export a HOLD_REASON_KEYS constant from claim-eligibility.cjs; define the reason-shaped predicate literally; and place the live-DB scan in the db project or behind describeDb, with the unit tier covering only the pure resolver."
+    },
+    {
+      "id": "TST-P5",
+      "severity": "LOW",
+      "ac": "AC-7 / TS-5 / FR-3",
+      "title": "human_action_required is a boolean flag with no specified reason text, and the new keys' precedence and release-check behavior are unspecified",
+      "detail": "AC-7 requires a non-null reason for metadata carrying only human_action_required, but that key is flag-shaped, so the resolver must synthesize a string the way pilot_throwaway synthesizes 'pilot throwaway venture'. The PRD names no such string. FR-3 also says to preserve isHoldReleased behavior, but none of the four new keys has a paired set-at field, so the release check cannot apply to them as written, and the insertion point in the existing precedence chain is unstated, which changes the source_key AC-8 will observe. TS-5 covers only human_action_note.",
+      "required_correction": "Name the synthesized reason string for the boolean key, state the precedence slot for all four keys, and state explicitly that the release check is skipped for keys with no set-at field. Add one TS per key or restate TS-5 as parameterized."
+    },
+    {
+      "id": "TST-P6",
+      "severity": "MEDIUM",
+      "ac": "FR-1",
+      "title": "FR-1's coordinator_request clause is vacuous, and the write site keeps the hardcoded existence-check bound that FR-5(d) forbids for the gauge",
+      "detail": "Two separate defects at the same write site. (a) 'every coordinator_request row in the same batch' cannot happen: printInbox's query (scripts/fleet-dashboard.cjs:1768) filters payload->>signal_type IS NOT NULL, coordinator_request rows carry no signal_type, and the literal coordinator_request appears nowhere in fleet-dashboard.cjs. Including them requires widening the enumeration query, which the code comment above it warns surfaces 105+ unrelated INFO rows. (b) writeSignalReceipts' existence check is .limit(50) justified by a comment reading 'highStuckSignals is drawn from printInbox()'s .limit(20) batch, so 50 is generous headroom'. Removing the stuck+high filter takes that batch from roughly 1-2 rows to the full 20, and any further batch widening breaks the bound, producing duplicate receipts. FR-5(d) imposes the batch-derived-bound rule on the gauge only.",
+      "required_correction": "Either strike the coordinator_request clause or add an FR for widening the enumeration query with its own regression AC. Extend FR-5(d)'s full-enumerated-batch bound rule to the FR-1 write site, and add an AC asserting a batch larger than the literal bound still writes exactly one receipt per signal."
+    },
+    {
+      "id": "TST-P7",
+      "severity": "LOW",
+      "ac": "AC-1",
+      "title": "AC-1 names an untestable entry point that TS-1 gets right",
+      "detail": "AC-1 says idempotency is 'verified by re-running printInbox() on the same batch'. printInbox takes no client argument, and the code comment at scripts/fleet-dashboard.cjs:1792 states it has no injectable client and that writeSignalReceipts was extracted precisely so it could be unit-tested directly. TS-1 correctly targets writeSignalReceipts.",
+      "required_correction": "Reword AC-1 to name writeSignalReceipts as the unit under test, matching TS-1."
+    },
+    {
+      "id": "TST-P8",
+      "severity": "LOW",
+      "ac": "AC-16 / FR-1 rider (a)",
+      "title": "The disjointness assertion passes vacuously and cannot detect the INFORMATIONAL/DRAIN_SET overlap the change creates",
+      "detail": "classifyCoordinationRow checks INFORMATIONAL_KINDS BEFORE the drain-set union (lib/fleet/worker-status.cjs:338), so any kind added to INFORMATIONAL_KINDS classifies informational by precedence and the disjointness test at tests/unit/coordination/kind-classification.test.js:67 can never fail. signal_receipt is already in every role's DRAIN_SET via the BACKPRESSURE_EXEMPT_KINDS spread (explicit comment at worker-status.cjs:443), so the addition puts it in both sets, while INFORMATIONAL_KINDS' own doc contract says a kind that gains a responder should move to the owning role's DRAIN_SET instead. Behaviorally this is safe: the only non-reporting consumer is orphan-reroute-sweep's isOrphanCandidate, which already returns false for the kind via recognizedKinds. It is a classification-contract inconsistency, not a functional break.",
+      "required_correction": "Either record in FR-1 why the dual membership is deliberate, or strengthen AC-16 to assert the overlap is confined to an explicit allowlist so a future accidental overlap fails CI."
+    },
+    {
+      "id": "TST-P9",
+      "severity": "LOW",
+      "ac": "coverage",
+      "title": "7 of 16 acceptance criteria have no mapped test scenario",
+      "detail": "TS-to-AC mapping: TS-1 to AC-1, TS-2 to AC-3, TS-3 to AC-4, TS-4 to AC-5, TS-5 to AC-7, TS-6 to AC-10 and AC-12, TS-7 to AC-13, TS-8 to AC-15. Unmapped: AC-2, AC-6, AC-8, AC-9, AC-11, AC-14, AC-16. AC-2 (the disposition line as a literal substring of the actual render output) and AC-11 (the CONSTRAINTS: none recorded path) are substantive behaviors with no scenario. AC-6, AC-14 and AC-16 are CI-meta assertions and are acceptable without a scenario.",
+      "required_correction": "Add scenarios for AC-2, AC-8, AC-9 and AC-11 before EXEC writes tests."
+    }
+  ],
+  "verified_premises": [
+    "capBodySafe returns {value,error} and never truncates; BODY_HARD_CAP=4096 (lib/shared/body-cap.cjs). FR-4's capBodySafe choice is sound; only its AC wording is wrong.",
+    "scripts/hooks/coordination-inbox.cjs renders only 'Subject:' (line 822) and 'Details: <body>' (line 823); no generic payload-field render exists. FR-1's rendered-disposition-line premise is CORRECT and AC-2 is implementable via subject or body.",
+    "signal_receipt is already present in BACKPRESSURE_EXEMPT_KINDS in BOTH lib/coordinator/dispatch.cjs:39 (Set) and lib/fleet/worker-status.cjs:229 (frozen array). FR-2's capped_pool_broadcast must be added to BOTH copies plus PAYLOAD_KINDS (worker-status.cjs:113); the PRD says BACKPRESSURE_EXEMPT_KINDS in the singular.",
+    "FR-2's building blocks all exist and are importable: MAX_WORKTREE_COUNT=40 and countActiveWorktrees are ESM exports of lib/worktree-quota.js; liveFleetSessions(supabase, opts) is a CJS export of lib/fleet/live-fleet-sessions.cjs; readState/writeState exist at scripts/fleet/worktree-reaper-tick.cjs:49 and :100.",
+    "AC-6 is concretely actionable: tests/unit/fleet/drain-set-registry.test.js:166 asserts an exact seed count of 106, so the new migration takes it to 110 and must also be appended to RECONCILIATION_MIGRATION_PATHS (line 25).",
+    "FR-5(d)'s full-enumerated-batch bound requirement IS concretely actionable: lib/fleet/outstanding-signals.cjs:115 uses a literal .limit(20) against rows.length <= DEFAULT_LIST_CAP; deriving the limit from rows.length, or paginating via the existing fapPaginate helper, is a direct and testable change.",
+    "The existing role_drain_sets migration is chairman-gated (@approved-by: PENDING) and unapplied; the registry fails open to the JS floor, so FR-2's new migration being unapplied at merge creates no functional gap and AC-4/AC-5 do not depend on it."
+  ],
+  "recommendation": "Proceed to EXEC. No finding blocks entry: the baseline is green and matches the LEAD artifact, and every FR has a real code site with real building blocks. TST-P1 through TST-P4 should be resolved as PRD amendments before EXEC writes the corresponding tests, since each currently specifies a test that either cannot be written as stated or would pass while the production behavior is wrong. TST-P5 through TST-P9 are wording and coverage corrections.",
+  "confidence": 0.85,
+  "summary": "PLAN-phase TESTING review of PRD-SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001. Baseline suite re-run green (113/113, 7 files), matching the LEAD-phase artifact exactly, so no drift since LEAD. Reviewed all 16 acceptance criteria and 8 test scenarios for testability. Nine findings: four MEDIUM specify tests that either cannot be written as stated or would pass while production behavior is wrong (AC-13 oversized-body handling names a nonexistent behavior and contradicts the fail-soft stamper contract; AC-12 misses the second body mirror at dispatch.cjs:1477; FR-2 acknowledged_at dedupe self-clears once the kind becomes drainable; AC-9 drift test has no predicate, no key list, no test tier). Five LOW are wording and coverage gaps, including FR-1 coordinator_request clause naming rows that cannot appear in that batch, and 7 of 16 ACs with no mapped scenario. No blocker to entering EXEC.",
+  "metadata": {
+    "test_execution": {
+      "tests_executed": 113,
+      "tests_passed": 113,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "artifact_sha": "5f91febe6edf7f3d8d6e4fee5e05c27f51c8579d1876f5cfe44babc8dc2840aa",
+      "runner": "vitest 4.1.4 --project unit --reporter=json",
+      "artifact_path": ".artifacts/testing-plan-to-exec-receipts-broadcast-run.json",
+      "source": "fresh"
+    }
+  },
+  "critical_issues": [],
+  "warnings": [
+    "TST-P1: Oversized-CONSTRAINTS handling names a behavior that does not exist today, and contradicts the fail-soft stamper contract",
+    "TST-P2: The body===payload.body assertion is only discriminating for callers that set exactly one of the two fields, and there are TWO mirrors not one",
+    "TST-P3: The acknowledged_at-based fire-once dedupe self-clears once capped_pool_broadcast becomes drainable",
+    "TST-P4: The drift-detection test has no concrete predicate, no key list to diff against, and no tier assignment",
+    "TST-P6: FR-1's coordinator_request clause is vacuous, and the write site keeps the hardcoded existence-check bound that FR-5(d) forbids for the gauge"
+  ],
+  "recommendations": [
+    "TST-P1 [MEDIUM] PRD must state which of three behaviors is correct when the rendered CONSTRAINTS block pushes the body over BODY_HARD_CAP (4096): (a) drop the stamp and insert the un-stamped row with a warn (fail-soft, consistent with the sibling stampers), (b) stamp a truncated summary line, or (c) throw and refuse the insert. TS-7 currently asserts (c) while FR-4's prose implies (a).",
+    "TST-P2 [MEDIUM] FR-4 must state that the stamp runs before BOTH mirrors (1468 and 1477), and must name which field it mutates. If it mutates only row.body, add an AC covering the caller-sets-both case, or specify that the stamp writes both copies.",
+    "TST-P3 [MEDIUM] Dedupe on created_at > now minus the re-emit window (or on a last-emit timestamp in the reaper-tick-style state file), not on acknowledged_at. Add an AC/TS covering: target acked the broadcast, next tick still emits zero.",
+    "TST-P4 [MEDIUM] FR-3 must add: export a HOLD_REASON_KEYS constant from claim-eligibility.cjs; define the reason-shaped predicate literally; and place the live-DB scan in the db project or behind describeDb, with the unit tier covering only the pure resolver.",
+    "TST-P5 [LOW] Name the synthesized reason string for the boolean key, state the precedence slot for all four keys, and state explicitly that the release check is skipped for keys with no set-at field. Add one TS per key or restate TS-5 as parameterized.",
+    "TST-P6 [MEDIUM] Either strike the coordinator_request clause or add an FR for widening the enumeration query with its own regression AC. Extend FR-5(d)'s full-enumerated-batch bound rule to the FR-1 write site, and add an AC asserting a batch larger than the literal bound still writes exactly one receipt per signal.",
+    "TST-P7 [LOW] Reword AC-1 to name writeSignalReceipts as the unit under test, matching TS-1.",
+    "TST-P8 [LOW] Either record in FR-1 why the dual membership is deliberate, or strengthen AC-16 to assert the overlap is confined to an explicit allowlist so a future accidental overlap fails CI.",
+    "TST-P9 [LOW] Add scenarios for AC-2, AC-8, AC-9 and AC-11 before EXEC writes tests."
+  ]
+}

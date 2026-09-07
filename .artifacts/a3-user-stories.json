@@ -1,0 +1,67 @@
+[
+  {
+    "story_key": "US-001",
+    "title": "Widen worker-signal receipts to every signal and render a disposition line",
+    "user_role": "Fleet worker",
+    "user_want": "to receive a receipt for any signal I send to the coordinator, not only stuck/high-severity ones",
+    "user_benefit": "so I can tell 'seen but queued' apart from 'lost' without waiting for a human reply, regardless of what kind of signal I sent",
+    "implementation_context": "## Implementation Guidance\n\n**Component Location:**\n- Extend `writeSignalReceipts()` in `scripts/fleet-dashboard.cjs` (already exists from QF-20260906-162, currently filtered to signal_type='stuck' AND severity='high')\n- Add `signal_receipt` to `INFORMATIONAL_KINDS` in `lib/fleet/worker-status.cjs` (currently only in `BACKPRESSURE_EXEMPT_KINDS`)\n\n**Architecture Patterns:**\n- Reuse the existing correlation_id-idempotent write via `dispatchToWorker` -- do not invent a second write path\n- Render the disposition line ('queued'|'routed:<target>'|'needs-decision:<who>') into `subject`/`body`, since `coordination-inbox.cjs`'s render is a fixed payload-field allowlist\n\n**Integration Points:**\n- `printInbox()`'s existing enumeration batch (no new query)\n- Explicitly EXCLUDES Adam-advisory widening (separate follow-up QF; see PRD risk R-3)\n\n**Implementation Steps:**\n1. Remove the stuck+high filter in `writeSignalReceipts()`\n2. Add the rendered disposition line to the outbound row's subject/body\n3. Add `signal_receipt` to `INFORMATIONAL_KINDS`\n4. Extend `tests/unit/coordinator/fleet-dashboard-signal-receipt.test.js` to cover non-stuck/non-high signals",
+    "acceptance_criteria": [
+      { "scenario": "Any signal type receives a receipt", "given": "printInbox() enumerates a signal_type='need-sweep', severity='medium' row", "when": "writeSignalReceipts runs on that batch", "then": "exactly one signal_receipt row is written and correlated to the signal" },
+      { "scenario": "Receipt never counts as backpressure", "given": "a target already at the 3-unanswered-row backpressure limit", "when": "a signal_receipt send is attempted", "then": "the send succeeds because signal_receipt is in BACKPRESSURE_EXEMPT_KINDS" },
+      { "scenario": "Disposition line is rendered, not just stored", "given": "a receipt row is written", "when": "coordination-inbox.cjs renders it", "then": "the rendered text contains 'queued', 'routed:', or 'needs-decision:' as a literal substring" }
+    ]
+  },
+  {
+    "story_key": "US-002",
+    "title": "Fan out one capped-pool broadcast per live seat instead of five seat-by-seat explanations",
+    "user_role": "Fleet worker",
+    "user_want": "to be told directly when the worktree pool is over cap and what slot-free work I can drive",
+    "user_benefit": "so the coordinator never has to explain the same slot-free procedure to each seat individually",
+    "implementation_context": "## Implementation Guidance\n\n**Component Location:**\n- New module `lib/coordinator/capped-pool-broadcast.cjs`\n- Invoked from the existing coordinator tick in `scripts/stale-session-sweep.cjs`\n\n**Architecture Patterns:**\n- Trigger source: `countActiveWorktrees()`/`MAX_WORKTREE_COUNT` from `lib/worktree-quota.js` (ESM -- read via dynamic `import()`, never a duplicated constant)\n- Live-seat enumeration: reuse `liveFleetSessions()` from `lib/fleet/live-fleet-sessions.cjs`\n- Fire-once dedupe: mirror `emitReaperStarvationAlert` in `lib/coordinator/coordination-events.cjs:855` (select an existing unacknowledged unexpired row of the same kind per target before sending)\n- Over-cap-since timestamp persistence: mirror the state-file pattern (`readState`/`writeState`) in `scripts/fleet/worktree-reaper-tick.cjs`\n- Do NOT target `target_session='broadcast'` -- confirmed dead, zero worker readers\n\n**Integration Points:**\n- `role_drain_sets` migration required for the new `capped_pool_broadcast` kind's `BACKPRESSURE_EXEMPT_KINDS` membership (mirror `20260906_role_drain_sets_add_signal_receipt.sql`)\n\n**Implementation Steps:**\n1. Build the pure `decide()` function (over-cap-since, hold minutes, re-emit hours)\n2. Build the per-seat fan-out `emit()` using liveFleetSessions()\n3. Wire the fire-once dedupe and the 'cleared' transition\n4. Add the migration + update seed-count/per-role-count tests",
+    "acceptance_criteria": [
+      { "scenario": "Over-cap fan-out reaches every live seat", "given": "worktree count above cap for 31 simulated minutes with 4 live seats", "when": "the tick runs", "then": "exactly 4 directed INFO rows are inserted, one per live seat, sharing one run_id" },
+      { "scenario": "Re-emit window suppresses duplicate broadcasts", "given": "a fan-out already emitted within the last 6 hours for the same condition", "when": "the tick runs again", "then": "zero additional rows are inserted" },
+      { "scenario": "Clearing the condition sends exactly one more notice", "given": "the over-cap condition has just resolved", "when": "the next tick runs", "then": "one cleared-notice row per live seat is sent, then none after that" }
+    ]
+  },
+  {
+    "story_key": "US-003",
+    "title": "Widen resolveHoldProvenance's key list so a documented hold never renders as a bare flag",
+    "user_role": "Coordinator / fleet operator",
+    "user_want": "every documented hold to render its actual reason, not 'no reason recorded'",
+    "user_benefit": "so I never mistake a deliberate chairman-ceremony hold for an abandoned flag and clear it in error",
+    "implementation_context": "## Implementation Guidance\n\n**Component Location:**\n- `resolveHoldProvenance()` in `lib/fleet/claim-eligibility.cjs:718` (QF-20260904-724's fix, landed as this SD's own prerequisite)\n\n**Architecture Patterns:**\n- Preserve the existing precedence-chain and `isHoldReleased()` release-check pattern; add human_action_note, human_action_required, human_action_reason, needs_coordinator_review_reason to the resolution chain\n- Add a drift-detection test scanning live `strategic_directives_v2.metadata` for reason-shaped keys the resolver does not read\n\n**Integration Points:**\n- Consumed by the new FR-4 `stampConstraintsBlock` (US-004) and the existing dashboard/ranker/eligibility surfaces\n\n**Implementation Steps:**\n1. Add the four missing keys to resolveHoldProvenance's precedence chain\n2. Verify against the 5 SDs named in QF-20260904-724\n3. Add the drift-detection test\n4. Mark QF-20260904-724 completed",
+    "acceptance_criteria": [
+      { "scenario": "Each of the four missing keys resolves", "given": "metadata carrying only human_action_note", "when": "resolveHoldProvenance(metadata) is called", "then": "it returns a non-null reason (repeat for the other 3 keys)" },
+      { "scenario": "Previously-false-bare SDs now resolve", "given": "the 5 SDs named in QF-20260904-724 (or their current-state equivalents)", "when": "formatHoldProvenance() renders them", "then": "each shows a real reason, not 'no reason recorded'" },
+      { "scenario": "Drift is self-detecting going forward", "given": "a live SD carries a reason-shaped metadata key absent from the resolver's key list", "when": "the new drift-detection test runs", "then": "it fails, catching the divergence at CI time instead of live" }
+    ]
+  },
+  {
+    "story_key": "US-004",
+    "title": "Stamp a CONSTRAINTS block on every WORK_ASSIGNMENT before the worker's first edit",
+    "user_role": "Fleet worker",
+    "user_want": "to see the target SD's ratifications, holds, and rulings in the WORK_ASSIGNMENT body itself",
+    "user_benefit": "so I never discover a load-bearing governance rule after I've already drafted something incompatible with it",
+    "implementation_context": "## Implementation Guidance\n\n**Component Location:**\n- New `stampConstraintsBlock()` in `lib/coordinator/dispatch.cjs`, fourth stamper guard alongside `stampEffortRecommendation`/`stampModelRecommendation`/`stampPremiseMeasurement`\n\n**Architecture Patterns:**\n- MUST run before the existing body/payload.body fill-if-absent mirror at line 1468 -- appending after it desynchronizes the two copies\n- Read holds via `resolveHoldProvenance`/`formatHoldProvenance` (post US-003 widening)\n- Apply `capBodySafe` from `lib/shared/body-cap.cjs` (insertCoordinationRow applies no body cap today)\n- Anchor is `insertCoordinationRow` (`lib/coordinator/dispatch.cjs:1214`) -- `buildWorkAssignment` does not exist anywhere in the repo\n\n**Integration Points:**\n- `strategic_directives_v2.metadata.ratifications_cited`, hold-reason keys, and any Solomon-ruling text\n\n**Implementation Steps:**\n1. Add stampConstraintsBlock, called before the body-mirror stamp\n2. Render ratifications_cited + resolved hold + ruling text as 'CONSTRAINTS:' block\n3. Render 'CONSTRAINTS: none recorded' only when genuinely nothing resolves\n4. Apply capBodySafe to the final body",
+    "acceptance_criteria": [
+      { "scenario": "Constraints are named", "given": "target SD has ratifications_cited and a review_hold_reason", "when": "insertCoordinationRow processes the WORK_ASSIGNMENT", "then": "the body contains a 'CONSTRAINTS:' section naming both" },
+      { "scenario": "None-recorded is honest, not omitted", "given": "target SD has no constraint-bearing metadata keys", "when": "the same stamper runs", "then": "the body contains 'CONSTRAINTS: none recorded'" },
+      { "scenario": "Stamp precedes the mirror", "given": "any WORK_ASSIGNMENT dispatch", "when": "insertCoordinationRow returns", "then": "row.body and row.payload.body are identical" }
+    ]
+  },
+  {
+    "story_key": "US-005",
+    "title": "CI fixtures and a zero-asserted unreceipted-signal gauge",
+    "user_role": "LEO protocol maintainer",
+    "user_want": "an automated, falsifiable check that no worker signal goes more than 30 minutes without a receipt",
+    "user_benefit": "so a regression in any of the four mechanisms above is caught in CI, not discovered live weeks later",
+    "implementation_context": "## Implementation Guidance\n\n**Component Location:**\n- Extend `tests/unit/coordinator/fleet-dashboard-signal-receipt.test.js`\n- New test file mirroring `scripts/fleet/worktree-reaper-tick.cjs`'s own test conventions for the broadcast fan-out\n- New assignment-constraints dispatch test using the permissive-double pattern already in `fleet-dashboard-signal-receipt.test.js`\n- Extend `lib/fleet/outstanding-signals.cjs`'s existing 'received' predicate into a zero-asserted gauge\n\n**Architecture Patterns:**\n- The gauge's existence-check query bound must cover the FULL enumerated batch, never a fixed 20/50 regardless of batch size\n- A lookup failure must report 'unknown'/error, never a false-pass 0\n\n**Implementation Steps:**\n1. Extend the receipt fixture to cover all signal types\n2. Add the pool-over-cap fixture\n3. Add the constraints-block dispatch fixture\n4. Add the unreceipted-signal gauge + its own test (including the fail-soft-must-not-report-zero case)",
+    "acceptance_criteria": [
+      { "scenario": "Full suite passes with new fixtures", "given": "the existing 113-test baseline plus the new fixtures", "when": "`npx vitest run --project unit` is executed", "then": "all tests pass, zero regressions" },
+      { "scenario": "Gauge reports real zero when receipts exist", "given": "N synthetic signals all carrying receipts", "when": "the gauge runs", "then": "it reports 0 unreceipted" },
+      { "scenario": "Gauge never reports a false zero on lookup failure", "given": "the receipt-existence-check query is stubbed to throw", "when": "the gauge runs", "then": "it reports 'unknown'/error, not 0" }
+    ]
+  }
+]

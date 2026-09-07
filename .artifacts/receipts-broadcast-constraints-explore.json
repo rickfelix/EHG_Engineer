@@ -1,0 +1,29 @@
+{
+  "verdict": "PASS",
+  "dedup_verdict": "no_duplicate_found",
+  "confidence": 90,
+  "summary": "No standalone prior-art implementation exists for FR-2's per-seat fan-out broadcast, FR-3's CONSTRAINTS-block dispatch stamping, or a WORK_ASSIGNMENT-hold-surfacing helper. FR-1's write site (writeSignalReceipts) is already shipped narrow (stuck+high only) by QF-20260906-162 (PR #8338, merged) and still needs the all-signals widening plus INFORMATIONAL_KINDS membership.",
+  "findings": {
+    "fr1_receipt_widening": {
+      "status": "partially_shipped, widening still open",
+      "evidence": "scripts/fleet-dashboard.cjs writeSignalReceipts (~line 1691) filters payload.signal_type==='stuck' AND payload.severity==='high' only, exactly as the SD scope states. Confirmed 'signal_receipt' is a PAYLOAD_KINDS member (lib/fleet/worker-status.cjs line 113) and IS in BACKPRESSURE_EXEMPT_KINDS (line 220, comment references QF-20260906-162), but is NOT present in INFORMATIONAL_KINDS (lines 289-313, read in full) - confirms the described FR-1(b) delta is real and unshipped. No other write site or helper duplicates writeSignalReceipts."
+    },
+    "fr2_broadcast_fanout": {
+      "status": "no_duplicate_found",
+      "evidence": "Grepped 'capped_pool_broadcast' across all .js/.cjs/.mjs in the worktree: zero hits anywhere in source (only appears in the LEAD scope-patch and sub-agent evidence JSON docs already in .artifacts/). No existing per-seat fan-out broadcast helper exists. Confirmed liveFleetSessions() (lib/fleet/live-fleet-sessions.cjs) and emitReaperStarvationAlert's fire-once dedup pattern (lib/coordinator/coordination-events.cjs ~line 855) both exist and are unused for this purpose today. worktree-reaper-tick.cjs's readState/writeState state-file pattern exists and is reaper-specific, not reused elsewhere yet. Prior LEAD-phase sub-agent evidence (testing + validation, in .artifacts/testing-receipts-broadcast-constraints-lead.json and .artifacts/validation-receipts-sd.json) independently confirmed the originally-specified target_session='broadcast' sentinel has zero worker consumers (only role-scoped sentinels like broadcast-coordinator/broadcast-adam/broadcast-solomon are read anywhere), so the per-seat-fanout redesign is a genuine correction, not rework of something that already exists."
+    },
+    "fr3_constraints_block": {
+      "status": "no_duplicate_found",
+      "evidence": "Grepped 'buildWorkAssignment' and 'stampConstraintsBlock' across the worktree: zero hits in source. buildWorkAssignment does not exist (confirms prior LEAD-phase finding). insertCoordinationRow (lib/coordinator/dispatch.cjs ~line 1214) exists with exactly three stamper guards today (stampEffortRecommendation, stampModelRecommendation, stampPremiseMeasurement) keyed on message_type==='WORK_ASSIGNMENT' - no fourth stampConstraintsBlock guard present, so FR-3 is genuinely net-new. resolveHoldProvenance/formatHoldProvenance both exist and are exported from lib/fleet/claim-eligibility.cjs but are not currently wired into any WORK_ASSIGNMENT dispatch path - no existing 'CONSTRAINTS block' rendering of holds onto assignment bodies was found anywhere (grepped 'CONSTRAINTS' broadly; the 20 hits are all unrelated: EVA stage synthesis, migration/schema constraints, test-file constraint checks)."
+    },
+    "fr3_prerequisite_qf": {
+      "status": "confirmed still open/unclaimed",
+      "evidence": "QF-20260904-724 (the resolveHoldProvenance key-list widening prerequisite) appears only inside this SD's own LEAD scope-patch document and two of this session's exploration scripts (.artifacts/a3-qfclaim.cjs, .artifacts/val-esc-link.cjs) - not in any shipped source file - consistent with it being open and unclaimed as the SD scope states."
+    },
+    "fr4_test_fixtures_and_pinned_lists": {
+      "kind_list_test_homes": "tests/unit/fleet/drain-set-registry.test.js line 166 pins the total DRAIN_SETS seed row count at exactly 106 ('102 prior + 4 reconciliation: signal_receipt for all four roles, QF-20260906-162') - already reflects the shipped signal_receipt BACKPRESSURE_EXEMPT_KINDS widening. tests/unit/fleet/drain-sets-adam-reconciliation.test.js line 53 pins per-role counts (30/20/28/26 per prior sub-agent finding, re-confirmed present in this file).",
+      "informational_kinds_pin": "tests/unit/coordination/kind-classification.test.js line 110 asserts INFORMATIONAL_KINDS is frozen (Object.freeze already applied - no change needed there) and line 67 asserts informational/actionable disjointness - this is the test EXEC must run any new INFORMATIONAL_KINDS addition (signal_receipt for FR-1(b), and any FR-2 broadcast kind if it goes the informational route) against.",
+      "existing_fixture_home_for_fr1": "tests/unit/coordinator/fleet-dashboard-signal-receipt.test.js already covers writeSignalReceipts' current narrow behavior - this is the file to extend for the all-signals widening, per prior testing-agent evidence."
+    }
+  }
+}

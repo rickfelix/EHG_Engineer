@@ -1,0 +1,822 @@
+
+ RUN  v4.1.4 C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001
+
+file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/scripts/lint/require-release-sd-wrapper-lint.mjs:107
+      throw new Error(`Allowlist entry '${file}' must have a non-empty reason string`);
+            ^
+
+Error: Allowlist entry 'scripts/target.mjs' must have a non-empty reason string
+    at loadAllowlist [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:107:13[90m)[39m
+    at main [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:189:17[90m)[39m
+    at [90mfile:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:233:1
+[90m    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)[39m
+[90m    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:660:26)[39m
+[90m    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)[39m
+
+Node.js v24.12.0
+file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/scripts/lint/require-release-sd-wrapper-lint.mjs:110
+      throw new Error(`Allowlist entry '${file}' must have a non-negative integer 'expected' count`);
+            ^
+
+Error: Allowlist entry 'scripts/target.mjs' must have a non-negative integer 'expected' count
+    at loadAllowlist [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:110:13[90m)[39m
+    at main [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:189:17[90m)[39m
+    at [90mfile:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:233:1
+[90m    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)[39m
+[90m    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:660:26)[39m
+[90m    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)[39m
+
+Node.js v24.12.0
+file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/scripts/lint/require-release-sd-wrapper-lint.mjs:104
+      throw new Error(`Allowlist entry '${file}' must be an object with {reason, expected}`);
+            ^
+
+Error: Allowlist entry 'scripts/target.mjs' must be an object with {reason, expected}
+    at loadAllowlist [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:104:13[90m)[39m
+    at main [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:189:17[90m)[39m
+    at [90mfile:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-release-sd-wrapper-lint.mjs:233:1
+[90m    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)[39m
+[90m    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:660:26)[39m
+[90m    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)[39m
+
+Node.js v24.12.0
+ ❯ |unit| tests/unit/fleet/source-tree-identity-realgit.test.js (17 tests | 17 skipped) 11125ms
+fatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+(node:59352) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/scripts/lint/require-main-guard-in-one-off-lint.mjs:131
+      throw new Error(`Allowlist entry '${file}' must have a non-empty reason string`);
+            ^
+
+Error: Allowlist entry 'scripts/one-off/whatever.mjs' must have a non-empty reason string
+    at loadAllowlist [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-main-guard-in-one-off-lint.mjs:131:13[90m)[39m
+    at main [90m(file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-main-guard-in-one-off-lint.mjs:212:17[90m)[39m
+    at [90mfile:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[39mscripts/lint/require-main-guard-in-one-off-lint.mjs:252:1
+[90m    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)[39m
+[90m    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:660:26)[39m
+[90m    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)[39m
+
+Node.js v24.12.0
+warning: in the working copy of 'scripts/one-off/tracked-unguarded.mjs', LF will be replaced by CRLF the next time Git touches it
+(node:25284) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+warning: in the working copy of 'marker.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+[query-discipline] TOLERATED at integration-test-requirement:children-check: column does not exist :: fault-sentinel — reason: Best-effort complexity input, one of three OR-ed signals. Failing closed here would block every EXEC-TO-PLAN handoff on a transient blip (required:true, unconditional gate). The fault is instead resolved CONSERVATIVELY by assumeComplexOnUnknown below, so an unanswerable lookup can only tighten the gate, never waive it.
+warning: in the working copy of 'marker.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'marker.txt', LF will be replaced by CRLF the next time Git touches it
+9:29:04 AM [vite] [33m[2m(ssr)[22m[39m [33mwarning: Invalid file URL: must not contain hostname file://${templatepath.replaceall("/%22,%20%22/%22)%7D[39m
+  Plugin: [35mbuiltin:vite-resolve[39m
+9:29:04 AM [vite] [33m[2m(ssr)[22m[39m [33mwarning: Invalid file URL: must not contain hostname file://${templatepath.replaceall("/%22,%20%22/%22)%7D[39m
+  Plugin: [35mbuiltin:vite-resolve[39m
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'marker.txt', LF will be replaced by CRLF the next time Git touches it
+[query-discipline] TOLERATED at integration-test-requirement:children-check: column does not exist :: fault-sentinel — reason: Best-effort complexity input, one of three OR-ed signals. Failing closed here would block every EXEC-TO-PLAN handoff on a transient blip (required:true, unconditional gate). The fault is instead resolved CONSERVATIVELY by assumeComplexOnUnknown below, so an unanswerable lookup can only tighten the gate, never waive it.
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'marker.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+[FR-1 INVENTORY] 6 self-gating guard(s) with NO production caller supplying their gated input:
+    - enforceSweepBudget (scripts/solomon-advisory.cjs:314) needs 'spent' — permissive means: withinBudget:true — the per-sweep cost ceiling does not apply
+    - createRegistryNarrowedTrustGate (lib/ship/auto-merge.mjs:73) needs 'registry' — permissive means: the trust gate cannot REVOKE auto-merge for a mis-tagged platform repo
+    - runPreShipGate (lib/daily-review/artifact-preship-gate.js:27) needs 'getForecast' — permissive means: the pre-ship artifact check passes without a forecast
+    - enforceGuardrail (lib/eva/guardrail-enforcement-engine.js:45) needs 'guardrails' — permissive means: no guardrail is enforced
+    - auditSourcingGateConflict (lib/governance/adam-contract-audit.js:39) needs 'gates' — permissive means: a sourcing-gate conflict goes unreported
+    - capabilityGapTerm (lib/adam/rationale-bar.js:293) needs 'capability' — permissive means: the capability-gap term contributes nothing to the rationale bar
+warning: in the working copy of 'baseline.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'other-worker.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'baseline.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scoped-file.txt', LF will be replaced by CRLF the next time Git touches it
+[qf-760-fixture 28e15cc] fix(QF-20260719-760): shared-tree contention guard fixture
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+warning: in the working copy of 'this-seat.txt', LF will be replaced by CRLF the next time Git touches it
+fatal: 'origin' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+fatal: ambiguous argument 'origin/main..feat/X-a': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+'b' is not recognized as an internal or external command,
+operable program or batch file.
+fatal: invalid object name 'origin/main..feat/X-a&type nul > "C'.
+warning: in the working copy of 'baseline.txt', LF will be replaced by CRLF the next time Git touches it
+fatal: invalid object name 'origin/main..feat/X-a|type nul > "C'.
+fatal: invalid object name 'origin/main..feat/X-a;type nul > "C'.
+fatal: invalid object name 'origin/main..feat/X-a&type nul > C'.
+(node:55076) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+'"b"' is not recognized as an internal or external command,
+operable program or batch file.
+warning: in the working copy of 'baseline.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'other-worker.txt', LF will be replaced by CRLF the next time Git touches it
+The system cannot find the path specified.
+The system cannot find the path specified.
+The system cannot find the path specified.
+The system cannot find the path specified.
+(node:19828) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+warning: in the working copy of 'a.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'a.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/one-off/dangerous.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/one-off/guarded.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/one-off/only-key.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/one-off/only-mutate.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'a.js', LF will be replaced by CRLF the next time Git touches it
+[vitest-membership] db tier: 257 suite(s) resolve and SKIP at runtime unless a designated non-production ref is authorized (VITEST_DB_ALLOW_REF). Coverage debt, not absence.
+(node:60708) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+warning: in the working copy of 'a.js', LF will be replaced by CRLF the next time Git touches it
+(node:28668) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+warning: in the working copy of 'a.js', LF will be replaced by CRLF the next time Git touches it
+❌ stage-advancement-chokepoint-lint (all): 1 violation(s) in 1 file(s) checked:
+
+   database/migrations/new_bypass.sql:2  UPDATE ventures SET current_lifecycle_stage = 5 WHERE id = 'x';
+
+THE RULE:
+"A governance gate on ONE advancement path is not a block -- every path that writes ventures.current_lifecycle_stage must be censused and either gated, deliberately exempt, or documented as a deferred bypass (docs/architecture/stage-advancement-path-census.md)."
+
+If this is a KNOWN, censused write: add the file to scripts/lint/stage-advancement-chokepoint-allowlist.json AND add a row to docs/architecture/stage-advancement-path-census.md.
+For a single intentional line: append a comment containing stage-advancement-lint-disable-line.
+Otherwise, this is a NEW, uncensused stage-advancement write -- route it through the artifact-gate chokepoint instead.
+❌ one-off-mutate-key-manifest DRIFT: committed manifest does not match a fresh scan (1 dangerous file(s) currently, committed had 45).
+   Run: node scripts/lint/generate-one-off-mutate-key-manifest.mjs   and commit the result.
+warning: in the working copy of 'a.js', LF will be replaced by CRLF the next time Git touches it
+fatal: not a git repository (or any of the parent directories): .git
+warning: in the working copy of 'empty.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'empty.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'brand-new.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'a.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'a.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/consumer1.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/consumer2.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/lib-a.js', LF will be replaced by CRLF the next time Git touches it
+❌ tier-rank-direct-comparison-lint (all): 1 unallowlisted violation(s) in 1 file(s) checked:
+
+   lib/reintroduced_comparison.js:3  return sd.metadata.min_tier_rank > workerRank ? 'blocked' : 'ok';
+
+THE RULE:
+"min_tier_rank vs a worker tier rank has exactly one shared predicate: tierRankVerdict() in lib/fleet/tier-ladder.cjs (SD-LEO-INFRA-TIER-FLOOR-PROVENANCE-001). A hand-rolled comparison elsewhere silently bypasses ruling 1B's provenance-advisory branch and the TIER_FLOOR_PROVENANCE_ADVISORY reversal switch -- call tierRankVerdict(workerRank, minRank, { hasProvenance }) instead, or reuse tierBlocks()/classifyDispatchIneligibility() which already delegate to it."
+
+If this is a genuinely non-comparison mention that trips the pattern: append a comment containing tier-rank-comparison-lint-disable-line, or add a { file, line, note } entry to scripts/lint/tier-rank-direct-comparison-allowlist.json.
+warning: in the working copy of 'lib/consumer1.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/consumer2.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/lib-a.js', LF will be replaced by CRLF the next time Git touches it
+[pre-tool-enforce] AUDIT WRITE FAILED (non-blocking): fetch failed
+Preparing worktree (new branch 'qf/QF-scratch-ghost')
+[ENF-16] BLOCKED --no-verify bypasses the pre-commit secret scan (Supabase/OpenAI/Resend/Gemini key detection) + CLAUDE.md-edit protection. Override: LEO_ALLOW_NO_VERIFY="<ticket: reason>" <your git command>
+[pre-tool-enforce] AUDIT WRITE FAILED (non-blocking): fetch failed
+[pre-tool-enforce] AUDIT WRITE FAILED (non-blocking): fetch failed
+❌ gemini-pin-lint (all): 1 unallowlisted violation(s) in 4319 file(s) checked:
+
+   lib/brainstorm/provider-rotation.js:61  google: 'gemini-2.5-pro',
+
+THE RULE:
+"Gemini model selection has exactly one SSOT (lib/config/model-config.js getGoogleModel(purpose)). A literal gemini-<version> string outside that file is a routing pin and must not be reintroduced (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-B) -- resolve via getGoogleModel(purpose) instead, or add a triaged allowlist entry if this is a non-routing occurrence (pricing table, fallback ladder, family regex, provenance stamp, fixture)."
+
+If this is a KNOWN, individually-triaged non-routing use (pricing table, fallback ladder, family regex, provenance stamp, fixture): add a { file, line, category, note } entry to scripts/lint/gemini-pin-allowlist.json.
+For a single intentional line: append a comment containing gemini-pin-lint-disable-line.
+Otherwise, resolve via lib/config/model-config.js's getGoogleModel(purpose) instead of a hardcoded literal.
+❌ gemini-pin-lint (all): 1 unallowlisted violation(s) in 1 file(s) checked:
+
+   lib/new_pin_reintroduction.js:2  const model = 'gemini-2.5-flash';
+
+THE RULE:
+"Gemini model selection has exactly one SSOT (lib/config/model-config.js getGoogleModel(purpose)). A literal gemini-<version> string outside that file is a routing pin and must not be reintroduced (SD-LEO-ORCH-GEMINI-MODEL-SCAN-001-B) -- resolve via getGoogleModel(purpose) instead, or add a triaged allowlist entry if this is a non-routing occurrence (pricing table, fallback ladder, family regex, provenance stamp, fixture)."
+
+If this is a KNOWN, individually-triaged non-routing use (pricing table, fallback ladder, family regex, provenance stamp, fixture): add a { file, line, category, note } entry to scripts/lint/gemini-pin-allowlist.json.
+For a single intentional line: append a comment containing gemini-pin-lint-disable-line.
+Otherwise, resolve via lib/config/model-config.js's getGoogleModel(purpose) instead of a hardcoded literal.
+warning: in the working copy of 'lib/lib-a.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/lib-a.js', LF will be replaced by CRLF the next time Git touches it
+work done
+warning: in the working copy of 'lib/consumer1.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/lib-a.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/consumer1.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'lib/lib-a.js', LF will be replaced by CRLF the next time Git touches it
+❌ gate-stage-hardcoded-literal-lint (all): 1 violation(s) in 1 file(s) checked:
+
+   lib/new_kill_gate_reintroduction.js:2  [KILL_GATE_STAGES]  export const KILL_GATE_STAGES = new Set([3, 5, 13]);
+
+THE RULE:
+"Kill/promotion gate-stage membership has exactly one SSOT (lib/eva/stage-governance.js). A hardcoded KILL_GATE_STAGES/PROMOTION_GATE_STAGES/KILL_GATES/PROMOTION_GATES literal must not be reintroduced (SD-LEO-INFRA-MINUS-GATE-SSOT-001 FR-7) -- derive from getStageGovernance(supabase) instead."
+
+If this is a KNOWN, individually-triaged pre-existing use (a DIFFERENT semantic meaning from the governance SSOT, per docs/architecture/stage-advancement-fr4-tr8-triage.md): add the file to scripts/lint/gate-stage-hardcoded-literal-allowlist.json AND add a row to that triage doc.
+For a single intentional line: append a comment containing gate-stage-lint-disable-line.
+Otherwise, derive gate-stage membership from lib/eva/stage-governance.js's getStageGovernance(supabase) instead of a hardcoded literal.
+{"action":"reconciled","ts":"2026-09-06T13:30:04.717Z","qf_id":"QF-20260508-001","pr_number":123,"merge_commit_sha":"abc123"}
+{"action":"summary","ts":"2026-09-06T13:30:04.718Z","evaluated":1,"reconciled":1,"skipped_pr_not_merged":0,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":0,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"reconciled_orphan","ts":"2026-09-06T13:30:04.735Z","qf_id":"QF-20260508-002","pr_number":999,"branch":"qf/QF-20260508-002","merge_commit_sha":"def456"}
+{"action":"summary","ts":"2026-09-06T13:30:04.735Z","evaluated":0,"reconciled":0,"skipped_pr_not_merged":0,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":1,"orphan_reconciled":1,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"skipped_pr_not_merged","ts":"2026-09-06T13:30:04.762Z","qf_id":"QF-20260508-003","pr_number":124,"pr_state":"OPEN"}
+{"action":"summary","ts":"2026-09-06T13:30:04.763Z","evaluated":1,"reconciled":0,"skipped_pr_not_merged":1,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":0,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"skipped_orphan_no_merged_pr","ts":"2026-09-06T13:30:04.777Z","qf_id":"QF-20260508-004","branch":"qf/QF-20260508-004"}
+{"action":"summary","ts":"2026-09-06T13:30:04.777Z","evaluated":0,"reconciled":0,"skipped_pr_not_merged":0,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":1,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":1,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"dry_run_would_reconcile","ts":"2026-09-06T13:30:04.800Z","qf_id":"QF-20260508-005","pr_number":125,"merge_commit_sha":"xyz"}
+{"action":"summary","ts":"2026-09-06T13:30:04.800Z","evaluated":1,"reconciled":1,"skipped_pr_not_merged":0,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":0,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"skipped_orphan_invalid_id","ts":"2026-09-06T13:30:04.923Z","qf_id":"BAD\"; rm -rf /; echo \""}
+{"action":"summary","ts":"2026-09-06T13:30:04.923Z","evaluated":0,"reconciled":0,"skipped_pr_not_merged":0,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":1,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":1}
+{"action":"skipped_pr_not_merged","ts":"2026-09-06T13:30:04.987Z","qf_id":"QF-20260508-006","pr_number":777,"pr_state":"OPEN"}
+{"action":"summary","ts":"2026-09-06T13:30:04.987Z","evaluated":1,"reconciled":0,"skipped_pr_not_merged":1,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":0,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"skipped_orphan_no_merged_pr","ts":"2026-09-06T13:30:05.013Z","qf_id":"QF-20260508-007","branch":"qf/QF-20260508-007"}
+{"action":"summary","ts":"2026-09-06T13:30:05.013Z","evaluated":0,"reconciled":0,"skipped_pr_not_merged":0,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":1,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":1,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"skipped_pr_not_merged","ts":"2026-09-06T13:30:05.026Z","qf_id":"QF-20260704-101","pr_number":5000,"pr_state":"OPEN"}
+{"action":"summary","ts":"2026-09-06T13:30:05.026Z","evaluated":1,"reconciled":0,"skipped_pr_not_merged":1,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":0,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"skipped_pr_not_merged","ts":"2026-09-06T13:30:05.038Z","qf_id":"QF-20260704-102","pr_number":14,"pr_state":"OPEN"}
+{"action":"summary","ts":"2026-09-06T13:30:05.038Z","evaluated":1,"reconciled":0,"skipped_pr_not_merged":1,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":0,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"skipped_orphan_no_merged_pr","ts":"2026-09-06T13:30:05.086Z","qf_id":"QF-20260704-103","branch":"qf/QF-20260704-103"}
+{"action":"summary","ts":"2026-09-06T13:30:05.086Z","evaluated":0,"reconciled":0,"skipped_pr_not_merged":0,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":1,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":1,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":0}
+{"action":"error_unresolvable_repo","ts":"2026-09-06T13:30:05.103Z","qf_id":"QF-20260704-104","target_application":"TotallyUnknownApp12345","error":"orphan-qf-reaper: unresolvable target_application \"TotallyUnknownApp12345\" — refusing to fall back to an ambient default repo"}
+{"action":"summary","ts":"2026-09-06T13:30:05.103Z","evaluated":1,"reconciled":0,"skipped_pr_not_merged":0,"skipped_pr_not_found":0,"skipped_already_completed":0,"orphan_evaluated":0,"orphan_reconciled":0,"orphan_skipped_no_merged_pr":0,"orphan_skipped_already_completed":0,"skipped_already_witnessed":0,"errored":1}
+❌ gate-stage-hardcoded-literal-lint (all): 1 violation(s) in 1 file(s) checked:
+
+   lib/reintroduced.mjs:2  [PROMOTION_GATES]  const PROMOTION_GATES = [17, 18, 23];
+
+THE RULE:
+"Kill/promotion gate-stage membership has exactly one SSOT (lib/eva/stage-governance.js). A hardcoded KILL_GATE_STAGES/PROMOTION_GATE_STAGES/KILL_GATES/PROMOTION_GATES literal must not be reintroduced (SD-LEO-INFRA-MINUS-GATE-SSOT-001 FR-7) -- derive from getStageGovernance(supabase) instead."
+
+If this is a KNOWN, individually-triaged pre-existing use (a DIFFERENT semantic meaning from the governance SSOT, per docs/architecture/stage-advancement-fr4-tr8-triage.md): add the file to scripts/lint/gate-stage-hardcoded-literal-allowlist.json AND add a row to that triage doc.
+For a single intentional line: append a comment containing gate-stage-lint-disable-line.
+Otherwise, derive gate-stage membership from lib/eva/stage-governance.js's getStageGovernance(supabase) instead of a hardcoded literal.
+The system cannot find the path specified.
+The system cannot find the path specified.
+❌ gate-stage-hardcoded-literal-lint (all): 1 violation(s) in 1 file(s) checked:
+
+   lib/not_allowlisted.js:2  [KILL_GATES]  const KILL_GATES = [3, 5, 13];
+
+THE RULE:
+"Kill/promotion gate-stage membership has exactly one SSOT (lib/eva/stage-governance.js). A hardcoded KILL_GATE_STAGES/PROMOTION_GATE_STAGES/KILL_GATES/PROMOTION_GATES literal must not be reintroduced (SD-LEO-INFRA-MINUS-GATE-SSOT-001 FR-7) -- derive from getStageGovernance(supabase) instead."
+
+If this is a KNOWN, individually-triaged pre-existing use (a DIFFERENT semantic meaning from the governance SSOT, per docs/architecture/stage-advancement-fr4-tr8-triage.md): add the file to scripts/lint/gate-stage-hardcoded-literal-allowlist.json AND add a row to that triage doc.
+For a single intentional line: append a comment containing gate-stage-lint-disable-line.
+Otherwise, derive gate-stage membership from lib/eva/stage-governance.js's getStageGovernance(supabase) instead of a hardcoded literal.
+The system cannot find the path specified.
+warning: in the working copy of 'database/migrations/legacy_fixture.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/temp/tracked-old.cjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'database/migrations/legacy_fixture.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'database/migrations/brand_new_fixture.sql', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+fatal: Not a valid object name origin/main
+Preparing worktree (new branch 'feature-x')
+warning: in the working copy of 'fixture.js', LF will be replaced by CRLF the next time Git touches it
+fatal: Not a valid object name origin/main
+warning: in the working copy of 'fixture.js', LF will be replaced by CRLF the next time Git touches it
+[sd-next:query-failure] {"timestamp":"2026-09-06T13:30:22.040Z","source":"loadHarnessBacklog.db","error":"pg_error: relation feedback does not exist","code":"42P01","table":"feedback"}
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+Usage: node scripts/context-ceiling-check.mjs --role <role> [--session-id <id>] [--json]
+No session id: pass --session-id or set CLAUDE_SESSION_ID.
+9:30:29 AM [vite] [33m[2m(ssr)[22m[39m [33mwarning: invalid import "../../${REL}". A file extension must be included in the static part of the import. For example: import(`./foo/${bar}.js`).[39m
+  Plugin: [35mvite:dynamic-import-vars[39m
+  File: [36mC:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/tests/unit/qf450-subagent-execution-loads.test.js[39m
+OK review-packet.html written, size: 3.35 MB
+warning: in the working copy of 'scripts/one-off/once.mjs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/tracked-orphan.mjs', LF will be replaced by CRLF the next time Git touches it
+⚠️  WARN: worker-signal.cjs send-path code is 1 commit(s) behind origin/main — this send may run pre-fix code. Consider a git pull before continuing.
+file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/[eval1]:1
+import { definitelyNotExported } from "file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/lib/quality/tuning-rules.js";console.log(JSON.stringify(["definitelyNotExported"].map((n) => typeof eval(n))));
+         ^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: The requested module 'file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/lib/quality/tuning-rules.js' does not provide an export named 'definitelyNotExported'
+[90m    at #asyncInstantiate (node:internal/modules/esm/module_job:302:21)[39m
+[90m    at async ModuleJob.run (node:internal/modules/esm/module_job:405:5)[39m
+[90m    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:268:26)[39m
+[90m    at async ModuleLoader.executeModuleJob (node:internal/modules/esm/loader:265:20)[39m
+[90m    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)[39m
+
+Node.js v24.12.0
+warning: Not a git repository. Use --no-index to compare two paths outside a working tree
+usage: git diff --no-index [<options>] <path> <path>
+
+Diff output format options
+    -p, --patch           generate patch
+    -s, --no-patch        suppress diff output
+    -u                    generate patch
+    -U, --unified[=<n>]   generate diffs with <n> lines context
+    -W, --[no-]function-context
+                          generate diffs with <n> lines context
+    --raw                 generate the diff in raw format
+    --patch-with-raw      synonym for '-p --raw'
+    --patch-with-stat     synonym for '-p --stat'
+    --numstat             machine friendly --stat
+    --shortstat           output only the last line of --stat
+    -X, --dirstat[=<param1>,<param2>...]
+                          output the distribution of relative amount of changes for each sub-directory
+    --cumulative          synonym for --dirstat=cumulative
+    --dirstat-by-file[=<param1>,<param2>...]
+                          synonym for --dirstat=files,<param1>,<param2>...
+    --check               warn if changes introduce conflict markers or whitespace errors
+    --summary             condensed summary such as creations, renames and mode changes
+    --name-only           show only names of changed files
+    --name-status         show only names and status of changed files
+    --stat[=<width>[,<name-width>[,<count>]]]
+                          generate diffstat
+    --stat-width <width>  generate diffstat with a given width
+    --stat-name-width <width>
+                          generate diffstat with a given name width
+    --stat-graph-width <width>
+                          generate diffstat with a given graph width
+    --stat-count <count>  generate diffstat with limited lines
+    --[no-]compact-summary
+                          generate compact summary in diffstat
+    --binary              output a binary diff that can be applied
+    --[no-]full-index     show full pre- and post-image object names on the "index" lines
+    --[no-]color[=<when>] show colored diff
+    --ws-error-highlight <kind>
+                          highlight whitespace errors in the 'context', 'old' or 'new' lines in the diff
+    -z                    do not munge pathnames and use NULs as output field terminators in --raw or --numstat
+    --[no-]abbrev[=<n>]   use <n> digits to display object names
+    --src-prefix <prefix> show the given source prefix instead of "a/"
+    --dst-prefix <prefix> show the given destination prefix instead of "b/"
+    --line-prefix <prefix>
+                          prepend an additional prefix to every line of output
+    --no-prefix           do not show any source or destination prefix
+    --default-prefix      use default prefixes a/ and b/
+    --inter-hunk-context <n>
+                          show context between diff hunks up to the specified number of lines
+    --output-indicator-new <char>
+                          specify the character to indicate a new line instead of '+'
+    --output-indicator-old <char>
+                          specify the character to indicate an old line instead of '-'
+    --output-indicator-context <char>
+                          specify the character to indicate a context instead of ' '
+
+Diff rename options
+    -B, --break-rewrites[=<n>[/<m>]]
+                          break complete rewrite changes into pairs of delete and create
+    -M, --find-renames[=<n>]
+                          detect renames
+    -D, --irreversible-delete
+                          omit the preimage for deletes
+    -C, --find-copies[=<n>]
+                          detect copies
+    --[no-]find-copies-harder
+                          use unmodified files as source to find copies
+    --no-renames          disable rename detection
+    --[no-]rename-empty   use empty blobs as rename source
+    --[no-]follow         continue listing the history of a file beyond renames
+    -l <n>                prevent rename/copy detection if the number of rename/copy targets exceeds given limit
+
+Diff algorithm options
+    --minimal             produce the smallest possible diff
+    -w, --ignore-all-space
+                          ignore whitespace when comparing lines
+    -b, --ignore-space-change
+                          ignore changes in amount of whitespace
+    --ignore-space-at-eol ignore changes in whitespace at EOL
+    --ignore-cr-at-eol    ignore carrier-return at the end of line
+    --ignore-blank-lines  ignore changes whose lines are all blank
+    -I, --[no-]ignore-matching-lines <regex>
+                          ignore changes whose all lines match <regex>
+    --[no-]indent-heuristic
+                          heuristic to shift diff hunk boundaries for easy reading
+    --patience            generate diff using the "patience diff" algorithm
+    --histogram           generate diff using the "histogram diff" algorithm
+    --diff-algorithm <algorithm>
+                          choose a diff algorithm
+    --anchored <text>     generate diff using the "anchored diff" algorithm
+    --word-diff[=<mode>]  show word diff, using <mode> to delimit changed words
+    --word-diff-regex <regex>
+                          use <regex> to decide what a word is
+    --color-words[=<regex>]
+                          equivalent to --word-diff=color --word-diff-regex=<regex>
+    --[no-]color-moved[=<mode>]
+                          moved lines of code are colored differently
+    --[no-]color-moved-ws <mode>
+                          how white spaces are ignored in --color-moved
+
+Other diff options
+    --[no-]relative[=<prefix>]
+                          when run from subdir, exclude changes outside and show relative paths
+    -a, --[no-]text       treat all files as text
+    -R                    swap two inputs, reverse the diff
+    --[no-]exit-code      exit with 1 if there were differences, 0 otherwise
+    --[no-]quiet          disable all output of the program
+    --[no-]ext-diff       allow an external diff helper to be executed
+    --[no-]textconv       run external text conversion filters when comparing binary files
+    --ignore-submodules[=<when>]
+                          ignore changes to submodules in the diff generation
+    --submodule[=<format>]
+                          specify how differences in submodules are shown
+    --ita-invisible-in-index
+                          hide 'git add -N' entries from the index
+    --ita-visible-in-index
+                          treat 'git add -N' entries as real in the index
+    -S <string>           look for differences that change the number of occurrences of the specified string
+    -G <regex>            look for differences that change the number of occurrences of the specified regex
+    --pickaxe-all         show all changes in the changeset with -S or -G
+    --pickaxe-regex       treat <string> in -S as extended POSIX regular expression
+    -O <file>             control the order in which files appear in the output
+    --rotate-to <path>    show the change in the specified path first
+    --skip-to <path>      skip the output to the specified path
+    --find-object <object-id>
+                          look for differences that change the number of occurrences of the specified object
+    --diff-filter [(A|C|D|M|R|T|U|X|B)...[*]]
+                          select files by diff type
+    --output <file>       output to a specific file
+
+Warning: A vi.mock('../../lib/supabase-client.js') call in "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/tests/unit/cleanup-providers.test.js" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+Warning: A vi.mock('../../lib/genesis/vercel-deploy.js') call in "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/tests/unit/cleanup-providers.test.js" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+# Preview: MEMORY.md (60 bytes, 2 lines)
+# Topic files to create: 0
+# Budget: 15360 bytes; over budget: false
+
+- [A1](feedback_a_1.md) — d
+- [A2](feedback_a_2.md) — d
+The system cannot find the path specified.
+[safe-root-resync] dry-run preview (git clean -fdn — would delete):
+  (nothing)
+[safe-root-resync] dry-run preview (git clean -fdn — would delete):
+  (nothing)
+[safe-root-resync] dry-run preview (git clean -fdn — would delete):
+would remove .prd-payloads/scratch.json
+[safe-root-resync] PREVIEW ONLY — no files deleted. The untracked files above will be PERMANENTLY removed if you re-run with --confirm-clean. Review them first.
+[safe-root-resync] node_modules probe FAILED: Cannot find @supabase. Run npm install
+[safe-root-resync] node_modules probe FAILED: missing. run npm install
+[safe-root-resync] node_modules repair WARN: npm install failed (non-fatal)
+[post-checkout-role-restore] WARN: supabase_connection_error (non-fatal)
+[safe-root-resync] node_modules repair WARN: import_failed (non-fatal)
+[safe-root-resync] node_modules probe FAILED: missing. npm install
+[safe-root-resync] node_modules probe FAILED: missing. npm install
+[safe-root-resync] npm lock held by other-session-xyz, waiting...
+[safe-root-resync] LOUD: node_modules is broken but lock still held by other-session-xyz after waiting. NOT running a racing install. Re-run `npm run resync:safe` once the other session finishes, or run `npm install` manually.
+[post-checkout-role-restore] WARN: DB is down (non-fatal)
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.closed pid=22196 n=1 ids=old:marker
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.closed pid=22196 n=1 ids=old:marker
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.closed pid=22196 n=1 ids=parked:marker
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.closed pid=22196 n=2 ids=i:marker,s:marker
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.skipped reason=identity_pid_mismatch marker=777 discovered=22196
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.closed pid=22196 n=1 ids=old:marker
+[session-register] rotation.db_join_failed reason=supabase.from(...).select(...).eq is not a function
+[session-register] rotation.closed pid=22196 n=1 ids=old:marker
+[session-register] rotation.failed reason=supabase down
+[retry-state-manager] tick-exemption entry rejected (needs full basename + extension and a reason): "adam"
+[retry-state-manager] tick-exemption entry rejected (needs full basename + extension and a reason): ".mjs"
+[retry-state-manager] tick-exemption entry rejected (needs full basename + extension and a reason): "a"
+[retry-state-manager] tick-exemption entry rejected (needs full basename + extension and a reason): "../evil.mjs"
+[retry-state-manager] tick-exemption entry rejected (needs full basename + extension and a reason): "scripts/adam-quiet-tick.mjs"
+[retry-state-manager] tick-exemption entry rejected (needs full basename + extension and a reason): "ad*am.mjs"
+[retry-state-manager] tick-exemption entry rejected (needs full basename + extension and a reason): "adam|.mjs"
+[retry-state-manager] tick-exemption config capped at 32 entries (34 present)
+[retry-state-manager] tick-exemption config unreadable (builtins only): Expected property name or '}' in JSON at position 2 (line 1 column 3)
+[demand-gate] live floor computation failed: sb.from is not a function — falling back to static floor
+[demand-gate] live floor computation failed: sb.from is not a function — falling back to static floor
+[demand-gate] live floor computation failed: sb.from is not a function — falling back to static floor
+[demand-gate] live floor computation failed: sb.from is not a function — falling back to static floor
+[demand-gate] live floor computation failed: sb.from is not a function — falling back to static floor
+[demand-gate] live floor computation failed: sb.from is not a function — falling back to static floor
+[demand-gate] live floor computation failed: sb.from is not a function — falling back to static floor
+The system cannot find the path specified.
+[demand-gate] withheld cost NOT recorded for test-engine: supabase.from is not a function
+[demand-gate] withheld cost NOT recorded for e: supabase.from is not a function
+[demand-gate] gauge read failed for e: gauge unavailable — withholding
+[tier-ladder] UNRESOLVED_SEAT_CAPABILITY {"token":"UNRESOLVED_SEAT_CAPABILITY","raw_model":null,"reason":"no_model_stamp","resolved_to":2,"context":null}
+{"ts":"2026-09-06T13:31:09.098Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.099Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.101Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.101Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.105Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.105Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.107Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.107Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.112Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.112Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.118Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.118Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.122Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.122Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.127Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.127Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.131Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.131Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.139Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.139Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.148Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.148Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.164Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.164Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.164Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"devils_advocate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.166Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.166Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.166Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"devils_advocate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.168Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.168Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.168Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"devils_advocate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.171Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.171Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.171Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"devils_advocate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.179Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.179Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.181Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.181Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.187Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.187Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.190Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.190Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.195Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:09.195Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v-1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+[session-register] rotation.closed pid=22196 n=1 ids=old:db_join
+[session-register] rotation.closed pid=22196 n=1 ids=old:marker
+[session-register] rotation.skipped reason=identity_pid_mismatch marker=777 discovered=22196
+[session-register] rotation.closed pid=22196 n=1 ids=decoy-ma:db_join
+[session-register] rotation.closed pid=22196 n=1 ids=same-hos:db_join
+[session-register] rotation.closed pid=22196 n=1 ids=old:db_join
+[session-register] rotation.closed pid=22196 n=1 ids=legit-se:db_join
+[session-register] rotation.closed pid=22196 n=1 ids=old:marker
+[session-register] rotation.closed pid=22196 n=1 ids=old:marker
+[quality-aggregator] audit_log write failed (quality_aggregator_run): boom
+[quality-aggregator] --dry-run: skipping aggregator invocation
+[quality-aggregator] advisory lock held by another invocation; no-op exit
+[quality-aggregator] aggregator failed: venture_quality_findings read failed: fetchAllPaginated: page at offset 0 failed: boom
+Error: venture_quality_findings read failed: fetchAllPaginated: page at offset 0 failed: boom
+    at runOneBatch (C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/scripts/cron/quality-findings-aggregator.mjs:182:11)
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at runOnce (C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/scripts/cron/quality-findings-aggregator.mjs:220:21)
+    at C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/tests/unit/cron/quality-findings-aggregator.test.js:241:17
+    at file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+[quality-aggregator] --dry-run: skipping aggregator invocation
+[quality-aggregator] batch complete {"run_id":"aggregate-1788701477761","started_at":"2026-09-06T13:31:17.761Z","finished_at":"2026-09-06T13:31:17.761Z","lookback_days":5,"ventures_scanned":0,"findings_read":0,"patterns_inserted":0,"patterns_updated":0,"errors":[],"dry_run":true,"wall_clock_ms":0}
+audit-test-failures --pr-only: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars are required
+{
+  "new_failures": [],
+  "new_failure_count": 0,
+  "cold_start": true,
+  "baseline_branch": "main"
+}
+{
+  "new_failures": [
+    {
+      "file": "src/changed.js",
+      "test": "broke it",
+      "error_category": "other",
+      "error_message_excerpt": "",
+      "recommended_action": "Manual triage: no error message captured."
+    }
+  ],
+  "new_failure_count": 1,
+  "used_fallback": false,
+  "baseline_branch": "main",
+  "baseline_scanned_at": "t"
+}
+{
+  "new_failures": [],
+  "new_failure_count": 0,
+  "used_fallback": false,
+  "baseline_branch": "main",
+  "baseline_scanned_at": "t"
+}
+{"ts":"2026-09-06T13:31:19.843Z","action":"pull","venture":"CronGenius","status":"ok","total":42,"persist_error":null}
+{"ts":"2026-09-06T13:31:19.844Z","action":"pull","venture":"NoEndpoint","status":"skipped","note":"no metrics_base_url configured","persist_error":null}
+{"ts":"2026-09-06T13:31:19.844Z","action":"summary","total":2,"ok":1,"skipped":1,"version_mismatch":0,"error":0}
+[demand-gate] gauge read failed for e: dep query failed — withholding
+[demand-gate] decision NOT recorded for refill-auto-promote: boom
+[sourcing-awareness] DB flag read failed (relation "sourcing_engine_activation_state" does not exist); falling back to env.
+[sourcing-awareness] reconcile upsert failed (boom).
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.364Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.367Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.371Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr7","details":{},"ts":"2026-09-06T13:31:23.372Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr7","details":{},"ts":"2026-09-06T13:31:23.374Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.376Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr7","details":{},"ts":"2026-09-06T13:31:23.377Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr8","details":{},"ts":"2026-09-06T13:31:23.378Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.381Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-LEADTOPLAN-1249b41c","reason":"fingerprint_stem_dup","details":{"kept_pattern_id":"PAT-RETRO-EXECTOPLAN-1249b41c"},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOLEAD-d1af8062","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOEXEC-b08769c7","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOEXEC-af701473","reason":"fr8","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-EXECTOPLAN-1249b41c","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOEXEC-211b3c47","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-LEADFINALAPPROVAL-b737c27f","reason":"fr8","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOLEAD-f6795567","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOLEAD-9d0c06ce","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOEXEC-SD-LEO-I","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.389Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-LEADTOPLAN-1249b41c","reason":"fingerprint_stem_dup","details":{"kept_pattern_id":"PAT-RETRO-EXECTOPLAN-1249b41c"},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOLEAD-d1af8062","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOEXEC-b08769c7","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOEXEC-af701473","reason":"fr8","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-EXECTOPLAN-1249b41c","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOEXEC-211b3c47","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-LEADFINALAPPROVAL-b737c27f","reason":"fr8","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOLEAD-f6795567","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOLEAD-9d0c06ce","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-RETRO-PLANTOEXEC-SD-LEO-I","reason":"fr6","details":{},"ts":"2026-09-06T13:31:23.390Z"}
+{"ts":"2026-09-06T13:31:23.532Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L0","gateType":"stage_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:23.533Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L2","gateType":"stage_gate","action":"auto_approve"}
+{"ts":"2026-09-06T13:31:23.534Z","level":"warn","module":"AutonomyModel","msg":"Could not fetch autonomy level, defaulting to L0","ventureId":"v1","error":"not found"}
+{"ts":"2026-09-06T13:31:23.535Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L4","gateType":"kill_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:23.536Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L2","gateType":"promotion_gate","action":"auto_approve"}
+{"ts":"2026-09-06T13:31:23.536Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L1","gateType":"promotion_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:23.537Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L0","gateType":"reality_gate","action":"manual"}
+{"ts":"2026-09-06T13:31:23.539Z","level":"info","module":"AutonomyModel","msg":"Chairman autonomy override active","ventureId":"v1","override":"L3"}
+{"ts":"2026-09-06T13:31:23.540Z","level":"info","module":"AutonomyModel","msg":"Chairman autonomy override active","ventureId":"v1","override":"L4"}
+{"ts":"2026-09-06T13:31:23.541Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L1","gateType":"reality_gate","action":"manual"}
+[notification-permission-wait] WRITE FAILED (non-blocking): network down
+{"schema_version":2,"timestamp":"2026-09-06T13:31:27.263Z","event":"orphan_sweep","scanned":1,"reapable":1,"excluded_count":0,"excluded_by_reason":{},"reclaimed_count":1,"archived_bytes":200,"disk_freed_bytes":0,"failed_count":0,"dry_run":true,"refused_count":0,"refused":[]}
+{"schema_version":2,"timestamp":"2026-09-06T13:31:27.285Z","event":"orphan_sweep","scanned":1,"reapable":0,"excluded_count":0,"excluded_by_reason":{},"reclaimed_count":0,"archived_bytes":0,"disk_freed_bytes":0,"failed_count":0,"dry_run":true,"refused_count":1,"refused":[{"dir":"QF-LIVE-5","reason":"high_content","files":4,"newest_mtime_ms":1788694287283}]}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:31:33.439Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:31:33.441Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:31:33.442Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"auto_captured_unreviewed","details":{},"ts":"2026-09-06T13:31:33.444Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:31:33.449Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:31:33.450Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:31:33.451Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:31:33.452Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:31:33.453Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:31:33.454Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"uuid_fingerprint","details":{},"ts":"2026-09-06T13:31:33.455Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"uuid_fingerprint","details":{},"ts":"2026-09-06T13:31:33.457Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-001","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:31:33.459Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-130","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:31:33.461Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-131","reason":"uuid_fingerprint","details":{},"ts":"2026-09-06T13:31:33.461Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-128","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:31:33.461Z"}
+[tier-ladder] UNRESOLVED_SEAT_CAPABILITY {"token":"UNRESOLVED_SEAT_CAPABILITY","raw_model":"gemini-3-5-pro","reason":"unrecognized_model","resolved_to":"haiku","context":"buffer-check"}
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[fr-c-generator] cron lock held by another tick; no-op exit
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: SOURCED gauge=0 floor=3 measured_at=unstamped — dispatchable 0 <= floor 3 — real demand, producing
+[fr-c-generator] batch complete startedAt=2026-09-06T13:31:37.849Z finishedAt=2026-09-06T13:31:37.849Z summary={"ventures":["v1"],"totalCreated":1,"totalAppended":0,"totalSkippedRateLimited":0,"totalErrors":0,"perVenture":{"v1":{"created":1}},"demand":{"engine":"fr-c-generator","gauge_value":0,"floor":3,"decision":"sourced","reason":"dispatchable 0 <= floor 3 — real demand, producing","measured_at":null}}
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: SOURCED gauge=0 floor=3 measured_at=unstamped — dispatchable 0 <= floor 3 — real demand, producing
+[fr-c-generator] generator failed: generator boom
+Error: generator boom
+    at C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/tests/unit/scripts/cron/fr-c-generator.test.js:156:54
+    at file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64
+[fr-c-generator] release_cron_lock failed: release exploded
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: SOURCED gauge=0 floor=3 measured_at=unstamped — dispatchable 0 <= floor 3 — real demand, producing
+[fr-c-generator] batch complete startedAt=2026-09-06T13:31:37.858Z finishedAt=2026-09-06T13:31:37.858Z summary={"ventures":["v1"],"totalCreated":1,"totalAppended":0,"totalSkippedRateLimited":0,"totalErrors":0,"perVenture":{},"demand":{"engine":"fr-c-generator","gauge_value":0,"floor":3,"decision":"sourced","reason":"dispatchable 0 <= floor 3 — real demand, producing","measured_at":null}}
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: WITHHELD gauge=11 floor=3 measured_at=unstamped — dispatchable 11 > floor 3 — belt already has work, staying quiet (this is healthy, not a fault)
+[fr-c-generator] batch complete startedAt=2026-09-06T13:31:37.858Z finishedAt=2026-09-06T13:31:37.858Z summary={"ventures":[],"totalCreated":0,"totalAppended":0,"totalSkippedRateLimited":0,"totalErrors":0,"perVenture":{},"withheldByDemand":true,"demand":{"engine":"fr-c-generator","gauge_value":11,"floor":3,"decision":"withheld","reason":"dispatchable 11 > floor 3 — belt already has work, staying quiet (this is healthy, not a fault)","measured_at":null}}
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: WITHHELD gauge=11 floor=3 measured_at=unstamped — dispatchable 11 > floor 3 — belt already has work, staying quiet (this is healthy, not a fault)
+[fr-c-generator] batch complete startedAt=2026-09-06T13:31:37.860Z finishedAt=2026-09-06T13:31:37.860Z summary={"ventures":[],"totalCreated":0,"totalAppended":0,"totalSkippedRateLimited":0,"totalErrors":0,"perVenture":{},"withheldByDemand":true,"demand":{"engine":"fr-c-generator","gauge_value":11,"floor":3,"decision":"withheld","reason":"dispatchable 11 > floor 3 — belt already has work, staying quiet (this is healthy, not a fault)","measured_at":null}}
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: UNMEASURABLE gauge=n/a floor=3 measured_at=unstamped — gauge unreadable (gauge_absent) — NOT a licence to produce
+[fr-c-generator] batch complete startedAt=2026-09-06T13:31:37.861Z finishedAt=2026-09-06T13:31:37.861Z summary={"ventures":[],"totalCreated":0,"totalAppended":0,"totalSkippedRateLimited":0,"totalErrors":0,"perVenture":{},"withheldByDemand":true,"demand":{"engine":"fr-c-generator","gauge_value":null,"floor":3,"decision":"unmeasurable","reason":"gauge unreadable (gauge_absent) — NOT a licence to produce","measured_at":null}}
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: WITHHELD gauge=11 floor=3 measured_at=unstamped — dispatchable 11 > floor 3 — belt already has work, staying quiet (this is healthy, not a fault)
+[fr-c-generator] batch complete startedAt=2026-09-06T13:31:37.863Z finishedAt=2026-09-06T13:31:37.863Z summary={"ventures":[],"totalCreated":0,"totalAppended":0,"totalSkippedRateLimited":0,"totalErrors":0,"perVenture":{},"withheldByDemand":true,"demand":{"engine":"fr-c-generator","gauge_value":11,"floor":3,"decision":"withheld","reason":"dispatchable 11 > floor 3 — belt already has work, staying quiet (this is healthy, not a fault)","measured_at":null}}
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: SOURCED gauge=0 floor=3 measured_at=unstamped — dispatchable 0 <= floor 3 — real demand, producing
+[fr-c-generator] batch complete startedAt=2026-09-06T13:31:37.863Z finishedAt=2026-09-06T13:31:37.863Z summary={"ventures":["v1"],"totalCreated":1,"totalAppended":0,"totalSkippedRateLimited":0,"totalErrors":0,"perVenture":{},"demand":{"engine":"fr-c-generator","gauge_value":0,"floor":3,"decision":"sourced","reason":"dispatchable 0 <= floor 3 — real demand, producing","measured_at":null}}
+[fr-c-generator] liveness stamp failed (non-fatal): supabase.from is not a function
+[demand-gate] fr-c-generator: SOURCED gauge=0 floor=3 measured_at=unstamped — dispatchable 0 <= floor 3 — real demand, producing
+[fr-c-generator] batch complete startedAt=2026-09-06T13:31:37.864Z finishedAt=2026-09-06T13:31:37.864Z summary={"ventures":["v1"],"totalCreated":1,"totalAppended":0,"totalSkippedRateLimited":0,"totalErrors":0,"perVenture":{},"demand":{"engine":"fr-c-generator","gauge_value":0,"floor":3,"decision":"sourced","reason":"dispatchable 0 <= floor 3 — real demand, producing","measured_at":null}}
+[sd-next:query-failure] {"timestamp":"2026-09-06T13:31:50.441Z","source":"loadOpenQuickFixes","error":"db down","code":null,"table":"quick_fixes"}
+[sd-next:query-failure] {"timestamp":"2026-09-06T13:31:50.451Z","source":"loadReadyToMergeQuickFixes","error":"db down","code":null,"table":"quick_fixes"}
+[vitest-pool]: Timeout terminating forks worker for test files C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/tests/pre-exec/pre-exec-analyzer.test.js.
+{"ts":"2026-09-06T13:32:16.169Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L4","gateType":"stage_gate","action":"auto_approve"}
+{"ts":"2026-09-06T13:32:16.173Z","level":"info","module":"AutonomyModel","msg":"Autonomy check","ventureId":"v1","autonomyLevel":"L2","gateType":"stage_gate","action":"auto_approve"}
+{"ts":"2026-09-06T13:32:16.176Z","level":"info","module":"AutonomyModel","msg":"Chairman autonomy override active","ventureId":"v1","override":"L4"}
+{"ts":"2026-09-06T13:32:16.177Z","level":"info","module":"AutonomyModel","msg":"Chairman autonomy override active","ventureId":"v1","override":"L4"}
+[demand-gate] gauge read failed for freeze-test: gauge exploded — withholding
+[demand-gate] live floor computation failed: capacity read failed — falling back to static floor
+[demand-gate] live floor computation failed: sync boom — falling back to static floor
+[demand-gate] live floor computation failed: computeBeltVerdict(): idleNow must be a finite number, got null — falling back to static floor
+[telemetry:auto] Analysis complete: 0 bottleneck(s), 100 traces, 0ms
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-130","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.146Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-131","reason":"uuid_fingerprint","details":{},"ts":"2026-09-06T13:33:20.146Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-128","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:33:20.146Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-130","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.147Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-131","reason":"uuid_fingerprint","details":{},"ts":"2026-09-06T13:33:20.147Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-128","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:33:20.147Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-130","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.148Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-131","reason":"uuid_fingerprint","details":{},"ts":"2026-09-06T13:33:20.148Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-LEARN-128","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:33:20.148Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0000","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0001","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0003","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0006","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0009","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0011","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0012","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0015","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0018","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0021","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0024","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0027","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0030","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0031","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0033","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0036","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0039","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0041","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0042","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0045","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0048","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0051","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0054","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0057","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0060","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0061","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0063","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0066","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0069","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0071","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0072","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0075","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0078","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0081","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0084","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0087","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0090","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0091","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0093","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0096","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0099","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0101","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0102","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0105","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0108","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0111","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0114","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0117","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0120","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0121","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0123","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0126","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0129","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0131","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0132","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0135","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0138","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0141","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0144","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0147","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0150","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0151","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0153","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0156","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0159","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0161","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0162","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0165","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0168","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0171","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0174","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0177","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0180","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0181","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0183","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0186","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0189","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0191","reason":"empty_proven","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0192","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0195","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-BENCH-0198","reason":"low_signal_source","details":{},"ts":"2026-09-06T13:33:20.150Z"}
+Warning: A vi.mock('../../scripts/modules/handoff/gates/fr-delivery-classifier.js') call in "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001/tests/unit/fr-delivery-traceability-wiring.test.js" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+[sd-next:query-failure] {"timestamp":"2026-09-06T13:33:41.546Z","source":"loadOpenQuickFixes","error":"relation \"quick_fixes\" does not exist","code":"42P01","table":"quick_fixes"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-1","reason":"unknown","details":{},"ts":"2026-09-06T13:36:13.370Z"}
+{"event":"learn.filter.suppressed","pattern_id":"PAT-TEST-1","reason":"already_assigned_open_sd","details":{},"ts":"2026-09-06T13:36:13.374Z"}
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |unit| tests/unit/fleet/source-tree-identity-realgit.test.js [ tests/unit/fleet/source-tree-identity-realgit.test.js ]
+Error: Hook timed out in 10000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ tests/unit/fleet/source-tree-identity-realgit.test.js:59:10
+     57| let originDir;     // a real bare remote, so origin/main actually reso…
+     58|
+     59| beforeAll(() => {
+       |          ^
+     60|   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 's2r-')…
+     61|   realGit(['-C', root, 'init', '-q']);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3915 passed | 15 skipped (3931)
+      Tests  48029 passed | 1 expected fail | 226 skipped | 2 todo (48258)
+   Start at  09:28:01
+   Duration  514.49s (transform 1812.94s, setup 1580.82s, import 4009.81s, tests 3356.80s, environment 4.18s)
+

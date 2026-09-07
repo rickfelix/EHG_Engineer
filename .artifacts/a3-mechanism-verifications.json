@@ -1,0 +1,19 @@
+{
+  "mechanism_verifications": [
+    { "verified_by": "LEAD session a13f0a2c (direct read)", "verified_at": "lib/fleet/worker-status.cjs:289", "claim": "INFORMATIONAL_KINDS list and its BACKPRESSURE_EXEMPT_KINDS/DRAIN_SETS spread relationship" },
+    { "verified_by": "test-receipts-lead (testing-agent)", "verified_at": "lib/fleet/worker-status.cjs:565", "claim": "getMessagesForSession filters on exact target_session, no broadcast union" },
+    { "verified_by": "LEAD session a13f0a2c (direct read)", "verified_at": "lib/fleet/claim-eligibility.cjs:718", "claim": "resolveHoldProvenance key list and its known over-match against completed SDs" },
+    { "verified_by": "test-receipts-lead (testing-agent)", "verified_at": "lib/coordinator/dispatch.cjs:1214", "claim": "insertCoordinationRow choke point and its existing 3 stamper guards" },
+    { "verified_by": "test-receipts-lead (testing-agent)", "verified_at": "lib/coordinator/dispatch.cjs:1468", "claim": "body/payload.body fill-if-absent mirror; a 4th stamper must run before this line" },
+    { "verified_by": "test-receipts-lead (testing-agent)", "verified_at": "scripts/hooks/coordination-inbox.cjs:668", "claim": "worker inbox drain matches exact session id, not the 'broadcast' sentinel" },
+    { "verified_by": "val-receipts (validation-agent)", "verified_at": "lib/checkin/steps/drain-reservations.cjs:58", "claim": "the only NULL-target reader in the checkin pipeline, scoped to reservation kinds only" },
+    { "verified_by": "LEAD session a13f0a2c (direct read)", "verified_at": "lib/fleet/live-fleet-sessions.cjs:55", "claim": "liveFleetSessions() as the live-seat enumeration source for the FR-2 fan-out" },
+    { "verified_by": "val-receipts (validation-agent)", "verified_at": "lib/coordinator/coordination-events.cjs:855", "claim": "emitReaperStarvationAlert's fire-once dedupe-by-existing-row pattern, reused for FR-2" },
+    { "verified_by": "LEAD session a13f0a2c (direct read)", "verified_at": "scripts/fleet/worktree-reaper-tick.cjs:514", "claim": "readState/writeState state-file pattern and countActiveWorktrees export" },
+    { "verified_by": "LEAD session a13f0a2c (direct read)", "verified_at": "lib/worktree-quota.js:48", "claim": "MAX_WORKTREE_COUNT=40 as the FR-2 trigger threshold source" },
+    { "verified_by": "LEAD session a13f0a2c (direct read)", "verified_at": "lib/shared/body-cap.cjs:22", "claim": "BODY_HARD_CAP=4096 and that insertCoordinationRow applies no body cap today" },
+    { "verified_by": "LEAD session a13f0a2c (direct read)", "verified_at": "tests/unit/coordinator/dispatch-send-backpressure.test.js:24", "claim": "existing stub-supabase test pattern for backpressure-exempt kinds, reused for FR-1/FR-2 fixtures" },
+    { "verified_by": "val-receipts (validation-agent)", "verified_at": "tests/unit/coordinator/fleet-dashboard-signal-receipt.test.js:172", "claim": "existing permissive-double test pattern for dispatchToWorker/insertCoordinationRow across the CJS require boundary" },
+    { "verified_by": "LEAD session a13f0a2c (direct read)", "verified_at": "lib/fleet/outstanding-signals.cjs:107", "claim": "the 'received' predicate reading correlation_id-linked signal_receipt rows, used by FR-4(d)'s gauge" }
+  ]
+}

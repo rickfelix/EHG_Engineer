@@ -1,0 +1,112 @@
+{
+  "verdict": "PASS",
+  "validation_mode": "prospective",
+  "phase": "LEAD",
+  "confidence": 92,
+  "summary": "Prospective TESTING at LEAD for SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001. Baseline green: 5 files / 67 tests on the named suites, plus 2 files / 46 tests on the classification suites. Verdict is PASS on baseline health. SIX design findings are raised against the plan as written; four are blocking. FR-2's broadcast lane is undeliverable to workers by construction and cannot be fixed by adding a drain-set row without failing the repo's own disjointness test. FR-1's payload.receipt line is a dormant field no consumer renders. FR-1's widening into printAdamInbox is an unbounded duplicate-write loop against a 200-row fetch behind a 50-row existence check. FR-3's stamp point is bypassed by one live WORK_ASSIGNMENT writer and lands on only one half of the body/payload.body mirror.",
+  "baseline": {
+    "command": "npx vitest run --project unit tests/unit/coordinator/fleet-dashboard-signal-receipt.test.js tests/unit/fleet/outstanding-signals.test.js lib/coordinator/dispatch.test.js tests/unit/fleet/drain-set-registry.test.js tests/unit/fleet/drain-sets-adam-reconciliation.test.js",
+    "files_passed": 5,
+    "files_failed": 0,
+    "tests_passed": 67,
+    "tests_failed": 0,
+    "duration_ms": 788,
+    "supplementary": {
+      "command": "npx vitest run --project unit tests/unit/coordination/kind-classification.test.js tests/unit/fleet/orphan-reroute-sweep.test.js",
+      "files_passed": 2,
+      "tests_passed": 46,
+      "tests_failed": 0
+    },
+    "json_reporter_run": {
+      "files": 7,
+      "tests_executed": 113,
+      "tests_passed": 113,
+      "tests_failed": 0
+    }
+  },
+  "findings": [
+    {
+      "id": "TST-B1",
+      "severity": "critical",
+      "title": "FR-2: a capped_pool_broadcast INFORMATIONAL row on target_session='broadcast' reaches ZERO worker consumers, and the repo's own disjointness test forbids the obvious fix",
+      "evidence": "Both worker read paths filter on an EXACT session id. scripts/hooks/coordination-inbox.cjs lines 668, 690 and 719 use .eq('target_session', sessionId). lib/fleet/worker-status.cjs line 565 getMessagesForSession uses .eq(C.targetSession, sessionId). The only fan-out reader in the checkin pipeline is lib/checkin/steps/drain-reservations.cjs line 58, which matches .is('target_session', null) -- SQL NULL, NOT the string 'broadcast'. Every other broadcast reader in the repo matches a ROLE-SCOPED sentinel exactly: lib/coordinator/resolve.cjs 503/536 'broadcast-coordinator'; scripts/adam-advisory.cjs 432/513/708/728 'broadcast-adam'; scripts/coordinator-quiet-tick.mjs 262/523 'broadcast-coordinator'; scripts/fleet-dashboard.cjs 2416 'broadcast-solomon'. The bare 'broadcast' sentinel is read only by kind-specific readers keyed on payload.kind='chairman_directive' (lib/coordinator/chairman-directive-gauge.cjs, scripts/adam-advisory.cjs 602). Second layer: lib/fleet/orphan-reroute-sweep.js line 69 returns false for any INFORMATIONAL_KINDS row, so the orphan-rescue path will not recover it either.",
+      "blind_spot": "The row inserts cleanly, emit() reports success, and no gauge reads zero. A writer with no consumer that is byte-indistinguishable from a working feature.",
+      "fork": "Adding capped_pool_broadcast to a role's DRAIN_SETS to make it drainable FAILS tests/unit/coordination/kind-classification.test.js line 67 ('a kind cannot be BOTH -- informational and actionable sets are disjoint'), which asserts every INFORMATIONAL_KINDS member classifies informational, while classifyCoordinationRow (lib/fleet/worker-status.cjs 338-348) checks INFORMATIONAL_KINDS BEFORE the drain-set union. The design must pick one: informational-and-coordinator-only, or actionable-and-drainable. It cannot be both.",
+      "required_action": "Either (a) target the coordinator's own role sentinel 'broadcast-coordinator', which HAS readers, and keep the kind INFORMATIONAL; or (b) write target_session=NULL and add a checkin step that reads it the way drain-reservations.cjs does; or (c) drop INFORMATIONAL and register it as a real drainable kind in DRAIN_SETS plus role_drain_sets. Option (a) is smallest and matches how every other coordinator-only informational row already travels."
+    },
+    {
+      "id": "TST-B2",
+      "severity": "high",
+      "title": "FR-1: the planned payload.receipt line (queued | routed:<target> | needs-decision:<who>) is rendered by NO consumer",
+      "evidence": "scripts/hooks/coordination-inbox.cjs lines 818-831 is the worker-facing render. It prints msg.subject, then 'if (msg.body) console.log(Details: + msg.body)', then a fixed allowlist of payload fields: the chairman_directive ack line, payload.suggested_sd, payload.available_sds. Arbitrary payload keys are never rendered. Today's writeSignalReceipts (scripts/fleet-dashboard.cjs 1692-1735) sets NO body at all, only subject plus payload, so the current receipt already renders subject-only. That works today ONLY because the subject is a fixed string carrying the whole meaning. A receipt whose disposition VARIES across queued/routed/needs-decision cannot ride in a fixed subject and will be invisible.",
+      "required_action": "Write the disposition into row.body (dispatch.cjs line 1477 then mirrors it into payload.body automatically), or into the subject, or add an explicit render line to the hook. payload.receipt alone is a dormant column on arrival."
+    },
+    {
+      "id": "TST-B3",
+      "severity": "high",
+      "title": "FR-1: widening receipts into printAdamInbox is an unbounded duplicate-write loop and floods the Adam lane",
+      "evidence": "scripts/fleet-dashboard.cjs line 2309 fetches selectUnactionedAdvisories with limit 200. The idempotence guard copied from writeSignalReceipts is .in('payload->>correlation_id', ids).limit(50) at scripts/fleet-dashboard.cjs 1707-1712, sized for printInbox's limit-20 batch filtered to stuck/high. Against 200 advisory ids that existence check SILENTLY TRUNCATES at 50, so rows 51-200 are re-receipted on every render, on every dashboard tick, forever. Compounding: printAdamInbox renders only actionRows plus a STATUS_CAP of 15 (lines 2372-2376) while the receipt set would be drawn from all 200 fetched, so a receipt would assert 'seen' for rows the coordinator never displayed. Compounding again: an advisory's sender is an ADAM seat, and classifyInboxMessage's amAdam branch (scripts/hooks/coordination-inbox.cjs line 213) returns markRead:false and markAck:false (surface-not-drain), so every receipt re-surfaces on every Adam poll until Adam explicitly acks it.",
+      "required_action": "Bound the existence check to the receipted population (paginate, or key it to the rendered set rather than the fetched set), receipt only the RENDERED groups, and decide explicitly whether an Adam-targeted receipt is wanted at all given the never-auto-drain contract on that lane. Note also that dispatchToWorker (dispatch.cjs line 1607) forces targetRoleHint='worker', correct for the signal lane and wrong for an Adam target."
+    },
+    {
+      "id": "TST-B4",
+      "severity": "high",
+      "title": "FR-3: insertCoordinationRow is not the only WORK_ASSIGNMENT writer, and a body-only stamp desynchronises the body/payload.body mirror",
+      "evidence": "(a) scripts/stale-session-sweep.cjs lines 1444-1484 builds message_type='WORK_ASSIGNMENT' and inserts RAW via supabase.from('session_coordination').insert(row), documented at line 1462 as a deliberate bypass of insertCoordinationRow (SD-LEO-INFRA-WORK-ASSIGNMENT-UNREADABLE-001 FR-3). A constraints stamp at the choke point never reaches it. That row is an informational completion_nudge with target_sd=null, so it arguably needs no constraints, but the SD's claim 'stamped for WORK_ASSIGNMENT rows' is then not true of every WORK_ASSIGNMENT row and the exception must be stated. (b) scripts/coordinator-cold-recovery.cjs lines 120-136 redispatchResume DOES go through insertCoordinationRow and carries a real target_sd, but writes target_session='broadcast', so per TST-B1 a constraints-stamped resume assignment is delivered to nobody. FR-3 would decorate a row that already reaches no reader. (c) dispatch.cjs mirrors body and payload.body in both directions at lines 1468 and 1477, each FILL-IF-ABSENT. If FR-3 appends the constraints block to row.body AFTER line 1477, or on a caller that already set payload.body, the two copies DIVERGE: readers keyed on payload.body, including the coordinator's own redelivery path per QF-20260728-246, get a body WITHOUT the constraints.",
+      "body_cap_note": "insertCoordinationRow applies NO body length cap. lib/shared/body-cap.cjs capBody (BODY_HARD_CAP 4096, throws rather than slicing) is wired only into scripts/worker-signal.cjs and lib/coordinator/signal-router.cjs. So an oversized constraints block will not throw at dispatch, it will simply persist. That is not a blocker but it means the cap the SD assumed is not on this path.",
+      "required_action": "Stamp BEFORE dispatch.cjs line 1468, document the stale-session-sweep raw-insert exception explicitly, and either fix or explicitly scope out the cold-recovery broadcast target."
+    },
+    {
+      "id": "TST-B5",
+      "severity": "medium",
+      "title": "FR-3: resolveHoldProvenance is the OVER-MATCHING hold reader; the repo already has a narrow one",
+      "evidence": "lib/fleet/claim-eligibility.cjs lines 764-772 record that VAL-1 (evidence cc6f72a7) MEASURED resolveHoldProvenance over-matching 42 completed SDs across 6 source keys, and that deferred_by, not_worker_claimable_reason, dispatch_ineligible_reason and pilot_throwaway are legitimately compatible with completion. isUnreleasedChairmanHold at line 773 is the narrow predicate built for exactly that reason. Rendering a constraints block off resolveHoldProvenance will print holds on SDs that hold nothing live, which trains workers to ignore the block.",
+      "required_action": "Use isUnreleasedChairmanHold to decide whether a hold is live, and resolveHoldProvenance only to render the WHY once a live hold is confirmed."
+    },
+    {
+      "id": "TST-B6",
+      "severity": "medium",
+      "title": "FR-4: the unreceipted-signals gauge inherits a 20-row existence-check bound sized for a cap of 5",
+      "evidence": "lib/fleet/outstanding-signals.cjs line 38 sets DEFAULT_LIST_CAP=5. The receipt existence check at lines 111-116 is .in('payload->>correlation_id', rows.map(r=>r.id)).limit(20), with an inline comment justifying 20 as headroom over a cap of 5. A zero-asserted gauge run over a WIDER population (any caller passing a larger cap) truncates that check and reports received=false for rows that DO have receipts, so the gauge reads non-zero for a reading reason rather than a real one. The fail-soft catch at line 117 also defaults received to false, so a query error reads as 'unreceipted' rather than 'unknown'.",
+      "required_action": "Paginate the receipt lookup or bind its limit to rows.length, and distinguish 'no receipt' from 'receipt lookup failed' in the gauge."
+    }
+  ],
+  "list_pin_impact": {
+    "question": "which tests pin the current kind lists, and what must be updated if capped_pool_broadcast is added",
+    "answer": "Adding capped_pool_broadcast to INFORMATIONAL_KINDS ALONE breaks NOTHING in the drain-set seed pins. INFORMATIONAL_KINDS is NOT spread into DRAIN_SETS: lib/fleet/worker-status.cjs lines 369-458 spread DIRECTIVE_KINDS, individual PAYLOAD_KINDS members and BACKPRESSURE_EXEMPT_KINDS only. So the 106-row seed-count assertion at tests/unit/fleet/drain-set-registry.test.js line 166 and the per-role 30/20/28/26 counts at tests/unit/fleet/drain-sets-adam-reconciliation.test.js line 53 are untouched. NO new migration is needed for an informational-only kind. database/migrations/20260906_role_drain_sets_add_signal_receipt.sql was required only because signal_receipt joined BACKPRESSURE_EXEMPT_KINDS, which IS spread into every role's set.",
+    "conditional": "IF the design changes per TST-B1 option (c) to make capped_pool_broadcast drainable, then four things must change together: (1) add it to the owning role's DRAIN_SETS in lib/fleet/worker-status.cjs; (2) add database/migrations/<date>_role_drain_sets_add_capped_pool_broadcast.sql following the 20260906 pattern with ON CONFLICT (role, kind, direction) DO NOTHING; (3) append that path to RECONCILIATION_MIGRATION_PATHS in tests/unit/fleet/drain-set-registry.test.js lines 23-38; (4) bump the seed-count assertion at drain-set-registry.test.js line 166 from 106 to 106+N and the per-role counts at drain-sets-adam-reconciliation.test.js line 53. AND it must be REMOVED from INFORMATIONAL_KINDS, or kind-classification.test.js line 67 fails.",
+    "also_pinned": "tests/unit/coordination/kind-classification.test.js line 110 asserts INFORMATIONAL_KINDS is frozen; Object.freeze is already applied, no change needed. tests/unit/fleet/orphan-reroute-sweep.test.js covers the INFORMATIONAL_KINDS early-return at orphan-reroute-sweep.js line 69; a new informational kind is silently excluded from orphan rescue and no existing test will notice."
+  },
+  "test_scenarios_recommended": [
+    "TS-1 (FR-2, must FAIL before the fix): assert a row written by capped-pool-broadcast emit() is returned by at least one REAL consumer query. Drive the actual predicate from scripts/hooks/coordination-inbox.cjs or worker-status.cjs getMessagesForSession against the written row, never a hand-rolled SELECT.",
+    "TS-2 (FR-2): assert capped_pool_broadcast classifies as exactly one of informational or actionable by exercising classifyCoordinationRow, so the disjointness fork is caught at build time.",
+    "TS-3 (FR-1): assert the receipt disposition string survives to a RENDERED line by driving the coordination-inbox render, not by inspecting the payload object.",
+    "TS-4 (FR-1): feed writeSignalReceipts a 200-row batch with 60 pre-existing receipts and assert zero duplicate writes, pinning the existence-check bound.",
+    "TS-5 (FR-3): assert body and payload.constraints agree after insertCoordinationRow for a caller that pre-set payload.body, and for one that pre-set only row.body.",
+    "TS-6 (FR-3): assert an SD whose metadata carries only deferred_by or pilot_throwaway renders NO holds section."
+  ],
+  "recommendation": "PROCEED to PLAN. PLAN must resolve TST-B1's informational-versus-drainable fork before FR-2 is specified, and FR-1 and FR-3 acceptance criteria must each name the CONSUMER that reads the new field, not just the writer that sets it.",
+  "test_execution": {
+    "tests_executed": 113,
+    "tests_passed": 113,
+    "tests_failed": 0,
+    "tests_skipped": 0,
+    "artifact_sha": "fcc926798342f21eb39dc40b021b026179dcb96b8583d163def2cbcf9c45616d",
+    "runner": "vitest",
+    "artifact_path": ".artifacts/testing-receipts-broadcast-baseline.json",
+    "source": "fresh"
+  },
+  "metadata": {
+    "test_execution": {
+      "tests_executed": 113,
+      "tests_passed": 113,
+      "tests_failed": 0,
+      "tests_skipped": 0,
+      "artifact_sha": "fcc926798342f21eb39dc40b021b026179dcb96b8583d163def2cbcf9c45616d",
+      "runner": "vitest",
+      "artifact_path": ".artifacts/testing-receipts-broadcast-baseline.json",
+      "source": "fresh"
+    },
+    "validation_mode": "prospective"
+  }
+}

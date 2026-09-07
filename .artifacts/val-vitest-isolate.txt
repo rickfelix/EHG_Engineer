@@ -1,0 +1,9 @@
+
+ RUN  v4.1.4 C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-COORDINATOR-RECEIPTS-BROADCAST-CONSTRAINTS-001
+
+
+ Test Files  3 passed (3)
+      Tests  43 passed (43)
+   Start at  09:36:59
+   Duration  49.19s (transform 231ms, setup 219ms, import 192ms, tests 83.31s, environment 0ms)
+

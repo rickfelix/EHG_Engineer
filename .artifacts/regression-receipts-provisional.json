@@ -1,0 +1,7 @@
+{
+  "verdict": "CONDITIONAL_PASS",
+  "confidence": 40,
+  "phase": "VERIFY",
+  "status": "PARTIAL - validation in progress, row is crash insurance",
+  "summary": "Provisional REGRESSION row written before validation chain. Will be updated with final verdict."
+}
