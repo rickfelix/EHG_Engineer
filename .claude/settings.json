@@ -358,9 +358,11 @@
   "permissions": {
     "allow": [
       "Bash(node scripts/:*)",
+      "Bash(SD_CREATE_VIA_SKILL=1 node scripts/:*)",
       "Bash(git commit:*)",
       "Bash(git -C:*)",
-      "Bash(cd .worktrees/:*)"
+      "Bash(cd .worktrees/:*)",
+      "PowerShell(node scripts/:*)"
     ]
   }
 }
