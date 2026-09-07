@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-07](#2026-09-07)
+  - [Bugfix](#bugfix)
 - [2026-09-06](#2026-09-06)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -183,6 +185,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-07
+
+### Bugfix
+
+- **Stale-session-sweep findings (`SKIP_RESET`, `WARNINGS`, `CONFLICTS`) now persist and alert instead of being console-only** - SD-LEO-FIX-STALE-SESSION-SWEEP-002
+  - `lib/fleet/sweep-findings-sink.cjs` adds `appendFindingLine()`, appending one JSON line per finding (timestamp, finding class, subject, summary) to `.artifacts/stale-session-sweep-findings.ndjson`, fail-soft so a write failure never aborts a sweep tick.
+  - `emitFindingAlert()` routes one directed `session_coordination` row per new finding to the live coordinator (falling back to the `broadcast-coordinator` sentinel), deduped against a 6-hour re-emit window keyed on finding class + subject — so a recurring condition doesn't page the coordinator every tick.
+  - `scripts/stale-session-sweep.cjs`'s `isSweepResetAllowed()` and the end-of-tick WARNINGS/CONFLICTS reporting loops call `recordFinding()` alongside their existing `console.log`, so persisted/alerted findings never diverge from what an operator watching the console would have seen.
+  - `lib/fleet/worker-status.cjs`'s `DRAIN_SETS.coordinator` recognizes the new `sweep_finding_alert` payload kind immediately via the JS floor; the corresponding DB-side `role_drain_sets` seed migration is chairman-gated and pending separately.
 
 ## 2026-09-06
 
