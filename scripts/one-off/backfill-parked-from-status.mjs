@@ -35,6 +35,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -117,4 +118,6 @@ async function main() {
   if (!EXECUTE) console.log('\nDry run only -- re-run with --execute to apply.');
 }
 
-main().catch((e) => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+}
