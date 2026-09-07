@@ -1431,11 +1431,8 @@ async function main() {
             // a CC needing no answer hold a real question behind it. The field has existed since
             // SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-2; this producer simply never passed it.
             const cp = buildSolomonConsultPayload({ correlationId: crypto.randomUUID(), body: `[PRE-SEND CONSULT] ${body}`, senderCallsign: 'adam-quiet-tick', repo: process.cwd(), severity: 'high', consultPurpose: 'pre_send' });
-            // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: insertCoordinationRow only INFERS sender_type
-            // FROM an already-present sender_session, it does not stamp one -- this row had
-            // neither, counting as empty_sender_row (kind solomon_consult). Other solomon_consult
-            // callers (worker-signal.cjs, lib/adam/presend-consult-lane.cjs) already thread a real
-            // sessionId; this fire-and-forget tick has none, so a static writer-identity string.
+            // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sender_session/sender_type were missing here
+            // (empty_sender_row) -- static writer-identity, no per-tick session id available.
             await insertCoordinationRow(sb, { sender_session: 'adam-quiet-tick', sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: '[SOLOMON_CONSULT] pre-send', body: cp.body, payload: cp }, { targetRoleHint: 'solomon' });
           }
         } catch { /* fail-open — see comment above */ }
