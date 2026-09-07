@@ -65,10 +65,6 @@ import { displayPreHandoffWarnings, displayExecPhaseRequirements } from './displ
 import { getParentOrchestratorGates, isParentOrchestrator } from './parent-orchestrator.js';
 import { getRemediation } from './remediation.js';
 
-// Worktree integration (SD-LEO-INFRA-INTEGRATE-WORKTREE-CREATION-001)
-import { createWorktree, symlinkNodeModules, getRepoRoot } from '../../../../../lib/worktree-manager.js';
-import { getVenturePath, validateVentureRepo } from '../../../../../lib/venture-resolver.js';
-
 // External validators (lazy loaded)
 let validateBMADForPlanToExec;
 let PlanToExecVerifier;
