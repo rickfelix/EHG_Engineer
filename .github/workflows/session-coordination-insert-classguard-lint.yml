@@ -53,7 +53,14 @@ jobs:
   session-coordination-insert-classguard-lint:
     runs-on: ubuntu-latest
     steps:
+      # QF-20260905-934: actions/checkout@v4's default shallow clone (depth 1, this ref only)
+      # carries no origin/main ref, so candidateFilesDiff()'s `git diff origin/main...HEAD` always
+      # threw and the script silently fell back to --all (advisory, never blocking) -- a gate that
+      # LOOKED wired but never once actually blocked. fetch-depth: 0 mirrors the proven precedent
+      # already used for this exact problem by the sibling count-truncation-diff-lint.yml.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
