@@ -1156,6 +1156,42 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
             }
           }
 
+          // SD-LEO-INFRA-MERGE-VERIFICATION-CANNOT-001: Scan D — a QF-escalated SD's real code
+          // lands on a PRE-EXISTING qf/<QF-ID> branch, created before the SD's own key existed.
+          // branchBelongsToSd (the resolver every scan above ultimately gates on) can never
+          // attribute that branch to the SD: its "rest" after the <type>/ prefix is a QF-ID
+          // string, never the SD key or a hyphenated extension of it, regardless of which prefix
+          // tokens BRANCH_TYPE_TOKENS allows. Scan C's --search text match gets discarded by the
+          // same filter; Scan C2's --head probes only construct <type>/<sdId> candidates, never
+          // the QF's own branch name. lib/sd-creation/source-adapters/qf.js's createFromQF
+          // already records the exact originating branch at escalation time
+          // (metadata.escalated_from_branch), so read it directly here — deliberately WITHOUT the
+          // branchBelongsToSd filter, since ownership is established by that first-class metadata
+          // field (written only by the canonical escalation path), not by branch-name pattern
+          // matching. A no-op for every non-escalated SD (metadata.escalated_from_branch absent).
+          if (mergedPRs.length === 0 && ctx.sd?.metadata?.escalated_from_branch) {
+            const escalatedBranch = ctx.sd.metadata.escalated_from_branch;
+            for (const { githubRepo: repo } of reposWithPaths) {
+              try {
+                const headResult = execFileSync(
+                  'gh',
+                  ['pr', 'list', '--repo', repo, '--state', 'merged', '--head', escalatedBranch, '--json', 'number,headRefName,url,mergedAt', '--limit', '10'],
+                  { encoding: 'utf8', timeout: 30000 }
+                );
+                const headPrs = JSON.parse(headResult || '[]');
+                if (headPrs.length > 0) {
+                  mergedPRs.push(...headPrs.map(pr => ({ ...pr, repo })));
+                  console.log(`   ✅ Scan D found merge evidence on this SD's recorded escalated_from_branch (${escalatedBranch})`);
+                  break;
+                }
+              } catch (_scanDErr) {
+                // DELIBERATELY does NOT set scanCFailed — same posture as Scan C2's per-probe catch:
+                // Scan D is purely additive positive evidence; a gh hiccup here must leave the
+                // verdict AND its reason code exactly as Scan A/B/C/C2 already determined.
+              }
+            }
+          }
+
           if (scanCFailed && mergedPRs.length === 0) {
             return {
               passed: false,
