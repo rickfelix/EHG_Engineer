@@ -158,6 +158,15 @@ describe('extractBlockedAction (QF-20260905-884)', () => {
     expect(result).toBeNull();
   });
 
+  it('redacts a live credential embedded in the blocked command before returning it (adversarial review finding: this detail is persisted AND broadcast over chairman SMS)', async () => {
+    const { extractBlockedAction } = await freshCore();
+    const entries = [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'curl -H "Authorization: Bearer sk-liveTestKeyPlaceholder1234567890" https://api.example.com' } }] } }];
+    const result = extractBlockedAction('/fake/transcript.jsonl', { readTailEntries: () => entries });
+    expect(result.tool).toBe('Bash');
+    expect(result.detail).not.toMatch(/sk-liveTestKeyPlaceholder1234567890/);
+    expect(result.detail).toMatch(/\[REDACTED/);
+  });
+
   it('writeNotificationRow threads payload.blocked_action from the transcript into the persisted row', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     vi.stubGlobal('fetch', fetchMock);

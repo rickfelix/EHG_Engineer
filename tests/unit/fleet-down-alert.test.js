@@ -1189,6 +1189,15 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
     expect(withoutAction.body).not.toMatch(/Blocked on:/);
   });
 
+  it('buildStuckPermissionWaitMessage only asserts "waiting on a permission prompt" when blockedAction corroborates it; falls back to neutral wording otherwise (adversarial review finding)', () => {
+    const verdict = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(16), lastToolAt: minutesAgo(16), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    const withAction = buildStuckPermissionWaitMessage(verdict, 'sess-1', NOW, { tool: 'Bash', detail: 'npm test' });
+    expect(withAction.body).toMatch(/waiting on a permission prompt/);
+    const withoutAction = buildStuckPermissionWaitMessage(verdict, 'sess-1', NOW, null);
+    expect(withoutAction.body).not.toMatch(/waiting on a permission prompt/);
+    expect(withoutAction.body).toMatch(/no further tool activity.*Notification event/);
+  });
+
   // Stub db supporting exactly the two query shapes checkStuckPermissionWaits issues:
   //   session_coordination: .select().eq().gte().order() -> { data: waitRows }
   //   claude_sessions:      .select().in()                -> { data: sessionRows }

@@ -267,15 +267,22 @@ export function evaluateStuckPermissionWait({
  * QF-20260905-884's second half (lib/hooks/notification-permission-wait-core.cjs) — and,
  * when present, names the blocked command so the page is self-describing instead of
  * requiring the chairman to open the transcript to find out what to approve/deny.
+ *
+ * ADVERSARIAL REVIEW FINDING (deep-tier /ship gate, this SD): every notification_permission_wait
+ * row shares one hardcoded payload.kind regardless of the underlying Notification sub-type (the
+ * writer, scripts/hooks/notification-permission-wait.cjs, says its own trigger is "most commonly"
+ * -- not exclusively -- a permission prompt); this arm never inspected payload.notification_type.
+ * Only assert "permission prompt" when blockedAction corroborates it (a pending tool_use IS
+ * permission-prompt-shaped); otherwise use neutral, still-actionable wording.
  */
 export function buildStuckPermissionWaitMessage(verdict, sessionId, now = new Date(), blockedAction = null) {
   const shortId = String(sessionId || 'unknown').slice(0, 12);
-  const actionText = blockedAction && blockedAction.tool
-    ? ` Blocked on: ${blockedAction.tool}${blockedAction.detail ? ' ' + blockedAction.detail : ''}.`
-    : '';
+  const body = blockedAction && blockedAction.tool
+    ? `STUCK SEAT ${shortId}: waiting on a permission prompt for ${verdict.elapsedMin.toFixed(0)}min with no further tool activity. Blocked on: ${blockedAction.tool}${blockedAction.detail ? ' ' + blockedAction.detail : ''}. Check its transcript and approve/deny.`
+    : `STUCK SEAT ${shortId}: no further tool activity for ${verdict.elapsedMin.toFixed(0)}min since a Notification event (commonly a permission prompt). Check its transcript.`;
   return {
     type: 'status',
-    body: `STUCK SEAT ${shortId}: waiting on a permission prompt for ${verdict.elapsedMin.toFixed(0)}min with no further tool activity.${actionText} Check its transcript and approve/deny.`,
+    body,
     kind: 'stuck_permission_wait_alert',
     dedupeKey: `stuck-permission-wait-${shortId}-${now.toISOString().slice(0, 13)}`,
   };
