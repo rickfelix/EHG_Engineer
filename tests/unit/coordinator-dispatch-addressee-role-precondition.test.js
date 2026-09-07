@@ -58,6 +58,9 @@ describe('declaredAddresseeRole() — pure (QF-20260728-944)', () => {
   it('declares solomon for payload.kind=solomon_consult', () => {
     expect(declaredAddresseeRole({ kind: 'solomon_consult' })).toBe('solomon');
   });
+  it('declares michael for payload.kind=michael_handoff (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G, Solomon Q6)', () => {
+    expect(declaredAddresseeRole({ kind: 'michael_handoff' })).toBe('michael');
+  });
   it('declares nothing for an unrelated payload', () => {
     expect(declaredAddresseeRole({ kind: 'coordinator_directive' })).toBeNull();
     expect(declaredAddresseeRole(null)).toBeNull();
@@ -128,6 +131,29 @@ describe('insertCoordinationRow: addressee-role precondition (QF-20260728-944)',
     };
     const res = await insertCoordinationRow(stubSupabase(), row, { logger: silentLogger, targetRoleHint: 'adam' });
     expect(res.data.payload.kind).toBe('coordinator_directive');
+  });
+
+  it('LANE 3 (michael_handoff/kind, SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G): REFUSES a michael_handoff message addressed to a session resolving to coordinator — attempted=1, blocked=1', async () => {
+    let attempted = 0, blocked = 0;
+    const row = {
+      message_type: 'INFO', target_session: LIVE_TARGET,
+      payload: { kind: 'michael_handoff' },
+    };
+    attempted++;
+    await expect(
+      insertCoordinationRow(stubSupabase(), row, { logger: silentLogger, targetRoleHint: 'coordinator' })
+    ).rejects.toMatchObject({ code: 'DISPATCH_ROLE_TOPIC_MISMATCH' });
+    blocked++;
+    expect(blocked / attempted).toBe(1);
+  });
+
+  it('a correctly-addressed michael_handoff to a session resolving to michael is UNAFFECTED (no false blocking)', async () => {
+    const row = {
+      message_type: 'INFO', target_session: LIVE_TARGET,
+      payload: { kind: 'michael_handoff' },
+    };
+    const res = await insertCoordinationRow(stubSupabase(), row, { logger: silentLogger, targetRoleHint: 'michael' });
+    expect(res.data.payload.kind).toBe('michael_handoff');
   });
 
   it('fails OPEN (does not block) when the target role is unresolvable — precision over recall', async () => {

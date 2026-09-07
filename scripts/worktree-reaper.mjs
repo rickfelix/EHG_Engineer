@@ -94,7 +94,7 @@ import { resolveRegisteredPools, computePoolCapStatus } from '../lib/worktree-re
 // QF-20260902-199 (defect A): durable, unattended-run-visible record of every
 // classification — see the module's own header for why this exists and why audit_log
 // (not a new table) is the sink.
-import { writeAuditSink } from '../lib/worktree-reaper/audit-sink.js';
+import { writeAuditSink, buildPruneCandidateRows, writeRows } from '../lib/worktree-reaper/audit-sink.js';
 // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1a: push a dead-owner hard_keep tree's
 // content to a recovery ref before it is kept forever with no disposition.
 import {
@@ -1324,6 +1324,17 @@ async function runAndReportOrphanSweep({ repoRoot, worktreesDir, supabase, execu
         metadata: s,
       });
     } catch { /* fail-soft: the stderr JSON line is the primary durable signal */ }
+  }
+  // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F (FR-0/FR-1): the prune-candidate set (registered
+  // worktrees whose gitdir target is missing -- the `git worktree prune` set, NEVER called
+  // "husk" per FR-3) was previously computed by defaultRemoveOrphan's own best-effort prune
+  // call and discarded entirely. Recorded here on EVERY sweep (dry-run included) since this is
+  // purely observational -- this SD wires no removal action for this class.
+  if (sweep.ok && supabase && sweep.pruneCandidates?.length) {
+    const pruneRunId = crypto.randomUUID();
+    const rows = buildPruneCandidateRows(sweep.pruneCandidates, { runId: pruneRunId });
+    await writeRows(supabase, rows, { logger: console.log });
+    console.log(`🧹 Orphan sweep: ${sweep.pruneCandidates.length} prune-candidate(s) (registered, gitdir target missing) recorded to audit_log (run_id=${pruneRunId})`);
   }
   return sweep;
 }

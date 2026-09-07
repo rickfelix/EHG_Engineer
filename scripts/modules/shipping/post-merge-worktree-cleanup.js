@@ -390,14 +390,31 @@ async function cleanupWorktreeByPath(wtPath, options = {}) {
       safeRecursiveRm(wtPath);
     } catch (err) {
       const husk = fs.existsSync(wtPath);
+      const huskTimestamp = new Date().toISOString();
       console.warn(JSON.stringify({
         event: husk ? 'worktree.husk_detected' : 'worktree.cleanup_rm_failed',
         wtPath,
         sdKey,
         husk,
         error: err?.message || String(err),
-        timestamp: new Date().toISOString()
+        timestamp: huskTimestamp
       }));
+      // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F (FR-2): this event previously had ZERO
+      // consumers on the ship path (unlike LEAD-FINAL-APPROVAL's cleanupWorktree, which at
+      // least gets remediation via closeHusk). Give it a durable record via the same sink the
+      // reaper's other refusals already use. Best-effort: never let a durability write fail
+      // the cleanup path itself.
+      if (husk) {
+        try {
+          const { buildHuskShipPathRows, writeRows } = await import('../../../lib/worktree-reaper/audit-sink.js');
+          const supabase = _getSupabaseServiceClient();
+          const rows = buildHuskShipPathRows(
+            { wtPath, sdKey, error: err?.message || String(err), timestamp: huskTimestamp },
+            { runId: `ship-${Date.now()}` }
+          );
+          await writeRows(supabase, rows, { logger: console.warn });
+        } catch { /* fail-soft: the console.warn above is the primary durable signal */ }
+      }
       return {
         cleaned: false,
         reason: husk ? 'husk_directory_remains' : 'rm_failed',

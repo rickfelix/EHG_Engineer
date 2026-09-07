@@ -258,6 +258,16 @@ describe('QF-20260818-249 queue partitioning (records/correctives get their own 
     expect(isTerminalRecord(chairmanApproval)).toBe(false);
   });
 
+  // QF-20260904-293: a critical solomon_rca audit record sat in the blocking decision queue
+  // for 10+ hours -- it is a captured RECORD (no decision to make), the same class as the
+  // capture/ruling/evidence categories above.
+  it('isTerminalRecord is true for Solomon audit-record categories, even at critical severity', () => {
+    for (const category of ['solomon_rca', 'solomon_self_assessment', 'solomon_forecast_basis', 'self_analytics']) {
+      const row = { decision_type: 'flag_review', details: { category }, severity: 'critical' };
+      expect(isTerminalRecord(row)).toBe(true);
+    }
+  });
+
   it('isCorrectiveFinding is true only for the corrective_finding category', () => {
     expect(isCorrectiveFinding(corrective)).toBe(true);
     expect(isCorrectiveFinding(capture)).toBe(false);

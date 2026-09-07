@@ -6,7 +6,10 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { buildAuditRows, writeAuditSink, severityForVerdict, EVENT_TYPE } from '../../../lib/worktree-reaper/audit-sink.js';
+import {
+  buildAuditRows, writeAuditSink, writeRows, severityForVerdict, EVENT_TYPE,
+  buildPruneCandidateRows, buildHuskShipPathRows, EVENT_TYPE_PRUNE_CANDIDATE, EVENT_TYPE_HUSK_SHIP_PATH,
+} from '../../../lib/worktree-reaper/audit-sink.js';
 
 // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-3: audit_log_severity_check allows only
 // these four values (database/schema-reference-snapshot.json) — the fix this SD exists
@@ -141,5 +144,71 @@ describe('writeAuditSink()', () => {
     const result = await writeAuditSink(supabase, [makeRecord()], { runId: 'run-9' });
     expect(result.ok).toBe(false);
     expect(result.error).toBe('network exploded');
+  });
+});
+
+// SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F: the two new residue classes, each its own
+// event_type -- never overloading EVENT_TYPE ('worktree_reaper_classification') above.
+describe('buildPruneCandidateRows() / buildHuskShipPathRows()', () => {
+  it('maps prune candidates to audit_log rows with a distinct event_type and an in-enum severity', () => {
+    const rows = buildPruneCandidateRows(
+      [{ name: 'SD-EXAMPLE-001', reason: 'gitdir file points to non-existent location' }],
+      { runId: 'run-prune-1' }
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].event_type).toBe(EVENT_TYPE_PRUNE_CANDIDATE);
+    expect(rows[0].event_type).not.toBe(EVENT_TYPE);
+    expect(rows[0].entity_id).toBe('SD-EXAMPLE-001');
+    expect(ALLOWED_SEVERITIES).toContain(rows[0].severity);
+    expect(rows[0].metadata.run_id).toBe('run-prune-1');
+  });
+
+  it('returns an empty array for an empty/undefined candidates input, never throws', () => {
+    expect(buildPruneCandidateRows([], { runId: 'run-prune-2' })).toEqual([]);
+    expect(buildPruneCandidateRows(undefined, { runId: 'run-prune-2' })).toEqual([]);
+  });
+
+  it('maps a ship-path husk_detected event to a single audit_log row with its own distinct event_type', () => {
+    const rows = buildHuskShipPathRows(
+      { wtPath: '/repo/.worktrees/QF-EXAMPLE', sdKey: 'QF-EXAMPLE', error: 'EPERM', timestamp: '2026-09-07T05:00:00.000Z' },
+      { runId: 'run-husk-1' }
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].event_type).toBe(EVENT_TYPE_HUSK_SHIP_PATH);
+    expect(rows[0].event_type).not.toBe(EVENT_TYPE_PRUNE_CANDIDATE);
+    expect(rows[0].event_type).not.toBe(EVENT_TYPE);
+    expect(rows[0].entity_id).toBe('/repo/.worktrees/QF-EXAMPLE');
+    expect(ALLOWED_SEVERITIES).toContain(rows[0].severity);
+    expect(rows[0].metadata.error).toBe('EPERM');
+  });
+
+  it('returns an empty array for an undefined husk event, never throws', () => {
+    expect(buildHuskShipPathRows(null, { runId: 'run-husk-2' })).toEqual([]);
+    expect(buildHuskShipPathRows(undefined, { runId: 'run-husk-2' })).toEqual([]);
+  });
+});
+
+describe('writeRows() — the shared insert path behind writeAuditSink and the new residue-class writers', () => {
+  it('inserts pre-built rows into audit_log as-is', async () => {
+    const inserted = [];
+    const supabase = { from: (table) => ({ insert: async (rows) => { expect(table).toBe('audit_log'); inserted.push(...rows); return { error: null }; } }) };
+    const rows = buildPruneCandidateRows([{ name: 'SD-X', reason: 'gitdir file points to non-existent location' }], { runId: 'run-10' });
+
+    const result = await writeRows(supabase, rows, {});
+
+    expect(result).toEqual({ ok: true, inserted: 1 });
+    expect(inserted).toHaveLength(1);
+  });
+
+  it('never throws when supabase is unavailable', async () => {
+    const result = await writeRows(null, [{ event_type: 'x' }], {});
+    expect(result).toEqual({ ok: false, error: 'no_supabase_client', inserted: 0 });
+  });
+
+  it('is a no-op for an empty rows array', async () => {
+    const from = vi.fn();
+    const result = await writeRows({ from }, [], {});
+    expect(result).toEqual({ ok: true, inserted: 0 });
+    expect(from).not.toHaveBeenCalled();
   });
 });

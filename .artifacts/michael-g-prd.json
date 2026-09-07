@@ -1,0 +1,174 @@
+{
+  "executive_summary": "Register Michael's 11 spec gauges, the michael_handoff coordination kind, and the Adam personal-day-lane carve-out encode tooling — closing three infrastructure gaps child A deliberately deferred to this child.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Register all 11 spec-§9 gauges in lib/governance/gauge-registry.js with ownerRole:'michael'",
+      "description": "Add michael-brief-landed, michael-feeder-health, michael-seat-uptime, michael-oauth-health, michael-classifier-drift, michael-gmail-modify-ceiling, michael-surface-rate, michael-reopen-rate, michael-overdue-cleared, michael-ledger-gap, michael-account-independence as stub entries: real string detectorFn matching each id, enabled:false, thresholdConfig.tripWhen, ownerRole:'michael', remediation, prevent, tracesToLayer:null. michael-token-budget is explicitly excluded (spec-deferred). Mirrors the existing adam_self_score_age/coordinator_self_score_age/solomon_self_score_age stub pattern (gauge-registry.js:211-242).",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "GAUGE_REGISTRY contains exactly 11 new entries with ownerRole==='michael', enabled===false, and a non-empty string detectorFn equal to each entry's id",
+        "grep for 'michael-token-budget' in gauge-registry.js returns nothing",
+        "tests/unit/governance/gauge-registry.test.js is updated: toHaveLength(30) becomes toHaveLength(41); the 27-live/3-stub-id assertion is extended to include the 11 new michael stub ids"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Register PAYLOAD_KINDS.MICHAEL_HANDOFF and add it to DRAIN_SETS.michael in lib/fleet/worker-status.cjs",
+      "description": "Add MICHAEL_HANDOFF: 'michael_handoff' to the PAYLOAD_KINDS object (worker-status.cjs:74-129) and append PAYLOAD_KINDS.MICHAEL_HANDOFF to the existing DRAIN_SETS.michael array (worker-status.cjs:410-415), whose own comment at :405-409 names this child as the one that closes this registration.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "PAYLOAD_KINDS.MICHAEL_HANDOFF === 'michael_handoff'",
+        "DRAIN_SETS.michael.includes('michael_handoff') is true",
+        "no other role's DRAIN_SETS entries change"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Add a chairman-gated database/migrations/ file inserting the michael_handoff kind into role_drain_sets",
+      "description": "INSERT INTO role_drain_sets (role, kind, provenance) VALUES ('michael', 'michael_handoff', 'SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G') ON CONFLICT (role, kind, direction) DO NOTHING, header '-- @approved-by: PENDING — chairman-gated apply required (do NOT apply outside it)', matching the exact shape of database/migrations/20260906_role_drain_sets_add_worker_signal.sql. NOT applied by this session.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "the migration file exists under database/migrations/, carries the PENDING approval header, and is purely additive (no existing row touched)",
+        "tests/unit/fleet/drain-set-registry.test.js passes, confirming JS-floor (FR-2) and migration (FR-3) parity"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Add exactly one new line to declaredAddresseeRole in lib/coordinator/dispatch.cjs for michael_handoff",
+      "description": "Immediately after the existing 'if (payload.kind === \"solomon_consult\") return \"solomon\";' line (dispatch.cjs:271), add 'if (payload.kind === \"michael_handoff\") return \"michael\";'. Required by the chairman-ratified Solomon Q6 adjudication (docs/michael/05-SOLOMON-ADJUDICATION.md), which names declaredAddresseeRole explicitly and treats a partial registration (this line omitted) as the untyped-row defect class. This is a scoped, precedented, one-line addition, not the open-ended widening the function's own 'do not widen without a measured occurrence' comment warns against — Solomon's cited real incident (an untyped row landing at 13:56Z, 2026-09-05) is itself the measured occurrence.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "declaredAddresseeRole({kind:'michael_handoff'}) returns 'michael'",
+        "declaredAddresseeRole's existing solomon/adam behavior is unchanged (regression-free)",
+        "git diff to dispatch.cjs for this FR is exactly one added line"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Create scripts/michael-inbox.cjs exporting drainMichaelOutbound",
+      "description": "New file draining DRAIN_SETS.michael kinds (including michael_handoff from FR-2) using the drain pattern of scripts/solomon-advisory.cjs (DRAIN_SETS.solomon.filter/inbox+orphan predicates/resolveRecognizedKinds), but exporting only inbox/drain functionality — Michael's seat sends nothing outbound through this path (michael-register.cjs:407). Already referenced by shipped child-A code: michael-register.cjs:297 lazy-requires { drainMichaelOutbound } from this exact path, michael-quiet-tick.mjs:148 calls it, .claude/commands/michael.md:71 documents its --quiet flag.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "scripts/michael-inbox.cjs exists and exports drainMichaelOutbound(supabase, {newSessionId, oldSessionIds}) returning {moved}",
+        "requiring the file from michael-register.cjs's existing lazy-require call site succeeds (no MODULE_NOT_FOUND)",
+        "the drain reads exactly DRAIN_SETS.michael's kind set, no more and no less"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "requirement": "Build the Adam-carve-out encode script (tooling only, not the chairman ratification itself)",
+      "description": "A script mirroring the confirmed precedent scripts/one-off/qf-20260905-813-encode-lens-predicates.mjs (SECTION_ID const, verbatim OLD_CLAUSE, an includes()-count-must-equal-1 guard, replace, --dry-run default, then CLAUDE.md regeneration), targeting leo_protocol_sections id=601 (adam_role_contract, section 5g 'CHAIRMAN SMS CHANNEL DUTY', which already carries a forward reference at char ~91692 saying the clause is 'encoded by child G') AND the michael_role_contract leo_protocol_sections row in one pass — the ratification writer's marker cross-check (lib/chairman/ratification-writer.mjs:167-238) requires the identical literal clause text in every named target contract's rendered file, so updating only adam_role_contract would fail that check the day the chairman actually ratifies. No chairman_ratifications row is created by this child — that is a chairman-only in-terminal act; the script requires an existing ratification row as a precondition and stays inert (refuses cleanly) until one exists.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "the encode script's dry-run mode against fixture content updates both target sections together or refuses cleanly if either target's marker count is not exactly 1",
+        "running the script twice against unchanged fixture content is a no-op on the second run",
+        "no code path in this child's own tests or scripts calls recordChairmanRatification against a live client"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "requirement": "lib/coordination/lane-lint-gauge.cjs is left unmodified", "rationale": "Its untyped_row check fires on a missing/null/empty payload.kind only, not an unrecognized-but-present one — once michael_handoff is registered elsewhere (FR-2/FR-3) a real row carrying it is never flagged, satisfying Solomon's Q6 condition that the gauge 'reads it' with zero code change. Verified by a test, not a new code path." },
+    { "id": "TR-2", "requirement": "lib/coordinator/peer-target.cjs is left unmodified", "rationale": "Already registers 'michael' (child A, peer-target.cjs:36,106) — touching it again would be redundant, unreviewable churn." },
+    { "id": "TR-3", "requirement": "lib/chairman/ratification-writer.mjs's VALID_TARGET_CONTRACTS is left unmodified", "rationale": "Already includes 'michael' (child A, ratification-writer.mjs:30) — this SD's original boilerplate description implied it as new work; LEAD confirmed it is already done." },
+    { "id": "TR-4", "requirement": "The 11 new gauges ship as registry stub entries with enabled:false and a non-null detectorFn string; detector resolver wiring in scripts/gauge-runner.mjs's buildDetectorResolvers() is optional for this PR (the runner skips an unresolved key non-fatally, gauge-runner.mjs:753)", "rationale": "Detection logic for several gauges (e.g. michael-classifier-drift, michael-surface-rate) depends on live feeder data this child does not own; registering the slot now (per the STUB-ROW ADOPTION CONTRACT documented at gauge-registry.js:10-19) avoids a build-order deadlock on sibling detector work." }
+  ],
+  "system_architecture": {
+    "overview": "Three independent, additive registration surfaces closing gaps child A deliberately deferred: (1) a data-only registry array gaining 11 stub rows, (2) a coordination-kind registration spanning a JS constant, a JS array, a chairman-gated DB migration, and one precedented line in an existing role-resolution function, backed by a new drain script, and (3) a text-encode utility mirroring an existing precedent script, targeting two leo_protocol_sections rows in one transactional pass.",
+    "components": [
+      { "name": "gauge-registry.js gauge stubs", "responsibility": "Reserve 11 registry slots for Michael's go-live invariants without depending on sibling detector SDs shipping first", "technology": "Plain JS array (lib/governance/gauge-registry.js)" },
+      { "name": "worker-status.cjs kind/drain-set registration", "responsibility": "Make michael_handoff a real, typed, drainable payload kind for the michael role", "technology": "Frozen JS objects (lib/fleet/worker-status.cjs)" },
+      { "name": "role_drain_sets migration", "responsibility": "Persist the michael_handoff/michael pairing in the DB-backed drain-set registry, kept in parity with the JS floor by an existing test", "technology": "Postgres migration, chairman-gated (database/migrations/)" },
+      { "name": "dispatch.cjs declaredAddresseeRole entry", "responsibility": "Detect a mis-delivered michael_handoff row at insert time, per Solomon's ratified Q6 adjudication", "technology": "lib/coordinator/dispatch.cjs" },
+      { "name": "scripts/michael-inbox.cjs", "responsibility": "Drain DRAIN_SETS.michael kinds for the Michael seat (inbox-only, no send path)", "technology": "CJS script mirroring scripts/solomon-advisory.cjs's drain pattern" },
+      { "name": "Adam-carve-out encode script", "responsibility": "Mechanically encode a chairman-ratified clause into both adam_role_contract and michael_role_contract once ratified, staying inert until then", "technology": "One-off encode script mirroring scripts/one-off/qf-20260905-813-encode-lens-predicates.mjs" }
+    ],
+    "data_flow": "Gauges: gauge-runner.mjs reads GAUGE_REGISTRY on its cadence, skips disabled/unresolved entries non-fatally. Kind registration: a session_coordination insert targeting the michael seat with payload.kind='michael_handoff' now passes declaredAddresseeRole's role check, lands as a typed row, and is picked up by scripts/michael-inbox.cjs's drain against DRAIN_SETS.michael (JS floor) unioned with role_drain_sets (DB floor) via lib/fleet/drain-set-registry.js. Carve-out: the encode script reads leo_protocol_sections rows 601 (adam) and the michael_role_contract row, verifies each target's marker occurs exactly once, replaces both, then triggers CLAUDE.md regeneration.",
+    "integration_points": [
+      "scripts/gauge-runner.mjs (gauge stub consumption, no change required this PR)",
+      "michael-register.cjs:297 / michael-quiet-tick.mjs:148 (existing consumers of scripts/michael-inbox.cjs, unmodified call sites)",
+      "lib/fleet/drain-set-registry.js resolveRecognizedKinds (unions the JS floor and the DB-backed role_drain_sets rows)",
+      "lib/chairman/ratification-writer.mjs (precondition consumer for the encode script; not modified)"
+    ]
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "All 11 michael gauges present with correct shape", "test_type": "unit", "given": "lib/governance/gauge-registry.js after this SD's changes", "when": "tests/unit/governance/gauge-registry.test.js runs", "then": "41 total entries, 11 new ones with ownerRole 'michael', enabled false, non-empty string detectorFn matching id" },
+    { "id": "TS-2", "scenario": "michael_handoff kind fully drainable", "test_type": "unit", "given": "worker-status.cjs and the role_drain_sets migration file", "when": "tests/unit/fleet/drain-set-registry.test.js runs", "then": "resolveRecognizedKinds({role:'michael'}) includes 'michael_handoff' with JS/migration parity" },
+    { "id": "TS-3", "scenario": "declaredAddresseeRole routes michael_handoff", "test_type": "unit", "given": "a payload {kind:'michael_handoff'}", "when": "declaredAddresseeRole(payload) is called", "then": "returns 'michael'; existing solomon/adam cases unchanged" },
+    { "id": "TS-4", "scenario": "michael-inbox.cjs drains a fixture row", "test_type": "unit", "given": "an injected supabase client with one michael_handoff row targeted at the seat", "when": "drainMichaelOutbound(sb, {newSessionId, oldSessionIds}) runs", "then": "returns {moved: 1} and the row's read_at is stamped" },
+    { "id": "TS-5", "scenario": "lane-lint-gauge does not flag a typed michael_handoff row", "test_type": "unit", "given": "a session_coordination row with payload.kind='michael_handoff' and a real body", "when": "the lane-lint gauge's untyped_row/bodyless_row checks run against it", "then": "neither check flags the row" },
+    { "id": "TS-6", "scenario": "Adam-carve-out encode idempotency and dual-target guard", "test_type": "unit", "given": "fixture leo_protocol_sections content for both targets, each containing the OLD_CLAUSE marker exactly once", "when": "the encode script runs twice", "then": "first run updates both sections; second run is a no-op; a fixture missing the marker in either target causes a clean refusal, not a partial write" },
+    { "id": "TS-7", "scenario": "michael-token-budget correctly excluded", "test_type": "unit", "given": "the completed gauge-registry.js", "when": "grepping for 'michael-token-budget'", "then": "zero matches" }
+  ],
+  "acceptance_criteria": [
+    "All 11 spec-§9 gauges (excluding michael-token-budget) are registered with ownerRole:'michael', enabled:false, and a valid string detectorFn",
+    "michael_handoff is a fully registered, drainable payload kind: PAYLOAD_KINDS, DRAIN_SETS.michael, the role_drain_sets migration, and declaredAddresseeRole all recognize it, verified by passing tests in the same PR",
+    "scripts/michael-inbox.cjs exists, exports drainMichaelOutbound with the exact signature already depended on by shipped child-A code, and is covered by a unit test",
+    "The Adam-carve-out encode script exists, is dry-run-by-default, verified idempotent, and updates both adam_role_contract and michael_role_contract together — but writes nothing live and creates no chairman_ratifications row"
+  ],
+  "risks": [
+    { "risk": "The 11 gauge stub entries silently fail gauge-registry.test.js's exact-count assertions if the PR misses updating the hardcoded 30/41 and stub-id-list expectations", "probability": "MEDIUM", "impact": "LOW", "mitigation": "Update the test file's counts in the same commit as the registry additions; run the full test file locally before considering the FR done", "rollback_plan": "Revert the gauge-registry.js and test file changes together; no data or migration involved" },
+    { "risk": "Adding a line to declaredAddresseeRole, a function explicitly commented against unscoped widening, sets a precedent for future uncontrolled additions if the ratification-backed justification is lost from the commit history", "probability": "LOW", "impact": "MEDIUM", "mitigation": "The added line's inline comment cites docs/michael/05-SOLOMON-ADJUDICATION.md Q6 by name so the justification travels with the code, not just the PR description", "rollback_plan": "Remove the single added line; declaredAddresseeRole reverts to exactly its pre-SD behavior, no other change entangled" },
+    { "risk": "The chairman-gated role_drain_sets migration is written correctly but never applied (chairman action pending), leaving the JS floor as the only live behavior until then", "probability": "MEDIUM", "impact": "LOW", "mitigation": "lib/fleet/drain-set-registry.js's union semantics mean the JS floor (FR-2) alone already delivers correct drain behavior immediately — the migration exists for DB/JS parity, not as the sole source of truth", "rollback_plan": "N/A — migration is additive and staged; no rollback needed if never applied" }
+  ],
+  "implementation_approach": {
+    "phases": [
+      { "phase": "Phase 1", "description": "Gauge registry additions (FR-1) — self-contained, no cross-file coupling", "deliverables": ["lib/governance/gauge-registry.js with 11 new stub entries", "updated tests/unit/governance/gauge-registry.test.js"] },
+      { "phase": "Phase 2", "description": "michael_handoff kind registration (FR-2, FR-3, FR-4) — must land together per drain-set-registry.test.js parity", "deliverables": ["worker-status.cjs PAYLOAD_KINDS + DRAIN_SETS.michael", "role_drain_sets migration file", "declaredAddresseeRole one-line addition", "passing drain-set-registry.test.js"] },
+      { "phase": "Phase 3", "description": "scripts/michael-inbox.cjs (FR-5) — depends on Phase 2's kind registration to have a real kind to drain", "deliverables": ["scripts/michael-inbox.cjs with drainMichaelOutbound export", "unit test with an injected supabase client"] },
+      { "phase": "Phase 4", "description": "Adam-carve-out encode script (FR-6) — independent of Phases 1-3, can build in parallel", "deliverables": ["encode script mirroring the qf-20260905-813 precedent", "unit test covering idempotency and the dual-target refusal guard"] }
+    ],
+    "technical_decisions": [
+      "Gauge stubs use a real string detectorFn (not null) because the live test suite enforces it, even though the registry file's own header comment describes a null-based STUB-ROW pattern that no live entry actually uses — the test is the authoritative contract",
+      "declaredAddresseeRole gains exactly one line rather than being left untouched, because the chairman-ratified Solomon Q6 adjudication is a higher-authority source than a generic code-level scoping comment, and the addition mirrors an existing precedented line rather than introducing new logic",
+      "The Adam-carve-out ratification itself is explicitly out of scope — this child ships tooling only, consistent with every other Michael migration's chairman-gated, staged-not-applied posture"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      { "name": "scripts/gauge-runner.mjs", "interaction": "Reads GAUGE_REGISTRY on its cadence; skips the 11 new disabled stubs non-fatally until a sibling SD flips them on", "frequency": "Per gauge-runner tick (existing cadence, unchanged by this SD)" },
+      { "name": "michael-register.cjs / michael-quiet-tick.mjs", "interaction": "Call scripts/michael-inbox.cjs's drainMichaelOutbound to drain the seat's directed rows including the new michael_handoff kind", "frequency": "On seat registration and every quiet-tick cycle" },
+      { "name": "Coordinator dispatch (lib/coordinator/dispatch.cjs callers)", "interaction": "A michael_handoff-kind send now resolves declaredAddresseeRole to 'michael' for mis-delivery detection", "frequency": "Per send targeting the michael role" }
+    ],
+    "dependencies": [
+      { "name": "role_drain_sets DB table", "type": "downstream", "contract": "Additive INSERT ... ON CONFLICT DO NOTHING, chairman-gated apply", "failure_handling": "Union semantics in drain-set-registry.js mean the JS floor covers behavior even if the migration is never applied" },
+      { "name": "docs/michael/05-SOLOMON-ADJUDICATION.md (ratified spec)", "type": "upstream", "contract": "Read-only source of record for the declaredAddresseeRole requirement; no write dependency", "failure_handling": "N/A — reference document only" }
+    ],
+    "data_contracts": [
+      { "contract_name": "michael_handoff payload shape", "schema": "session_coordination.payload: {kind:'michael_handoff', ...caller-defined fields}", "validation": "Recognized by PAYLOAD_KINDS/DRAIN_SETS.michael/role_drain_sets/declaredAddresseeRole added in this SD", "versioning": "New kind addition is additive; no existing kind's shape changes" }
+    ],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": [],
+      "deployment_considerations": "The role_drain_sets migration requires chairman apply before the DB floor is live; JS floor (worker-status.cjs) is live immediately on merge"
+    },
+    "observability_rollout": {
+      "monitoring": ["gauge-runner.mjs logs for the 11 new stub entries once enabled by a future sibling SD"],
+      "alerts": ["None new — gauges ship disabled"],
+      "rollout_strategy": "Standard PR merge; no phased rollout needed (additive, no behavior change for existing kinds/roles)",
+      "rollback_trigger": "A regression in drain-set-registry.test.js or gauge-registry.test.js on main",
+      "rollback_procedure": "Revert the merge commit; all changes are additive with no data migration applied, so revert is clean"
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/governance/gauge-registry.js", "tests/unit/governance/gauge-registry.test.js", "scripts/gauge-runner.mjs",
+      "lib/fleet/worker-status.cjs", "database/migrations/20260906_role_drain_sets_add_worker_signal.sql",
+      "lib/coordinator/dispatch.cjs", "lib/coordinator/peer-target.cjs", "lib/coordination/lane-lint-gauge.cjs",
+      "scripts/michael-register.cjs", "scripts/michael-quiet-tick.mjs", "scripts/solomon-advisory.cjs",
+      "lib/chairman/ratification-writer.mjs", "scripts/one-off/qf-20260905-813-encode-lens-predicates.mjs",
+      "docs/michael/02-SPEC.md", "docs/michael/03-CHALLENGE.md", "docs/michael/05-SOLOMON-ADJUDICATION.md"
+    ],
+    "patterns_identified": [
+      "STUB-ROW ADOPTION CONTRACT for the gauge registry (reserve slots ahead of detector SDs)",
+      "chairman-gated migration header convention: '-- @approved-by: PENDING' living in database/migrations/, not a separate directory",
+      "the encode-script precedent (verify-marker-occurs-once, dry-run-default, replace, regenerate)"
+    ],
+    "key_decisions": [
+      "Corrected an initial recommendation to skip declaredAddresseeRole after cross-checking the ratified Solomon Q6 adjudication, which explicitly requires it",
+      "Scoped the Adam-carve-out work to tooling only, deferring the actual chairman ratification act",
+      "Left peer-target.cjs, VALID_TARGET_CONTRACTS, and lane-lint-gauge.cjs untouched after confirming they need no change"
+    ],
+    "exploration_date": "2026-09-07"
+  }
+}
