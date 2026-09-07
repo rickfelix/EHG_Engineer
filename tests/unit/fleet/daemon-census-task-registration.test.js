@@ -10,6 +10,7 @@ import {
 } from '../../../scripts/setup-daemon-census-task.mjs';
 
 const WRAPPER_PATH = 'C:/repo/scripts/cron/daemon-census-task.cmd';
+const HIDDEN_LAUNCHER_PATH = 'C:/repo/scripts/cron/run-hidden.vbs';
 
 describe('buildWrapperScript (TESTING evidence 534ab65e finding F2: schtasks cwd is System32, not the repo)', () => {
   it('throws without repoRoot', () => {
@@ -40,53 +41,57 @@ describe('buildWrapperScript (TESTING evidence 534ab65e finding F2: schtasks cwd
 
 describe('FR4-TASK: argv shape', () => {
   it('is idempotent (/F) and targets the correct task name', () => {
-    const args = buildCensusSchtasksArgs({ requireRunner: false, wrapperPath: WRAPPER_PATH });
+    const args = buildCensusSchtasksArgs({ requireRunner: false, wrapperPath: WRAPPER_PATH, hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     expect(args).toEqual(expect.arrayContaining(['/TN', TASK_NAME, '/F']));
   });
 
-  it('/TR points at the WRAPPER, not directly at node+script (TESTING F2), UNQUOTED (TESTING N3)', () => {
-    // execFileSync passes each argv element as its own token via CreateProcess -- no shell strips
-    // wrapping quote characters, so embedding literal `"..."` would hand schtasks a path string
-    // containing quote characters, not the real file. Matches setup-liveness-watcher-task.mjs /
-    // setup-reboot-respawn-task.mjs / setup-eva-watcher-task.mjs / setup-console-creation-watcher-task.mjs,
-    // which all pass wrapperPath bare for the same reason.
-    const args = buildCensusSchtasksArgs({ requireRunner: false, wrapperPath: WRAPPER_PATH });
+  // QF-20260904-169: /TR previously pointed at the WRAPPER directly, which materialised a
+  // visible console on every fire -- one of the six pre-existing registrars this QF exists to
+  // fix. Now the wrapper is reached only via the hidden-window launcher.
+  it('/TR is the hidden-window launcher, never the wrapper directly', () => {
+    const args = buildCensusSchtasksArgs({ requireRunner: false, wrapperPath: WRAPPER_PATH, hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     const trArg = args[args.indexOf('/TR') + 1];
-    expect(trArg).toBe(WRAPPER_PATH);
+    expect(trArg).toContain('wscript.exe');
+    expect(trArg).toContain('run-hidden.vbs');
+    expect(trArg).toContain(WRAPPER_PATH);
   });
 
   it('throws without wrapperPath', () => {
-    expect(() => buildCensusSchtasksArgs({ requireRunner: false })).toThrow(/wrapperPath required/);
+    expect(() => buildCensusSchtasksArgs({ requireRunner: false, hiddenLauncherPath: HIDDEN_LAUNCHER_PATH })).toThrow(/wrapperPath required/);
+  });
+
+  it('throws without hiddenLauncherPath', () => {
+    expect(() => buildCensusSchtasksArgs({ requireRunner: false, wrapperPath: WRAPPER_PATH })).toThrow(/hiddenLauncherPath required/);
   });
 
   it('schedules on a MINUTE interval, default 60', () => {
-    const args = buildCensusSchtasksArgs({ requireRunner: false, wrapperPath: WRAPPER_PATH });
+    const args = buildCensusSchtasksArgs({ requireRunner: false, wrapperPath: WRAPPER_PATH, hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     const i = args.indexOf('/MO');
     expect(args[i - 1]).toBe('MINUTE');
     expect(args[i + 1]).toBe('60');
   });
 
   it('honors a custom interval', () => {
-    const args = buildCensusSchtasksArgs({ intervalMinutes: 15, requireRunner: false, wrapperPath: WRAPPER_PATH });
+    const args = buildCensusSchtasksArgs({ intervalMinutes: 15, requireRunner: false, wrapperPath: WRAPPER_PATH, hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     const i = args.indexOf('/MO');
     expect(args[i + 1]).toBe('15');
   });
 
   it('rejects a nonsense interval rather than registering a task that never fires sanely', () => {
     for (const bad of [0, -1, 1440, 2.5, 'soon']) {
-      expect(() => buildCensusSchtasksArgs({ intervalMinutes: bad, requireRunner: false, wrapperPath: WRAPPER_PATH })).toThrow(/interval-minutes/);
+      expect(() => buildCensusSchtasksArgs({ intervalMinutes: bad, requireRunner: false, wrapperPath: WRAPPER_PATH, hiddenLauncherPath: HIDDEN_LAUNCHER_PATH })).toThrow(/interval-minutes/);
     }
   });
 
   it('REFUSES to build a command pointing at a MISSING runner', () => {
     // Same accepted-but-unread failure mode the console-reaper registrar guards against: a task
     // whose target does not exist registers happily and then fails silently every interval.
-    expect(() => buildCensusSchtasksArgs({ requireRunner: true, runnerPath: 'C:/nope/missing-runner.mjs', wrapperPath: WRAPPER_PATH }))
+    expect(() => buildCensusSchtasksArgs({ requireRunner: true, runnerPath: 'C:/nope/missing-runner.mjs', wrapperPath: WRAPPER_PATH, hiddenLauncherPath: HIDDEN_LAUNCHER_PATH }))
       .toThrow(/runner not found/);
   });
 
   it('ACCEPTS the real runner (assert-daemon-census.mjs), which exists', () => {
-    expect(() => buildCensusSchtasksArgs({ requireRunner: true, wrapperPath: WRAPPER_PATH })).not.toThrow();
+    expect(() => buildCensusSchtasksArgs({ requireRunner: true, wrapperPath: WRAPPER_PATH, hiddenLauncherPath: HIDDEN_LAUNCHER_PATH })).not.toThrow();
   });
 });
 

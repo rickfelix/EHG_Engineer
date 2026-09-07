@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-06T23:59:57.149Z",
-  "git_commit": "92782f98",
+  "generated_at": "2026-09-07T00:46:44.041Z",
+  "git_commit": "fdf2344e",
   "db_snapshot_hash": "75c730afb94b407a",
   "files": {
     "CLAUDE.md": {
@@ -149,11 +149,11 @@
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 20611,
-      "bytes": 20689,
-      "estimated_tokens": 5153,
-      "content_hash": "e62d02cfe53047b9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260906-597\\CLAUDE_MICHAEL.md"
+      "chars": 20785,
+      "bytes": 20863,
+      "estimated_tokens": 5197,
+      "content_hash": "238a0e9679b19771",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
       "type": "full",
@@ -229,7 +229,7 @@
     }
   },
   "section_digests": {
-    "global": "7a72eaa72c3ca110",
+    "global": "550d6dc28906241c",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -513,7 +513,7 @@
       "655": "59137a758bb13a65",
       "656": "d2ccb43f1edf9602",
       "657": "11c9181c9e30ef9c",
-      "658": "8b4d4c124bbfb164",
+      "658": "2bb59a1b81f76a38",
       "659": "f07759022446ffb1"
     },
     "meta": {
