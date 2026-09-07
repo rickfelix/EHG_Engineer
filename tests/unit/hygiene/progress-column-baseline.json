@@ -97,14 +97,14 @@
     },
     {
       "file": "lib/sd-park.js",
-      "line": 100,
+      "line": 105,
       "rule": "D",
       "method": "query",
       "snippet": "raw SQL query text"
     },
     {
       "file": "lib/sd-park.js",
-      "line": 227,
+      "line": 232,
       "rule": "D",
       "method": "query",
       "snippet": "raw SQL query text"

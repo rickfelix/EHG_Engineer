@@ -393,6 +393,26 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
     expect(after.metadata.park_reason).toBe('second park');
   });
 
+  it('adversarial-review fix: park() strips a stale parked_from_status_source on re-park (never mislabels a fresh park as backfill-inferred)', async () => {
+    const sdKey = await seedSd('reparked-inferred-marker', { status: 'active', current_phase: 'LEAD', progress: 0 });
+    await park(savepointClient, sdKey, { reason: 'first park', actor: 'PLAN' });
+    // Simulate a row whose parked_from_status was backfill-inferred (as the live
+    // scripts/one-off/backfill-parked-from-status.mjs run does for 25 real rows).
+    await rawClient.query(
+      'UPDATE strategic_directives_v2 SET metadata = metadata || \'{"parked_from_status_source":"backfill_inferred"}\'::jsonb WHERE sd_key=$1',
+      [sdKey],
+    );
+    await unpark(savepointClient, sdKey, { reason: 'unpark for retest', actor: 'PLAN', restoreStatus: 'active' });
+
+    // Re-park directly (not through the backfill script) -- this park's own
+    // parked_from_status is a directly-observed fact (sd.status='active'), not inferred.
+    await park(savepointClient, sdKey, { reason: 'second park (direct, not backfill)', actor: 'PLAN' });
+
+    const after = await readSd(sdKey);
+    expect(after.metadata.parked_from_status).toBe('active');
+    expect(after.metadata.parked_from_status_source).toBeUndefined();
+  });
+
   it('TS-6: park rejects actor=EXEC (throws) and leaves the SD status UNCHANGED (no DB write)', async () => {
     const sdKey = await seedSd('exec-actor', { status: 'in_progress', current_phase: 'EXEC', progress: 50 });
 
