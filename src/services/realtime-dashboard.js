@@ -20,8 +20,13 @@ class RealtimeDashboard {
     this._debounceTimers = new Map(); // Per-type trailing-edge debounce
     
     // Initialize Supabase client for realtime
+    // SD-LEO-FIX-CLOSE-ANON-KEY-001 (FR-1): this class only ever runs server-side
+    // (instantiated in server/config.js), so it can and must use the service-role key rather
+    // than the anon key -- it was the anon_read_strategic_directives_v2 policy's ONLY known
+    // consumer (2025-12-17/18 history: the policy was dropped, this broke, the policy was
+    // re-added). Moving this reader off anon is what makes dropping that policy for good safe.
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     
     if (supabaseUrl && supabaseKey) {
       this.supabase = createClient(supabaseUrl, supabaseKey, {

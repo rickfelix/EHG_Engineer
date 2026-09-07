@@ -1,0 +1,57 @@
+# Anon read-contract probe -- SD-LEO-FIX-CLOSE-ANON-KEY-001 FR-2.
+#
+# The probe binary is invoked DIRECTLY so its exit code is the gate, mirroring
+# anon-write-contract-probe.yml -- this repo's vitest `db` project has an empty
+# DESIGNATED_NON_PROD_REFS, so a live-tier test placed there SKIPS, and a skip reports green.
+#
+# GitHub Actions does NOT expand brace alternation in path filters -- keep per-extension entries
+# literal (tests/unit/anon-write-contract-probe.test.js already enforces this repo-wide).
+name: anon-read-strategic-directives-probe
+
+permissions:
+  contents: read
+
+on:
+  push:
+    paths:
+      - 'scripts/anon-read-strategic-directives-probe.mjs'
+      - 'tests/unit/anon-read-strategic-directives-probe.test.js'
+      - '.github/workflows/anon-read-strategic-directives-probe.yml'
+  pull_request:
+    paths:
+      - 'scripts/anon-read-strategic-directives-probe.mjs'
+      - 'tests/unit/anon-read-strategic-directives-probe.test.js'
+      - '.github/workflows/anon-read-strategic-directives-probe.yml'
+  schedule:
+    # The policy can change without anyone touching this repo -- a sibling migration re-adding
+    # anon_read_strategic_directives_v2 (as happened 2025-12-18) is exactly the event this probe
+    # exists to catch, and it produces no diff here.
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      # No continue-on-error anywhere in this file, and no job-level if:.
+      - name: unit tier (pure -- cannot skip)
+        run: npx vitest run --project unit tests/unit/anon-read-strategic-directives-probe.test.js
+      - name: assert credentials are present
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is empty or unset — the live contract assertion cannot run."
+            exit 1
+          fi
+      - name: live contract assertion
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/anon-read-strategic-directives-probe.mjs
