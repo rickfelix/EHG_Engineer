@@ -13,6 +13,7 @@
 
 import { getReadyChildren } from './child-sd-selector.js';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import { createWorktree, getRepoRoot } from '../../../lib/worktree-manager.js';
 import { compose } from '../../../lib/agent-experience-factory/index.js';
 import fs from 'fs';
@@ -185,11 +186,14 @@ export async function planParallelExecution(supabase, parentSdId, currentSdId) {
   // 1. Resolve parent SD key for naming and state paths
   let parentSdKey = parentSdId;
   try {
-    const { data: parent } = await supabase
-      .from('strategic_directives_v2')
-      .select('sd_key')
-      .eq('id', parentSdId)
-      .single();
+    const parent = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('sd_key')
+        .eq('id', parentSdId)
+        .single(),
+      { site: 'parallel-team-spawner:resolve_parent_sd_key' }
+    );
     if (parent?.sd_key) parentSdKey = parent.sd_key;
   } catch (e) {
     // Intentionally suppressed: UUID fallback

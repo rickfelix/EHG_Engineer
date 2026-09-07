@@ -75,6 +75,50 @@ describe('Multi-Session Claim Conflict Gate', () => {
       expect(result.issues).toHaveLength(0);
     });
 
+    // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 (SECURITY sub-agent finding, REGRESSION):
+    // the stale-same-conversation-claim cleanup sits inside the catch for a possibly-missing
+    // RPC, so a query FAULT there had no local handler and propagated to this function's own
+    // outer catch -- which is explicitly "fail-open on unexpected error" (pass:true, score:80)
+    // for the ENTIRE gate, not just this optional cleanup. Asserting score:100 (not 80) here
+    // proves the REAL Surface-A conflict check ran to completion after the cleanup faulted,
+    // rather than the whole gate silently short-circuiting into the generic fail-open verdict.
+    it('continues to the real conflict check (score:100, not the generic fail-open score:80) when the stale-claim cleanup query genuinely faults', async () => {
+      const supabase = {
+        // Force the fallback branch: the RPC throws, so validateMultiSessionClaim's inner
+        // try/catch runs the claude_sessions stale-claim cleanup fallback.
+        rpc: vi.fn().mockRejectedValue(new Error('release_same_conversation_claims does not exist')),
+        from: vi.fn((table) => {
+          if (table === 'claude_sessions') {
+            // Matches the fallback's `.select(...).eq(...).eq(...).eq(...)` shape (no terminal
+            // .maybeSingle()/.single(), it resolves as a plain array-select promise) with a
+            // genuine PostgREST-shaped fault, never a thrown/rejected promise.
+            const chain = {
+              select: () => chain,
+              eq: () => chain,
+              then: (onF) => Promise.resolve({ data: null, error: { code: '42703', message: 'column "hostname" does not exist' } }).then(onF),
+            };
+            return chain;
+          }
+          if (table === 'strategic_directives_v2') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: { claiming_session_id: null }, error: null })
+                })
+              })
+            };
+          }
+          throw new Error(`unexpected table "${table}"`);
+        }),
+      };
+
+      const result = await validateMultiSessionClaim(supabase, 'SD-TEST-001');
+
+      expect(result.score).toBe(100);
+      expect(result.pass).toBe(true);
+      expect(result.issues).toHaveLength(0);
+    });
+
     it('should BLOCK when Surface A owner is on a DIFFERENT hostname and genuinely alive', async () => {
       const supabase = createMockSupabase({
         ownerSessionId: 'other-session-123',

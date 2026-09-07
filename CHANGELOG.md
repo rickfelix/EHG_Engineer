@@ -3,6 +3,9 @@
 
 ## Table of Contents
 
+- [2026-09-07](#2026-09-07)
+  - [Bugfix](#bugfix)
+  - [Documentation](#documentation)
 - [2026-09-06](#2026-09-06)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -184,6 +187,22 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
+## 2026-09-07
+
+### Bugfix
+
+- **Stale-session-sweep findings (`SKIP_RESET`, `WARNINGS`, `CONFLICTS`) now persist and alert instead of being console-only** - SD-LEO-FIX-STALE-SESSION-SWEEP-002
+  - `lib/fleet/sweep-findings-sink.cjs` adds `appendFindingLine()`, appending one JSON line per finding (timestamp, finding class, subject, summary) to `.artifacts/stale-session-sweep-findings.ndjson`, fail-soft so a write failure never aborts a sweep tick.
+  - `emitFindingAlert()` routes one directed `session_coordination` row per new finding to the live coordinator (falling back to the `broadcast-coordinator` sentinel), deduped against a 6-hour re-emit window keyed on finding class + subject — so a recurring condition doesn't page the coordinator every tick.
+  - `scripts/stale-session-sweep.cjs`'s `isSweepResetAllowed()` and the end-of-tick WARNINGS/CONFLICTS reporting loops call `recordFinding()` alongside their existing `console.log`, so persisted/alerted findings never diverge from what an operator watching the console would have seen.
+  - `lib/fleet/worker-status.cjs`'s `DRAIN_SETS.coordinator` recognizes the new `sweep_finding_alert` payload kind immediately via the JS floor; the corresponding DB-side `role_drain_sets` seed migration is chairman-gated and pending separately.
+
+### Documentation
+
+- **Encode the twelve Foundation-audit lens PREDICATE + INSTRUMENT + CANARY texts into `CLAUDE_SOLOMON_MANUAL.md`, replacing the bare lens-name line** - SD-LEO-DOC-FOUNDATION-AUDIT-LENS-001
+  - The twelve lenses (A1-A6, B1-B6) previously existed only as names on one manual line; their predicates lived in a Solomon seat's session-local scratch file, one discard from zero. `scripts/one-off/qf-20260905-813-encode-lens-predicates.mjs` verified the old clause appeared exactly once in `leo_protocol_sections` (row id=629) before replacing it with the full verbatim text from feedback 5b18d8f4, then `node scripts/generate-claude-md-from-db.js` regenerated the manual from the DB.
+  - Origin: a chairman question ("would this have been caught in any of the six dimensions?") whose measured answer showed the predicates were not durably encoded anywhere the standing Friday foundation audit could read them.
+
 ## 2026-09-06
 
 ### Bugfix
@@ -211,6 +230,10 @@
   - New STAGE 12 checks `git diff --cached --name-only` immediately before that banner and exits 1 with a diagnostic naming the likely cause (wrong working tree) instead of proceeding. 3 new regression tests (`tests/unit/husky/pre-commit-nonempty-index-guard.test.js`) pin the guard's shell predicate and its position ahead of the banner.
   - A known, disclosed tradeoff: a message-only `git commit --amend` (no new staged changes) also produces an empty diff and is blocked too — documented in-line rather than special-cased, consistent with CLAUDE.md's existing discouragement of amend in this repo.
   - Escalated from QF-20260906-295 because the fix touches `.husky/pre-commit`, a charter-designated sensitive path; the underlying code was already merged (PR #8399, commit `96501f014de`) before this SD formalized governance over it.
+- **A test could reach a REAL Resend/Twilio send with nothing at the shared transport to stop it** - SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C
+  - Three confirmed live incidents (two in 2026-08, one 2026-09-03) happened because only a per-caller guard existed (`chairman-sms-gate/index.js:243`), covering 1 of 8+ email callers and 0 of 2 SMS callers — a per-site patch, not the transport-layer boundary the class of bug needed.
+  - Added a shared guard (`lib/notifications/transport-test-isolation-guard.js`) consumed by both `resend-adapter.js::sendEmailInternal` and `twilio-provider.js::send`: refuses a real send under a test runner (`VITEST`/`NODE_ENV=test`) unless `fetch` is already mocked, detected via the `.mock` property vitest/jest attach to `vi.fn()`/`vi.stubGlobal` — chosen specifically so the 2 existing legitimate mocked-fetch test suites keep exercising the real code path unmodified (55 pre-existing + 18 new tests, zero regressions).
+  - Added a CI lint (`scripts/lint/transport-test-isolation-guard-lint.mjs`) asserting both guards stay present and that any test importing a transport module directly shows isolation evidence, wired into `.github/workflows/transport-test-isolation-guard-lint.yml` and registered with `control-seed-test-lint`'s seeded-defect trial (verdict `BLOCKS`).
 ### Infrastructure
 
 - **Every fixed role seat's operational memory now mirrors to a database checkpoint, with a daily staleness check** - SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A
@@ -288,6 +311,12 @@
 
 - **Repoints 2 code sites that were silently writing/reading dropped or renamed columns** - SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-E
   - `server/routes/feedback.js` used `legacy_id` (5 sites) where the live schema now has `sd_key`; `server/routes/stage24.js` used `stage_number` where the live schema now has `lifecycle_stage`. Both are pure code repoints, live now, no migration required.
+
+- **Michael's morning brief now assembles, renders, and serves itself with no Claude session required** - SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-E
+  - `lib/michael/brief-model.mjs` is the one typed contract (`michael_brief_runs.data_json`, spec §6 schema 2) every writer goes through; `validateBriefData` refuses a missing `frontPage` key, a wrong schema number, or any unknown top-level key at the write boundary.
+  - `scripts/michael/brief-assemble.mjs`, registered as `FEEDERS`' seventh entry (GHA venue, 05:15-06:00 ET), gates on child D's `assembleReadiness` and alone produces a complete, rendered, verified brief of record by 05:45 ET whether or not the seat ever wakes. `lib/michael/render-brief.js` ports the (no-longer-present-in-repo) HTML renderer with five self-checks — doctype, closing tag, today's long date, zero template tokens, zero NUL bytes — `verified` is true only when all five pass.
+  - `scripts/michael/brief-finalize.mjs` (seat verb) additively overlays overnight enrichment, re-rendering and re-verifying before stamping `enriched_at` — never on a failing render. `server/routes/michael.js` gains `GET /brief/latest` and `/brief/:date`, content-negotiated HTML or JSON, behind the existing `requireAuth`+`requireAdminRole` mount.
+  - The Drive-doc copy (`scripts/michael/brief-doc.mjs`) was corrected at LEAD from the originally-scoped host venue to its own GHA workflow (`michael-brief-doc-cron.yml`) after VALIDATION traced `GOOGLE_SERVICE_ACCOUNT_JSON` to a GHA-only repo secret unrelated to the chairman's host-only OAuth grant — the original design would have been dead by construction. Reuses the daily-review team's `runPreShipGate`/`createBriefDoc` unmodified; a dedicated wiring test cross-checks both workflow files so the split can't silently regress.
 
 ## 2026-09-05
 

@@ -126,7 +126,7 @@ v1.1: **oracle-extract**, **health-sync** (both Drive reads through the chairman
 
 Rendering ports `scripts/render-brief-artifact.py` and `templates/morning-brief-rebuild-template.html` to `lib/michael/render-brief.js` (template inlined, dead clipboard script dropped); self-verification (doctype, closing tag, today's long date, zero `{{X}}`, zero NUL bytes) before `verified = true`.
 
-Serving: `server/routes/michael.js` exposes `GET /api/michael/brief/latest` and `/:date` (HTML and JSON) behind `requireAuth`. The dashboard page is a child SD in the frontend repo (`/admin/michael`, sourced with `--target-repos EHG`). Until it lands, `brief_md` (plain text; `createBriefDoc` inserts strings verbatim) is written as a Google Doc via the existing service-account path into `CHAIRMAN_FOLDER_ID` — from the host venue, since that path also holds a credential.
+Serving: `server/routes/michael.js` exposes `GET /api/michael/brief/latest` and `/:date` (HTML and JSON) behind `requireAuth`. The dashboard page is a child SD in the frontend repo (`/admin/michael`, sourced with `--target-repos EHG`). Until it lands, `brief_md` (plain text; `createBriefDoc` inserts strings verbatim) is written as a Google Doc via the existing service-account path into `CHAIRMAN_FOLDER_ID` — **corrected at child E's LEAD phase (VALIDATION 0adb8248): this runs from the GHA venue, its own workflow (`michael-brief-doc-cron.yml`), not the host venue this section originally said.** `GOOGLE_SERVICE_ACCOUNT_JSON` is a GHA-only repo secret unrelated to the chairman's host-only OAuth grant (§4); a host-only script here would have been dead by construction. `assertHostVenue` is never imported by `brief-doc.mjs`.
 
 ## 7. The morning conversation
 

@@ -10,6 +10,7 @@
  *
  * Fixes triangulation finding about missing architectural patterns.
  */
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Pattern categories with keywords for case-insensitive matching.
@@ -175,10 +176,13 @@ export function createArchitecturalPatternChecklistGate(prdRepo, sd, supabase) {
       // Check for children in database
       let childrenCount = 0;
       try {
-        const { data: children } = await supabase
-          .from('strategic_directives_v2')
-          .select('id')
-          .eq('parent_sd_id', sd?.id);
+        const children = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('id')
+            .eq('parent_sd_id', sd?.id),
+          { site: 'architectural-pattern-checklist:children_count' }
+        );
         childrenCount = children?.length || 0;
       } catch (e) {
         // Intentionally suppressed: children count query is non-blocking

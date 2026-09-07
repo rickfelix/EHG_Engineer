@@ -13,6 +13,7 @@
  * Fail-safe: every error is caught and logged; this hook NEVER blocks SD completion.
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 import { recordReuseEvent } from '../../../../../../lib/capabilities/capability-reuse-tracker.js';
 import { scoreAndPersistCapabilities } from '../../../../../../lib/capabilities/plane1-scoring.js';
 
@@ -44,14 +45,17 @@ export async function runCapabilityScoringOnCompletion(sd, supabase) {
 
   // (a) Record reuse for keys also registered by a different prior SD — before scoring.
   for (const cap of ownCaps) {
-    const { data: priorRow } = await supabase
-      .from('sd_capabilities')
-      .select('id')
-      .eq('capability_key', cap.capability_key)
-      .eq('action', 'registered') // only a prior REGISTERED row counts as reuse (not deprecated/superseded)
-      .neq('sd_id', sdKey)
-      .limit(1)
-      .maybeSingle();
+    const priorRow = await safeQuery(
+      supabase
+        .from('sd_capabilities')
+        .select('id')
+        .eq('capability_key', cap.capability_key)
+        .eq('action', 'registered') // only a prior REGISTERED row counts as reuse (not deprecated/superseded)
+        .neq('sd_id', sdKey)
+        .limit(1)
+        .maybeSingle(),
+      { site: 'capability-scoring-hook:prior_row' }
+    );
 
     if (priorRow) {
       const res = await recordReuseEvent(

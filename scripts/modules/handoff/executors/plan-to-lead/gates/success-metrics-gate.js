@@ -15,6 +15,7 @@
  */
 
 import { verifyAllMetrics } from '../../../../../lib/metric-auto-verifier.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 import { resolveAllBindings, BINDING_EXAMPLES } from '../../../../../lib/metric-evidence-resolver.js';
 import { GATE_REASON_CODES, isPlaceholderActual } from './gate-reason-codes.js';
 
@@ -106,10 +107,13 @@ export function createSuccessMetricsGate(supabase) {
       const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
 
       // ── Orchestrator bypass ──
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'success-metrics-gate:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Parent orchestrator SD (${childSDs.length} children) — bypassing`);
@@ -133,11 +137,14 @@ export function createSuccessMetricsGate(supabase) {
       // Child SD detection for verification advisory mode
       let isChildSD = false;
       try {
-        const { data: parentCheck } = await supabase
-          .from('strategic_directives_v2')
-          .select('parent_sd_id')
-          .eq('id', sdUuid)
-          .single();
+        const parentCheck = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('parent_sd_id')
+            .eq('id', sdUuid)
+            .single(),
+          { site: 'success-metrics-gate:parent_check' }
+        );
         isChildSD = !!parentCheck?.parent_sd_id;
       } catch { /* fail-open */ }
 
@@ -212,17 +219,23 @@ export function createSuccessMetricsGate(supabase) {
       if (hasEmptyActuals) {
         try {
           // Query evidence: accepted handoffs, user story completion, PR merge status
-          const { data: handoffs } = await supabase
-            .from('sd_phase_handoffs')
-            .select('handoff_type, status, validation_score')
-            .eq('sd_id', sdUuid)
-            .eq('status', 'accepted');
+          const handoffs = await safeQuery(
+            supabase
+              .from('sd_phase_handoffs')
+              .select('handoff_type, status, validation_score')
+              .eq('sd_id', sdUuid)
+              .eq('status', 'accepted'),
+            { site: 'success-metrics-gate:auto_populate_handoffs' }
+          );
           const acceptedCount = handoffs?.length || 0;
 
-          const { data: stories } = await supabase
-            .from('user_stories')
-            .select('status')
-            .eq('sd_id', sdUuid);
+          const stories = await safeQuery(
+            supabase
+              .from('user_stories')
+              .select('status')
+              .eq('sd_id', sdUuid),
+            { site: 'success-metrics-gate:auto_populate_stories' }
+          );
           const totalStories = stories?.length || 0;
           // SD-LEARN-FIX-ADDRESS-PAT-AUTO-080: Count ready/done/validated stories as evidence
           const EVIDENCE_STATUSES = new Set(['completed', 'ready', 'done', 'validated']);

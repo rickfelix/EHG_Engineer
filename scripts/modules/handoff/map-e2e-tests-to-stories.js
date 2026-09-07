@@ -10,6 +10,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -102,11 +103,14 @@ export async function mapE2ETestsToUserStories(sdId, supabase, options = {}) {
   }
 
   // Step 1: Get user stories from database
-  const { data: userStories } = await supabase
-    .from('user_stories')
-    .select('id, story_key, title, e2e_test_path')
-    .eq('sd_id', sdId)
-    .order('story_key');
+  const userStories = await safeQuery(
+    supabase
+      .from('user_stories')
+      .select('id, story_key, title, e2e_test_path')
+      .eq('sd_id', sdId)
+      .order('story_key'),
+    { site: 'map-e2e-tests-to-stories:user_stories' }
+  );
 
   if (!userStories || userStories.length === 0) {
     if (!silent) {

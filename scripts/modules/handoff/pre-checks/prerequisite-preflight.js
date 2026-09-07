@@ -15,6 +15,7 @@
 
 import { SD_TYPE_THRESHOLDS, DEFAULT_THRESHOLD, JSONB_FIELDS } from '../../sd-quality-scoring.js';
 import { shouldBypassUserStories } from '../../../../lib/protocol-policies/orchestrator-bypass.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import { lookupSdIdForFk } from '../../auto-trigger-stories.mjs';
 import { isLightweightSDType, detectCodeProduction } from '../validation/sd-type-applicability-policy.js';
 
@@ -580,11 +581,14 @@ export async function checkPlanToExecPrereqs(supabase, sd, sdId) {
   const issues = [];
 
   // Check PRD exists and is approved
-  const { data: prd } = await supabase
-    .from('product_requirements_v2')
-    .select('id, status, executive_summary')
-    .eq('sd_id', sd.id)
-    .single();
+  const prd = await safeQuery(
+    supabase
+      .from('product_requirements_v2')
+      .select('id, status, executive_summary')
+      .eq('sd_id', sd.id)
+      .single(),
+    { site: 'prerequisite-preflight:plan_to_exec_prd' }
+  );
 
   if (!prd) {
     issues.push({
@@ -658,14 +662,17 @@ async function checkLeadFinalApprovalPrereqs(supabase, sd, sdId) {
   const lookupId = sd?.id || sdId;
 
   // Check PLAN-TO-LEAD handoff exists
-  const { data: planToLeadRows } = await supabase
-    .from('sd_phase_handoffs')
-    .select('id, status')
-    .eq('sd_id', lookupId)
-    .eq('to_phase', 'LEAD')
-    .eq('from_phase', 'PLAN')
-    .in('status', ['accepted', 'completed'])
-    .limit(1);
+  const planToLeadRows = await safeQuery(
+    supabase
+      .from('sd_phase_handoffs')
+      .select('id, status')
+      .eq('sd_id', lookupId)
+      .eq('to_phase', 'LEAD')
+      .eq('from_phase', 'PLAN')
+      .in('status', ['accepted', 'completed'])
+      .limit(1),
+    { site: 'prerequisite-preflight:plan_to_lead_rows' }
+  );
   const planToLead = planToLeadRows?.[0] || null;
 
   if (!planToLead) {
@@ -677,11 +684,14 @@ async function checkLeadFinalApprovalPrereqs(supabase, sd, sdId) {
   }
 
   // Check retrospective exists
-  const { data: retros } = await supabase
-    .from('retrospectives')
-    .select('id')
-    .eq('sd_id', lookupId)
-    .limit(1);
+  const retros = await safeQuery(
+    supabase
+      .from('retrospectives')
+      .select('id')
+      .eq('sd_id', lookupId)
+      .limit(1),
+    { site: 'prerequisite-preflight:retros' }
+  );
   const retro = retros?.[0] || null;
 
   if (!retro) {
