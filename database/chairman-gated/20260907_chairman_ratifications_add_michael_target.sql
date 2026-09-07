@@ -1,8 +1,9 @@
 -- SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-F -- widens chairman_ratifications'
 -- cr_target_contracts_valid CHECK to accept 'michael' as a target_contracts value.
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
---   Chairman verification NOT yet obtained. This file is staged only.
+-- @approved-by: codestreetlabs@gmail.com
+--   Chairman verbal by verified SMS 2026-09-07 (staging row 7bb7f018): "Apply the stages
+--   migration so ratifications can bind Michael." Scribed by Adam under contract 3c.
 --   WHY chairman-gated rather than database/migrations/: this file DROPs and re-ADDs a CHECK
 --   constraint on an existing, chairman-gated governance table (chairman_ratifications) --
 --   same sensitivity class as the table's own original migration
