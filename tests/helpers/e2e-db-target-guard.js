@@ -48,8 +48,16 @@ export function assertPlaywrightTargetSafe(env = process.env) {
     dotenv.config(); // idempotent — never overwrites an already-set var
   }
 
-  // Check 1: reuse assessDbTarget's existing default-deny predicate, unchanged.
-  const assessment = assessDbTarget(env);
+  // Check 1: reuse assessDbTarget's existing default-deny predicate, unchanged -- but pass it
+  // the same SUPABASE_URL||NEXT_PUBLIC_SUPABASE_URL fallback chain check 2 uses, not env.SUPABASE_URL
+  // alone. assessDbTarget itself only ever reads env.SUPABASE_URL (tests/helpers/db-target.js:51,
+  // unmodified) and never falls back to NEXT_PUBLIC_SUPABASE_URL; without this normalization, an
+  // undesignated NON-production ref reachable solely via NEXT_PUBLIC_SUPABASE_URL (with a real
+  // service key) would resolve assessment.ref to null (check 1 a no-op) while check 2 only compares
+  // against the PRODUCTION ref specifically -- so it would pass both checks unrefused, even though
+  // assessDbTarget's own default-deny philosophy would refuse it if it ever saw the URL at all.
+  const normalizedEnv = env.SUPABASE_URL ? env : { ...env, SUPABASE_URL: env.NEXT_PUBLIC_SUPABASE_URL };
+  const assessment = assessDbTarget(normalizedEnv);
   if (assessment.ref && !assessment.allowed) {
     throw new Error(
       `[e2e-db-target-guard] Refused: target ref "${assessment.ref}" is not designated safe ` +

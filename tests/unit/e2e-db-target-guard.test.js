@@ -82,6 +82,18 @@ describe('e2e-db-target-guard: assertPlaywrightTargetSafe', () => {
     });
   });
 
+  it('TS-9 (LOW finding, EXEC-TO-PLAN TESTING): an undesignated NON-production ref reachable only via NEXT_PUBLIC_SUPABASE_URL is still refused', () => {
+    // Before the fix: assessDbTarget only ever reads env.SUPABASE_URL, so with SUPABASE_URL absent
+    // its ref resolves to null and check 1 is a no-op; check 2 only compares against the
+    // PRODUCTION ref, so an arbitrary undesignated non-prod ref reached solely via
+    // NEXT_PUBLIC_SUPABASE_URL sailed through unrefused despite a real service key being present.
+    const env = {
+      'NEXT_PUBLIC_SUPABASE_URL': 'https://someotherref.supabase.co',
+      'SUPABASE_SERVICE_ROLE_KEY': 'k',
+    };
+    expect(() => assertPlaywrightTargetSafe(env)).toThrow(/Refused/);
+  });
+
   it('a malformed/unrecognisable URL is treated as no-target, not refused', () => {
     const env = { 'SUPABASE_URL': 'not-a-real-url', 'SUPABASE_SERVICE_ROLE_KEY': 'k' };
     expect(() => assertPlaywrightTargetSafe(env)).not.toThrow();
