@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-07T18:56:38.944Z",
-  "git_commit": "6afea343",
-  "db_snapshot_hash": "75c730afb94b407a",
+  "generated_at": "2026-09-07T23:15:43.342Z",
+  "git_commit": "6c43b2f6",
+  "db_snapshot_hash": "e8156a0352cac564",
   "files": {
     "CLAUDE.md": {
       "type": "full",
@@ -69,11 +69,11 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 115395,
-      "bytes": 116228,
-      "estimated_tokens": 28849,
-      "content_hash": "627316832639366b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260905-121\\CLAUDE_ADAM.md"
+      "chars": 116169,
+      "bytes": 117004,
+      "estimated_tokens": 29043,
+      "content_hash": "49548eb1d1b29e45",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\QF-20260907-825\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
@@ -229,7 +229,7 @@
     }
   },
   "section_digests": {
-    "global": "549c5a335b65a69e",
+    "global": "28db6719ac1db738",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -483,7 +483,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "f3ecffdc5a128eec",
+      "601": "fef84602aafbad2a",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "f5d0c5029c6a3524",
@@ -514,7 +514,8 @@
       "656": "d2ccb43f1edf9602",
       "657": "11c9181c9e30ef9c",
       "658": "2bb59a1b81f76a38",
-      "659": "f07759022446ffb1"
+      "659": "f07759022446ffb1",
+      "660": "61acc95edefef269"
     },
     "meta": {
       "94": {
@@ -1936,6 +1937,11 @@
         "section_type": "michael_model_posture",
         "target_file": "CLAUDE_MICHAEL_MODEL_POSTURE.md",
         "title": "Michael Model Posture (binding companion)"
+      },
+      "660": {
+        "section_type": "quick_fixes_schema_traps",
+        "target_file": null,
+        "title": "Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)"
       }
     }
   }
