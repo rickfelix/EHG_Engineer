@@ -1,0 +1,86 @@
+{
+  "title": "Michael I: Dropbox retirement and _Cowork migration tooling",
+  "executive_summary": "Build scripts/michael/retire-cowork.mjs, an idempotent, dry-run-by-default script implementing the 5 Dropbox _Cowork retirement steps from docs/michael/02-SPEC.md §8 (v0.2 predecessor line 157: disable scheduled tasks; delete morning-brief-rebuild/uninstall cowork-bootstrap; zip-archive the folder; delete the folder once the fourteen-morning success window from vision §8 has elapsed; verify the retirement grep is clean). The live window has not started (only children A-H have landed; no go-live/parallel-read marker exists anywhere in code or DB), so this SD builds and tests the tooling -- it does not perform any live host action. Two real gaps found during LEAD investigation are corrected here before EXEC: the spec's own step-5 acceptance grep is unsatisfiable as literally written (30 false-positive hits against an unrelated EHG intake-pipeline doc set), and the CHAIRMAN_FOLDER_ID archive upload has no venue that can write it (GHA service account can't reach the host folder; the host chairman OAuth grant is drive.readonly) -- resolved by scripting local zip creation plus read-only verification, leaving the actual upload a manual chairman step rather than widening any OAuth scope.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "retire-cowork.mjs orchestrator: dry-run by default, tiered apply flags",
+      "description": "New scripts/michael/retire-cowork.mjs runs all 5 steps in order and reports status for each. No flag: pure dry-run, reports what each step WOULD do, zero side effects. --apply: executes steps 1-3 (disable tasks, record step-2 checklist confirmation, create+verify the archive zip). A separate --apply-deletion flag (never implied by --apply alone) is required to attempt step 4, and only proceeds if the step-4 precondition (FR-5) is met. Modeled on scripts/michael/import-cowork-memory.mjs's own --apply/--verify/--ratify precedent and scripts/michael/retention.mjs's apply/dry_run mode split.",
+      "acceptance_criteria": [
+        "Running with no flags performs zero writes, zero schtasks calls, zero filesystem changes, zero network calls -- prints a per-step status report only",
+        "--apply-deletion without --apply also refuses (steps 1-3 must complete/be recorded before step 4 is even attempted)",
+        "Each step's outcome (ok / skipped / refused / not_applicable) is distinct and printed, never a single boolean success/fail for the whole run"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Step 1 -- disable remaining Cowork scheduled tasks",
+      "description": "Extend scripts/setup-alarm-cron-tasks.mjs's existing pure builder set (buildCreateArgs/buildRemoveArgs/buildQueryArgs/buildQueryXmlArgs at :125-141) with a new buildDisableArgs(taskName) returning ['/Change','/TN',taskName,'/DISABLE']. retire-cowork.mjs's step-1 handler reuses scripts/setup-michael-host-tasks.mjs's execFileSync('schtasks', args) invocation posture (never a shell string -- the fleet's known schtasks-from-Git-Bash-returns-false-empty-results defect only applies to shell invocation, never to execFileSync with an argv array) against a configurable list of candidate task names (default seed: 'Wake Cowork PC', overridable via --task-names). A task-not-found result (schtasks exit code / ERROR 2) is treated as step success (already satisfied), not failure -- vision doc 01-VISION.md:12 records the desktop scheduler already died in late June, so the tasks may simply no longer exist.",
+      "acceptance_criteria": [
+        "buildDisableArgs is a pure function, unit tested for correct argv shape, no execution",
+        "step 1's handler is unit tested against a mocked execFileSync returning 'ERROR: The system cannot find the file specified' (task-not-found) and asserts the step reports ok/already-satisfied, not a failure",
+        "step 1's handler is unit tested against a mocked successful disable and asserts it reports ok/disabled",
+        "no real schtasks process is ever spawned during the test suite"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Step 2 -- morning-brief-rebuild artifact and cowork-bootstrap skill (host-only checklist)",
+      "description": "Both artifacts are confirmed host-side-only, unreachable from this repo (cowork-bootstrap: zero repo references anywhere; morning-brief-rebuild: two prose-only mentions, the actual port to lib/michael/render-brief.js already happened). retire-cowork.mjs cannot script this step. It prints the two checklist instructions (delete the morning-brief-rebuild artifact; uninstall the cowork-bootstrap skill) and accepts a --confirm-step2 flag recording the chairman's confirmation that both were done on the host, written into the run's report/metadata. Without --confirm-step2, step 2 reports as 'pending -- host action required', never as complete.",
+      "acceptance_criteria": [
+        "Without --confirm-step2, the run report shows step 2 as pending with the exact checklist text",
+        "With --confirm-step2, the run report shows step 2 as confirmed, with the confirmation timestamp recorded",
+        "No code anywhere attempts to locate or delete either artifact by path (they do not exist in this repo)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Step 3 -- archive the folder as a zip, verify (not script) the Drive upload",
+      "description": "retire-cowork.mjs creates C:\\Users\\rickf\\Dropbox\\_Cowork-archive-<date>.zip locally via PowerShell Compress-Archive invoked through execFileSync (no zip library exists in the repo -- confirmed via dependency audit). It does NOT attempt to upload the zip to CHAIRMAN_FOLDER_ID ('1_Ui4ckZLtIUi3Sm9W_y41eEDHEnNIwDP', lib/daily-review/drive-doc-client.js:18): validation confirmed neither available credential can write it -- the GHA-only service account (drive-doc-client.js's venue) cannot reach the host's local folder, and the host-side chairman OAuth grant (lib/michael/google-clients.mjs:8) is drive.readonly. Instead, after the chairman manually uploads the zip (a host action outside this SD's code), retire-cowork.mjs's --verify-step3 mode calls the EXISTING read-only listDriveFiles({folderId: CHAIRMAN_FOLDER_ID, name: '_Cowork-archive-<date>.zip'}) from lib/michael/google-clients.mjs:69 and refuses to mark step 3 complete until the file is confirmed present.",
+      "acceptance_criteria": [
+        "The zip-creation call is unit tested against a mocked execFileSync, asserting the correct Compress-Archive argv shape -- no real PowerShell process spawned in tests",
+        "No new Google Drive WRITE call is introduced anywhere in the new code (grep-verifiable: zero drive.files.create/update calls outside the existing, untouched drive-doc-client.js)",
+        "--verify-step3 is unit tested against a mocked listDriveFiles both finding and not-finding the archive, asserting the correct complete/pending report in each case"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Step 4 -- gated, irreversible folder deletion",
+      "description": "New lib/michael/retirement-window.mjs exports computeRetirementWindow({ windowStartEtDate, requiredConsecutiveDays = 14, todayEtDate }), modeled on lib/ship/witness-adoption.mjs:142's computeAdoptionReadiness shape: walks ET dates forward from windowStartEtDate, and for each date requires BOTH a michael_brief_runs row with verified=true for that et_date AND a michael_feedback_ledger row for that same et_date (NOT michael_brief_runs.surfaced_at, confirmed dead -- declared at database/migrations/20260906_michael_tables.sql:276 but never written by any code in scripts/michael or lib/michael). Returns {ready, consecutiveDays, reason}. Since no go-live marker exists anywhere in code or DB, windowStartEtDate is a required, explicit CLI argument (--window-start <et_date>), never auto-derived. retire-cowork.mjs's step 4 handler refuses with WINDOW_NOT_ELAPSED unless computeRetirementWindow returns ready:true, AND separately requires --apply-deletion. On both conditions met, it deletes the local folder only (never any DB row -- michael_feedback_ledger stays in scripts/michael/retention.mjs's existing NEVER_TOUCHED allow-list, confirmed at retention.mjs:37, and this SD does not touch that list).",
+      "acceptance_criteria": [
+        "computeRetirementWindow is pure and unit tested: a full 14-day verified+ledger streak from windowStartEtDate returns ready:true, consecutiveDays:14",
+        "unit tests cover streak-breaking gaps: a missing michael_brief_runs row, a verified:false row, and a missing michael_feedback_ledger row on any date within the window each independently break the streak and return ready:false with a reason naming the gap date",
+        "step 4 refuses with WINDOW_NOT_ELAPSED when computeRetirementWindow returns ready:false, regardless of --apply-deletion",
+        "step 4 refuses when --apply-deletion is absent, regardless of window readiness",
+        "no test in the suite performs a real filesystem deletion -- the delete call is behind an injectable fs interface, mocked in all tests",
+        "michael_feedback_ledger rows are never written, updated, or deleted by any code in this SD"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Step 5 -- corrected acceptance grep, encoded as an automated test",
+      "description": "The spec's literal predicate (grep -r \"_Cowork\\|Dropbox\" lib scripts .github docs) is unsatisfiable as written: measured against live main, the bare 'Dropbox' alternation produces 30 hits, all in the unrelated EHG ideas-intake pipeline documentation (docs/06_deployment/strategic-intake-pipeline-v1.md and 10 other files) -- none Cowork-related. The corrected predicate scopes to '_Cowork' alone, with an explicit allow-list for the files that legitimately and permanently reference it: scripts/michael/import-cowork-memory.mjs, scripts/michael/import-cowork-memory.test.js, lib/michael/cowork-manifest.mjs, lib/michael/cowork-parse.mjs, lib/michael/cowork-write.mjs (and their .test.js siblings), scripts/michael/retire-cowork.mjs and its test, and everything under docs/michael/**. A new test (tests/unit/michael-cowork-retirement-grep.test.js) runs the corrected grep programmatically and asserts zero hits outside the allow-list.",
+      "acceptance_criteria": [
+        "The new test passes against current main as-is (the retirement grep, correctly scoped, is already clean modulo the allow-list -- this SD's own new retire-cowork.mjs/.test.js and retirement-window.mjs/.test.js files are added to the allow-list as they are created)",
+        "The test would FAIL if a new, non-allow-listed file introduced a '_Cowork' reference, proving it is a real check and not a vacuous pass",
+        "The allow-list is an explicit, named array in the test file, not a broad path-prefix wildcard that could silently swallow future violations"
+      ]
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "fr": "FR-1", "scenario": "no-flag run performs zero side effects, mocked at every I/O boundary (schtasks, filesystem, Drive, PowerShell)" },
+    { "id": "TS-2", "fr": "FR-1", "scenario": "--apply-deletion without --apply refuses before evaluating the window" },
+    { "id": "TS-3", "fr": "FR-2", "scenario": "buildDisableArgs pure-function shape; step 1 tolerates task-not-found as success" },
+    { "id": "TS-4", "fr": "FR-3", "scenario": "step 2 reports pending without --confirm-step2, confirmed with it" },
+    { "id": "TS-5", "fr": "FR-4", "scenario": "zip-creation argv shape; --verify-step3 both found/not-found paths" },
+    { "id": "TS-6", "fr": "FR-5", "scenario": "computeRetirementWindow full-streak and each of the three gap-breaking cases" },
+    { "id": "TS-7", "fr": "FR-5", "scenario": "step 4 refuses on WINDOW_NOT_ELAPSED and on missing --apply-deletion, independently" },
+    { "id": "TS-8", "fr": "FR-6", "scenario": "the corrected retirement grep passes against main, and a synthetic non-allow-listed violation is proven to fail it" }
+  ],
+  "out_of_scope": [
+    "Actually performing the live retirement (the fourteen-morning window has not started -- this SD ships tooling only)",
+    "Widening the chairman OAuth Drive scope beyond drive.readonly",
+    "Building a go-live/parallel-read phase marker mechanism (window-start stays an explicit required argument for this SD)",
+    "Any change to michael_feedback_ledger's NEVER_TOUCHED status in retention.mjs"
+  ]
+}
