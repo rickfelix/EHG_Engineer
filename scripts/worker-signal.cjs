@@ -470,13 +470,20 @@ function isSolomonConsultEnabled() {
  * false/omitted -> reply-needed (fire-and-forget-by-default today, but the worker DOES
  * expect an eventual answer, so it is chase-eligible) + a computed reply_expected_by
  * window (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
+ *
+ * QF-20260907-273: a pre_send mirror (consultPurpose='pre_send') is a read-only notice
+ * the recipient must ack and is contractually forbidden to reply to -- Solomon's real
+ * verdict travels via recordDisposition/consult_answer, never a payload.reply_to echo.
+ * Stamping it reply-needed made every dutifully-acked mirror read as an open obligation
+ * to SLA/ping-on-silence readers. informational/expects_reply:false/no deadline is honest.
  */
 function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo, severity, sdKey, triageScore, triageReason, isAwait, replyWindowMs, now, consultPurpose }) {
-  const replyClass = isAwait ? 'live-handshake' : 'reply-needed';
+  const isPreSendMirror = consultPurpose === 'pre_send';
+  const replyClass = isPreSendMirror ? 'informational' : (isAwait ? 'live-handshake' : 'reply-needed');
   const payload = {
     kind: PAYLOAD_KINDS.SOLOMON_CONSULT,   // 'solomon_consult' (SSOT constant, never a literal)
     correlation_id: correlationId,
-    expects_reply: true,
+    expects_reply: !isPreSendMirror,
     reply_class: replyClass,
     sender_callsign: senderCallsign || null,
     repo: repo || null,

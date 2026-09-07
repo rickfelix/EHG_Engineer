@@ -7,6 +7,7 @@
  */
 
 import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+import { shouldBypassUserStories } from '../../../../../../lib/protocol-policies/orchestrator-bypass.js';
 
 /**
  * Create the USER_STORY_EXISTENCE_GATE validator
@@ -63,10 +64,18 @@ export function createUserStoryExistenceGate(supabase) {
 
       // Determine if stories are required
       // Hardcoded fallback: types that never need user stories (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-082)
+      // QF-20260812-225: this local set omitted security/database/refactor, which
+      // lib/protocol-policies/orchestrator-bypass.js's STORY_EXEMPT_TYPES (the canonical,
+      // single-source-of-truth policy) correctly exempts -- hard-failing e.g. sd_type='security'
+      // SDs that have zero authored user stories. Consulting shouldBypassUserStories() ADDITIVELY
+      // (never replacing this set) closes that gap without narrowing the existing exemptions
+      // this gate already relies on (bugfix/quick_fix/qa/uat/ux_debt/docs are NOT all present in
+      // the canonical set, which governs a different requirement -- STORIES sub-agent execution
+      // at PLAN-TO-EXEC -- not this gate's PLAN-TO-LEAD existence check).
       const NO_STORIES_TYPES = new Set(['infrastructure', 'documentation', 'docs', 'orchestrator', 'bugfix', 'quick_fix', 'qa', 'uat', 'ux_debt']);
       const storiesRequired = profile
         ? (profile.requires_user_stories ?? false)
-        : !NO_STORIES_TYPES.has(sdType);
+        : !(NO_STORIES_TYPES.has(sdType) || shouldBypassUserStories(sdType));
 
       console.log(`   SD Type: ${sdType}`);
       console.log(`   Stories Required: ${storiesRequired ? 'YES' : 'NO'}`);

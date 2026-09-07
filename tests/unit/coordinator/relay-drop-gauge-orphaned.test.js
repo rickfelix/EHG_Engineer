@@ -15,6 +15,7 @@ import {
   COMMITMENT_LIVENESS_CUT_POINT_MINUTES,
   LIVENESS,
   TRACKED_INBOUND_KINDS,
+  DISPOSED_VALUES,
 } from '../../../lib/coordinator/relay-drop-gauge.cjs';
 import { PAYLOAD_KINDS } from '../../../lib/fleet/worker-status.cjs';
 
@@ -120,6 +121,58 @@ describe('decideCommitments (FR-3: merges the commitments table into the single 
     const commitments = [{ id: 'c3', owner_session: 'coord-1', counterparty_session: 'f27a883d', subject: 'x', due_by: null, created_at: new Date(NOW).toISOString() }];
     const decisions = decideCommitments(commitments, { now: NOW, livenessOf: () => LIVENESS.ORPHANED });
     expect(decisions[0].counterpartyLiveness).toBe(LIVENESS.ORPHANED);
+  });
+});
+
+// QF-20260906-160 (R8, ratification 2ab4b4bc): a row explicitly disposed to a dead/
+// retargeted/superseded target must clear the tracked set on that fact alone, never
+// waiting on an outbound reply the counterparty can no longer send. Before this fix,
+// payload.disposition had NO reader anywhere in this gauge -- the ratified clear-on-truth
+// path was dead by construction and ORPHANED COMMITMENTS never shrank on disposal.
+describe('QF-20260906-160: disposed rows resolve ok and clear ORPHANED, never persist as flag', () => {
+  const ancientDisposedRow = {
+    id: 'r-disposed',
+    payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, id: 'r-disposed', disposition: 'unanswerable_target_dead' },
+    created_at: new Date(NOW - 999 * 60 * 1000).toISOString(), // ancient -- would otherwise flag
+    target_session: 'released-1',
+  };
+
+  it('a row disposed as unanswerable_target_dead resolves ok, never flag, with no outbound reply at all', () => {
+    const decisions = decideRelayDrops([ancientDisposedRow], [], { now: NOW, livenessOf: () => LIVENESS.ORPHANED });
+    expect(decisions[0].action).toBe('ok');
+    expect(decisions[0].reason).toBe('disposed:unanswerable_target_dead');
+    expect(decisions[0].disposed).toBe(true);
+  });
+
+  it.each(['retargeted', 'superseded'])('a row disposed as %s also resolves ok', (disposition) => {
+    const row = { ...ancientDisposedRow, payload: { ...ancientDisposedRow.payload, disposition } };
+    const decisions = decideRelayDrops([row], [], { now: NOW, livenessOf: () => LIVENESS.ORPHANED });
+    expect(decisions[0].action).toBe('ok');
+    expect(decisions[0].disposed).toBe(true);
+  });
+
+  it('an unrecognized disposition value does NOT short-circuit -- falls through to normal flag/pending logic', () => {
+    const row = { ...ancientDisposedRow, payload: { ...ancientDisposedRow.payload, disposition: 'some_other_value' } };
+    const decisions = decideRelayDrops([row], [], { now: NOW, livenessOf: () => LIVENESS.ORPHANED });
+    expect(decisions[0].action).toBe('flag');
+    expect(decisions[0].disposed).toBeUndefined();
+  });
+
+  it('the ticket predicate: a fixture row from a released (ORPHANED) sender with the disposition set yields zero undisposed-orphaned', () => {
+    const decisions = decideRelayDrops([ancientDisposedRow], [], { now: NOW, livenessOf: () => LIVENESS.ORPHANED });
+    const orphaned = decisions.filter((d) => d.counterpartyLiveness === LIVENESS.ORPHANED).length;
+    const orphanedDisposed = decisions.filter((d) => d.disposed && d.counterpartyLiveness === LIVENESS.ORPHANED).length;
+    expect(orphaned - orphanedDisposed).toBe(0);
+  });
+
+  it('a non-disposed row is unaffected: no disposed key added to its decision shape', () => {
+    const row = { id: 'r-clean', payload: { kind: PAYLOAD_KINDS.RELAY_REQUEST, id: 'r-clean' }, created_at: new Date(NOW - 999 * 60 * 1000).toISOString(), target_session: 'x' };
+    const decisions = decideRelayDrops([row], [], { now: NOW });
+    expect(decisions[0].disposed).toBeUndefined();
+  });
+
+  it('DISPOSED_VALUES is the closed set {unanswerable_target_dead, retargeted, superseded}', () => {
+    expect([...DISPOSED_VALUES].sort()).toEqual(['retargeted', 'superseded', 'unanswerable_target_dead']);
   });
 });
 

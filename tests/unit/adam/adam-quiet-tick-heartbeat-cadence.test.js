@@ -14,7 +14,7 @@
  * 15min quiet-tick cycle of the threshold itself.
  */
 import { describe, it, expect } from 'vitest';
-import { checkHeartbeatCadence, HEARTBEAT_OVERDUE_THRESHOLD_MS } from '../../../scripts/adam-quiet-tick.mjs';
+import { checkHeartbeatCadence, HEARTBEAT_OVERDUE_THRESHOLD_MS, formatHeartbeatCadenceLine } from '../../../scripts/adam-quiet-tick.mjs';
 
 function readBuilder(data) {
   const b = {
@@ -87,5 +87,31 @@ describe('checkHeartbeatCadence', () => {
     const sb = sbWithError();
     const result = await checkHeartbeatCadence(sb, { nowMs: Date.now() });
     expect(result.overdueMin).toBeNull();
+  });
+});
+
+// QF-20260906-942: the gauge and the send gate must never disagree about whether a send is
+// possible. During the 22:00-06:00 ET quiet window the gate WILL drop the send, so the line
+// must switch from an actionable instruction to an informational suppression, matching the
+// established QUIET_TICK_STALL_SUPPRESSED / QUIET_TICK_SMS_SUPPRESSED convention.
+describe('formatHeartbeatCadenceLine', () => {
+  it('returns null when there is no overdue gap (nothing to print)', () => {
+    expect(formatHeartbeatCadenceLine(null, false)).toBeNull();
+    expect(formatHeartbeatCadenceLine(null, true)).toBeNull();
+  });
+
+  it('outside quiet hours: emits the actionable OVERDUE line instructing an immediate send', () => {
+    const line = formatHeartbeatCadenceLine(180, false);
+    expect(line).toContain('QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=180');
+    expect(line).toContain('send NOW');
+    expect(line).not.toContain('SUPPRESSED');
+  });
+
+  it('inside quiet hours: emits the informational SUPPRESSED line, never the actionable one', () => {
+    const line = formatHeartbeatCadenceLine(180, true);
+    expect(line).toContain('QUIET_TICK_HEARTBEAT_SUPPRESSED=adam gapMin=180');
+    expect(line).toContain('22:00-06:00 ET quiet window');
+    expect(line).not.toContain('send NOW');
+    expect(line).not.toContain('QUIET_TICK_HEARTBEAT_OVERDUE');
   });
 });
