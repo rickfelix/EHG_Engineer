@@ -48,7 +48,8 @@ export const TASK_WRITABLE = Object.freeze(['effort_grade', 'est_minutes', 'prop
 export const ENVELOPE_KEYS = Object.freeze(['producer', 'run_id', 'produced_at', 'et_date', 'model_used', 'tokens_in', 'tokens_out', 'counts', 'items', 'tasks', 'content_hash']);
 export const RUN_COUNT_KEYS = Object.freeze(['classified', 'needs_you', 'borderline', 'graded', 'opus_rejudged', 'sample']);
 const CLASS_RE = /^[a-z][a-z0-9_-]{0,39}$/;
-const INTENT_RE = /^(archive|unarchive|label:[A-Za-z0-9_-]{1,64})$/;
+// unarchive is a chairman verb owned by gmail-act.mjs (which stamps action_taken_at itself); the feeder cannot execute it
+const INTENT_RE = /^(archive|label:[A-Za-z0-9_-]{1,64})$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Pure: the hash the runner writes and this script recomputes — sha256 over canonicalJson(envelope minus content_hash). */
