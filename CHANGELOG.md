@@ -305,6 +305,12 @@
 - **Repoints 2 code sites that were silently writing/reading dropped or renamed columns** - SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-E-E
   - `server/routes/feedback.js` used `legacy_id` (5 sites) where the live schema now has `sd_key`; `server/routes/stage24.js` used `stage_number` where the live schema now has `lifecycle_stage`. Both are pure code repoints, live now, no migration required.
 
+- **Michael's morning brief now assembles, renders, and serves itself with no Claude session required** - SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-E
+  - `lib/michael/brief-model.mjs` is the one typed contract (`michael_brief_runs.data_json`, spec §6 schema 2) every writer goes through; `validateBriefData` refuses a missing `frontPage` key, a wrong schema number, or any unknown top-level key at the write boundary.
+  - `scripts/michael/brief-assemble.mjs`, registered as `FEEDERS`' seventh entry (GHA venue, 05:15-06:00 ET), gates on child D's `assembleReadiness` and alone produces a complete, rendered, verified brief of record by 05:45 ET whether or not the seat ever wakes. `lib/michael/render-brief.js` ports the (no-longer-present-in-repo) HTML renderer with five self-checks — doctype, closing tag, today's long date, zero template tokens, zero NUL bytes — `verified` is true only when all five pass.
+  - `scripts/michael/brief-finalize.mjs` (seat verb) additively overlays overnight enrichment, re-rendering and re-verifying before stamping `enriched_at` — never on a failing render. `server/routes/michael.js` gains `GET /brief/latest` and `/brief/:date`, content-negotiated HTML or JSON, behind the existing `requireAuth`+`requireAdminRole` mount.
+  - The Drive-doc copy (`scripts/michael/brief-doc.mjs`) was corrected at LEAD from the originally-scoped host venue to its own GHA workflow (`michael-brief-doc-cron.yml`) after VALIDATION traced `GOOGLE_SERVICE_ACCOUNT_JSON` to a GHA-only repo secret unrelated to the chairman's host-only OAuth grant — the original design would have been dead by construction. Reuses the daily-review team's `runPreShipGate`/`createBriefDoc` unmodified; a dedicated wiring test cross-checks both workflow files so the split can't silently regress.
+
 ## 2026-09-05
 
 ### Bugfix
