@@ -49,7 +49,7 @@ function mkSb({ parent, siblings }) {
       const q = {
         select() { return q; },
         or() { return q; },
-        eq() { return isParentCall ? q : Promise.resolve({ data: siblings, error: null }); },
+        eq() { return isParentCall ? q : { limit: () => Promise.resolve({ data: siblings, error: null }) }; },
         maybeSingle() { return Promise.resolve({ data: parent, error: null }); },
       };
       return q;
