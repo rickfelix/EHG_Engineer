@@ -185,10 +185,20 @@ function isSameTurnClaimEnabled() {
  * holding NO active claim right now. A worker that still holds a claim must finish it or hand it
  * off explicitly (the wind-down handshake) — this function must never fire for that population,
  * or a finisher could grab a SECOND SD while still sitting on an unfinished first one.
- * @param {{ hasActiveClaim?: boolean, workerShaped?: boolean }} args
+ *
+ * database-agent review (post QF-20260907-596): claimSurfaceUnreadable (a getMyClaims read error
+ * or thrown exception, distinct from a clean "holds nothing" result) ALSO refuses the attempt,
+ * matching lib/checkin/steps/resume.cjs:56-62's own handling of the identical signal (halt the
+ * ladder on error rather than reclassify the seat). hasActiveClaim itself stays fail-OPEN (false
+ * on an unreadable surface) for every OTHER consumer of this same value (shouldRemind's worker
+ * gate, shouldParkRecoverable) — those must never trap a claim-less interactive operator on a
+ * transient DB hiccup. Only claim-ACQUISITION needs the opposite (fail-closed) direction; folding
+ * that into hasActiveClaim itself would have fixed one door by opening the other.
+ * @param {{ hasActiveClaim?: boolean, workerShaped?: boolean, claimSurfaceUnreadable?: boolean }} args
  * @returns {boolean}
  */
-function shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped } = {}) {
+function shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped, claimSurfaceUnreadable } = {}) {
+  if (claimSurfaceUnreadable) return false;
   return Boolean(workerShaped) && !hasActiveClaim;
 }
 
@@ -641,21 +651,26 @@ const TELEMETRY_RESERVE_MS = 2500;
  * Uses the canonical both-kinds ownership predicate (lib/claim/get-my-claims.cjs) instead of
  * hand-rolling a second one-kind reader.
  *
- * FAILS CLOSED (assume a claim exists) on a read error — deliberately the OPPOSITE direction from
- * this function's own name. A database-agent review of the merged fix flagged this: unlike the
- * generic reminder path (genuinely safe to fail open, since a false negative there just skips an
- * optional park), this value ALSO gates shouldAttemptSameTurnClaim's `!hasActiveClaim` check below
- * — reporting false on an unreadable claim state would fire the same-turn-claim attempt on a
- * session that may actually hold a claim, the exact symptom this QF fixes, via a different door.
+ * TWO SEPARATE SIGNALS, deliberately not folded into one boolean (database-agent review, second
+ * pass): `hasActiveClaim` stays FAIL-OPEN (false) on a read error — this value ALSO feeds
+ * shouldRemind's worker gate and shouldParkRecoverable, both of which must never trap a claim-
+ * less interactive operator on a transient DB hiccup ("a claim-less interactive operator ends
+ * most turns unarmed by design"). `unreadable` surfaces the SAME error as its own flag, consumed
+ * ONLY by shouldAttemptSameTurnClaim (the one consumer that genuinely needs the opposite, fail-
+ * CLOSED direction — never acquire a claim on evidence you couldn't actually read), mirroring
+ * lib/checkin/steps/resume.cjs:56-62's own handling of the identical getMyClaims error signal.
+ * An earlier revision of this function folded both into a single fail-closed boolean, which fixed
+ * the claim-acquisition door but opened the block/park door: a transient DB error would make a
+ * genuinely claim-less interactive operator worker-shaped and blockable.
  * @param {object} supabase - injected client, never a module singleton
  * @param {string} sessionId
- * @returns {Promise<boolean>}
+ * @returns {Promise<{hasActiveClaim: boolean, unreadable: boolean}>}
  */
 async function computeHasActiveClaim(supabase, sessionId) {
   try {
     const { getMyClaims } = require('../../lib/claim/get-my-claims.cjs');
     const { claims, error } = await getMyClaims(supabase, sessionId);
-    if (error) return true; // unreadable claim state must never look claim-less
+    if (error) return { hasActiveClaim: false, unreadable: true };
     // Matches the ORIGINAL (SD-only) semantics exactly for SD claims: the row's mere existence
     // under this session's claiming_session_id IS the ownership signal, no status filter — SD
     // status vocabulary ('draft', 'active', 'pending_approval', ...) doesn't map to a simple
@@ -663,9 +678,10 @@ async function computeHasActiveClaim(supabase, sessionId) {
     // completion clears claiming_session_id (scripts/modules/complete-quick-fix/orchestrator.js),
     // but a terminal-but-still-claimed row is transiently reachable between completion and the
     // stale-session-sweep's dedicated terminal-QF clearing pass — cheap insurance against that gap.
-    return claims.some((c) => (c.kind === 'QF' ? c.status === 'open' || c.status === 'in_progress' : true));
+    const hasActiveClaim = claims.some((c) => (c.kind === 'QF' ? c.status === 'open' || c.status === 'in_progress' : true));
+    return { hasActiveClaim, unreadable: false };
   } catch {
-    return true; // fail CLOSED: an unreadable claim state must never look claim-less
+    return { hasActiveClaim: false, unreadable: true }; // fail-open for the block/park path
   }
 }
 
@@ -703,7 +719,7 @@ async function main() {
     if (error) { return shutdown(); }            // DB error — fail-open
 
     const loopState = data ? data.loop_state : null;
-    const hasActiveClaim = await computeHasActiveClaim(supabase, sessionId);
+    const { hasActiveClaim, unreadable: claimSurfaceUnreadable } = await computeHasActiveClaim(supabase, sessionId);
 
     // ALLOW-PATH probe (SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001): did this session announce a
     // wind-down via /signal recently? session_coordination.sender_session = this session, and the
@@ -827,7 +843,7 @@ async function main() {
       // claim on the SECOND stop this turn, matching shouldRemind's existing stopHookActive
       // exemption. This bounds this path to at most one block per turn regardless of whether some
       // future claim predicate again under-reports a legitimately-held claim.
-      if (!stopHookActive && isSameTurnClaimEnabled() && shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped })) {
+      if (!stopHookActive && isSameTurnClaimEnabled() && shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped, claimSurfaceUnreadable })) {
         const claimTimeoutMs = Math.max(0, remainingBudgetMs() - TELEMETRY_RESERVE_MS);
         const { outcome, key, resolution } = await attemptSameTurnNextClaim({
           resolveCheckinFn: require('../worker-checkin.cjs').resolveCheckin,

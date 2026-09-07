@@ -33,33 +33,39 @@ const claimStub = (sd = [], qf = [], errs = {}) => ({
 
 describe('computeHasActiveClaim (QF-20260907-596 — the regression this QF fixes)', () => {
   it('is true for a QF-only holder — the exact bug: previously always false', async () => {
-    expect(await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'in_progress' }]), 'me')).toBe(true);
+    const r = await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'in_progress' }]), 'me');
+    expect(r).toEqual({ hasActiveClaim: true, unreadable: false });
   });
 
   it('is true for an SD-only holder (unchanged behavior)', async () => {
-    expect(await computeHasActiveClaim(claimStub([{ sd_key: 'SD-A', status: 'active' }], []), 'me')).toBe(true);
+    const r = await computeHasActiveClaim(claimStub([{ sd_key: 'SD-A', status: 'active' }], []), 'me');
+    expect(r).toEqual({ hasActiveClaim: true, unreadable: false });
   });
 
   it('is false for a genuinely claim-less session', async () => {
-    expect(await computeHasActiveClaim(claimStub([], []), 'me')).toBe(false);
+    const r = await computeHasActiveClaim(claimStub([], []), 'me');
+    expect(r).toEqual({ hasActiveClaim: false, unreadable: false });
   });
 
   it('is false for a QF held in a terminal status (completed/cancelled)', async () => {
-    expect(await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'completed' }]), 'me')).toBe(false);
+    const r = await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'completed' }]), 'me');
+    expect(r).toEqual({ hasActiveClaim: false, unreadable: false });
   });
 
-  // database-agent review finding (post-merge follow-up): the OPPOSITE fail direction from a
-  // bare try/catch is required here. This value gates shouldAttemptSameTurnClaim's
-  // !hasActiveClaim check, so reporting false on an unreadable claim state would fire the
-  // same-turn-claim attempt on a session that may genuinely hold one -- this QF's own bug,
-  // via a different door.
-  it('fails CLOSED (true) when the underlying client throws — an unreadable state must never look claim-less', async () => {
+  // database-agent review, SECOND pass: a single fail-closed boolean fixes the claim-acquisition
+  // door but opens the block/park door (a transient DB error would make a genuinely claim-less
+  // interactive operator worker-shaped and blockable). hasActiveClaim itself must stay reported
+  // as false (fail-open, unchanged from before this function existed); `unreadable` carries the
+  // SAME error as an independent signal, consumed only by shouldAttemptSameTurnClaim below.
+  it('hasActiveClaim stays FALSE (fail-open) on a thrown exception; unreadable is TRUE', async () => {
     const throwing = { from: () => { throw new Error('boom'); } };
-    expect(await computeHasActiveClaim(throwing, 'me')).toBe(true);
+    const r = await computeHasActiveClaim(throwing, 'me');
+    expect(r).toEqual({ hasActiveClaim: false, unreadable: true });
   });
 
-  it('fails CLOSED (true) when getMyClaims reports a partial-read error rather than a clean empty result', async () => {
-    expect(await computeHasActiveClaim(claimStub([], [], { qf: 'network blip' }), 'me')).toBe(true);
+  it('hasActiveClaim stays FALSE (fail-open) on a getMyClaims partial-read error; unreadable is TRUE', async () => {
+    const r = await computeHasActiveClaim(claimStub([], [], { qf: 'network blip' }), 'me');
+    expect(r).toEqual({ hasActiveClaim: false, unreadable: true });
   });
 });
 
@@ -107,6 +113,19 @@ describe('shouldAttemptSameTurnClaim (SD-LEO-INFRA-WORKER-WIND-DOWN-001)', () =>
   it('is false on empty/undefined input (fail-closed on the attempt, not the park)', () => {
     expect(shouldAttemptSameTurnClaim({})).toBe(false);
     expect(shouldAttemptSameTurnClaim()).toBe(false);
+  });
+
+  // database-agent review, SECOND pass: claimSurfaceUnreadable is an INDEPENDENT refusal, not
+  // folded into hasActiveClaim (which must stay fail-open for shouldRemind/shouldParkRecoverable).
+  // Never acquire a claim on evidence you couldn't actually read, mirroring
+  // lib/checkin/steps/resume.cjs:56-62's own handling of a getMyClaims read error.
+  it('never attempts when the claim surface was unreadable, even if hasActiveClaim reads false (fail-open)', () => {
+    expect(shouldAttemptSameTurnClaim({ hasActiveClaim: false, workerShaped: true, claimSurfaceUnreadable: true })).toBe(false);
+  });
+
+  it('claimSurfaceUnreadable refuses even when every other input would otherwise attempt', () => {
+    expect(shouldAttemptSameTurnClaim({ hasActiveClaim: false, workerShaped: true, claimSurfaceUnreadable: true })).toBe(false);
+    expect(shouldAttemptSameTurnClaim({ hasActiveClaim: false, workerShaped: true, claimSurfaceUnreadable: false })).toBe(true);
   });
 });
 
