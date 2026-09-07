@@ -118,6 +118,26 @@ describe('createActivationInvariantGate — triggered SD missing pieces', () => 
     expect(result.issues[0]).toMatch(/No TESTING sub-agent evidence/);
   });
 
+  it('QF-20260907-644: remediation names the CI gap for a db-tier activation test with no evidence', async () => {
+    const dbTierTestPath = 'tests/database/chairman-decision-queue-null-safe.db.test.js';
+    expect(fs.existsSync(path.resolve(ROOT_DIR, dbTierTestPath))).toBe(true);
+    const prd = { id: 'prd-uuid', sd_id: triggeredSD.id, activation_test_id: dbTierTestPath };
+    const gate = createActivationInvariantGate(mockSupabase(prd, null), null);
+    const result = await gate.validator({ sd: triggeredSD, sdId: triggeredSD.id });
+    expect(result.passed).toBe(false);
+    expect(result.details.remediation).toMatch(/QF-20260907-644/);
+    expect(result.details.remediation).toMatch(/VITEST_DB_ALLOW_REF/);
+  });
+
+  it('does NOT add the db-tier note for a non-db-tier activation test', async () => {
+    const fakeTestPath = 'scripts/modules/activation-invariant/trigger-evaluator.test.js';
+    const prd = { id: 'prd-uuid', sd_id: triggeredSD.id, activation_test_id: fakeTestPath };
+    const gate = createActivationInvariantGate(mockSupabase(prd, null), null);
+    const result = await gate.validator({ sd: triggeredSD, sdId: triggeredSD.id });
+    expect(result.passed).toBe(false);
+    expect(result.details.remediation).not.toMatch(/QF-20260907-644/);
+  });
+
   it('fails when TESTING evidence row exists but verdict != PASS', async () => {
     const fakeTestPath = 'scripts/modules/activation-invariant/trigger-evaluator.test.js';
     const prd = { id: 'prd-uuid', sd_id: triggeredSD.id, activation_test_id: fakeTestPath };
