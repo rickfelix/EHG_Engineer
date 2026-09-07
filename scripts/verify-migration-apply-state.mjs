@@ -646,11 +646,9 @@ function daysSinceToken(token, now) {
  */
 export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date(), liveFunctionBodies = new Map()) {
   const survivingByFile = new Map();
-  for (const { cls, name, file, body } of expected.values()) {
+  for (const { cls, name, file } of expected.values()) {
     if (!survivingByFile.has(file)) survivingByFile.set(file, []);
-    // body carried through (FR-3) so the mismatch check below can see a function's declared
-    // body -- every other consumer of this array only ever reads cls/name, so this is additive.
-    survivingByFile.get(file).push({ cls, name, body });
+    survivingByFile.get(file).push({ cls, name });
   }
   return orderedFiles.map((file) => {
     const facts = perFile.get(file) || { creates: [], drops: [] };
@@ -674,12 +672,21 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
     // declares is a DIFFERENT failure mode than "does not exist" (missing, above) -- a stale
     // prior version (or an aborted REPLACE) can otherwise read as fully APPLIED. Scoped to
     // objects already excluded from `missing` (name-exists) so this never double-counts.
+    //
+    // SECURITY review (EXEC evidence): body text must never enter `relevant`/`missing`/`result`
+    // (they feed --json output and downstream consumers) -- looked up here, ad hoc, from this
+    // file's OWN raw creates instead, so only the (harmless) function NAME ever escapes below.
+    const fileFuncBodies = new Map(
+      (facts.creates || [])
+        .filter((c) => c.cls === 'function' && c.body != null)
+        .map((c) => [c.name, c.body])
+    );
     const bodyMismatches = relevant.filter((o) => (
       o.cls === 'function' &&
-      o.body != null &&
+      fileFuncBodies.has(o.name) &&
       live.has(`function:${o.name}`) &&
       liveFunctionBodies.has(o.name) &&
-      normalizeSqlBody(o.body) !== normalizeSqlBody(liveFunctionBodies.get(o.name))
+      normalizeSqlBody(fileFuncBodies.get(o.name)) !== normalizeSqlBody(liveFunctionBodies.get(o.name))
     ));
     if (bodyMismatches.length && status === 'APPLIED') status = 'BODY_MISMATCH';
     const result = { file, status, missing, objects: relevant.length };
@@ -689,7 +696,12 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
     // gap — CEREMONY_PENDING says so explicitly and carries age_days so staleness is still
     // visible. APPLIED/NO_DDL chairman-gated files are unaffected; every non-chairman-gated
     // file keeps the four-value vocabulary above completely unchanged.
-    if (status !== 'APPLIED' && file.startsWith(CHAIRMAN_GATED_PREFIX)) {
+    //
+    // SECURITY review (EXEC evidence, MEDIUM): a BODY_MISMATCH-only file's objects ARE live --
+    // relabeling it CEREMONY_PENDING would falsely claim a chairman apply ceremony is still
+    // outstanding for something already applied. Excluded so a body-drifted chairman-gated
+    // function stays BODY_MISMATCH (the true state), never masquerading as a pending apply.
+    if (status !== 'APPLIED' && status !== 'BODY_MISMATCH' && file.startsWith(CHAIRMAN_GATED_PREFIX)) {
       result.status = 'CEREMONY_PENDING';
       const token = migrationDateToken(file);
       if (token) result.age_days = daysSinceToken(token, now);
@@ -717,9 +729,17 @@ export function summarizeResults(results, { scanned, excludedDown = 0, droppedLa
     dropped_later: droppedLater,
   };
   const gaps = results
-    .filter((r) => r.status === 'PARTIAL' || r.status === 'NOT_APPLIED' || r.status === 'CEREMONY_PENDING' || r.status === 'BODY_MISMATCH')
+    .filter((r) => r.status === 'PARTIAL' || r.status === 'NOT_APPLIED' || r.status === 'CEREMONY_PENDING')
     .reverse(); // newest first
-  return { summary, gaps };
+  // SECURITY review (EXEC evidence, HIGH): BODY_MISMATCH is deliberately NOT part of `gaps`.
+  // Every existing `gaps` consumer (partitionBlockingFailSet, seed-migration-dispositions.mjs's
+  // Rule A) is built around "object not yet live" -- a body-drifted function violates that (it
+  // EXISTS live, just diverged), and mixing it in was measured seeding a PERMANENT "blocked on
+  // chairman sign-off" disposition for functions that are, in fact, already applied. Kept in its
+  // own array; advisory-only, surfaced by its own report line and --json key, touches no
+  // existing gap/disposition/ledger machinery.
+  const bodyMismatches = results.filter((r) => r.status === 'BODY_MISMATCH').reverse();
+  return { summary, gaps, bodyMismatches };
 }
 
 /**
@@ -731,24 +751,16 @@ export function summarizeResults(results, { scanned, excludedDown = 0, droppedLa
  * are untouched by this split; only the --strict exit + GAPS/PASS marker + breakage alert
  * consume blockingFailSet.
  *
- * SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001: BODY_MISMATCH joins CEREMONY_PENDING in the
- * non-blocking subset, on the same rationale the PRD's own risk mitigation calls for ("framed as
- * needs review, not an automatic hard failure of downstream gates"). Empirically measured against
- * the live corpus at ship time: 44 pre-existing mismatches (9 of them RECENT, i.e. would already
- * be in the --strict/--recent-only fail set today) -- a live investigation of one (check_gate_
- * weights / create-gate-integrity-view.sql) confirmed a GENUINE stale body, but the sheer volume
- * this first rollout surfaces, plus this file's own pre-existing bare-name-only function identity
- * (no arg-signature disambiguation -- overloaded functions can already collide on plain existence
- * checks, before this SD), means flipping straight to blocking would turn --strict CI red the same
- * day this ships, for a backlog with no disposition/ledger-suppression path built for it yet. Stays
- * fully visible in gaps/summary/--json; promote to blocking once such a workflow exists (same
- * pattern CEREMONY_PENDING already established).
+ * SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001: BODY_MISMATCH never reaches this function at all --
+ * it is deliberately excluded from `gaps` at the source (summarizeResults()), not filtered out
+ * here, because `failSet` (recentGaps/activeGaps) already omits it. See that function's own
+ * comment for why (a body-drifted function IS live, so it must never enter the same
+ * "not-yet-applied" pipeline this split and its downstream disposition-ledger consumer assume).
  */
 export function partitionBlockingFailSet(failSet) {
   return {
     ceremonyPendingFailSet: failSet.filter((g) => g.status === 'CEREMONY_PENDING'),
-    bodyMismatchFailSet: failSet.filter((g) => g.status === 'BODY_MISMATCH'),
-    blockingFailSet: failSet.filter((g) => g.status !== 'CEREMONY_PENDING' && g.status !== 'BODY_MISMATCH'),
+    blockingFailSet: failSet.filter((g) => g.status !== 'CEREMONY_PENDING'),
   };
 }
 
@@ -892,7 +904,7 @@ async function main() {
   }
 
   const results = classifyFiles(forward, expected, perFile, live, undefined, liveFunctionBodies);
-  const { summary, gaps } = summarizeResults(results, {
+  const { summary, gaps, bodyMismatches } = summarizeResults(results, {
     scanned: forward.length, excludedDown: down.length, droppedLater: droppedLater.length,
   });
 
@@ -906,7 +918,7 @@ async function main() {
   const legacyGaps = activeGaps.filter((g) => !isRecent(g.file, cutoff));
   const failSet = recentOnly ? recentGaps : activeGaps;
 
-  const { ceremonyPendingFailSet, bodyMismatchFailSet, blockingFailSet } = partitionBlockingFailSet(failSet);
+  const { ceremonyPendingFailSet, blockingFailSet } = partitionBlockingFailSet(failSet);
 
   // FR-3: the machine-checkable definition of done. 117 of the 126 gap files sit behind
   // RETIRED_BEFORE and can NEVER turn the gate red, so "every file has a decision" is
@@ -944,7 +956,7 @@ async function main() {
     // first-class array, reusing the SAME {id, twin, verdict} shape the stderr print already
     // uses -- no new classification logic. See scripts/migration-gap-summary.mjs for the
     // genuine downstream consumer (not merely a cosmetic payload addition).
-    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, dispositions, excluded, cutoff, recentOnly, droppedLater, files: results }, null, 2));
+    console.log(JSON.stringify({ summary, gaps, bodyMismatches, recentGaps, legacyGaps, dispositions, excluded, cutoff, recentOnly, droppedLater, files: results }, null, 2));
   } else {
     console.log('MIGRATION APPLY-STATE REPORT (advisory, read-only)');
     console.log(`  ordering: legacy non-dated files first (lexical), then date-prefixed (chronological)`);
@@ -1034,8 +1046,11 @@ async function main() {
     if (asJson) console.error(ceremonyWarning);
     else console.log(ceremonyWarning);
   }
-  if (bodyMismatchFailSet.length) {
-    const bodyMismatchWarning = `::warning::${bodyMismatchFailSet.length} migration(s) have a live function whose body diverges from the file (non-blocking, needs a human look): ${bodyMismatchFailSet.map((g) => printableFile(g.file)).join(', ')}`;
+  if (bodyMismatches.length) {
+    // Never gated by --recent-only/ledger suppression (unlike ceremonyWarning above): BODY_MISMATCH
+    // touches neither the disposition ledger nor the recent/legacy split (see summarizeResults()) --
+    // it is a wholly separate, advisory-only concern with no suppression mechanism of its own yet.
+    const bodyMismatchWarning = `::warning::${bodyMismatches.length} migration(s) have a live function whose body diverges from the file (non-blocking, needs a human look): ${bodyMismatches.map((g) => printableFile(g.file)).join(', ')}`;
     if (asJson) console.error(bodyMismatchWarning);
     else console.log(bodyMismatchWarning);
   }

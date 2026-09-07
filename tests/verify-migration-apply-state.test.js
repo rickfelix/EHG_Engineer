@@ -346,17 +346,38 @@ describe('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 — function body-aware classi
     expect(row.status).toBe('APPLIED');
   });
 
-  it('BODY_MISMATCH feeds summarizeResults() gaps and its own summary counter', () => {
+  it('SECURITY review (HIGH): BODY_MISMATCH feeds its own bodyMismatches array and summary counter, but NEVER `gaps` -- every gaps consumer (partitionBlockingFailSet, the disposition-ledger seeder) assumes "not yet live", which a body-drifted function violates', () => {
     const sql = 'CREATE OR REPLACE FUNCTION fn_stale() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN \'new\'; END $$;';
     const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
     const { expected, perFile } = foldLifecycle(ff);
     const live = new Set(['function:fn_stale']);
     const liveFunctionBodies = new Map([['fn_stale', "BEGIN RETURN 'old'; END"]]);
     const results = classifyFiles(['m.sql'], expected, perFile, live, undefined, liveFunctionBodies);
-    const { summary, gaps } = summarizeResults(results, { scanned: 1 });
+    const { summary, gaps, bodyMismatches } = summarizeResults(results, { scanned: 1 });
     expect(summary.body_mismatch).toBe(1);
-    expect(gaps).toHaveLength(1);
-    expect(gaps[0].status).toBe('BODY_MISMATCH');
+    expect(gaps).toHaveLength(0);
+    expect(bodyMismatches).toHaveLength(1);
+    expect(bodyMismatches[0].status).toBe('BODY_MISMATCH');
+  });
+
+  it('SECURITY review (MEDIUM): a chairman-gated file whose ONLY problem is a body mismatch stays BODY_MISMATCH, never relabeled CEREMONY_PENDING (its objects ARE live -- no apply ceremony is actually outstanding)', () => {
+    const sql = 'CREATE OR REPLACE FUNCTION fn_stale() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN \'new\'; END $$;';
+    const ff = [{ file: 'database/chairman-gated/20260907_gated_fn.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['function:fn_stale']);
+    const liveFunctionBodies = new Map([['fn_stale', "BEGIN RETURN 'old'; END"]]);
+    const [row] = classifyFiles(['database/chairman-gated/20260907_gated_fn.sql'], expected, perFile, live, undefined, liveFunctionBodies);
+    expect(row.status).toBe('BODY_MISMATCH');
+  });
+
+  it('SECURITY review (LOW): raw function body text never leaks into result.missing (only the function name, via body_mismatches)', () => {
+    const sql = 'CREATE OR REPLACE FUNCTION fn_stale() RETURNS void LANGUAGE plpgsql AS $$ SECRET_LOOKING_TEXT_MARKER END $$;';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    // absent live entirely -- exercises the NOT_APPLIED path, where `missing` actually gets populated
+    const [row] = classifyFiles(['m.sql'], expected, perFile, new Set(), undefined, new Map());
+    expect(JSON.stringify(row)).not.toContain('SECRET_LOOKING_TEXT_MARKER');
+    expect(row.missing).toEqual([{ cls: 'function', name: 'fn_stale' }]);
   });
 });
 
@@ -432,22 +453,11 @@ describe('partitionBlockingFailSet — CEREMONY_PENDING warns, does not block (Q
     expect(blockingFailSet).toHaveLength(1);
   });
 
-  it('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001: BODY_MISMATCH warns, does not block, like CEREMONY_PENDING', () => {
-    const failSet = [{ file: '20260824_stale_fn.sql', status: 'BODY_MISMATCH', missing: [], body_mismatches: ['f'] }];
-    const { bodyMismatchFailSet, blockingFailSet } = partitionBlockingFailSet(failSet);
-    expect(blockingFailSet).toHaveLength(0);
-    expect(bodyMismatchFailSet).toHaveLength(1);
-  });
-
-  it('a MIX of CEREMONY_PENDING, BODY_MISMATCH and a real gap: only the real gap blocks', () => {
-    const failSet = [
-      { file: 'database/chairman-gated/20260824_gated.sql', status: 'CEREMONY_PENDING', missing: [] },
-      { file: '20260824_stale_fn.sql', status: 'BODY_MISMATCH', missing: [], body_mismatches: ['f'] },
-      { file: '20260824_ordinary.sql', status: 'NOT_APPLIED', missing: [] },
-    ];
-    const { blockingFailSet } = partitionBlockingFailSet(failSet);
-    expect(blockingFailSet.map((g) => g.file)).toEqual(['20260824_ordinary.sql']);
-  });
+  // SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001: no partitionBlockingFailSet test for BODY_MISMATCH
+  // here -- per the SECURITY review fix, a BODY_MISMATCH result never reaches `gaps`/`failSet` in
+  // the first place (see summarizeResults()), so this function never sees one in practice. That
+  // "never enters the gaps pipeline" invariant is covered directly on summarizeResults() instead
+  // (see the "function body-aware classification" describe block above).
 });
 
 // SD-LEO-INFRA-MIGRATION-DEPLOY-DRIFT-001 FR-2/FR-3: recent-vs-legacy classifier.
