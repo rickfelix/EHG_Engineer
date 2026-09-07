@@ -65,6 +65,19 @@ async function drainInbox(supabase, sessionId, { quiet = false, asJson = false }
   const rows = (allRows || []).filter((r) => isMichaelInboxRow(r, recognizedKinds));
   const orphaned = (allRows || []).filter((r) => isOrphanedMichaelRow(r, recognizedKinds));
 
+  // SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001 FR-1: stamp read_at on every recognized-kind row so it
+  // does not resurface on the next drain, mirroring solomon-advisory.cjs's exact pattern.
+  // Orphaned rows are deliberately NEVER stamped -- isOrphanedMichaelRow's own contract is
+  // "surface, never silently consume", so they must stay visible until a human resolves them.
+  if (rows.length > 0) {
+    const { error: stampError } = await supabase
+      .from('session_coordination')
+      .update({ read_at: new Date().toISOString() })
+      .in('id', rows.map((r) => r.id))
+      .is('read_at', null);
+    if (stampError) console.error('ERROR: failed to stamp read_at on drained rows:', stampError.message);
+  }
+
   if (asJson) {
     console.log(JSON.stringify({ ok: true, rows: rows.length, orphaned: orphaned.length }));
     return { rows, orphaned };
