@@ -216,4 +216,122 @@ describe('Acceptance Criteria Traceability Gate', () => {
 
     expect(result.details.total_criteria).toBe(1);
   });
+
+  // SECURITY sub-agent review (2026-09-07): the two-strategy fault-interaction matrix was
+  // untested beyond the single-strategy case above. These three cover the remaining
+  // permutations of { primary fault | primary clean-absent } x { secondary fault | secondary
+  // clean-absent } that the dual-fault-flag predicate (line ~204-206) actually branches on.
+
+  it('primary FAULTS, secondary (metadata-key) cleanly finds no doc — refuses (cannot determine)', async () => {
+    let callCount = 0;
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockImplementation(() => {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              or: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    single: vi.fn().mockRejectedValue(new Error('bad column')),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'no rows' } }),
+            }),
+          };
+        }),
+      }),
+    };
+
+    const gate = createAcceptanceCriteriaTraceabilityGate(supabase);
+    const result = await gate.validator({
+      sd: { id: 'id', sd_key: 'KEY', metadata: { vision_key: 'V-META' } },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+    expect(result.issues.join(' ')).toMatch(/query fault, not an absent vision doc/);
+  });
+
+  it('primary cleanly finds no doc, secondary (metadata-key) FAULTS — refuses (cannot determine)', async () => {
+    let callCount = 0;
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockImplementation(() => {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              or: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'no rows' } }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockRejectedValue(new Error('bad column')),
+            }),
+          };
+        }),
+      }),
+    };
+
+    const gate = createAcceptanceCriteriaTraceabilityGate(supabase);
+    const result = await gate.validator({
+      sd: { id: 'id', sd_key: 'KEY', metadata: { vision_key: 'V-META' } },
+    });
+
+    // This is the case the comment (pre-fix) inaccurately claimed would "stand as a real
+    // answer" -- the code's actual (and correct) AND-rule refuses here too, since a clean
+    // absence from ONE strategy does not excuse an unanswered fault on the OTHER.
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+    expect(result.issues.join(' ')).toMatch(/query fault, not an absent vision doc/);
+  });
+
+  it('primary FAULTS, secondary (metadata-key) returns real data — proceeds on the data, does not refuse', async () => {
+    const visionDoc = {
+      content: '# V\n## Success Criteria\n1. Test criterion about validation gates and their operation',
+      vision_key: 'V-META',
+    };
+    let callCount = 0;
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockImplementation(() => {
+          callCount++;
+          if (callCount === 1) {
+            return {
+              or: vi.fn().mockReturnValue({
+                order: vi.fn().mockReturnValue({
+                  limit: vi.fn().mockReturnValue({
+                    single: vi.fn().mockRejectedValue(new Error('bad column')),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: visionDoc, error: null }),
+            }),
+          };
+        }),
+      }),
+    };
+
+    const gate = createAcceptanceCriteriaTraceabilityGate(supabase);
+    const result = await gate.validator({
+      sd: { id: 'id', sd_key: 'KEY', metadata: { vision_key: 'V-META' } },
+    });
+
+    expect(result.details.total_criteria).toBe(1);
+  });
 });
