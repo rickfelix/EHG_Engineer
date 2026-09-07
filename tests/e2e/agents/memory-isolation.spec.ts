@@ -16,6 +16,7 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -41,25 +42,23 @@ test.describe('Memory Isolation E2E Tests (SOVEREIGN SEAL v2.9.0)', () => {
     if (company) testCompanyId = company.id;
 
     // Create TWO ventures to test isolation (MedSync and FinTrack analogy)
-    const { data: venture1 } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture1 } = await insertGuarded(supabase, 'ventures', {
         name: `MedSync Test Venture ${Date.now()}`,
         company_id: testCompanyId,
-        current_lifecycle_stage: 1
-      })
+        current_lifecycle_stage: 1,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/memory-isolation.spec.ts' })
       .select('id')
       .single();
 
     if (venture1) testVentureId1 = venture1.id;
 
-    const { data: venture2 } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture2 } = await insertGuarded(supabase, 'ventures', {
         name: `FinTrack Test Venture ${Date.now()}`,
         company_id: testCompanyId,
-        current_lifecycle_stage: 1
-      })
+        current_lifecycle_stage: 1,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/memory-isolation.spec.ts' })
       .select('id')
       .single();
 
