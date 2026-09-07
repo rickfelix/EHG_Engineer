@@ -6,6 +6,7 @@
  */
 
 import { fetchAllPaginated } from '../../../../lib/db/fetch-all-paginated.mjs';
+import { normalizePhaseToken } from '../../../../lib/sub-agent-executor/phase-token.js';
 
 export class HandoffRepository {
   constructor(supabase) {
@@ -196,7 +197,10 @@ export class HandoffRepository {
       .order('created_at', { ascending: false });
 
     if (phase) {
-      query = query.eq('phase', phase);
+      // QF-20260906-403: normalize the query param -- rows are written with a normalized
+      // phase from this point forward, so a caller passing e.g. 'exec-to-plan' must still
+      // match a row stored as 'EXEC_TO_PLAN'.
+      query = query.eq('phase', normalizePhaseToken(phase));
     }
 
     const { data, error } = await query;
