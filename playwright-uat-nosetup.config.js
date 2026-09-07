@@ -1,4 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
+import { assertPlaywrightTargetSafe } from './tests/helpers/e2e-db-target-guard.js';
+
+// SD-LEO-INFRA-E2E-DBTIER-PROD-REF-GUARD-001: refuse to proceed when the resolved target
+// is the production Supabase project ref, before any spec file (or its network calls) loads.
+assertPlaywrightTargetSafe();
 
 export default defineConfig({
   testDir: './tests/uat',
