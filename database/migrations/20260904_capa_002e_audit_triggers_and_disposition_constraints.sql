@@ -74,6 +74,25 @@
 --      fragile against embedded quotes/apostrophes in arbitrary historical
 --      free text.
 --
+-- QF-20260904-757 (added between authoring and apply -- this migration sat behind a
+-- chairman-ceremony apply gate, and both the target population and the writer that
+-- created it kept moving in the interim):
+--   4. lib/quick-fix/status-writer.cjs's reconciler-facing writer
+--      (scripts/reconcile-escalated-completed-sd-quick-fixes.mjs) was itself leaving
+--      disposition NULL on every row it closed (it wrote disposition_reason_code=
+--      'escalated_sd_completed' but never the disposition column of record) -- fixed
+--      in that script directly, but the rows it had ALREADY written this way before the
+--      fix (45 as of 2026-09-07, up from the 1 named specifically below as
+--      QF-20260719-281) still need the same one-time backfill this migration already
+--      does for other buckets. Rule: disposition_reason_code='escalated_sd_completed'
+--      AND disposition IS NULL AND (escalated_to_sd_id IS NOT NULL OR resolution_sd_id
+--      IS NOT NULL) -> 'promoted' (same meaning as the QF-20260719-281 backfill below,
+--      derived instead of named -- this bucket only ever gets ONE honest disposition,
+--      so an explicit rule is not guessing).
+--   5. One additional row (QF-20260905-109) closed with disposition NULL and no
+--      evidence after this migration's original 16-row survey was taken. Added to the
+--      existing no-specific-evidence list below rather than re-surveying from scratch.
+--
 -- Created: 2026-09-04
 
 BEGIN;
@@ -304,7 +323,23 @@ SET disposition = 'promoted',
       ' [BACKFILLED 2026-09-04 SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E]: escalated_to_sd_id and resolution_sd_id were already set (chairman-verbal-authorized escalation, see verification_notes) -- disposition backfilled to match.'
 WHERE id = 'QF-20260719-281' AND status = 'closed' AND disposition IS NULL;
 
--- 3e. Remaining 14 closed/disposition-null rows: no evidence supports a
+-- 3d-2 (QF-20260904-757). Derivation, not a named list: every row the reconciler closed
+-- via disposition_reason_code='escalated_sd_completed' before its own disposition-column
+-- bug was fixed. The reason code plus a set SD-link field are direct evidentiary support
+-- for 'promoted' -- same meaning as QF-20260719-281 immediately above, just reached
+-- programmatically instead of hand-named, since this bucket can grow between migration
+-- authoring and apply (see header note 4).
+UPDATE quick_fixes
+SET disposition = 'promoted',
+    reason = COALESCE(reason, '') ||
+      ' [BACKFILLED 2026-09-04 SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-E / QF-20260904-757]: disposition_reason_code=escalated_sd_completed with an SD link already set -- disposition backfilled to match (reconciler-writer bug, fixed going forward).'
+WHERE status = 'closed'
+  AND disposition IS NULL
+  AND disposition_reason_code = 'escalated_sd_completed'
+  AND (escalated_to_sd_id IS NOT NULL OR resolution_sd_id IS NOT NULL);
+
+-- 3e. Remaining 14 closed/disposition-null rows (plus QF-20260905-109, closed after this
+-- migration's original survey -- see header note 5): no evidence supports a
 -- specific existing enum value (several are "PREMISE REFUTED" or "SUPERSEDED"
 -- outcomes distinct from the 5 existing meanings, some carry no note at all).
 -- Grandfathered honestly rather than guessed. Original reason/verification_notes
@@ -317,7 +352,8 @@ WHERE id IN (
   'QF-20260719-635', 'QF-20260610-257', 'QF-20260611-506', 'QF-20260711-624',
   'QF-20260714-549', 'QF-20260611-977', 'QF-20260719-464', 'QF-20260726-405',
   'QF-20260807-444', 'QF-20260808-403', 'QF-20260903-052', 'QF-20260824-216',
-  'QF-20260824-315', 'QF-20260713-422'
+  'QF-20260824-315', 'QF-20260713-422',
+  'QF-20260905-109'  -- QF-20260904-757: closed 2026-09-05, no reason/verification_notes
 )
 AND status = 'closed' AND disposition IS NULL;
 

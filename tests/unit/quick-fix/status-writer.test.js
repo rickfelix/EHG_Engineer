@@ -234,4 +234,15 @@ describe('transitionRequiresDisposition (pure helper)', () => {
   it('false for a same-status no-op transition', () => {
     expect(transitionRequiresDisposition('open', 'open')).toBe(false);
   });
+
+  it('QF-20260904-757: true entering closed/cancelled from ANY status, not only open', () => {
+    expect(transitionRequiresDisposition('in_progress', 'closed')).toBe(true);
+    expect(transitionRequiresDisposition('in_progress', 'cancelled')).toBe(true);
+    expect(transitionRequiresDisposition('blocked', 'closed')).toBe(true);
+  });
+
+  it('QF-20260904-757: still false entering a non-closed/cancelled status from a non-escalated origin', () => {
+    expect(transitionRequiresDisposition('in_progress', 'open')).toBe(false);
+    expect(transitionRequiresDisposition('in_progress', 'completed')).toBe(false);
+  });
 });
