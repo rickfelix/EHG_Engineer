@@ -12,7 +12,7 @@
  * acceptance criteria ("unit test with one excluded file and one vitest file").
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
 
