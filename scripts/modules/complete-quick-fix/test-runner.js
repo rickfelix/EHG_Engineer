@@ -16,11 +16,16 @@ export const WHOLE_SUITE_UNIT_COMMAND = 'npm run test:unit';
  * vitest-excluded, so a scoped `vitest run` on it false-FAILs ("No test files found") even
  * though it passes under `node --test`. Detected by CONTENT so a real vitest file (which
  * never imports node:test) is never misrouted.
+ *
+ * Anchored to the START of a line (^ + multiline): a real import/require is its own top-level
+ * statement, so this can't match the substring 'node:test' sitting inside a fixture-writing
+ * string literal (own dogfood bug -- test-runner-node-test-detection.test.js's OWN fixture
+ * strings contain that exact text and were misdetected as node:test files before this anchor).
  */
 export function isNodeTestFile(filePath, testDir) {
   try {
     const abs = path.isAbsolute(filePath) ? filePath : path.join(testDir || process.cwd(), filePath);
-    return /from\s+['"]node:test['"]|require\(\s*['"]node:test['"]\s*\)/.test(fs.readFileSync(abs, 'utf8'));
+    return /^\s*import\s.*from\s+['"]node:test['"]|^\s*(?:const|let|var)\s.*require\(\s*['"]node:test['"]\s*\)/m.test(fs.readFileSync(abs, 'utf8'));
   } catch {
     return false;
   }
