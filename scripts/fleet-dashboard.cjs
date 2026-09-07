@@ -1786,6 +1786,25 @@ async function writeSignalReceipts(supabase, coordinatorId, signals) {
 // coordinator-ack-signal.cjs (stamps acknowledged_at). The prior code marked read_at on
 // render AND queried read_at IS NULL — so one filtered/parked render silently lost the
 // signal (high-sev consults were missed). Mirrors the Adam-lane fix (QF-20260621-174).
+// SD-LEO-INFRA-READ-WRITTEN-UNSCOPED-001 (FR-1): stamp read_at = DELIVERED (transport-level
+// "the coordinator rendered it"), but NEVER acknowledged_at — the signal is retired ONLY by
+// coordinator-ack-signal.cjs (ACTIONED). So a filtered/skimmed/parked-cron render can no
+// longer silently hide an unacked signal; it re-surfaces (printInbox's own SELECT gates on
+// acknowledged_at IS NULL) until explicitly acked. Gated on read_at IS NULL so the stamp is
+// idempotent (first-delivery timestamp), matching every other census-cataloged write site
+// (solomon-advisory.cjs, adam-advisory.cjs, michael-inbox.cjs) — previously unconditional, so
+// every render overwrote read_at to now(). Safe: the SELECT above already gates on
+// acknowledged_at, not read_at, so this cannot reopen the drain-on-display RCA
+// (SD-LEO-INFRA-SIGNAL-INBOX-DRAIN-ON-DISPLAY-001) this write's model exists to satisfy.
+async function stampInboxReadAt(client, ids) {
+  if (!ids || ids.length === 0) return;
+  await client
+    .from('session_coordination')
+    .update({ read_at: new Date().toISOString() })
+    .in('id', ids)
+    .is('read_at', null);
+}
+
 async function printInbox() {
   const getActiveCoordinatorId = _getActiveCoordinatorIdForInbox;
 
@@ -1904,16 +1923,9 @@ async function printInbox() {
     ids.push(s.id);
   }
 
-  // Stamp read_at = DELIVERED (transport-level "the coordinator rendered it"), but NEVER
-  // acknowledged_at — the signal is retired ONLY by coordinator-ack-signal.cjs (ACTIONED).
-  // So a filtered/skimmed/parked-cron render can no longer silently hide an unacked signal;
-  // it re-surfaces (SELECT gates on acknowledged_at IS NULL) until explicitly acked.
-  if (ids.length > 0) {
-    await supabase
-      .from('session_coordination')
-      .update({ read_at: new Date().toISOString() })
-      .in('id', ids);
-  }
+  // QF-style write site, extracted for direct unit testing — printInbox itself has no
+  // injectable client (mirrors writeSignalReceipts above, same constraint).
+  await stampInboxReadAt(supabase, ids);
 
   console.log('');
 }
@@ -3428,7 +3440,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate, writeSignalReceipts };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate, writeSignalReceipts, stampInboxReadAt };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.
