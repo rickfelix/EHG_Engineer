@@ -750,15 +750,18 @@ async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, session
     try {
       let q = supabase
         .from('session_coordination')
-        .select('id')
+        .select('id, payload')
         .eq('target_session', originator)
         .eq('payload->>reply_to', String(replyTo));
       const ccMessageKind = payload && payload.message_kind;
       if (ccMessageKind != null) q = q.eq('payload->>message_kind', String(ccMessageKind));
       const ccPartIndex = payload && payload.part_index;
       if (ccPartIndex != null) q = q.eq('payload->>part_index', String(ccPartIndex));
-      const { data: existing } = await q.limit(1);
-      if (Array.isArray(existing) && existing.length > 0) return { inserted: false, originator };
+      // QF-20260904-225: a backpressure_parked row never actually reached the originator,
+      // so it must not count as "already delivered" (mirrors the alreadyAnswered fix below).
+      const { data: existingRaw } = await q.limit(20);
+      const existing = (Array.isArray(existingRaw) ? existingRaw : []).filter((r) => !(r.payload && r.payload.backpressure_parked === true));
+      if (existing.length > 0) return { inserted: false, originator };
     } catch { /* fail-open: attempt the CC */ }
     const { error: ccErr } = await insertRow(
       supabase,
