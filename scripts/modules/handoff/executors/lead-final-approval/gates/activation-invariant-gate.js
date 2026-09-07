@@ -158,6 +158,13 @@ function notTriggered(triggerResult) {
   };
 }
 
+// A db-tier test (tests/database/*.db.test.js, gated by tests/helpers/db-tier-gate.js) never
+// runs against a designated non-production ref in this repo's standard CI (QF-20260907-644,
+// PAT-ACTIVATION-INVARIANT-DBTIER-GAP: grep across .github/workflows/*.yml shows no workflow
+// sets VITEST_DB_ALLOW_REF) -- so step 3 below is structurally unachievable for such a test and
+// the bypass is the sanctioned path, not a fallback.
+const DB_TIER_TEST_PATTERN = /(^|\/)tests\/database\/.*\.db\.test\.js$/;
+
 /**
  * Build a remediation message for a failed gate. Tagged for grep + actionable.
  */
@@ -178,6 +185,15 @@ function buildRemediation({ missingComponent, prdId, testPath }) {
     'Emergency bypass (rate-limited 3/SD, 10/day, logged to audit_log):',
     `  node scripts/handoff.js execute LEAD-FINAL-APPROVAL <SD-ID> --bypass-validation --bypass-reason "${BYPASS_TOKEN}:<ticket>"`,
   ];
+  if (testPath && DB_TIER_TEST_PATTERN.test(testPath)) {
+    lines.push(
+      '',
+      'NOTE (QF-20260907-644): this is a db-tier activation test. No CI workflow in this repo',
+      'sets VITEST_DB_ALLOW_REF, so step 3 SKIPS everywhere in the standard pipeline and cannot',
+      'produce genuine PASS evidence. The bypass above is the expected path for this case --',
+      'cite a ticket tracking the db-tier CI gap (or file one), not a fabricated PASS.',
+    );
+  }
   if (testPath) lines.splice(3, 0, `Referenced test path: ${testPath}`);
   return lines.join('\n');
 }
