@@ -429,13 +429,53 @@ describe('runPreserveStage() never advances the checked-out branch (QF-20260904-
 });
 
 describe('appendReaperPreservedPointer()', () => {
-  it('skips QF-owned rows (quick_fixes has no metadata column) -- audit_log remains authoritative', async () => {
-    const result = await appendReaperPreservedPointer(
-      { from: vi.fn() },
-      { key: 'QF-20260904-001', isQf: true },
-      { ref: 'wip/reclaim/QF-20260904-001/ts' }
-    );
-    expect(result).toEqual({ ok: false, skipped: true, reason: 'quick_fixes_no_metadata_column' });
+  it('QF-20260904-652: writes to quick_fixes.metadata.reaper_preserved[] for a QF-owned row, never overwriting other metadata', async () => {
+    const existingRow = { id: 'QF-20260904-001', metadata: { other: 'field' } };
+    let updatePayload = null;
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existingRow, error: null }) }) }),
+        update: (payload) => { updatePayload = payload; return { eq: async () => ({ error: null }) }; },
+      }),
+    };
+
+    const pointer = { ref: 'wip/reclaim/QF-20260904-001/ts', sha: 'abc' };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'QF-20260904-001', isQf: true }, pointer);
+
+    expect(result).toEqual({ ok: true });
+    expect(updatePayload.metadata.other).toBe('field');
+    expect(updatePayload.metadata.reaper_preserved).toEqual([pointer]);
+  });
+
+  it('QF-20260904-652: fails soft on Postgres 42703 (column absent) on the read half, never throws', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { code: '42703', message: 'column "metadata" does not exist' } }) }) }),
+      }),
+    };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'QF-X', isQf: true }, { ref: 'r' });
+    expect(result).toEqual({ ok: false, skipped: true, reason: 'column_absent' });
+  });
+
+  it('QF-20260904-652: fails soft on Postgres 42703 on the write half too', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'QF-X', metadata: {} }, error: null }) }) }),
+        update: () => ({ eq: async () => ({ error: { code: '42703', message: 'column "metadata" does not exist' } }) }),
+      }),
+    };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'QF-X', isQf: true }, { ref: 'r' });
+    expect(result).toEqual({ ok: false, skipped: true, reason: 'column_absent' });
+  });
+
+  it('QF-20260904-652: skips (no throw) when no quick_fixes row matches the key', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      }),
+    };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'QF-NOBODY', isQf: true }, { ref: 'r' });
+    expect(result).toEqual({ ok: false, skipped: true, reason: 'no_matching_qf_id' });
   });
 
   it('appends to metadata.reaper_preserved[] for an SD row, never overwriting other metadata', async () => {
@@ -443,7 +483,7 @@ describe('appendReaperPreservedPointer()', () => {
     let updatePayload = null;
     const supabase = {
       from: () => ({
-        select: () => ({ eq: () => ({ single: async () => ({ data: existingRow, error: null }) }) }),
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existingRow, error: null }) }) }),
         update: (payload) => { updatePayload = payload; return { eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'row-1' }, error: null }) }) }) }) }; },
       }),
     };
@@ -456,10 +496,20 @@ describe('appendReaperPreservedPointer()', () => {
     expect(updatePayload.metadata.reaper_preserved).toEqual([pointer]);
   });
 
+  it('QF-20260904-652: skips (no throw) on a zero-match sd_key lookup instead of erroring on .single()', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      }),
+    };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'chore/encode-1afdeaac-20260906', isQf: false }, { ref: 'r' });
+    expect(result).toEqual({ ok: false, skipped: true, reason: 'no_matching_sd_key' });
+  });
+
   it('retries on an optimistic-concurrency conflict (updated_at moved) then gives up after max retries', async () => {
     const supabase = {
       from: () => ({
-        select: () => ({ eq: () => ({ single: async () => ({ data: { id: 'row-1', metadata: {}, updated_at: 't0' }, error: null }) }) }),
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'row-1', metadata: {}, updated_at: 't0' }, error: null }) }) }),
         update: () => ({ eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }), // always loses the race
       }),
     };

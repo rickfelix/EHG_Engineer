@@ -39,6 +39,14 @@ function makeFakeSupabase(seed = {}) {
         if (op === 'not_is_null') return row[col] !== null && row[col] !== undefined;
         if (op === 'in') return Array.isArray(val) && val.includes(row[col]);
         if (op === 'is') return (row[col] ?? null) === val;
+        // QF-20260905-781: minimal .or() support for the one shape this suite needs —
+        // "col.not.is.null" clauses, ORed together (mirrors the real PostgREST filter string).
+        if (op === 'or_group') {
+          return val.some((clause) => {
+            const m = /^([a-z_]+)\.not\.is\.null$/.exec(clause);
+            return m ? row[m[1]] !== null && row[m[1]] !== undefined : false;
+          });
+        }
         // adversarial-review finding: silently passing an unrecognized operator makes the
         // fixture unable to observe the predicate under test at all (this is exactly how the
         // undo path's .gt() went unexercised for so long) -- fail loud instead, so a future
@@ -76,6 +84,7 @@ function makeFakeSupabase(seed = {}) {
       not(col, _op, _val) { ctx.filters.push([col, 'not_is_null', null]); return api; },
       in(col, arr) { ctx.filters.push([col, 'in', arr]); return api; },
       is(col, val) { ctx.filters.push([col, 'is', val]); return api; },
+      or(filterStr) { ctx.filters.push(['__or__', 'or_group', String(filterStr).split(',').map((c) => c.trim())]); return api; },
       order(col, { ascending } = {}) { ctx.order = { col, ascending: !!ascending }; return api; },
       limit(n) { ctx.limitN = n; return api; },
       async maybeSingle() {

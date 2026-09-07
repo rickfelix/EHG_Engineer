@@ -395,3 +395,35 @@ describe('QF-20260710-593: ackRows — the action-time stamp', () => {
     expect(updates[0].guards).toContainEqual(['in', 'target_session', ['solomon-sess', 'broadcast-solomon']]);
   });
 });
+
+// QF-20260906-523: a parked/deduped send (insertCoordinationRow throws with e.landed=true) means
+// the content already reached the target -- exiting 1 here trained callers to resend and
+// duplicate an ask that already landed. Ported verbatim from adam-advisory.cjs:1401-1404
+// (QF-20260902-160). main() is not exported (documented limitation, see the
+// argv-testability note in module.exports above), and reaching this branch for real requires a
+// live insertCoordinationRow throw -- not reachable via a hermetic subprocess spawn without a DB.
+// A static source-shape assertion is the same technique already used for other in-main() logic
+// in this file (see solomon-advisory-capture-miss-seam.test.js) and is what the fix's own EXIT
+// PREDICATE names: a parked send exits ZERO and its printed line contains neither 'ERROR' nor
+// 'not sent'.
+describe('QF-20260906-523: a landed:true insert error is DELIVERED (exit 0), not ERROR (exit 1)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '../../scripts/solomon-advisory.cjs'), 'utf8');
+
+  it('the landed branch sits inside the insertCoordinationRow catch, before the generic ERROR fallback, and exits 0', () => {
+    const catchIdx = source.indexOf('inserted = data;\n  } catch (e) {');
+    expect(catchIdx).toBeGreaterThan(0);
+    const landedIdx = source.indexOf('if (e && e.landed) {', catchIdx);
+    const errorFallbackIdx = source.indexOf("console.error(`ERROR: advisory not sent", catchIdx);
+    expect(landedIdx).toBeGreaterThan(catchIdx);
+    expect(errorFallbackIdx).toBeGreaterThan(landedIdx); // landed check runs FIRST, falls through to ERROR only when absent
+
+    const landedBranch = source.slice(landedIdx, errorFallbackIdx);
+    expect(landedBranch).toMatch(/DELIVERED \(not a failure\)/);
+    expect(landedBranch).toMatch(/process\.exit\(0\)/);
+    // Never prints ERROR or "not sent" on the landed path -- the exact predicate the QF names.
+    expect(landedBranch).not.toMatch(/ERROR/);
+    expect(landedBranch).not.toMatch(/not sent/);
+  });
+});
