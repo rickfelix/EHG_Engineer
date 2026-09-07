@@ -93,12 +93,45 @@ export async function enforcePolicy(supabase, policy, { apply = false, runId = n
     const countQuery = policy.countMode === 'estimated'
       ? supabase.from(policy.table).select('*', { count: 'estimated', head: true })
       : supabase.from(policy.table).select('*', { count: 'exact', head: true });
+    const countStart = Date.now();
     const { count, error: cntErr } = await countQuery.lt(policy.timestampColumn, cutoff);
+    const countElapsedMs = Date.now() - countStart;
     // QF-20260823-655: cntErr.message was blank on the failures this fixes (some PostgREST/PG
     // timeout errors carry no .message), producing an unclassifiable "count failed: " log line.
-    // Fall back through code/details/the stringified object so a real failure is never silent.
-    if (cntErr) throw new Error(`count failed: ${cntErr.message || cntErr.code || cntErr.details || JSON.stringify(cntErr)}`);
-    result.eligible = count || 0;
+    if (cntErr) {
+      // QF-20260905-256: a FILTERED count/estimate against a large table with no index on
+      // policy.timestampColumn hits the PostgREST statement timeout and returns a fully empty
+      // error object ({message:"", code:undefined, details:undefined}) -- reproduced live on
+      // eva_scheduler_metrics (4.5M rows, no created_at index). That signature is a TIMEOUT, a
+      // different failure mode from a real query error, and must not throw before the apply
+      // step even when rows ARE eligible. Fall back to a bounded existence probe (cheap: LIMIT 1
+      // needs no full scan to find one match) instead of failing the whole job.
+      // Strict === '' (present-but-empty), not merely falsy: distinguishes the ACTUAL
+      // reproduced timeout shape ({message: ""}) from an unrelated error object that simply
+      // lacks a .message property (e.g. {unexpected: 'shape'}), which must still throw normally.
+      const looksLikeTimeout = cntErr.message === '' && !cntErr.code && !cntErr.details;
+      if (!looksLikeTimeout) {
+        // Fall back through code/details/the stringified object so a real failure is never silent.
+        throw new Error(`count failed: ${cntErr.message || cntErr.code || cntErr.details || JSON.stringify(cntErr)}`);
+      }
+      const { data: probeRows, error: probeErr } = await supabase
+        .from(policy.table).select('id')
+        .lt(policy.timestampColumn, cutoff)
+        .limit(1);
+      if (probeErr) throw new Error(`count TIMEOUT (${countElapsedMs}ms) and fallback probe also failed: ${probeErr.message}`);
+      // Unfiltered estimated count is a cheap catalog-based row estimate (no scan needed) --
+      // purely human-readable table-size context for the TIMEOUT log line, never eligibility.
+      let sizeEstimate = null;
+      try {
+        const { count: est } = await supabase.from(policy.table).select('*', { count: 'estimated', head: true });
+        sizeEstimate = est ?? null;
+      } catch { /* best-effort context only, never blocks the probe result */ }
+      result.probed = true;
+      result.eligible = probeRows && probeRows.length > 0 ? 1 : 0;
+      console.log(`   ⏱ TIMEOUT on count for ${policy.table} (${countElapsedMs}ms, table size ~${sizeEstimate ?? 'unknown'}) — probe found ${result.eligible ? 'eligible rows' : 'none'}`);
+    } else {
+      result.eligible = count || 0;
+    }
     if (!apply || result.eligible === 0) return result;
 
     while (result.archived < policy.perRunCap) {
