@@ -443,6 +443,44 @@ async function hasParentNeedsOwnLeadToPlan(sd) {
   return !data || data.length === 0;
 }
 
+/**
+ * QF-20260905-822: sibling of hasParentNeedsOwnLeadToPlan above — the SAME class of gap, one
+ * handoff later. A parent whose own LEAD-TO-PLAN IS accepted (current_phase now 'PLAN') but
+ * whose PLAN-TO-EXEC is not yet accepted still needs that setup handoff run before any child is
+ * claimable (leo_protocol_sections 439: "parent setup handoffs are seat-run once, before the
+ * first child"). Without this, a seat claiming a parent past LEAD-TO-PLAN auto-routed straight
+ * to a child, silently skipping the parent's own PLAN-TO-EXEC (witnessed live: a seat had to
+ * release and re-claim with --parent --confirm to reach it).
+ *
+ * Returns true ONLY when ALL of:
+ *   1. sd.sd_type === 'orchestrator'
+ *   2. sd.current_phase === 'PLAN' (the destination of an accepted LEAD-TO-PLAN)
+ *   3. sd_phase_handoffs has zero rows where sd_id=sd.id AND
+ *      handoff_type='PLAN-TO-EXEC' AND status='accepted'
+ *
+ * FAIL-LOUD: throws on PostgrestError, mirroring hasParentNeedsOwnLeadToPlan.
+ */
+async function hasParentNeedsOwnPlanToExec(sd) {
+  if (!sd || sd.sd_type !== 'orchestrator') return false;
+  if (sd.current_phase !== 'PLAN') return false;
+
+  const { data, error } = await supabase
+    .from('sd_phase_handoffs')
+    .select('handoff_type, status')
+    .eq('sd_id', sd.id)
+    .eq('handoff_type', 'PLAN-TO-EXEC')
+    .eq('status', 'accepted')
+    .limit(1);
+
+  if (error) {
+    throw new Error(
+      `[hasParentNeedsOwnPlanToExec] sd_phase_handoffs query failed for ${sd.sd_key || sd.id}: ${error.message || error.code || 'unknown error'}`
+    );
+  }
+
+  return !data || data.length === 0;
+}
+
 // SD-ARCH-HOTSPOT-SD-START-001 FR-5: relocated to lib/claim/queue-resolver.cjs
 // (shared with worker-checkin, incl. the sd_key→UUID resolve-and-retry fallback
 // and the live-claim source-of-truth read). Thin delegates.
@@ -681,7 +719,10 @@ async function main() {
     // Explicit override — claim parent regardless of children/handoff state.
     // Safety: when parent is past LEAD-TO-PLAN AND children incomplete, require
     // --confirm to prevent double-claiming the wrong phase (FR-3 R5 mitigation).
-    const parentNeeds = await hasParentNeedsOwnLeadToPlan(sd);
+    // QF-20260905-822: also recognizes a pending PLAN-TO-EXEC as a legitimate parent-setup
+    // reason to claim the parent — without this, --parent alone (no --confirm) was refused
+    // for exactly the case it exists to serve.
+    const parentNeeds = (await hasParentNeedsOwnLeadToPlan(sd)) || (await hasParentNeedsOwnPlanToExec(sd));
     if (!parentNeeds) {
       const childrenForCheck = await getOrchestratorChildren(effectiveId);
       const incomplete = childrenForCheck.some(c => c.status !== 'completed');
@@ -702,9 +743,16 @@ async function main() {
       // FR-2: Pre-route guard — does parent need its OWN LEAD-TO-PLAN first?
       // Without this guard, orchestrator parents whose own LEAD-TO-PLAN has not
       // yet run are structurally unreachable (PAT-ORCH-ROUTING-PHASE-BLINDNESS-001).
+      // QF-20260905-822: sibling guard for the SAME class of gap one handoff later — a
+      // parent past LEAD-TO-PLAN but short of its own PLAN-TO-EXEC (leo_protocol_sections
+      // 439's "parent setup handoffs are seat-run once, before the first child").
       if (await hasParentNeedsOwnLeadToPlan(sd)) {
         console.log(`\n${colors.cyan}🔀 ORCHESTRATOR PARENT${colors.reset} — own LEAD-TO-PLAN required`);
         console.log(`   ${colors.dim}Parent orchestrator needs own LEAD-TO-PLAN handoff first — claiming parent (PAT-ORCH-ROUTING-PHASE-BLINDNESS-001).${colors.reset}`);
+        // Fall through to parent claim (skip the route-to-leaf block below).
+      } else if (await hasParentNeedsOwnPlanToExec(sd)) {
+        console.log(`\n${colors.cyan}🔀 ORCHESTRATOR PARENT${colors.reset} — own PLAN-TO-EXEC required`);
+        console.log(`   ${colors.dim}Parent orchestrator needs own PLAN-TO-EXEC handoff first — claiming parent (leo_protocol_sections 439).${colors.reset}`);
         // Fall through to parent claim (skip the route-to-leaf block below).
       } else {
       console.log(`\n${colors.cyan}🔀 ORCHESTRATOR DETECTED${colors.reset} (${children.length} children)`);
