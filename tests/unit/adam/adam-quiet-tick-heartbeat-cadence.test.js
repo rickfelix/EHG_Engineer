@@ -14,7 +14,10 @@
  * 15min quiet-tick cycle of the threshold itself.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { checkHeartbeatCadence, HEARTBEAT_OVERDUE_THRESHOLD_MS, formatHeartbeatCadenceLine } from '../../../scripts/adam-quiet-tick.mjs';
+import { inQuietHours } from '../../../lib/comms/adam-outbound/rubric-engine/lint.js';
 
 function readBuilder(data) {
   const b = {
@@ -113,5 +116,41 @@ describe('formatHeartbeatCadenceLine', () => {
     expect(line).toContain('22:00-06:00 ET quiet window');
     expect(line).not.toContain('send NOW');
     expect(line).not.toContain('QUIET_TICK_HEARTBEAT_OVERDUE');
+  });
+});
+
+// QF-20260907-365: PR #8458 wired inQuietHours() into the heartbeat cadence line but called it
+// with NO arguments. lint.js defaults the context to {}, so etHour() finds neither nowHourET nor
+// a Date/finite-number now and throws by design ('the engine must never GUESS quiet-hours' —
+// lint.js:80, correct behavior, NOT to be relaxed). The throw at adam-quiet-tick.mjs:1588 aborts
+// the whole tick body BEFORE the inbox lines at :1682 are ever reached — QUIET_TICK_ERROR fires
+// every tick, QUIET_TICK_HEARTBEAT_OVERDUE never prints, and the summary's dir:N inbox count
+// silently disagrees with zero emitted QUIET_TICK_INBOX_DIRECTIVE lines. Fixed call site passes
+// { now: Date.now() }, mirroring the exact working shape from this QF's own reproduction steps.
+describe('inQuietHours call-site contract (QF-20260907-365 regression)', () => {
+  it('throws when called with no context (the engine must never guess quiet-hours) — documents WHY a bare call is unsafe', () => {
+    expect(() => inQuietHours()).toThrow(/quiet-hours needs context/);
+  });
+
+  it('does not throw when called with { now: Date.now() } — the fixed call-site shape', () => {
+    expect(() => inQuietHours({ now: Date.now() })).not.toThrow();
+    expect(typeof inQuietHours({ now: Date.now() })).toBe('boolean');
+  });
+
+  it('adam-quiet-tick.mjs never calls inQuietHours() bare — pins the call site so the regression cannot silently reappear', () => {
+    const scriptPath = fileURLToPath(new URL('../../../scripts/adam-quiet-tick.mjs', import.meta.url));
+    const src = readFileSync(scriptPath, 'utf8');
+    // Only real CALL sites (a non-comment line invoking the imported function), never prose —
+    // line 632's doc comment legitimately says "inQuietHours() result" in English. Every actual
+    // call in this file must pass a non-empty argument; a bare zero-arg call throws
+    // unconditionally (see above) and would silently truncate every line the tick emits after it.
+    const callSites = src
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('*') && !line.trim().startsWith('//'))
+      .filter((line) => /inQuietHours\(/.test(line));
+    expect(callSites.length).toBeGreaterThan(0); // sanity: the call site still exists
+    for (const line of callSites) {
+      expect(line).not.toMatch(/inQuietHours\(\s*\)/);
+    }
   });
 });
