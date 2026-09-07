@@ -1,4 +1,9 @@
 -- SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-A -- shared venture-agnostic usage-event ingestion
+-- CHAIRMAN-APPROVED 2026-09-07 ~02:10Z ON THE AMENDED CONTENT: he first said "apply the venture
+-- usage events migration", Adam withheld on the same-constraint check, he then said "amend it",
+-- and after the amendment was proven he said "apply it". The approval below binds to THIS file
+-- including the six restored artifact_type values. Scribed by Adam session bc762fa4 under 3c.
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE.
