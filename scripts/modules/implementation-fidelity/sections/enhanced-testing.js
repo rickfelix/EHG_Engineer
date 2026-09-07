@@ -6,6 +6,7 @@
  */
 
 import { existsSync } from 'fs';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import { readdir } from 'fs/promises';
 import path from 'path';
 import { getSDSearchTerms, gitLogForSD, detectImplementationRepos } from '../utils/index.js';
@@ -193,13 +194,16 @@ export async function validateEnhancedTesting(sd_id, designAnalysis, databaseAna
   // D3: Check for test coverage metadata (3 points - MINOR)
   console.log('\n   [D3] Test Coverage Documentation...');
 
-  const { data: handoffData } = await supabase
-    .from('sd_phase_handoffs')
-    .select('metadata')
-    .eq('sd_id', sd_id)
-    .eq('handoff_type', 'EXEC-TO-PLAN')
-    .order('created_at', { ascending: false })
-    .limit(1);
+  const handoffData = await safeQuery(
+    supabase
+      .from('sd_phase_handoffs')
+      .select('metadata')
+      .eq('sd_id', sd_id)
+      .eq('handoff_type', 'EXEC-TO-PLAN')
+      .order('created_at', { ascending: false })
+      .limit(1),
+    { site: 'enhanced-testing:d3_coverage_handoff_metadata' }
+  );
 
   if (handoffData?.[0]?.metadata) {
     const metadataStr = JSON.stringify(handoffData[0].metadata).toLowerCase();

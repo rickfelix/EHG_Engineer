@@ -20,6 +20,7 @@
  */
 
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 import { execSync } from 'child_process';
 import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems, buildSDSpecificImprovementAreas } from '../../retrospective-enricher.js'; // SD-LEARN-FIX-ADDRESS-PAT-AUTO-030
 import { getMainRef } from '../../shared-git-context.js';
@@ -426,14 +427,21 @@ export async function createExecToPlanRetrospective(supabase, sdId, sd, handoffR
     // QF-20260509-967: also fetch quality_score, metadata, generated_by so we can
     // skip the overwrite when the existing row is manually-curated OR has a higher
     // quality_score than the incoming auto-generated payload.
-    const { data: existing } = await supabase
-      .from('retrospectives')
-      .select('id, quality_score, metadata, generated_by')
-      .eq('sd_id', retrospective.sd_id)
-      .eq('retrospective_type', 'EXEC_TO_PLAN')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // SECURITY-RELEVANT: a query fault here must never read as "no existing row" -- that would
+    // bypass the manually-curated/higher-quality clobber guard below and silently overwrite a
+    // protected retrospective. safeQuery throws on a real fault, which the enclosing catch (below)
+    // turns into "skip this retro write, continue the handoff" -- never a false clobber.
+    const existing = await safeQuery(
+      supabase
+        .from('retrospectives')
+        .select('id, quality_score, metadata, generated_by')
+        .eq('sd_id', retrospective.sd_id)
+        .eq('retrospective_type', 'EXEC_TO_PLAN')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      { site: 'exec-to-plan-retrospective:existing_row_clobber_guard' }
+    );
 
     // SD-LEO-INFRA-BACKEND-WRITE-SAFETY-001 (FR-3): cross-type sd-level guard.
     // Closes the generated_by=null leak path. Witnessed retro 84ada45e: 10/4/5

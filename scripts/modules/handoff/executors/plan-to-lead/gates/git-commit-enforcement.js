@@ -6,6 +6,7 @@
  */
 
 import { isInfrastructureSDSync } from '../../../../sd-type-checker.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 // Observe-only witness rung (SD-LEO-INFRA-INDEPENDENT-GATE-WITNESS-001-D)
 import { withObserveOnlyWitness } from '../../../../../../lib/eva/observe-gate-witness.js';
 
@@ -78,8 +79,8 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
             max_score: 100,
             issues: [
               `GATE5 FAIL-CLOSED: venture repo '${sd.target_application}' is not locally git-capable, so commit status `
-              + `cannot be verified. Free-pass removed per SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-4 / SECURITY VB-4. `
-              + `Clone the venture repo (or route via the bridge with a git-capable checkout) before this handoff.`
+              + 'cannot be verified. Free-pass removed per SD-LEO-INFRA-RECONCILE-VENTURE-BUILD-001 FR-4 / SECURITY VB-4. '
+              + 'Clone the venture repo (or route via the bridge with a git-capable checkout) before this handoff.'
             ],
             warnings: [],
             details: { fail_closed_venture_repo: true, target_application: sd.target_application }
@@ -111,10 +112,13 @@ export function createGitCommitEnforcementGate(supabase, sd, appPath) {
 
       // PARENT SD DETECTION
       const sdUuid = ctx.sd?.id || ctx.sdId;
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id, sd_key, status')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_key, status')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'git-commit-enforcement:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         const completedChildren = childSDs.filter(c => c.status === 'completed');

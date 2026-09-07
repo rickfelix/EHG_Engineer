@@ -17,6 +17,7 @@
  */
 
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import { execSync } from 'child_process';
 // SD-LEO-REFAC-ELIMINATE-HARD-CODED-001: Registry-driven venture paths
 import { getVenturePath } from '../../../lib/venture-resolver.js';
@@ -449,13 +450,16 @@ export async function enrichRetrospectivePreGate(supabase, sdId, sd) {
   const sdKey = sd?.sd_key || sdId;
 
   // 1. Get the newest retrospective for this SD
-  const { data: retro } = await supabase
-    .from('retrospectives')
-    .select('id, generated_by, key_learnings, action_items, improvement_areas, what_went_well, what_needs_improvement, metadata')
-    .eq('sd_id', sdId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const retro = await safeQuery(
+    supabase
+      .from('retrospectives')
+      .select('id, generated_by, key_learnings, action_items, improvement_areas, what_went_well, what_needs_improvement, metadata')
+      .eq('sd_id', sdId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    { site: 'retrospective-enricher:latest_retro' }
+  );
 
   if (!retro) return result;
 
@@ -643,13 +647,16 @@ function getGitChangedFiles(targetApp) {
  * Get prior handoff scores for this SD.
  */
 async function getHandoffScores(supabase, sdId) {
-  const { data } = await supabase
-    .from('sd_phase_handoffs')
-    .select('handoff_type, quality_score, status')
-    .eq('sd_id', sdId)
-    .eq('status', 'accepted')
-    .order('created_at', { ascending: false })
-    .limit(3);
+  const data = await safeQuery(
+    supabase
+      .from('sd_phase_handoffs')
+      .select('handoff_type, quality_score, status')
+      .eq('sd_id', sdId)
+      .eq('status', 'accepted')
+      .order('created_at', { ascending: false })
+      .limit(3),
+    { site: 'retrospective-enricher:handoff_scores' }
+  );
   return data || [];
 }
 
@@ -658,13 +665,16 @@ async function getHandoffScores(supabase, sdId) {
  * Returns null if no design score exists — does not block enrichment.
  */
 async function getDesignQualityScore(supabase, sdId) {
-  const { data } = await supabase
-    .from('design_quality_scores')
-    .select('composite_score, accessibility_score, token_compliance_score, component_reuse_score, visual_polish_score, calculated_at')
-    .eq('sd_id', sdId)
-    .order('calculated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const data = await safeQuery(
+    supabase
+      .from('design_quality_scores')
+      .select('composite_score, accessibility_score, token_compliance_score, component_reuse_score, visual_polish_score, calculated_at')
+      .eq('sd_id', sdId)
+      .order('calculated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    { site: 'retrospective-enricher:design_quality_score' }
+  );
   return data || null;
 }
 
@@ -672,10 +682,13 @@ async function getDesignQualityScore(supabase, sdId) {
  * Get issue patterns linked to this SD key.
  */
 async function getLinkedPatterns(supabase, sdKey) {
-  const { data } = await supabase
-    .from('issue_patterns')
-    .select('pattern_id, issue_summary, severity, occurrence_count, category, prevention_checklist')
-    .or(`assigned_sd_id.eq.${sdKey},assigned_sd_id.like.%${sdKey}%`)
-    .limit(3);
+  const data = await safeQuery(
+    supabase
+      .from('issue_patterns')
+      .select('pattern_id, issue_summary, severity, occurrence_count, category, prevention_checklist')
+      .or(`assigned_sd_id.eq.${sdKey},assigned_sd_id.like.%${sdKey}%`)
+      .limit(3),
+    { site: 'retrospective-enricher:linked_patterns' }
+  );
   return data || [];
 }

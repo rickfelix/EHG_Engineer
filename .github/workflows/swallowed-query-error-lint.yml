@@ -15,10 +15,19 @@ name: Swallowed Query Error Lint
 # mandatory — loadAllowlist() throws without one, because a silence you cannot explain is the
 # reflexive kind. The COUNT of allowlist entries is itself a gauge.
 #
-# ADVISORY-FIRST: `continue-on-error: true`, so it cannot turn an in-flight PR red on day one. The
-# report is always in the job log. ~232 pre-existing gate/executor sites are a TRACKED MIGRATION,
-# not this SD's scope — flip to blocking (run with --enforce, drop continue-on-error) once that
-# baseline has been worked down, not before, or the signal trains people to ignore it.
+# SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 (FR-6): ENFORCING as of this SD. The original 32-site
+# gate/executor baseline (measured at that SD's authoring; ~232 was a stale figure carried over
+# from an earlier, broader draft scope) is now fully converted --
+# `node scripts/lint/swallowed-query-error-lint.mjs` reports 0 ungoverned. `continue-on-error` is
+# dropped and the run uses `--enforce`, so a PR that reintroduces a data-only destructure in any
+# scanned path now fails CI (exit 1), not just logs a warning nobody reads.
+#
+# This `paths:` list is a SEPARATE, hardcoded mirror of the lint's own SCAN_PREFIXES array
+# (scripts/lint/swallowed-query-error-lint.mjs) -- the two must change together in the same PR, or
+# a widened scan scope is armed but unreachable (a PR touching only the newly-widened directory
+# would never trigger this job). tests/unit/lint/swallowed-query-error-lint-workflow-paths.test.js
+# parses THIS FILE and asserts every SCAN_PREFIXES entry has a matching path glob here, so drift
+# between the two fails CI (not a comment claiming they're in sync, which cannot detect drift).
 
 on:
   pull_request:
@@ -28,6 +37,7 @@ on:
       - 'scripts/modules/claim-health/**'
       - 'lib/claim/**'
       - 'lib/oversight/**'
+      - 'scripts/modules/implementation-fidelity/**'
       - 'lib/db/safe-query.mjs'
       - 'scripts/lint/swallowed-query-error-lint.mjs'
       - 'scripts/lint/swallowed-query-error-allowlist.json'
@@ -45,6 +55,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Detect PostgREST reads that discard `error` in gate/executor code (advisory)
-        continue-on-error: true
-        run: node scripts/lint/swallowed-query-error-lint.mjs
+      - name: Detect PostgREST reads that discard `error` in gate/executor code (enforced)
+        run: node scripts/lint/swallowed-query-error-lint.mjs --enforce

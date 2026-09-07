@@ -33,6 +33,7 @@ import { execFileSync } from 'node:child_process';
 import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../../lib/handoff/wait-verdict.js';
 import { REQUIRED_SUBAGENTS } from '../required-subagents.js';
 import { gradeProvenance, HANDOFF_TYPE_TO_PHASE } from '../../../../lib/sub-agent-executor/evidence-provenance.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 
 /**
  * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: shared kill-switch for the provenance-grading warnings
@@ -238,15 +239,18 @@ async function resolveCurrentPhaseStartedAt(ctx, supabase) {
 
   // Try most recent accepted handoff INTO the current phase
   try {
-    const { data } = await db
-      .from('sd_phase_handoffs')
-      .select('accepted_at')
-      .eq('sd_id', sdUuid)
-      .eq('to_phase', currentPhase)
-      .eq('status', 'accepted')
-      .not('accepted_at', 'is', null)
-      .order('accepted_at', { ascending: false })
-      .limit(1);
+    const data = await safeQuery(
+      db
+        .from('sd_phase_handoffs')
+        .select('accepted_at')
+        .eq('sd_id', sdUuid)
+        .eq('to_phase', currentPhase)
+        .eq('status', 'accepted')
+        .not('accepted_at', 'is', null)
+        .order('accepted_at', { ascending: false })
+        .limit(1),
+      { site: 'subagent-evidence-gate:phase_started_at_handoff' }
+    );
 
     if (data && data.length > 0 && data[0].accepted_at) {
       ctx._phaseStartedAt = parseAsUTC(data[0].accepted_at);
@@ -258,11 +262,14 @@ async function resolveCurrentPhaseStartedAt(ctx, supabase) {
 
   // LEAD fallback: SD creation timestamp
   try {
-    const { data } = await db
-      .from('strategic_directives_v2')
-      .select('created_at')
-      .eq('id', sdUuid)
-      .single();
+    const data = await safeQuery(
+      db
+        .from('strategic_directives_v2')
+        .select('created_at')
+        .eq('id', sdUuid)
+        .single(),
+      { site: 'subagent-evidence-gate:phase_started_at_sd_created' }
+    );
     if (data?.created_at) {
       ctx._phaseStartedAt = parseAsUTC(data.created_at);
       return ctx._phaseStartedAt;
