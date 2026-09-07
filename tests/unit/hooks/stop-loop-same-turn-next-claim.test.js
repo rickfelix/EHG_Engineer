@@ -48,9 +48,18 @@ describe('computeHasActiveClaim (QF-20260907-596 — the regression this QF fixe
     expect(await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'completed' }]), 'me')).toBe(false);
   });
 
-  it('fails open (false) when the underlying client throws', async () => {
+  // database-agent review finding (post-merge follow-up): the OPPOSITE fail direction from a
+  // bare try/catch is required here. This value gates shouldAttemptSameTurnClaim's
+  // !hasActiveClaim check, so reporting false on an unreadable claim state would fire the
+  // same-turn-claim attempt on a session that may genuinely hold one -- this QF's own bug,
+  // via a different door.
+  it('fails CLOSED (true) when the underlying client throws — an unreadable state must never look claim-less', async () => {
     const throwing = { from: () => { throw new Error('boom'); } };
-    expect(await computeHasActiveClaim(throwing, 'me')).toBe(false);
+    expect(await computeHasActiveClaim(throwing, 'me')).toBe(true);
+  });
+
+  it('fails CLOSED (true) when getMyClaims reports a partial-read error rather than a clean empty result', async () => {
+    expect(await computeHasActiveClaim(claimStub([], [], { qf: 'network blip' }), 'me')).toBe(true);
   });
 });
 

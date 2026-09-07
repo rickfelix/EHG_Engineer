@@ -639,7 +639,14 @@ const TELEMETRY_RESERVE_MS = 2500;
  * next-claim block loop below (every stop attempt "discovered" the worker's own already-held QF
  * as a fresh claim, since resolveCheckin's 'resume' action was classified as a brand-new claim).
  * Uses the canonical both-kinds ownership predicate (lib/claim/get-my-claims.cjs) instead of
- * hand-rolling a second one-kind reader. Fail-open (treat as no claim) on any error.
+ * hand-rolling a second one-kind reader.
+ *
+ * FAILS CLOSED (assume a claim exists) on a read error — deliberately the OPPOSITE direction from
+ * this function's own name. A database-agent review of the merged fix flagged this: unlike the
+ * generic reminder path (genuinely safe to fail open, since a false negative there just skips an
+ * optional park), this value ALSO gates shouldAttemptSameTurnClaim's `!hasActiveClaim` check below
+ * — reporting false on an unreadable claim state would fire the same-turn-claim attempt on a
+ * session that may actually hold a claim, the exact symptom this QF fixes, via a different door.
  * @param {object} supabase - injected client, never a module singleton
  * @param {string} sessionId
  * @returns {Promise<boolean>}
@@ -647,7 +654,8 @@ const TELEMETRY_RESERVE_MS = 2500;
 async function computeHasActiveClaim(supabase, sessionId) {
   try {
     const { getMyClaims } = require('../../lib/claim/get-my-claims.cjs');
-    const { claims } = await getMyClaims(supabase, sessionId);
+    const { claims, error } = await getMyClaims(supabase, sessionId);
+    if (error) return true; // unreadable claim state must never look claim-less
     // Matches the ORIGINAL (SD-only) semantics exactly for SD claims: the row's mere existence
     // under this session's claiming_session_id IS the ownership signal, no status filter — SD
     // status vocabulary ('draft', 'active', 'pending_approval', ...) doesn't map to a simple
@@ -657,7 +665,7 @@ async function computeHasActiveClaim(supabase, sessionId) {
     // stale-session-sweep's dedicated terminal-QF clearing pass — cheap insurance against that gap.
     return claims.some((c) => (c.kind === 'QF' ? c.status === 'open' || c.status === 'in_progress' : true));
   } catch {
-    return false; // fail-open: no claim signal
+    return true; // fail CLOSED: an unreadable claim state must never look claim-less
   }
 }
 
