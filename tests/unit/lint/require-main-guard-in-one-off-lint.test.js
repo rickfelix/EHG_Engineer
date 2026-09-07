@@ -14,7 +14,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,39 @@ const DRIVER = path.resolve(__dirname, '../../../scripts/lint/require-main-guard
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 let fixtureRoot;
+
+// QF-20260907-246: the 'allowlisted violation' test below writes a real file under the real
+// scripts/one-off/ (a temp dir can't prove real allowlist-matching -- see its own comment) and
+// its try/finally cleans up on a normal exit, but a SIGTERM (observed: complete-quick-fix.js's
+// internal test-verification timeout killing a stuck subprocess) skips finally blocks entirely --
+// no in-process handler can prevent that. Rather than chase interrupt-safety in-process, make the
+// NEXT run self-healing: sweep any prior run's leftover fixture + its allowlist entry before this
+// file's own fixtures are created, so a mid-test kill leaks at most once instead of accumulating or
+// bleeding into an unrelated later diff (which is exactly how this was found, on QF-20260905-244).
+function sweepStalePriorRunFixtures() {
+  const oneOffDir = path.resolve(REPO_ROOT, 'scripts', 'one-off');
+  const allowlistPath = path.resolve(REPO_ROOT, 'scripts', 'lint', 'require-main-guard-in-one-off-allowlist.json');
+  const STALE_RE = /^__test-fixture-require-main-guard-\d+\.mjs$/;
+  let staleNames;
+  try {
+    staleNames = readdirSync(oneOffDir).filter((f) => STALE_RE.test(f));
+  } catch {
+    return; // directory read failure is not this sweep's problem to solve
+  }
+  if (staleNames.length === 0) return;
+  for (const name of staleNames) rmSync(path.join(oneOffDir, name), { force: true });
+  try {
+    const doc = JSON.parse(readFileSync(allowlistPath, 'utf8'));
+    let changed = false;
+    for (const name of staleNames) {
+      const key = `scripts/one-off/${name}`;
+      if (doc.allow && key in doc.allow) { delete doc.allow[key]; changed = true; }
+    }
+    if (changed) writeFileSync(allowlistPath, JSON.stringify(doc, null, 2) + '\n');
+  } catch {
+    // Best-effort: the stray .mjs is gone either way, which is what stops it appearing in a diff.
+  }
+}
 
 // QF-20260830-870: the driver's default scan is now TRACKED-ONLY (git ls-files), so it reports
 // zero files against these fixtures -- they live under a bare mkdtempSync() temp dir (or, for the
@@ -41,6 +74,7 @@ function runDriver(root, extraArgs = ['--working-dir']) {
 }
 
 beforeAll(() => {
+  sweepStalePriorRunFixtures();
   fixtureRoot = mkdtempSync(path.join(tmpdir(), 'require-main-guard-fixture-'));
   const oneOffDir = path.join(fixtureRoot, 'scripts', 'one-off');
   mkdirSync(oneOffDir, { recursive: true });
