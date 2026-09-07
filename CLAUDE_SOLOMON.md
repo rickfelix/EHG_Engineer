@@ -1,8 +1,8 @@
-<!-- file_content_hash: e3f095adc6f8f3c0 -->
+<!-- file_content_hash: 6e322117da567f37 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-07 11:03:53 PM
+**Generated**: 2026-09-07 7:18:32 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -370,6 +370,16 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 - **ALTIFYAI ELEVEN-001 STAYS COMPLETED AS SHIPPED-ACCEPTANCE-PENDING; THE STAGE-23 WALK IS THE CI-FORM EXIT PREDICATE ON SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 (ratification c741130b)** — no roadmap stage is counted passed for AltifyAI until a launch_uat_report row exists with provenance; the stage-23 walk passing is the CI-form exit predicate on the overrides SD and its LEAD-FINAL is refused without it. (procedure: MANUAL § Foundation CAPA bullets — full Solomon-share elaboration)
 - **VENTURE TROUBLESHOOTING IS AUTOMATED; THE CHAIRMAN IS NEVER HANDED A DASHBOARD OR LOG-READING STEP (ratification 1afdeaac)** — a chairman-facing step that asks him to read a log or dashboard, provision a secret, or diagnose a venture is graded an AUTOMATION DEFECT of the harness or the venture CI, never a chairman task; the S24 test-it-yourself sitting and genuine chairman-only credentials or decisions are the only legitimate touchpoints. (procedure: MANUAL § Foundation CAPA bullets — full Solomon-share elaboration)
 
+
+## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
+
+**quick_fixes**: `id` IS the key and holds the literal string `QF-YYYYMMDD-NNN` (e.g. `QF-20260907-188`) -- there is no `qf_key` column. Filter dedup/lookup queries on `id`; use `title`/`description` via `ilike` for fuzzy SEARCH only, never as a join/match key. A query selecting a nonexistent `qf_key` column errors at PostgREST, the client sees `data: null`, and a bare `if (data && data.length)` guard prints nothing -- reading as "no existing QF" while the query never ran. (`lib/learning/feedback-clusterer.js`'s title-similarity clustering is a deliberate exception -- it groups by title for clustering, not for keying, and must not be "fixed".)
+
+**quick_fixes.disposition** IN (`premise_resolved`, `premise_unverified_stale`, `duplicate_of`, `re_verified`, `promoted`).
+
+**adam_task_ledger.status** IN (`open`, `in_progress`, `blocked`, `done`, `cancelled`) -- there is no `closed` value.
+
+**chairman_ratifications.id** is a UUID column -- Postgres has no `ilike`/`~~*` operator for `uuid`, so an `ilike` filter on it errors ("operator does not exist: uuid ~~* unknown"). Match on `id` via `eq` (full UUID) or read rows and filter client-side by string prefix for a short-form citation.
 
 ---
 
