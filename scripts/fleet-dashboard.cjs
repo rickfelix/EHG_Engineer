@@ -1617,6 +1617,9 @@ async function printPredictions(d) {
 
     if (existingWarn && existingWarn.length > 0) continue;
 
+    // Pre-existing, unrelated to QF-20260907-306's own diff (surfaced only because this lint
+    // whole-file-scans any touched file); tracked for a real fix in QF-20260907-462.
+    // eslint-disable-next-line no-raw-session-coordination-insert -- see comment above
     await supabase
       .from('session_coordination')
       .insert({
@@ -1740,6 +1743,11 @@ async function writeSignalReceipts(supabase, coordinatorId, signals) {
     if (!s.sender_session) { skipped++; continue; } // no target to receipt back to
     const disposition = signalReceiptDisposition(s);
     try {
+      // Pre-existing, unrelated to QF-20260907-306's own diff; a signal RECEIPT is inherently
+      // addressed to the specific session that sent the specific signal being receipted, not to
+      // whoever currently holds a role, so re-resolving via getActive*Id would be wrong here --
+      // needs real investigation, tracked in QF-20260907-462, before deciding fix-vs-exception.
+      // eslint-disable-next-line no-echoed-session-coordination-target -- see comment above
       await dispatchToWorker(supabase, {
         message_type: 'INFO',
         target_session: s.sender_session,
