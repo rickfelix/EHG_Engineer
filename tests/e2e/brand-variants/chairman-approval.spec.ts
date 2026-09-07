@@ -16,6 +16,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -31,15 +32,14 @@ test.describe('Brand Variants - Chairman Approval', () => {
   let createdVariantIds: string[] = [];
 
   test.beforeAll(async () => {
-    const { data: venture } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture } = await insertGuarded(supabase, 'ventures', {
         name: `Chairman Approval Test ${timestamp}`,
         problem_statement: 'Test problem',
         solution: 'Test solution',
         target_market: 'Test market',
-        stage: 12
-      })
+        stage: 12,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/chairman-approval.spec.ts' })
       .select()
       .single();
 

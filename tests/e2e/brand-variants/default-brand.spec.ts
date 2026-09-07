@@ -14,6 +14,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -62,16 +63,15 @@ test.describe('Default Brand Application', () => {
     }
 
     // Create venture under org with no brand config
-    const { data: venture, error } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture, error } = await insertGuarded(supabase, 'ventures', {
         name: `Default Brand Venture ${timestamp}`,
         org_id: testOrgId,
         problem_statement: 'Test problem for default brand',
         solution: 'Test solution',
         target_market: 'Test market',
-        stage: 1
-      })
+        stage: 1,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/default-brand.spec.ts' })
       .select('id, name, brand_variant_id, org_id')
       .single();
 

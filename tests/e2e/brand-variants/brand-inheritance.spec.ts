@@ -14,6 +14,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -95,17 +96,16 @@ test.describe('Brand Inheritance from Organization', () => {
     }
 
     // Create venture under org with custom brand
-    const { data: venture, error } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture, error } = await insertGuarded(supabase, 'ventures', {
         name: `Inherited Brand Venture ${timestamp}`,
         org_id: testOrgId,
         brand_variant_id: testBrandVariantId,
         problem_statement: 'Test problem for brand inheritance',
         solution: 'Test solution',
         target_market: 'Test market',
-        stage: 1
-      })
+        stage: 1,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/brand-inheritance.spec.ts' })
       .select('id, name, brand_variant_id, org_id')
       .single();
 
@@ -160,17 +160,16 @@ test.describe('Brand Inheritance from Organization', () => {
     ];
 
     for (const name of ventureNames) {
-      const { data: venture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: venture } = await insertGuarded(supabase, 'ventures', {
           name,
           org_id: testOrgId,
           brand_variant_id: testBrandVariantId,
           problem_statement: 'Test consistency',
           solution: 'Test solution',
           target_market: 'Test market',
-          stage: 1
-        })
+          stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/brand-inheritance.spec.ts' })
         .select('id, org_id, brand_variant_id')
         .single();
 
