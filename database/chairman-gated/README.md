@@ -1187,3 +1187,54 @@ defect). It also wired `product_requirements_v2.activation_test_id` on Child E's
 script's path, as a documentary record of what verifies the chain — that record is a documentary
 repair, not a live re-check: Child E is already `status=completed`, so no gate re-evaluates it
 against a fresh run of this script.
+
+## Applying `20260906_strategic_directives_worktree_commit_pin.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260906_strategic_directives_worktree_commit_pin.sql" \
+  --prod-deploy --allow-any-path
+```
+
+**Run the dry-run before ceremony, safe to re-run any time (transactional, ROLLBACK-guarded):**
+
+```
+node database/chairman-gated/20260906_strategic_directives_worktree_commit_pin_dry_run.mjs
+```
+
+Rollback: `20260906_strategic_directives_worktree_commit_pin_DOWN.sql` (drops the CHECK constraint,
+then the `worktree_commit_pin` column).
+
+## What it does
+
+Adds an additive, nullable `worktree_commit_pin TEXT` column to `strategic_directives_v2`, plus a
+CHECK constraint enforcing one of 3 regex shapes when non-null: EXACT `<path>@<sha>`, APPROXIMATE
+`<path>@<sha>~asof:<ISO8601>`, or HISTORICAL `HISTORICAL:<path>`.
+
+**Why a new column, not the existing `worktree_path`.** SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B's
+PRD originally specified pinning the EXISTING `worktree_path` column directly. An EXEC-phase RCA
+(rca-agent + teammates, 2026-09-07) found that would break 10 literal-path read sites across 4
+files — `lib/claim-validity-gate.js` (6 sites, including a `process.chdir()` on the stored value),
+`lib/claim/reacquire-self-live.mjs`, `scripts/hooks/pre-tool-enforce.cjs`, and worst of all
+`scripts/modules/handoff/gates/subagent-evidence-gate.js` (silently disables the gate-evidence
+staleness check under a pinned value — a direct hit on the CLAUDE.md gate-evidence-provenance
+rule this SD exists to strengthen). Corrected to a sibling column: `worktree_path` is completely
+untouched (same 5 writers, same 10 readers), and only `scripts/sd-start.js` (via
+`lib/git/commit-pin-resolver.mjs`) and the FR-3 reconciliation script ever write
+`worktree_commit_pin` — no pre-existing code reads it, so there is nothing to break.
+
+**Why `VALID` immediately, no `NOT VALID` → `VALIDATE` two-step.** The column starts 100% `NULL`
+across all 6,176 existing rows, so `worktree_commit_pin IS NULL OR <3 shapes>` is satisfied by
+every existing row by construction — there is no pre-existing-violator population to defer
+validation against (unlike a retrofit onto `worktree_path` itself, which carries ~2,493 non-null
+legacy values, would have required).
+
+**Why TIER-2 despite being "just an ADD COLUMN".** The tier-gate's auto-apply allow-list (Rule H)
+covers only `CHECK (col = ANY (ARRAY[literals]))` — a fixed-literal-set check, not a regex — so a
+regex `CHECK` is default-deny TIER-2 regardless of how simple the accompanying `ADD COLUMN` is.
+
+**Fail-soft on absence, same pattern as `20260906_add_quick_fixes_metadata_column.sql`.**
+`scripts/sd-start.js`'s writer wraps the `worktree_commit_pin` write in its own try/catch and logs
+a warning, non-fatally, if the column does not yet exist — so the writer code can (and does) merge
+independently of this migration's apply timing, and no claim/handoff ever fails because of it.
