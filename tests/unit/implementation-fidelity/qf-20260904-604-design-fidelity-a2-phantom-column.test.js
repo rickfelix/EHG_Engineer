@@ -2,10 +2,14 @@
  * QF-20260904-604 — Gate 2 design-fidelity A2 probe selected sd_phase_handoffs.deliverables,
  * a column that has never existed (real column is deliverables_manifest). Under a
  * throw-on-42703 client (SCHEMA-TRUTH-001-A) that read detonated, scoring Gate 2 at 0 for
- * every SD with 12 held in EXEC. Fix: the A2 probe no longer selects the phantom column at
- * all -- the pre-existing "no handoff found" +5 outcome (design-fidelity.js:322-326 before
- * the fix) is kept verbatim as the sole, unconditional A2 result. No fallback to
- * deliverables_manifest (out of scope for this ticket).
+ * every SD with 12 held in EXEC. Fix at the time: the A2 probe stopped selecting the phantom
+ * column entirely and booked a flat, unconditional +5 -- a residue explicitly left as "no
+ * fallback to deliverables_manifest (out of scope for this ticket)".
+ *
+ * QF-20260906-474 (ratification 6c263823) replaces that residue: A1/A2/A3 must never award
+ * half credit on an unverifiable branch (a constant reads as a measurement no probe took).
+ * A2 now reads the REAL deliverables_manifest column on the accepted EXEC-TO-PLAN handoff --
+ * this file is updated to pin the new, varying behavior rather than the flat +5 it used to pin.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -25,28 +29,21 @@ const { validateDesignFidelity } = await import(
   '../../../scripts/modules/implementation-fidelity/sections/design-fidelity.js'
 );
 
-/** A supabase double that detonates like a real throw-on-42703 client the instant
- *  anything touches sd_phase_handoffs.deliverables -- the phantom column this QF removes. */
-function makeThrowOn42703Supabase(calls) {
+/** A supabase double whose sd_phase_handoffs leg resolves to `handoffRow` (or none). */
+function makeHandoffSupabase(handoffRow, calls = { tables: [] }) {
   return {
     from(table) {
       calls.tables.push(table);
       if (table === 'sd_phase_handoffs') {
-        return {
-          select(colsStr) {
-            calls.handoffSelects.push(colsStr);
-            const requested = String(colsStr).split(',').map((s) => s.trim());
-            if (requested.includes('deliverables')) {
-              throw { code: '42703', message: 'column sd_phase_handoffs.deliverables does not exist' };
-            }
-            return this;
-          },
-          eq() { return this; },
-          order() { return this; },
-          limit: () => Promise.resolve({ data: [], error: null }),
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          order: () => chain,
+          limit: () => chain,
+          maybeSingle: () => Promise.resolve({ data: handoffRow ?? null, error: null }),
         };
+        return chain;
       }
-      // Any other table (e.g. sd-id-resolver's own lookups) behaves as an empty, benign chain.
       const chain = {
         select: () => chain,
         eq: () => chain,
@@ -72,42 +69,44 @@ function makeValidation() {
   };
 }
 
-describe('QF-20260904-604: design-fidelity A2 no longer reads the phantom deliverables column', () => {
+describe('QF-20260906-474: design-fidelity A2 reads the real deliverables_manifest column', () => {
   beforeEach(() => { h.sd = null; });
 
-  it('completes without a 42703 against a throw-on-42703 client, and A2 credits 5', async () => {
-    // A UI leaf so no earlier exemption branch (EHG_Engineer / backend-leaf) short-circuits
-    // before reaching A2 -- mirrors the G1 Feedback Widget non-exempt case.
+  it('credits A2 10/10 when an accepted EXEC->PLAN handoff has a non-empty deliverables_manifest', async () => {
     h.sd = { sd_type: 'feature', scope: 'Feedback Widget UI Layer with a form and a button', title: 'G1 Feedback Widget' };
     const v = makeValidation();
-    const calls = { tables: [], handoffSelects: [] };
-    const supabase = makeThrowOn42703Supabase(calls);
+    const calls = { tables: [] };
+    const supabase = makeHandoffSupabase({ deliverables_manifest: '- ✅ All user stories implemented' }, calls);
 
     await expect(validateDesignFidelity('SD-X', { some: 'design' }, v, supabase)).resolves.not.toThrow();
 
-    expect(v.warnings).toContain('[A2] No EXEC→PLAN handoff found');
-    // sd_phase_handoffs is never touched at all -- the phantom-column read is gone, not
-    // merely error-tolerant.
-    expect(calls.tables).not.toContain('sd_phase_handoffs');
-    expect(calls.handoffSelects).toHaveLength(0);
+    expect(v.gate_scores.design_fidelity).toBeGreaterThanOrEqual(10);
+    expect(v.details.design_fidelity?.deliverables_manifest_found).toBe(true);
+    // NOTE: A1/A3 still can't verify in this fixture (gitLogForSD is mocked empty), so
+    // v.unverified stays true overall -- this test isolates A2's OWN success path only.
+    expect(v.warnings).not.toContain('[A2] No accepted EXEC→PLAN handoff with a deliverables manifest found');
+    expect(calls.tables).toContain('sd_phase_handoffs');
   });
 
-  it('A2 is unconditional: even if a real handoff row with a workflow-mentioning payload existed, A2 still just credits the flat 5 (no re-introduced 10-point branch)', async () => {
+  it('awards 0/10 and stamps the section unverified when no accepted EXEC->PLAN handoff exists', async () => {
     h.sd = { sd_type: 'feature', scope: 'Feedback Widget UI Layer with a form and a button', title: 'G1 Feedback Widget' };
     const v = makeValidation();
-    // Even a supabase double that WOULD happily return workflow-mentioning deliverables
-    // must not change the outcome, because A2 no longer queries at all.
-    const chain = {
-      select: () => chain,
-      eq: () => chain,
-      order: () => chain,
-      limit: () => Promise.resolve({ data: [{ deliverables: { workflow: 'user workflow implemented' } }], error: null }),
-    };
-    const supabase = { from: () => chain };
+    const supabase = makeHandoffSupabase(null);
 
     await validateDesignFidelity('SD-X', { some: 'design' }, v, supabase);
 
-    expect(v.warnings).toContain('[A2] No EXEC→PLAN handoff found');
-    expect(v.details.design_fidelity?.workflows_mentioned).toBeUndefined();
+    expect(v.warnings).toContain('[A2] No accepted EXEC→PLAN handoff with a deliverables manifest found');
+    expect(v.unverified).toBe(true);
+  });
+
+  it('two distinct A2 outcomes on the same SD shape, differing only by handoff presence (acceptance criterion)', async () => {
+    h.sd = { sd_type: 'feature', scope: 'Feedback Widget UI Layer with a form and a button', title: 'G1 Feedback Widget' };
+    const withHandoff = makeValidation();
+    await validateDesignFidelity('SD-X', { some: 'design' }, withHandoff, makeHandoffSupabase({ deliverables_manifest: '- ✅ done' }));
+
+    const withoutHandoff = makeValidation();
+    await validateDesignFidelity('SD-X', { some: 'design' }, withoutHandoff, makeHandoffSupabase(null));
+
+    expect(withHandoff.gate_scores.design_fidelity).not.toBe(withoutHandoff.gate_scores.design_fidelity);
   });
 });

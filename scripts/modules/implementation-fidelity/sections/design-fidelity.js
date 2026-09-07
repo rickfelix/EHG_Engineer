@@ -283,26 +283,54 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
       sectionDetails.component_files = componentFiles.slice(0, 5);
       console.log(`   ✅ Found ${componentFiles.length} component files`);
     } else {
+      // QF-20260906-474 (ratification 6c263823): no component files found is UNVERIFIABLE, not
+      // half-verified -- award 0 and stamp the section unverified rather than book a constant
+      // that reads as a measurement no probe actually took.
       validation.warnings.push('[A1] No component files found in git commits');
-      sectionScore += 5;
-      console.log('   ⚠️  No component files found (5/10)');
+      validation.unverified = true;
+      console.log('   ⚠️  No component files found (0/10, unverified)');
     }
   } catch (error) {
     validation.warnings.push(`[A1] Git log check failed: ${error.message}`);
-    sectionScore += 5;
-    console.log('   ⚠️  Cannot verify components (5/10)');
+    validation.unverified = true;
+    console.log('   ⚠️  Cannot verify components (0/10, unverified)');
   }
 
   // A2: Check for workflow implementation (10 points)
-  // QF-20260904-604: this probe used to select sd_phase_handoffs.deliverables, a column
-  // that has never existed (real column is deliverables_manifest) -- under the
-  // throw-on-42703 client that detonated Gate 2 for every SD. The +5 outcome below is
-  // kept verbatim as the sole A2 result; no fallback to deliverables_manifest here.
+  // QF-20260906-474: replaces the QF-20260904-604 constant +5 (a residue left when the phantom
+  // sd_phase_handoffs.deliverables probe -- a column that never existed -- was removed; the real
+  // column is deliverables_manifest). Reads the accepted EXEC-TO-PLAN handoff's manifest: its
+  // presence is real evidence the workflow-completion gate ran and passed for this SD; its
+  // absence is unverifiable, not half-verified.
   console.log('\n   [A2] User Workflows Implementation...');
 
-  validation.warnings.push('[A2] No EXEC→PLAN handoff found');
-  sectionScore += 5;
-  console.log('   ⚠️  No handoff found (5/10)');
+  try {
+    const { data: handoff, error: handoffError } = await supabase
+      .from('sd_phase_handoffs')
+      .select('deliverables_manifest')
+      .eq('sd_id', sd_id)
+      .eq('handoff_type', 'EXEC-TO-PLAN')
+      .eq('status', 'accepted')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (handoffError) throw handoffError;
+
+    if (handoff && typeof handoff.deliverables_manifest === 'string' && handoff.deliverables_manifest.trim()) {
+      sectionScore += 10;
+      sectionDetails.deliverables_manifest_found = true;
+      console.log('   ✅ Accepted EXEC→PLAN handoff with a deliverables manifest found (10/10)');
+    } else {
+      validation.warnings.push('[A2] No accepted EXEC→PLAN handoff with a deliverables manifest found');
+      validation.unverified = true;
+      console.log('   ⚠️  No accepted EXEC→PLAN handoff found (0/10, unverified)');
+    }
+  } catch (error) {
+    validation.warnings.push(`[A2] Handoff manifest check failed: ${error.message}`);
+    validation.unverified = true;
+    console.log('   ⚠️  Cannot verify workflows (0/10, unverified)');
+  }
 
   // A3: Check for user action support (5 points)
   console.log('\n   [A3] User Actions Support...');
@@ -331,13 +359,15 @@ export async function validateDesignFidelity(sd_id, designAnalysis, validation, 
       sectionDetails.crud_operations_found = true;
       console.log('   ✅ CRUD operations found in code changes');
     } else {
+      // QF-20260906-474 (ratification 6c263823): unverifiable, not half-verified.
       validation.warnings.push('[A3] No CRUD operations detected in code changes');
-      sectionScore += 3;
-      console.log('   ⚠️  No CRUD operations detected (3/5)');
+      validation.unverified = true;
+      console.log('   ⚠️  No CRUD operations detected (0/5, unverified)');
     }
   } catch (_error) {
-    sectionScore += 3;
-    console.log('   ⚠️  Cannot verify CRUD operations (3/5)');
+    validation.warnings.push('[A3] Git diff check failed, cannot verify CRUD operations');
+    validation.unverified = true;
+    console.log('   ⚠️  Cannot verify CRUD operations (0/5, unverified)');
   }
 
   // ADVISORY mode: convert issues to warnings, award full credit
