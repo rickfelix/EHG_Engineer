@@ -71,7 +71,7 @@ export async function runBriefAssemble({ sb, argv = [], now = new Date() } = {})
       const nowIso = now.toISOString();
       const w = await writeRows(sb, 'michael_brief_runs', (t) => t
         .upsert({ et_date: etDate, data_json: data, rendered_html: html, verified: verdict.verified, verify_notes: verdict.verify_notes || null, assembled_at: nowIso, rendered_at: nowIso }, { onConflict: 'et_date' })
-        .select('id'));
+        .select('id').single()); // et_date is uniquely indexed — exactly one row, bounded by design
       if (!w.ok) return { status: 'failed', counts: { ...counts, error_code: w.refusal, phase: 'write' } };
       counts.rows_written = 1;
       return { status: readiness.degraded ? 'degraded' : 'ok', counts };
