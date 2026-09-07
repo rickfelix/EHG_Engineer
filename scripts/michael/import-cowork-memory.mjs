@@ -48,6 +48,12 @@ export const SOURCE_FILES = Object.freeze({
   'body-section.md': 'rules',
   'morning-brief-distillation.md': 'rules',
   'CLAUDE.md': 'rules',
+  // Child J (v1.1, FR-5): youtube rules use the SAME "json: {...}" directive as every other rule
+  // file (lib/michael/cowork-parse.mjs's parseRuleFile is generic); the youtube-digest feeder
+  // (scripts/michael/youtube-digest.mjs) requires rule_json.channel_id, so a rule imported without
+  // a json: line is staged as an unusable prose row — channelOfRule() there counts it as
+  // malformed_rule (degraded, never crashed) rather than silently doing nothing.
+  'youtube.md': 'rules',
   'gmail-labels.md': 'labels',
   'memory/closures.md': 'closures',
   'memory/brief-feedback.md': 'feedback',

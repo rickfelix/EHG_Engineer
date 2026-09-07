@@ -139,7 +139,8 @@ describe('parseSourceFiles', () => {
     expect(missing).toEqual(expect.arrayContaining(['todoist.md', 'body-section.md', 'CLAUDE.md']));
   });
 
-  it('SOURCE_FILES maps exactly the eight source files the spec names', () => {
-    expect(Object.keys(SOURCE_FILES).sort()).toEqual(['CLAUDE.md', 'body-section.md', 'gmail-labels.md', 'gmail.md', 'memory/brief-feedback.md', 'memory/closures.md', 'morning-brief-distillation.md', 'todoist.md'].sort());
+  it('SOURCE_FILES maps exactly the nine source files the spec names (child J adds youtube.md)', () => {
+    expect(Object.keys(SOURCE_FILES).sort()).toEqual(['CLAUDE.md', 'body-section.md', 'gmail-labels.md', 'gmail.md', 'memory/brief-feedback.md', 'memory/closures.md', 'morning-brief-distillation.md', 'todoist.md', 'youtube.md'].sort());
+    expect(SOURCE_FILES['youtube.md']).toBe('rules');
   });
 });
