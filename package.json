@@ -11,6 +11,7 @@
     "michael:brief-doc": "node scripts/michael/brief-doc.mjs",
     "michael:inbox": "node scripts/michael-inbox.cjs",
     "michael:encode-adam-carveout": "node scripts/michael/encode-adam-carveout.mjs",
+    "michael:retire-cowork": "node scripts/michael/retire-cowork.mjs",
     "schema:snapshot:prd": "node scripts/snapshot-prd-schema.js",
     "schema:check-drift": "node scripts/snapshot-prd-schema.js --check-drift",
     "altifyai:fr7-fixture-drift": "node scripts/regen-fr7-source-material-fixture.mjs",
