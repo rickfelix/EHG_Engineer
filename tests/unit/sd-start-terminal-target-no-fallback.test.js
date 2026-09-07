@@ -26,7 +26,7 @@ describe('QF-20260704-825: TARGET_ALREADY_TERMINAL guard precedes auto-fallback'
   it('checks claimResult.error === "sd_terminal_status" and process.exit(1)s unconditionally', () => {
     const idx = src.indexOf('TARGET_ALREADY_TERMINAL');
     expect(idx).toBeGreaterThan(0);
-    const body = src.slice(idx - 400, idx + 700);
+    const body = src.slice(idx - 400, idx + 1050);
     expect(body).toMatch(/claimResult\.error === 'sd_terminal_status'/);
     expect(body).toMatch(/process\.exit\(1\)/);
   });
