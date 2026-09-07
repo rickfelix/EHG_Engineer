@@ -22,7 +22,7 @@ import { autoValidateUserStories, classifyDesignOnly, storyMeetsDesignBar } from
  * opts: { uuid, stories, deliverables }. Returns { client, recorded }.
  */
 function makeClient(opts) {
-  const recorded = { resolvedByKey: null, promoteStatusIn: null, validateCalled: false };
+  const recorded = { resolvedByKey: null, promotedIds: null, validateCalled: false };
   function builder(table) {
     const st = { table, op: 'select', updateData: null, eqs: {}, ins: {} };
     const resolve = () => {
@@ -35,12 +35,18 @@ function makeClient(opts) {
       if (st.table === 'user_stories') {
         if (st.op === 'update') {
           if (st.updateData?.status === 'completed') {
-            recorded.promoteStatusIn = st.ins.status ?? null;
             if (st.ins.id) recorded.promotedIds = st.ins.id;
           }
           if (st.updateData?.validation_status === 'validated') {
             recorded.validateCalled = true;
             if (st.ins.id) recorded.validatedIds = st.ins.id;
+          }
+          // QF-20260903-031: disposeUserStory's write — status='blocked' + validation_status='skipped'.
+          if (st.updateData?.status === 'blocked' && st.updateData?.validation_status === 'skipped') {
+            recorded.disposedStoryKeys = recorded.disposedStoryKeys || [];
+            recorded.disposedStoryKeys.push(st.eqs.story_key);
+            recorded.disposeReasonCodes = recorded.disposeReasonCodes || [];
+            recorded.disposeReasonCodes.push(st.updateData.metadata?.disposition?.reason_code ?? null);
           }
           return { data: opts.stories, error: null };
         }
@@ -53,7 +59,9 @@ function makeClient(opts) {
       update(d) { st.op = 'update'; st.updateData = d; return api; },
       eq(k, v) { st.eqs[k] = v; return api; },
       in(k, arr) { st.ins[k] = arr; return api; },
+      limit() { return api; },
       maybeSingle() { return Promise.resolve(resolve()); },
+      single() { return Promise.resolve(resolve()); },
       then(res, rej) { return Promise.resolve(resolve()).then(res, rej); },
     };
     return api;
@@ -69,7 +77,7 @@ test('draft stories are promoted (ready+draft) and then validated', async () => 
     deliverables: [{ deliverable_name: 'd', completion_status: 'completed' }],
   });
   const res = await autoValidateUserStories('11111111-1111-1111-1111-111111111111', client);
-  assert.deepEqual(recorded.promoteStatusIn, ['ready', 'draft'], 'promotion must include draft, not just ready');
+  assert.deepEqual(recorded.promotedIds, ['s1'], 'promotion must include draft, not just ready');
   assert.equal(recorded.validateCalled, true, 'completed stories must be auto-validated');
   assert.equal(res.validated, true);
 });
@@ -107,7 +115,7 @@ test('ready stories still promoted+validated (no regression for the original pat
     deliverables: [{ deliverable_name: 'd', completion_status: 'completed' }],
   });
   const res = await autoValidateUserStories('44444444-4444-4444-4444-444444444444', client);
-  assert.deepEqual(recorded.promoteStatusIn, ['ready', 'draft'], 'ready stories still promoted via the widened set');
+  assert.deepEqual(recorded.promotedIds, ['s1'], 'ready stories still promoted via the widened set');
   assert.equal(recorded.validateCalled, true);
   assert.equal(res.validated, true);
 });
@@ -122,7 +130,7 @@ test('deliverables incomplete short-circuits with no promotion or validation', a
   const res = await autoValidateUserStories('55555555-5555-5555-5555-555555555555', client);
   assert.equal(res.validated, false, 'incomplete deliverables must not validate');
   assert.equal(res.message, 'Deliverables incomplete');
-  assert.equal(recorded.promoteStatusIn, null, 'no promotion when deliverables are incomplete');
+  assert.equal(recorded.promotedIds, null, 'no promotion when deliverables are incomplete');
   assert.equal(recorded.validateCalled, false, 'no validation when deliverables are incomplete');
 });
 
@@ -135,7 +143,66 @@ test('no user stories returns the {validated:true,count:0} contract (infra/docs 
   const res = await autoValidateUserStories('66666666-6666-6666-6666-666666666666', client);
   assert.equal(res.validated, true, 'no stories is an acceptable pass for infra/docs SDs');
   assert.equal(res.count, 0);
-  assert.equal(recorded.promoteStatusIn, null, 'nothing to promote when there are no stories');
+  assert.equal(recorded.promotedIds, null, 'nothing to promote when there are no stories');
+});
+
+// ── QF-20260903-031 ─────────────────────────────────────────────────────────────────────────────
+// A 'draft' story from the auto-GENERATED pipeline can mean "all acceptance criteria are
+// generator boilerplate" (allAcsBoilerplate() -> draft, SD-LEO-INFRA-AUTO-STORY-QUALITY-GATE-001),
+// which is a DIFFERENT meaning from the add-prd-to-database.js "not yet promoted" 'draft' the tests
+// above cover. Blindly promoting both meant a "story" synthesized from PRD analysis prose (a code
+// finding, an LOC/scope estimate — never an implementable feature) was silently promoted to
+// completed+validated. This must instead route through the sanctioned disposition path
+// (scripts/dispose-user-story.js, QF-20260903-222) and be excluded from promotion.
+
+test('QF-20260903-031: an all-boilerplate draft story is dispositioned, NOT promoted alongside a genuine one', async () => {
+  const boilerplateAc = { scenario: 'x', given: 'y', when: 'z', then: 'w', is_boilerplate: true };
+  const stories = [
+    { id: 'g1', story_key: 'SD-X-001:US-001', title: 'Genuine story', status: 'ready', validation_status: 'pending' },
+    {
+      id: 'b1',
+      story_key: 'SD-X-001:US-002',
+      title: 'markRatificationEncoded (:205) never SELECTs the row — it is a blind conditional',
+      status: 'draft',
+      validation_status: 'pending',
+      acceptance_criteria: [boilerplateAc, boilerplateAc, boilerplateAc],
+    },
+  ];
+  const { client, recorded } = makeClient({
+    uuid: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+    stories,
+    deliverables: [{ deliverable_name: 'd', completion_status: 'completed' }],
+  });
+  const res = await autoValidateUserStories('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', client);
+  assert.deepEqual(recorded.promotedIds, ['g1'], 'the boilerplate artefact must NOT be promoted alongside the genuine story');
+  assert.deepEqual(recorded.disposedStoryKeys, ['SD-X-001:US-002'], 'the artefact is routed through the sanctioned disposition path by story_key');
+  assert.deepEqual(recorded.disposeReasonCodes, ['AUTO_BOILERPLATE_GENERATOR_ARTEFACT']);
+  assert.equal(res.validated, true, 'the genuine story still validates — one artefact does not block the whole SD');
+});
+
+test('QF-20260903-031: a draft story with mixed boilerplate/substantive ACs is still promoted (not a false positive)', async () => {
+  const stories = [
+    {
+      id: 's1',
+      story_key: 'SD-X-002:US-001',
+      title: 'A genuine story with one boilerplate AC and one real one',
+      status: 'draft',
+      validation_status: 'pending',
+      acceptance_criteria: [
+        { scenario: 'x', given: 'y', when: 'z', then: 'w', is_boilerplate: true },
+        { scenario: 'a genuine, non-boilerplate criterion', given: 'g', when: 'w', then: 't' },
+      ],
+    },
+  ];
+  const { client, recorded } = makeClient({
+    uuid: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+    stories,
+    deliverables: [{ deliverable_name: 'd', completion_status: 'completed' }],
+  });
+  const res = await autoValidateUserStories('cccccccc-cccc-cccc-cccc-cccccccccccc', client);
+  assert.deepEqual(recorded.promotedIds, ['s1'], 'a story is only excluded when ALL its ACs are boilerplate, not just one');
+  assert.equal(recorded.disposedStoryKeys, undefined, 'no disposition when not every AC is boilerplate');
+  assert.equal(res.validated, true);
 });
 
 // ── SD-LEO-INFRA-VALIDATE-DESIGN-ONLY-STORIES-001 ──────────────────────────────────────────────

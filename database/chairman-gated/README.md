@@ -1170,3 +1170,73 @@ regardless of tier the next time the pending-migration detector runs, defeating 
 code path is fail-soft on the column's absence either way (`mergeQfMetadataKeys` catches Postgres
 `42703` and returns `{merged:false, reason:'column_absent'}`), so claim provenance simply does not
 land on the QF side until this is applied — no claim ever fails because of it.
+
+**Confirming activation after apply** (SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-F, Child F): run
+
+```
+node scripts/verify-quick-fixes-metadata-activation.mjs
+```
+
+immediately after applying the migration above. It reports one of four states: `NOT_YET_APPLIED`
+(the expected result before you run the apply command), `ACTIVATED` (the column exists and a live,
+disposable-row self-claim through the real `stampClaim()`/`mergeQfMetadataKeys()` chain wrote AND
+was independently read back — the migration and the chain are both genuinely live), `REGRESSED`
+(the column exists but the chain itself is broken — a real defect, file it), or `INDETERMINATE`
+(a connection/environmental problem prevented a definite answer — retry, this is not itself a
+defect). It also wired `product_requirements_v2.activation_test_id` on Child E's PRD to this
+script's path, as a documentary record of what verifies the chain — that record is a documentary
+repair, not a live re-check: Child E is already `status=completed`, so no gate re-evaluates it
+against a fresh run of this script.
+
+## Applying `20260906_drop_anon_read_strategic_directives_v2.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260906_drop_anon_read_strategic_directives_v2.sql" \
+  --prod-deploy --allow-any-path
+```
+
+(SD-LEO-FIX-CLOSE-ANON-KEY-001, FR-3.) Drops `anon_read_strategic_directives_v2` (`FOR SELECT TO
+anon USING (true)`) from `public.strategic_directives_v2`, closing an unauthenticated read of all
+6176 rows on production. Keeps `strategic_directives_v2_service_role_access` and the other five
+live policies on this table untouched — see the file's own header for the full live-measured
+policy inventory.
+
+**MUST apply strictly AFTER FR-1 lands** (already true as of this SD's own PR — verify via `git
+log --oneline -- src/services/realtime-dashboard.js
+src/services/database-loader/connections.ts` before running the ceremony): the policy this file
+drops is what forced its own 2025-12-18 re-add, when a still-anon-keyed
+`src/services/realtime-dashboard.js` broke the moment it was dropped the day before. Re-run
+`node scripts/anon-read-strategic-directives-probe.mjs` as a smoke check on the realtime dashboard
+consumer after applying, per the SD's `smoke_test_steps`.
+
+**Run the dry-run proof before the ceremony, safe to re-run any time (runs the real UP body —
+precondition, DROP, verify — plus a same-transaction anon-visibility re-check, inside a
+transaction that always `ROLLBACK`s):**
+
+```
+node database/chairman-gated/20260906_drop_anon_read_strategic_directives_v2_dry_run.mjs
+```
+
+**FR-2 CI predicate** (`scripts/anon-read-strategic-directives-probe.mjs`,
+`.github/workflows/anon-read-strategic-directives-probe.yml`) is the pre/post acceptance signal:
+it FAILS against current production (this policy still live) and must PASS once this file is
+applied — run it once before the ceremony (expect exit 2) and once after (expect exit 0).
+
+**FR-2 was widened** (Solomon GO 8d0dead0 / ratification 49656c8c) to also enumerate every public
+table the anon role can read and assert it against `ANON_READ_ALLOWLIST` in the same probe script —
+a frozen, measured baseline of the ~135 other tables already anon-exposed today, none of which this
+migration touches. Those are explicitly out of scope for this SD (recorded as a follow-up finding,
+not fixed here) — `strategic_directives_v2` is the only entry deliberately absent from that
+allow-list, since it is the one this migration removes.
+
+**FR-4 (post-apply readback, separate action, not part of this file):** once applied, record a
+provenance-stamped readback on the SD — pg_policies for this table (expect the anon policy gone,
+the other six unchanged) plus a fresh anon-key count read (expect 0) — per ratification 6c263823
+(producer, run id, content hash).
+
+**Rollback**: re-create the dropped policy exactly as captured in this file's own header (`CREATE
+POLICY anon_read_strategic_directives_v2 ... FOR SELECT TO anon USING (true)`) — re-verify against
+live `pg_policies` before trusting that captured text as current, per this directory's standing
+caveat that a captured predicate is context to diff against, not an authority to restore from.
