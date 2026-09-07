@@ -444,6 +444,27 @@ describe('SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 FR-1: PR-file-list is a
     expect(sb.from).not.toHaveBeenCalled();
   });
 
+  // SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 (SECURITY review, NEW-MED-1): BODY_MISMATCH -- a
+  // function that resolves LIVE but whose body diverges from the committed file -- previously
+  // fell into ordinaryUnapplied by default (any status not in the small exclusion list), which
+  // reported "migration(s) not applied" for an object that, in fact, IS live. Own WAIT branch
+  // with an accurate message; no chairman_decisions queue write (this isn't a deliberate
+  // wait-for-chairman state, unlike CEREMONY_PENDING).
+  it('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001: BODY_MISMATCH gets its own WAIT message, distinct from "not applied", and never touches chairman_decisions', async () => {
+    classifyMigrationApplyState.mockResolvedValue({
+      files: [{ file: '20260101_SD-TEST-001_bodymismatch.sql', status: 'BODY_MISMATCH', body_mismatches: ['fn_stale'] }],
+      error: null
+    });
+    const sb = { from: vi.fn() };
+    const r = await createChairmanApplyVerificationGate(sb).validator(sdWith({}));
+    expect(r.passed).toBe(false);
+    expect(r.wait).toBe(true);
+    expect(r.wait_reason).toContain('body diverges');
+    expect(r.wait_reason).not.toContain('not applied');
+    expect(r.details.body_mismatched).toEqual(['20260101_SD-TEST-001_bodymismatch.sql']);
+    expect(sb.from).not.toHaveBeenCalled();
+  });
+
   // SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D (TS-4): prFileSet is documented as indexed by BOTH the
   // full repo-relative path AND its bare basename (gates.js:1795-1799). Every existing case above
   // that exercises the PR-file-list path matches on the FULL path; none proves the BASENAME half

@@ -1981,8 +1981,15 @@ export function createChairmanApplyVerificationGate(supabase) {
         // a known, re-checkable lifecycle state, no retry-budget burn, no RCA trigger. A genuine
         // classifier ERROR (handled above via failClosed) remains the only hard-FAIL path.
         const CEREMONY_STATUS = 'CEREMONY_PENDING';
+        // SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 (SECURITY review, NEW-MED-1): BODY_MISMATCH is
+        // a function that resolves LIVE but whose body diverges from the committed file -- it is
+        // NOT "not applied" (that object exists), so without this exclusion it fell into
+        // ordinaryUnapplied by default and reported the misleading "not applied" WAIT message for
+        // an object that is, in fact, live. Given its own WAIT branch below instead.
+        const BODY_MISMATCH_STATUS = 'BODY_MISMATCH';
         const ceremonyPending = owned.filter(f => f.status === CEREMONY_STATUS);
-        const ordinaryUnapplied = owned.filter(f => f.status !== 'APPLIED' && f.status !== 'NO_DDL' && f.status !== CEREMONY_STATUS);
+        const bodyMismatched = owned.filter(f => f.status === BODY_MISMATCH_STATUS);
+        const ordinaryUnapplied = owned.filter(f => f.status !== 'APPLIED' && f.status !== 'NO_DDL' && f.status !== CEREMONY_STATUS && f.status !== BODY_MISMATCH_STATUS);
 
         if (ceremonyPending.length) {
           console.log(`   ⏳ WAIT: ${ceremonyPending.length} chairman-gated migration(s) awaiting ceremony apply`);
@@ -2024,6 +2031,18 @@ export function createChairmanApplyVerificationGate(supabase) {
             issues: [],
             details: { applicable: true, gated: true, ceremony_pending: names },
             remediation: 'Chairman approval queued (decisionType=migration_apply, visible via scripts/chairman-decisions.mjs list) -- once approved, the coordinator applies via the apply-migration.js token ceremony, then re-run this handoff.'
+          });
+        }
+
+        if (bodyMismatched.length) {
+          console.log(`   ⏳ WAIT: ${bodyMismatched.length} migration(s) have a live function whose body diverges from the file`);
+          const names = bodyMismatched.map(f => f.file);
+          return buildWaitResult({
+            score: 0, max_score: 100,
+            wait_reason: `${sdKey}: ${bodyMismatched.length} owned migration(s) resolve live but their function body diverges from the committed file (needs a human look, not necessarily a re-apply): ${names.join(', ')}`,
+            issues: [],
+            details: { applicable: true, gated, body_mismatched: names },
+            remediation: 'Compare the live function body (pg_proc.prosrc) against the migration file. If the live body is intentional drift (a later hotfix never backported), commit a corrective migration; if it is a genuinely stale apply, re-run the CREATE OR REPLACE. Then re-run this handoff.'
           });
         }
 
