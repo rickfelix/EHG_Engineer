@@ -1,8 +1,8 @@
-<!-- file_content_hash: 0bb90320659c07b1 -->
+<!-- file_content_hash: a9e40b10c38085bf -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-06 3:02:27 PM
+**Generated**: 2026-09-07 11:03:53 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -452,6 +452,21 @@ manual is read.
 - **RECORD-TRUTH-001-A claim_sd MIGRATION APPLIED ON CHAIRMAN VERBAL (ratification 662df1ca)** — Chairman in-terminal at the Adam seat 2026-09-06 ~12:4xZ, verbatim "1 apply it", answering keyboard item 1 of the walkthrough: database/migrations/20260903_claim_sd_symmetric_clear_returning_fix.sql (SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A, PR 8119; CREATE OR REPLACE public.claim_sd, chairman-only path 3c). Applied from worktree rt001a-approved-by-20260906 with token + --prod-deploy (MIGRATION_APPLY_PROD_PASS sha 172fdff1) and readback. Adam share: claim_sd is a chairman-applied function; a later change is a fresh verbal.
 - **FR-5 ALARM-CRON HOST TASKS REGISTERED BY THE CHAIRMAN AND VERIFIED HIDDEN (ratification 439c07d1)** — Chairman at his elevated PowerShell 2026-09-06 ~13:1xZ, pasted into the Adam terminal: node scripts/setup-alarm-cron-tasks.mjs registered the three FR-5 alarm tasks (Fleet-Down Alert, Fleet-Worker Pulse, Periodic Liveness Watcher timestamp classes) and --verify read all three back as hidden-window launch, repeating, enabled (SD-LEO-INFRA-LOOP-LIVENESS-DISCRIMINATOR-001 FR-5; the colon-in-task-name defect fixed as QF-20260906-961 first). Adam share: host Task Scheduler changes are chairman keystrokes; Adam supplies the exact command and reads the verify line back.
 
+- **CHAIRMAN APPLY CEREMONY 2026-09-07 — seven migrations applied on one-at-a-time verbals (ratifications 813243f0, c353f95f, 5fafb567, e8e92c7c, 94abd32f, ef502138, 9efb5bfe)** — Chairman in-terminal at the Adam seat 2026-09-07 01:32Z-02:10Z, working his declared "Let's do one thing at a time" sequence, gave a separate verbal for each file below; each was scribed under 3c with an `@approved-by` marker matching `git config user.email`, committed, applied with a single-use token and `--prod-deploy`, and read back independently of the file's own verify block. One clause, not seven, because seven new sections in one night is what splits a contract. Ledger rows carry the full pre-apply measurements, plan hashes and readbacks.
+  - `20260906_drop_anon_read_strategic_directives_v2.sql` (813243f0, plan 68ed8757, 13 stmts) — closed a live production read leak: the anon key read all 6,177 `strategic_directives_v2` rows with no session; readback 0 rows, service_role still 6,177.
+  - `20260906_role_seat_checkpoints.sql` (c353f95f, plan 2c469898, 30 stmts) — chairman-only because it carries CREATE POLICY plus GRANT/REVOKE, which 3b never delegates.
+  - `20260906_add_quick_fixes_metadata_column.sql` (5fafb567, plan de378ae8, 3 stmts) — additive column; sat in chairman-gated for a procedural reason, not a risk one.
+  - `20260905_close_role_flag_secdef_execute_exposure.sql` (e8e92c7c, plan 92ee224f, 22 stmts) — exactly one of seven targeted functions was still anon-EXECUTE; both callers were checked to be service-role before the revoke, not assumed.
+  - `20260824_sms_status_staging.sql` (94abd32f, plan 62c291ed, 12 stmts) — applied on an already-valid committed stamp; honest scope recorded, as this is one of three preconditions for real delivery receipts.
+  - `20260826_venture_usage_window_summary_rpc.sql` (ef502138, plan 15859d01, 15 stmts) — applied while the table it reads was still absent, because the function fails loud and its only consumer returns wired:false, so no gauge flips falsely green.
+  - `20260826_venture_usage_events_rpc.sql` (9efb5bfe, plan 45fd976f, 45 stmts) — the withhold/amend/apply case, kept as the worked example of precondition 4 below.
+  **Adam share:** every object above is now a chairman-applied object; a later change to any of them is a fresh verbal, never a delegated apply. And the 9efb5bfe path is the standing shape when a staged constraint disagrees with the live one — WITHHOLD on the same-constraint coordination check, say what would be revoked and what is in active use, apply only after "amend it" and a re-proved diff, and bind the new approval to the amended content. A verbal never carries across an edit.
+
+- **AN UNRELEASED CHAIRMAN HOLD NOW BLOCKS DIRECTIVE COMPLETION (ratification 12ebdd61)** — Chairman in-terminal at the Adam seat 2026-09-07 ~01:50Z applied `20260904_strategic_directives_unreleased_chairman_hold_completion_guard.sql` (SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2 part 2; plan 0d63ffb9, 79 stmts). This one gets its own sentence because it changes what a seat may DO, not just what exists: completing a strategic directive whose metadata carries an unreleased chairman hold now raises **SDCW2** at the database, inside `enforce_canonical_lifecycle_write()`, on both the `aaa_` and `zzz_` triggers. Ten not-yet-completed directives were carrying such a hold when it went live and are the population this refuses. The escape hatch is real and was verified before the apply, not taken on the error text's word: `releaseHold()` at `lib/fleet/claim-eligibility.cjs:844`, which stamps `unfenced_at`/`by`/`reason`; the predicate reads false once `unfenced_at` is at or after the hold's set-at stamp and true when it precedes it. **Adam share:** an SDCW2 is not a gate bug and must never be bypassed — it means a hold this seat or another set was never released. Release it through `releaseHold()` with a reason, then complete. Adam also does not set a hold it has no intention of returning to clear.
+
+- **PHASE-SNAPSHOT WINDOW REGISTRATION IS WRITE-ONCE (ratification 72a3615a)** — Chairman in-terminal at the Adam seat 2026-09-07 ~02:15Z applied `20260829_phase_snapshot_windows_agent_class_rates.sql` (plan 97e518cf, 14 stmts). Its own sentence for the same reason: once `window_registered_at` is set on a `sd_phase_handoffs` row, that column and `baseline_snapshot` are **immutable** — a later change raises **P0001** from a BEFORE UPDATE freeze trigger. The guard is inert on the 37,940 existing rows because the column is new and NULL everywhere, so it bites only newly-registered windows. **Adam share, three parts.** (1) The migration alters `sd_phase_handoffs`; `phase_snapshot_windows` is a VIEW the same file creates. Adam told the chairman the wrong target relation and corrected it on the record — read the file's ALTER lines, never infer the table from the filename. (2) A baseline is a measurement, so register the window only when the snapshot is the one to keep; there is no second attempt. (3) The probe that first appeared to show this guard broken was selecting a different row on each statement because its id subquery had no ORDER BY. Pin the row before concluding a guard fails.
+
+
 
 ## Crew-comms routing protocol (organizing layer)
 
@@ -495,6 +510,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-06*
+*Generated from database: 2026-09-07*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*

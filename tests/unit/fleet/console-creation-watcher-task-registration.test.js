@@ -15,27 +15,47 @@ import {
   STARTUP_TASK_NAME,
 } from '../../../scripts/setup-console-creation-watcher-task.mjs';
 
+const HIDDEN_LAUNCHER_PATH = 'C:\\repo\\scripts\\cron\\run-hidden.vbs';
+
 describe('buildCreateArgs — TS-3', () => {
   it('produces a repeating /SC MINUTE trigger with a non-SYSTEM S4U principal', () => {
-    const args = buildCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', runAs: 'rickf' });
-    expect(args).toEqual(['/Create', '/TN', TASK_NAME, '/TR', 'C:\\wrapper.cmd', '/SC', 'MINUTE', '/MO', '5', '/F', '/RU', 'rickf', '/NP']);
+    const args = buildCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, runAs: 'rickf' });
+    expect(args).toEqual(['/Create', '/TN', TASK_NAME, '/TR', `wscript.exe //B "${HIDDEN_LAUNCHER_PATH}" "C:\\wrapper.cmd"`, '/SC', 'MINUTE', '/MO', '5', '/F', '/RU', 'rickf', '/NP']);
   });
 
   it('omits /NP for a well-known service account', () => {
-    const args = buildCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', runAs: 'SYSTEM' });
+    const args = buildCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, runAs: 'SYSTEM' });
     expect(args).toContain('/RU');
     expect(args).not.toContain('/NP');
   });
 
   it('throws on an invalid interval', () => {
-    expect(() => buildCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', intervalMinutes: 0 })).toThrow();
+    expect(() => buildCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, intervalMinutes: 0 })).toThrow();
+  });
+
+  // QF-20260904-169: this task's /TR previously pointed at the .cmd directly, materialising a
+  // visible console on the chairman's desktop every fire (the original symptom this QF exists
+  // to fix). Verify the hidden-window launcher is now always used.
+  it('/TR is the hidden-window launcher, never the .cmd directly', () => {
+    const args = buildCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, runAs: 'rickf' });
+    const trAction = args[args.indexOf('/TR') + 1];
+    expect(trAction).toContain('wscript.exe');
+    expect(trAction).toContain('run-hidden.vbs');
+  });
+
+  it('throws without hiddenLauncherPath', () => {
+    expect(() => buildCreateArgs({ wrapperPath: 'C:\\wrapper.cmd' })).toThrow(/hiddenLauncherPath/);
   });
 });
 
 describe('buildStartupCreateArgs — TS-3', () => {
   it('registers the startup companion via /SC ONLOGON with the same principal', () => {
-    const args = buildStartupCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', runAs: 'rickf' });
-    expect(args).toEqual(['/Create', '/TN', STARTUP_TASK_NAME, '/TR', 'C:\\wrapper.cmd', '/SC', 'ONLOGON', '/F', '/RU', 'rickf', '/NP']);
+    const args = buildStartupCreateArgs({ wrapperPath: 'C:\\wrapper.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, runAs: 'rickf' });
+    expect(args).toEqual(['/Create', '/TN', STARTUP_TASK_NAME, '/TR', `wscript.exe //B "${HIDDEN_LAUNCHER_PATH}" "C:\\wrapper.cmd"`, '/SC', 'ONLOGON', '/F', '/RU', 'rickf', '/NP']);
+  });
+
+  it('throws without hiddenLauncherPath', () => {
+    expect(() => buildStartupCreateArgs({ wrapperPath: 'C:\\wrapper.cmd' })).toThrow(/hiddenLauncherPath/);
   });
 });
 

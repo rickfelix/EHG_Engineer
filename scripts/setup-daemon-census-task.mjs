@@ -42,6 +42,11 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+// QF-20260904-169: this registrar's /TR previously pointed at the .cmd directly, materialising
+// a visible console on every fire. Reuse the SECURITY-reviewed, quoting-correct hidden-window
+// action builder from setup-alarm-cron-tasks.mjs rather than re-deriving the same quoting logic
+// again.
+import { buildHiddenTrAction, HIDDEN_LAUNCHER_REL_PATH } from './setup-alarm-cron-tasks.mjs';
 
 const TAG = '[daemon-census-task]';
 export const TASK_NAME = 'LEO-DaemonCensus';
@@ -66,9 +71,9 @@ export function buildWrapperScript({ repoRoot, cleanup = false }) {
 
 /**
  * Build the `schtasks /Create` argv. PURE — no embedded quoting; execFileSync quotes spaced args.
- * @param {{intervalMinutes?: number, wrapperPath?: string, requireRunner?: boolean, runnerPath?: string|null}} [opts]
+ * @param {{intervalMinutes?: number, wrapperPath?: string, hiddenLauncherPath?: string, requireRunner?: boolean, runnerPath?: string|null}} [opts]
  */
-export function buildCensusSchtasksArgs({ intervalMinutes = 60, wrapperPath, requireRunner = true, runnerPath = null } = {}) {
+export function buildCensusSchtasksArgs({ intervalMinutes = 60, wrapperPath, hiddenLauncherPath, requireRunner = true, runnerPath = null } = {}) {
   const minutes = Number(intervalMinutes);
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1439) {
     throw new Error(`${TAG} --interval-minutes must be an integer 1..1439 (got ${intervalMinutes})`);
@@ -83,15 +88,14 @@ export function buildCensusSchtasksArgs({ intervalMinutes = 60, wrapperPath, req
     );
   }
   if (!wrapperPath) throw new Error(`${TAG} wrapperPath required`);
+  if (!hiddenLauncherPath) throw new Error(`${TAG} hiddenLauncherPath required`);
+  // QF-20260904-169: /TR is the hidden-window launcher, never the .cmd directly (was previously
+  // the bare wrapperPath -- see setup-alarm-cron-tasks.mjs's buildHiddenTrAction for the quoting
+  // rationale, SECURITY-reviewed there).
+  const trAction = buildHiddenTrAction({ hiddenLauncherPath, wrapperPath });
   return [
     '/Create', '/TN', TASK_NAME,
-    // Unquoted (TESTING evidence 534ab65e, finding N3): execFileSync passes each argv element as
-    // its own token via CreateProcess, with no shell to strip wrapping quote characters -- embedding
-    // literal `"..."` here would hand schtasks a path string containing quote characters, which is
-    // not the real file (matches the established convention in setup-liveness-watcher-task.mjs,
-    // setup-reboot-respawn-task.mjs, setup-eva-watcher-task.mjs, setup-console-creation-watcher-task.mjs,
-    // all of which pass wrapperPath bare for the same reason).
-    '/TR', wrapperPath,
+    '/TR', trAction,
     '/SC', 'MINUTE', '/MO', String(minutes),
     '/F', // idempotent re-register
     // No /RU/RL: assert-daemon-census.mjs only reads/updates claude_sessions via the Supabase
@@ -150,6 +154,7 @@ async function main() {
   }
 
   const wrapperPath = path.join(REPO_ROOT, WRAPPER_REL_PATH);
+  const hiddenLauncherPath = path.join(REPO_ROOT, HIDDEN_LAUNCHER_REL_PATH);
   const wrapperContent = buildWrapperScript({ repoRoot: REPO_ROOT, cleanup: args.cleanup });
 
   let schtasksArgs;
@@ -157,6 +162,7 @@ async function main() {
     schtasksArgs = buildCensusSchtasksArgs({
       intervalMinutes: Number(args.intervalMinutes),
       wrapperPath,
+      hiddenLauncherPath,
     });
   } catch (err) {
     console.error((err && err.message) || String(err));
@@ -179,6 +185,11 @@ async function main() {
     console.error(`${TAG} REFUSING real registration from an ephemeral worktree checkout: ${REPO_ROOT}`);
     console.error(`${TAG} This would embed a path that stops existing post-merge (see file header). Re-run from the main checkout.`);
     process.exit(4);
+  }
+
+  if (!existsSync(hiddenLauncherPath)) {
+    console.error(`${TAG} hidden-window launcher missing at ${hiddenLauncherPath} — refusing to register a task that would fall back to a visible console.`);
+    process.exit(5);
   }
 
   // ADVERSARIAL REVIEW (PR #7369, WARNING): scheduling with --cleanup converts assert-daemon-

@@ -27,6 +27,7 @@ import {
 } from '../../../scripts/setup-liveness-watcher-task.mjs';
 
 const REPO = 'C:\\repo';
+const HIDDEN_LAUNCHER_PATH = 'C:\\repo\\scripts\\cron\\run-hidden.vbs';
 
 describe('FR-3b the wrapper runs the PID class and nothing else', () => {
   it('sets LIVENESS_CLASSES to the PID-anchored class only', () => {
@@ -49,7 +50,7 @@ describe('FR-3b the wrapper runs the PID class and nothing else', () => {
 
 describe('FR-3b registration uses the argv form that works unelevated', () => {
   it('cadence task is a repeating MINUTE schedule', () => {
-    const a = buildCreateArgs({ wrapperPath: 'C:\\repo\\w.cmd' });
+    const a = buildCreateArgs({ wrapperPath: 'C:\\repo\\w.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     expect(a).toContain('/SC');
     expect(a[a.indexOf('/SC') + 1]).toBe('MINUTE');
     expect(a).toContain('/F'); // idempotent re-registration
@@ -59,14 +60,14 @@ describe('FR-3b registration uses the argv form that works unelevated', () => {
   });
 
   it('rejects a nonsense interval instead of registering something that never fires', () => {
-    expect(() => buildCreateArgs({ wrapperPath: 'x', intervalMinutes: 0 })).toThrow(/invalid intervalMinutes/);
-    expect(() => buildCreateArgs({ wrapperPath: 'x', intervalMinutes: 'soon' })).toThrow(/invalid intervalMinutes/);
+    expect(() => buildCreateArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, intervalMinutes: 0 })).toThrow(/invalid intervalMinutes/);
+    expect(() => buildCreateArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, intervalMinutes: 'soon' })).toThrow(/invalid intervalMinutes/);
   });
 
   it('startup companion is ONLOGON by default and ONSTART only when explicitly asked', () => {
-    const logon = buildStartupCreateArgs({ wrapperPath: 'x' });
+    const logon = buildStartupCreateArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     expect(logon[logon.indexOf('/SC') + 1]).toBe('ONLOGON');
-    const boot = buildStartupCreateArgs({ wrapperPath: 'x', boot: true });
+    const boot = buildStartupCreateArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, boot: true });
     expect(boot[boot.indexOf('/SC') + 1]).toBe('ONSTART');
   });
 
@@ -77,6 +78,26 @@ describe('FR-3b registration uses the argv form that works unelevated', () => {
   it('--boot is opt-in, not the default', () => {
     expect(parseArgs(['node', 'x']).boot).toBe(false);
     expect(parseArgs(['node', 'x', '--boot']).boot).toBe(true);
+  });
+
+  // QF-20260904-169: MEASURED via live PowerShell readback (Get-ScheduledTask), all three tasks
+  // this registrar builds (cadence, startup arm, sweep) previously pointed /TR at their .cmd
+  // directly, materialising a visible console on the chairman's desktop every fire.
+  it('/TR is the hidden-window launcher, never the .cmd directly', () => {
+    const cadence = buildCreateArgs({ wrapperPath: 'C:\\repo\\w.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
+    const cadenceTr = cadence[cadence.indexOf('/TR') + 1];
+    expect(cadenceTr).toContain('wscript.exe');
+    expect(cadenceTr).toContain('run-hidden.vbs');
+
+    const startup = buildStartupCreateArgs({ wrapperPath: 'C:\\repo\\w.cmd', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
+    const startupTr = startup[startup.indexOf('/TR') + 1];
+    expect(startupTr).toContain('wscript.exe');
+    expect(startupTr).toContain('run-hidden.vbs');
+  });
+
+  it('throws without hiddenLauncherPath', () => {
+    expect(() => buildCreateArgs({ wrapperPath: 'x' })).toThrow(/hiddenLauncherPath required/);
+    expect(() => buildStartupCreateArgs({ wrapperPath: 'x' })).toThrow(/hiddenLauncherPath required/);
   });
 });
 
@@ -100,10 +121,17 @@ describe('FR-3b the SWEEP gets a durable PID-capable venue too', () => {
   });
 
   it('runs the sweep on a tighter cadence than the watcher, matching sweep-cron.yml', () => {
-    const sweep = buildCreateArgs({ taskName: SWEEP_TASK_NAME, wrapperPath: 'x', intervalMinutes: 5 });
+    const sweep = buildCreateArgs({ taskName: SWEEP_TASK_NAME, wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, intervalMinutes: 5 });
     expect(sweep[sweep.indexOf('/MO') + 1]).toBe('5');
-    const watcher = buildCreateArgs({ wrapperPath: 'x' });
+    const watcher = buildCreateArgs({ wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH });
     expect(Number(watcher[watcher.indexOf('/MO') + 1])).toBeGreaterThan(5);
+  });
+
+  it('the sweep /TR is also the hidden-window launcher (QF-20260904-169)', () => {
+    const sweep = buildCreateArgs({ taskName: SWEEP_TASK_NAME, wrapperPath: 'x', hiddenLauncherPath: HIDDEN_LAUNCHER_PATH, intervalMinutes: 5 });
+    const trArg = sweep[sweep.indexOf('/TR') + 1];
+    expect(trArg).toContain('wscript.exe');
+    expect(trArg).toContain('run-hidden.vbs');
   });
 });
 

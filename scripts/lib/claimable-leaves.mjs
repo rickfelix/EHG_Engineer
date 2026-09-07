@@ -20,7 +20,7 @@
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 import { isFixtureSd, isStartedSd, isUnactionableRemediationSd } from '../../lib/coordinator/sd-exclusion.mjs';
 import { parseSdDependencies } from '../../lib/utils/parse-sd-dependencies.cjs';
-import { parentLeadPending, classifyDispatchIneligibility, resolveHoldProvenance, formatHoldProvenance } from '../../lib/fleet/claim-eligibility.cjs';
+import { parentLeadPending, classifyDispatchIneligibility, resolveDescriptiveHoldNote, formatHoldProvenance } from '../../lib/fleet/claim-eligibility.cjs';
 import { checkMetadataDependency } from '../modules/sd-next/dependency-resolver.js';
 
 // Collect every blocker sd_key for an SD: the `dependencies` column PLUS the canonical
@@ -119,7 +119,7 @@ export async function computeClaimableLeaves(sb, opts = {}) {
           break;
         case 'human_action_required': {
           humanActionSkips++;
-          const prov = resolveHoldProvenance(d.metadata);
+          const prov = resolveDescriptiveHoldNote(d.metadata);
           // SD-LEO-FIX-HUMAN-ACTION-FENCES-001: a fence with no stated release condition
           // "removes the mechanism that would prompt its own review" (the SD's own framing) —
           // surface it here, at the one place every humanActionHolds consumer (fleet-dashboard.cjs,

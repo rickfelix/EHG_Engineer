@@ -1,0 +1,45 @@
+name: Transport Test Isolation Guard Lint
+
+# SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C (FR-4/FR-5)
+#
+# Three confirmed live incidents (2026-08-xx x2, 2026-09-03) had a test reach a REAL Resend/
+# Twilio send because only a per-caller guard existed (chairman-sms-gate/index.js:243),
+# covering 1 of 8+ email callers and 0 of 2 SMS callers. This SD added a shared guard
+# (lib/notifications/transport-test-isolation-guard.js) consumed by both resend-adapter.js and
+# twilio-provider.js. This workflow blocks a PR that removes either guard, or that adds a new
+# test importing either transport module without mocking the network layer.
+#
+# NO npm ci: the lint imports only node:fs and node:path.
+#
+# PATH FILTER: ONE ENTRY PER EXTENSION, never a brace-glob (GitHub Actions does not expand
+# brace alternation -- see fixture-producer-guard-lint.yml's header for the incident that taught
+# this repo that lesson).
+
+on:
+  pull_request:
+    paths:
+      - 'lib/notifications/resend-adapter.js'
+      - 'lib/notifications/transport-test-isolation-guard.js'
+      - 'lib/messaging/providers/twilio-provider.js'
+      - 'tests/**/*.test.js'
+      - 'tests/**/*.test.mjs'
+      - 'tests/**/*.spec.js'
+      - 'tests/**/*.spec.mjs'
+      - 'scripts/lint/transport-test-isolation-guard-lint.mjs'
+      - 'scripts/lint/transport-test-isolation-guard-allowlist.json'
+      - '.github/workflows/transport-test-isolation-guard-lint.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transport-test-isolation-guard-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Both transports guard against unmocked test-env sends
+        run: node scripts/lint/transport-test-isolation-guard-lint.mjs
