@@ -73,7 +73,13 @@
     "path": "lib/seeded-coord-defect.js",
     "content": "// SEEDED DEFECT: raw session_coordination insert bypassing insertCoordinationRow().\nexport async function send(supabase, payload) {\n  const { error } = await supabase.from('session_coordination').insert({\n    message_type: 'INFO',\n    payload\n  });\n  return error;\n}\n"
    }
-  ]
+  ],
+  "env": { "CI": "" },
+  "note": "QF-20260905-934: env.CI is forced empty for THIS fixture trial only (safeSpecEnv does not block it -- CI is not in UNSAFE_ENV_RE). The scratch dir runTrial() builds is `git init`'d with a staged index and NO commit, so candidateFilesDiff()'s `git diff origin/main...HEAD` always throws here regardless of origin -- there is no HEAD yet. Under an inherited CI=true (this harness itself runs in CI), that throw now hits this control's own CI-fail-closed branch (added by this same QF) instead of the pre-existing local-dev advisory fallback the seed fixture relies on to ever reach detection. Forcing CI='' for the trial restores that fallback path -- it does not touch the real production workflow's env, which is untouched and still fails loud on a genuinely unresolvable base.",
+  "observability_proof": {
+   "input": "The file-path list from candidateFilesDiff()'s four git calls (diff vs origin/main...HEAD, --cached, working-tree, and `git ls-files --others`) under scripts/** and lib/**, or candidateFilesAll()'s recursive walk of those same two directories in --all/degraded mode; each matched file's on-disk source text is then run through ESLint's Linter().verify() against the no-raw-session-coordination-insert and no-echoed-session-coordination-target rules. process.env.CI and process.env.SESSION_COORD_LINT_BASE also gate behavior: CI==='true' fails the run loud on an unresolvable diff base, otherwise it degrades to the --all advisory scan.",
+   "seen": "PR #8235, CI run 33963260337 (merged): actions/checkout's default shallow clone left origin/main unresolvable, so the run fell through to --all(degraded) mode and reported 41 real violation(s) across the pre-existing backlog, exit 0, advisory-not-blocking -- a genuine positive observed in the live GitHub Actions deployment, not a temp-dir fixture."
+  }
  },
  {
   "name": "alter-default-override-lint",
