@@ -204,6 +204,11 @@
   - `database/chairman-gated/20260907_session_coordination_archive.sql` (staged, not yet applied) adds a same-shaped archive table for a future retention job, plus `lib/coordination/query-with-archive.cjs` for callers needing historical + live visibility.
   - Fixed an unanchored `.gitignore` glob (`query-*.cjs`) that was silently excluding a legitimate `lib/coordination/` file.
 
+- **Orphan-writers registry gains 14 sourced specimens, 4 new entry types, and a wired reader-presence getter** - SD-LEO-FIX-ORPHAN-WRITERS-REGISTRY-001 (escalated from QF-20260904-116, over the 75-LOC quick-fix ceiling)
+  - `lib/governance/orphan-writers-registry.js` grows from 20 to 34 `ORPHAN_ENTRIES` and from 7 to 11 `ENTRY_TYPES` (`writer-with-no-reader`, `reads-before-the-writer`, `detector-with-no-sink`, `reads-but-never-compares`), sourced from Solomon rulings 18f04802 + 47cd9f79 + BOUND 84677786.
+  - EXEC-phase re-verification against live main caught 3 of the originally-sourced specimens as already-fixed (stale) and 1 as premise-refuted (dropped), so those were corrected or removed before shipping rather than registered as false governance data.
+  - New `getReaderClassification(entry)` getter (two-bucket `reader:NONE` vs `wired-but-blind`) is wired into its first production consumer, `scripts/orphan-writers-count.mjs`'s weekly summary — a LEAD-phase VALIDATION finding caught that the getter had zero callers before this SD.
+
 ### Infrastructure
 
 - **Swallowed-query-error lint widened to 6 directories and flipped from advisory to enforcing; ~40 remaining sites converted** - SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001
