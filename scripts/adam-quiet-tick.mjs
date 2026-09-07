@@ -71,6 +71,9 @@ import { countCompletionReadyParents } from '../lib/fleet/parent-completion.mjs'
 // ONE place, consumed by both the startup check (point-in-time) and this tick (continuous) so
 // the two can never disagree on what "required" means.
 import { ADAM_LOOPS, parseArmedSet, loopStatus } from './adam-startup-check.mjs';
+// QF-20260906-942: the SAME predicate the send gate itself uses (never a second, re-derived
+// time check) so the gauge and the gate can never disagree about whether a send is possible.
+import { inQuietHours } from '../lib/comms/adam-outbound/rubric-engine/lint.js';
 // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C / RCA 9a02a76d: neither existing gauge measures
 // whether origin/main is actually ADVANCING (output-flow blind spot), nor whether an in-flight
 // item is running past its type's historical duration baseline (chairman-specified 2026-09-01).
@@ -620,6 +623,22 @@ export async function checkHeartbeatCadence(sb, { nowMs = Date.now() } = {}) {
     }
   } catch { /* fail-soft */ }
   return { overdueMin: null };
+}
+
+/**
+ * QF-20260906-942: pure + exported so the OVERDUE-vs-SUPPRESSED branch is directly testable
+ * without going through main(). The gauge and the send gate must never disagree about whether
+ * a send is possible -- inside the 22:00-06:00 ET quiet window the gate WILL drop it, so the
+ * line must not instruct one. isQuiet is the caller's inQuietHours() result (the SAME predicate
+ * the gate itself evaluates, never a second, re-derived time check). Established convention:
+ * QUIET_TICK_STALL_SUPPRESSED / QUIET_TICK_SMS_SUPPRESSED (informational, never actionable).
+ */
+export function formatHeartbeatCadenceLine(overdueMin, isQuiet) {
+  if (overdueMin == null) return null;
+  if (isQuiet) {
+    return `QUIET_TICK_HEARTBEAT_SUPPRESSED=adam gapMin=${overdueMin} — 3-hourly heartbeat cadence contract breached, but within the 22:00-06:00 ET quiet window; the send gate would drop it. INFORMATIONAL, not actionable. Cadence resumes at 06:00 ET.`;
+  }
+  return `QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${overdueMin} — 3-hourly heartbeat cadence contract breached (>=175min since last send; chairman verbal 2026-08-28); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`;
 }
 
 /** QF-20260808-673: how far back to look for an unanswered chairman inbound. */
@@ -1566,9 +1585,8 @@ async function main() {
     // QF-20260823-131 (re-tuned 2026-08-28, ratification 9eebe200: cadence now EVERY 3 HOURS):
     // re-checks the SAME >=175min measured-gap bar the durable cron uses, every 15min via this tick.
     const heartbeatCadence = await checkHeartbeatCadence(sb);
-    if (heartbeatCadence.overdueMin) {
-      console.log(`QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${heartbeatCadence.overdueMin} — 3-hourly heartbeat cadence contract breached (>=175min since last send; chairman verbal 2026-08-28); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`);
-    }
+    const heartbeatCadenceLine = formatHeartbeatCadenceLine(heartbeatCadence.overdueMin, inQuietHours());
+    if (heartbeatCadenceLine) console.log(heartbeatCadenceLine);
     // SD-LEO-INFRA-ADAM-DURABLE-STANDING-001: THE STANDING PRIORITY IS PRINTED HERE, ABOVE THE
     // INBOX LOOP BELOW, AND THE POSITION IS THE POINT. The measured failure was the queue setting
     // the agenda; a priority rendered under a dozen inbound rows has been filed, not surfaced.
