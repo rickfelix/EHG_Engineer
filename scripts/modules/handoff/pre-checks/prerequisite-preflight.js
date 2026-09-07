@@ -18,6 +18,7 @@ import { shouldBypassUserStories } from '../../../../lib/protocol-policies/orche
 import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import { lookupSdIdForFk } from '../../auto-trigger-stories.mjs';
 import { isLightweightSDType, detectCodeProduction } from '../validation/sd-type-applicability-policy.js';
+import { isParentOrchestrator } from '../../../../lib/handoff/parent-detection.js';
 
 /**
  * Determines whether an SD requires user stories at PLAN-TO-EXEC time.
@@ -85,6 +86,27 @@ export function shouldRequireSmokeTest(sd) {
     return producesCode;
   }
   return false;
+}
+
+/**
+ * Fail-safe wrapper around isParentOrchestrator() for preflight use.
+ * QF-20260906-480: this is a quick, best-effort check that runs BEFORE the full
+ * gate pipeline — a lookup failure here (bad mock, transient DB error) must
+ * default to `false` (the pre-existing, standalone-SD behavior) rather than
+ * propagate and trip the OUTER fail-open catch in runPrerequisitePreflight(),
+ * which would silently swallow every OTHER preflight check too.
+ *
+ * @param {Object} sd - Strategic Directive record
+ * @param {Object} supabase - Supabase client
+ * @returns {Promise<boolean>}
+ */
+async function safeIsParentOrchestrator(sd, supabase) {
+  try {
+    return await isParentOrchestrator(sd, supabase);
+  } catch (err) {
+    console.warn(`   ⚠️  Parent-orchestrator preflight check error (non-blocking, defaulting to false): ${err.message}`);
+    return false;
+  }
 }
 
 /**
@@ -159,6 +181,16 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
         break;
     }
 
+    // QF-20260906-480: a parent orchestrator's PLAN-TO-EXEC uses the reduced set
+    // (PARENT_PRD_EXISTS + CHILDREN_STRUCTURE_VALID) — the full gate pipeline
+    // (parent-orchestrator.js#getParentOrchestratorGates) never includes the
+    // Sub-Agent Evidence Gate for parents, since implementation (and its TESTING
+    // evidence) is delegated to children. isParentOrchestrator() caches on `sd`
+    // identity, so this reuses the DB lookup already made in checkPlanToExecPrereqs
+    // (no extra query) instead of paying for a second isParentOrchestrator() DB
+    // round trip.
+    const isParentPlanToExec = normalizedType === 'PLAN_TO_EXEC' && await safeIsParentOrchestrator(sd, supabase);
+
     // QF-20260720-851 (P2): surface missing sub-agent evidence BEFORE the full gate
     // run. Reuses the SAME validator the real GATE_SUBAGENT_EVIDENCE gate enforces
     // (no drift, no gate weakening, no auto-invoking agents) so a worker sees the
@@ -167,7 +199,14 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     // 9 SDs in a 48h window, ~12-min mean retry latency, 23/24 resolved on retry —
     // an ordering speed-bump, not a quality catch). A WAIT verdict (evidence may
     // still be mid-write) is intentionally NOT treated as a preflight failure.
-    try {
+    if (isParentPlanToExec) {
+      issues.push({
+        code: 'PARENT_SUBAGENT_EVIDENCE_BYPASSED',
+        severity: 'info',
+        message: 'Parent orchestrator: sub-agent evidence requirement bypassed at PLAN-TO-EXEC per Orchestrator Parent Lifecycle (implementation, and its evidence, delegated to children)',
+        remediation: 'No action required — informational entry only.'
+      });
+    } else { try {
       // QF-20260807-283: pull the published contract from the GATE rather than restating it here —
       // a second copy of the writer contract is the drift this QF exists to prevent.
       const { validateSubagentEvidence, EVIDENCE_WRITER_CONTRACT } = await import('../gates/subagent-evidence-gate.js');
@@ -238,7 +277,7 @@ export async function runPrerequisitePreflight(supabase, handoffType, sdId) {
     } catch (evidenceErr) {
       // Fail-open: the real gate still enforces this later — preflight is UX only.
       console.warn(`   ⚠️  Sub-agent evidence preflight error (non-blocking): ${evidenceErr.message}`);
-    }
+    } }
   } catch (err) {
     // Fail-open: don't block handoff if preflight itself errors
     console.warn(`   ⚠️  Prerequisite preflight error (non-blocking): ${err.message}`);
@@ -580,6 +619,16 @@ export function checkLeadToPlanPrereqs(sd) {
 export async function checkPlanToExecPrereqs(supabase, sd, sdId) {
   const issues = [];
 
+  // QF-20260906-480: the Orchestrator Parent Lifecycle (leo_protocol_sections
+  // "SD Continuation Truth Table" / SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001) defines
+  // PLAN-TO-EXEC for a parent as a REDUCED set — PARENT_PRD_EXISTS + CHILDREN_STRUCTURE_VALID,
+  // no DESIGN/DATABASE/TESTING sub-agents (delegated to children). The full gate pipeline
+  // (parent-orchestrator.js) already implements this correctly, but this quick preflight
+  // (which runs BEFORE the full gate pipeline) demanded the STANDALONE requirements —
+  // PRD 'approved' status and TESTING sub-agent evidence — rejecting every parent's
+  // PLAN-TO-EXEC by construction (PRD_NOT_APPROVED, SUBAGENT_EVIDENCE_MISSING).
+  const isParent = await safeIsParentOrchestrator(sd, supabase);
+
   // Check PRD exists and is approved
   const prd = await safeQuery(
     supabase
@@ -595,6 +644,15 @@ export async function checkPlanToExecPrereqs(supabase, sd, sdId) {
       code: 'PRD_MISSING',
       message: 'No PRD record found for this SD',
       remediation: `Create PRD: node scripts/add-prd-to-database.js ${sdId} "Title"`
+    });
+  } else if (isParent) {
+    // PARENT_PRD_EXISTS is satisfied by existence alone — mirrors parent-orchestrator.js's
+    // getParentOrchestratorGates(), which never checks prd.status or executive_summary length.
+    issues.push({
+      code: 'PARENT_PRD_APPROVAL_BYPASSED',
+      severity: 'info',
+      message: 'Parent orchestrator: PRD approval-status and summary-length checks bypassed per Orchestrator Parent Lifecycle (PLAN-TO-EXEC reduced set)',
+      remediation: 'No action required — informational entry only.'
     });
   } else {
     if (!['approved', 'ready_for_exec', 'in_progress'].includes(prd.status)) {
@@ -620,7 +678,16 @@ export async function checkPlanToExecPrereqs(supabase, sd, sdId) {
   // SD-LEARN-FIX-ADDRESS-PAT-RETRO-003 (US-001/US-002):
   // Skip USER_STORIES_MISSING for SD types where STORIES is not required per
   // CLAUDE_CORE.md sub-agent matrix. Feature/bugfix still enforce.
-  if (shouldRequireUserStories(sd.sd_type)) {
+  // QF-20260906-480: a parent orchestrator's implementation lives in children, so
+  // user stories (like DESIGN/DATABASE) are never authored on the parent itself.
+  if (isParent) {
+    issues.push({
+      code: 'USER_STORIES_BYPASSED',
+      severity: 'info',
+      message: 'Parent orchestrator: user-stories requirement bypassed per Orchestrator Parent Lifecycle (implementation delegated to children)',
+      remediation: 'No action required — informational entry only.'
+    });
+  } else if (shouldRequireUserStories(sd.sd_type)) {
     const { data: stories, error: storiesErr } = await supabase
       .from('user_stories')
       .select('story_key')
