@@ -1300,3 +1300,15 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
     errSpy.mockRestore();
   });
 });
+
+describe('env resolution (QF-20260906-288)', () => {
+  it('imports dotenv/config as its first import, so a bare Task-Scheduler invocation with no ambient SUPABASE_URL still resolves its env from .env, mirroring scripts/fleet-worker-pulse.mjs', () => {
+    // Reproduced live: `env -u SUPABASE_URL -u SUPABASE_SERVICE_ROLE_KEY node scripts/fleet-down-alert.mjs`
+    // exited 2 with "missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY" before this fix, while the
+    // identical wrapper shape running fleet-worker-pulse.mjs (which already has this import)
+    // resolved its env correctly under the same unset-env conditions.
+    const src = readFileSync(fileURLToPath(new URL('../../scripts/fleet-down-alert.mjs', import.meta.url)), 'utf8');
+    const firstImport = src.match(/^import .*$/m)?.[0];
+    expect(firstImport).toBe("import 'dotenv/config';");
+  });
+});

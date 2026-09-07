@@ -26,18 +26,42 @@ name: Fixture Producer Guard Coverage Lint
 on:
   pull_request:
     paths:
+      # SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-1): the lint's own walk() extension
+      # filter was widened to mjs|js|cjs|ts|tsx|mts UNIFORMLY across all 5 SCAN_ROOTS, so every
+      # root below gets all 6 extension entries too -- an adversarial ship-review round caught
+      # that tests/e2e originally got the new extensions while the 4 pre-existing roots did not,
+      # which would have silently un-triggered this blocking gate for a future .ts producer under
+      # those roots even though the lint itself would still catch it in a full local/CI run.
       - 'tests/integration/**/*.js'
       - 'tests/integration/**/*.mjs'
       - 'tests/integration/**/*.cjs'
+      - 'tests/integration/**/*.ts'
+      - 'tests/integration/**/*.tsx'
+      - 'tests/integration/**/*.mts'
       - 'tests/database/**/*.js'
       - 'tests/database/**/*.mjs'
       - 'tests/database/**/*.cjs'
+      - 'tests/database/**/*.ts'
+      - 'tests/database/**/*.tsx'
+      - 'tests/database/**/*.mts'
       - 'scripts/harness/**/*.js'
       - 'scripts/harness/**/*.mjs'
       - 'scripts/harness/**/*.cjs'
+      - 'scripts/harness/**/*.ts'
+      - 'scripts/harness/**/*.tsx'
+      - 'scripts/harness/**/*.mts'
       - 'scripts/canary/**/*.js'
       - 'scripts/canary/**/*.mjs'
       - 'scripts/canary/**/*.cjs'
+      - 'scripts/canary/**/*.ts'
+      - 'scripts/canary/**/*.tsx'
+      - 'scripts/canary/**/*.mts'
+      - 'tests/e2e/**/*.js'
+      - 'tests/e2e/**/*.mjs'
+      - 'tests/e2e/**/*.cjs'
+      - 'tests/e2e/**/*.ts'
+      - 'tests/e2e/**/*.tsx'
+      - 'tests/e2e/**/*.mts'
       - 'lib/governance/fixture-producer-guard.mjs'
       - 'scripts/lint/fixture-producer-guard-lint.mjs'
       - 'scripts/lint/fixture-producer-guard-allowlist.json'

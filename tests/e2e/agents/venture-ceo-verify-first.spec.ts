@@ -62,11 +62,12 @@ test.describe('Venture CEO verify-first seeded thread', () => {
     // running the full seeded thread's budget-check step.
     const { VentureFactory } = await import('../../../lib/agents/venture-ceo-factory.js');
     const { buildFixtureVentureRow } = await import('../../../scripts/harness/s20-fixture.mjs');
+    const { insertGuarded, CLASSIFICATION } = await import('../../../lib/governance/fixture-producer-guard.mjs');
 
     const runId = `e2e-budget-fail-${Date.now()}`;
     const uniqueSuffix = randomUUID().replace(/-/g, '').slice(0, 10);
     const ventureRow = { ...buildFixtureVentureRow(`SD-A-${runId}`), name: `TEST-${uniqueSuffix}-SD-A` };
-    const { data: venture } = await supabase.from('ventures').insert(ventureRow).select('id, name').single();
+    const { data: venture } = await insertGuarded(supabase, 'ventures', ventureRow, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/venture-ceo-verify-first.spec.ts' }).select('id, name').single();
 
     const factory = new VentureFactory(supabase);
     const result = await factory.instantiateVenture({ ventureName: venture!.name, ventureId: venture!.id, totalTokenBudget: 25000 });
@@ -126,6 +127,7 @@ test.describe('Venture CEO verify-first seeded thread', () => {
     // exact partial state, then confirm the agent-id-keyed teardown still reaches it.
     const { VentureFactory } = await import('../../../lib/agents/venture-ceo-factory.js');
     const { buildFixtureVentureRow } = await import('../../../scripts/harness/s20-fixture.mjs');
+    const { insertGuarded, CLASSIFICATION } = await import('../../../lib/governance/fixture-producer-guard.mjs');
 
     const runId = `e2e-partial-${Date.now()}`;
     // Name uniqueness must land within the first 20 normalized chars — see the same-named
@@ -133,7 +135,7 @@ test.describe('Venture CEO verify-first seeded thread', () => {
     // and VentureFactory._generateVentureCode() truncates to 20 chars).
     const uniqueSuffix = randomUUID().replace(/-/g, '').slice(0, 10);
     const ventureRow = { ...buildFixtureVentureRow(`SD-A-${runId}`), name: `TEST-${uniqueSuffix}-SD-A` };
-    const { data: venture } = await supabase.from('ventures').insert(ventureRow).select('id, name').single();
+    const { data: venture } = await insertGuarded(supabase, 'ventures', ventureRow, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/venture-ceo-verify-first.spec.ts' }).select('id, name').single();
 
     const factory = new VentureFactory(supabase);
     const result = await factory.instantiateVenture({ ventureName: venture!.name, ventureId: venture!.id, totalTokenBudget: 25000 });

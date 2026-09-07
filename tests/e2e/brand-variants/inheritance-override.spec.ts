@@ -14,6 +14,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -81,17 +82,16 @@ test.describe('Hierarchical Inheritance Override', () => {
 
     // Create parent venture with parent brand
     if (parentBrandVariantId) {
-      const { data: parent } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: parent } = await insertGuarded(supabase, 'ventures', {
           name: `Parent Venture ${timestamp}`,
           org_id: testOrgId,
           brand_variant_id: parentBrandVariantId,
           problem_statement: 'Parent problem',
           solution: 'Parent solution',
           target_market: 'Parent market',
-          stage: 5
-        })
+          stage: 5,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/inheritance-override.spec.ts' })
         .select()
         .single();
 
@@ -100,9 +100,7 @@ test.describe('Hierarchical Inheritance Override', () => {
 
     // Create child venture with child brand override
     if (childBrandVariantId && parentVentureId) {
-      const { data: child } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: child } = await insertGuarded(supabase, 'ventures', {
           name: `Child Venture ${timestamp}`,
           org_id: testOrgId,
           parent_venture_id: parentVentureId,
@@ -110,8 +108,9 @@ test.describe('Hierarchical Inheritance Override', () => {
           problem_statement: 'Child problem',
           solution: 'Child solution',
           target_market: 'Child market',
-          stage: 2
-        })
+          stage: 2,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/inheritance-override.spec.ts' })
         .select()
         .single();
 

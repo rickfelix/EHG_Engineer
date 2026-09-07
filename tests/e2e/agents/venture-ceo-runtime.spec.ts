@@ -15,6 +15,7 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -48,13 +49,12 @@ test.describe.skip('Venture CEO Runtime E2E Tests (QUARANTINED — see note abov
     if (company) testCompanyId = company.id;
 
     // Create test venture with budget
-    const { data: venture } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture } = await insertGuarded(supabase, 'ventures', {
         name: `CEO Runtime Test Venture ${Date.now()}`,
         company_id: testCompanyId,
-        current_lifecycle_stage: 1
-      })
+        current_lifecycle_stage: 1,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/venture-ceo-runtime.spec.ts' })
       .select('id')
       .single();
 
@@ -125,13 +125,12 @@ test.describe.skip('Venture CEO Runtime E2E Tests (QUARANTINED — see note abov
 
     test('CEO-002: should block execution when budget is zero', async () => {
       // Given venture with exhausted budget
-      const { data: testVenture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: testVenture } = await insertGuarded(supabase, 'ventures', {
           name: `Zero Budget Venture ${Date.now()}`,
           company_id: testCompanyId,
-          current_lifecycle_stage: 1
-        })
+          current_lifecycle_stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/venture-ceo-runtime.spec.ts' })
         .select('id')
         .single();
 
@@ -191,13 +190,12 @@ test.describe.skip('Venture CEO Runtime E2E Tests (QUARANTINED — see note abov
 
     test('CEO-004: should fire SovereignAlert when budget below 20%', async () => {
       // Given budget is at 15% (below 20% threshold)
-      const lowBudgetVenture = await supabase
-        .from('ventures')
-        .insert({
+      const lowBudgetVenture = await insertGuarded(supabase, 'ventures', {
           name: `Low Budget Venture ${Date.now()}`,
           company_id: testCompanyId,
-          current_lifecycle_stage: 1
-        })
+          current_lifecycle_stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/venture-ceo-runtime.spec.ts' })
         .select('id')
         .single();
 
@@ -229,13 +227,12 @@ test.describe.skip('Venture CEO Runtime E2E Tests (QUARANTINED — see note abov
 
     test('CEO-005: should fail-closed when no budget record exists', async () => {
       // Given venture WITHOUT budget record
-      const { data: noBudgetVenture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: noBudgetVenture } = await insertGuarded(supabase, 'ventures', {
           name: `No Budget Record Venture ${Date.now()}`,
           company_id: testCompanyId,
-          current_lifecycle_stage: 1
-        })
+          current_lifecycle_stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/venture-ceo-runtime.spec.ts' })
         .select('id')
         .single();
 

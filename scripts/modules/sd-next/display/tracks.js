@@ -321,6 +321,12 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
     console.log(`${colors.dim}${indent}        └─ Child deps: ${item.childDepStatus.summary}${colors.reset}`);
   }
 
+  // QF-20260904-708: parent's mandatory_child_order names an intended dispatch sequence;
+  // a non-terminal predecessor holds this child regardless of any other ranking signal.
+  if (item.childOrderHold && item.childOrderHold.held) {
+    console.log(`${colors.yellow}${indent}        └─ held: after ${item.childOrderHold.afterKey}${colors.reset}`);
+  }
+
   // Display children recursively
   const children = childItems.get(sdId) || childItems.get(item.id) || [];
   const childrenInTrack = children.filter(c => allItems.includes(c));

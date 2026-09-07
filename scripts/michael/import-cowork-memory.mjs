@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // scripts/michael/import-cowork-memory.mjs — migrate the legacy Dropbox _Cowork folder into
-// michael_rules / michael_gmail_labels / michael_closures / michael_feedback_ledger, verify the
-// import, and let the chairman ratify it once. SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-F.
+// michael_rules / michael_closures / michael_feedback_ledger, verify the import, and let the
+// chairman ratify it once. SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-F. Gmail label rules
+// (gmail-labels.md) and doctrine.md principle-to-domain assignment are NOT wired to a writer here
+// -- see SD-LEO-FIX-COWORK-IMPORTER-CANNOT-001 and cowork-parse.mjs's module doc comment.
 // Spec docs/michael/02-SPEC.md section 8. RUNS ON THE HOST (reads a local folder outside repo/CI
 // reach). --root is a REQUIRED flag with NO default anywhere in this script — the literal strings
 // "Dropbox" and "_Cowork" never appear as a hardcoded path, since child I's retirement acceptance
@@ -21,8 +23,8 @@
 // michael_rules writes never bypass the Opus-verifier gate: a first-time import is a plain insert;
 // a re-import whose content differs from an existing active row REFUSES (lib/michael/
 // cowork-write.mjs, which reuses scripts/michael/rule-encode.mjs's exported needsVerifier
-// predicate). michael_gmail_labels/michael_closures/michael_feedback_ledger imports are idempotent
-// upserts on their real unique keys.
+// predicate). michael_closures/michael_feedback_ledger imports are idempotent upserts on their
+// real unique keys.
 //
 // --verify re-parses the source and diffs against what --apply wrote, per source file.
 // --ratify calls the canonical lib/chairman/ratification-writer.mjs writer once the chairman has
@@ -35,42 +37,44 @@ import path from 'node:path';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { createMichaelClient, parseArgs, readRows, refusal, emit } from '../../lib/michael/db.mjs';
 import { buildManifest, diffManifest } from '../../lib/michael/cowork-manifest.mjs';
-import { parseRuleFile, parseLabelTable, parseClosures, parseFeedbackLedger } from '../../lib/michael/cowork-parse.mjs';
-import { writeRule, writeLabel, writeClosure, writeFeedbackEntry } from '../../lib/michael/cowork-write.mjs';
+import { parseRuleFile, parseClosures, parseFeedbackLedger, parseDoctrine } from '../../lib/michael/cowork-parse.mjs';
+import { writeRule, writeClosure, writeFeedbackEntry } from '../../lib/michael/cowork-write.mjs';
 import { recordChairmanRatification } from '../../lib/chairman/ratification-writer.mjs';
 
 export const DEFAULT_MANIFEST_PATH = path.join('.artifacts', 'michael-cowork-manifest.json');
 
-/** Which source files this script recognizes, relative to --root, and how each is parsed. */
+/**
+ * Which source files this script recognizes, relative to --root, and how each is parsed.
+ * REWRITTEN by SD-LEO-FIX-COWORK-IMPORTER-CANNOT-001: paths corrected to match the real corpus
+ * layout (4 files live under memory/preferences/, not root), gmail-labels.md removed (no such
+ * file exists anywhere in the corpus -- the label rules are prose inside gmail.md, out of scope
+ * here), memory/doctrine.md added. Only gmail.md carries a sectionHeadingRe -- it is the sole rule
+ * file with a genuine heading-per-rule structure; see cowork-parse.mjs's module doc comment for
+ * why the other four rule-typed entries intentionally have none.
+ */
 export const SOURCE_FILES = Object.freeze({
-  'gmail.md': 'rules',
-  'todoist.md': 'rules',
-  'body-section.md': 'rules',
-  'morning-brief-distillation.md': 'rules',
-  'CLAUDE.md': 'rules',
-  // Child J (v1.1, FR-5): youtube rules use the SAME "json: {...}" directive as every other rule
-  // file (lib/michael/cowork-parse.mjs's parseRuleFile is generic); the youtube-digest feeder
-  // (scripts/michael/youtube-digest.mjs) requires rule_json.channel_id, so a rule imported without
-  // a json: line is staged as an unusable prose row — channelOfRule() there counts it as
-  // malformed_rule (degraded, never crashed) rather than silently doing nothing.
-  'youtube.md': 'rules',
-  'gmail-labels.md': 'labels',
-  'memory/closures.md': 'closures',
-  'memory/brief-feedback.md': 'feedback',
+  'memory/preferences/gmail.md': { kind: 'rules', domain: 'gmail', sectionHeadingRe: /^##\s+Triage rules/i },
+  'memory/preferences/todoist.md': { kind: 'rules', domain: 'todoist' },
+  'memory/preferences/body-section.md': { kind: 'rules', domain: 'body' },
+  'memory/preferences/morning-brief-distillation.md': { kind: 'rules', domain: 'brief' },
+  'CLAUDE.md': { kind: 'rules', domain: null },
+  'memory/closures.md': { kind: 'closures' },
+  'memory/brief-feedback.md': { kind: 'feedback' },
+  'memory/doctrine.md': { kind: 'doctrine' },
 });
 
 /** Read and parse every present source file. Returns { parsed: {relPath: {...}}, missing: [relPath] }. */
 export function parseSourceFiles(root, { fsImpl = fs } = {}) {
   const parsed = {};
   const missing = [];
-  for (const [relPath, kind] of Object.entries(SOURCE_FILES)) {
+  for (const [relPath, spec] of Object.entries(SOURCE_FILES)) {
     const full = path.join(root, relPath);
     if (!fsImpl.existsSync(full)) { missing.push(relPath); continue; }
     const text = fsImpl.readFileSync(full, 'utf8');
-    if (kind === 'rules') parsed[relPath] = { kind, ...parseRuleFile(text) };
-    else if (kind === 'labels') parsed[relPath] = { kind, ...parseLabelTable(text) };
-    else if (kind === 'closures') parsed[relPath] = { kind, ...parseClosures(text) };
-    else if (kind === 'feedback') parsed[relPath] = { kind, ...parseFeedbackLedger(text) };
+    if (spec.kind === 'rules') parsed[relPath] = { kind: 'rules', ...parseRuleFile(text, { domain: spec.domain, sectionHeadingRe: spec.sectionHeadingRe }) };
+    else if (spec.kind === 'closures') parsed[relPath] = { kind: 'closures', ...parseClosures(text) };
+    else if (spec.kind === 'feedback') parsed[relPath] = { kind: 'feedback', ...parseFeedbackLedger(text) };
+    else if (spec.kind === 'doctrine') parsed[relPath] = { kind: 'doctrine', ...parseDoctrine(text) };
   }
   return { parsed, missing };
 }
@@ -125,13 +129,6 @@ export async function runImportCoworkMemory({ sb, argv = [], now = new Date(), f
           rows.push({ rule_key: rule.rule_key, ok: Boolean(found) && found.rule_text === rule.rule_text, present: Boolean(found) });
         }
         report[relPath] = { ok: rows.every((x) => x.ok), rows };
-      } else if (result.kind === 'labels') {
-        const rows = [];
-        for (const label of result.labels) {
-          const r = await readRows(sb, 'michael_gmail_labels', (q) => q.eq('label_id', label.label_id), { select: 'label_id' });
-          rows.push({ label_id: label.label_id, ok: r.rows.length === 1 });
-        }
-        report[relPath] = { ok: rows.every((x) => x.ok), rows };
       } else if (result.kind === 'closures') {
         const rows = [];
         for (const c of result.closures) {
@@ -152,23 +149,28 @@ export async function runImportCoworkMemory({ sb, argv = [], now = new Date(), f
   }
 
   if (!apply) {
-    const preview = Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, { kind: v.kind, parsed_count: (v.rules || v.labels || v.closures || v.entries || []).length, unparsed: v.unparsed || [] }]));
+    const preview = Object.fromEntries(Object.entries(parsed).map(([k, v]) => [k, { kind: v.kind, parsed_count: (v.rules || v.closures || v.entries || v.principles || []).length, unparsed: v.unparsed || [] }]));
     return { ok: true, action: 'dry_run', root, missing, preview };
   }
 
-  const results = { rules: [], labels: [], closures: [], feedback: [] };
+  // doctrine.md principles are previewed (dry-run above) but never written here: RULE_DOMAINS has
+  // no cross-cutting/personal bucket, and assigning a domain per principle is an editorial call
+  // (see cowork-parse.mjs's parseDoctrine doc comment) this script does not automate. skipped
+  // entries are reported so the chairman/Michael can see exactly what's pending, not silently
+  // dropped.
+  const results = { rules: [], closures: [], feedback: [], doctrine_skipped: [] };
   for (const [relPath, result] of Object.entries(parsed)) {
     if (result.kind === 'rules') {
       for (const rule of result.rules) results.rules.push(await writeRule({ sb, ...rule }, { sourceFile: relPath, now }));
-    } else if (result.kind === 'labels') {
-      for (const label of result.labels) results.labels.push(await writeLabel({ sb, label }));
     } else if (result.kind === 'closures') {
       for (const closure of result.closures) results.closures.push(await writeClosure({ sb, closure }));
     } else if (result.kind === 'feedback') {
       for (const entry of result.entries) results.feedback.push(await writeFeedbackEntry({ sb, entry }));
+    } else if (result.kind === 'doctrine') {
+      for (const principle of result.principles) results.doctrine_skipped.push({ key: principle.key, reason: 'NEEDS_DOMAIN_RULING' });
     }
   }
-  const refused = [...results.rules, ...results.labels, ...results.closures, ...results.feedback].filter((r) => r.ok === false);
+  const refused = [...results.rules, ...results.closures, ...results.feedback].filter((r) => r.ok === false);
   return { ok: refused.length === 0, action: 'apply', root, missing, results, refused };
 }
 

@@ -20,6 +20,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { getStageForArtifactType } from '../../../lib/eva/artifact-types.js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -79,15 +80,14 @@ test.describe('Full Venture Lifecycle Journey (Stages 1-25)', () => {
     if (company) testCompanyId = company.id;
 
     // Create test venture at Stage 0 (pre-start)
-    const { data: venture } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture } = await insertGuarded(supabase, 'ventures', {
         name: `Full Lifecycle Journey Venture ${Date.now()}`,
         company_id: testCompanyId,
         problem_statement: 'Test problem statement for E2E lifecycle testing',
         current_lifecycle_stage: 1,
-        description: 'Testing complete venture lifecycle from Stage 1 to Stage 25'
-      })
+        description: 'Testing complete venture lifecycle from Stage 1 to Stage 25',
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/venture-lifecycle/full-journey.spec.ts' })
       .select('id')
       .single();
 
@@ -259,14 +259,13 @@ test.describe('Lifecycle Regression Tests', () => {
       .select('id')
       .single();
 
-    const { data: venture, error: ventureInsertError } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture, error: ventureInsertError } = await insertGuarded(supabase, 'ventures', {
         name: `Skip Test Venture ${Date.now()}`,
         company_id: company.id,
         problem_statement: 'Test problem statement for stage-skip regression test',
-        current_lifecycle_stage: 1
-      })
+        current_lifecycle_stage: 1,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/venture-lifecycle/full-journey.spec.ts' })
       .select('id')
       .single();
 

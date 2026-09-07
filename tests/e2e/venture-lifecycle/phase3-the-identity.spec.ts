@@ -12,6 +12,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import { getStageForArtifactType } from '../../../lib/eva/artifact-types.js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -38,15 +39,14 @@ test.describe('Phase 3: THE IDENTITY (Stages 10-12)', () => {
 
     if (company) testCompanyId = company.id;
 
-    const { data: venture } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture } = await insertGuarded(supabase, 'ventures', {
         name: `Phase 3 Test Venture ${Date.now()}`,
         company_id: testCompanyId,
         problem_statement: 'Test problem statement for E2E lifecycle testing',
         current_lifecycle_stage: 9,
-        description: 'Testing THE IDENTITY phase lifecycle'
-      })
+        description: 'Testing THE IDENTITY phase lifecycle',
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/venture-lifecycle/phase3-the-identity.spec.ts' })
       .select('id')
       .single();
 
