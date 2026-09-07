@@ -63,9 +63,12 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // solomon/michael/adam/coordinator so worker-signal.cjs's newly-typed payload.kind classifies
     // as actionable at every role it can be sent to — worker-signal.cjs never targets the worker
     // role, so DRAIN_SETS.worker stops at 27 (the capped_pool_broadcast addition only).
+    // +1 to coordinator ONLY (31), the rest unchanged, as of QF-20260905-230: 'sweep_finding_alert'
+    // added as a standalone literal — lib/fleet/sweep-findings-sink.cjs's only writer
+    // (stale-session-sweep.cjs) only ever targets the coordinator.
     expect(DRAIN_SETS.adam.length).toBe(32);
     expect(DRAIN_SETS.solomon.length).toBe(22);
-    expect(DRAIN_SETS.coordinator.length).toBe(30);
+    expect(DRAIN_SETS.coordinator.length).toBe(31);
     expect(DRAIN_SETS.worker.length).toBe(27);
   });
 
