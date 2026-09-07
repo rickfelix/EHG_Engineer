@@ -51,10 +51,10 @@ describe('cutoffEtDate', () => {
 
 describe('runRetention', () => {
   it('dry run: counts eligible rows per target with a STRICT lt(cutoff), writes no table, and still stamps feeder_runs (venue gha)', async () => {
-    const sb = stub({ counts: { michael_brief_runs: 4, michael_gmail_triage_items: 9, michael_calendar_day: 12, michael_feeder_runs: 5, michael_staged_items: 2 } });
+    const sb = stub({ counts: { michael_brief_runs: 4, michael_gmail_triage_items: 9, michael_calendar_day: 12, michael_feeder_runs: 5, michael_staged_items: 2, michael_health_daily: 6, michael_check_in_journal: 7 } });
     const r = await runRetention({ sb, argv: [], now: NOW });
     expect(r).toMatchObject({ ok: true, tables_absent: false, mode: 'dry_run', days: 30, cutoff: '2026-08-07', stamped: true, attempt: 1 });
-    expect(r.per_table.map((t) => [t.table, t.eligible])).toEqual([['michael_brief_runs', 4], ['michael_gmail_triage_items', 9], ['michael_calendar_day', 12], ['michael_feeder_runs', 5], ['michael_staged_items', 2]]);
+    expect(r.per_table.map((t) => [t.table, t.eligible])).toEqual([['michael_brief_runs', 4], ['michael_gmail_triage_items', 9], ['michael_calendar_day', 12], ['michael_feeder_runs', 5], ['michael_staged_items', 2], ['michael_health_daily', 6], ['michael_check_in_journal', 7]]);
     const mutated = sb.writes.map((w) => w.table);
     expect(mutated).toEqual(['michael_feeder_runs']);
     const stamp = sb.writes[0].ops[0].args[0];
@@ -82,12 +82,26 @@ describe('runRetention', () => {
     expect(r.per_table[1].applied).toBeUndefined();
     expect(r.per_table[3].applied).toBe(1);
   });
-  it('never touches rules, closures, the ledger, snapshots, labels or credentials', async () => {
+  it('never touches rules, closures, the ledger, snapshots, labels, credentials, or the v1.1 oracle tables', async () => {
     const sb = stub({ counts: { michael_brief_runs: 1, michael_gmail_triage_items: 1, michael_calendar_day: 1 } });
     await runRetention({ sb, argv: ['--apply'], now: NOW });
     const touched = new Set(sb.froms);
     for (const t of NEVER_TOUCHED) expect(touched.has(t), t).toBe(false);
-    expect(RETENTION_TARGETS.map((t) => t.table)).toEqual(['michael_brief_runs', 'michael_gmail_triage_items', 'michael_calendar_day', 'michael_feeder_runs', 'michael_staged_items']);
+    expect(NEVER_TOUCHED).toContain('michael_oracle_history');
+    expect(NEVER_TOUCHED).toContain('michael_oracle_alignment');
+    expect(RETENTION_TARGETS.map((t) => t.table)).toEqual(['michael_brief_runs', 'michael_gmail_triage_items', 'michael_calendar_day', 'michael_feeder_runs', 'michael_staged_items', 'michael_health_daily', 'michael_check_in_journal']);
+  });
+  it('v1.1 (child J): deletes whole rows of michael_health_daily and michael_check_in_journal strictly older than the cutoff, same as michael_calendar_day', async () => {
+    const sb = stub({ counts: { michael_health_daily: 2, michael_check_in_journal: 3 } });
+    await runRetention({ sb, argv: ['--apply'], now: NOW });
+    for (const table of ['michael_health_daily', 'michael_check_in_journal']) {
+      const w = sb.writes.find((x) => x.table === table);
+      expect(w.ops.map((o) => o.op), table).toEqual(['delete', 'lt']);
+      expect(w.ops[1].args, table).toEqual(['et_date', '2026-08-07']);
+    }
+  });
+  it('v1.1 (child J): youtube_pick staged items are emptied the same way task_route items are', async () => {
+    expect(RETENTION_TARGETS.find((t) => t.table === 'michael_staged_items').kinds).toContain('youtube_pick');
   });
   it('child D: empties the payload of DISPOSITIONED staged rows strictly older than the cutoff instant and leaves undispositioned rows untouched (TS-19)', async () => {
     const sb = stub({ counts: { michael_staged_items: 3 } });
@@ -97,9 +111,10 @@ describe('runRetention', () => {
     expect(w.ops[0].args[0]).toEqual({ payload: {} });
     // the filter is on dispositioned_at (an instant), so a NULL dispositioned_at never matches lt()
     expect(w.ops[1].args).toEqual(['dispositioned_at', '2026-08-07T00:00:00.000Z']);
-    // only task_route (prose): tasks_cleanup is the bridged-item ledger (ids only) and rulings, proposals,
-    // captures and rule edits keep their payload as evidence
-    expect(w.ops[2].args).toEqual(['kind', ['task_route']]);
+    // task_route (prose) and youtube_pick (child J, untrusted RSS video titles): tasks_cleanup is
+    // the bridged-item ledger (ids only) and rulings, proposals, captures and rule edits keep their
+    // payload as evidence
+    expect(w.ops[2].args).toEqual(['kind', ['task_route', 'youtube_pick']]);
     expect(w.ops[3].args).toEqual(['payload', '{}']);
     expect(JSON.stringify(w.ops)).not.toContain('et_date');
   });

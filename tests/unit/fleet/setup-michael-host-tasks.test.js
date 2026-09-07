@@ -30,9 +30,9 @@ function deps({ platform = 'win32', schtasks = () => ({ ok: true, stdout: '' }),
 const GMAIL_WRAPPER = path.join(REPO, 'scripts', 'cron', 'michael-gmail-triage-task.cmd');
 
 describe('MICHAEL_TASKS and the plan', () => {
-  it('registers exactly the three credentialed feeders with distinct colon-free names and michael-<feeder>-task.cmd wrappers (gitignored pattern)', () => {
-    expect(MICHAEL_TASKS.map((t) => t.feeder)).toEqual(['tasks-classifier', 'calendar-read', 'gmail-triage']);
-    expect(new Set(MICHAEL_TASKS.map((t) => t.taskName)).size).toBe(3);
+  it('registers exactly the five credentialed feeders with distinct colon-free names and michael-<feeder>-task.cmd wrappers (gitignored pattern)', () => {
+    expect(MICHAEL_TASKS.map((t) => t.feeder)).toEqual(['tasks-classifier', 'calendar-read', 'gmail-triage', 'oracle-extract', 'health-sync']);
+    expect(new Set(MICHAEL_TASKS.map((t) => t.taskName)).size).toBe(5);
     for (const t of MICHAEL_TASKS) {
       for (const ch of TASK_NAME_ILLEGAL_CHARS) expect(t.taskName, `${t.taskName} contains ${JSON.stringify(ch)}`).not.toContain(ch);
       expect(t.taskName).toMatch(/^EHG Michael [a-z-]+$/);
@@ -42,7 +42,7 @@ describe('MICHAEL_TASKS and the plan', () => {
   });
   it('the create args carry /SC MINUTE /MO 15 /ST 00:00 /F and NEITHER /RU NOR /NP (measured denied unelevated); the TR action is the quoted hidden launcher', () => {
     const plan = buildPlan({ repoRoot: REPO });
-    expect(plan).toHaveLength(3);
+    expect(plan).toHaveLength(5);
     for (const p of plan) {
       expect(p.createArgs).toEqual(['/Create', '/TN', p.taskName, '/TR', p.trAction, '/SC', 'MINUTE', '/MO', '15', '/ST', '00:00', '/F']);
       expect(p.createArgs).not.toContain('/RU'); expect(p.createArgs).not.toContain('/NP');
@@ -87,12 +87,12 @@ describe('main (injected deps, no host mutation)', () => {
     expect(await main(['node', 'x'], d)).toEqual({ exitCode: 2, action: 'not_win32' });
     expect(calls).toEqual([]); expect(errors[0]).toMatch(/win32-only/);
   });
-  it('--dry-run prints three wrappers and three /Create lines with no /RU /NP, states the preconditions, and mutates nothing', async () => {
+  it('--dry-run prints five wrappers and five /Create lines with no /RU /NP, states the preconditions, and mutates nothing', async () => {
     const { d, calls, writes, logs } = deps();
     const r = await main(['node', 'x', '--dry-run'], d);
     expect(r).toMatchObject({ exitCode: 0, action: 'dry_run_register' });
-    expect(r.plan.map((p) => p.script)).toEqual(['scripts/michael/tasks-classifier.mjs --apply', 'scripts/michael/calendar-read.mjs --apply', 'scripts/michael/gmail-triage.mjs --apply']);
-    expect(logs.filter((l) => /would run: schtasks \/Create/.test(l))).toHaveLength(3);
+    expect(r.plan.map((p) => p.script)).toEqual(['scripts/michael/tasks-classifier.mjs --apply', 'scripts/michael/calendar-read.mjs --apply', 'scripts/michael/gmail-triage.mjs --apply', 'scripts/michael/oracle-extract.mjs --apply', 'scripts/michael/health-sync.mjs --apply']);
+    expect(logs.filter((l) => /would run: schtasks \/Create/.test(l))).toHaveLength(5);
     expect(logs.join('\n')).toMatch(/awake/); expect(logs.join('\n')).toMatch(/mains power/); expect(logs.join('\n')).toMatch(/no \/RU \/NP/);
     for (const l of logs.filter((x) => /would run: schtasks/.test(x))) expect(l).not.toMatch(/\/RU |\/NP /);
     expect(calls).toEqual([]); expect(writes).toEqual([]);
@@ -103,11 +103,11 @@ describe('main (injected deps, no host mutation)', () => {
     expect(pre.errors.join('\n')).toMatch(/would REFUSE: feeder script\(s\) missing/); expect(pre.warns.join('\n')).toMatch(/would DEMOTE/);
     expect(pre.calls).toEqual([]); expect(pre.writes).toEqual([]);
   });
-  it('register writes the three wrappers and runs three /Create calls; --with-modify promotes only gmail-triage', async () => {
+  it('register writes the five wrappers and runs five /Create calls; --with-modify promotes only gmail-triage', async () => {
     const { d, calls, writes } = deps();
     expect(await main(['node', 'x'], d)).toMatchObject({ exitCode: 0, action: 'registered', withModify: false });
-    expect(writes.map(([p]) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new']);
-    expect(calls).toHaveLength(3);
+    expect(writes.map(([p]) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new', 'michael-oracle-extract-task.cmd.new', 'michael-health-sync-task.cmd.new']);
+    expect(calls).toHaveLength(5);
     for (const c of calls) { expect(c[0]).toBe('/Create'); expect(c).not.toContain('/RU'); expect(c).not.toContain('/NP'); }
     expect(writes.every(([, c]) => !/--modify/.test(c))).toBe(true);
     const p = deps();
@@ -136,7 +136,7 @@ describe('main (injected deps, no host mutation)', () => {
     expect(await main(['node', 'x'], f.d)).toMatchObject({ exitCode: 1, action: 'registered' });
     expect(f.errors.join('\n')).toMatch(/Access is denied/);
     // the wrapper is swapped in only after /Create succeeds: the failed task's staged wrapper is removed, its old wrapper untouched
-    expect(f.renames.map(([, to]) => path.basename(to))).toEqual(['michael-tasks-classifier-task.cmd', 'michael-gmail-triage-task.cmd']);
+    expect(f.renames.map(([, to]) => path.basename(to))).toEqual(['michael-tasks-classifier-task.cmd', 'michael-gmail-triage-task.cmd', 'michael-oracle-extract-task.cmd', 'michael-health-sync-task.cmd']);
     expect(f.unlinks.map((p) => path.basename(p))).toEqual(['michael-calendar-read-task.cmd.new']);
     expect(f.errors.join('\n')).toMatch(/left unchanged/);
     // a promotion whose /Create is refused never reaches the live wrapper
@@ -148,12 +148,12 @@ describe('main (injected deps, no host mutation)', () => {
     expect(await main(['node', 'x'], swap.d)).toMatchObject({ exitCode: 1 });
     expect(swap.errors.join('\n')).toMatch(/runs the PREVIOUS wrapper/);
     // the staged file never lingers (it embeds the host-absolute repo root): removed on a failed rename too
-    expect(swap.unlinks.map((p) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new']);
+    expect(swap.unlinks.map((p) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new', 'michael-oracle-extract-task.cmd.new', 'michael-health-sync-task.cmd.new']);
   });
   it('--status queries each task; --remove deletes each; --verify reads the split <Command>/<Arguments> XML and reports the shadow phase', async () => {
     const s = deps({ schtasks: () => ({ ok: true, stdout: 'TaskName: x' }) });
     expect(await main(['node', 'x', '--status'], s.d)).toEqual({ exitCode: 0, action: 'status' });
-    expect(s.calls.map((c) => c[0])).toEqual(['/Query', '/Query', '/Query']);
+    expect(s.calls.map((c) => c[0])).toEqual(['/Query', '/Query', '/Query', '/Query', '/Query']);
     const rm = deps();
     expect(await main(['node', 'x', '--remove'], rm.d)).toEqual({ exitCode: 0, action: 'removed' });
     expect(rm.calls.map((c) => c.slice(0, 3))).toEqual(MICHAEL_TASKS.map((t) => ['/Delete', '/TN', t.taskName]));
@@ -166,7 +166,7 @@ describe('main (injected deps, no host mutation)', () => {
     const v = deps({ schtasks: perTask });
     const r = await main(['node', 'x', '--verify'], v.d);
     expect(r).toMatchObject({ exitCode: 0, action: 'verified' });
-    expect(r.results.map((x) => x.ok)).toEqual([true, true, true]);
+    expect(r.results.map((x) => x.ok)).toEqual([true, true, true, true, true]);
     expect(r.results.map((x) => x.wrapper)).toEqual(MICHAEL_TASKS.map((t) => wrapperOf(t.feeder)));
     expect(v.logs.find((l) => /gmail-triage/.test(l))).toMatch(/shadow phase/);
     // the promotion lives in the wrapper .cmd the OS launches (the XML never carries --modify): --verify reads THAT file

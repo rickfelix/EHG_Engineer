@@ -161,7 +161,7 @@ describe('runImportCoworkMemory', () => {
       path.join(dir, 'memory', 'doctrine.md'),
       ['## Operating principles', '', '### High-signal family (B2)', '', 'Anything involving family is high-signal.', ''].join('\n'),
     );
-    const { sb, calls } = db();
+    const { sb } = db();
     const dryRun = await runImportCoworkMemory({ sb, argv: ['--root', dir], now: NOW, manifestPath });
     expect(dryRun.preview['memory/doctrine.md'].parsed_count).toBe(1);
 

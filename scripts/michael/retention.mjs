@@ -31,10 +31,19 @@ export const RETENTION_TARGETS = Object.freeze([
   // DISPOSITIONED and older than the cutoff the payload is emptied to {} (kind, disposition and timestamps
   // stay). tasks_cleanup payloads are ids and counts only AND are the bridged-item ledger the classifier's
   // re-creation guard reads, so they are never emptied. Undispositioned rows persist — deliberate (TR-4).
-  { table: 'michael_staged_items', action: 'empty_payload', columns: ['payload'], dateColumn: 'dispositioned_at', kinds: ['task_route'] },
+  { table: 'michael_staged_items', action: 'empty_payload', columns: ['payload'], dateColumn: 'dispositioned_at', kinds: ['task_route', 'youtube_pick'] },
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J (v1.1, PLAN-TO-EXEC TESTING finding G5): these two
+  // tables hold whole-row personal data (health metrics, journal prose) with no separate
+  // counts/status worth preserving past the cutoff, so the entire row is deleted rather than a
+  // column nulled -- mirrors michael_calendar_day's own full-delete pattern for daily personal data.
+  { table: 'michael_health_daily', action: 'delete', columns: [] },
+  { table: 'michael_check_in_journal', action: 'delete', columns: [] },
 ]);
-/** Never touched by retention (spec §2: rules, closures, dispositions and counts are kept). */
-export const NEVER_TOUCHED = Object.freeze(['michael_rules', 'michael_closures', 'michael_feedback_ledger', 'michael_gmail_labels', 'michael_todoist_snapshot', 'michael_credentials']);
+/** Never touched by retention (spec §2: rules, closures, dispositions and counts are kept).
+ * v1.1 (child J): michael_oracle_history/michael_oracle_alignment are accumulated personal
+ * history/scoring, not daily prose clutter -- retained indefinitely, mirroring
+ * michael_feedback_ledger's own dispositions-are-kept posture. */
+export const NEVER_TOUCHED = Object.freeze(['michael_rules', 'michael_closures', 'michael_feedback_ledger', 'michael_gmail_labels', 'michael_todoist_snapshot', 'michael_credentials', 'michael_oracle_history', 'michael_oracle_alignment']);
 
 /** Pure: the ET calendar date `days` before today's ET date (YYYY-MM-DD). Rows with et_date < cutoff are eligible. */
 export function cutoffEtDate(now = new Date(), days = DEFAULT_DAYS) {

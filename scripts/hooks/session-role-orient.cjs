@@ -132,6 +132,18 @@ function isAdamSeat(meta) {
 }
 
 /**
+ * SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J (FR-7) — is THIS seat the live Michael seat?
+ *
+ * Same exact-equality shape as isAdamSeat, for the same reason: metadata.role is a free-text field
+ * an operator can set to anything, and a substring/prefix test would leak Michael-only content to
+ * a role string that merely CONTAINS "michael" (a retired seat, a typo, a future michael_* variant).
+ * ONE REPRESENTATION: this is the only place the string 'michael' appears as a role comparison.
+ */
+function isMichaelSeat(meta) {
+  return meta?.role === 'michael';
+}
+
+/**
  * FR-1 — Adam's orientation: the generic role lines PLUS the Drive Report headline.
  *
  * Built on roleLines rather than replacing it: everything roleLines says about a non-fleet seat is
@@ -159,6 +171,77 @@ function adamLines(headline, suppressed = false) {
         ? `[ROLE] DRIVE REPORT — ${headline}`
         : '[ROLE] DRIVE REPORT — unavailable this session (no current report readable). This line is the mechanism working, not failing: it arrives every session so you never depend on remembering to ask.',
   ];
+}
+
+/**
+ * SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J (FR-7) — strip anything a headline built from
+ * closed vocabulary should never carry, defensively. Every field fetchMichaelHeadline reads is a
+ * boolean or a timestamp (never brief_md/verify_notes free text — same "closed vocabulary only"
+ * rule as fetchDriveReport's derivation), so there is no live path for CR/LF or a literal "[ROLE]"
+ * substring today. This exists anyway as the same belt-and-suspenders the SECURITY sub-agent found
+ * missing on the sibling Adam headline: a hook line that reaches a worker's SessionStart context is
+ * one string concatenation away from being read as an additional [ROLE] doctrine line, and a future
+ * edit that adds a free-text field to the derivation must not reopen that path silently.
+ */
+function sanitizeRoleLine(s) {
+  return String(s || '').replace(/[\r\n]+/g, ' ').replace(/\[ROLE\]/gi, '(role)').trim();
+}
+
+/**
+ * FR-7 — Michael's orientation: the generic role lines PLUS today's brief-run status.
+ *
+ * Mirrors adamLines exactly (built on roleLines, three-way suppressed/headline/unavailable shape)
+ * — see that function's docstring for why each branch exists. SUPPRESSED is its own sentence for
+ * the identical reason: an operator silencing the line must not read as "checked, nothing to show".
+ */
+function michaelLines(headline, suppressed = false) {
+  return [
+    ...roleLines('michael'),
+    suppressed
+      ? '[ROLE] MICHAEL BRIEF — SUPPRESSED by LEO_MICHAEL_BRIEF_INJECT=off. Nobody looked: this says nothing about whether today\'s brief exists. Unset that variable to restore it.'
+      : headline
+        ? `[ROLE] MICHAEL BRIEF — ${headline}`
+        : '[ROLE] MICHAEL BRIEF — unavailable this session (no brief run for today\'s ET date yet). This line is the mechanism working, not failing: it arrives every session so you never depend on remembering to ask.',
+  ];
+}
+
+/**
+ * FR-7 — the kill switch for the Michael brief-status injection, and ONLY for it. Its OWN variable
+ * (not LEO_DRIVE_REPORT_INJECT): that switch names the Adam Drive Report feature specifically, and
+ * an operator silencing Adam's headline must not unknowingly silence Michael's too. Same
+ * env-gated + fail-open + scoped-to-the-lines-not-the-hook contract as driveInjectionEnabled.
+ */
+function michaelInjectionEnabled() {
+  return String(process.env.LEO_MICHAEL_BRIEF_INJECT || '').trim().toLowerCase() !== 'off';
+}
+
+/**
+ * FR-7 — read TODAY's (ET) michael_brief_runs row and derive a closed-vocabulary headline. Returns
+ * null on ANY failure (fail-open, matching fetchDriveReport). et_date scoped to TODAY: a stale
+ * headline (yesterday's brief, still verified) read as if it were today's status is a false
+ * assurance of the exact shape TR-2 already closed once for the suppressed-switch line.
+ *
+ * SAME PHANTOM-COLUMN HAZARD AS fetchDriveReport: the select below names only columns that exist on
+ * michael_brief_runs (database/migrations/20260906_michael_tables.sql) — et_date, assembled_at,
+ * verified, surfaced_at. brief_md/rendered_html/verify_notes are prose columns and are deliberately
+ * NEVER selected: this hook's output reaches a worker's SessionStart context, and free text there is
+ * exactly what sanitizeRoleLine and the Adam precedent both guard against — closed vocabulary is
+ * enforced by never reading the free-text columns in the first place, not by scrubbing them after.
+ */
+async function fetchMichaelHeadline(get = pgGet) {
+  try {
+    const { etDateStr } = await import('../../lib/time/chairman-et-wall-clock.js');
+    const etDate = etDateStr(new Date());
+    const rows = await get(`michael_brief_runs?select=et_date,assembled_at,verified,surfaced_at&et_date=eq.${etDate}&limit=1`);
+    const r = rows?.[0];
+    if (!r) return null;
+    const parts = [
+      r.assembled_at ? 'assembled' : 'not yet assembled',
+      r.verified === true ? 'verified' : 'UNVERIFIED',
+      r.surfaced_at ? 'surfaced' : 'not yet surfaced',
+    ];
+    return { headline: sanitizeRoleLine(parts.join(', ')) };
+  } catch { return null; }
 }
 
 /**
@@ -283,7 +366,7 @@ async function stampAdamReceipt(reportId) {
  * The seats this hook can route to. A token rather than a boolean per rung, because the question
  * "which rung won?" has one answer and every caller needs the same one.
  */
-const SEAT = Object.freeze({ COORDINATOR: 'coordinator', ADAM: 'adam', ROLE: 'role', WORKER: 'worker', SOLO: 'solo' });
+const SEAT = Object.freeze({ COORDINATOR: 'coordinator', ADAM: 'adam', MICHAEL: 'michael', ROLE: 'role', WORKER: 'worker', SOLO: 'solo' });
 
 /**
  * WHICH SEAT IS THIS — the ONE place rung precedence lives.
@@ -333,6 +416,12 @@ function resolveSeat(sessionId, meta, coordFile) {
   // returns roleLines plus one line rather than a parallel block. The rung above him is the general
   // one; this rung only adds what is specific to him.
   if (isAdamSeat(meta)) return SEAT.ADAM;
+  // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J (FR-7) — MICHAEL BRANCH. SAME LOAD-BEARING
+  // POSITION AS ADAM, above: verdictFromMetadata(meta) === ROLE_VERDICT.ROLE already matches a live
+  // Michael seat today (role-status-identity.cjs registers 'michael' as a role name), so a branch
+  // placed after that rung is UNREACHABLE — dead code that tests green for any test calling
+  // michaelLines()/isMichaelSeat() directly instead of driving decide()/resolveSeat() end-to-end.
+  if (isMichaelSeat(meta)) return SEAT.MICHAEL;
   if (ROLE_VERDICT && verdictFromMetadata(meta) === ROLE_VERDICT.ROLE) return SEAT.ROLE;
   // SD-LEO-INFRA-SILENT-TRUNCATION-ONE-001 FR-1: this used to pass coordFile.session_id.slice(0, 8).
   // The [ROLE] line below is the ONLY place a worker is told who its coordinator is, and a worker
@@ -353,10 +442,11 @@ function resolveSeat(sessionId, meta, coordFile) {
  * The lines this seat is shown. Signature and output unchanged — this is now a thin renderer over
  * resolveSeat, which is where the precedence comments above belong and now live.
  */
-function decide(sessionId, meta, coordFile, driveHeadline = null, driveSuppressed = false) {
+function decide(sessionId, meta, coordFile, driveHeadline = null, driveSuppressed = false, michaelHeadline = null, michaelSuppressed = false) {
   switch (resolveSeat(sessionId, meta, coordFile)) {
     case SEAT.COORDINATOR: return COORDINATOR;
     case SEAT.ADAM: return adamLines(driveHeadline, driveSuppressed);
+    case SEAT.MICHAEL: return michaelLines(michaelHeadline, michaelSuppressed);
     case SEAT.ROLE: return roleLines(meta.role);
     case SEAT.WORKER: return workerLines(meta?.callsign, coordFile.session_id);
     default: return SOLO;
@@ -377,6 +467,7 @@ function decide(sessionId, meta, coordFile, driveHeadline = null, driveSuppresse
 async function orient({
   sessionId, meta, coordFile,
   fetchReport = fetchDriveReport,
+  fetchMichael = fetchMichaelHeadline,
   stamp = stampAdamReceipt,
   log = console.log,
   describe = null,
@@ -385,10 +476,17 @@ async function orient({
   // the resolved seat is what let a coordinator-flagged Adam seat stamp a receipt for content it
   // was never shown — see resolveSeat. Gating on the seat also keeps the round trip off every
   // other seat's startup budget, which is what the isAdamSeat gate was originally for.
-  const isAdam = resolveSeat(sessionId, meta, coordFile) === SEAT.ADAM;
+  const seat = resolveSeat(sessionId, meta, coordFile);
+  const isAdam = seat === SEAT.ADAM;
   const suppressed = isAdam && !driveInjectionEnabled();
   const driveReport = isAdam && !suppressed ? await fetchReport() : null;
-  decide(sessionId, meta, coordFile, driveReport?.headline || null, suppressed).forEach((l) => log(l));
+  // FR-7: the SAME per-seat gate as Adam's, so a coordinator-flagged Michael seat (or any seat that
+  // is not actually resolved to MICHAEL) never pays for the round trip or shows the brief line —
+  // mirrors the exact hazard resolveSeat's docstring names for the Adam branch above.
+  const isMichael = seat === SEAT.MICHAEL;
+  const michaelSuppressed = isMichael && !michaelInjectionEnabled();
+  const michaelReport = isMichael && !michaelSuppressed ? await fetchMichael() : null;
+  decide(sessionId, meta, coordFile, driveReport?.headline || null, suppressed, michaelReport?.headline || null, michaelSuppressed).forEach((l) => log(l));
   // The receipt is stamped AFTER the lines are emitted: the injection IS the delivery, and a
   // receipt may only claim what was actually delivered. Stamping first would record a consumption
   // that a later failure could prevent.
@@ -432,4 +530,4 @@ function main() {
   });
 }
 if (require.main === module) main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));
-module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, resolveSeat, SEAT, SOLO, COORDINATOR, workerLines, roleLines, isAdamSeat, adamLines, driveInjectionEnabled, fetchDriveReport, stampAdamReceipt, orient, COORD_FILE };
+module.exports = { readCoordFile, fetchMeta, findActiveCoord, decide, resolveSeat, SEAT, SOLO, COORDINATOR, workerLines, roleLines, isAdamSeat, adamLines, driveInjectionEnabled, fetchDriveReport, stampAdamReceipt, isMichaelSeat, michaelLines, michaelInjectionEnabled, fetchMichaelHeadline, sanitizeRoleLine, orient, COORD_FILE };
