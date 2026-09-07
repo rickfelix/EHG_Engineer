@@ -660,11 +660,16 @@ async function main() {
     }
     // SD-LEO-INFRA-OPEN-COMMITMENTS-RECONCILED-001 / FR-4: ORPHANED rendered distinctly from
     // PENDING/flagged — a row's counterpartyLiveness is orthogonal to its action.
-    if (gauge.orphaned > 0) {
-      console.log('\n[HOURLY-REVIEW] ORPHANED COMMITMENTS — ' + gauge.orphaned + ' row(s), counterparty released or dead/unreleased:');
-      gauge.decisions.filter(function (d) { return d.counterpartyLiveness === 'ORPHANED'; }).slice(0, 10).forEach(function (d) {
+    // QF-20260906-160: disposed (R8) rows are cleared by that fact alone and no longer print
+    // as a concern — only genuinely-unresolved orphaned rows appear in the list below.
+    const orphanedUndisposed = gauge.orphaned - (gauge.orphanedDisposed || 0);
+    if (orphanedUndisposed > 0) {
+      console.log('\n[HOURLY-REVIEW] ORPHANED COMMITMENTS — ' + orphanedUndisposed + ' row(s), counterparty released or dead/unreleased' + (gauge.orphanedDisposed > 0 ? ' (' + gauge.orphanedDisposed + ' disposed, cleared)' : '') + ':');
+      gauge.decisions.filter(function (d) { return d.counterpartyLiveness === 'ORPHANED' && !d.disposed; }).slice(0, 10).forEach(function (d) {
         console.log('  ⚠ [' + String(d.id) + '] correlation=' + String(d.correlationId) + ' | action=' + d.action);
       });
+    } else if (gauge.orphanedDisposed > 0) {
+      console.log('\n[HOURLY-REVIEW] ORPHANED COMMITMENTS — 0 row(s) (' + gauge.orphanedDisposed + ' disposed, cleared)');
     }
   } catch (e) {
     console.log('[HOURLY-REVIEW] relay-drop-gauge check skipped (non-fatal): ' + e.message);
