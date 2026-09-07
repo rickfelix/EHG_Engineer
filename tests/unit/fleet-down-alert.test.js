@@ -1196,10 +1196,10 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
     return {
       from(table) {
         if (table === 'session_coordination') {
-          return { select: () => ({ eq: () => ({ gte: () => ({ order: async () => ({ data: waitRows, error: null }) }) }) }) };
+          return { select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: waitRows, error: null }) }) }) }) }) };
         }
         if (table === 'claude_sessions') {
-          return { select: () => ({ in: async () => ({ data: sessionRows, error: null }) }) };
+          return { select: () => ({ in: () => ({ limit: async () => ({ data: sessionRows, error: null }) }) }) };
         }
         throw new Error(`unexpected table: ${table}`);
       },

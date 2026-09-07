@@ -286,6 +286,10 @@ export function buildStuckPermissionWaitMessage(verdict, sessionId, now = new Da
 // keeps the query cheap; a wait older than that has long since either recovered or already
 // exhausted the single alertable tick above, so it is correctly silent, not re-scanned forever.
 const STUCK_PERMISSION_WAIT_LOOKBACK_H = 4;
+// Explicit, generous bound (count-truncation-diff-lint requires a literal-digit .limit(N<1000)
+// in-chain, not just the lookback window above) -- a 4h window realistically holds far fewer
+// than 500 distinct waits; truncation past that is a loud console line, not a silent drop.
+const STUCK_PERMISSION_WAIT_ROW_LIMIT = 500;
 
 export async function checkStuckPermissionWaits(db, DRY, sendChairmanSMSFn = null, now = new Date()) {
   const windowStartIso = new Date(now.getTime() - STUCK_PERMISSION_WAIT_LOOKBACK_H * 3600000).toISOString();
@@ -294,8 +298,12 @@ export async function checkStuckPermissionWaits(db, DRY, sendChairmanSMSFn = nul
     .select('payload, created_at')
     .eq('payload->>kind', 'notification_permission_wait')
     .gte('created_at', windowStartIso)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(500);
   if (error) { console.error('[stuck-permission-wait] query failed:', error.message); return; }
+  if ((rows || []).length >= STUCK_PERMISSION_WAIT_ROW_LIMIT) {
+    console.error(`[stuck-permission-wait] rows TRUNCATED at ${STUCK_PERMISSION_WAIT_ROW_LIMIT} -- a genuinely stuck seat may be missing from this pass.`);
+  }
 
   // Most-recent row per session_id (rows are already newest-first).
   const latestBySession = new Map();
@@ -308,7 +316,8 @@ export async function checkStuckPermissionWaits(db, DRY, sendChairmanSMSFn = nul
   const { data: sessions, error: sErr } = await db
     .from('claude_sessions')
     .select('session_id, last_tool_at')
-    .in('session_id', [...latestBySession.keys()]);
+    .in('session_id', [...latestBySession.keys()])
+    .limit(500);
   if (sErr) { console.error('[stuck-permission-wait] session query failed:', sErr.message); return; }
   const lastToolBySession = new Map((sessions || []).map((s) => [s.session_id, s.last_tool_at]));
 
