@@ -16,7 +16,43 @@ const {
   recordSameTurnClaimAttempt,
   formatCoordinatorMessagesForBlock,
   decideMessageBlock,
+  computeHasActiveClaim,
 } = require(HOOK_PATH);
+
+// QF-20260907-596: same fake-supabase shape as tests/unit/claim/get-my-claims-fr2.test.js.
+/** @param sd rows returned for strategic_directives_v2, qf rows for quick_fixes */
+const claimStub = (sd = [], qf = [], errs = {}) => ({
+  from: (t) => ({
+    select: () => ({
+      eq: async () => (t === 'strategic_directives_v2'
+        ? { data: sd, error: errs.sd ? { message: errs.sd } : null }
+        : { data: qf, error: errs.qf ? { message: errs.qf } : null }),
+    }),
+  }),
+});
+
+describe('computeHasActiveClaim (QF-20260907-596 — the regression this QF fixes)', () => {
+  it('is true for a QF-only holder — the exact bug: previously always false', async () => {
+    expect(await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'in_progress' }]), 'me')).toBe(true);
+  });
+
+  it('is true for an SD-only holder (unchanged behavior)', async () => {
+    expect(await computeHasActiveClaim(claimStub([{ sd_key: 'SD-A', status: 'active' }], []), 'me')).toBe(true);
+  });
+
+  it('is false for a genuinely claim-less session', async () => {
+    expect(await computeHasActiveClaim(claimStub([], []), 'me')).toBe(false);
+  });
+
+  it('is false for a QF held in a terminal status (completed/cancelled)', async () => {
+    expect(await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'completed' }]), 'me')).toBe(false);
+  });
+
+  it('fails open (false) when the underlying client throws', async () => {
+    const throwing = { from: () => { throw new Error('boom'); } };
+    expect(await computeHasActiveClaim(throwing, 'me')).toBe(false);
+  });
+});
 
 describe('isSameTurnClaimEnabled (default-on kill switch)', () => {
   it('defaults to enabled when unset', () => {
@@ -129,6 +165,16 @@ describe('attemptSameTurnNextClaim (SD-LEO-INFRA-WORKER-WIND-DOWN-001)', () => {
     const result = await attemptSameTurnNextClaim({ resolveCheckinFn, sb: {}, sessionId: 'sess-1', timeoutMs: 5000 });
     expect(result.outcome).toBe('claimed');
     expect(result.key).toBe('SD-ORPHAN-001');
+  });
+
+  // REGRESSION (QF-20260907-596): bare 'resume' was previously classified as 'claimed' too. It is
+  // reachable whenever hasActiveClaim under-reports what the caller already holds (the exact QF-
+  // only-claim bug this QF fixes) — resolveCheckin then resumes the caller's OWN existing claim,
+  // and misreporting that as a brand-new same-turn claim produced an infinite Stop-hook block loop.
+  it("REGRESSION: bare 'resume' (resuming your OWN already-held claim) is none-claimable, never a fresh claim", async () => {
+    const resolveCheckinFn = vi.fn().mockResolvedValue({ action: 'resume', sd: 'QF-20260906-831', message: 'Already claiming quick-fix QF-20260906-831' });
+    const result = await attemptSameTurnNextClaim({ resolveCheckinFn, sb: {}, sessionId: 'sess-1', timeoutMs: 5000 });
+    expect(result.outcome).toBe('none-claimable');
   });
 
   it('a hypothetical FUTURE ladder action not yet denylisted is claimed-by-default, not silently dropped', async () => {
@@ -285,6 +331,18 @@ describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" 
 
   it('gates the attempt on both the kill switch and the same predicate this file exports', () => {
     expect(src).toMatch(/isSameTurnClaimEnabled\(\)\s*&&\s*shouldAttemptSameTurnClaim\(/);
+  });
+
+  // QF-20260907-596 Layer 2: bounds the same-turn-claim block to at most once per turn regardless
+  // of whether some future claim predicate again under-reports a legitimately-held claim — matches
+  // shouldRemind's own stopHookActive exemption for the generic wakeup reminder.
+  it('QF-20260907-596: never attempts a same-turn claim on the second stop this turn (stopHookActive)', () => {
+    expect(src).toMatch(/!stopHookActive\s*&&\s*isSameTurnClaimEnabled\(\)\s*&&\s*shouldAttemptSameTurnClaim\(/);
+  });
+
+  it('QF-20260907-596: hasActiveClaim derives from the both-kinds ownership predicate, not a hand-rolled SD-only query', () => {
+    expect(src).toMatch(/computeHasActiveClaim\(supabase, sessionId\)/);
+    expect(src).not.toMatch(/\.from\('strategic_directives_v2'\)\s*\n\s*\.select\('sd_key'\)\s*\n\s*\.eq\('claiming_session_id'/);
   });
 
   it('delegates to the canonical checkin resolution path, not a hand-rolled claim query', () => {

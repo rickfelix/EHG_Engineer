@@ -5,6 +5,7 @@
 
 - [2026-09-07](#2026-09-07)
   - [Bugfix](#bugfix)
+  - [Infrastructure](#infrastructure)
   - [Documentation](#documentation)
 - [2026-09-06](#2026-09-06)
   - [Bugfix](#bugfix)
@@ -197,6 +198,13 @@
   - `scripts/stale-session-sweep.cjs`'s `isSweepResetAllowed()` and the end-of-tick WARNINGS/CONFLICTS reporting loops call `recordFinding()` alongside their existing `console.log`, so persisted/alerted findings never diverge from what an operator watching the console would have seen.
   - `lib/fleet/worker-status.cjs`'s `DRAIN_SETS.coordinator` recognizes the new `sweep_finding_alert` payload kind immediately via the JS floor; the corresponding DB-side `role_drain_sets` seed migration is chairman-gated and pending separately.
 
+### Infrastructure
+
+- **Swallowed-query-error lint widened to 6 directories and flipped from advisory to enforcing; ~40 remaining sites converted** - SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001
+  - Converted the remaining flagged sites across `scripts/modules/handoff/**`, `lib/claim/**`, `lib/oversight/**`, `scripts/modules/claim-health/**`, and the newly-scanned `scripts/modules/implementation-fidelity/**` to route through `lib/db/safe-query.mjs` (`safeQuery`/`safeCount`), which throws on a genuine PostgREST fault instead of silently treating it as "0 rows found". A subset required restructuring the enclosing `catch` too — wrapping the query alone was insufficient where the catch already converted any fault (including the newly-thrown one) into a false-permissive/false-pass outcome (`multi-session-claim-gate.js`, `acceptance-criteria-traceability.js`, `release-claim-both-surfaces.mjs`).
+  - `.github/workflows/swallowed-query-error-lint.yml` drops `continue-on-error` and runs with `--enforce`: `node scripts/lint/swallowed-query-error-lint.mjs` now reports 0 ungoverned findings, and a PR reintroducing a swallowed-error destructure in any scanned path fails CI instead of only logging a warning. The lint's own self-test suite was rewritten against fixture directories (`SWALLOWED_QUERY_LINT_ROOT` env override) so it stops reading the live tree once the ungoverned count reaches zero.
+  - New `scripts/lint/swallowed-query-fail-open-classifier.mjs` does real AST analysis (espree) to classify each swallowed-query hit's enclosing try/catch as `fail_open` (catch returns `passed: true`, masking the fault as a benign pass), `has_catch`, or `no_catch` — replacing a no-brace-matching heuristic estimate with an enumerated, provenance-backed list.
+  - Fixed two CI gates this SD's own conversions newly tripped: `count-truncation-diff-lint.mjs` was flagging ~69 pre-existing, unmodified `.select(...)` sites as "new" purely because wrapping them in `safeQuery(...)` reformatted the line git diffs as added; and `control-seed-test-lint.mjs` required (and now has, seed-trial-verified) detection specs for the two lint controls above.
 ### Documentation
 
 - **Encode the twelve Foundation-audit lens PREDICATE + INSTRUMENT + CANARY texts into `CLAUDE_SOLOMON_MANUAL.md`, replacing the bare lens-name line** - SD-LEO-DOC-FOUNDATION-AUDIT-LENS-001

@@ -229,13 +229,16 @@ async function attemptSameTurnNextClaim({ resolveCheckinFn, sb, sessionId, timeo
   // drops any FUTURE ladder rung that also acquires a claim, exactly as it already dropped TWO
   // live ones — recover-stranded-final (rung 5.7, 'resume_final') and adopt-orphan (rung 5.8,
   // 'resume_orphan') run UNCONDITIONALLY (no ctx.mySd gate) and both call tryClaim, so they ARE
-  // reachable for a claim-less caller. Only plain 'resume' (lib/checkin/steps/resume.cjs:248) is
-  // genuinely mySd-gated and therefore unreachable here — it still classifies correctly as
-  // 'claimed' below if that gate is ever loosened, since it is not in the denylist either.
-  // Denylist NON-claim terminals instead: anything
-  // NOT in this set is treated as a real claim, so a new rung that adds a new action string is
-  // claimed-by-default rather than silently misreported as 'none-claimable'.
-  const NON_CLAIM_ACTIONS = new Set(['idle', 'idle_fable_propose', 'error']);
+  // reachable for a claim-less caller. Denylist NON-claim terminals instead: anything NOT in this
+  // set is treated as a real claim, so a new rung that adds a new action string is claimed-by-
+  // default rather than silently misreported as 'none-claimable'.
+  // QF-20260907-596: bare 'resume' (lib/checkin/steps/resume.cjs) IS reachable here whenever
+  // hasActiveClaim under-reports what the caller already holds (measured: a QF-only holder,
+  // before this QF's hasActiveClaim fix, always read false) — resolveCheckin then resumes the
+  // caller's OWN existing claim and this classifier reported that as a brand-new 'claimed' event,
+  // producing an infinite same-turn-next-claim block loop. Resuming your own already-held work is
+  // never a same-turn claim; denylisted as defense in depth even after the hasActiveClaim fix.
+  const NON_CLAIM_ACTIONS = new Set(['idle', 'idle_fable_propose', 'error', 'resume']);
   if (resolution.action && !NON_CLAIM_ACTIONS.has(resolution.action)) {
     const key = resolution.sd || resolution.qf || null;
     return { outcome: 'claimed', key, resolution };
@@ -627,6 +630,37 @@ const HOOK_WORK_BUDGET_MS = 6000;
 // silently starved the more important one: MEASURED, the write got timed out at the cap.
 const TELEMETRY_RESERVE_MS = 2500;
 
+/**
+ * Coverage-gap signal: does this session hold a live claim, SD or QF? A claim-holder whose
+ * loop_state never entered the machine ('unknown'/null) is still a worker about to go silent.
+ *
+ * QF-20260907-596: this PREVIOUSLY queried strategic_directives_v2 alone, so a worker whose only
+ * claim was a quick_fixes row always read hasActiveClaim=false — which fed an infinite same-turn-
+ * next-claim block loop below (every stop attempt "discovered" the worker's own already-held QF
+ * as a fresh claim, since resolveCheckin's 'resume' action was classified as a brand-new claim).
+ * Uses the canonical both-kinds ownership predicate (lib/claim/get-my-claims.cjs) instead of
+ * hand-rolling a second one-kind reader. Fail-open (treat as no claim) on any error.
+ * @param {object} supabase - injected client, never a module singleton
+ * @param {string} sessionId
+ * @returns {Promise<boolean>}
+ */
+async function computeHasActiveClaim(supabase, sessionId) {
+  try {
+    const { getMyClaims } = require('../../lib/claim/get-my-claims.cjs');
+    const { claims } = await getMyClaims(supabase, sessionId);
+    // Matches the ORIGINAL (SD-only) semantics exactly for SD claims: the row's mere existence
+    // under this session's claiming_session_id IS the ownership signal, no status filter — SD
+    // status vocabulary ('draft', 'active', 'pending_approval', ...) doesn't map to a simple
+    // open/in_progress check the way QF status does. For QF claims, filter to open/in_progress:
+    // completion clears claiming_session_id (scripts/modules/complete-quick-fix/orchestrator.js),
+    // but a terminal-but-still-claimed row is transiently reachable between completion and the
+    // stale-session-sweep's dedicated terminal-QF clearing pass — cheap insurance against that gap.
+    return claims.some((c) => (c.kind === 'QF' ? c.status === 'open' || c.status === 'in_progress' : true));
+  } catch {
+    return false; // fail-open: no claim signal
+  }
+}
+
 // QF-20260902-152: kinds that must interrupt the same-turn checkin even while armed — matches
 // lib/fleet/worker-status.cjs's DIRECTIVE_KINDS members reserved for hard-stop/sequencing use
 // (fence_notice) and the chairman-directive channel, not the full directive set (a routine
@@ -661,18 +695,7 @@ async function main() {
     if (error) { return shutdown(); }            // DB error — fail-open
 
     const loopState = data ? data.loop_state : null;
-    // Coverage-gap signal: does this session hold a live SD claim? A claim-holder whose
-    // loop_state never entered the machine ('unknown'/null) is still a worker about to go
-    // silent. Cheap single-row probe; fail-open (treat as no claim) on any error.
-    let hasActiveClaim = false;
-    try {
-      const { data: claimRows } = await supabase
-        .from('strategic_directives_v2')
-        .select('sd_key')
-        .eq('claiming_session_id', sessionId)
-        .limit(1);
-      hasActiveClaim = Array.isArray(claimRows) && claimRows.length > 0;
-    } catch { /* fail-open: no claim signal */ }
+    const hasActiveClaim = await computeHasActiveClaim(supabase, sessionId);
 
     // ALLOW-PATH probe (SD-LEO-INFRA-LOOP-CONTINUITY-ENFORCE-001): did this session announce a
     // wind-down via /signal recently? session_coordination.sender_session = this session, and the
@@ -792,7 +815,11 @@ async function main() {
       // the specific population that would otherwise sit idle-beside-claimable-work — a finisher
       // holding NO active claim. A claim-holder ending its turn (mid-work, or armed-with-claim)
       // must never be diverted into grabbing a second SD here.
-      if (isSameTurnClaimEnabled() && shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped })) {
+      // QF-20260907-596 Layer 2 (defense in depth): never attempt — or re-block on — a same-turn
+      // claim on the SECOND stop this turn, matching shouldRemind's existing stopHookActive
+      // exemption. This bounds this path to at most one block per turn regardless of whether some
+      // future claim predicate again under-reports a legitimately-held claim.
+      if (!stopHookActive && isSameTurnClaimEnabled() && shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped })) {
         const claimTimeoutMs = Math.max(0, remainingBudgetMs() - TELEMETRY_RESERVE_MS);
         const { outcome, key, resolution } = await attemptSameTurnNextClaim({
           resolveCheckinFn: require('../worker-checkin.cjs').resolveCheckin,
@@ -851,4 +878,4 @@ if (require.main === module) {
   main().catch(() => shutdown());
 }
 
-module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL, isSameTurnClaimEnabled, shouldAttemptSameTurnClaim, attemptSameTurnNextClaim, recordSameTurnClaimAttempt, formatCoordinatorMessagesForBlock, decideMessageBlock, HARD_INTERRUPT_KINDS };
+module.exports = { shouldRemind, shouldParkRecoverable, parkSessionRecoverable, classifyWindDownReason, recordWindDown, isFlagEnabled, muzzleStdout, SWALLOW, REMINDER, reminderFor, REMINDER_HEAD, REMINDER_ROLE_TAIL, REMINDER_WORKER_TAIL, isSameTurnClaimEnabled, shouldAttemptSameTurnClaim, attemptSameTurnNextClaim, recordSameTurnClaimAttempt, formatCoordinatorMessagesForBlock, decideMessageBlock, HARD_INTERRUPT_KINDS, computeHasActiveClaim };
