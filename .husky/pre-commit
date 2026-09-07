@@ -915,5 +915,30 @@ else
   echo "✅ No workflow files staged — skipping workflow-YAML gate"
 fi
 
+# ============================================================================
+# STAGE 12: Non-Empty Index Guard (BLOCKING) -- QF-20260906-295
+# ============================================================================
+# MEASURED by the coordinator 2026-09-07 00:21Z (advisory c63221c9): a seat edited a
+# file in the shared repo ROOT while its actual branch lived in a worktree, so
+# nothing was staged in the worktree's index. Every stage above ran over that empty
+# diff, each printed its own "passed", and this banner read as a real commit --
+# git then no-op'd with no visible "nothing to commit" in the captured output. Fail
+# loud instead, and name the likely cause (wrong working tree) rather than a bare
+# "nothing to commit".
+# ============================================================================
+if [ -z "$(git diff --cached --name-only)" ]; then
+  echo ""
+  echo "❌ BLOCKED: Nothing is staged for this commit."
+  echo ""
+  echo "   Every pre-commit check above ran over an EMPTY index and would have"
+  echo "   printed \"Pre-commit checks passed\" for a commit that does nothing."
+  echo ""
+  echo "   Did you edit a file in the wrong working tree? If you're in a worktree,"
+  echo "   confirm the file you edited is under THIS worktree's path, not the"
+  echo "   shared repo root (\`pwd\`, or node scripts/resolve-sd-workdir.js <key>)."
+  echo ""
+  exit 1
+fi
+
 echo ""
 echo "✅ Pre-commit checks passed. Proceeding with commit."
