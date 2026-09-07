@@ -30,6 +30,7 @@ function makeBuilder(table) {
   const builder = {
     select: () => builder,
     eq: () => builder,
+    neq: () => builder,
     or: () => builder,
     in: () => builder,
     update: () => builder,
