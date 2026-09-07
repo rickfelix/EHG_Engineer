@@ -176,6 +176,7 @@ describe('buildPruneCandidateRows() / buildHuskShipPathRows()', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].event_type).toBe(EVENT_TYPE_HUSK_SHIP_PATH);
     expect(rows[0].event_type).not.toBe(EVENT_TYPE_PRUNE_CANDIDATE);
+    expect(rows[0].event_type).not.toBe(EVENT_TYPE);
     expect(rows[0].entity_id).toBe('/repo/.worktrees/QF-EXAMPLE');
     expect(ALLOWED_SEVERITIES).toContain(rows[0].severity);
     expect(rows[0].metadata.error).toBe('EPERM');
