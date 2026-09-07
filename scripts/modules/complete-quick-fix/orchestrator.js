@@ -735,7 +735,7 @@ export async function completeQuickFix(qfId, options = {}) {
     uatVerified = options.uatVerified;
   }
 
-  if (!validateUAT(uatVerified)) {
+  if (!validateUAT(uatVerified, { forceComplete: options.forceComplete, reason: options.reason })) {
     process.exit(1);
   }
 
