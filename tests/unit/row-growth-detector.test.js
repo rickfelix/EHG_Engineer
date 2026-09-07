@@ -10,9 +10,11 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
   detectRowGrowthAnomalies,
+  confirmRowGrowthAnomaly,
   isSnapshotDue,
   GOVERNANCE_TABLES,
   DEFAULT_OPTS,
+  EXACT_COUNT_CEILING,
   SNAPSHOT_DUE_MS,
 } = require('../../lib/coordinator/row-growth.cjs');
 
@@ -82,6 +84,47 @@ describe('detectRowGrowthAnomalies (pure)', () => {
     );
     expect(out).toHaveLength(1);
     expect(out[0].trigger).toBe('growth_factor');
+  });
+});
+
+describe('confirmRowGrowthAnomaly (pure, QF-20260905-880)', () => {
+  // Fixture of record: the 11:53Z anomaly ecc4198f — validation_audit_log estimate jumped
+  // 12314 -> 21853 (factor 1.77, abs_spike by the estimate-only detector), but a real exact
+  // count moments later read 13324 (146 rows/24h) — a planner re-estimate, not real growth.
+  it('estimate jump with exact flat emits nothing (the real ecc4198f fixture)', () => {
+    const candidate = { table: 'validation_audit_log', prev: 12314, curr: 21853, delta: 9539, factor: 1.77, trigger: 'growth_factor' };
+    const result = confirmRowGrowthAnomaly(candidate, 13324, null);
+    expect(result.status).toBe('refuted');
+    expect(result.measurement).toBe('exact');
+    expect(result.comparedAgainst).toBe('prior_estimate');
+    expect(result.exact).toBe(13324);
+  });
+
+  it('genuine growth confirms with both estimate and exact figures', () => {
+    const candidate = { table: 't', prev: 1000, curr: 8000, delta: 7000, factor: 8, trigger: 'abs_spike' };
+    const result = confirmRowGrowthAnomaly(candidate, 7000, null); // real +6000 vs the prior estimate
+    expect(result).toMatchObject({ status: 'confirmed', measurement: 'exact', comparedAgainst: 'prior_estimate', baseline: 1000, exact: 7000, delta: 6000, trigger: 'abs_spike' });
+  });
+
+  it('compares against the prior EXACT-confirmed value when one exists, not the prior estimate', () => {
+    const candidate = { table: 't', prev: 1000, curr: 8000, delta: 7000, factor: 8, trigger: 'abs_spike' };
+    // prior exact-confirmed was 6000 (higher than the prior estimate 1000) -> real delta is only 2000
+    const result = confirmRowGrowthAnomaly(candidate, 8000, 6000);
+    expect(result).toMatchObject({ status: 'refuted', comparedAgainst: 'exact', baseline: 6000, delta: 2000 });
+  });
+
+  it('estimate_only when the exact count query fails (null) — never treated as measured', () => {
+    const candidate = { table: 't', prev: 1000, curr: 8000, delta: 7000, factor: 8, trigger: 'abs_spike' };
+    const result = confirmRowGrowthAnomaly(candidate, null, null);
+    expect(result.status).toBe('estimate_only');
+    expect(result.measurement).toBe('estimate_only');
+    expect(result.exact).toBeNull();
+  });
+
+  it('estimate_only when the estimate exceeds EXACT_COUNT_CEILING — exact count never taken', () => {
+    const candidate = { table: 't', prev: 100000, curr: EXACT_COUNT_CEILING + 1, delta: 900000, factor: 3, trigger: 'abs_spike' };
+    const result = confirmRowGrowthAnomaly(candidate, 999999, null); // even if a caller had one, it's ignored
+    expect(result.status).toBe('estimate_only');
   });
 });
 
