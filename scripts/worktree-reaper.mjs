@@ -65,7 +65,7 @@ import { safeRecursiveRm, safeRecursiveCp, removeWorktreeViaGit } from '../lib/w
 import { runOrphanSweep, resolveMinAgeMs, fetchTerminalStatusKeys } from '../lib/worktree-reaper/orphan-sweep.js';
 // QF-20260710-432: last-line live-claim guard — a live-claimed worktree is never
 // reaped regardless of commit count (Alpha-2 incident: zero-commit mid-PLAN reap).
-import { liveClaimBlocksRemoval } from '../lib/worktree-reaper/live-claim-guard.js';
+import { liveClaimBlocksRemoval, resolveHolderKey } from '../lib/worktree-reaper/live-claim-guard.js';
 import { heartbeatResidencyBlocksRemoval, treeResidencyBlocksRemoval } from '../lib/worktree-reaper/residency-guard.js';
 import { hasReapEligibleMarker, readReapEligibleMarker, isReapEligibleMarkerValid } from '../lib/worktree-reaper/reap-eligible-marker.js';
 import { decideRemoval, UNRESOLVABLE_KEY_RESIDENCY_CLEARED } from '../lib/worktree-reaper/removal-decision.js';
@@ -1577,7 +1577,16 @@ export async function main(argv = process.argv) {
     const wtInput = { ...wt, key: basename };
 
     const claimKey = normalizePath(wt.path);
-    const activeClaim = claimMap.get(claimKey);
+    // QF-20260904-139: claimMap keys on the LIVE worktree_path claude_sessions carries, which a
+    // reused-by-checkout directory never gets rewritten to (stays null/stale) -- so a live claim
+    // on a directory reused for a new SD/QF was invisible here even though the tree's reuse
+    // marker or checked-out branch names it. Fall back to the resolved holder key (reuse marker,
+    // then branch, then basename) against the already-loaded claimedKeySet.
+    const { parsed: holderParsed, source: keySource } = resolveHolderKey({ path: wt.path, branch: wt.branch });
+    const keyClaim = holderParsed && ctx.claimedKeySet.has(holderParsed.key)
+      ? { key: holderParsed.key, key_source: keySource }
+      : null;
+    const activeClaim = claimMap.get(claimKey) || keyClaim;
 
     const dirty = collectDirtyStatus(wt.path);
     const unpushedCount = dirty.exists ? countUnpushedCommits(wt.path) : 0;
@@ -1834,9 +1843,13 @@ export async function main(argv = process.argv) {
       // Alpha-2 incident reaped a live-claimed ZERO-COMMIT worktree mid-PLAN; commit
       // presence/age is never sufficient evidence of abandonment.
       const claimGuard = await liveClaimBlocksRemoval(supabase, wtPath, {
+        branch: rec.branch,
         logger: (m) => process.stderr.write(`  ${m}
 `),
       });
+      // QF-20260904-139: name which of {reuse_marker, branch, basename} resolved the
+      // key on every row, so a reused/mis-keyed directory's protection is auditable.
+      console.log(`  key source: ${claimGuard.detail?.key_source ?? 'unresolved'}`);
       // SD-FDBK-INFRA-ORPHAN-WORKTREE-STRANDING-001-B (FR-2): tree residency —
       // occupancy asked of the FILESYSTEM, needing no DB row to agree with reality.
       // This is the only predicate that can answer for a worktree whose basename

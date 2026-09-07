@@ -96,7 +96,9 @@ describe('liveClaimBlocksRemoval — the Alpha-2 regression fixture', () => {
     const r = await liveClaimBlocksRemoval(null, 'C:/repo/.worktrees/_archive');
     expect(r.blocked).toBe(true);
     expect(r.reason).toBe('work_key_unresolvable');
-    expect(r.detail).toEqual({ worktree_path: 'C:/repo/.worktrees/_archive' });
+    // QF-20260904-139: detail now also names which resolver source was tried (null here --
+    // no reuse marker, no key-shaped branch, and the basename resolves to no work key either).
+    expect(r.detail).toEqual({ worktree_path: 'C:/repo/.worktrees/_archive', key_source: null });
   });
 
   // The two REAL basenames from the 2026-07-31 incident, verbatim. Regression pins.
