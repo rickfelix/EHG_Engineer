@@ -234,8 +234,15 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
     expect(result.verdict).toBe(PRESERVE_VERDICT.PUSH_FAILED);
     expect(result.pushed).toBe(false);
     expect(gitRunner.mock.calls.some((c) => c[0][0] === 'push')).toBe(true);
-    // no ls-remote verify ever attempted once push failed
-    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'ls-remote')).toBe(false);
+    // no ls-remote verify ever attempted AFTER the push failed -- the ref-existence
+    // check (QF-20260904-693) runs once, upfront, before any staging/push work, so an
+    // ls-remote call earlier in the sequence is expected and does not indicate a
+    // post-failure verify was attempted.
+    const pushIndex = gitRunner.mock.calls.findIndex((c) => c[0][0] === 'push');
+    const lsRemoteAfterPush = gitRunner.mock.calls
+      .slice(pushIndex + 1)
+      .some((c) => c[0][0] === 'ls-remote');
+    expect(lsRemoteAfterPush).toBe(false);
   });
 
   it('TS-5 (secret hit holds and never pushes): zero push invocations, verdict preserve_held_secret', async () => {
@@ -294,6 +301,59 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
 
     expect(result.verdict).toBe(PRESERVE_VERDICT.VERIFY_FAILED);
     expect(result.pushed).toBe(true);
+  });
+});
+
+describe('runPreserveStage() skips a redundant push for an unchanged tip (QF-20260904-693)', () => {
+  it('skips the push entirely when an existing wip/reclaim/<key>/* ref already points at the current HEAD', async () => {
+    const sha = 'unchanged0tip0sha';
+    const gitRunner = makeGitRunner([
+      { match: /^rev-parse HEAD/, result: { code: 0, stdout: `${sha}\n` } },
+      {
+        match: /^ls-remote --heads origin wip\/reclaim\/foo\/\*/,
+        result: { code: 0, stdout: `${sha}\trefs/heads/wip/reclaim/foo/2026-09-01T00-00-00-000Z\n` },
+      },
+    ]);
+
+    const result = await runPreserveStage(
+      { wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' },
+      { gitRunner, nowMs: NOW }
+    );
+
+    expect(result.verdict).toBe(PRESERVE_VERDICT.PUSHED);
+    expect(result.pushed).toBe(false);
+    expect(result.sha).toBe(sha);
+    expect(result.ref).toBe('wip/reclaim/foo/2026-09-01T00-00-00-000Z');
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'push')).toBe(false);
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'commit')).toBe(false);
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'add')).toBe(false);
+  });
+
+  it('pushes a new ref when HEAD has moved past every existing wip/reclaim ref (moved tip)', async () => {
+    const oldSha = 'old0tip0sha';
+    const newSha = 'moved0tip0sha';
+    const gitRunner = makeGitRunner([
+      { match: /^rev-parse HEAD/, result: { code: 0, stdout: `${newSha}\n` } },
+      {
+        match: /^ls-remote --heads origin wip\/reclaim\/foo\/\*/,
+        result: { code: 0, stdout: `${oldSha}\trefs/heads/wip/reclaim/foo/2026-09-01T00-00-00-000Z\n` },
+      },
+      { match: /^ls-files --others/, result: { code: 0, stdout: '' } },
+      { match: /^diff --cached --quiet/, result: { code: 0, stdout: '' } }, // nothing staged
+      { match: /^push origin/, result: { code: 0, stdout: '' } },
+      { match: /^ls-remote origin refs\/heads/, result: { code: 0, stdout: `${newSha}\trefs/heads/wip/reclaim/foo\n` } },
+    ]);
+
+    const result = await runPreserveStage(
+      { wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' },
+      { gitRunner, nowMs: NOW }
+    );
+
+    expect(result.verdict).toBe(PRESERVE_VERDICT.PUSHED);
+    expect(result.pushed).toBe(true);
+    expect(result.sha).toBe(newSha);
+    expect(result.ref).not.toBe('wip/reclaim/foo/2026-09-01T00-00-00-000Z');
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'push')).toBe(true);
   });
 });
 
@@ -369,13 +429,53 @@ describe('runPreserveStage() never advances the checked-out branch (QF-20260904-
 });
 
 describe('appendReaperPreservedPointer()', () => {
-  it('skips QF-owned rows (quick_fixes has no metadata column) -- audit_log remains authoritative', async () => {
-    const result = await appendReaperPreservedPointer(
-      { from: vi.fn() },
-      { key: 'QF-20260904-001', isQf: true },
-      { ref: 'wip/reclaim/QF-20260904-001/ts' }
-    );
-    expect(result).toEqual({ ok: false, skipped: true, reason: 'quick_fixes_no_metadata_column' });
+  it('QF-20260904-652: writes to quick_fixes.metadata.reaper_preserved[] for a QF-owned row, never overwriting other metadata', async () => {
+    const existingRow = { id: 'QF-20260904-001', metadata: { other: 'field' } };
+    let updatePayload = null;
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existingRow, error: null }) }) }),
+        update: (payload) => { updatePayload = payload; return { eq: async () => ({ error: null }) }; },
+      }),
+    };
+
+    const pointer = { ref: 'wip/reclaim/QF-20260904-001/ts', sha: 'abc' };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'QF-20260904-001', isQf: true }, pointer);
+
+    expect(result).toEqual({ ok: true });
+    expect(updatePayload.metadata.other).toBe('field');
+    expect(updatePayload.metadata.reaper_preserved).toEqual([pointer]);
+  });
+
+  it('QF-20260904-652: fails soft on Postgres 42703 (column absent) on the read half, never throws', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { code: '42703', message: 'column "metadata" does not exist' } }) }) }),
+      }),
+    };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'QF-X', isQf: true }, { ref: 'r' });
+    expect(result).toEqual({ ok: false, skipped: true, reason: 'column_absent' });
+  });
+
+  it('QF-20260904-652: fails soft on Postgres 42703 on the write half too', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'QF-X', metadata: {} }, error: null }) }) }),
+        update: () => ({ eq: async () => ({ error: { code: '42703', message: 'column "metadata" does not exist' } }) }),
+      }),
+    };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'QF-X', isQf: true }, { ref: 'r' });
+    expect(result).toEqual({ ok: false, skipped: true, reason: 'column_absent' });
+  });
+
+  it('QF-20260904-652: skips (no throw) when no quick_fixes row matches the key', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      }),
+    };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'QF-NOBODY', isQf: true }, { ref: 'r' });
+    expect(result).toEqual({ ok: false, skipped: true, reason: 'no_matching_qf_id' });
   });
 
   it('appends to metadata.reaper_preserved[] for an SD row, never overwriting other metadata', async () => {
@@ -383,7 +483,7 @@ describe('appendReaperPreservedPointer()', () => {
     let updatePayload = null;
     const supabase = {
       from: () => ({
-        select: () => ({ eq: () => ({ single: async () => ({ data: existingRow, error: null }) }) }),
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existingRow, error: null }) }) }),
         update: (payload) => { updatePayload = payload; return { eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'row-1' }, error: null }) }) }) }) }; },
       }),
     };
@@ -396,10 +496,20 @@ describe('appendReaperPreservedPointer()', () => {
     expect(updatePayload.metadata.reaper_preserved).toEqual([pointer]);
   });
 
+  it('QF-20260904-652: skips (no throw) on a zero-match sd_key lookup instead of erroring on .single()', async () => {
+    const supabase = {
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+      }),
+    };
+    const result = await appendReaperPreservedPointer(supabase, { key: 'chore/encode-1afdeaac-20260906', isQf: false }, { ref: 'r' });
+    expect(result).toEqual({ ok: false, skipped: true, reason: 'no_matching_sd_key' });
+  });
+
   it('retries on an optimistic-concurrency conflict (updated_at moved) then gives up after max retries', async () => {
     const supabase = {
       from: () => ({
-        select: () => ({ eq: () => ({ single: async () => ({ data: { id: 'row-1', metadata: {}, updated_at: 't0' }, error: null }) }) }),
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'row-1', metadata: {}, updated_at: 't0' }, error: null }) }) }),
         update: () => ({ eq: () => ({ eq: () => ({ select: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }) }), // always loses the race
       }),
     };

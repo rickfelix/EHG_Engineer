@@ -44,6 +44,7 @@ import {
   dimScoreOf,
   dimNameOf,
 } from '../../../../../../lib/handoff/threshold-resolver.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 export {
   SD_TYPE_THRESHOLDS,
   DIMENSION_WARNING_THRESHOLD,
@@ -165,13 +166,16 @@ const THRESHOLD_LABELS = {
 async function checkOverride(sdType, supabase) {
   if (!supabase || !sdType) return { active: false };
   try {
-    const { data } = await supabase
-      .from('validation_gate_registry')
-      .select('reason')
-      .eq('gate_key', 'GATE_VISION_SCORE')
-      .eq('applicability', 'OPTIONAL_OVERRIDE')
-      .eq('sd_type', sdType)
-      .limit(1);
+    const data = await safeQuery(
+      supabase
+        .from('validation_gate_registry')
+        .select('reason')
+        .eq('gate_key', 'GATE_VISION_SCORE')
+        .eq('applicability', 'OPTIONAL_OVERRIDE')
+        .eq('sd_type', sdType)
+        .limit(1),
+      { site: 'vision-score:check_override' }
+    );
 
     if (data && data.length > 0) {
       const justification = (data[0].reason || '').trim();
@@ -333,12 +337,15 @@ export async function validateVisionScore(sd, supabase, deps = {}) {
   const willUseFetchedScore = visionScore === null;
   if ((visionScore === null || dimensionScores === null) && supabase && sdKey) {
     try {
-      const { data } = await supabase
-        .from('eva_vision_scores')
-        .select('total_score, threshold_action, dimension_scores, rubric_snapshot, scored_at')
-        .eq('sd_id', sdKey)
-        .order('scored_at', { ascending: false })
-        .limit(1);
+      const data = await safeQuery(
+        supabase
+          .from('eva_vision_scores')
+          .select('total_score, threshold_action, dimension_scores, rubric_snapshot, scored_at')
+          .eq('sd_id', sdKey)
+          .order('scored_at', { ascending: false })
+          .limit(1),
+        { site: 'vision-score:fetch_cached_score' }
+      );
 
       if (data && data.length > 0) {
         visionScore = visionScore ?? data[0].total_score;

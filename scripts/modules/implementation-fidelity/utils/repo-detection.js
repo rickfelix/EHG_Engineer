@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { readFile } from 'fs/promises';
 import { getSDSearchTerms } from './git-helpers.js';
 import { resolveRepoPath, resolveLocalPath, ENGINEER_ROOT } from '../../../../lib/repo-paths.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import { resolveWorktreeCwd } from '../../../../lib/resolve-worktree-cwd.js';
 
 const execAsync = promisify(exec);
@@ -34,12 +35,15 @@ export async function resolveReposForSD(sd_id, supabase) {
   // 1. Check if SD has a target_application
   let targetApp = null;
   try {
-    const { data } = await supabase
-      .from('strategic_directives_v2')
-      .select('target_application')
-      .or(`sd_key.eq.${sd_id},id.eq.${sd_id}`)
-      .limit(1)
-      .single();
+    const data = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('target_application')
+        .or(`sd_key.eq.${sd_id},id.eq.${sd_id}`)
+        .limit(1)
+        .single(),
+      { site: 'repo-detection:resolve_target_application' }
+    );
     targetApp = data?.target_application;
   } catch (_) {
     // Ignore - will fallback to all repos

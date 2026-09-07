@@ -112,17 +112,92 @@ function isUntracked(relFile) {
  * That class of edit is invisible to this control; the pre-existing inventory (advisory) is the
  * only mechanism that would eventually re-surface it on its own periodic re-run.
  */
-function scanFile(relFile, addedLines, overrides) {
+/**
+ * Discovered 2026-09-07 (SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001): wrapping an EXISTING,
+ * unmodified `.select(...)` chain in a new outer call (e.g. safeQuery(...)) necessarily
+ * reformats the SURROUNDING lines (new indentation, an added wrapper token before the chain and
+ * an added options object after it), which makes git diff report the `.select(` line as "added"
+ * even though the query's own select-columns and predicate chain are byte-for-byte identical to
+ * origin/main. addedLineNumbers() then flags it as a brand-new site, when the actual
+ * count/truncation risk (if any) already existed and was never touched by this PR. A whole-window
+ * text comparison does NOT survive this (the wrapper's added prefix/suffix lines differ), so
+ * this matches on the `.select(` line's OWN trimmed text instead -- that exact line is rarely, if
+ * ever, touched by a pure wrap -- and only suppresses the finding when the SAME text already
+ * classified as 'needs-review' in the base file too (i.e. genuinely unbounded pre-PR, not newly
+ * widened by this PR's edit).
+ */
+// A trimmed `.select(` line's own text, stripped of a trailing statement-terminator/
+// argument-separator -- wrapping an existing statement in a new outer call (safeQuery(...),
+// Promise.all([...])) turns its trailing `;` into a `,` (now an argument, not a standalone
+// statement) with no other change to this one line. Exported so both the base-file indexer
+// below and scanFile's own lookup key are guaranteed to normalize identically.
+export function normalizeSelectLineKey(line) {
+  return line.trim().replace(/[;,]\s*$/, '');
+}
+
+/**
+ * Pure: builds the `.select(` text -> classifications-seen map for one file's content. No I/O,
+ * no git -- takes the base file's raw text directly, so this is testable against a synthetic
+ * fixture string without touching the filesystem or a git ref.
+ */
+export function baseSelectClassificationsFromContent(content, relFile) {
+  const baseLines = content.split('\n');
+  const nonLive = isNonLivePath(relFile);
+  const byText = new Map();
+  baseLines.forEach((line, i) => {
+    if (!/\.select\s*\(/.test(line) || /\/\/|\/\*|^\s*\*/.test(line.slice(0, line.indexOf('.select')))) return;
+    const key = normalizeSelectLineKey(line);
+    const classification = nonLive ? 'non-live-path' : classifyChain(chainWindow(baseLines, i));
+    // Same trimmed .select( text can legitimately appear more than once in a file (e.g. two
+    // different gates reading the same columns) -- track the SET of classifications seen so a
+    // definitely-bounded prior instance never masks a genuinely different, unbounded new one.
+    if (!byText.has(key)) byText.set(key, new Set());
+    byText.get(key).add(classification);
+  });
+  return byText;
+}
+
+/**
+ * Discovered 2026-09-07 (SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001): wrapping an EXISTING,
+ * unmodified `.select(...)` chain in a new outer call (e.g. safeQuery(...)) necessarily
+ * reformats the SURROUNDING lines (new indentation, an added wrapper token before the chain and
+ * an added options object after it), which makes git diff report the `.select(` line as "added"
+ * even though the query's own select-columns and predicate chain are byte-for-byte identical to
+ * origin/main. addedLineNumbers() then flags it as a brand-new site, when the actual
+ * count/truncation risk (if any) already existed and was never touched by this PR. A whole-window
+ * text comparison does NOT survive this (the wrapper's added prefix/suffix lines differ), so
+ * this matches on the `.select(` line's OWN trimmed text instead -- that exact line is rarely, if
+ * ever, touched by a pure wrap -- and only suppresses the finding when the SAME text already
+ * classified as 'needs-review' in the base file too (i.e. genuinely unbounded pre-PR, not newly
+ * widened by this PR's edit).
+ */
+function baseSelectClassifications(base, relFile) {
+  let content;
+  try {
+    // stdio ignores stderr: a genuinely new file (not present at `base`) is an EXPECTED, routine
+    // case here, not a real error -- git's own "fatal: path ... exists on disk, but not in
+    // <base>" would otherwise print on every such file and read as a build failure in CI logs.
+    content = execSync(`git show ${base}:"${relFile}"`, { encoding: 'utf8', timeout: 30000, cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch {
+    return null; // file didn't exist at base -- a genuinely new file, nothing to compare against
+  }
+  return baseSelectClassificationsFromContent(content, relFile);
+}
+
+function scanFile(relFile, addedLines, overrides, base) {
   const abs = path.join(REPO_ROOT, relFile);
   if (!fs.existsSync(abs)) return [];
   const nonLive = isNonLivePath(relFile);
   const lines = fs.readFileSync(abs, 'utf8').split('\n');
+  const basePreExisting = baseSelectClassifications(base, relFile);
   const violations = [];
   lines.forEach((line, i) => {
     const lineNo = i + 1;
     if (addedLines && !addedLines.has(lineNo)) return;
     if (!/\.select\s*\(/.test(line) || /\/\/|\/\*|^\s*\*/.test(line.slice(0, line.indexOf('.select')))) return;
     const auto = nonLive ? 'non-live-path' : classifyChain(chainWindow(lines, i));
+    const lookupKey = normalizeSelectLineKey(line);
+    if (auto === 'needs-review' && basePreExisting?.get(lookupKey)?.has('needs-review')) return; // already unbounded pre-PR, reformatted only
     // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: honor scripts/audit/count-truncation-overrides.json
     // here too -- this function's own error message already promised this escape hatch.
     const { classification } = resolveClassification(overrides, `${relFile}:${lineNo}`, line, auto);
@@ -149,7 +224,7 @@ function main() {
   }
 
   const overrides = loadOverrides();
-  const violations = files.flatMap((f) => scanFile(f, isUntracked(f) ? null : addedLineNumbers(base, f), overrides));
+  const violations = files.flatMap((f) => scanFile(f, isUntracked(f) ? null : addedLineNumbers(base, f), overrides, base));
 
   if (violations.length === 0) {
     console.log(`✅ count-truncation-diff-lint: 0 new needs-review select() site(s) across ${files.length} changed file(s)`);
