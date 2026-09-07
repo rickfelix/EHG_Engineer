@@ -15,6 +15,7 @@
 
 import readline from 'readline';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems, buildSDSpecificImprovementAreas } from '../../retrospective-enricher.js'; // SD-LEARN-FIX-ADDRESS-PAT-AUTO-022
 
 /**
@@ -310,14 +311,21 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
 
     // SD-LEARN-FIX-ADDRESS-PAT-AUTO-050: Upsert to prevent duplicate rows on retry.
     // QF-20260509-967: also fetch quality_score, metadata, generated_by for clobber-guard.
-    const { data: existing } = await supabase
-      .from('retrospectives')
-      .select('id, quality_score, metadata, generated_by')
-      .eq('sd_id', retrospective.sd_id)
-      .eq('retrospective_type', retrospectiveType)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // SECURITY-RELEVANT: a query fault here must never read as "no existing row" -- that would
+    // bypass the manually-curated/higher-quality clobber guard below and silently overwrite a
+    // protected retrospective. safeQuery throws on a real fault; the enclosing catch turns it
+    // into "skip this retro write, continue the handoff", never a false clobber.
+    const existing = await safeQuery(
+      supabase
+        .from('retrospectives')
+        .select('id, quality_score, metadata, generated_by')
+        .eq('sd_id', retrospective.sd_id)
+        .eq('retrospective_type', retrospectiveType)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      { site: 'lead-to-plan-retrospective:existing_row_clobber_guard' }
+    );
 
     // SD-LEO-INFRA-BACKEND-WRITE-SAFETY-001 (FR-3): cross-type sd-level guard.
     // Closes the generated_by=null leak path that QF-967's per-type check below

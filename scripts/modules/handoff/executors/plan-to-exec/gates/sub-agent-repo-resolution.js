@@ -21,6 +21,7 @@
  *     unresolved rows for these are tolerated (CONDITIONAL_PASS @ 70).
  *     UNRESOLVED only BLOCKS for cross-repo targets.
  */
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const REASON_CODES = {
   HEALTHY: 'SUB_AGENT_REPO_HEALTHY',
@@ -235,10 +236,13 @@ async function collectSdScope(supabase, sd) {
   const ids = [sdId];
 
   try {
-    const { data: children } = await supabase
-      .from('strategic_directives_v2')
-      .select('id')
-      .eq('parent_sd_id', sdId);
+    const children = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('id')
+        .eq('parent_sd_id', sdId),
+      { site: 'sub-agent-repo-resolution:collect_sd_scope_children' }
+    );
     if (Array.isArray(children)) {
       for (const c of children) {
         if (c?.id) ids.push(c.id);

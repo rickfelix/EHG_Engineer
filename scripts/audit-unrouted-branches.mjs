@@ -38,6 +38,35 @@ import { resolveGitHubRepo } from '../lib/repo-paths.js';
 
 const BASE = 'origin/main';
 const PROTECTED = new Set(['main', 'master', 'HEAD']);
+/** QF-20260904-422: the reaper's own PRESERVE recovery namespace (PRESERVE-001) --
+ *  pushed by design on every hard_keep tree, never routed via a PR. These dominated
+ *  the candidate set (208 of 245 hits measured live) and inflated runtime with a
+ *  wasted `git cherry` call each; excluded before that pass, reported on their own
+ *  summary line instead of as unrouted work. */
+const PRESERVE_REF_PREFIX = 'wip/reclaim/';
+export function isPreserveRef(branch) {
+  return typeof branch === 'string' && branch.startsWith(PRESERVE_REF_PREFIX);
+}
+function preserveRefKey(branch) {
+  return branch.slice(PRESERVE_REF_PREFIX.length).split('/')[0];
+}
+
+/**
+ * Pure: split ancestry-unmerged candidates into ordinary work (still needing the
+ * per-ref patch-equivalence check) and reaper PRESERVE recovery refs (never routed by
+ * design, summarized instead of classified). Exported for testing without git/gh.
+ */
+export function partitionPreserveCandidates(candidates) {
+  const preserveRefs = candidates.filter((c) => isPreserveRef(c.branch));
+  const otherCandidates = candidates.filter((c) => !isPreserveRef(c.branch));
+  return {
+    otherCandidates,
+    preserve: {
+      count: preserveRefs.length,
+      distinct_trees: new Set(preserveRefs.map((c) => preserveRefKey(c.branch))).size,
+    },
+  };
+}
 /**
  * Default window, chosen from measurement rather than taste:
  *   3d  ->  6 hits,  ~5s   (fast enough to surface inline anywhere)
@@ -125,8 +154,13 @@ export function countUnmergedPatches(ref, cwd) {
 export function findUnroutedBranches(cwd, repo, opts = {}) {
   const { set: openPRs, ok } = openPRBranches(repo);
   if (!ok) return null;
+  // Split BEFORE the expensive per-ref `git cherry` pass below -- a preserve ref is
+  // never routed by design, so running it through classification wastes a process
+  // spawn for no possible outcome.
+  const { otherCandidates, preserve } = partitionPreserveCandidates(listUnmergedRefs(cwd));
+
   const found = [];
-  for (const cand of listUnmergedRefs(cwd)) {
+  for (const cand of otherCandidates) {
     if (!withinAgeWindow(cand.newestCommitISO, opts)) continue;
     try {
       const hit = classifyBranch({
@@ -139,7 +173,10 @@ export function findUnroutedBranches(cwd, repo, opts = {}) {
       process.stderr.write(`[audit-unrouted-branches] skipped ${cand.ref}: ${err.message}\n`);
     }
   }
-  return found.sort((a, b) => (b.age_hours ?? 0) - (a.age_hours ?? 0)); // oldest first
+  return {
+    found: found.sort((a, b) => (b.age_hours ?? 0) - (a.age_hours ?? 0)), // oldest first
+    preserve,
+  };
 }
 
 function fmtAge(h) {
@@ -157,11 +194,12 @@ function main() {
   const repo = flag('--repo') || process.env.GITHUB_REPOSITORY || resolveGitHubRepo('EHG_Engineer');
   const maxAgeDays = Number(flag('--max-age-days') ?? DEFAULT_MAX_AGE_DAYS);
 
-  const rows = findUnroutedBranches(process.cwd(), repo, { maxAgeDays });
-  if (rows === null) { process.exit(0); return; } // gh unavailable; already warned
+  const result = findUnroutedBranches(process.cwd(), repo, { maxAgeDays });
+  if (result === null) { process.exit(0); return; } // gh unavailable; already warned
+  const { found: rows, preserve } = result;
 
   if (json) {
-    process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
+    process.stdout.write(JSON.stringify({ unrouted: rows, preserve }, null, 2) + '\n');
   } else if (rows.length === 0) {
     console.log(`[audit-unrouted-branches] No unrouted branches in the last ${maxAgeDays}d — everything ahead of ${BASE} is merged or has an open PR.`);
   } else {
@@ -170,6 +208,9 @@ function main() {
       console.log(`  - ${r.branch}  +${r.unmerged_commits} unmerged commit(s)  newest ${fmtAge(r.age_hours)} old`);
     }
     console.log('  → open a PR, or delete the branch if the work is abandoned.');
+  }
+  if (!json && preserve.count > 0) {
+    console.log(`[audit-unrouted-branches] ${preserve.count} reaper PRESERVE recovery ref(s) across ${preserve.distinct_trees} tree(s) excluded (${PRESERVE_REF_PREFIX}* -- pushed by design, never routed via a PR).`);
   }
   process.exit(0); // informational only; never block a caller
 }

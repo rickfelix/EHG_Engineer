@@ -6,7 +6,15 @@
  * starts aligned but drifts during implementation.
  *
  * ADVISORY gate — always passes, but logs delta for visibility.
+ *
+ * SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-2: every query here routes through safeQuery with a
+ * `tolerate` reason rather than a bare error-discarding destructure — the gate's own contract is
+ * "always passes", so a hard throw on a broken query would be a behaviour REGRESSION, not a fix.
+ * `tolerate` keeps the null-on-failure fallback this file already relies on, but makes the
+ * silence GOVERNED (a `[query-discipline] TOLERATED` line to stderr) instead of ungoverned.
  */
+
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const RESCORE_TIMEOUT_MS = 60_000;
 
@@ -21,10 +29,13 @@ export function createVisionCompletionScoreGate(supabase) {
       const sdKey = ctx.sd?.sd_key || ctx.sdId;
 
       // ORCHESTRATOR BYPASS
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'vision-completion-score:child_sds', tolerate: 'advisory-only gate — a failed orchestrator-bypass check falls back to treating the SD as non-orchestrator rather than throwing' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Orchestrator SD (${childSDs.length} children) — bypassing`);
@@ -38,11 +49,14 @@ export function createVisionCompletionScoreGate(supabase) {
       // CORRECTIVE SD EXEMPTION
       let metadata = ctx.sd?.metadata;
       if (!metadata) {
-        const { data: sdRecord } = await supabase
-          .from('strategic_directives_v2')
-          .select('metadata')
-          .eq('id', sdUuid)
-          .single();
+        const sdRecord = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('metadata')
+            .eq('id', sdUuid)
+            .single(),
+          { site: 'vision-completion-score:sd_record', tolerate: 'advisory-only gate — a failed metadata lookup falls back to no vision_key, which the gate already treats as skip-not-applicable' }
+        );
         metadata = sdRecord?.metadata;
       }
 
@@ -73,12 +87,15 @@ export function createVisionCompletionScoreGate(supabase) {
       if (archKey) console.log(`   Arch Key: ${archKey}`);
 
       // Look up entry score (earliest score for this SD)
-      const { data: entryScores } = await supabase
-        .from('eva_vision_scores')
-        .select('id, total_score, dimension_scores, scored_at')
-        .eq('sd_id', sdKey)
-        .order('scored_at', { ascending: true })
-        .limit(1);
+      const entryScores = await safeQuery(
+        supabase
+          .from('eva_vision_scores')
+          .select('id, total_score, dimension_scores, scored_at')
+          .eq('sd_id', sdKey)
+          .order('scored_at', { ascending: true })
+          .limit(1),
+        { site: 'vision-completion-score:entry_scores', tolerate: 'advisory-only gate — a failed entry-score lookup reports as "no entry score found" rather than throwing' }
+      );
 
       const entryScore = entryScores?.[0];
       if (entryScore) {
@@ -91,12 +108,15 @@ export function createVisionCompletionScoreGate(supabase) {
       const RECENT_SCORE_THRESHOLD_MS = 30 * 60 * 1000;
       let completionScore = null;
 
-      const { data: recentScores } = await supabase
-        .from('eva_vision_scores')
-        .select('id, total_score, dimension_scores, scored_at')
-        .eq('sd_id', sdKey)
-        .order('scored_at', { ascending: false })
-        .limit(1);
+      const recentScores = await safeQuery(
+        supabase
+          .from('eva_vision_scores')
+          .select('id, total_score, dimension_scores, scored_at')
+          .eq('sd_id', sdKey)
+          .order('scored_at', { ascending: false })
+          .limit(1),
+        { site: 'vision-completion-score:recent_scores', tolerate: 'advisory-only gate — a failed recent-score lookup forces a fresh re-score attempt rather than throwing' }
+      );
 
       const recentScore = recentScores?.[0];
       if (recentScore) {
@@ -118,12 +138,15 @@ export function createVisionCompletionScoreGate(supabase) {
           await Promise.race([scorePromise, timeoutPromise]);
 
           // Fetch the newly created score
-          const { data: newScores } = await supabase
-            .from('eva_vision_scores')
-            .select('id, total_score, dimension_scores, scored_at')
-            .eq('sd_id', sdKey)
-            .order('scored_at', { ascending: false })
-            .limit(1);
+          const newScores = await safeQuery(
+            supabase
+              .from('eva_vision_scores')
+              .select('id, total_score, dimension_scores, scored_at')
+              .eq('sd_id', sdKey)
+              .order('scored_at', { ascending: false })
+              .limit(1),
+            { site: 'vision-completion-score:new_scores', tolerate: 'advisory-only gate — a failed post-rescore fetch surfaces as no completionScore, which the outer flow already treats as advisory-pass' }
+          );
 
           completionScore = newScores?.[0];
         } catch (err) {

@@ -14,6 +14,7 @@ import {
   buildSemanticResult,
   buildSkipResult
 } from '../../../validation/semantic-gate-utils.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'SMOKE_TEST_VALIDATION';
 
@@ -63,12 +64,15 @@ export function createSmokeTestValidationGate(supabase) {
           // Fallback: check SD smoke_test_steps before scoring 0
           let sdSmokeSteps = ctx.sd?.smoke_test_steps || [];
           if (sdSmokeSteps.length === 0 && supabase && sdId) {
-            const { data: sdData } = await supabase
-              .from('strategic_directives_v2')
-              .select('smoke_test_steps')
-              .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
-              .limit(1)
-              .single();
+            const sdData = await safeQuery(
+              supabase
+                .from('strategic_directives_v2')
+                .select('smoke_test_steps')
+                .or(`id.eq.${sdId},sd_key.eq.${sdId}`)
+                .limit(1)
+                .single(),
+              { site: 'smoke-test-validation:sd_smoke_test_steps' }
+            );
             sdSmokeSteps = sdData?.smoke_test_steps || [];
           }
 
@@ -127,6 +131,17 @@ export function createSmokeTestValidationGate(supabase) {
         });
       } catch (err) {
         console.log(`   ⚠️  Error: ${err.message}`);
+        // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-2: a genuine query-discipline failure
+        // (safeQuery/safeCount throwing) must not be swallowed into the same lenient advisory
+        // pass as an ordinary unexpected error — it means the check itself could not run.
+        if (err.code === 'QUERY_FAILED' || err.code === 'COUNT_UNMEASURABLE') {
+          // confidence must be >= 0.7: buildSemanticResult forces passed=true when confidence < 0.7
+          // (its "degrade blocking to warning" rule), which would silently re-swallow this fix.
+          return buildSemanticResult({
+            passed: false, score: 0, confidence: 0.9,
+            issues: [`Smoke test validation could not run — query failed: ${err.message}`]
+          });
+        }
         return buildSemanticResult({
           passed: true, score: 50, confidence: 0.3,
           warnings: [`Smoke test validation error: ${err.message}`]

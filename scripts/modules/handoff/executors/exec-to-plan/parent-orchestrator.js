@@ -26,6 +26,7 @@
  */
 
 import { computeScopeCoverage } from '../../../../../lib/sd/scope-coverage.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 import { captureCompletionFlags } from '../../../../capture-completion-flags.js';
 
 /**
@@ -92,11 +93,14 @@ export function getParentOrchestratorExecToPlanGates(supabase, sd) {
         // window -- `sd` may have been fetched earlier in this handoff, and a full-object
         // metadata overwrite using a stale copy would silently clobber any concurrent write
         // to this parent's metadata JSON column.
-        const { data: freshSd } = await supabase
-          .from('strategic_directives_v2')
-          .select('metadata')
-          .eq('id', sd.id)
-          .maybeSingle();
+        const freshSd = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('metadata')
+            .eq('id', sd.id)
+            .maybeSingle(),
+          { site: 'parent-orchestrator:refetch_metadata_before_scope_coverage_write' }
+        );
         const baseMetadata = (freshSd?.metadata && typeof freshSd.metadata === 'object' && !Array.isArray(freshSd.metadata))
           ? freshSd.metadata
           : (sd.metadata && typeof sd.metadata === 'object' && !Array.isArray(sd.metadata) ? sd.metadata : {});

@@ -20,6 +20,8 @@
  * #3/#4 were load-bearing — see git history pre-NORMALIZE-HANDOFF.)
  */
 
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
+
 /**
  * SD-LEO-FIX-RETROSPECTIVE-EXISTS-GATE-001: sd_phase_handoffs.accepted_at is a
  * `timestamp without time zone` column in some environments — PostgREST returns it
@@ -61,11 +63,14 @@ export function parseAsUTC(ts) {
  */
 async function resolveCanonicalSdId(sdUuid, sdKey, supabase) {
   if (!sdKey) return sdUuid;
-  const { data: canonical } = await supabase
-    .from('strategic_directives_v2')
-    .select('id')
-    .eq('sd_key', sdKey)
-    .maybeSingle();
+  const canonical = await safeQuery(
+    supabase
+      .from('strategic_directives_v2')
+      .select('id')
+      .eq('sd_key', sdKey)
+      .maybeSingle(),
+    { site: 'retro-filters:canonical_sd_id' }
+  );
   if (canonical?.id && canonical.id !== sdUuid) {
     console.log(`   ⚠️  [retro-filters] sdUuid mismatch (${sdUuid} vs canonical ${canonical.id}) — using canonical id`);
     return canonical.id;
@@ -84,16 +89,19 @@ async function resolveCanonicalSdId(sdUuid, sdKey, supabase) {
  * @returns {Promise<string>} ISO timestamp string
  */
 export async function resolveLeadToPlanAcceptedAt(sdUuid, sdCreatedAt, supabase) {
-  const { data: handoff } = await supabase
-    .from('sd_phase_handoffs')
-    .select('accepted_at')
-    .eq('sd_id', sdUuid)
-    .eq('from_phase', 'LEAD')
-    .eq('to_phase', 'PLAN')
-    .eq('status', 'accepted')
-    .order('accepted_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const handoff = await safeQuery(
+    supabase
+      .from('sd_phase_handoffs')
+      .select('accepted_at')
+      .eq('sd_id', sdUuid)
+      .eq('from_phase', 'LEAD')
+      .eq('to_phase', 'PLAN')
+      .eq('status', 'accepted')
+      .order('accepted_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    { site: 'retro-filters:lead_to_plan_accepted_at' }
+  );
 
   // Normalize to an explicit-UTC ISO string (parseAsUTC above) — the raw column value
   // may be a naive (no-Z) timestamp string; used downstream both as the .gt() filter

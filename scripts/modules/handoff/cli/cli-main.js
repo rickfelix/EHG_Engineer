@@ -8,6 +8,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../../lib/supabase-client.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import { createHandoffSystem } from '../index.js';
 import dotenv from 'dotenv';
 import { findClaudeCodePid } from '../../../../lib/terminal-identity.js';
@@ -923,11 +924,14 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
         const { createClient } = await import('@supabase/supabase-js');
         const supabaseForCheck = createSupabaseServiceClient();
 
-        const { data: completedHandoffs } = await supabaseForCheck
-          .from('sd_phase_handoffs')
-          .select('handoff_type, status')
-          .eq('sd_id', workflowCheck.sd.id)
-          .eq('status', 'accepted');
+        const completedHandoffs = await safeQuery(
+          supabaseForCheck
+            .from('sd_phase_handoffs')
+            .select('handoff_type, status')
+            .eq('sd_id', workflowCheck.sd.id)
+            .eq('status', 'accepted'),
+          { site: 'cli-main:completed_handoffs' }
+        );
 
         const completedTypes = new Set((completedHandoffs || []).map(h => h.handoff_type));
         const missingPrereqs = [];
@@ -1475,10 +1479,13 @@ async function runPreGateBlockerDetection(supabase, sdId, sd) {
 
   // 2. Check for stale claims on dependency SDs
   if (sd?.dependencies && Array.isArray(sd.dependencies) && sd.dependencies.length > 0) {
-    const { data: depSDs } = await supabase
-      .from('strategic_directives_v2')
-      .select('id, sd_key, status, claiming_session_id')
-      .in('id', sd.dependencies);
+    const depSDs = await safeQuery(
+      supabase
+        .from('strategic_directives_v2')
+        .select('id, sd_key, status, claiming_session_id')
+        .in('id', sd.dependencies),
+      { site: 'cli-main:dep_sds' }
+    );
 
     for (const dep of (depSDs || [])) {
       if (dep.status !== 'completed' && dep.status !== 'cancelled') {
@@ -1488,11 +1495,14 @@ async function runPreGateBlockerDetection(supabase, sdId, sd) {
 
       // Check for stale claims on deps and auto-release if dead
       if (dep.claiming_session_id) {
-        const { data: claimSession } = await supabase
-          .from('v_active_sessions')
-          .select('session_id, heartbeat_age_seconds, pid, hostname, terminal_id')
-          .eq('session_id', dep.claiming_session_id)
-          .single();
+        const claimSession = await safeQuery(
+          supabase
+            .from('v_active_sessions')
+            .select('session_id, heartbeat_age_seconds, pid, hostname, terminal_id')
+            .eq('session_id', dep.claiming_session_id)
+            .single(),
+          { site: 'cli-main:claim_session' }
+        );
 
         if (claimSession) {
           const analysis = analyzeClaimRelationship({

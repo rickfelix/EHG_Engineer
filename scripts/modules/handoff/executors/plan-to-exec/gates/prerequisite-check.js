@@ -6,6 +6,7 @@
  */
 
 import { autoResolveFailedHandoffs } from '../../../gates/auto-resolve-failures.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Create the PREREQUISITE_HANDOFF_CHECK gate validator
@@ -61,13 +62,16 @@ export function createPrerequisiteCheckGate(supabase) {
 
         // Diagnostic: check if handoff exists with non-accepted status
         const sdKey = ctx.sd?.sd_key || ctx.sdId;
-        const { data: anyHandoffs } = await supabase
-          .from('sd_phase_handoffs')
-          .select('id, status, sd_id, handoff_type, created_at')
-          .or(`sd_id.eq.${sdUuid},sd_id.eq.${sdKey}`)
-          .eq('handoff_type', 'LEAD-TO-PLAN')
-          .order('created_at', { ascending: false })
-          .limit(3);
+        const anyHandoffs = await safeQuery(
+          supabase
+            .from('sd_phase_handoffs')
+            .select('id, status, sd_id, handoff_type, created_at')
+            .or(`sd_id.eq.${sdUuid},sd_id.eq.${sdKey}`)
+            .eq('handoff_type', 'LEAD-TO-PLAN')
+            .order('created_at', { ascending: false })
+            .limit(3),
+          { site: 'prerequisite-check:any_handoffs' }
+        );
 
         if (anyHandoffs && anyHandoffs.length > 0) {
           console.log('');

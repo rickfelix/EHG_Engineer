@@ -12,6 +12,8 @@
  * Auto-passes for SDs without architecture plans or non-pipeline SDs.
  */
 
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
+
 const PIPELINE_KEYWORDS = [
   'pipeline', 'orchestrat', 'stage-execution', 'stage_execution',
   'eva-orchestrator', 'reality-gate', 'reality_gate', 'lifecycle',
@@ -80,10 +82,13 @@ export function createSmokeTestEvidenceGate(supabase) {
       const sd = ctx.sd || {};
 
       // ORCHESTRATOR BYPASS — orchestrators validate via children
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'smoke-test-evidence:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Orchestrator SD (${childSDs.length} children) — bypassing`);
@@ -120,11 +125,14 @@ export function createSmokeTestEvidenceGate(supabase) {
         };
       }
 
-      const { data: archPlan } = await supabase
-        .from('eva_architecture_plans')
-        .select('plan_key, content, sections')
-        .eq('plan_key', archKey)
-        .single();
+      const archPlan = await safeQuery(
+        supabase
+          .from('eva_architecture_plans')
+          .select('plan_key, content, sections')
+          .eq('plan_key', archKey)
+          .single(),
+        { site: 'smoke-test-evidence:arch_plan' }
+      );
 
       if (!archPlan) {
         console.log(`   ⚠️  Architecture plan '${archKey}' not found`);

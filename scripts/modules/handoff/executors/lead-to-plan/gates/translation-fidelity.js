@@ -17,6 +17,7 @@ import {
   buildSemanticResult,
   buildSkipResult
 } from '../../../validation/semantic-gate-utils.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'TRANSLATION_FIDELITY';
 
@@ -99,12 +100,15 @@ export function createTranslationFidelityGate(supabase) {
         // a sibling-query error degrades to the unscoped (legacy) evaluation.
         let siblings = [];
         try {
-          const { data: sibRows } = await supabase
-            .from('strategic_directives_v2')
-            .select('sd_key, title')
-            .filter('metadata->>arch_key', 'eq', archKey)
-            .neq('sd_key', sdKey)
-            .limit(40);
+          const sibRows = await safeQuery(
+            supabase
+              .from('strategic_directives_v2')
+              .select('sd_key, title')
+              .filter('metadata->>arch_key', 'eq', archKey)
+              .neq('sd_key', sdKey)
+              .limit(40),
+            { site: 'translation-fidelity:sibling_sds' }
+          );
           siblings = sibRows || [];
         } catch (e) {
           console.log(`   ⚠️  Sibling query failed (running unscoped): ${e.message}`);

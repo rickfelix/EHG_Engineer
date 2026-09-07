@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
+
 /**
  * Auto-Populate Deliverables from PRD Module
  *
@@ -52,11 +54,14 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
   try {
     // Check if deliverables already exist (skip if requested)
     if (skipIfExists) {
-      const { data: existing } = await supabase
-        .from('sd_scope_deliverables')
-        .select('id')
-        .eq('sd_id', sdId)
-        .limit(1);
+      const existing = await safeQuery(
+        supabase
+          .from('sd_scope_deliverables')
+          .select('id')
+          .eq('sd_id', sdId)
+          .limit(1),
+        { site: 'extract-deliverables-from-prd:skip_if_exists_check' }
+      );
 
       if (existing && existing.length > 0) {
         if (!silent) {
@@ -75,10 +80,13 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
 
     // Build user story lookup map for ID resolution
     const storyKeyToId = new Map();
-    const { data: userStories } = await supabase
-      .from('user_stories')
-      .select('id, story_key')
-      .eq('sd_id', sdId);
+    const userStories = await safeQuery(
+      supabase
+        .from('user_stories')
+        .select('id, story_key')
+        .eq('sd_id', sdId),
+      { site: 'extract-deliverables-from-prd:user_story_lookup', tolerate: 'Phase 2 enhancement (story linking) -- a lookup failure should degrade to unlinked deliverables, not abort the whole extraction' }
+    );
 
     if (userStories) {
       userStories.forEach(s => storyKeyToId.set(s.story_key, s.id));
@@ -87,7 +95,10 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
     // SD-LEO-INFRA-SIZE-TIER-AWARE-001: drop size-irrelevant boilerplate for small SD types.
     let sdTypeForTier = null;
     try {
-      const { data: sdRow } = await supabase.from('strategic_directives_v2').select('sd_type').eq('id', sdId).single();
+      const sdRow = await safeQuery(
+        supabase.from('strategic_directives_v2').select('sd_type').eq('id', sdId).single(),
+        { site: 'extract-deliverables-from-prd:sd_type_for_tier', tolerate: 'fail-open: no SD type -> full checklist (no filtering)' }
+      );
       sdTypeForTier = sdRow?.sd_type ?? null;
     } catch { /* fail-open: no SD type -> full checklist (no filtering) */ }
     const execChecklist = filterChecklistForTier(prd.exec_checklist, sdTypeForTier);
@@ -194,11 +205,14 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
     // Option 4: Extract from user stories (if no other source found)
     // Enhanced for SD-DELIVERABLES-V2-001: Links deliverables directly to user stories
     if (deliverables.length === 0) {
-      const { data: storiesForExtract } = await supabase
-        .from('user_stories')
-        .select('id, story_key, title, priority')
-        .eq('sd_id', sdId)
-        .limit(10); // Max 10 to avoid over-extraction
+      const storiesForExtract = await safeQuery(
+        supabase
+          .from('user_stories')
+          .select('id, story_key, title, priority')
+          .eq('sd_id', sdId)
+          .limit(10), // Max 10 to avoid over-extraction
+        { site: 'extract-deliverables-from-prd:fallback_user_story_extraction' }
+      );
 
       if (storiesForExtract && storiesForExtract.length > 0) {
         storiesForExtract.forEach(story => {

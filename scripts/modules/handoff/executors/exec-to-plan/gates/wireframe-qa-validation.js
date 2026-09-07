@@ -9,6 +9,7 @@
  * Checks: Whether wireframe artifacts exist and if implementation
  *         files correspond to wireframed components.
  */
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * SD types that are exempt from wireframe QA validation.
@@ -74,11 +75,14 @@ async function gatherWireframeArtifacts(prd, supabase, sdId) {
   // Check agent_artifacts table
   if (supabase && sdId) {
     try {
-      const { data } = await supabase
-        .from('agent_artifacts')
-        .select('title, artifact_type')
-        .eq('sd_id', sdId)
-        .or('artifact_type.ilike.%wireframe%,artifact_type.ilike.%mockup%,title.ilike.%wireframe%,title.ilike.%mockup%');
+      const data = await safeQuery(
+        supabase
+          .from('agent_artifacts')
+          .select('title, artifact_type')
+          .eq('sd_id', sdId)
+          .or('artifact_type.ilike.%wireframe%,artifact_type.ilike.%mockup%,title.ilike.%wireframe%,title.ilike.%mockup%'),
+        { site: 'wireframe-qa-validation:agent_artifacts' }
+      );
 
       if (data && data.length > 0) {
         data.forEach(a => artifacts.push(`Artifact: ${a.title} (${a.artifact_type})`));

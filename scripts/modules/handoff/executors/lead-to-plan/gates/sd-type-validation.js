@@ -11,6 +11,7 @@
  */
 
 import { sdTypeClassifier } from '../../../../../../lib/sd/type-classifier.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 import { autoDetectSdType } from '../../../../../../lib/utils/sd-type-validation.js';
 
 // Valid SD types (from LEO Protocol)
@@ -51,13 +52,16 @@ function isTypeLocked(sd) {
  */
 async function analyzePrdSignals(sd, supabase) {
   try {
-    const { data: prd } = await supabase
-      .from('product_requirements_v2')
-      .select('functional_requirements, executive_summary, category, implementation_approach, system_architecture')
-      .eq('sd_id', sd.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const prd = await safeQuery(
+      supabase
+        .from('product_requirements_v2')
+        .select('functional_requirements, executive_summary, category, implementation_approach, system_architecture')
+        .eq('sd_id', sd.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single(),
+      { site: 'sd-type-validation:analyze_prd_signals' }
+    );
 
     if (!prd) return null;
 

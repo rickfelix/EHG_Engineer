@@ -5,6 +5,7 @@
  * GATE_PRD_EXISTS: Ensures PRD exists and is approved (SD-LEARN-008)
  * GATE_ARCHITECTURE_VERIFICATION: Prevents architecture mismatches (SD-BACKEND-002A)
  */
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 /**
  * Create the GATE_PRD_EXISTS gate validator
@@ -25,11 +26,14 @@ export function createPrdExistsGate(prdRepo) {
         // UAT, documentation, and infrastructure SDs may not require PRDs
         const sdType = ctx.sd?.sd_type || 'feature';
         if (ctx.supabase) {
-          const { data: profile } = await ctx.supabase
-            .from('sd_type_validation_profiles')
-            .select('requires_prd')
-            .eq('sd_type', sdType)
-            .maybeSingle();
+          const profile = await safeQuery(
+            ctx.supabase
+              .from('sd_type_validation_profiles')
+              .select('requires_prd')
+              .eq('sd_type', sdType)
+              .maybeSingle(),
+            { site: 'prd-gates:sd_type_validation_profile' }
+          );
 
           if (profile && profile.requires_prd === false) {
             console.log(`   ✅ PRD not required for sd_type='${sdType}' (validation profile)`);

@@ -14,7 +14,10 @@ function mockSb({ sd, prd, stories }) {
         return { select() { return { or() { return { limit() { return { maybeSingle: () => Promise.resolve({ data: sd, error: null }) }; } }; } }; } };
       }
       if (table === 'product_requirements_v2') {
-        return { select() { return { eq() { return { single: () => Promise.resolve({ data: prd, error: prd ? null : { message: 'no rows' } }) }; } }; } };
+        // PostgREST's real .single() on zero rows returns error.code='PGRST116' — safeQuery
+        // (SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001) treats that code as a genuine absence and
+        // any other error as a real query failure, so the mock must match the real shape.
+        return { select() { return { eq() { return { single: () => Promise.resolve({ data: prd, error: prd ? null : { message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116' } }) }; } }; } };
       }
       if (table === 'user_stories') {
         return { select() { return { eq: () => Promise.resolve({ data: stories || [], error: null }) }; } };

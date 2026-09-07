@@ -12,6 +12,7 @@
  */
 
 import { detectPerformanceCriteria, findBenchmarkEvidence, validateBenchmarkTargets } from '../../../../../lib/performance-evidence-checker.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 // External validator (lazy loaded)
 let getValidationRequirements;
@@ -96,11 +97,14 @@ export function createPerformanceCriticalGate(supabase) {
         }
 
         // SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001: Load PRD performance_requirements
-        const { data: prdData } = await supabase
-          .from('product_requirements_v2')
-          .select('performance_requirements')
-          .eq('sd_id', sdUuid)
-          .single();
+        const prdData = await safeQuery(
+          supabase
+            .from('product_requirements_v2')
+            .select('performance_requirements')
+            .eq('sd_id', sdUuid)
+            .single(),
+          { site: 'performance-critical-gate:prd_performance_requirements' }
+        );
 
         const perfRequirements = prdData?.performance_requirements;
         if (perfRequirements && Object.keys(perfRequirements).length > 0) {
