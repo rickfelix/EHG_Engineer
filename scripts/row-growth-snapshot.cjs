@@ -21,11 +21,14 @@ require('dotenv').config();
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const {
   GOVERNANCE_TABLES,
+  EXACT_COUNT_CEILING,
   SNAPSHOT_EVENT_TYPE,
   ANOMALY_EVENT_TYPE,
   detectRowGrowthAnomalies,
+  confirmRowGrowthAnomaly,
   isSnapshotDue,
   readTableEstimates,
+  readExactCount,
   readLatestSnapshot,
   emitRowGrowthAnomalyAlert,
 } = require('../lib/coordinator/row-growth.cjs');
@@ -54,7 +57,19 @@ async function main() {
     return;
   }
   const captured_at = new Date().toISOString();
-  const snapshot = { captured_at, tables };
+
+  const candidates = prev ? detectRowGrowthAnomalies(prev, { captured_at, tables }) : [];
+  const exactConfirmed = { ...(prev?.exact_confirmed || {}) };
+  const confirmed = [];
+  const estimateOnly = [];
+  for (const c of candidates) {
+    const exactCount = c.curr <= EXACT_COUNT_CEILING ? await readExactCount(sb, c.table) : null;
+    const result = confirmRowGrowthAnomaly(c, exactCount, exactConfirmed[c.table] ?? null);
+    if (result.measurement === 'exact') exactConfirmed[c.table] = exactCount;
+    if (result.status === 'confirmed') confirmed.push(result);
+    else if (result.status === 'estimate_only') estimateOnly.push(result);
+  }
+  const snapshot = { captured_at, tables, exact_confirmed: exactConfirmed };
 
   // Persist the baseline point (non-fatal on failure — next run retries).
   try {
@@ -70,15 +85,26 @@ async function main() {
 
   if (!prev) return;
 
-  const anomalies = detectRowGrowthAnomalies(prev, snapshot);
-  if (anomalies.length === 0) {
-    console.log('[row-growth] no growth anomalies');
-    return;
+  // Recorded but never paged — an unconfirmed number must not trigger the same urgency a confirmed one would.
+  if (estimateOnly.length) {
+    try {
+      await sb.from('coordination_events').insert({
+        event_type: ANOMALY_EVENT_TYPE, severity: 'info',
+        payload: { captured_at, anomalies: estimateOnly, window: { prev: prev.captured_at, curr: captured_at } },
+      });
+    } catch { /* non-fatal, next run supersedes */ }
+    for (const e of estimateOnly) console.log(`[row-growth] estimate_only (unconfirmed): ${e.table} estimate=${e.estimate}`);
   }
 
-  console.log(`[row-growth] ⚠️  ${anomalies.length} growth anomalie(s):`);
+  if (confirmed.length === 0) {
+    console.log('[row-growth] no growth anomalies confirmed');
+    return;
+  }
+  const anomalies = confirmed;
+
+  console.log(`[row-growth] ⚠️  ${anomalies.length} growth anomalie(s) (exact-confirmed):`);
   for (const a of anomalies) {
-    console.log(`   - ${a.table}: ${a.prev} -> ${a.curr} (+${a.delta}${a.factor ? `, x${a.factor.toFixed(2)}` : ''}) [${a.trigger}]`);
+    console.log(`   - ${a.table}: ${a.comparedAgainst} ${a.baseline} -> exact ${a.exact} (+${a.delta}${a.factor ? `, x${a.factor.toFixed(2)}` : ''}) [${a.trigger}]`);
   }
 
   // Alert leg 1: durable detector event.
@@ -98,7 +124,7 @@ async function main() {
       target_session: coordinatorId, // null => broadcast row, still visible in inbox scans
       message_type: 'INFO',
       subject: `[ROW_GROWTH] ${anomalies.length} table(s) growing abnormally — top: ${top.table} +${top.delta}`,
-      body: anomalies.map((a) => `${a.table}: ${a.prev} -> ${a.curr} (+${a.delta}${a.factor ? `, x${a.factor.toFixed(2)}` : ''}) [${a.trigger}]`).join('\n'),
+      body: anomalies.map((a) => `${a.table}: ${a.comparedAgainst} ${a.baseline} -> exact ${a.exact} (+${a.delta}${a.factor ? `, x${a.factor.toFixed(2)}` : ''}) [${a.trigger}]`).join('\n'),
       payload: { kind: 'row_growth_anomaly', anomalies },
       sender_type: 'system',
       expires_at: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
