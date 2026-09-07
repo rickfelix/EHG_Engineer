@@ -96,12 +96,16 @@ describe('fetchTerminalStatusKeys', () => {
 describe('runOrphanSweep + resolveTerminalStatusKeys (end-to-end, real fs)', () => {
   let root, worktreesDir;
 
-  function mkHeavyOrphan(name) {
+  function mkHeavyOrphan(name, { withGitFile = false } = {}) {
     const dir = path.join(worktreesDir, name);
     fs.mkdirSync(dir, { recursive: true });
     for (let i = 0; i < CONTENT_REFUSE_MIN_FILES + 1; i += 1) {
       fs.writeFileSync(path.join(dir, `f${i}.txt`), 'x'.repeat(50));
     }
+    // QF-20260905-149: a .git file makes this a REAL, checked-out worktree -- never bypassable by
+    // EITHER rung (DB-status or unregistered-stale) -- so this fixture still isolates the
+    // DB-status bypass's own boundary now that a second, independent bypass exists.
+    if (withGitFile) fs.writeFileSync(path.join(dir, '.git'), 'gitdir: /elsewhere\n');
     const when = new Date(Date.now() - 2 * 60 * 60 * 1000);
     for (const e of fs.readdirSync(dir)) fs.utimesSync(path.join(dir, e), when, when);
     fs.utimesSync(dir, when, when);
@@ -128,7 +132,7 @@ describe('runOrphanSweep + resolveTerminalStatusKeys (end-to-end, real fs)', () 
   });
 
   it('leaves a high_content refusal refused when the DB status never resolves to terminal', async () => {
-    mkHeavyOrphan('QF-LIVE-5');
+    mkHeavyOrphan('QF-LIVE-5', { withGitFile: true });
     const result = await runOrphanSweep({
       worktreesDir,
       minAgeMs: 30 * 60 * 1000,
