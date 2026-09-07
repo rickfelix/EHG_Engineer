@@ -26,19 +26,31 @@ import { readFileSync, readdirSync, statSync } from 'fs';
 import { resolve, join, extname } from 'path';
 import { fileURLToPath } from 'url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+// SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-5: SWALLOWED_QUERY_LINT_ROOT lets the test suite
+// point this exact CLI at a temp fixture tree (real spawnSync, real exit codes, real --enforce/
+// --list flags) instead of re-implementing scanning logic inline against the extractor alone.
+// Unset (the normal/CI case) is byte-identical to the prior hardcoded behavior -- zero change to
+// the real scan. When set, SCAN_PREFIXES becomes '.' (scan the whole fixture root) since a fixture
+// tree has no reason to mirror the real 5-directory layout.
+const ROOT = process.env.SWALLOWED_QUERY_LINT_ROOT
+  ? resolve(process.env.SWALLOWED_QUERY_LINT_ROOT)
+  : resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const SCAN_EXTS = new Set(['.js', '.mjs', '.cjs']);
 const EXCLUDE = new Set(['node_modules', '.git', '.worktrees', 'dist', 'build', 'coverage', 'archive']);
 const ALLOWLIST_PATH = resolve(ROOT, 'scripts/lint/swallowed-query-error-allowlist.json');
 
 // Gate/executor paths only — see the scoping note above.
-const SCAN_PREFIXES = [
-  'scripts/modules/handoff',
-  'lib/gates',
-  'scripts/modules/claim-health',
-  'lib/claim',
-  'lib/oversight',
-];
+// Exported so a test can assert this exact array (FR-5 AC) rather than trusting a comment to
+// stay in sync with a future widening.
+export const SCAN_PREFIXES = process.env.SWALLOWED_QUERY_LINT_ROOT
+  ? ['.']
+  : [
+    'scripts/modules/handoff',
+    'lib/gates',
+    'scripts/modules/claim-health',
+    'lib/claim',
+    'lib/oversight',
+  ];
 
 // A destructure that binds ONLY data (optionally renamed) and no `error`.
 const DATA_ONLY = /const\s*\{\s*data(?:\s*:\s*[A-Za-z0-9_$]+)?\s*\}\s*=\s*await/;

@@ -10,6 +10,7 @@
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
 import { safeTruncate } from '../../../lib/utils/safe-truncate.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import { SDRepository } from './db/SDRepository.js';
 import { PRDRepository } from './db/PRDRepository.js';
 import { HandoffRepository } from './db/HandoffRepository.js';
@@ -1063,11 +1064,14 @@ export class HandoffOrchestrator {
           // resolved UUID form), but this poll queried by the outer sdId (sd_key form) —
           // add-prd-to-database.js persists sd_id as the UUID, so a sd_key-keyed poll never
           // matched and every detached-mode PRD generation burned the full 90s window.
-          const { data } = await this.supabase
-            .from('product_requirements_v2')
-            .select('id')
-            .eq('sd_id', idToUse)
-            .limit(1);
+          const data = await safeQuery(
+            this.supabase
+              .from('product_requirements_v2')
+              .select('id')
+              .eq('sd_id', idToUse)
+              .limit(1),
+            { site: 'HandoffOrchestrator:prd_creation_poll' }
+          );
 
           if (data && data.length > 0) {
             prdCreated = true;

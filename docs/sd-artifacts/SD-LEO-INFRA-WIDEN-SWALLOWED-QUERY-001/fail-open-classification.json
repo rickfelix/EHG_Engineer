@@ -1,43 +1,7 @@
 {
-  "generated_at": "2026-09-07T01:01:07.684Z",
+  "generated_at": "2026-09-07T01:07:19.881Z",
   "counts": {
-    "has_catch": 5
+    "has_catch": 0
   },
-  "results": [
-    {
-      "file": "lib/claim/release-claim-both-surfaces.mjs",
-      "line": 266,
-      "kind": "data",
-      "snippet": "const { data: sd } = await sb",
-      "classification": "has_catch"
-    },
-    {
-      "file": "lib/claim/release-claim-both-surfaces.mjs",
-      "line": 271,
-      "kind": "data",
-      "snippet": "const { data: sess } = await sb",
-      "classification": "has_catch"
-    },
-    {
-      "file": "lib/gates/operator-contract/harness-adapter.js",
-      "line": 368,
-      "kind": "data",
-      "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/HandoffOrchestrator.js",
-      "line": 1066,
-      "kind": "data",
-      "snippet": "const { data } = await this.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/parallel-team-spawner.js",
-      "line": 188,
-      "kind": "data",
-      "snippet": "const { data: parent } = await supabase",
-      "classification": "has_catch"
-    }
-  ]
+  "results": []
 }
