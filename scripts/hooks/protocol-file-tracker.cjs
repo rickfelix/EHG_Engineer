@@ -20,6 +20,10 @@ const { detectProjectDir } = require('./lib/detect-context.cjs');
 // resolver (same ~/.claude-sessions mechanism as unified-state-manager) instead of hardcoding
 // the legacy shared file, so writes land in the per-session file and converge with the writer.
 const { getSessionStateFilePath, resolveStateReadPath } = require('./lib/session-state-resolver.cjs');
+// SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G: role-seat post-compaction re-read check. Additive --
+// reads state already loaded below, never writes protocolGate.fileReads or touches
+// core-protocol-gate.js's handoff-time path.
+const { checkRoleSession } = require('../../lib/governance/post-compaction-role-recheck.cjs');
 const PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || detectProjectDir();
 const SESSION_STATE_FILE = getSessionStateFilePath(PROJECT_DIR); // scoped write/metadata path
 // Sync marker file for race condition prevention (PAT-ASYNC-RACE-001)
@@ -486,6 +490,28 @@ function processHookInput(hookInput) {
     };
   } else if (state.protocolFilesPartiallyRead[normalizedPath]) {
     delete state.protocolFilesPartiallyRead[normalizedPath];
+  }
+
+  // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G: role-seat post-compaction re-read check. Fires on
+  // this hook's own trigger (a Read call) rather than "every tool call" -- the true PostToolUse
+  // matcher for this hook is "Read" (.claude/settings.json), not a wildcard, so this is honestly
+  // "next Read of a tracked protocol file", which a role seat performs routinely as part of
+  // ordinary operation. Read-only against `state` already in memory + two file-based signals;
+  // never mutates protocolGate.fileReads or state written above.
+  try {
+    const sessionId = process.env.CLAUDE_SESSION_ID || '';
+    const recheck = checkRoleSession(sessionId, state);
+    if (recheck.role && recheck.required) {
+      const enforce = ['1', 'true'].includes(String(process.env.ROLE_COMPACTION_REREAD_ENFORCE_V1 || '').toLowerCase());
+      console.log(
+        `[protocol-file-tracker] POST_COMPACTION_REREAD_REQUIRED role=${recheck.role} ` +
+        `compacted_at=${recheck.compactionAt} contract_last_read_at=${recheck.contractReadAt || 'never'} ` +
+        `mode=${enforce ? 'enforce' : 'diagnostic'}`
+      );
+    }
+  } catch (e) {
+    // Never let this advisory check break the file-tracking write path above.
+    console.error(`[protocol-file-tracker] post-compaction-role-recheck error: ${e.message}`);
   }
 
   if (writeSessionState(state)) {
