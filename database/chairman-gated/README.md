@@ -1240,3 +1240,51 @@ the other six unchanged) plus a fresh anon-key count read (expect 0) — per rat
 POLICY anon_read_strategic_directives_v2 ... FOR SELECT TO anon USING (true)`) — re-verify against
 live `pg_policies` before trusting that captured text as current, per this directory's standing
 caveat that a captured predicate is context to diff against, not an authority to restore from.
+
+## Applying `20260907_feedback_immutability_trigger.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260907_feedback_immutability_trigger.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260907_feedback_immutability_trigger_DOWN.sql` (drops the three triggers + their
+functions only — never the `feedback` table itself, which pre-existed this migration).
+
+(SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, FR-2.) Adds an append-only guard (BEFORE UPDATE/DELETE
+row-level triggers + a BEFORE TRUNCATE statement-level trigger, all `ENABLE ALWAYS`) to the
+EXISTING `public.feedback` table — no `CREATE TABLE`, no grant/RLS change. Named directly in the
+parent orchestrator's (`SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001`) own exit test ("an update to a
+chairman-originated feedback row fails under the service role"). Per this SD's own write-caller
+census (`docs/audits/SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E-write-caller-census.md`), no
+application code path performs UPDATE/DELETE against `feedback` outside ad-hoc `.artifacts/*`
+one-off scripts, so this guard should not break any legitimate writer — INSERT is unaffected.
+`feedback` also carries an inbound FK (`feedback_sd_map.feedback_id`), which independently blocks
+TRUNCATE before this migration's own trigger gets a chance to fire; the verify block accepts either
+rejection path (see the file's own inline comment).
+
+## Applying `20260907_governance_audit_log_immutability_trigger.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260907_governance_audit_log_immutability_trigger.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260907_governance_audit_log_immutability_trigger_DOWN.sql` (drops the three triggers +
+their functions only — never the `governance_audit_log` table itself).
+
+(SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, FR-3.) Same append-only guard shape as the `feedback`
+migration above, applied to the EXISTING `public.governance_audit_log` table, which today has zero
+immutability triggers and full anon/authenticated/service_role grants (RLS is its only barrier per
+the CAPA-002E migration's own header). Does NOT modify the sibling CAPA-002E migration's
+`audit_trigger_generic()` INSERT-instrumenting trigger — this migration only protects rows already
+written here. `governance_audit_log` has no inbound or outbound foreign keys (measured live), so
+unlike `feedback`, TRUNCATE hits this migration's own trigger directly.
+
+**Both migrations depend on the same SD's FR-1 census** (the write-caller census document above) —
+review it before applying either, and before extending this pattern to any of the deferred
+candidate tables it names.
