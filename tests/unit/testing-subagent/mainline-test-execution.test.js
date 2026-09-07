@@ -33,6 +33,8 @@ describe('buildMainlinePhase3TestExecution (FR-4, TS-9)', () => {
       runner: 'playwright',
       artifact_path: null,
       source: null,
+      mapped_candidates: null,
+      found_files: null,
     });
     expect(isMeasuredExecution(result)).toBe(true);
   });
