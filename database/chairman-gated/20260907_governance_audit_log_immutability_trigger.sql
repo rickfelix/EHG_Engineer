@@ -1,7 +1,7 @@
 -- SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E (FR-3) -- append-only immutability trigger on the
 -- EXISTING public.governance_audit_log table.
 --
--- @approved-by: codestreetlabs@gmail.com
+-- @approved-by: <PENDING -- chairman must add this line + a token before apply>
 --   Chairman verification NOT yet obtained. This file is staged only.
 --   WHY chairman-gated rather than database/migrations/: this file creates TRIGGERS -- lands in
 --   scripts/lib/migration-tier-classifier.mjs's FORBIDDEN_TOPLEVEL set (TIER-2, the literal
