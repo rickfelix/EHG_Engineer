@@ -204,6 +204,11 @@
   - `database/chairman-gated/20260907_session_coordination_archive.sql` (staged, not yet applied) adds a same-shaped archive table for a future retention job, plus `lib/coordination/query-with-archive.cjs` for callers needing historical + live visibility.
   - Fixed an unanchored `.gitignore` glob (`query-*.cjs`) that was silently excluding a legitimate `lib/coordination/` file.
 
+- **Worktree residue: capture the `git worktree prune` set instead of discarding it, and give the ship-path husk event a durable record** - SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F
+  - `lib/worktree-reaper/orphan-sweep.js` adds `parsePruneCandidates()`/`detectPruneCandidates()`: a registered worktree whose gitdir target is missing (the `git worktree prune --dry-run -v` set) was already computed by the sweep's own per-orphan cleanup call and thrown away; it now surfaces as a distinct `pruneCandidates` bucket on `runOrphanSweep()`'s result, never folded into the existing orphan classification.
+  - `lib/worktree-reaper/audit-sink.js` adds `buildPruneCandidateRows()`/`buildHuskShipPathRows()` sharing a new `writeRows()` (extracted from `writeAuditSink`'s insert logic), each with its own `event_type` (`worktree_prune_candidate` / `worktree_husk_ship_path`) so neither is conflated with the existing `worktree_reaper_classification` rows or each other. The ship path's previously-zero-consumer `worktree.husk_detected` event (`scripts/modules/shipping/post-merge-worktree-cleanup.js`) now routes through the same sink.
+  - Two independent sub-agent catches before merge: LEAD-phase validation found this repo's own code reserves the word "husk" for the *opposite* residue class (deregistered-from-git, directory-survives), which would have produced a vacuous test against the intended class; EXEC-phase testing found `detectPruneCandidates` read only `stdout`, but `git worktree prune --dry-run -v` reports on `stderr` — the feature would have written zero rows in production despite a fully green suite. Both fixed pre-merge; the second was closed with a real end-to-end fixture (an isolated temp git repo, no injected mock) and confirmed by mutation testing (5/5 kills).
+
 ### Infrastructure
 
 - **Swallowed-query-error lint widened to 6 directories and flipped from advisory to enforcing; ~40 remaining sites converted** - SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001
