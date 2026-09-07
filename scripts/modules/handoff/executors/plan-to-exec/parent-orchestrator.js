@@ -6,6 +6,8 @@
  * implementation is delegated to child SDs
  */
 
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
+
 /**
  * Get gates for parent orchestrator SDs
  *
@@ -76,10 +78,13 @@ export function getParentOrchestratorGates(supabase, prdRepo, sd, _options) {
       console.log('\n👶 GATE: Children Structure Validation');
       console.log('-'.repeat(50));
 
-      const { data: children } = await supabase
-        .from('strategic_directives_v2')
-        .select('id, sd_key, title, status, parent_sd_id')
-        .eq('parent_sd_id', sd.id);
+      const children = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id, sd_key, title, status, parent_sd_id')
+          .eq('parent_sd_id', sd.id),
+        { site: 'parent-orchestrator:children_structure' }
+      );
 
       if (!children || children.length === 0) {
         console.log('   ❌ No children found - parent orchestrator must have children');

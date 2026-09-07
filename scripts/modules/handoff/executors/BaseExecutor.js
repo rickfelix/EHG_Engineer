@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import ResultBuilder from '../ResultBuilder.js';
 import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-truncate.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -859,23 +860,29 @@ export class BaseExecutor {
       // Verify this session still holds the claim before executing state transitions
       try {
         const sdKey = sd?.sd_key || sdId;
-        const { data: currentClaim } = await this.supabase
-          .from('claude_sessions')
-          .select('session_id, sd_key')
-          .eq('sd_key', sdKey)
-          .eq('status', 'active')
-          .limit(1)
-          .single();
+        const currentClaim = await safeQuery(
+          this.supabase
+            .from('claude_sessions')
+            .select('session_id, sd_key')
+            .eq('sd_key', sdKey)
+            .eq('status', 'active')
+            .limit(1)
+            .single(),
+          { site: 'BaseExecutor:claim_heartbeat_by_sd_key' }
+        );
 
         // Also check by UUID if sd_key didn't match
         if (!currentClaim && sd?.id) {
-          const { data: uuidClaim } = await this.supabase
-            .from('claude_sessions')
-            .select('session_id, sd_key')
-            .eq('sd_key', sd.id)
-            .eq('status', 'active')
-            .limit(1)
-            .single();
+          const uuidClaim = await safeQuery(
+            this.supabase
+              .from('claude_sessions')
+              .select('session_id, sd_key')
+              .eq('sd_key', sd.id)
+              .eq('status', 'active')
+              .limit(1)
+              .single(),
+            { site: 'BaseExecutor:claim_heartbeat_by_uuid' }
+          );
 
           if (uuidClaim && options.autoProceedSessionId && uuidClaim.session_id !== options.autoProceedSessionId) {
             console.log(`\n⚠️  CLAIM HEARTBEAT: Another session (${uuidClaim.session_id}) now holds this SD`);
@@ -1095,11 +1102,14 @@ export class BaseExecutor {
       // phantom column (live 42703) — the whole select errored into the catch on
       // every call, so the type note NEVER rendered. 'prd_minimum_score' is the
       // real threshold-style column on sd_type_validation_profiles.
-      const { data: profile } = await this.supabase
-        .from('sd_type_validation_profiles')
-        .select('requires_prd, requires_user_stories, prd_minimum_score')
-        .eq('sd_type', sdType)
-        .single();
+      const profile = await safeQuery(
+        this.supabase
+          .from('sd_type_validation_profiles')
+          .select('requires_prd, requires_user_stories, prd_minimum_score')
+          .eq('sd_type', sdType)
+          .single(),
+        { site: 'BaseExecutor:progressive_preflight_sd_type_profile' }
+      );
       if (profile) {
         const notes = [];
         if (!profile.requires_prd) notes.push('PRD not required for this SD type');
@@ -1214,12 +1224,15 @@ export class BaseExecutor {
       console.log(`      Reason: ${sdType === 'database' ? 'sd_type=database' : 'schema_changes=true'}`);
 
       // Check if DATABASE sub-agent already executed for this SD
-      const { data: existingExecution } = await this.supabase
-        .from('sub_agent_execution_results')
-        .select('id, verdict')
-        .eq('sd_id', sd.id)
-        .eq('sub_agent_code', 'DATABASE')
-        .limit(1);
+      const existingExecution = await safeQuery(
+        this.supabase
+          .from('sub_agent_execution_results')
+          .select('id, verdict')
+          .eq('sd_id', sd.id)
+          .eq('sub_agent_code', 'DATABASE')
+          .limit(1),
+        { site: 'BaseExecutor:auto_trigger_database_subagent_existing_check' }
+      );
 
       if (existingExecution && existingExecution.length > 0) {
         console.log(`      ℹ️  DATABASE sub-agent already executed (verdict: ${existingExecution[0].verdict})`);
@@ -1288,11 +1301,14 @@ export class BaseExecutor {
     // Step 1: Check if a valid claim already exists (from sd:start or parent conversation).
     // SD-LEO-INFRA-CONSOLIDATE-CLAIMS-INTO-001: sd_claims dropped — claude_sessions is the
     // single source of truth. Active claims are sessions with sd_id set and status='active'.
-    const { data: existingClaims } = await this.supabase
-      .from('claude_sessions')
-      .select('session_id, sd_key, claimed_at, heartbeat_at')
-      .eq('sd_key', claimId)
-      .in('status', ['active', 'idle']);
+    const existingClaims = await safeQuery(
+      this.supabase
+        .from('claude_sessions')
+        .select('session_id, sd_key, claimed_at, heartbeat_at')
+        .eq('sd_key', claimId)
+        .in('status', ['active', 'idle']),
+      { site: 'BaseExecutor:existing_claims' }
+    );
 
     const activeClaim = (existingClaims || []).find(c => {
       const ageSeconds = (Date.now() - new Date(c.heartbeat_at || c.claimed_at).getTime()) / 1000;

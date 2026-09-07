@@ -15,6 +15,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -258,11 +259,14 @@ async function syncStateToDb(state) {
     if (!sessionId) return;
 
     // Read existing metadata to merge
-    const { data: existing } = await supabase
-      .from('claude_sessions')
-      .select('metadata')
-      .eq('session_id', sessionId)
-      .single();
+    const existing = await safeQuery(
+      supabase
+        .from('claude_sessions')
+        .select('metadata')
+        .eq('session_id', sessionId)
+        .single(),
+      { site: 'continuation-state:sync_state_to_db' }
+    );
 
     const existingMetadata = existing?.metadata || {};
 

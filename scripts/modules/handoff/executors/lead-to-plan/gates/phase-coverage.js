@@ -18,6 +18,7 @@ import {
   buildSemanticResult,
   buildSkipResult
 } from '../../../validation/semantic-gate-utils.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'ARCHITECTURE_PHASE_COVERAGE';
 
@@ -90,17 +91,23 @@ export function createPhaseCoverageGate(supabase) {
 
         if (orchestratorIds.length > 0) {
           // Get UUIDs for orchestrators to query children by parent_sd_id
-          const { data: orchUuids } = await supabase
-            .from('strategic_directives_v2')
-            .select('id, sd_key')
-            .in('sd_key', orchestratorIds);
+          const orchUuids = await safeQuery(
+            supabase
+              .from('strategic_directives_v2')
+              .select('id, sd_key')
+              .in('sd_key', orchestratorIds),
+            { site: 'phase-coverage:orch_uuids' }
+          );
 
           if (orchUuids && orchUuids.length > 0) {
             const uuids = orchUuids.map(o => o.id);
-            const { data: children } = await supabase
-              .from('strategic_directives_v2')
-              .select('sd_key, title, status, parent_sd_id')
-              .in('parent_sd_id', uuids);
+            const children = await safeQuery(
+              supabase
+                .from('strategic_directives_v2')
+                .select('sd_key, title, status, parent_sd_id')
+                .in('parent_sd_id', uuids),
+              { site: 'phase-coverage:orch_children' }
+            );
 
             if (children && children.length > 0) {
               console.log(`   📋 Found ${children.length} child SD(s) of orchestrator(s)`);
@@ -165,6 +172,16 @@ export function createPhaseCoverageGate(supabase) {
         });
       } catch (err) {
         console.log(`   ⚠️  Error: ${err.message}`);
+        // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-2: a genuine query-discipline failure must
+        // not be swallowed into the same lenient advisory pass as an ordinary unexpected error.
+        if (err.code === 'QUERY_FAILED' || err.code === 'COUNT_UNMEASURABLE') {
+          // confidence must be >= 0.7: buildSemanticResult forces passed=true when confidence < 0.7
+          // (its "degrade blocking to warning" rule), which would silently re-swallow this fix.
+          return buildSemanticResult({
+            passed: false, score: 0, confidence: 0.9,
+            issues: [`Phase coverage could not run — query failed: ${err.message}`]
+          });
+        }
         return buildSemanticResult({
           passed: true, score: 50, confidence: 0.3,
           warnings: [`Phase coverage verification error: ${err.message}`]
