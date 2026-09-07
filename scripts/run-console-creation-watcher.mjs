@@ -14,30 +14,66 @@
  * (OS-level, FR-3). Neither layer substitutes for the other.
  */
 import { spawn } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import path from 'node:path';
 import { handleProcessCreationEvent } from '../lib/fleet/console-creation-watcher.mjs';
+import { getRepoRoot } from '../lib/repo-paths.js';
 
 const TAG = '[console-creation-watcher]';
 export const CONSOLE_IMAGE = 'OpenConsole.exe';
 /** Between-restart backoff for the PowerShell subprocess, so a fast crash-loop doesn't spin hot. */
 export const RESTART_DELAY_MS = 5000;
+/** QF-20260905-766: fail LOUD, not hot — after this many subprocess exits inside FAST_FAILURE_WINDOW_MS
+ *  each, stop restarting instead of looping forever on an unfixable error (e.g. an elevation refusal). */
+export const CONSECUTIVE_FAILURE_CEILING = 3;
+export const FAST_FAILURE_WINDOW_MS = 60_000;
+/** Singleton pid-file lock — QF-20260905-766: neither this script nor the scheduled task guarded
+ *  against an orphaned instance (window closed / session change) plus a fresh 5-minute re-fire,
+ *  which accumulated three live trees on the chairman's host. */
+export const PID_LOCK_PATH = path.join(getRepoRoot(), '.claude', 'console-creation-watcher.pid');
+
+function isPidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+/** Returns the lock path on success, or null if a live instance already holds it. */
+export function acquireSingletonLock(lockPath = PID_LOCK_PATH) {
+  if (existsSync(lockPath)) {
+    const existingPid = parseInt(readFileSync(lockPath, 'utf8').trim(), 10);
+    if (Number.isFinite(existingPid) && isPidAlive(existingPid)) return null;
+  }
+  writeFileSync(lockPath, String(process.pid));
+  return lockPath;
+}
+
+export function releaseSingletonLock(lockPath = PID_LOCK_PATH) {
+  try { unlinkSync(lockPath); } catch { /* already gone — fine */ }
+}
 
 /**
- * The PowerShell body: a WQL-scoped Win32_ProcessStartTrace subscription, one JSON line per
- * matching creation event on stdout. Scoped WHERE ProcessName='OpenConsole.exe' at the query
- * level (not filtered client-side after receiving every process start) to keep the always-on
- * subscription cheap. ParentProcessID/ProcessID are the only fields Win32_ProcessStartTrace
- * carries directly; the image name and grandparent are resolved via a follow-up Win32_Process
- * lookup for the (short-lived, still-live-at-this-instant) parent pid.
+ * The PowerShell body: one JSON line per matching console-creation event on stdout.
+ *
+ * QF-20260905-766 (root cause): Win32_ProcessStartTrace requires elevation, and the shell on the
+ * chairman's host is not elevated — every subscription attempt exited 1, restarted forever (5s
+ * backoff, no ceiling) and the scheduled task (Interactive logon, so the failing loop opened a
+ * VISIBLE console) re-fired every 5 minutes on top of the orphaned instances. DEFAULT is now the
+ * intrinsic __InstanceCreationEvent source, which standard (non-elevated) users can subscribe to
+ * on root\cimv2 — verified live, unelevated, on this host: registers with zero error and fires
+ * within ~1s of a real process creation. elevated=true keeps the lower-latency ProcessStartTrace
+ * source available as an opt-in for hosts that already run this elevated.
  */
-export function buildWmiListenerScript() {
+export function buildWmiListenerScript({ elevated = false } = {}) {
+  const query = elevated
+    ? `SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='${CONSOLE_IMAGE}'`
+    : `SELECT * FROM __InstanceCreationEvent WITHIN 1 WHERE TargetInstance ISA 'Win32_Process' AND TargetInstance.Name='${CONSOLE_IMAGE}'`;
   return [
     '$ErrorActionPreference = "Stop"',
-    `$query = "SELECT * FROM Win32_ProcessStartTrace WHERE ProcessName='${CONSOLE_IMAGE}'"`,
+    `$query = "${query}"`,
     'Register-WmiEvent -Query $query -SourceIdentifier ConsoleCreationWatch | Out-Null',
     'while ($true) {',
     '  $e = Wait-Event -SourceIdentifier ConsoleCreationWatch',
-    '  $pid_ = $e.SourceEventArgs.NewEvent.ProcessID',
-    '  $ppid = $e.SourceEventArgs.NewEvent.ParentProcessID',
+    elevated ? '  $pid_ = $e.SourceEventArgs.NewEvent.ProcessID' : '  $pid_ = $e.SourceEventArgs.NewEvent.TargetInstance.ProcessId',
+    elevated ? '  $ppid = $e.SourceEventArgs.NewEvent.ParentProcessID' : '  $ppid = $e.SourceEventArgs.NewEvent.TargetInstance.ParentProcessId',
     '  $parent = Get-CimInstance Win32_Process -Filter "ProcessId=$ppid" -ErrorAction SilentlyContinue',
     '  $obj = [ordered]@{',
     '    pid = $pid_',
@@ -105,6 +141,7 @@ function defaultExec(cmd, args) {
  * @param {(msg: string) => void} [deps.onLog]
  * @param {() => boolean} [deps.shouldContinue] - injected so a test can stop the restart loop; defaults to "forever"
  * @param {(ms: number) => Promise<void>} [deps.delay]
+ * @returns {Promise<{stopped: 'shouldContinue'|'consecutive_failures'}>}
  */
 export async function runWatcher(deps = {}) {
   const {
@@ -115,8 +152,10 @@ export async function runWatcher(deps = {}) {
     delay = (ms) => new Promise((r) => setTimeout(r, ms)),
   } = deps;
 
+  let consecutiveFastFailures = 0;
   while (shouldContinue()) {
     onLog('starting WMI subscription subprocess');
+    const startedAt = Date.now();
     const exitCode = await new Promise((resolve) => {
       const child = spawnFn();
       let buffer = '';
@@ -133,9 +172,16 @@ export async function runWatcher(deps = {}) {
       child.on('error', (err) => { onLog(`subprocess spawn error: ${err.message}`); resolve(-1); });
       child.on('close', (code) => resolve(code));
     });
+    const fastFailure = exitCode !== 0 && (Date.now() - startedAt) < FAST_FAILURE_WINDOW_MS;
+    consecutiveFastFailures = fastFailure ? consecutiveFastFailures + 1 : 0;
+    if (consecutiveFastFailures >= CONSECUTIVE_FAILURE_CEILING) {
+      onLog(`${consecutiveFastFailures} consecutive fast failures (exit ${exitCode}) — stopping instead of restarting forever (fail loud, not hot)`);
+      return { stopped: 'consecutive_failures' };
+    }
     onLog(`subscription subprocess exited (code ${exitCode}) — restarting in ${RESTART_DELAY_MS}ms`);
     if (shouldContinue()) await delay(RESTART_DELAY_MS);
   }
+  return { stopped: 'shouldContinue' };
 }
 
 async function main() {
@@ -143,7 +189,16 @@ async function main() {
     console.error(`${TAG} win32-only — WMI is a Windows API.`);
     process.exit(2);
   }
-  await runWatcher();
+  if (!acquireSingletonLock()) {
+    console.log(`${TAG} another live instance already holds the lock (${PID_LOCK_PATH}) — exiting`);
+    return;
+  }
+  process.on('exit', () => releaseSingletonLock());
+  const elevated = process.env.CONSOLE_WATCHER_ELEVATED === '1';
+  const result = await runWatcher(elevated ? {
+    spawnFn: () => spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', buildWmiListenerScript({ elevated: true })], { windowsHide: true }),
+  } : {});
+  if (result.stopped === 'consecutive_failures') process.exitCode = 1;
 }
 
 if (process.argv[1]?.endsWith('run-console-creation-watcher.mjs')) {
