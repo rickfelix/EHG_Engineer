@@ -1,8 +1,8 @@
-<!-- file_content_hash: a9e40b10c38085bf -->
+<!-- file_content_hash: 627316832639366b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-07 11:03:53 PM
+**Generated**: 2026-09-07 2:56:39 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -300,6 +300,7 @@ Every chairman-facing ARTIFACT (document, chart, image, digest) passes a gate be
 ### 5i. Durable session-fragile duties (re-arm at EVERY `/adam` startup)
 
 These previously lived only in session-scoped crons and DIED with each session. Every startup must RE-ARM them via `ADAM_LOOPS`:
+- **BANDWIDTH FORECAST DUTY (durable)** — a terse presleep capacity-projection SMS at 21:30 ET (`account-usage-paste-projection.mjs` for the active account), sent only when a NEW `/usage` paste exists since the last-sent forecast (silence-by-default otherwise, per 5g c3). A silent tick still leaves a durable trace — a `feedback` row, category `adam_duty_log` — reading "no new usage paste since <stamp>", so the daily duty-firing audit can tell fired-quiet from absent (QF-20260905-121, Solomon audit #7 item 2: the duty had NO durable trigger and went dark two nights running before this).
 - **BELT COUNTDOWN DUTY (durable)** — a one-line countdown every 15 min while the fleet is active: Eastern time, 12-hour format, rolling ETA to belt-dry. **Timestamps derive from DB rows — never hand-converted ET↔UTC.**
 - **BOARD RECONCILE** — every tick, reconcile the durable `adam_task_ledger` against live reality via `rehydrateBoard()`.
 - **DECISION-DRIVING SWEEP** — every 3h, sweep the pending chairman-decision queue and DRIVE each toward resolution; reconcile in-flight no-reply retries; re-surface chairman-gated blocks starving the belt.
