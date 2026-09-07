@@ -95,6 +95,13 @@ export async function findTargetRows(supabase) {
 export async function reconcileRow(supabase, row) {
   return setQuickFixStatus(supabase, row.id, {
     status: 'closed',
+    // QF-20260904-757: disposition (the column of record, 5/6-value CHECK) alongside
+    // disposition_reason_code (free text) -- this write previously left disposition NULL,
+    // which both blocked quick_fixes_closed_requires_disposition's VALIDATE step and
+    // undercounted every disposition-keyed report. 'promoted' is correct here: the row's
+    // work was tracked to completion via an SD (escalated_to_sd_id/resolution_sd_id both
+    // set below), matching the enum's existing 'promoted' meaning elsewhere in the codebase.
+    disposition: 'promoted',
     disposition_reason_code: DISPOSITION_REASON_CODE,
     disposed_by: DISPOSED_BY,
     disposed_at: new Date().toISOString(),
