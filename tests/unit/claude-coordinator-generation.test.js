@@ -18,12 +18,14 @@ const MAPPING = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../script
 const DIGEST_MAPPING = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../scripts/section-file-mapping-digest.json'), 'utf8'));
 
 describe('section-file-mapping — CLAUDE_COORDINATOR.md routes to the governed section', () => {
-  it('maps CLAUDE_COORDINATOR.md -> [coordinator_role_contract, role_partnership_contract]', () => {
+  it('maps CLAUDE_COORDINATOR.md -> [coordinator_role_contract, role_partnership_contract, quick_fixes_schema_traps]', () => {
     // SD-LEO-INFRA-UNIT-TEST-DEBT-TRIAGE-001: section-file-mapping.json deliberately added
     // 'role_partnership_contract' to the coordinator file (the coordinator's role includes the
     // partnership contract). Updated the stale single-section assertion to the current config.
+    // QF-20260907-188: appended the shared 'quick_fixes_schema_traps' section (also wired into
+    // CLAUDE_CORE.md/CLAUDE_ADAM.md/CLAUDE_SOLOMON.md).
     expect(MAPPING['CLAUDE_COORDINATOR.md']).toBeTruthy();
-    expect(MAPPING['CLAUDE_COORDINATOR.md'].sections).toEqual(['coordinator_role_contract', 'role_partnership_contract']);
+    expect(MAPPING['CLAUDE_COORDINATOR.md'].sections).toEqual(['coordinator_role_contract', 'role_partnership_contract', 'quick_fixes_schema_traps']);
   });
   it('maps CLAUDE_COORDINATOR_DIGEST.md -> [coordinator_role_contract]', () => {
     expect(DIGEST_MAPPING['CLAUDE_COORDINATOR_DIGEST.md']).toBeTruthy();
