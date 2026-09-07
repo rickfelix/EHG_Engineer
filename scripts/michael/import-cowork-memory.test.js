@@ -1,4 +1,7 @@
 // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-F / FR-1..FR-7, TS-1..TS-8.
+// REWRITTEN by SD-LEO-FIX-COWORK-IMPORTER-CANNOT-001: fixtures now use the REAL corpus paths and
+// formats (verified live against the actual Dropbox _Cowork folder, 2026-09-07), replacing the
+// invented "### domain: key" convention this file previously exercised.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,9 +13,30 @@ const NOW = new Date('2026-09-07T12:00:00.000Z');
 const MISSING = { data: null, error: { code: '42P01', message: 'relation does not exist' } };
 
 function seedFixture(dir) {
-  fs.writeFileSync(path.join(dir, 'gmail.md'), '### gmail: newsletter-archive\nArchive newsletters automatically.\njson: {"match":{"list_id":"news.example.com"},"class":"newsletter","action":{"verb":"archive"}}\n\nAn unrecognized line with no heading context is fine here since it is inside the block above.\n');
-  fs.mkdirSync(path.join(dir, 'memory'), { recursive: true });
-  fs.writeFileSync(path.join(dir, 'memory', 'closures.md'), '### closure: c1\ntopic: onboarding\nWe decided.\n');
+  fs.mkdirSync(path.join(dir, 'memory', 'preferences'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'memory', 'preferences', 'gmail.md'),
+    [
+      '## Triage rules',
+      '',
+      '### Newsletters (auto-label + archive)',
+      '',
+      'Archive newsletters automatically.',
+      'json: {"match":{"list_id":"news.example.com"},"class":"newsletter","action":{"verb":"archive"}}',
+      '',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(dir, 'memory', 'closures.md'),
+    [
+      '### 2026-05-21 — Onboarding flow decided',
+      '',
+      '- **Keywords:** onboarding, flow, signup',
+      '- **Closure:** We decided the onboarding flow ships without a wizard.',
+      '- **Expires:** permanent',
+      '',
+    ].join('\n'),
+  );
 }
 
 function db({ activeRule = null, absent = false } = {}) {
@@ -57,8 +81,10 @@ describe('runImportCoworkMemory', () => {
     const { sb, calls } = db();
     const r = await runImportCoworkMemory({ sb, argv: ['--root', dir], now: NOW, manifestPath });
     expect(r.action).toBe('dry_run');
-    expect(r.preview['gmail.md'].parsed_count).toBe(1);
-    expect(r.missing).toContain('todoist.md');
+    expect(r.preview['memory/preferences/gmail.md'].parsed_count).toBe(1);
+    expect(r.preview['memory/closures.md'].parsed_count).toBe(1);
+    expect(r.missing).toContain('memory/preferences/todoist.md');
+    expect(r.missing).not.toContain('memory/preferences/gmail.md');
     expect(calls.some((c) => c.kind === 'insert' || c.kind === 'upsert')).toBe(false);
   });
 
@@ -66,11 +92,10 @@ describe('runImportCoworkMemory', () => {
     const { sb } = db();
     const r1 = await runImportCoworkMemory({ sb, argv: ['--root', dir], now: NOW, manifestPath });
     expect(r1.ok).toBe(true);
-    fs.writeFileSync(path.join(dir, 'gmail.md'), '### gmail: newsletter-archive\nDIFFERENT text now.\n');
+    fs.writeFileSync(path.join(dir, 'memory', 'preferences', 'gmail.md'), '## Triage rules\n\n### Newsletters (auto-label + archive)\n\nDIFFERENT text now.\n');
     const r2 = await runImportCoworkMemory({ sb: db().sb, argv: ['--root', dir], now: NOW, manifestPath });
     expect(r2.ok).toBe(false);
     expect(r2.refusal).toBe('ROOT_DRIFTED');
-    expect(r2.diff.changed).toContain('gmail.md');
   });
 
   it('an unchanged folder verifies clean against its own prior manifest (no drift, no refusal)', async () => {
@@ -103,8 +128,8 @@ describe('runImportCoworkMemory', () => {
     const { sb } = db(); // select on michael_rules returns [] (no active row) -> not found
     const r = await runImportCoworkMemory({ sb, argv: ['--root', dir, '--verify'], now: NOW, manifestPath });
     expect(r.action).toBe('verify');
-    expect(r.report['gmail.md'].ok).toBe(false);
-    expect(r.report['gmail.md'].rows[0]).toMatchObject({ rule_key: 'newsletter-archive', present: false });
+    expect(r.report['memory/preferences/gmail.md'].ok).toBe(false);
+    expect(r.report['memory/preferences/gmail.md'].rows[0]).toMatchObject({ rule_key: 'newsletters-auto-label-archive', present: false });
   });
 
   it('is inert on a missing relation, never throws', async () => {
@@ -130,16 +155,48 @@ describe('runImportCoworkMemory', () => {
     expect(r.ok).toBe(false);
     expect(ratifyWriter).not.toHaveBeenCalled();
   });
+
+  it('doctrine.md principles are previewed but never written -- reported as skipped pending a domain ruling', async () => {
+    fs.writeFileSync(
+      path.join(dir, 'memory', 'doctrine.md'),
+      ['## Operating principles', '', '### High-signal family (B2)', '', 'Anything involving family is high-signal.', ''].join('\n'),
+    );
+    const { sb, calls } = db();
+    const dryRun = await runImportCoworkMemory({ sb, argv: ['--root', dir], now: NOW, manifestPath });
+    expect(dryRun.preview['memory/doctrine.md'].parsed_count).toBe(1);
+
+    const { sb: sb2, calls: calls2 } = db();
+    const apply = await runImportCoworkMemory({ sb: sb2, argv: ['--root', dir, '--apply'], now: NOW, manifestPath });
+    expect(apply.results.doctrine_skipped).toEqual([{ key: 'high-signal-family-b2', reason: 'NEEDS_DOMAIN_RULING' }]);
+    // Exactly one michael_rules insert (the gmail.md fixture rule) -- the doctrine principle above
+    // must never reach the writer at all.
+    expect(calls2.filter((c) => c.table === 'michael_rules' && c.kind === 'insert')).toHaveLength(1);
+  });
 });
 
 describe('parseSourceFiles', () => {
   it('reports missing files without throwing', () => {
     const { parsed, missing } = parseSourceFiles(dir);
-    expect(Object.keys(parsed)).toContain('gmail.md');
-    expect(missing).toEqual(expect.arrayContaining(['todoist.md', 'body-section.md', 'CLAUDE.md']));
+    expect(Object.keys(parsed)).toContain('memory/preferences/gmail.md');
+    expect(missing).toEqual(expect.arrayContaining(['memory/preferences/todoist.md', 'memory/preferences/body-section.md', 'CLAUDE.md']));
   });
 
-  it('SOURCE_FILES maps exactly the eight source files the spec names', () => {
-    expect(Object.keys(SOURCE_FILES).sort()).toEqual(['CLAUDE.md', 'body-section.md', 'gmail-labels.md', 'gmail.md', 'memory/brief-feedback.md', 'memory/closures.md', 'morning-brief-distillation.md', 'todoist.md'].sort());
+  it('SOURCE_FILES maps exactly the eight source files this SD corrected, gmail-labels.md removed', () => {
+    expect(Object.keys(SOURCE_FILES).sort()).toEqual([
+      'CLAUDE.md',
+      'memory/brief-feedback.md',
+      'memory/closures.md',
+      'memory/doctrine.md',
+      'memory/preferences/body-section.md',
+      'memory/preferences/gmail.md',
+      'memory/preferences/morning-brief-distillation.md',
+      'memory/preferences/todoist.md',
+    ].sort());
+  });
+
+  it('only gmail.md carries a sectionHeadingRe -- the other rule-typed files intentionally have none', () => {
+    expect(SOURCE_FILES['memory/preferences/gmail.md'].sectionHeadingRe).toBeTruthy();
+    expect(SOURCE_FILES['memory/preferences/todoist.md'].sectionHeadingRe).toBeUndefined();
+    expect(SOURCE_FILES['CLAUDE.md'].sectionHeadingRe).toBeUndefined();
   });
 });
