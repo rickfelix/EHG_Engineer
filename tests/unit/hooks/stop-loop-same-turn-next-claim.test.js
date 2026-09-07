@@ -33,24 +33,39 @@ const claimStub = (sd = [], qf = [], errs = {}) => ({
 
 describe('computeHasActiveClaim (QF-20260907-596 — the regression this QF fixes)', () => {
   it('is true for a QF-only holder — the exact bug: previously always false', async () => {
-    expect(await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'in_progress' }]), 'me')).toBe(true);
+    const r = await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'in_progress' }]), 'me');
+    expect(r).toEqual({ hasActiveClaim: true, unreadable: false });
   });
 
   it('is true for an SD-only holder (unchanged behavior)', async () => {
-    expect(await computeHasActiveClaim(claimStub([{ sd_key: 'SD-A', status: 'active' }], []), 'me')).toBe(true);
+    const r = await computeHasActiveClaim(claimStub([{ sd_key: 'SD-A', status: 'active' }], []), 'me');
+    expect(r).toEqual({ hasActiveClaim: true, unreadable: false });
   });
 
   it('is false for a genuinely claim-less session', async () => {
-    expect(await computeHasActiveClaim(claimStub([], []), 'me')).toBe(false);
+    const r = await computeHasActiveClaim(claimStub([], []), 'me');
+    expect(r).toEqual({ hasActiveClaim: false, unreadable: false });
   });
 
   it('is false for a QF held in a terminal status (completed/cancelled)', async () => {
-    expect(await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'completed' }]), 'me')).toBe(false);
+    const r = await computeHasActiveClaim(claimStub([], [{ id: 'QF-1', status: 'completed' }]), 'me');
+    expect(r).toEqual({ hasActiveClaim: false, unreadable: false });
   });
 
-  it('fails open (false) when the underlying client throws', async () => {
+  // database-agent review, SECOND pass: a single fail-closed boolean fixes the claim-acquisition
+  // door but opens the block/park door (a transient DB error would make a genuinely claim-less
+  // interactive operator worker-shaped and blockable). hasActiveClaim itself must stay reported
+  // as false (fail-open, unchanged from before this function existed); `unreadable` carries the
+  // SAME error as an independent signal, consumed only by shouldAttemptSameTurnClaim below.
+  it('hasActiveClaim stays FALSE (fail-open) on a thrown exception; unreadable is TRUE', async () => {
     const throwing = { from: () => { throw new Error('boom'); } };
-    expect(await computeHasActiveClaim(throwing, 'me')).toBe(false);
+    const r = await computeHasActiveClaim(throwing, 'me');
+    expect(r).toEqual({ hasActiveClaim: false, unreadable: true });
+  });
+
+  it('hasActiveClaim stays FALSE (fail-open) on a getMyClaims partial-read error; unreadable is TRUE', async () => {
+    const r = await computeHasActiveClaim(claimStub([], [], { qf: 'network blip' }), 'me');
+    expect(r).toEqual({ hasActiveClaim: false, unreadable: true });
   });
 });
 
@@ -98,6 +113,19 @@ describe('shouldAttemptSameTurnClaim (SD-LEO-INFRA-WORKER-WIND-DOWN-001)', () =>
   it('is false on empty/undefined input (fail-closed on the attempt, not the park)', () => {
     expect(shouldAttemptSameTurnClaim({})).toBe(false);
     expect(shouldAttemptSameTurnClaim()).toBe(false);
+  });
+
+  // database-agent review, SECOND pass: claimSurfaceUnreadable is an INDEPENDENT refusal, not
+  // folded into hasActiveClaim (which must stay fail-open for shouldRemind/shouldParkRecoverable).
+  // Never acquire a claim on evidence you couldn't actually read, mirroring
+  // lib/checkin/steps/resume.cjs:56-62's own handling of a getMyClaims read error.
+  it('never attempts when the claim surface was unreadable, even if hasActiveClaim reads false (fail-open)', () => {
+    expect(shouldAttemptSameTurnClaim({ hasActiveClaim: false, workerShaped: true, claimSurfaceUnreadable: true })).toBe(false);
+  });
+
+  it('claimSurfaceUnreadable refuses even when every other input would otherwise attempt', () => {
+    expect(shouldAttemptSameTurnClaim({ hasActiveClaim: false, workerShaped: true, claimSurfaceUnreadable: true })).toBe(false);
+    expect(shouldAttemptSameTurnClaim({ hasActiveClaim: false, workerShaped: true, claimSurfaceUnreadable: false })).toBe(true);
   });
 });
 
@@ -343,6 +371,23 @@ describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" 
   it('QF-20260907-596: hasActiveClaim derives from the both-kinds ownership predicate, not a hand-rolled SD-only query', () => {
     expect(src).toMatch(/computeHasActiveClaim\(supabase, sessionId\)/);
     expect(src).not.toMatch(/\.from\('strategic_directives_v2'\)\s*\n\s*\.select\('sd_key'\)\s*\n\s*\.eq\('claiming_session_id'/);
+  });
+
+  // database-agent second-pass review: the fail-open/fail-closed split lives in TWO places --
+  // computeHasActiveClaim's return shape (covered by the unit tests above) AND main()'s own
+  // call-site wiring of claimSurfaceUnreadable into shouldAttemptSameTurnClaim. The behavioral
+  // tests call shouldAttemptSameTurnClaim directly with explicit args, so they structurally
+  // cannot see a regression that drops claimSurfaceUnreadable from the main() call site --
+  // that would leave the arg undefined (fail-OPEN), silently reverting this SD's second commit
+  // while every other test in this file stays green. Source-pin the wiring itself.
+  it('SD-LEO-FIX-STOP-HOOK-INFINITE-001: main() actually threads claimSurfaceUnreadable into shouldAttemptSameTurnClaim (not just destructures it)', () => {
+    // Anchored on isSameTurnClaimEnabled() && shouldAttemptSameTurnClaim(...) -- the exact
+    // call-site shape from the test above at line 368-369 -- so this cannot vacuously match
+    // the function's OWN definition/destructuring signature, which has the identical
+    // "shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped, claimSurfaceUnreadable }"
+    // substring but is never preceded by "isSameTurnClaimEnabled() &&".
+    expect(src).toMatch(/isSameTurnClaimEnabled\(\)\s*&&\s*shouldAttemptSameTurnClaim\(\{[^}]*claimSurfaceUnreadable[^}]*\}\)/);
+    expect(src).toMatch(/unreadable:\s*claimSurfaceUnreadable/);
   });
 
   it('delegates to the canonical checkin resolution path, not a hand-rolled claim query', () => {
