@@ -1034,9 +1034,12 @@ export class HandoffOrchestrator {
       logFd = fs.openSync(logPath, 'w');
 
       // Spawn with log file output instead of stdio: 'ignore'
+      // QF-20260906-335: windowsHide -- a detached child without it opens a visible console
+      // window on Windows.
       const child = spawn('node', [scriptPath, idToUse, title], {
         detached: true,
         stdio: ['ignore', logFd, logFd],
+        windowsHide: true,
         cwd: process.cwd(),
         env: process.env
       });

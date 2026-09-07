@@ -603,10 +603,12 @@ export class BaseExecutor {
         try {
           const _req = createRequire(import.meta.url);
           const { spawn } = _req('child_process');
+          // QF-20260906-335: windowsHide -- a detached child without it opens a visible console
+          // window on Windows.
           const _child = spawn(
             process.execPath,
             [path.join(ENGINEER_ROOT, 'scripts', 'worker-signal.cjs'), ..._pendingGateAutoSignalArgs.args],
-            { detached: true, stdio: 'ignore', env: { ...process.env, CLAUDE_SESSION_ID: _pendingGateAutoSignalArgs.sessionId } }
+            { detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, CLAUDE_SESSION_ID: _pendingGateAutoSignalArgs.sessionId } }
           );
           _child.unref();
         } catch { /* fail-open: auto-signal must never block the handoff */ }
