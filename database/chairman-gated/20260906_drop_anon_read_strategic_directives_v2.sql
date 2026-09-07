@@ -3,7 +3,10 @@
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
--- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE. -- @approved-by: PENDING
+-- CHAIRMAN-APPROVED 2026-09-07 ~01:35Z: verbal at the Adam terminal, quote: "apply the
+-- strategic directives read-policy migration." Scribed by Adam session bc762fa4 under the 3c
+-- ceremony; content unchanged from the merged file except this marker block.
+-- @approved-by: codestreetlabs@gmail.com
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 --
 -- WHY THIS IS CHAIRMAN-GATED, NOT WORKER-APPLIED: this is a permission REMOVAL on a live,
