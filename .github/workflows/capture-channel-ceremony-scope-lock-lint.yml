@@ -49,6 +49,12 @@ jobs:
         with:
           node-version: '20'
 
+      # QF-20260905-229: the ratification-verified exception below imports lib/supabase-client.js
+      # (@supabase/supabase-js), an external dependency this previously dependency-free lint job
+      # never needed. Matches claude-md-drift.yml's own install step exactly.
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
       - name: Run capture-channel ceremony scope-lock lint (diff vs PR base)
         env:
           # SEC-CCD-002 (SD-LEO-INFRA-CAPTURE-CHANNEL-DISPOSITION-001 SECURITY review 40c35949):
@@ -56,6 +62,13 @@ jobs:
           # the lint's own VALID_BASE_REF guard (lib/git/hardened-runner.cjs) validates its shape
           # before any git process spawns.
           CEREMONY_LINT_BASE: origin/${{ github.base_ref }}
+          # QF-20260905-229: read-only lookup of a CITED chairman_ratifications row id, only when
+          # the commit range actually cites one (a permissions-key change with no citation never
+          # touches these). Same secrets already exposed to other pull_request-triggered jobs in
+          # this repo (e.g. claude-md-drift.yml, leo-gates.yml) -- not a new credential-exposure
+          # pattern.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           node scripts/lint/capture-channel-ceremony-scope-lock-lint.mjs --base "$CEREMONY_LINT_BASE" | tee lint-output.txt
           exit_code=${PIPESTATUS[0]}

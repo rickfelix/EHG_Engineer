@@ -47,7 +47,11 @@
  * Exit: 1 if any ceremony surface is touched, 0 otherwise.
  */
 import { makeHardenedGitRunner, VALID_BASE_REF } from '../../lib/git/hardened-runner.cjs';
-import { evaluateCeremonyScopeLock, WITNESS_CONTENT_FILE, SETTINGS_JSON_PATH } from '../../lib/governance/ceremony-scope-lock.js';
+import {
+  evaluateCeremonyScopeLock, WITNESS_CONTENT_FILE, SETTINGS_JSON_PATH,
+  extractRatificationId, ratificationNamesSettingsPath,
+} from '../../lib/governance/ceremony-scope-lock.js';
+import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
 const runGit = makeHardenedGitRunner(process.cwd(), { timeout: 30000, maxBuffer: 32 * 1024 * 1024 });
 
@@ -85,7 +89,30 @@ function settingsJsonTexts(base, files) {
   }
 }
 
-function main() {
+// QF-20260905-229: PR 8296/8491 both carried a chairman-keystroked, ratified permissions.allow
+// change and both merged with this lint red -- the sanctioned path had no pass path. main() below
+// only attempts a citation lookup (and, if one is found, a DB read) when the commit range
+// actually cites a ratification id -- the two pre-existing CLI seed tests never do, so this is a
+// pure addition with zero behavior change on every diff that isn't citing a ratification.
+async function fetchRatificationRow(supabase, ratificationId) {
+  // Ratification ids are cited as an 8-hex short form OR a full UUID (extractRatificationId
+  // accepts both) -- a short form is a PREFIX of the primary key's text. `id` is typed UUID, and
+  // Postgres has no ilike/~~* operator for that type (measured: "operator does not exist: uuid
+  // ~~* unknown" -- PostgREST's embedded id::text cast syntax did not help either), so this reads
+  // the small (append-only, ~100-row) ledger and does the prefix match client-side instead of
+  // fighting a cast in the query string.
+  // count-truncation-diff-lint: explicit visible bound (must be < 1000). Measured live headroom
+  // is ample (92 rows on an append-only ledger that grows one row per ratification event).
+  const { data, error } = await supabase.from('chairman_ratifications').select('id, quote, source').limit(500);
+  if (error) {
+    console.error(`⚠️  ceremony-scope-lock-lint: chairman_ratifications read failed (${error.message}) -- treating citation as unverified`);
+    return null;
+  }
+  const needle = ratificationId.toLowerCase();
+  return (data || []).find((row) => typeof row.id === 'string' && row.id.toLowerCase().startsWith(needle)) || null;
+}
+
+async function main() {
   let files;
   try {
     files = changedFiles(base);
@@ -94,7 +121,32 @@ function main() {
     process.exit(1);
   }
 
-  const result = evaluateCeremonyScopeLock(files, witnessDiffText(base, files), settingsJsonTexts(base, files));
+  let ratVerified = false;
+  if (files.includes(SETTINGS_JSON_PATH)) {
+    let commitLog = '';
+    try {
+      commitLog = runGit(['log', '--format=%B', `${base}...HEAD`]);
+    } catch {
+      commitLog = '';
+    }
+    const ratificationId = extractRatificationId(commitLog);
+    if (ratificationId) {
+      try {
+        const supabase = createSupabaseServiceClient();
+        const row = await fetchRatificationRow(supabase, ratificationId);
+        ratVerified = ratificationNamesSettingsPath(row);
+        if (ratVerified) {
+          console.log(`ℹ️  ceremony-scope-lock-lint: permissions change ratification-verified (id ${ratificationId})`);
+        } else {
+          console.error(`⚠️  ceremony-scope-lock-lint: cited ratification ${ratificationId} does not name ${SETTINGS_JSON_PATH} -- not treating as verified`);
+        }
+      } catch (e) {
+        console.error(`⚠️  ceremony-scope-lock-lint: ratification ${ratificationId} cited but Supabase unreachable (${e.message.split('\n')[0]}) -- treating as unverified`);
+      }
+    }
+  }
+
+  const result = evaluateCeremonyScopeLock(files, witnessDiffText(base, files), settingsJsonTexts(base, files), { ratificationVerified: ratVerified });
 
   if (result.pass) {
     console.log(`✅ capture-channel-ceremony-scope-lock-lint: no ceremony surface touched (base=${base})`);
@@ -118,4 +170,7 @@ function main() {
   process.exit(1);
 }
 
-main();
+main().catch((e) => {
+  console.error(`⚠️  ceremony-scope-lock-lint: unexpected error (${e && e.message}) -- failing closed`);
+  process.exit(1);
+});
