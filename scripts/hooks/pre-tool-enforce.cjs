@@ -869,6 +869,29 @@ async function main() {
           );
           await auditAndExit(auditPromise, 2, 1000);
         }
+
+        // QF-20260904-283: quota enforcement at the REGISTRATION EVENT itself, not only in the
+        // three canonical creator scripts (worktree-manager.js createWorkTypeWorktree,
+        // resolve-sd-workdir.js, qf-start.js) that already call enforceWorktreeQuota before
+        // shelling out. A raw `git worktree add` invoked by anything else (a hand-typed add, a
+        // recipe that shells out directly) bypassed the quota entirely — two such registrations
+        // landed at 48 and 49 against a cap of 40 on 2026-09-05, past all three callers'
+        // throw-before-add checks. Reuses the repoRoot already resolved above for the sibling
+        // check — no extra git shell-out. Same off-switch as the sibling guard above
+        // (LEO_WORKTREE_ADD_GUARD=off) since both live on the same intercepted event.
+        try {
+          const { enforceWorktreeQuota } = require('../../lib/worktree-quota.js');
+          enforceWorktreeQuota(repoRoot, path.join(repoRoot, '.worktrees'));
+        } catch (quotaErr) {
+          if (quotaErr && quotaErr.errorCode === 'WORKTREE_QUOTA_EXCEEDED') {
+            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-12e-QUOTA', quotaErr.message, 'block', {});
+            process.stderr.write(`[ENF-12e-QUOTA] ${quotaErr.message}\n`);
+            await auditAndExit(auditPromise, 2, 1000);
+          }
+          // Any other failure (e.g. the quota check's own git shell-out) is fail-open, matching
+          // this whole enforcement block's policy — never block a worktree add on an unrelated
+          // internal error.
+        }
       }
     } catch { /* fail-open on any internal error */ }
   }
