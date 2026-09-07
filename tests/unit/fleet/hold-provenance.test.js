@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { resolveHoldProvenance, formatHoldProvenance } = require('../../../lib/fleet/claim-eligibility.cjs');
+const { resolveHoldProvenance, resolveDescriptiveHoldNote, DESCRIPTIVE_HOLD_NOTE_KEYS, formatHoldProvenance } = require('../../../lib/fleet/claim-eligibility.cjs');
 import { computeClaimableLeaves } from '../../../scripts/coordinator-backlog-rank.mjs';
 
 /**
@@ -212,5 +212,54 @@ describe('SD-LEO-FIX-HUMAN-ACTION-FENCES-001: computeClaimableLeaves flags holds
     const sb = fakeSbForRows({ data: rows });
     const result = await computeClaimableLeaves(sb, { quiet: true });
     expect(result.humanActionHolds[0].hasUnfenceCondition).toBe(false);
+  });
+});
+
+/**
+ * QF-20260904-724: five of ten documented holds rendered "no reason recorded (bare flag)"
+ * because the dashboard's ONLY reader (resolveHoldProvenance) is deliberately narrow (see the
+ * FR-3 CORRECTION docblock / claim-eligibility-hold-scope-guard.test.js). Display-only widening
+ * via resolveDescriptiveHoldNote, wired into computeClaimableLeaves' humanActionHolds feed.
+ */
+describe('resolveDescriptiveHoldNote — display-only widening (QF-20260904-724)', () => {
+  it('resolves each of the four FR-3-correction keys the gate resolver deliberately ignores', () => {
+    expect(resolveDescriptiveHoldNote({ human_action_note: 'awaiting ceremony' }).reason).toBe('awaiting ceremony');
+    expect(resolveDescriptiveHoldNote({ human_action_reason: 'awaiting ratification' }).reason).toBe('awaiting ratification');
+    expect(resolveDescriptiveHoldNote({ human_action_required: true }).reason).toBe('human action required');
+    expect(resolveDescriptiveHoldNote({ needs_coordinator_review_reason: 'evidence absent' }).reason).toBe('evidence absent');
+  });
+
+  it('resolves the KPI-COUNTS-CHEAP-001 shape (multiple descriptive keys; first in list order wins)', () => {
+    const prov = resolveDescriptiveHoldNote({
+      human_action_note: 'note', coordinator_clear_note: 'clear-note',
+      needs_coordinator_review_reason: 'review', completion_evidence_invalid_reason: 'invalid',
+    });
+    expect(prov.source_key).toBe('human_action_note');
+  });
+
+  it('still prefers the gated resolver when both a gated and a descriptive key are present', () => {
+    const prov = resolveDescriptiveHoldNote({ requires_human_action_reason: 'canonical', human_action_note: 'sibling' });
+    expect(prov.source_key).toBe('requires_human_action_reason');
+  });
+
+  it('returns null for a truly bare hold (no key at all)', () => {
+    expect(resolveDescriptiveHoldNote({ requires_human_action: true })).toBeNull();
+  });
+
+  it('self-detecting: DESCRIPTIVE_HOLD_NOTE_KEYS covers every key this ticket measured as false-bare', () => {
+    for (const key of ['human_action_note', 'needs_coordinator_review_reason', 'human_action_required', 'coordinator_clear_note', 'completion_evidence_invalid_reason']) {
+      expect(DESCRIPTIVE_HOLD_NOTE_KEYS).toContain(key);
+    }
+  });
+
+  it('computeClaimableLeaves: a human_action_note-only hold no longer renders as a bare flag', async () => {
+    const rows = [{
+      sd_key: 'SD-HELD-NOTE-001', title: 'held', status: 'draft', sd_type: 'feature', priority: 'high',
+      created_at: '2026-07-01T00:00:00Z', current_phase: 'LEAD', claiming_session_id: null, dependencies: null, parent_sd_id: null,
+      metadata: { requires_human_action: true, human_action_note: 'awaiting @approved-by ceremony' },
+    }];
+    const sb = fakeSbForRows({ data: rows });
+    const result = await computeClaimableLeaves(sb, { quiet: true });
+    expect(formatHoldProvenance(result.humanActionHolds[0].provenance)).toBe('awaiting @approved-by ceremony');
   });
 });
