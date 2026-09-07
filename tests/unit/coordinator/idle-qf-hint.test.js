@@ -200,6 +200,33 @@ describe('eligibleIdleWorkers — release-recency exclusion (07:56:44Z Hotel-5 s
   });
 });
 
+// QF-20260906-196: eligibleIdleWorkers hinted a seat the check-in gate had already told it may
+// not self-claim (metadata.self_claim=false / availability=idle_only / coordinator_stand_down=
+// true) — a real seat was hinted twice, 3 minutes after its stand-down stamp. Fix imports the
+// check-in gate's own isSelfClaimDisabled (scripts/worker-checkin.cjs) rather than re-deriving
+// the flag list here, so the two gates can never drift apart again.
+describe('eligibleIdleWorkers — self-claim-disabled exclusion (QF-20260906-196)', () => {
+  it('excludes a coordinator_stand_down=true seat — the incident specimen', () => {
+    const w = worker({ session_id: 'standdown-1', metadata: { coordinator_stand_down: true } });
+    expect(eligibleIdleWorkers([w], NOW)).toEqual([]);
+  });
+
+  it('excludes a self_claim=false seat', () => {
+    const w = worker({ session_id: 'no-self-claim', metadata: { self_claim: false } });
+    expect(eligibleIdleWorkers([w], NOW)).toEqual([]);
+  });
+
+  it('excludes an availability=idle_only seat', () => {
+    const w = worker({ session_id: 'idle-only', metadata: { availability: 'idle_only' } });
+    expect(eligibleIdleWorkers([w], NOW)).toEqual([]);
+  });
+
+  it('includes an ordinary seat with none of the flags set — unaffected by the new gate', () => {
+    const w = worker({ session_id: 'w-idle' });
+    expect(eligibleIdleWorkers([w], NOW).map((x) => x.session_id)).toEqual(['w-idle']);
+  });
+});
+
 describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live insert)', () => {
   function qfsForSelect(qfs, selectedCols) {
     if (selectedCols.includes('verified_at')) return qfs;
