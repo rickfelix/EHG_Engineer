@@ -305,6 +305,35 @@ describe('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 — function body-aware classi
     expect(a).toBe(b);
   });
 
+  // SHIP adversarial review (WARNING): a historical `-- CREATE FUNCTION ...` comment documenting
+  // an old implementation must never overwrite the real, live CREATE's body just because it
+  // appears later in the file's raw text.
+  it('a line-commented-out CREATE FUNCTION with the same name does NOT overwrite the real body (even when it appears later in the file)', () => {
+    const bodies = extractFunctionBodies(`
+      CREATE OR REPLACE FUNCTION real_impl() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN 'real'; END $$;
+      -- Old implementation, kept for reference:
+      -- CREATE OR REPLACE FUNCTION real_impl() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN 'old'; END $$;
+    `);
+    expect(bodies.get('real_impl')).toContain("'real'");
+    expect(bodies.get('real_impl')).not.toContain("'old'");
+  });
+
+  it('a block-commented-out CREATE FUNCTION with the same name does NOT overwrite the real body', () => {
+    const bodies = extractFunctionBodies(`
+      CREATE OR REPLACE FUNCTION real_impl2() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN 'real'; END $$;
+      /* CREATE OR REPLACE FUNCTION real_impl2() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN 'old'; END $$; */
+    `);
+    expect(bodies.get('real_impl2')).toContain("'real'");
+    expect(bodies.get('real_impl2')).not.toContain("'old'");
+  });
+
+  it('a real inline comment INSIDE a function body is preserved verbatim (comment-stripping never touches dollar-quoted content)', () => {
+    const bodies = extractFunctionBodies(
+      'CREATE OR REPLACE FUNCTION with_comment() RETURNS void LANGUAGE plpgsql AS $$ BEGIN -- author note\n RETURN; END $$;'
+    );
+    expect(bodies.get('with_comment')).toContain('author note');
+  });
+
   it('TS-1: live body matches migration body (post-normalization) -> still APPLIED, unchanged', () => {
     const sql = 'CREATE OR REPLACE FUNCTION fn_match() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN; END $$;';
     const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
@@ -694,5 +723,14 @@ describe('extraction — ADD COLUMN class (QF-20260725-470)', () => {
     const src = fs.readFileSync(path.join(ROOT, 'scripts', 'verify-migration-apply-state.mjs'), 'utf8');
     expect(src).toMatch(/byClass\.get\('column'\)/);
     expect(src).toMatch(/information_schema\.columns/);
+  });
+
+  // SHIP adversarial review (WARNING): `DISTINCT ON (p.proname) ... ORDER BY p.proname` with no
+  // secondary sort key gives Postgres no guarantee which overload's row (and therefore which
+  // prosrc/body) is returned -- unspecified, not "last row wins". A stable tiebreak column keeps
+  // the same overload picked on every run instead of flapping BODY_MISMATCH true/false.
+  it('the prosrc query has a deterministic DISTINCT ON tiebreak (p.oid), not a bare ORDER BY p.proname', () => {
+    const src = fs.readFileSync(path.join(ROOT, 'scripts', 'verify-migration-apply-state.mjs'), 'utf8');
+    expect(src).toMatch(/ORDER BY p\.proname,\s*p\.oid/);
   });
 });

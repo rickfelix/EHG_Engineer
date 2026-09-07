@@ -328,9 +328,29 @@ const FUNCTION_DEF_RE = new RegExp(
   'gi'
 );
 
+/**
+ * SHIP adversarial review: strip `--`/`/* *\/` comments while leaving every dollar-quoted region
+ * byte-identical -- the inverse of stripNonDdl() (which destroys dollar-quoted bodies on purpose).
+ * Without this, a historical `-- CREATE OR REPLACE FUNCTION foo() ... AS $$ ... $$;` comment block
+ * documenting an OLD implementation (common in this migration corpus) would still satisfy
+ * FUNCTION_DEF_RE and, if it appears AFTER the real CREATE in raw scan order, silently overwrite
+ * the real declared body in the Map below with the commented-out one -- producing a false
+ * BODY_MISMATCH (or masking a real one) for a function that was actually applied correctly.
+ * The dollar-quote alternative is listed first so it wins at any '$' position, consuming through
+ * to ITS OWN closing tag (same backreference trick as stripNonDdl()) before a comment pattern
+ * elsewhere ever gets a chance to split it -- a comment embedded INSIDE a real body (e.g. a
+ * PL/pgSQL `-- note` the function's own author wrote) is protected the same way.
+ */
+function stripCommentsPreservingDollarQuotes(sql) {
+  return sql.replace(
+    /(\$[A-Za-z_]\w*\$|\$\$)[\s\S]*?\1|--[^\n]*|\/\*[\s\S]*?\*\//g,
+    (match) => (match.startsWith('$') ? match : ' ')
+  );
+}
+
 /** Map<normalized function name, raw body text> — last CREATE wins, per file. */
 export function extractFunctionBodies(sql) {
-  const s = sql.replace(/\r\n/g, '\n');
+  const s = stripCommentsPreservingDollarQuotes(sql.replace(/\r\n/g, '\n'));
   const bodies = new Map();
   FUNCTION_DEF_RE.lastIndex = 0;
   let m;
@@ -577,13 +597,21 @@ async function resolveLive(client, expected) {
     // pg_get_functiondef()) -- the same shape extractFunctionBodies() captures from the
     // migration file side, so both sides feed normalizeSqlBody() without any reformatting.
     // DISTINCT ON keeps this a name-keyed map even under overloads (pre-existing limitation:
-    // this whole module resolves functions by bare name, not name+signature -- last row wins,
-    // same "one identity per name" model every other object class in this file already uses).
+    // this whole module resolves functions by bare name, not name+signature). SHIP adversarial
+    // review: `ORDER BY p.proname` alone has NO tiebreak among same-named overloads, so Postgres
+    // makes no guarantee which physical row DISTINCT ON returns -- it is unspecified, not "last
+    // row wins" as an earlier version of this comment claimed. That was harmless when DISTINCT
+    // only deduped a name-existence check, but now the returned row's BODY feeds a real content
+    // comparison, so an unpinned tiebreak could flap BODY_MISMATCH true/false across runs for a
+    // function that never changed. `p.oid` is an arbitrary but STABLE tiebreak (unlike wall-clock
+    // or query-plan-dependent ordering, oid never changes for a given row), so the same overload
+    // is picked every run -- doesn't resolve which overload is "correct" (unresolvable without a
+    // signature-aware redesign, out of this SD's scope) but makes the pick deterministic.
     const { rows } = await client.query(
       `SELECT DISTINCT ON (p.proname) p.proname AS name, p.prosrc AS body FROM pg_proc p
          JOIN pg_namespace ns ON ns.oid = p.pronamespace
         WHERE ns.nspname = 'public' AND p.proname = ANY($1::text[])
-        ORDER BY p.proname`,
+        ORDER BY p.proname, p.oid`,
       [[...byClass.get('function')]]
     );
     mark('function', rows, 'name');
