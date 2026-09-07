@@ -134,6 +134,10 @@ export function buildCreateArgs({ taskName, trAction, intervalMinutes, startTime
 export function buildRemoveArgs(taskName) {
   return ['/Delete', '/TN', taskName, '/F'];
 }
+/** SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-I: disable (not delete) a scheduled task in place. */
+export function buildDisableArgs(taskName) {
+  return ['/Change', '/TN', taskName, '/DISABLE'];
+}
 export function buildQueryArgs(taskName) {
   return ['/Query', '/TN', taskName, '/V', '/FO', 'LIST'];
 }
