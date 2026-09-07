@@ -573,6 +573,32 @@ async function createQuickFix(options = {}) {
   // Re-read the just-inserted row to keep the original return shape for callers.
   const { data } = await supabase.from('quick_fixes').select('*').eq('id', qfId).single();
 
+  // QF-20260903-266 — PERSISTED-CONTENT ECHO, extending the QF-20260903-787 precedent
+  // (scripts/worker-signal.cjs) to operator-authored prose write paths beyond signals. The
+  // precedent's own governance description ("tier-ladder.cjs:487 guards .") took exactly this
+  // hit: a backticked expression inside a double-quoted shell argument was command-substituted
+  // away, and the create still reported success with no way to notice at write time.
+  // Read-back-and-report ONLY -- this must never be able to fail the write it observes (the
+  // description is already durably persisted above; this block is purely observational).
+  try {
+    const persisted = data && data.description;
+    if (persisted === undefined || persisted === null) {
+      console.log('  persisted_description: (none)');
+    } else {
+      const text = String(persisted);
+      const digest = require('crypto').createHash('sha256').update(text).digest('hex').slice(0, 8);
+      console.log(`  persisted_description: ${text.length} chars, sha256:${digest}`);
+      console.log('    ^ compare against what you MEANT to send. A shorter-than-expected count is the');
+      console.log('      signature of shell command-substitution eating part of your message.');
+      if (typeof description === 'string' && text.length !== description.length) {
+        console.log(`  ⚠ WRITE-SIDE TRUNCATION: submitted ${description.length} chars, stored ${text.length}. The row does NOT match what this process submitted.`);
+      }
+    }
+  } catch {
+    // Never let the echo turn a successful create into a failure — observability aid, not a gate.
+    console.log('  persisted_description: (read-back unavailable)');
+  }
+
   // Tier 3: Escalate to full Strategic Directive
   if (isTier3) {
     console.log('\n⚠️  ESCALATION REQUIRED\n');
