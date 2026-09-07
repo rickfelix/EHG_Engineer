@@ -373,6 +373,23 @@ describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" 
     expect(src).not.toMatch(/\.from\('strategic_directives_v2'\)\s*\n\s*\.select\('sd_key'\)\s*\n\s*\.eq\('claiming_session_id'/);
   });
 
+  // database-agent second-pass review: the fail-open/fail-closed split lives in TWO places --
+  // computeHasActiveClaim's return shape (covered by the unit tests above) AND main()'s own
+  // call-site wiring of claimSurfaceUnreadable into shouldAttemptSameTurnClaim. The behavioral
+  // tests call shouldAttemptSameTurnClaim directly with explicit args, so they structurally
+  // cannot see a regression that drops claimSurfaceUnreadable from the main() call site --
+  // that would leave the arg undefined (fail-OPEN), silently reverting this SD's second commit
+  // while every other test in this file stays green. Source-pin the wiring itself.
+  it('SD-LEO-FIX-STOP-HOOK-INFINITE-001: main() actually threads claimSurfaceUnreadable into shouldAttemptSameTurnClaim (not just destructures it)', () => {
+    // Anchored on isSameTurnClaimEnabled() && shouldAttemptSameTurnClaim(...) -- the exact
+    // call-site shape from the test above at line 368-369 -- so this cannot vacuously match
+    // the function's OWN definition/destructuring signature, which has the identical
+    // "shouldAttemptSameTurnClaim({ hasActiveClaim, workerShaped, claimSurfaceUnreadable }"
+    // substring but is never preceded by "isSameTurnClaimEnabled() &&".
+    expect(src).toMatch(/isSameTurnClaimEnabled\(\)\s*&&\s*shouldAttemptSameTurnClaim\(\{[^}]*claimSurfaceUnreadable[^}]*\}\)/);
+    expect(src).toMatch(/unreadable:\s*claimSurfaceUnreadable/);
+  });
+
   it('delegates to the canonical checkin resolution path, not a hand-rolled claim query', () => {
     expect(src).toMatch(/resolveCheckinFn:\s*require\(['"]\.\.\/worker-checkin\.cjs['"]\)\.resolveCheckin/);
   });
