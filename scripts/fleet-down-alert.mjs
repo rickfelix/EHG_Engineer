@@ -15,6 +15,7 @@
 // window was still up, or there is no prior pulse); do NOT re-spam every 15 min during a long
 // outage. The next alert only fires after the fleet recovers (a pulse>0) and goes down again.
 
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import path from 'path';
