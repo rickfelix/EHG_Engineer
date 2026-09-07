@@ -227,3 +227,31 @@ decision verified, so only the genuinely-covered finding closes. Dedup (`already
 on `(sd_key, kind, file)`, not just `(sd_key, kind)`, so a second distinct unapplied migration on
 the same SD still surfaces instead of being permanently masked by an earlier row for a different
 file.
+
+## `chairman_approval` was listed as "Covered" but had no value mapping; a new withdrawal path for fixture-venture decisions (SD-LEO-INFRA-CHAIRMAN-DECISION-VALUE-001, 2026-09-07)
+
+The row-1 table above (branch 4, `chairman_approval`) reads "Covered" because the queue view
+correctly *surfaces* `chairman_approval` rows — but `fn_chairman_decision_value(p_decision_type,
+p_action)`, the function `fn_chairman_decide` calls to translate an `approved`/`rejected` action
+into a `chairman_decisions.decision` verb, had no branch for it. A `chairman_approval` row could be
+surfaced and acted on, but never actually **closed** through the sanctioned decide path — verified
+live against specimen `644a861f` before fixing.
+`database/chairman-gated/20260907_add_chairman_approval_to_decision_value.sql` (chairman-applied)
+adds `chairman_approval` to the existing APPROVAL-SHAPED bucket alongside `ddl_approval`,
+`gate_approval`, `outbound_publish_approval`, `ratified_deviation`, `migration_apply`, and
+`credential_scope` — no new bucket, no new verb.
+
+Separately, some `chairman_decisions`/`chairman_approval` rows are linked to a fixture/demo venture
+(`ventures.is_demo=true`) and were never going to receive a genuine chairman merits ruling — they
+needed to leave the queue without asserting `approve`/`reject`. `lib/chairman/fixture-hygiene-
+withdrawal.mjs`'s `planFixtureHygieneWithdrawal(row, venture, {decidedBy, reason})` is a pure
+planner (reusing `decision-retirement.mjs`'s existing `applyRetirement()` writer, never a new write
+path) that moves such a row to `status='cancelled'` with `retirementBasis.disposition
+='fixture_hygiene_withdrawal'` — a third terminal state, structurally distinct from `approve`/
+`reject`, so a hygiene cleanup can never be misread later as a merits decision. Gated on:
+`status='pending'`, both `decidedBy` and `reason` present (never defaulted), and the venture
+actually carrying `is_demo=true` (refuses for a real venture, or when the venture lookup itself
+failed). Exposed as `node scripts/chairman-decisions.mjs withdraw <id> --reason "<why>"
+[--decided-by <name>]`. `decision-retirement.mjs`'s `armOf()` gained a `review` → `arm4` mapping to
+route the acceptance specimen (`chairman_decisions` row `d87a7018`, `decision_type='review'`,
+fixture venture `8344c34b`).
