@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-07T00:52:06.121Z",
+  "generated_at": "2026-09-07T00:56:13.143Z",
   "counts": {
-    "has_catch": 15
+    "has_catch": 10
   },
   "results": [
     {
@@ -23,41 +23,6 @@
       "line": 368,
       "kind": "data",
       "snippet": "const { data } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/architectural-pattern-checklist.js",
-      "line": 178,
-      "kind": "data",
-      "snippet": "const { data: children } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/prd-gates.js",
-      "line": 28,
-      "kind": "data",
-      "snippet": "const { data: profile } = await ctx.supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/sub-agent-repo-resolution.js",
-      "line": 238,
-      "kind": "data",
-      "snippet": "const { data: children } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/gates/translation-fidelity.js",
-      "line": 94,
-      "kind": "data",
-      "snippet": "const { data: sibRows } = await supabase",
-      "classification": "has_catch"
-    },
-    {
-      "file": "scripts/modules/handoff/executors/plan-to-exec/retrospective.js",
-      "line": 230,
-      "kind": "data",
-      "snippet": "const { data: existing } = await supabase",
       "classification": "has_catch"
     },
     {
