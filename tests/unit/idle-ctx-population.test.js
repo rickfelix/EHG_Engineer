@@ -8,8 +8,17 @@
  * to the stale sd_key mirror. This pins the fixed behaviour: an `error` on the response is now
  * treated exactly like a thrown exception.
  */
-import { describe, it, expect } from 'vitest';
-import { resolveIdleCtx } from '../../lib/fleet/idle-ctx-population.mjs';
+import { describe, it, expect, vi } from 'vitest';
+
+// QF-20260905-755: resolveIdleCtx's new tailInFlightSessionIds population shells out to `gh` --
+// mock node:child_process so this suite never depends on a real gh binary/network egress.
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, execFileSync: vi.fn() };
+});
+
+const { resolveIdleCtx } = await import('../../lib/fleet/idle-ctx-population.mjs');
+const { execFileSync } = await import('node:child_process');
 
 function tableFor(rows, { erroringTables = new Set() } = {}, tableName) {
   const resolve = (n) => {
@@ -25,6 +34,7 @@ function tableFor(rows, { erroringTables = new Set() } = {}, tableName) {
     eq() { return b; },
     is() { return b; },
     gt() { return b; },
+    gte() { return b; },
     limit(n) { return Promise.resolve(resolve(n)); },
     // quick_fixes' query ends on .in() with no .limit() -- awaiting the builder itself must
     // resolve, exactly like the real PostgREST filter-builder's own thenable.
@@ -77,5 +87,54 @@ describe('resolveIdleCtx (SEC-1: PostgREST-error responses fail closed like thro
     const ctx = await resolveIdleCtx(client);
     expect(ctx.sdHolderSessionIds).toBeNull();
     expect(ctx.undeliveredReasons.some((r) => r.startsWith('sd_holder_read_failed:'))).toBe(true);
+  });
+});
+
+describe('resolveIdleCtx: tailInFlightSessionIds (QF-20260905-755)', () => {
+  it('no recently-completed SD carries metadata.completed_by_session: gh is never called (bounded, no wasted calls)', async () => {
+    execFileSync.mockClear();
+    const client = fakeClient({ sds: [{ claiming_session_id: 'sd-holder-1' }] }); // no sd_key/metadata
+    const ctx = await resolveIdleCtx(client);
+    expect(ctx.tailInFlightSessionIds).toEqual(new Set());
+    expect(execFileSync).not.toHaveBeenCalled();
+  });
+
+  it('a matching docs(<SD-KEY>) tail PR with CI still pending -> the completing session is added', async () => {
+    execFileSync.mockClear();
+    execFileSync.mockReturnValue(JSON.stringify([
+      { title: 'docs(SD-EXAMPLE-001): CHANGELOG entry', statusCheckRollup: [{ status: 'IN_PROGRESS' }] },
+    ]));
+    const client = fakeClient({ sds: [{ sd_key: 'SD-EXAMPLE-001', metadata: { completed_by_session: 's1' } }] });
+    const ctx = await resolveIdleCtx(client);
+    expect(ctx.tailInFlightSessionIds).toEqual(new Set(['s1']));
+  });
+
+  it('the same tail PR once CI has fully resolved (all SUCCESS) -> NOT added (the seat reads idle again)', async () => {
+    execFileSync.mockClear();
+    execFileSync.mockReturnValue(JSON.stringify([
+      { title: 'docs(SD-EXAMPLE-001): CHANGELOG entry', statusCheckRollup: [{ conclusion: 'SUCCESS' }, { conclusion: 'SUCCESS' }] },
+    ]));
+    const client = fakeClient({ sds: [{ sd_key: 'SD-EXAMPLE-001', metadata: { completed_by_session: 's1' } }] });
+    const ctx = await resolveIdleCtx(client);
+    expect(ctx.tailInFlightSessionIds).toEqual(new Set());
+  });
+
+  it('an open PR merely mentioning the SD key, NOT titled docs(<SD-KEY>) -- never masks a genuinely-idle seat', async () => {
+    execFileSync.mockClear();
+    execFileSync.mockReturnValue(JSON.stringify([
+      { title: 'fix(SD-EXAMPLE-001): unrelated follow-on', statusCheckRollup: [{ status: 'IN_PROGRESS' }] },
+    ]));
+    const client = fakeClient({ sds: [{ sd_key: 'SD-EXAMPLE-001', metadata: { completed_by_session: 's1' } }] });
+    const ctx = await resolveIdleCtx(client);
+    expect(ctx.tailInFlightSessionIds).toEqual(new Set());
+  });
+
+  it('a gh failure for one candidate is recorded (observable) and never crashes the whole population pass', async () => {
+    execFileSync.mockClear();
+    execFileSync.mockImplementation(() => { throw new Error('gh: command not found'); });
+    const client = fakeClient({ sds: [{ sd_key: 'SD-EXAMPLE-001', metadata: { completed_by_session: 's1' } }] });
+    const ctx = await resolveIdleCtx(client);
+    expect(ctx.tailInFlightSessionIds).toEqual(new Set());
+    expect(ctx.undeliveredReasons.some((r) => r.startsWith('tail_in_flight_gh_failed:SD-EXAMPLE-001:'))).toBe(true);
   });
 });
