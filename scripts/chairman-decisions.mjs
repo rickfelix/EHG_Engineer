@@ -21,6 +21,8 @@ import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.m
 import { resolveAndWriteChairmanSiteReviewAttestation } from '../lib/eva/bridge/chairman-site-review-attestation.js';
 import { resolveAndRunAcquisitionPipeline } from '../lib/eva/bridge/domain-acquisition-trigger.js';
 import { resolveAndVerifyClassifierDenial } from '../lib/chairman/classifier-denial-guard.mjs';
+import { planFixtureHygieneWithdrawal } from '../lib/chairman/fixture-hygiene-withdrawal.mjs';
+import { applyRetirement } from '../lib/chairman/decision-retirement.mjs';
 
 const parsed = parseArgs(process.argv.slice(2));
 if (parsed.error) {
@@ -249,6 +251,46 @@ const writers = {
     return { table: 'feedback', feedback_id: data?.[0]?.id, snoozed_until: snoozedUntil, note: 'item remains pending' };
   },
 };
+
+if (parsed.command === 'withdraw') {
+  try {
+    const { data: row, error: rowErr } = await db.from('chairman_decisions')
+      .select('id, status, decision_type, venture_id').eq('id', parsed.id).single();
+    if (rowErr || !row) {
+      console.error('WITHDRAW_ERR: row not found: ' + (rowErr?.message || parsed.id));
+      await armCliTeardown(1);
+    } else {
+      let venture = null;
+      if (row.venture_id) {
+        const { data: v } = await db.from('ventures').select('id, is_demo').eq('id', row.venture_id).single();
+        venture = v || null;
+      }
+      const decidedBy = parsed.decidedBy || DECIDED_BY;
+      const plan = planFixtureHygieneWithdrawal(row, venture, { decidedBy, reason: parsed.reason });
+      if (!plan) {
+        console.error(
+          'WITHDRAW_ERR: no fixture-hygiene authority for ' + parsed.id + ' — withdraw only succeeds when the ' +
+          'row is pending, its linked venture is fixture-flagged (is_demo=true), and the decision_type maps ' +
+          'to a supported arm. This is NOT a decide bypass; a genuinely decidable row must go through decide.'
+        );
+        await armCliTeardown(1);
+      } else {
+        const out = await applyRetirement(db, plan);
+        if (!out.wrote) {
+          console.error('WITHDRAW_ERR: ' + (out.reason || 'unknown') + (out.error ? (' — ' + out.error) : ''));
+          await armCliTeardown(1);
+        } else {
+          console.log('WITHDRAWN ' + parsed.id + ' (fixture hygiene) — reason: ' + parsed.reason);
+          console.log('WROTE: ' + JSON.stringify(out));
+          await armCliTeardown(0);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('WITHDRAW_ERR: ' + e.message);
+    await armCliTeardown(1);
+  }
+}
 
 if (parsed.command === 'decide') {
   try {
