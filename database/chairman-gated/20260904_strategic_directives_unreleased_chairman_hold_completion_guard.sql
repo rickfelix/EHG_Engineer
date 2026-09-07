@@ -1,4 +1,8 @@
 -- SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2 part 2 (AC-4/AC-6/AC-7)
+-- CHAIRMAN-APPROVED 2026-09-07 ~01:50Z: verbal at the Adam terminal, quote: "apply the strategic
+-- directives completion guard migration." Scribed by Adam session bc762fa4 under the 3c ceremony;
+-- executable content unchanged, only this marker block was added.
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- Extends the EXISTING enforce_canonical_lifecycle_write() trigger function (created by
 -- 20260824_strategic_directives_canonical_writer_choke.sql, Step 3 — already live) with a
