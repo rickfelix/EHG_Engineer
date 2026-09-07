@@ -9,6 +9,11 @@
   "match": "session_id, status, is_alive, released_at, stale_at, released_reason",
   "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: .limit(sampleLimit) follows on the next line -- sampleLimit defaults to SAMPLE_LIMIT=10, always <1000, but the classifier's limit() regex only recognizes a literal digit, not a named binding."
  },
+ "scripts/adam-quiet-tick.mjs:736": {
+  "classification": "bounded-by-design",
+  "match": "select('id, from_phone, body_raw, parked_at, routed_at')",
+  "note": "QF-20260905-781: pre-existing, unchanged .limit(SMS_INBOUND_CAP) follows 4 lines below (SMS_INBOUND_CAP=50, always <1000) -- this diff only widened the select() column list (added routed_at) to support surfacing a routed-but-never-parked verified-chairman row, re-triggering diff-lint classification of an already-bounded query the classifier's limit() regex can't see because the bound is a named constant, not a literal digit -- same class as the session-liveness entry above."
+ },
  "scripts/hooks/coordination-inbox.cjs:929": {
   "classification": "bounded-by-design",
   "match": "sd_key, heartbeat_at, expected_silence_until, is_alive, status, terminal_id, process_alive_at",
