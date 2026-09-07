@@ -180,17 +180,20 @@ describe('the advisory-first claim is TESTED, not just asserted (TESTING 4118666
     expect(listed.split('\n').length).toBeGreaterThan(capped.split('\n').length);
   });
 
-  // FR-5 AC: assert the exact live SCAN_PREFIXES array so a future widening (e.g. FR-7) cannot
-  // land without this test also changing -- a comment claiming the scope is in sync is not
-  // verification. Imported directly (not spawned), so this reads the array WITHOUT
-  // SWALLOWED_QUERY_LINT_ROOT set, i.e. the real 5-directory scope, not a fixture override.
-  it('SCAN_PREFIXES is exactly the 5 real gate/executor directories (fails loud on drift)', () => {
+  // FR-5 AC: assert the exact live SCAN_PREFIXES array so a future widening cannot land without
+  // this test also changing -- a comment claiming the scope is in sync is not verification.
+  // Imported directly (not spawned), so this reads the array WITHOUT
+  // SWALLOWED_QUERY_LINT_ROOT set, i.e. the real scope, not a fixture override. FR-7 widened
+  // this from 5 to 6 directories in the same SD; this test caught that widening the moment it
+  // landed (it failed here first, then was updated), which is exactly the contract it exists for.
+  it('SCAN_PREFIXES is exactly the 6 real gate/executor directories (fails loud on drift)', () => {
     expect(SCAN_PREFIXES).toEqual([
       'scripts/modules/handoff',
       'lib/gates',
       'scripts/modules/claim-health',
       'lib/claim',
       'lib/oversight',
+      'scripts/modules/implementation-fidelity',
     ]);
   });
 });

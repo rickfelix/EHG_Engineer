@@ -50,6 +50,10 @@ export const SCAN_PREFIXES = process.env.SWALLOWED_QUERY_LINT_ROOT
     'scripts/modules/claim-health',
     'lib/claim',
     'lib/oversight',
+    // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-7: prevention, not remediation of a live defect
+    // (the two phantom-column reads that originally motivated this widening were already
+    // repaired by QF-20260904-604/844 and are not among the sites found here).
+    'scripts/modules/implementation-fidelity',
   ];
 
 // A destructure that binds ONLY data (optionally renamed) and no `error`.
