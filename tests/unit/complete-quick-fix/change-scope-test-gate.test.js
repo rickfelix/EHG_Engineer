@@ -170,24 +170,51 @@ describe('getScopedUnitTestFiles (FR-1, TR-2) — fs fixture', () => {
   afterAll(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('resolves a co-located sibling test for a changed source file', () => {
-    expect(getScopedUnitTestFiles(['lib/foo.js'], dir)).toEqual(['lib/foo.test.js']);
+    expect([...getScopedUnitTestFiles(['lib/foo.js'], dir)]).toEqual(['lib/foo.test.js']);
   });
   it('resolves a __tests__ sibling test', () => {
     expect(getScopedUnitTestFiles(['lib/baz.js'], dir)).toContain('lib/__tests__/baz.test.js');
   });
   it('includes a changed *.test.js file directly (rule 1)', () => {
-    expect(getScopedUnitTestFiles(['tests/unit/changed.test.js'], dir)).toEqual(['tests/unit/changed.test.js']);
+    expect([...getScopedUnitTestFiles(['tests/unit/changed.test.js'], dir)]).toEqual(['tests/unit/changed.test.js']);
   });
   it('returns [] (coverage gap) when a source file has no associated unit test', () => {
-    expect(getScopedUnitTestFiles(['lib/bar.js'], dir)).toEqual([]);
+    expect([...getScopedUnitTestFiles(['lib/bar.js'], dir)]).toEqual([]);
   });
-  it('returns [] for an empty / non-array diff', () => {
-    expect(getScopedUnitTestFiles([], dir)).toEqual([]);
-    expect(getScopedUnitTestFiles(undefined, dir)).toEqual([]);
+  it('returns [] for an empty / non-array diff (and mappedCandidates 0)', () => {
+    const empty = getScopedUnitTestFiles([], dir);
+    expect([...empty]).toEqual([]);
+    expect(empty.mappedCandidates).toBe(0);
+    expect([...getScopedUnitTestFiles(undefined, dir)]).toEqual([]);
   });
   it('does not include a candidate path that does not exist on disk', () => {
     // lib/foo.js sibling exists, but a non-existent source yields nothing
-    expect(getScopedUnitTestFiles(['lib/nope.js'], dir)).toEqual([]);
+    expect([...getScopedUnitTestFiles(['lib/nope.js'], dir)]).toEqual([]);
+  });
+
+  it('QF-20260905-797 (a): finds a test under tests/unit/** by basename, not just co-located siblings', () => {
+    mkdirSync(path.join(dir, 'lib', 'x'), { recursive: true });
+    mkdirSync(path.join(dir, 'tests', 'unit', 'x'), { recursive: true });
+    writeFileSync(path.join(dir, 'lib', 'x', 'y.js'), 'export const z=1;');
+    writeFileSync(path.join(dir, 'tests', 'unit', 'x', 'y.test.js'), '');
+    const result = getScopedUnitTestFiles(['lib/x/y.js'], dir);
+    expect(result).toContain('tests/unit/x/y.test.js');
+    expect(result.mappedCandidates).toBeGreaterThan(0);
+  });
+
+  it('QF-20260905-797 (b): finds a test elsewhere that imports the changed module by basename', () => {
+    mkdirSync(path.join(dir, 'lib', 'importme'), { recursive: true });
+    mkdirSync(path.join(dir, 'tests', 'unit', 'z'), { recursive: true });
+    writeFileSync(path.join(dir, 'lib', 'importme', 'mod.js'), 'export const w=1;');
+    writeFileSync(path.join(dir, 'tests', 'unit', 'z', 'consumer.test.js'), "import { w } from '../../../lib/importme/mod.js';\n");
+    const result = getScopedUnitTestFiles(['lib/importme/mod.js'], dir);
+    expect(result).toContain('tests/unit/z/consumer.test.js');
+  });
+
+  it('QF-20260905-797 (c): mapped_candidates exceeds found count when a partial map exists — evidence visible, not silent', () => {
+    const result = getScopedUnitTestFiles(['lib/bar.js'], dir); // no test exists anywhere for bar
+    expect(result.length).toBe(0);
+    expect(result.mappedCandidates).toBeGreaterThan(0);
   });
 });
 
