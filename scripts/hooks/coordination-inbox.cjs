@@ -570,6 +570,11 @@ async function insertDeliveredRowIfRequested(supabase, sessionId, msg) {
       .eq('target_session', msg.sender_session)
       .limit(1);
     if (existing && existing.length > 0) return 'duplicate';
+    // transport-ack DELIVERED marker for msg.sender_session; whether it should route through
+    // insertCoordinationRow() (which adds backpressure/target-validation semantics
+    // 'transport_ack' does not currently opt into via BACKPRESSURE_EXEMPT_KINDS) is a real
+    // design question, not a drive-by call in an unrelated PR — tracked at QF-20260907-402.
+    // eslint-disable-next-line no-raw-session-coordination-insert -- see comment above
     await supabase
       .from('session_coordination')
       .insert({
