@@ -31,13 +31,17 @@ function stubSupabase({ selectRows = [], updateRows = [], selectError = null, up
   return {
     calls,
     from(table) {
+      let isUpdate = false;
       const chain = {
         select() { return chain; },
         in(col, vals) { chain._in = { col, vals }; return chain; },
         is() { return chain; },
         order() { return chain; },
-        limit() { return Promise.resolve({ data: selectError ? null : selectRows, error: selectError }); },
-        update(patch) { calls.updates.push(patch); return chain; },
+        limit() {
+          if (isUpdate) return chain;
+          return Promise.resolve({ data: selectError ? null : selectRows, error: selectError });
+        },
+        update(patch) { isUpdate = true; calls.updates.push(patch); return chain; },
         gte() { return chain; },
         then(res, rej) {
           return Promise.resolve(updateError ? { data: null, error: updateError } : { data: updateRows, error: null }).then(res, rej);

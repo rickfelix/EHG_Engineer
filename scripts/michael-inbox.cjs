@@ -110,7 +110,8 @@ async function drainMichaelOutbound(supabase, { newSessionId, oldSessionIds } = 
       .in('target_session', olds)
       .is('read_at', null)
       .gte('created_at', cutoff)
-      .select('id');
+      .select('id')
+      .limit(500);
     if (error) return { moved: 0, error: error.message };
     return { moved: Array.isArray(data) ? data.length : 0 };
   } catch (e) {
