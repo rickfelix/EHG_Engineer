@@ -597,6 +597,7 @@ scratchpad/
 .artifacts/sms-status-relay-drain-tick.marker
 .artifacts/abnormal-exit-witness.ndjson
 .artifacts/sms-status-relay-drain-completions.ndjson
+.artifacts/michael-seat/
 
 # SD-LEO-FIX-VERIFY-MIGRATION-APPLY-001 (security-agent OBS-1): a test-only chairman-gated
 # fixture is written+removed in tests/integration/migration-apply-state-ledger-wiring.test.js;

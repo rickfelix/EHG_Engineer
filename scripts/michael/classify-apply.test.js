@@ -95,6 +95,8 @@ describe('validation (pure)', () => {
     expect(itemProblem({ thread_id: 't1', class: 'Has Spaces' })).toBe('CLASS_INVALID');
     expect(itemProblem({ thread_id: 't1', class: 'x', needs_you_reason: 'r'.repeat(241) })).toBe('REASON_INVALID');
     expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: 'delete' })).toBe('INTENT_INVALID');
+    // unarchive belongs to gmail-act (chairman verb); a seat intent the feeder cannot execute would re-degrade every fire
+    expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: 'unarchive' })).toBe('INTENT_INVALID');
     expect(itemProblem({ thread_id: 't1', class: 'x', action_intent: 'label:L_1' })).toBe(null);
     expect(itemProblem({ thread_id: '', class: 'x' })).toBe('ITEM_INVALID');
     expect(itemProblem({ thread_id: 't1', class: 'x', verified_by: 'v'.repeat(65) })).toBe('ITEM_INVALID');
