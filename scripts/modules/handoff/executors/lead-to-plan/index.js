@@ -39,7 +39,10 @@ import {
   // Grill Convergence Gate (SD-LEO-PROTOCOL-POCOCK-PATTERNS-ORCH-001-C, Child C)
   createGrillConvergenceGate,
   // Verifier-Parity Gate (SD-LEO-INFRA-HANDOFF-INTEGRITY-RECONCILE-001) — precheck-only
-  createVerifierParityGate
+  createVerifierParityGate,
+  // Parent-Exec Gate (QF-20260906-901): child SDs cannot activate before their orchestrator
+  // parent completes its own two setup handoffs.
+  createParentExecGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -115,6 +118,9 @@ export class LeadToPlanExecutor extends BaseExecutor {
 
     // SD Transition Readiness Gate
     gates.push(createTransitionReadinessGate(this.supabase));
+
+    // Parent-Exec Gate (QF-20260906-901) — observe-only by default
+    gates.push(createParentExecGate(this.supabase));
 
     // Target Application Validation Gate
     gates.push(createTargetApplicationGate(this.supabase));
