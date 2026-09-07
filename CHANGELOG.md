@@ -5,6 +5,7 @@
 
 - [2026-09-07](#2026-09-07)
   - [Bugfix](#bugfix)
+  - [Documentation](#documentation)
 - [2026-09-06](#2026-09-06)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -195,6 +196,12 @@
   - `emitFindingAlert()` routes one directed `session_coordination` row per new finding to the live coordinator (falling back to the `broadcast-coordinator` sentinel), deduped against a 6-hour re-emit window keyed on finding class + subject — so a recurring condition doesn't page the coordinator every tick.
   - `scripts/stale-session-sweep.cjs`'s `isSweepResetAllowed()` and the end-of-tick WARNINGS/CONFLICTS reporting loops call `recordFinding()` alongside their existing `console.log`, so persisted/alerted findings never diverge from what an operator watching the console would have seen.
   - `lib/fleet/worker-status.cjs`'s `DRAIN_SETS.coordinator` recognizes the new `sweep_finding_alert` payload kind immediately via the JS floor; the corresponding DB-side `role_drain_sets` seed migration is chairman-gated and pending separately.
+
+### Documentation
+
+- **Encode the twelve Foundation-audit lens PREDICATE + INSTRUMENT + CANARY texts into `CLAUDE_SOLOMON_MANUAL.md`, replacing the bare lens-name line** - SD-LEO-DOC-FOUNDATION-AUDIT-LENS-001
+  - The twelve lenses (A1-A6, B1-B6) previously existed only as names on one manual line; their predicates lived in a Solomon seat's session-local scratch file, one discard from zero. `scripts/one-off/qf-20260905-813-encode-lens-predicates.mjs` verified the old clause appeared exactly once in `leo_protocol_sections` (row id=629) before replacing it with the full verbatim text from feedback 5b18d8f4, then `node scripts/generate-claude-md-from-db.js` regenerated the manual from the DB.
+  - Origin: a chairman question ("would this have been caught in any of the six dimensions?") whose measured answer showed the predicates were not durably encoded anywhere the standing Friday foundation audit could read them.
 
 ## 2026-09-06
 
