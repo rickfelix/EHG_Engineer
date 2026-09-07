@@ -925,6 +925,13 @@ fi
 # git then no-op'd with no visible "nothing to commit" in the captured output. Fail
 # loud instead, and name the likely cause (wrong working tree) rather than a bare
 # "nothing to commit".
+#
+# KNOWN LIMITATION, disclosed rather than engineered around: a pure `git commit --amend`
+# that changes only the commit message (no prior `git add`) also has an empty
+# `git diff --cached` and would be blocked here too. CLAUDE.md's own git-safety protocol
+# already discourages amend in this repo ("Always create NEW commits ... unless the user
+# explicitly requests a git amend"), so this is an accepted, narrow tradeoff against the
+# measured, real defect class this guard closes -- not a silent gap.
 # ============================================================================
 if [ -z "$(git diff --cached --name-only)" ]; then
   echo ""
