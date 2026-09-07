@@ -58,6 +58,10 @@ describe('runBriefAssemble', () => {
     expect(upsertCall.ops[0].args[1]).toEqual({ onConflict: 'et_date' });
     expect(upsertCall.ops[0].args[0].data_json.headsUp.some((h) => h.includes('gmail-triage'))).toBe(true);
     expect(upsertCall.ops[0].args[0].assembled_at).toBe(AFTER_DEADLINE.toISOString());
+    expect(upsertCall.ops[0].args[0].rendered_at).toBe(AFTER_DEADLINE.toISOString());
+    expect(upsertCall.ops[0].args[0].verified).toBe(true);
+    expect(typeof upsertCall.ops[0].args[0].rendered_html).toBe('string');
+    expect(upsertCall.ops[0].args[0].rendered_html).toContain('<!DOCTYPE html>');
   });
 
   it('with all four required feeders ok: assembles clean (not degraded)', async () => {

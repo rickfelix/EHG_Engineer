@@ -20,6 +20,7 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { createMichaelClient, parseArgs, readRows, writeRows, refusal, emit } from '../../lib/michael/db.mjs';
 import { runFeeder, exitCodeFor, gracefulExit, assembleReadiness, READINESS_REQUIREMENTS, BRIEF_DEADLINE_ET } from '../../lib/michael/feeder.mjs';
 import { buildBriefData, validateBriefData } from '../../lib/michael/brief-model.mjs';
+import { renderBrief, verifyRender } from '../../lib/michael/render-brief.js';
 
 export const FEEDER = 'brief-assemble';
 
@@ -61,10 +62,15 @@ export async function runBriefAssemble({ sb, argv = [], now = new Date() } = {})
       const check = validateBriefData(data);
       if (!check.valid) return { status: 'failed', counts: { ...counts, error_code: check.refusal, phase: 'validate' } };
 
-      if (!apply) return { status: readiness.degraded ? 'degraded' : 'ok', counts, preview: { data_json: data } };
+      const html = renderBrief(data, { etDate });
+      const verdict = verifyRender(html, { etDate });
+      counts.verified = verdict.verified;
 
+      if (!apply) return { status: readiness.degraded ? 'degraded' : 'ok', counts, preview: { data_json: data, verified: verdict.verified } };
+
+      const nowIso = now.toISOString();
       const w = await writeRows(sb, 'michael_brief_runs', (t) => t
-        .upsert({ et_date: etDate, data_json: data, assembled_at: now.toISOString() }, { onConflict: 'et_date' })
+        .upsert({ et_date: etDate, data_json: data, rendered_html: html, verified: verdict.verified, verify_notes: verdict.verify_notes || null, assembled_at: nowIso, rendered_at: nowIso }, { onConflict: 'et_date' })
         .select('id'));
       if (!w.ok) return { status: 'failed', counts: { ...counts, error_code: w.refusal, phase: 'write' } };
       counts.rows_written = 1;
