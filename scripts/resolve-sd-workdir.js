@@ -31,7 +31,7 @@ import { enforceWorktreeQuota, MAX_WORKTREE_COUNT, WORKTREE_QUOTA_HELPERS } from
 // cannot drift away from the createWorktree behavior.
 // SD-LEO-INFRA-LEO-INFRA-WORKTREE-001: SUBSTRATE_ITEMS + validateWorktreeSubstrate
 // for the post-creation completeness gate.
-import { resolveWorktreeBaseRef, fetchBaseRef, WorktreeBaseFetchFailedError, SUBSTRATE_ITEMS, VENTURE_SUBSTRATE_ITEMS, validateWorktreeSubstrate, refreshPropagatedEnv } from '../lib/worktree-manager.js';
+import { resolveWorktreeBaseRef, fetchBaseRef, SUBSTRATE_ITEMS, VENTURE_SUBSTRATE_ITEMS, validateWorktreeSubstrate, refreshPropagatedEnv } from '../lib/worktree-manager.js';
 import { provisionWorktreeNodeModules, getIsolationMode, getFreeDiskBytes, countActiveFreshSessions } from '../lib/worktree-provision.js';
 import { execSync } from 'child_process';
 import { isNodeModulesUnprovisioned as isUnprovisionedShared } from '../lib/node-modules-population.js';
