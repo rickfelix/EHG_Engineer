@@ -8,6 +8,7 @@
 // Run once: node scripts/one-off/qf-20260907-188-quick-fixes-schema-traps.mjs
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -59,7 +60,9 @@ async function main() {
   console.log(`Inserted leo_protocol_sections row id=${data.id}, section_type=${SECTION_TYPE}`);
 }
 
-main().catch((e) => {
-  console.error('FAILED:', e);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => {
+    console.error('FAILED:', e);
+    process.exit(1);
+  });
+}
