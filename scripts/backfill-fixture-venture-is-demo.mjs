@@ -2,6 +2,14 @@
 /**
  * Backfill ventures.is_demo=true for fixture ventures — QF-20260726-908.
  *
+ * KNOWN DUPLICATE (flagged by SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001, not consolidated
+ * there — out of that SD's scope): scripts/backfill-fixture-venture-flags.mjs does the same
+ * retroactive is_demo=true backfill using a DIFFERENT predicate source
+ * (lib/chairman/chairman-actionable.mjs's FIXTURE_NAME_PATTERNS vs. this file's isFixtureVenture
+ * canonical predicate). Both are now historical-only per that SD's FR-4 — producers should stamp
+ * is_demo:true at insert time via lib/governance/fixture-producer-guard.mjs's insertGuarded()
+ * instead of relying on either backfill script. A future SD should consolidate these two.
+ *
  * WHY THIS IS THE FIX RATHER THAN A NEW FILTER. The chairman's queue
  * (chairman_pending_decisions -> chairman_unified_decisions) ALREADY excludes
  * `COALESCE(is_demo,false)=true OR name ~ '^(__e2e_|__citest_|canonical-source-test-|Test Venture for)'`.
