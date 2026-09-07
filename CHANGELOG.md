@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-07](#2026-09-07)
+  - [Bugfix](#bugfix)
 - [2026-09-06](#2026-09-06)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -184,6 +186,16 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
+## 2026-09-07
+
+### Bugfix
+
+- **Stale-session-sweep findings (`SKIP_RESET`, `WARNINGS`, `CONFLICTS`) now persist and alert instead of being console-only** - SD-LEO-FIX-STALE-SESSION-SWEEP-002
+  - `lib/fleet/sweep-findings-sink.cjs` adds `appendFindingLine()`, appending one JSON line per finding (timestamp, finding class, subject, summary) to `.artifacts/stale-session-sweep-findings.ndjson`, fail-soft so a write failure never aborts a sweep tick.
+  - `emitFindingAlert()` routes one directed `session_coordination` row per new finding to the live coordinator (falling back to the `broadcast-coordinator` sentinel), deduped against a 6-hour re-emit window keyed on finding class + subject — so a recurring condition doesn't page the coordinator every tick.
+  - `scripts/stale-session-sweep.cjs`'s `isSweepResetAllowed()` and the end-of-tick WARNINGS/CONFLICTS reporting loops call `recordFinding()` alongside their existing `console.log`, so persisted/alerted findings never diverge from what an operator watching the console would have seen.
+  - `lib/fleet/worker-status.cjs`'s `DRAIN_SETS.coordinator` recognizes the new `sweep_finding_alert` payload kind immediately via the JS floor; the corresponding DB-side `role_drain_sets` seed migration is chairman-gated and pending separately.
+
 ## 2026-09-06
 
 ### Bugfix
@@ -211,6 +223,10 @@
   - New STAGE 12 checks `git diff --cached --name-only` immediately before that banner and exits 1 with a diagnostic naming the likely cause (wrong working tree) instead of proceeding. 3 new regression tests (`tests/unit/husky/pre-commit-nonempty-index-guard.test.js`) pin the guard's shell predicate and its position ahead of the banner.
   - A known, disclosed tradeoff: a message-only `git commit --amend` (no new staged changes) also produces an empty diff and is blocked too — documented in-line rather than special-cased, consistent with CLAUDE.md's existing discouragement of amend in this repo.
   - Escalated from QF-20260906-295 because the fix touches `.husky/pre-commit`, a charter-designated sensitive path; the underlying code was already merged (PR #8399, commit `96501f014de`) before this SD formalized governance over it.
+- **A test could reach a REAL Resend/Twilio send with nothing at the shared transport to stop it** - SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C
+  - Three confirmed live incidents (two in 2026-08, one 2026-09-03) happened because only a per-caller guard existed (`chairman-sms-gate/index.js:243`), covering 1 of 8+ email callers and 0 of 2 SMS callers — a per-site patch, not the transport-layer boundary the class of bug needed.
+  - Added a shared guard (`lib/notifications/transport-test-isolation-guard.js`) consumed by both `resend-adapter.js::sendEmailInternal` and `twilio-provider.js::send`: refuses a real send under a test runner (`VITEST`/`NODE_ENV=test`) unless `fetch` is already mocked, detected via the `.mock` property vitest/jest attach to `vi.fn()`/`vi.stubGlobal` — chosen specifically so the 2 existing legitimate mocked-fetch test suites keep exercising the real code path unmodified (55 pre-existing + 18 new tests, zero regressions).
+  - Added a CI lint (`scripts/lint/transport-test-isolation-guard-lint.mjs`) asserting both guards stay present and that any test importing a transport module directly shows isolation evidence, wired into `.github/workflows/transport-test-isolation-guard-lint.yml` and registered with `control-seed-test-lint`'s seeded-defect trial (verdict `BLOCKS`).
 ### Infrastructure
 
 - **Every fixed role seat's operational memory now mirrors to a database checkpoint, with a daily staleness check** - SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A
