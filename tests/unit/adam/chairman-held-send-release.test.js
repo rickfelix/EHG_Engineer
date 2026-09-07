@@ -32,8 +32,9 @@ function heldRow(overrides = {}) {
  * undefined and the audit-write-failure path was structurally unreachable. `writes` records every
  * update call (vals + filters) so tests can assert exactly what was persisted.
  */
-function makeFakeSupabase({ answerRow = null, claimSucceeds = true, releaseUpdateError = null, unclaimMatches = true, solomonSessionIds = [] } = {}) {
+function makeFakeSupabase({ answerRow = null, answerRows = null, claimSucceeds = true, releaseUpdateError = null, unclaimMatches = true, solomonSessionIds = [] } = {}) {
   const writes = [];
+  const rows = answerRows || (answerRow ? [answerRow] : []);
   return {
     writes,
     from(table) {
@@ -44,7 +45,7 @@ function makeFakeSupabase({ answerRow = null, claimSucceeds = true, releaseUpdat
               eq: () => ({
                 order: () => ({
                   order: () => ({
-                    limit: async () => ({ data: answerRow ? [answerRow] : [], error: null }),
+                    limit: async () => ({ data: rows, error: null }),
                   }),
                 }),
               }),
@@ -140,6 +141,68 @@ describe('decideRelease (pure core)', () => {
     expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: 'ans-5', verdict: 'GO' }))
       .toMatchObject({ action: 'release' });
   });
+
+  // FIX 1 (QF-20260905-746). Solomon GO (d60ec8b1, 13:43Z): structured payload.verdict is
+  // authoritative and is NEVER overridden by the amendment-marker regex, in EITHER direction.
+  it('TS-e (FIX 1): structuredVerdict=GO releases even when the verdict TEXT would otherwise trip the amendment regex', () => {
+    expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: 'ans-6', structuredVerdict: 'GO', verdict: 'GO -- and yes there is a real security hole in the OLD flow, but this text is fine' }))
+      .toMatchObject({ action: 'release', reason: 'verdict_cited' });
+  });
+
+  it('TS-f (FIX 1): structuredVerdict=NO refuses even when the verdict TEXT reads as an unqualified approval', () => {
+    expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: 'ans-7', structuredVerdict: 'NO', verdict: 'looks great, ship it' }))
+      .toMatchObject({ action: 'refuse', reason: 'verdict_structured_negative_or_amending' });
+  });
+
+  it('TS-g (FIX 1): structuredVerdict=AMEND refuses', () => {
+    expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: 'ans-7b', structuredVerdict: 'AMEND', verdict: 'close but change the amount' }))
+      .toMatchObject({ action: 'refuse', reason: 'verdict_structured_negative_or_amending' });
+  });
+
+  // Solomon constraint (a): the leading-token rule is the ONLY fallback and is never overridden by
+  // the amendment regex either -- a bare "GO" that goes on to discuss a "hold" or a "risk" must
+  // still release.
+  it('TS-h (FIX 1): no structured verdict, but a clean leading GO token releases despite regex-trippy prose later in the body', () => {
+    expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: 'ans-8', verdict: 'GO. Note there is no hold needed and the risk is low.' }))
+      .toMatchObject({ action: 'release', reason: 'verdict_cited' });
+  });
+
+  // FIXTURE 1 (FIX 1's pinned specimen): the REAL live Solomon answer (session_coordination id
+  // 25584a06-9b07-449d-a2a9-32d3e1fce894, correlation e1c0150e, hold 824c7d54 -- QF-20260906-202's
+  // specimen) that reproduced the bug this QF fixes: a genuine GO whose prose ("...the reason it
+  // should not wait...") trips VERDICT_AMENDMENT_MARKERS, and whose body does NOT open with a
+  // leading GO/APPROVE/SEND token (it opens with a bracketed context line). Per Solomon constraint
+  // (b): with NEITHER a structured verdict NOR a leading token, this must be refused -- LOUDLY, with
+  // a distinct reason -- not silently released and not silently folded into the old generic
+  // amendment-refusal reason. The fix for Solomon going forward is `send --verdict GO` (see the next
+  // test) or a clean leading token; this test pins the refuse-not-crash behavior for the unstructured
+  // historical specimen itself.
+  const LIVE_FALSE_POSITIVE_GO_BODY = '[SOLOMON verdict on the held chairman send 199dcce6 (Fable-exhaustion plan as a two-option decision, held send 824c7d54, decision 6d7ff154), reply on 199dcce6] GO, and send it first in the queue. Grounding read: the text is my own plan 89b7a95a restated faithfully: reserve the remaining rickfelix2000 Fable window for the chairman, automated seats to Opus now with Sonnet for small drains, the step-down rule per account, the Sonnet-only posture holding SD builds until the weekly reset, one text when that happens; two options, recommendation 1 with its reason, no auto-default and the consequence of silence stated. The reset day and hour are the account sampler\'s (INHERITED), the rest is measured. The second freeze of the day, 19:50Z to 22:28Z, landed at the hour the diagnosis predicted (17:28Z plus five hours), which is the strongest evidence the text needs and the reason it should not wait behind the other two decisions. Send as written.\n\nSolomon';
+
+  it('FIXTURE 1 (live specimen 25584a06, QF-20260906-202): unstructured GO prose tripping the amendment regex is refused with the NEW distinct reason, not silently released', () => {
+    expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: '25584a06-9b07-449d-a2a9-32d3e1fce894', verdict: LIVE_FALSE_POSITIVE_GO_BODY }))
+      .toMatchObject({ action: 'refuse', reason: 'verdict_appears_negative_or_amending' });
+  });
+
+  it('FIXTURE 1, corrected: the SAME live prose sent with structuredVerdict=GO (i.e. via solomon-advisory send --verdict GO) now releases cleanly', () => {
+    expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: '25584a06-9b07-449d-a2a9-32d3e1fce894', structuredVerdict: 'GO', verdict: LIVE_FALSE_POSITIVE_GO_BODY }))
+      .toMatchObject({ action: 'release', reason: 'verdict_cited' });
+  });
+
+  // FIXTURE 2 (the MIRROR fixture): a genuine NO/refusal whose prose contains GO-adjacent words
+  // ("go back", "hole") -- proves the leading-token check is anchored to the START of the body
+  // (never a substring match anywhere in it), so this is refused correctly both with and without
+  // the regex.
+  it('FIXTURE 2 (MIRROR): a NO containing GO-adjacent substrings is never misread as an approval', () => {
+    const mirrorBody = 'NO -- do not send this. There is a security hole; go back and re-architect the approach first.';
+    expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: 'ans-mirror', verdict: mirrorBody }))
+      .toMatchObject({ action: 'refuse', reason: 'verdict_appears_negative_or_amending' });
+  });
+
+  it('Solomon constraint (b): genuinely ambiguous prose (no structured verdict, no leading token, no amendment marker) is refused LOUDLY with a distinct reason, never silently released', () => {
+    expect(decideRelease({ found: true, isGenuineSolomon: true, answerRowId: 'ans-ambiguous', verdict: 'Reviewed the packet, looks consistent with the plan we discussed yesterday.' }))
+      .toMatchObject({ action: 'refuse', reason: 'no_structured_verdict_or_leading_token' });
+  });
 });
 
 describe('isSolomonSession (S-2 allowlist, fail-closed)', () => {
@@ -163,7 +226,7 @@ describe('resolveVerifiedAnswer (S-3 TOCTOU fix + V-1 rotated-Solomon fallback)'
   it('reports found=false when no answer row exists', async () => {
     const supabase = makeFakeSupabase({ answerRow: null });
     const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
-    expect(result).toEqual({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null });
+    expect(result).toEqual({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null, structuredVerdict: null });
   });
 
   it('STRONG path: isGenuineSolomon=true when the SAME row read confirms the sender via the current-role allowlist', async () => {
@@ -172,7 +235,29 @@ describe('resolveVerifiedAnswer (S-3 TOCTOU fix + V-1 rotated-Solomon fallback)'
       solomonSessionIds: ['solomon-session-1'],
     });
     const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
-    expect(result).toEqual({ found: true, isGenuineSolomon: true, answerRowId: 'ans-1', verdict: 'GO' });
+    expect(result).toEqual({ found: true, isGenuineSolomon: true, answerRowId: 'ans-1', verdict: 'GO', structuredVerdict: null });
+  });
+
+  it('FIX 1: a structured payload.verdict is surfaced as structuredVerdict (normalized uppercase)', async () => {
+    const supabase = makeFakeSupabase({
+      answerRow: { id: 'ans-1', sender_session: 'solomon-session-1', sender_type: 'solomon', payload: { body: 'ship it', verdict: 'go' } },
+      solomonSessionIds: ['solomon-session-1'],
+    });
+    const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
+    expect(result.structuredVerdict).toBe('GO');
+  });
+
+  it('FIX 3 (absorbs QF-20260906-202): the LATEST genuine-Solomon answer wins, not the earliest', async () => {
+    const supabase = makeFakeSupabase({
+      answerRows: [
+        { id: 'ans-early', sender_session: 'solomon-session-1', sender_type: 'solomon', payload: { body: 'Do not send this, hold for review' } },
+        { id: 'ans-later', sender_session: 'solomon-session-1', sender_type: 'solomon', payload: { body: 'GO' } },
+      ],
+      solomonSessionIds: ['solomon-session-1'],
+    });
+    const result = await resolveVerifiedAnswer(supabase, 'corr-1', 'adam-session-1');
+    expect(result.answerRowId).toBe('ans-later');
+    expect(result.verdict).toBe('GO');
   });
 
   it('V-1 FALLBACK path: a ROTATED-OUT Solomon (no longer role=solomon in claude_sessions) is still recognized via the write-time sender_type attestation', async () => {
@@ -241,6 +326,50 @@ describe('releaseHeldSend — refusal cases + success', () => {
     const outcome = await releaseHeldSend(supabase, heldRow(), { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS });
     expect(outcome).toMatchObject({ action: 'refuse', reason: 'verdict_appears_negative_or_amending', heldSendId: 'held-1' });
     expect(sendChairmanSMS).not.toHaveBeenCalled();
+  });
+
+  it('Solomon constraint (b): a refusal STAMPS last_error on the row itself, never leaving only an aggregate refused=1 with nothing on the row', async () => {
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: true, isGenuineSolomon: true, answerRowId: 'ans-2', verdict: 'Do not send, this is wrong' }));
+    const sendChairmanSMS = vi.fn();
+    const supabase = makeFakeSupabase();
+    const outcome = await releaseHeldSend(supabase, heldRow(), { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS });
+    expect(outcome).toMatchObject({ action: 'refuse', reason: 'verdict_appears_negative_or_amending' });
+    const stampWrite = supabase.writes.find((w) => typeof w.vals.last_error === 'string' && w.vals.last_error.startsWith('refused:'));
+    expect(stampWrite).toBeTruthy();
+    expect(stampWrite.vals.last_error).toContain('verdict_appears_negative_or_amending');
+    expect(stampWrite.vals.last_error).toContain('ans-2');
+  });
+
+  it('FIX 2: an unanswered hold past hold_expires_at is abandoned (never left immortal in status=held)', async () => {
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null }));
+    const sendChairmanSMS = vi.fn();
+    const enqueueChairmanSmsFn = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const supabase = makeFakeSupabase();
+    const outcome = await releaseHeldSend(
+      supabase,
+      heldRow({ hold_expires_at: '2026-01-01T00:00:00Z' }),
+      { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS, enqueueChairmanSms: enqueueChairmanSmsFn, context: { now: Date.parse('2026-01-02T00:00:00Z') } },
+    );
+    expect(outcome).toMatchObject({ action: 'abandoned', reason: 'consult_hold_expired_unanswered', heldSendId: 'held-1', noticeEnqueued: true });
+    const abandonWrite = supabase.writes.find((w) => w.vals.status === 'abandoned');
+    expect(abandonWrite).toBeTruthy();
+    expect(abandonWrite.vals.metadata.void_reason).toContain('QF-20260905-746');
+    expect(enqueueChairmanSmsFn).toHaveBeenCalledTimes(1);
+    expect(enqueueChairmanSmsFn.mock.calls[0][1]).toMatchObject({ kind: 'heartbeat_status', dedupeKey: 'chairman-held-sends-abandoned:held-1' });
+    expect(sendChairmanSMS).not.toHaveBeenCalled();
+  });
+
+  it('FIX 2: an unanswered hold NOT yet past hold_expires_at stays held (no premature abandonment)', async () => {
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null }));
+    const sendChairmanSMS = vi.fn();
+    const supabase = makeFakeSupabase();
+    const outcome = await releaseHeldSend(
+      supabase,
+      heldRow({ hold_expires_at: '2026-01-02T00:00:00Z' }),
+      { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS, context: { now: Date.parse('2026-01-01T00:00:00Z') } },
+    );
+    expect(outcome).toMatchObject({ action: 'hold', reason: 'unanswered', heldSendId: 'held-1' });
+    expect(supabase.writes.some((w) => w.vals.status === 'abandoned')).toBe(false);
   });
 
   it('REFUSAL (not-found): the held row carries no consult correlation at all -> action=skip, never dispatches', async () => {
