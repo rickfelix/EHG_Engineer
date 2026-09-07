@@ -130,3 +130,36 @@ describe('twilio-provider isConfigured() (SD-LEO-INFRA-FLEET-DEAD-MAN-001 FR-2)'
     expect(isConfigured()).toBe(false);
   });
 });
+
+// SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C: shared transport-layer test-isolation guard. Every
+// other test in this file relies on vi.stubGlobal('fetch', fetchMock) -- that IS the "mocked"
+// case the guard must pass through, already proven green above. This block covers the OTHER
+// branch: a real, unmocked fetch under a test runner (the actual incident shape).
+describe('twilio-provider send() test-isolation guard (SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C)', () => {
+  const originalEnv = { ...process.env };
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC_test';
+    process.env.TWILIO_AUTH_TOKEN = 'token_test';
+    process.env.TWILIO_MESSAGING_SERVICE = 'MG_test';
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+    global.fetch = originalFetch;
+    vi.unstubAllGlobals();
+  });
+
+  it('refuses a real send and never calls fetch when VITEST is set but fetch is unmocked', async () => {
+    // A plain (non-vi.fn()) wrapper -- deliberately NOT a mock, so it carries no `.mock`
+    // property and isFetchMocked() correctly reports "unmocked".
+    let callCount = 0;
+    global.fetch = (...args) => { callCount++; return originalFetch(...args); };
+
+    const result = await send({ to: '+15551234567', body: 'hi' });
+
+    expect(result).toEqual({ provider_message_id: null, status: 'failed', reason: 'test_env_guard' });
+    expect(callCount).toBe(0);
+  });
+});

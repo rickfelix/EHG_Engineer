@@ -33,6 +33,11 @@ import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { getRepoRoot } from '../lib/repo-paths.js';
 import { validateScheduledTaskPrincipal } from '../lib/fleet/console-parentage.mjs';
+// QF-20260904-169: this task's /TR previously pointed at the .cmd directly, materialising a
+// visible console on every fire. Reuse the SECURITY-reviewed, quoting-correct hidden-window
+// action builder from setup-alarm-cron-tasks.mjs rather than re-deriving the same quoting logic
+// a sixth/seventh time.
+import { buildHiddenTrAction, HIDDEN_LAUNCHER_REL_PATH } from './setup-alarm-cron-tasks.mjs';
 
 export const TASK_NAME = 'LEO-ConsoleCreationWatcher';
 export const STARTUP_TASK_NAME = 'LEO-ConsoleCreationWatcher-Startup';
@@ -74,11 +79,13 @@ export function buildWrapperScript({ repoRoot, npmCommand = NPM_COMMAND } = {}) 
   return ['@echo off', `cd /d "${repoRoot}"`, `call npm run ${npmCommand}`].join('\r\n') + '\r\n';
 }
 
-export function buildCreateArgs({ taskName = TASK_NAME, wrapperPath, intervalMinutes = DEFAULT_INTERVAL_MINUTES, runAs = DEFAULT_RUN_AS } = {}) {
+export function buildCreateArgs({ taskName = TASK_NAME, wrapperPath, hiddenLauncherPath, intervalMinutes = DEFAULT_INTERVAL_MINUTES, runAs = DEFAULT_RUN_AS } = {}) {
   if (!wrapperPath) throw new Error('buildCreateArgs: wrapperPath required');
+  if (!hiddenLauncherPath) throw new Error('buildCreateArgs: hiddenLauncherPath required');
   const mo = parseInt(intervalMinutes, 10);
   if (!Number.isFinite(mo) || mo < 1) throw new Error(`buildCreateArgs: invalid intervalMinutes ${intervalMinutes}`);
-  const args = ['/Create', '/TN', taskName, '/TR', wrapperPath, '/SC', 'MINUTE', '/MO', String(mo), '/F'];
+  const trAction = buildHiddenTrAction({ hiddenLauncherPath, wrapperPath });
+  const args = ['/Create', '/TN', taskName, '/TR', trAction, '/SC', 'MINUTE', '/MO', String(mo), '/F'];
   if (runAs) {
     args.push('/RU', runAs);
     if (!isWellKnownServiceAccount(runAs)) args.push('/NP');
@@ -87,9 +94,11 @@ export function buildCreateArgs({ taskName = TASK_NAME, wrapperPath, intervalMin
 }
 
 /** The startup companion: /SC ONLOGON, same principal, same wrapper. */
-export function buildStartupCreateArgs({ taskName = STARTUP_TASK_NAME, wrapperPath, runAs = DEFAULT_RUN_AS } = {}) {
+export function buildStartupCreateArgs({ taskName = STARTUP_TASK_NAME, wrapperPath, hiddenLauncherPath, runAs = DEFAULT_RUN_AS } = {}) {
   if (!wrapperPath) throw new Error('buildStartupCreateArgs: wrapperPath required');
-  const args = ['/Create', '/TN', taskName, '/TR', wrapperPath, '/SC', 'ONLOGON', '/F'];
+  if (!hiddenLauncherPath) throw new Error('buildStartupCreateArgs: hiddenLauncherPath required');
+  const trAction = buildHiddenTrAction({ hiddenLauncherPath, wrapperPath });
+  const args = ['/Create', '/TN', taskName, '/TR', trAction, '/SC', 'ONLOGON', '/F'];
   if (runAs) {
     args.push('/RU', runAs);
     if (!isWellKnownServiceAccount(runAs)) args.push('/NP');
@@ -148,6 +157,7 @@ export async function main(argv = process.argv, deps = {}) {
   const platform = deps.platform || process.platform;
   const repoRoot = deps.repoRoot || getRepoRoot();
   const wrapperPath = path.join(repoRoot, WRAPPER_REL_PATH);
+  const hiddenLauncherPath = path.join(repoRoot, HIDDEN_LAUNCHER_REL_PATH);
 
   if (platform !== 'win32') {
     logger.error(`${tag} win32-only (schtasks).`);
@@ -174,8 +184,8 @@ export async function main(argv = process.argv, deps = {}) {
   const effectiveRunAs = args.runAs || DEFAULT_RUN_AS;
   assertSafePrincipal(effectiveRunAs);
   const wrapperContent = buildWrapperScript({ repoRoot });
-  const createArgs = buildCreateArgs({ wrapperPath, runAs: effectiveRunAs });
-  const startupArgs = buildStartupCreateArgs({ wrapperPath, runAs: effectiveRunAs });
+  const createArgs = buildCreateArgs({ wrapperPath, hiddenLauncherPath, runAs: effectiveRunAs });
+  const startupArgs = buildStartupCreateArgs({ wrapperPath, hiddenLauncherPath, runAs: effectiveRunAs });
 
   if (args.dryRun) {
     logger.log(`${tag} DRY RUN — would write wrapper ${wrapperPath}:`);
@@ -183,6 +193,11 @@ export async function main(argv = process.argv, deps = {}) {
     logger.log(`${tag} would run: schtasks ${createArgs.join(' ')}`);
     logger.log(`${tag} would run: schtasks ${startupArgs.join(' ')}`);
     return { exitCode: 0, action: 'dry_run_register', wrapperPath };
+  }
+
+  if (!fs.existsSync(hiddenLauncherPath)) {
+    logger.error(`${tag} hidden-window launcher missing at ${hiddenLauncherPath} — refusing to register a task that would fall back to a visible console.`);
+    return { exitCode: 1, action: 'launcher_missing' };
   }
 
   try {

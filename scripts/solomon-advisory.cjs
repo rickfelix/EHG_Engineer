@@ -141,7 +141,7 @@ const KNOWN_SEND_KINDS = new Set([...Object.values(PAYLOAD_KINDS), ...DIRECTIVE_
  * optional keys) via resolveDecisionRequested() -- see that function's docstring for the full
  * default-flip rationale. See tests/fixtures/solomon-ledger-decision-requested-counterexample.json.
  */
-function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass, messageKind, partIndex, partTotal, informational, decision }) {
+function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expectsReply, replyTo, via, replyClass, replyWindowMs, now, kind, framingClass, messageKind, partIndex, partTotal, informational, decision, verdict }) {
   // An answer to a consult (replyTo set) is terminal -- always fire-and-forget. Otherwise: request
   // mode (expectsReply) is live-handshake; send mode defaults fire-and-forget unless the sender
   // opts into reply-needed via --reply-class (SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-C).
@@ -155,6 +155,11 @@ function buildAdvisoryPayload({ body, senderCallsign, repo, correlationId, expec
     decision_requested: resolveDecisionRequested({ informational, decision }),
   };
   if (framingClass) payload.framing_class = framingClass;
+  // FIX 1 (QF-20260905-746, Solomon GO d60ec8b1): a STRUCTURED verdict -- the authoritative signal
+  // lib/adam/chairman-held-send-release.js decideRelease() now reads FIRST, before ever screening
+  // verdict PROSE for amendment markers. Validated against VERDICT_VALUES at the CLI boundary below;
+  // trusted here as already-normalized uppercase.
+  if (verdict) payload.verdict = verdict;
   // FR-1/FR-4 (SD-LEO-INFRA-CORRECTION-DELIVERY-PATH-001-C): the correction discriminator. NOTE what
   // is deliberately NOT changed — the `kind` force above stays exactly as it was, so an arbitrary
   // --kind on a reply (e.g. chairman_directive) is STILL coerced to adam_advisory. That force is
@@ -1019,7 +1024,11 @@ async function drainSolomonOutbound(supabase, { newSessionId, oldSessionIds } = 
 // have re-created the very leak this removes, for different flags. These are every value-consuming
 // flag the SEND path parses; a drift test pins them against the source so a newly parsed flag cannot
 // be added without appearing here.
-const VALUE_FLAGS = ['--to', '--kind', '--part', '--message-kind', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout', '--framing-class'];
+const VALUE_FLAGS = ['--to', '--kind', '--part', '--message-kind', '--reply-class', '--reply-to', '--reply-window-ms', '--timeout', '--framing-class', '--verdict'];
+// FIX 1 (QF-20260905-746): the structured verdict vocabulary -- exported so
+// lib/adam/chairman-held-send-release.js's own normalizer can be pinned against the same source
+// in a drift test, never a second hand-typed list.
+const VERDICT_VALUES = Object.freeze(['GO', 'NO', 'AMEND']);
 // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001: --informational added here, not just parsed at the
 // call site — this list is what sendBodyFromArgv strips, so an entry missing here reproduces the
 // exact --part/--message-kind body-leak defect documented above, for this flag instead.
@@ -1083,7 +1092,7 @@ async function main() {
   const argv = process.argv.slice(2);
   const mode = argv[0];
   if (mode !== 'send' && mode !== 'request' && mode !== 'inbox' && mode !== 'status' && mode !== 'ack') {
-    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>] [--framing-class instrument|pick] [--message-kind retraction|amend|supersede] [--part N/M] [--decision]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
+    console.error('Usage: node scripts/solomon-advisory.cjs send "<body>" [--reply-to <id>] [--to adam] [--kind <recognized_kind>] [--framing-class instrument|pick] [--message-kind retraction|amend|supersede] [--part N/M] [--decision] [--verdict GO|NO|AMEND]  |  request "<q>" [--timeout <ms>] [--to adam] [--kind <recognized_kind>]  |  inbox [--quiet] [--background]  |  ack <row-id...>  |  status [--working "<body>" [--eta <ms>]]');
     process.exit(2);
   }
   const sessionId = process.env.CLAUDE_SESSION_ID;
@@ -1201,6 +1210,18 @@ async function main() {
   const messageKindArg = mkIdx >= 0 ? argv[mkIdx + 1] || null : null;
   if (messageKindArg && !MESSAGE_KIND_SET.has(messageKindArg)) {
     console.error(`ERROR: --message-kind must be one of ${MESSAGE_KINDS.join(', ')} (got "${messageKindArg}").`);
+    process.exit(2);
+  }
+  // FIX 1 (QF-20260905-746): --verdict GO|NO|AMEND stamps payload.verdict, the structured signal
+  // chairman-held-send-release.js's decideRelease() now checks FIRST -- authoritative, never
+  // overridden by a prose amendment-marker scan. Normalized case-insensitively; an unrecognized
+  // value fails loud (never silently dropped, which would leave a caller believing the verdict was
+  // stamped when it was not).
+  const vIdx = argv.indexOf('--verdict');
+  const verdictRaw = vIdx >= 0 ? (argv[vIdx + 1] || '') : null;
+  const verdictArg = verdictRaw ? verdictRaw.toUpperCase() : null;
+  if (verdictArg && !VERDICT_VALUES.includes(verdictArg)) {
+    console.error(`ERROR: --verdict must be one of ${VERDICT_VALUES.join(', ')} (got "${verdictRaw}").`);
     process.exit(2);
   }
   // FR-3: `--part N/M` sends ordered parts of one long reply on ONE correlation_id. Parsed as a pair
@@ -1327,7 +1348,7 @@ async function main() {
   // worker-signal.cjs already uses -- never a silent clip, never a crash-shaped stack trace.
   let payload;
   try {
-    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg, messageKind: messageKindArg, partIndex: partIndexArg, partTotal: partTotalArg, informational: informationalArg, decision: decisionArg });
+    payload = buildAdvisoryPayload({ body, senderCallsign, repo: process.cwd(), correlationId, expectsReply, replyTo, via, replyClass: replyClassArg, replyWindowMs, kind: kindArg, framingClass: framingClassArg, messageKind: messageKindArg, partIndex: partIndexArg, partTotal: partTotalArg, informational: informationalArg, decision: decisionArg, verdict: verdictArg });
   } catch (e) {
     if (e && e.code === 'BODY_TOO_LONG') { console.error('ERROR:', e.message); process.exit(2); }
     throw e;
@@ -1511,6 +1532,7 @@ module.exports = {
   bodyFromArgv, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS,
   resolveDecisionRequested, // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-1
   checkRatificationCaptureMiss, // SD-LEO-INFRA-SOLOMON-RATIFICATION-CAPTURE-001-A FR-5
+  VERDICT_VALUES, // FIX 1 (QF-20260905-746)
 };
 
 if (require.main === module) {

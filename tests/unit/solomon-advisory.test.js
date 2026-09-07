@@ -108,6 +108,44 @@ describe('SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: buildAdvisoryPayload — fram
   });
 });
 
+// FIX 1 (QF-20260905-746): payload.verdict is the structured signal
+// lib/adam/chairman-held-send-release.js decideRelease() now checks FIRST, before ever screening
+// verdict prose for amendment markers.
+describe('FIX 1 (QF-20260905-746): buildAdvisoryPayload — verdict', () => {
+  it('is omitted entirely when not provided (byte-identical to pre-fix behavior)', () => {
+    const p = m.buildAdvisoryPayload({ body: 'no verdict here' });
+    expect('verdict' in p).toBe(false);
+  });
+  it('stamps payload.verdict when provided, alongside the existing oracle marker', () => {
+    const p = m.buildAdvisoryPayload({ body: 'GO, and send it first in the queue.', verdict: 'GO' });
+    expect(p.verdict).toBe('GO');
+    expect(p.oracle).toBe(true);
+    expect(p.kind).toBe('adam_advisory');
+  });
+
+  // CLI: --verdict GO|NO|AMEND, validated BEFORE any DB connection is used (mirrors the
+  // --framing-class precedent above) -- an unrecognized value fails loud at the argv boundary,
+  // never silently dropped and never reaching a live network call.
+  it('CLI: --verdict with an unrecognized value exits 2 with a listing error', () => {
+    let error;
+    try {
+      execFileSync('node', [SCRIPT_PATH, 'send', 'test', '--verdict', 'MAYBE'], {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+        env: { ...process.env, CLAUDE_SESSION_ID: 'test-session-verdict-2' },
+      });
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeDefined();
+    expect(error.status).toBe(2);
+    expect(error.stderr).toMatch(/--verdict must be one of GO, NO, AMEND/);
+  });
+  it('CLI: --verdict is registered in VALUE_FLAGS (never leaks into the message body)', () => {
+    expect(m.VALUE_FLAGS).toContain('--verdict');
+  });
+});
+
 describe('alreadyAnswered delegates to the shared reply-class module (no duplicate implementation)', () => {
   it('is re-exported from lib/coordinator/reply-class.cjs, same function reference', () => {
     const shared = require('../../lib/coordinator/reply-class.cjs');

@@ -865,5 +865,29 @@
    "input": "Every swallowed-query-error-lint hit (file:line) not present in the allowlist, joined against an espree AST of the same file: walks enclosing TryStatement nodes to find the innermost try wrapping the hit line, then inspects the catch handler's ReturnStatement subtree for an ObjectExpression property `passed: true` (direct or helper-wrapped, e.g. `return buildSemanticResult({ passed: true, ... })`).",
    "seen": "Real positive observed 2026-09-06 during this SD's own FR-2 work: classifyAll() run against the live repo (docs/sd-artifacts/SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001/fail-open-classification.json, generated_at 2026-09-07T01:07:19.881Z) enumerated real fail_open sites including scripts/modules/handoff/gates/multi-session-claim-gate.js's stale-claim-cleanup site before it was fixed, and scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js's catch (line ~138, `return buildSemanticResult({ passed: true, score: 50 })`) which is exactly the helper-wrapped shape the second committed unit test fixture models."
   }
+ },
+ {
+  "name": "transport-test-isolation-guard-lint",
+  "script": "scripts/lint/transport-test-isolation-guard-lint.mjs",
+  "rootFlag": "--root",
+  "observability_proof": {
+   "input": "PART A (guard presence): the SOURCE TEXT of two named files (lib/notifications/resend-adapter.js, lib/messaging/providers/twilio-provider.js), read via readFileSync, matched against /shouldRefuseRealSend\\s*\\(/. PART B (coverage): the SOURCE TEXT of every *.test.js/*.spec.js file found by a recursive walk of tests/, matched against a transport-import regex, then checked for fetch-mock evidence (vi.stubGlobal('fetch',...) or global(This)?.fetch=), a vi.mock() of the transport module itself, or a pure non-network-only import (verifyInboundSignature); plus scripts/lint/transport-test-isolation-guard-allowlist.json ('<repo-relative-file>' -> non-empty reason). OUTPUT SIGNAL is the process exit code (0 = both guards present and every importing test file shows isolation evidence; 1 = a guard missing OR a violation found OR the startup selfTest failed) plus stdout naming each present/missing guard file and stderr naming each violating test file by its repo-relative path. It consumes NO database columns and NO environment variables.",
+   "seen": "This control has so far only run GREEN in CI against the shipped tree (0 real violations exist by design -- the SD that introduced it fixed every gap before merge), matching fixture-producer-guard-lint.yml's own precedent of an as-yet-unblocked gate. HONEST SUBSTITUTE: during development, an early draft of the Part B matcher (a blanket 'imports the transport module' check with no isolation-evidence carve-out) DID fire two real false-positive violations against actual repo files -- tests/unit/messaging/twilio-signature.test.js (imports only the pure, non-network verifyInboundSignature export) and tests/unit/notifications/orchestrator.test.js (isolates via vi.mock() on the whole transport module, not a fetch mock). Both were confirmed by direct inspection to be non-issues, which is what drove the importsNonNetworkOnly() and vi.mock()-detection additions committed in the same PR. That is live evidence the detection LOGIC engages with real repo content and can be wrong in the over-flagging direction if under-specified -- not evidence of a true unguarded-send defect, since none currently exists."
+  },
+  "note": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C (FR-4). Three fixtures: two minimal stub transports carrying the guard call (so Part A reads present against the scratch tree rather than reporting both files simply MISSING, which would make any exit-1 result meaningless -- the scratch dir otherwise contains none of the real lib/ tree), and one seeded test file that imports the email transport directly with zero isolation evidence -- the exact incident shape (a test reaching a shared transport with no mock injected) this control exists to catch. Detection is keyed on the seeded test file's own basename appearing in the violation line, which it does (transport-test-isolation-guard-lint.mjs prints the violating file's repo-relative path, a superset of the basename).",
+  "fixtures": [
+   {
+    "path": "lib/notifications/resend-adapter.js",
+    "content": "// Minimal stub proving Part A's guard-presence check reads TRUE against this fixture tree.\nimport { shouldRefuseRealSend } from './transport-test-isolation-guard.js';\nexport async function sendEmailInternal(payload) {\n  if (shouldRefuseRealSend()) { return { success: true, suppressed: true }; }\n  return { success: true };\n}\n"
+   },
+   {
+    "path": "lib/messaging/providers/twilio-provider.js",
+    "content": "// Minimal stub proving Part A's guard-presence check reads TRUE against this fixture tree.\nimport { shouldRefuseRealSend } from '../../notifications/transport-test-isolation-guard.js';\nexport async function send(args) {\n  if (shouldRefuseRealSend()) { return { provider_message_id: null, status: 'failed' }; }\n  return { provider_message_id: 'x', status: 'queued' };\n}\n"
+   },
+   {
+    "path": "tests/seeded-transport-guard-defect.test.js",
+    "content": "// SEEDED DEFECT: imports the email transport directly with ZERO isolation evidence -- no\n// fetch mock, no vi.mock() of the module, no pure-signature-only import. This is the exact\n// incident shape (an unrelated test reaching a shared transport unguarded) the control exists\n// to catch.\nimport { sendEmailInternal } from '../lib/notifications/resend-adapter.js';\nexport const probe = sendEmailInternal;\n"
+   }
+  ]
  }
 ]

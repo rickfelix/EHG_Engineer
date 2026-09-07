@@ -1871,7 +1871,19 @@ export function createChairmanApplyVerificationGate(supabase) {
         // A declaration that names a file the corpus does not contain is itself unverifiable.
         // Without this, declaring ['real.sql','typo.sql'] checked only real.sql and silently
         // dropped the other — a partial match reported as a full pass.
-        const missingDeclared = declared.filter(d => !files.some(f => f.file === d));
+        // QF-20260906-413: match by exact string OR basename, mirroring prFileSet's own
+        // basename-OR-fullpath union above (lines 1808-1821) — a primary-root corpus entry is
+        // basename-only, so a declared FULL repo-relative path (e.g. 'database/migrations/X.sql')
+        // for an applied primary-root migration was reported "not found" even though the same
+        // file, under its basename, was already in files[] with status APPLIED.
+        const corpusMatchSet = new Set();
+        for (const f of files) {
+          corpusMatchSet.add(f.file);
+          corpusMatchSet.add(path.basename(f.file));
+        }
+        const missingDeclared = declared.filter(
+          d => !corpusMatchSet.has(d) && !corpusMatchSet.has(path.basename(d))
+        );
         if (missingDeclared.length) {
           return failClosed(
             `declared migration(s) not found in the migration corpus: ${missingDeclared.join(', ')}`,
