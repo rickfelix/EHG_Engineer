@@ -1,7 +1,10 @@
 -- SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E (Child E) FR-5 — a home for QF-side claim provenance.
 -- Target DB: EHG_Engineer
 --
--- @approved-by: <PENDING -- apply via the chairman's 3-factor ceremony>
+-- CHAIRMAN-APPROVED 2026-09-07 ~01:45Z: verbal at the Adam terminal, quote: "apply the quick
+-- fixes metadata column migration." Scribed by Adam session bc762fa4 under the 3c ceremony;
+-- executable content unchanged, only this marker block replaced the PENDING placeholder.
+-- @approved-by: codestreetlabs@gmail.com
 --   approval on record. See database/chairman-gated/README.md: the approver header must match
 --   `git config user.email` at apply time and is checked against the chairman-approval record.
 --
