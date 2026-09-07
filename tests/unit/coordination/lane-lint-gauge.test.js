@@ -42,6 +42,10 @@ describe('isUntypedRow / isBodylessRow / isEmptySenderRow — pure detectors', (
     expect(isUntypedRow({ payload: { kind: 'adam_advisory' } })).toBe(false);
   });
 
+  it('isUntypedRow: false for a real michael_handoff-typed row (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G, Solomon Q6 "lane-lint reads it" condition — no code change needed, verified here)', () => {
+    expect(isUntypedRow({ payload: { kind: 'michael_handoff' } })).toBe(false);
+  });
+
   it('isBodylessRow: true only for a TYPED, non-mechanical, non-fence row with no canonical body', () => {
     expect(isBodylessRow({ payload: { kind: 'adam_advisory' }, body: null })).toBe(true);
     expect(isBodylessRow({ payload: { kind: 'adam_advisory', body: 'x' } })).toBe(false);
