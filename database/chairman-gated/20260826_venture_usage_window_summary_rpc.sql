@@ -1,4 +1,8 @@
 -- SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-C — fn_venture_usage_window_summary read RPC
+-- CHAIRMAN-APPROVED 2026-09-07 ~02:00Z: verbal at the Adam terminal, quote: "apply the venture
+-- usage summary migration." The deliberate no-stamp-until-real-approval note below is now
+-- satisfied. Scribed by Adam session bc762fa4 under the 3c ceremony; no executable change.
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE.
