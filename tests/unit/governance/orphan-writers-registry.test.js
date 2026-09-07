@@ -118,13 +118,18 @@ describe('orphan-writers-registry: known-orphan count baseline (QF-20260831-821)
   // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001: 19 -> 20. One new no-stamper-wired entry
   // (lane-lint-gauge-machine-writers) — re-check live against QF-20260904-116 at merge time,
   // which independently appends a different set of entries to this same array.
-  // QF-20260904-116: 20 -> 35. Thirteen new specimens (Adam-sourced, Solomon deep-sweep finding
-  // 4b662adb / rulings 18f04802 + 47cd9f79) plus two new specimens from the BOUND 2026-09-05
-  // addition (Solomon deep-sweep finding 84677786 item 2, first entries for the two new
-  // entry_types detector-with-no-sink and reads-but-never-compares). The feedback-sla-categories
-  // entry was also reclassified wired-but-blind -> writer-with-no-reader (ruling 18f04802 item
-  // 2) — a re-type, not a new row, so it does not add to this count.
-  const PINNED_TOTAL_ENTRIES = 35;
+  // QF-20260904-116: 20 -> 34. Thirteen specimens sourced by Adam (Solomon deep-sweep finding
+  // 4b662adb / rulings 18f04802 + 47cd9f79) plus two specimens from the BOUND 2026-09-05 addition
+  // (Solomon deep-sweep finding 84677786 item 2, first entries for the two new entry_types
+  // detector-with-no-sink and reads-but-never-compares) = 15 candidate rows. EXEC-phase
+  // re-verification against current main (Golf-3, Claude worker, 2026-09-07) found specimen 7
+  // (claim-eligibility-hold-provenance-coalescer) rests on a refuted premise -- the coalescer's
+  // 6-key scope is QF-20260904-724's own deliberate, documented correction, not a wired-but-blind
+  // defect -- and dropped it (wired-but-blind already has ample coverage from specimens 6, 9, 10,
+  // 12 plus base entries, so no entry_type loses coverage). 15 candidates - 1 dropped = 14 added.
+  // The feedback-sla-categories entry was also reclassified wired-but-blind -> writer-with-no-reader
+  // (ruling 18f04802 item 2) — a re-type, not a new row, so it does not add to this count.
+  const PINNED_TOTAL_ENTRIES = 34;
 
   it('total entry count matches the pinned baseline -- update PINNED_TOTAL_ENTRIES with a reason if this genuinely changed', () => {
     expect(ORPHAN_ENTRIES.length).toBe(PINNED_TOTAL_ENTRIES);
@@ -251,13 +256,28 @@ describe('orphan-writers-registry: QF-20260904-116 specimen mechanism mapping (S
     expect(entry.entry_type).toBe('no-stamper-wired');
   });
 
-  it('specimens 6, 7, 9, 10 (disposition columns, coalescer keys, parent metadata lag, C5 predicate) are wired-but-blind', () => {
-    const ids = ['quick-fixes-guard-b-disposition-column-mismatch', 'claim-eligibility-hold-provenance-coalescer', 'sd-parent-metadata-children-status-lag', 'c5-w5d-audit-predicate-dead-column'];
+  it('specimens 6, 9, 10 (disposition columns, parent metadata lag, C5 predicate) are wired-but-blind', () => {
+    const ids = ['quick-fixes-guard-b-disposition-column-mismatch', 'sd-parent-metadata-children-status-lag', 'c5-w5d-audit-predicate-dead-column'];
     for (const id of ids) {
       const entry = ORPHAN_ENTRIES.find((e) => e.id === id);
       expect(entry, id).toBeTruthy();
       expect(entry.entry_type, id).toBe('wired-but-blind');
     }
+  });
+
+  it('specimen 7 (claim-eligibility-hold-provenance-coalescer) was DROPPED — premise refuted by QF-20260904-724', () => {
+    const entry = ORPHAN_ENTRIES.find((e) => e.id === 'claim-eligibility-hold-provenance-coalescer');
+    expect(entry).toBeUndefined();
+  });
+
+  it('specimens 2 and 4 are retained as RESOLVED taxonomy-proof specimens (fixed since sourcing)', () => {
+    const resolved = ORPHAN_ENTRIES.find((e) => e.id === 'sub-agent-results-storage-unpersisted-warning');
+    expect(resolved).toBeTruthy();
+    expect(resolved.predicate.description).toMatch(/RESOLVED/);
+
+    const reaper = ORPHAN_ENTRIES.find((e) => e.id === 'worktree-reaper-stagereclaim-placeholder');
+    expect(reaper).toBeTruthy();
+    expect(reaper.predicate.description).toMatch(/RESOLVED/);
   });
 
   it('specimen 12 (dispatch backpressure counter) is wired-but-blind, explicitly NOT reads-before-the-writer (Solomon 47cd9f79)', () => {
@@ -280,6 +300,11 @@ describe('orphan-writers-registry: QF-20260904-116 specimen mechanism mapping (S
     const compares = ORPHAN_ENTRIES.find((e) => e.id === 'resolve-sd-workdir-branch-read-never-compared');
     expect(compares).toBeTruthy();
     expect(compares.entry_type).toBe('reads-but-never-compares');
+  });
+
+  it('detector-with-no-sink\'s sole specimen is retained as RESOLVED taxonomy proof (fixed since sourcing)', () => {
+    const sink = ORPHAN_ENTRIES.find((e) => e.id === 'stale-session-sweep-conflicts-console-only');
+    expect(sink.predicate.description).toMatch(/RESOLVED/);
   });
 });
 
