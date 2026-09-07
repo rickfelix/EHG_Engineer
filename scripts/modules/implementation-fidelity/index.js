@@ -10,6 +10,7 @@
  */
 
 import { calculateAdaptiveThreshold, checkGatePassed, YELLOW_BAND_WIDTH } from '../adaptive-threshold-calculator.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import { getPatternStats } from '../pattern-tracking.js';
 import {
   shouldSkipCodeValidation,
@@ -130,11 +131,14 @@ export async function validateGate2ExecToPlan(sd_id, supabase, options = {}) {
 
     // Fetch Gate 2 exempt sections
     try {
-      const { data: typeProfile } = await supabase
-        .from('sd_type_validation_profiles')
-        .select('gate2_exempt_sections')
-        .eq('sd_type', sdType)
-        .single();
+      const typeProfile = await safeQuery(
+        supabase
+          .from('sd_type_validation_profiles')
+          .select('gate2_exempt_sections')
+          .eq('sd_type', sdType)
+          .single(),
+        { site: 'implementation-fidelity:gate2_exempt_sections' }
+      );
 
       if (typeProfile?.gate2_exempt_sections?.length > 0) {
         validation.details.gate2_exempt_sections = typeProfile.gate2_exempt_sections;
@@ -251,15 +255,17 @@ export async function validateGate2ExecToPlan(sd_id, supabase, options = {}) {
     if (handoffHistory) {
       gate1Handoff = handoffHistory.find(h => h.handoff_type === 'PLAN-TO-EXEC') || null;
     } else {
-      const { data } = await supabase
-        .from('sd_phase_handoffs')
-        .select('metadata')
-        .eq('sd_id', sd_id)
-        .eq('handoff_type', 'PLAN-TO-EXEC')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
-      gate1Handoff = data;
+      gate1Handoff = await safeQuery(
+        supabase
+          .from('sd_phase_handoffs')
+          .select('metadata')
+          .eq('sd_id', sd_id)
+          .eq('handoff_type', 'PLAN-TO-EXEC')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        { site: 'implementation-fidelity:gate1_handoff_for_adaptive_threshold' }
+      );
     }
 
     const priorGateScores = gate1Handoff?.metadata?.gate1_validation?.score

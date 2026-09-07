@@ -7,6 +7,7 @@
  */
 
 import { fileURLToPath, pathToFileURL } from 'url';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 import { isLightweightSDType } from '../../validation/sd-type-applicability-policy.js';
 import { dirname, resolve } from 'path';
 
@@ -108,10 +109,13 @@ async function fallbackToLegacyE2EMapping(supabase, sdId, prd) {
   }
 
   try {
-    const { data: userStories } = await supabase
-      .from('user_stories')
-      .select('id, story_id, title, status')
-      .eq('prd_id', prd.id);
+    const userStories = await safeQuery(
+      supabase
+        .from('user_stories')
+        .select('id, story_id, title, status')
+        .eq('prd_id', prd.id),
+      { site: 'test-evidence:legacy_e2e_user_stories' }
+    );
 
     if (userStories && userStories.length > 0) {
       const e2eMapping = await mapE2ETestsToUserStories(sdId, supabase);

@@ -11,6 +11,7 @@
  */
 
 import { createSupabaseServiceClient } from '../../../lib/supabase-client.js';
+import { safeQuery } from '../../../lib/db/safe-query.mjs';
 import { sortByUrgency, scoreToBand } from '../auto-proceed/urgency-scorer.js';
 import { buildDependencyDAG, detectCycles, computeRunnableSet } from '../../../lib/orchestrator/dependency-dag.js';
 import { computeGateState } from '../../../lib/cadence/pre-claim-gate.mjs';
@@ -152,12 +153,17 @@ export async function getNextReadyChild(supabase, parentSdId, excludeCompletedId
             : 'Next child found';
           return { sd: candidate, allComplete: false, reason };
         }
-        // Check if the claiming session is active or stale
-        const { data: claimer } = await supabase
-          .from('v_active_sessions')
-          .select('session_id, heartbeat_age_seconds, computed_status')
-          .eq('session_id', candidate.claiming_session_id)
-          .maybeSingle();
+        // Check if the claiming session is active or stale. A query FAULT here must never read as
+        // "claimer gone" (Infinity age -> auto-release path below) -- safeQuery throws on a real
+        // error, and the enclosing catch (below) returns sd:null/fail-closed, never a false release.
+        const claimer = await safeQuery(
+          supabase
+            .from('v_active_sessions')
+            .select('session_id, heartbeat_age_seconds, computed_status')
+            .eq('session_id', candidate.claiming_session_id)
+            .maybeSingle(),
+          { site: 'child-sd-selector:claimer_liveness' }
+        );
 
         const hbAge = claimer?.heartbeat_age_seconds ?? Infinity;
         if (claimer && hbAge < 300) {

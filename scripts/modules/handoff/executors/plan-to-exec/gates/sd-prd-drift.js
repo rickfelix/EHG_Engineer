@@ -19,6 +19,7 @@
  */
 
 import { extractKeywords, calculateSimilarity } from '../../../validation/scope-similarity.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 // FR-2: keyword-similarity threshold for the no-key-match fallback. Jaccard over FR text.
 const SIMILARITY_THRESHOLD = 0.18;
@@ -113,12 +114,15 @@ export async function checkGovPrecondition(sd, prd, supabase) {
   // (b) blessed via an approved chairman_decision for this SD.
   try {
     const sdId = sd.id || sd.sd_key;
-    const { data } = await supabase
-      .from('chairman_decisions')
-      .select('id,status')
-      .or(`context->>sd_id.eq.${sdId},context->>sd_key.eq.${sd.sd_key || sdId}`)
-      .in('status', ['approved', 'reviewed', 'APPROVED', 'REVIEWED'])
-      .limit(1);
+    const data = await safeQuery(
+      supabase
+        .from('chairman_decisions')
+        .select('id,status')
+        .or(`context->>sd_id.eq.${sdId},context->>sd_key.eq.${sd.sd_key || sdId}`)
+        .in('status', ['approved', 'reviewed', 'APPROVED', 'REVIEWED'])
+        .limit(1),
+      { site: 'sd-prd-drift:gov_precondition_chairman_decision' }
+    );
     if (data && data.length > 0) return { required: true, satisfied: true, marker: String(marker) };
   } catch { /* fail toward surfacing: treat as unsatisfied (advisory by default) */ }
   return { required: true, satisfied: false, marker: String(marker) };
@@ -132,12 +136,15 @@ async function fetchPrd(ctx) {
   // product_requirements_v2.directive_id holds the sd_key; id is PRD-<sdkey>.
   const key = sd.sd_key || sd.id || ctx.sdId;
   try {
-    const { data } = await sb
-      .from('product_requirements_v2')
-      .select('functional_requirements, acceptance_criteria, technical_requirements')
-      .or(`directive_id.eq.${key},id.eq.PRD-${key}`)
-      .limit(1)
-      .maybeSingle();
+    const data = await safeQuery(
+      sb
+        .from('product_requirements_v2')
+        .select('functional_requirements, acceptance_criteria, technical_requirements')
+        .or(`directive_id.eq.${key},id.eq.PRD-${key}`)
+        .limit(1)
+        .maybeSingle(),
+      { site: 'sd-prd-drift:fetch_prd' }
+    );
     return data;
   } catch { return null; }
 }

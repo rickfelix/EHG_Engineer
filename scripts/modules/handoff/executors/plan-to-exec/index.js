@@ -7,6 +7,7 @@
  */
 
 import BaseExecutor from '../BaseExecutor.js';
+import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
 
 // Gate creators
 import {
@@ -107,10 +108,13 @@ export class PlanToExecExecutor extends BaseExecutor {
       console.log('\n   🎯 PARENT ORCHESTRATOR DETECTED');
       console.log('      Implementation gates will be SKIPPED (work delegated to children)');
 
-      const { data: children } = await this.supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sd.id);
+      const children = await safeQuery(
+        this.supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sd.id),
+        { site: 'plan-to-exec/index:parent_orchestrator_children' }
+      );
 
       console.log(`      Children: ${children?.length || 0}`);
       options._childrenCount = children?.length || 0;
@@ -467,15 +471,18 @@ export class PlanToExecExecutor extends BaseExecutor {
       console.log('-'.repeat(50));
 
       // Fetch LEAD-TO-PLAN handoff for this SD
-      const { data: leadHandoff } = await this.supabase
-        .from('sd_phase_handoffs')
-        .select('score, validation_details, created_at')
-        .eq('sd_id', sd.id)
-        .eq('handoff_type', 'LEAD-TO-PLAN')
-        .eq('status', 'accepted')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      const leadHandoff = await safeQuery(
+        this.supabase
+          .from('sd_phase_handoffs')
+          .select('score, validation_details, created_at')
+          .eq('sd_id', sd.id)
+          .eq('handoff_type', 'LEAD-TO-PLAN')
+          .eq('status', 'accepted')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single(),
+        { site: 'plan-to-exec/index:synthesize_lead_analysis_handoff' }
+      );
 
       if (!leadHandoff) {
         console.log('   ℹ️  No LEAD-TO-PLAN handoff found — skipping analysisStep');
@@ -565,11 +572,14 @@ export class PlanToExecExecutor extends BaseExecutor {
       }
 
       // Assess User Stories Quality (if exist)
-      const { data: userStories } = await this.supabase
-        .from('user_stories')
-        .select('*')
-        .eq('prd_id', prd.id)
-        .limit(5);
+      const userStories = await safeQuery(
+        this.supabase
+          .from('user_stories')
+          .select('*')
+          .eq('prd_id', prd.id)
+          .limit(5),
+        { site: 'plan-to-exec/index:russian_judge_user_stories' }
+      );
 
       if (userStories && userStories.length > 0) {
         const { UserStoryQualityRubric } = await import('../../../rubrics/user-story-quality-rubric.js');

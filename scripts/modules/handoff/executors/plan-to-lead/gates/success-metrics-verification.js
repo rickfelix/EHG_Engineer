@@ -21,6 +21,7 @@
  */
 
 import { verifyAllMetrics } from '../../../../../lib/metric-auto-verifier.js';
+import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const DISABLED_SD_TYPES = new Set(['documentation', 'orchestrator']);
 const ADVISORY_SD_TYPES = new Set(['infrastructure']);
@@ -37,10 +38,13 @@ export function createSuccessMetricsVerificationGate(supabase) {
       const sdType = (ctx.sd?.sd_type || 'feature').toLowerCase();
 
       // ORCHESTRATOR / children bypass
-      const { data: childSDs } = await supabase
-        .from('strategic_directives_v2')
-        .select('id')
-        .eq('parent_sd_id', sdUuid);
+      const childSDs = await safeQuery(
+        supabase
+          .from('strategic_directives_v2')
+          .select('id')
+          .eq('parent_sd_id', sdUuid),
+        { site: 'success-metrics-verification:child_sds' }
+      );
 
       if (childSDs && childSDs.length > 0) {
         console.log(`   ℹ️  Parent orchestrator SD (${childSDs.length} children) — bypassing`);
@@ -56,14 +60,19 @@ export function createSuccessMetricsVerificationGate(supabase) {
       // like "test pass rate" or "coverage %"). Treat as advisory.
       let isChildSD = false;
       try {
-        const { data: parentCheck } = await supabase
-          .from('strategic_directives_v2')
-          .select('parent_sd_id')
-          .eq('id', sdUuid)
-          .single();
+        const parentCheck = await safeQuery(
+          supabase
+            .from('strategic_directives_v2')
+            .select('parent_sd_id')
+            .eq('id', sdUuid)
+            .single(),
+          { site: 'success-metrics-verification:parent_check' }
+        );
         isChildSD = !!parentCheck?.parent_sd_id;
       } catch {
-        // Fail-open: if check fails, treat as standalone
+        // NOT fail-open despite the old label here: isChildSD staying false makes
+        // isAdvisory more likely to be false too (REQUIRED, not advisory) below --
+        // a query fault makes verification MORE strict, never less.
       }
 
       // SD type check — disabled types auto-pass

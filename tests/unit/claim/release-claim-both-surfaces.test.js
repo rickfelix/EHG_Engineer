@@ -31,6 +31,9 @@ function makeDb({ sds = [], sessions = [], errorOn = null } = {}) {
         update(payload) { ctx.op = 'update'; ctx.payload = payload; return b; },
         eq(k, v) { ctx.filters[k] = v; return b; },
         maybeSingle() {
+          if (errorOn && errorOn.table === table && errorOn.op === 'select') {
+            return Promise.resolve({ data: null, error: { message: errorOn.message || 'db error', code: errorOn.code } });
+          }
           const row = (tables[table] || []).find((r) => matches(r, ctx.filters));
           return Promise.resolve({ data: row ? { ...row } : null, error: null });
         },
@@ -150,6 +153,18 @@ describe('releaseClaimBothSurfaces', () => {
     const r = await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1' });
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/23514/);
+  });
+
+  // SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 / FR-2 (SECURITY-RELEVANT): before this fix, the R6
+  // readback's two maybeSingle() calls bound only `data`, so a genuine query FAULT (not a real
+  // "row absent") was indistinguishable from the old holder genuinely being gone -- both left
+  // sd/sess as undefined, making sdGone/sessGone true and FALSELY CONFIRMING oldHolderGone/ok.
+  it('R6 SECURITY: a genuine query fault during the readback returns ok:false, never a false-positive oldHolderGone', async () => {
+    const db = makeDb(seed({ errorOn: { table: 'strategic_directives_v2', op: 'select', message: '42703 column does not exist' } }));
+    const r = await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1' });
+    expect(r.ok).toBe(false);
+    expect(r.oldHolderGone).toBeFalsy();
+    expect(r.error).toMatch(/42703/);
   });
 
   it('tryRpc: uses the release_session RPC when the holder is still on the SD (retire)', async () => {

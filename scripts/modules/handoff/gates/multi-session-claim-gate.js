@@ -29,6 +29,7 @@ import os from 'os';
 // PAT-SESSION-IDENTITY-003: Centralized terminal identity
 // Import from single source of truth to prevent duplication cascade
 import { getTerminalId } from '../../../../lib/terminal-identity.js';
+import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 
 // RCA-TERMINAL-IDENTITY-CHAIN-BREAK-001: Three-case terminal_id matching
 // Handles ambiguous case where one terminal_id has PID suffix and the other doesn't
@@ -75,13 +76,30 @@ export async function validateMultiSessionClaim(supabase, sdId, options = {}) {
         p_current_session_id: currentSessionId
       });
     } catch (_) {
-      // RPC may not exist yet — fall back to direct cleanup
-      const { data: staleClaims } = await supabase
-        .from('claude_sessions')
-        .select('session_id, hostname, terminal_id')
-        .eq('sd_key', sdId)
-        .eq('status', 'active')
-        .eq('hostname', currentHostname);
+      // RPC may not exist yet — fall back to direct cleanup.
+      // SECURITY-RELEVANT REGRESSION FIX (SECURITY sub-agent finding): this whole block is
+      // itself inside a catch, so a throw here has no local handler and propagates to the
+      // OUTER catch below, which is explicitly "fail-open on unexpected error" (pass:true) for
+      // THE ENTIRE claim-ownership conflict check -- not just this optional stale-claim
+      // cleanup. Before safeQuery, a bare destructure swallowed a fault into an empty release
+      // list and execution continued to the real conflict check further down; converting the
+      // query without a LOCAL catch here would have turned "skip an optional cleanup" into
+      // "skip the whole gate and pass". This local try/catch restores that original, narrow
+      // failure scope.
+      let staleClaims = null;
+      try {
+        staleClaims = await safeQuery(
+          supabase
+            .from('claude_sessions')
+            .select('session_id, hostname, terminal_id')
+            .eq('sd_key', sdId)
+            .eq('status', 'active')
+            .eq('hostname', currentHostname),
+          { site: 'multi-session-claim-gate:stale_same_conversation_claims' }
+        );
+      } catch (staleClaimsErr) {
+        console.log(`   ⚠️  Stale-claim cleanup query failed (non-fatal, continuing to conflict check): ${staleClaimsErr.message}`);
+      }
 
       const toRelease = (staleClaims || []).filter(s => {
         if (s.session_id === currentSessionId) return false;
