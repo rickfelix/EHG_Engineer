@@ -34,14 +34,18 @@
 // Step 5 (the retirement grep is clean): see lib/michael/cowork-retirement-grep.mjs and its own
 // test — a static, repo-wide check, not something this script needs to run at deletion time.
 //
+// --cowork-root is a REQUIRED flag with NO default anywhere in this script (mirrors
+// import-cowork-memory.mjs's own --root), so this file never trips no-literal-home-path-lint and
+// step 5's retirement grep never has a real path string to (correctly) flag.
+//
 // Usage:
-//   node scripts/michael/retire-cowork.mjs                                            # dry-run report, zero side effects
-//   node scripts/michael/retire-cowork.mjs --apply                                    # steps 1-3
-//   node scripts/michael/retire-cowork.mjs --apply --confirm-step2                    # + record the step-2 host checklist confirmation
-//   node scripts/michael/retire-cowork.mjs --apply --archive-date 2026-11-10          # + create the local archive zip
-//   node scripts/michael/retire-cowork.mjs --verify-step3 --archive-date 2026-11-10   # verify the manual Drive upload landed (read-only)
-//   node scripts/michael/retire-cowork.mjs --apply --apply-deletion --window-start <et_date>  # attempt step 4 (refuses unless the window is real)
-//   node scripts/michael/retire-cowork.mjs --json
+//   node scripts/michael/retire-cowork.mjs --cowork-root "<path>"                                  # dry-run report, zero side effects
+//   node scripts/michael/retire-cowork.mjs --cowork-root "<path>" --apply                           # steps 1-3
+//   node scripts/michael/retire-cowork.mjs --cowork-root "<path>" --apply --confirm-step2           # + record the step-2 host checklist confirmation
+//   node scripts/michael/retire-cowork.mjs --cowork-root "<path>" --apply --archive-date 2026-11-10 # + create the local archive zip
+//   node scripts/michael/retire-cowork.mjs --verify-step3 --archive-date 2026-11-10                 # verify the manual Drive upload landed (read-only)
+//   node scripts/michael/retire-cowork.mjs --cowork-root "<path>" --apply --apply-deletion --window-start <et_date>  # attempt step 4 (refuses unless the window is real)
+//   node scripts/michael/retire-cowork.mjs --cowork-root "<path>" --json
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -55,7 +59,10 @@ import { listDriveFiles } from '../../lib/michael/google-clients.mjs';
 export const DEFAULT_STATE_PATH = path.join('.artifacts', 'michael-cowork-retirement-state.json');
 export const CHAIRMAN_FOLDER_ID = '1_Ui4ckZLtIUi3Sm9W_y41eEDHEnNIwDP';
 export const DEFAULT_CANDIDATE_TASK_NAMES = Object.freeze(['Wake Cowork PC']);
-export const DEFAULT_COWORK_ROOT = 'C:\\Users\\rickf\\Dropbox\\_Cowork';
+// No default folder path — --cowork-root is a REQUIRED flag with NO default anywhere in this
+// script, mirroring scripts/michael/import-cowork-memory.mjs's own --root precedent: the literal
+// personal path never appears hardcoded (no-literal-home-path-lint), and step 5's own retirement
+// grep must never find a real path string to flag.
 
 /** Pure: classify a schtasks result. execFileSync THROWS on a non-zero exit — callers pass the
  * caught error's {status, stdout, stderr} shape, never a "returned failure" object. */
@@ -137,7 +144,8 @@ export function runStep2({ confirmStep2 = false, now = new Date() } = {}) {
 }
 
 /** Step 3a: create the local archive zip via PowerShell Compress-Archive. -Force makes a re-run idempotent; -LiteralPath (never -Path) avoids wildcard interpretation. */
-export function runStep3Archive({ coworkRoot = DEFAULT_COWORK_ROOT, archiveDate, runPowershell = defaultRunPowershell, apply = false } = {}) {
+export function runStep3Archive({ coworkRoot, archiveDate, runPowershell = defaultRunPowershell, apply = false } = {}) {
+  if (!coworkRoot) return { ok: false, step: 3, outcome: 'failed', reason: 'COWORK_ROOT_REQUIRED' };
   if (!archiveDate) return { ok: false, step: 3, outcome: 'failed', reason: 'ARCHIVE_DATE_REQUIRED' };
   const zipName = `_Cowork-archive-${archiveDate}.zip`;
   const zipPath = path.join(path.dirname(coworkRoot), zipName);
@@ -162,13 +170,14 @@ export async function runStep3Verify({ archiveDate, listDrive = listDriveFiles, 
  * streak is computed from live DB rows. NEVER touches michael_feedback_ledger — deletes the local
  * folder only, and only when applyDeletion is explicitly true. */
 export async function runStep4({
-  sb, windowStartEtDate, today = todayEt(), applyDeletion = false, coworkRoot = DEFAULT_COWORK_ROOT,
+  sb, windowStartEtDate, today = todayEt(), applyDeletion = false, coworkRoot,
   fsImpl = fs, state,
 } = {}) {
   if (!state || state.step1 !== 'ok' || state.step2 !== 'ok' || state.step3 !== 'ok') {
     return { ok: false, step: 4, outcome: 'refused', reason: 'PRIOR_STEPS_INCOMPLETE' };
   }
   if (!windowStartEtDate) return { ok: false, step: 4, outcome: 'refused', reason: 'WINDOW_START_REQUIRED' };
+  if (!coworkRoot) return { ok: false, step: 4, outcome: 'refused', reason: 'COWORK_ROOT_REQUIRED' };
 
   const briefRunsRead = await readRows(sb, 'michael_brief_runs', (q) => q.gte('et_date', windowStartEtDate).lte('et_date', today), { select: 'et_date,verified' });
   const ledgerRead = await readRows(sb, 'michael_feedback_ledger', (q) => q.gte('et_date', windowStartEtDate).lte('et_date', today), { select: 'et_date' });
@@ -200,18 +209,22 @@ export function parseCliArgs(argv) {
     verifyStep3: a['verify-step3'] === true,
     archiveDate: typeof a['archive-date'] === 'string' ? a['archive-date'] : null,
     windowStart: typeof a['window-start'] === 'string' ? a['window-start'] : null,
+    coworkRoot: typeof a['cowork-root'] === 'string' ? a['cowork-root'] : null,
     taskNames: typeof a['task-names'] === 'string' ? a['task-names'].split(',').map((s) => s.trim()).filter(Boolean) : [...DEFAULT_CANDIDATE_TASK_NAMES],
     json: a.json === true,
   };
 }
 
-/** deps: { sb, argv, now, fsImpl, runSchtasks, runPowershell, listDrive, statePath, coworkRoot }. Never throws. */
+/** deps: { sb, argv, now, fsImpl, runSchtasks, runPowershell, listDrive, statePath, coworkRoot }.
+ * coworkRoot, if supplied by a caller, always wins over --cowork-root (tests inject it directly);
+ * otherwise it comes from the CLI flag. Never throws. */
 export async function runRetireCowork({
   sb, argv = [], now = new Date(), fsImpl = fs, runSchtasks = defaultRunSchtasks, runPowershell = defaultRunPowershell,
-  listDrive = listDriveFiles, statePath = DEFAULT_STATE_PATH, coworkRoot = DEFAULT_COWORK_ROOT,
+  listDrive = listDriveFiles, statePath = DEFAULT_STATE_PATH, coworkRoot,
 } = {}) {
   const args = parseCliArgs(argv);
   const apply = args.apply;
+  const root = coworkRoot || args.coworkRoot;
 
   if (args.applyDeletion && !apply) {
     return refusal('APPLY_REQUIRED_BEFORE_DELETION', '--apply-deletion requires --apply (steps 1-3 must be attempted/recorded first)');
@@ -222,10 +235,12 @@ export async function runRetireCowork({
     return { ok: v.ok, action: 'verify_step3', result: v };
   }
 
+  if (!root) return refusal('COWORK_ROOT_REQUIRED', '--cowork-root is required (no default — the literal path never appears hardcoded in this repo)');
+
   const step1 = runStep1({ taskNames: args.taskNames, runSchtasks, apply });
   const step2 = runStep2({ confirmStep2: args.confirmStep2, now });
   const step3 = args.archiveDate
-    ? runStep3Archive({ coworkRoot, archiveDate: args.archiveDate, runPowershell, apply })
+    ? runStep3Archive({ coworkRoot: root, archiveDate: args.archiveDate, runPowershell, apply })
     : { ok: !apply, step: 3, outcome: apply ? 'refused' : 'would_archive', reason: apply ? 'ARCHIVE_DATE_REQUIRED' : undefined };
 
   if (apply) {
@@ -245,7 +260,7 @@ export async function runRetireCowork({
     const loadedAfter = loadState(statePath, fsImpl);
     step4 = await runStep4({
       sb, windowStartEtDate: args.windowStart, today: todayEt(now), applyDeletion: args.applyDeletion,
-      coworkRoot, fsImpl, state: loadedAfter.ok ? loadedAfter.state : null,
+      coworkRoot: root, fsImpl, state: loadedAfter.ok ? loadedAfter.state : null,
     });
   } else if (args.applyDeletion) {
     step4 = { ok: false, step: 4, outcome: 'refused', reason: 'WINDOW_START_REQUIRED' };

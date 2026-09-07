@@ -4,6 +4,9 @@ import {
   classifySchtasksResult, assertTaskName, parseCliArgs,
 } from './retire-cowork.mjs';
 
+// A synthetic, never-real path — never the chairman's literal home path (no-literal-home-path-lint).
+const FAKE_COWORK_ROOT = 'X:/synthetic-test-root/cowork-fixture';
+
 /** In-memory fake fs — no real disk touched by any test in this file. */
 function fakeFs(initial = {}) {
   const files = { ...initial };
@@ -92,7 +95,7 @@ describe('runStep2 — host-only checklist', () => {
 describe('runStep3Archive — local zip creation', () => {
   it('dry-run reports the exact PowerShell command without calling runPowershell', () => {
     const runPowershell = vi.fn();
-    const r = runStep3Archive({ archiveDate: '2026-11-10', runPowershell, apply: false });
+    const r = runStep3Archive({ coworkRoot: FAKE_COWORK_ROOT, archiveDate: '2026-11-10', runPowershell, apply: false });
     expect(runPowershell).not.toHaveBeenCalled();
     expect(r.ok).toBe(true);
     expect(r.psCommand).toContain('Compress-Archive');
@@ -101,14 +104,19 @@ describe('runStep3Archive — local zip creation', () => {
     expect(r.psCommand).not.toMatch(/-Path\s/); // never the wildcard-interpreting -Path
   });
 
+  it('requires --cowork-root, refuses without it (never the archiveDate check first — no-literal-home-path-lint means this can never default)', () => {
+    const r = runStep3Archive({ coworkRoot: null, archiveDate: '2026-11-10', apply: false });
+    expect(r).toMatchObject({ ok: false, outcome: 'failed', reason: 'COWORK_ROOT_REQUIRED' });
+  });
+
   it('requires --archive-date, refuses without it', () => {
-    const r = runStep3Archive({ archiveDate: null, apply: false });
+    const r = runStep3Archive({ coworkRoot: FAKE_COWORK_ROOT, archiveDate: null, apply: false });
     expect(r).toMatchObject({ ok: false, outcome: 'failed', reason: 'ARCHIVE_DATE_REQUIRED' });
   });
 
   it('apply calls runPowershell exactly once with the -Force command — positive control the mock is wired', () => {
     const runPowershell = vi.fn(() => ({ status: 0 }));
-    const r = runStep3Archive({ archiveDate: '2026-11-10', runPowershell, apply: true });
+    const r = runStep3Archive({ coworkRoot: FAKE_COWORK_ROOT, archiveDate: '2026-11-10', runPowershell, apply: true });
     expect(runPowershell).toHaveBeenCalledTimes(1);
     expect(runPowershell.mock.calls[0][0][0]).toContain('-Force');
     expect(r).toMatchObject({ ok: true, outcome: 'archived' });
@@ -116,8 +124,8 @@ describe('runStep3Archive — local zip creation', () => {
 
   it('a re-run (idempotent, thanks to -Force) still succeeds — no special-cased "already exists" failure', () => {
     const runPowershell = vi.fn(() => ({ status: 0 }));
-    const first = runStep3Archive({ archiveDate: '2026-11-10', runPowershell, apply: true });
-    const second = runStep3Archive({ archiveDate: '2026-11-10', runPowershell, apply: true });
+    const first = runStep3Archive({ coworkRoot: FAKE_COWORK_ROOT, archiveDate: '2026-11-10', runPowershell, apply: true });
+    const second = runStep3Archive({ coworkRoot: FAKE_COWORK_ROOT, archiveDate: '2026-11-10', runPowershell, apply: true });
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     expect(runPowershell).toHaveBeenCalledTimes(2);
@@ -125,7 +133,7 @@ describe('runStep3Archive — local zip creation', () => {
 
   it('a non-zero PowerShell exit is reported as a real failure', () => {
     const runPowershell = () => ({ status: 1, stderr: 'Compress-Archive : Access to the path is denied.' });
-    const r = runStep3Archive({ archiveDate: '2026-11-10', runPowershell, apply: true });
+    const r = runStep3Archive({ coworkRoot: FAKE_COWORK_ROOT, archiveDate: '2026-11-10', runPowershell, apply: true });
     expect(r).toMatchObject({ ok: false, outcome: 'failed', reason: 'COMPRESS_ARCHIVE_FAILED' });
   });
 });
@@ -193,10 +201,16 @@ describe('runStep4 — gated, irreversible deletion', () => {
     };
   }
 
+  it('refuses COWORK_ROOT_REQUIRED before ever reading the DB, when no root is given', async () => {
+    const sb = sbRows({ michael_brief_runs: [], michael_feedback_ledger: [] });
+    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, coworkRoot: null });
+    expect(r).toMatchObject({ ok: false, outcome: 'refused', reason: 'COWORK_ROOT_REQUIRED' });
+  });
+
   it('refuses WINDOW_NOT_ELAPSED when the computed streak has a gap, and never deletes', async () => {
     const sb = sbRows({ michael_brief_runs: [], michael_feedback_ledger: [] });
     const fsImpl = { rmSync: vi.fn() };
-    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, fsImpl });
+    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, coworkRoot: FAKE_COWORK_ROOT, fsImpl });
     expect(r).toMatchObject({ ok: false, outcome: 'refused', reason: 'WINDOW_NOT_ELAPSED' });
     expect(fsImpl.rmSync).not.toHaveBeenCalled();
   });
@@ -204,7 +218,7 @@ describe('runStep4 — gated, irreversible deletion', () => {
   it('refuses TABLES_ABSENT when the migration is unapplied, never silently proceeds', async () => {
     const sb = sbError({ '*': { code: '42P01', message: 'relation does not exist' } });
     const fsImpl = { rmSync: vi.fn() };
-    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, fsImpl });
+    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, coworkRoot: FAKE_COWORK_ROOT, fsImpl });
     expect(r).toMatchObject({ ok: false, outcome: 'refused', reason: 'TABLES_ABSENT' });
     expect(fsImpl.rmSync).not.toHaveBeenCalled();
   });
@@ -221,7 +235,7 @@ describe('runStep4 — gated, irreversible deletion', () => {
   it('a fully-satisfied window with applyDeletion=false reports would_delete without touching the filesystem', async () => {
     const sb = sbRows(fourteenDayRows());
     const fsImpl = { rmSync: vi.fn() };
-    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, applyDeletion: false, fsImpl });
+    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, coworkRoot: FAKE_COWORK_ROOT, applyDeletion: false, fsImpl });
     expect(r).toMatchObject({ ok: true, outcome: 'would_delete' });
     expect(fsImpl.rmSync).not.toHaveBeenCalled();
   });
@@ -240,7 +254,7 @@ describe('runStep4 — gated, irreversible deletion', () => {
       },
     });
     const fsImpl = { rmSync: vi.fn() };
-    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, applyDeletion: true, fsImpl });
+    const r = await runStep4({ sb, windowStartEtDate: '2026-01-01', today: '2026-01-20', state: fullState, coworkRoot: FAKE_COWORK_ROOT, applyDeletion: true, fsImpl });
     expect(r).toMatchObject({ ok: true, outcome: 'deleted' });
     expect(fsImpl.rmSync).toHaveBeenCalledTimes(1);
     expect(ledgerWrite).not.toHaveBeenCalled();
@@ -260,12 +274,17 @@ describe('parseCliArgs', () => {
 });
 
 describe('runRetireCowork — orchestration, dry-run by default, tiered apply gating', () => {
-  it('no flags: zero side effects across every I/O boundary (schtasks, PowerShell, Drive, filesystem)', async () => {
+  it('refuses cleanly (never crashes, never defaults) when --cowork-root is omitted entirely', async () => {
+    const r = await runRetireCowork({ sb: {}, argv: [], fsImpl: fakeFs() });
+    expect(r).toMatchObject({ ok: false, refusal: 'COWORK_ROOT_REQUIRED' });
+  });
+
+  it('no flags but --cowork-root given: zero side effects across every I/O boundary (schtasks, PowerShell, Drive, filesystem)', async () => {
     const runSchtasks = vi.fn();
     const runPowershell = vi.fn();
     const listDrive = vi.fn();
     const fsx = fakeFs();
-    const r = await runRetireCowork({ sb: {}, argv: [], runSchtasks, runPowershell, listDrive, fsImpl: fsx, statePath: '/state.json' });
+    const r = await runRetireCowork({ sb: {}, argv: ['--cowork-root', FAKE_COWORK_ROOT], runSchtasks, runPowershell, listDrive, fsImpl: fsx, statePath: '/state.json' });
     expect(runSchtasks).not.toHaveBeenCalled();
     expect(runPowershell).not.toHaveBeenCalled();
     expect(listDrive).not.toHaveBeenCalled();
@@ -273,7 +292,7 @@ describe('runRetireCowork — orchestration, dry-run by default, tiered apply ga
     expect(r.action).toBe('dry_run');
   });
 
-  it('--apply-deletion without --apply refuses immediately, before evaluating the window', async () => {
+  it('--apply-deletion without --apply refuses immediately, before evaluating the window or --cowork-root', async () => {
     const r = await runRetireCowork({ sb: {}, argv: ['--apply-deletion', '--window-start', '2026-01-01'], fsImpl: fakeFs() });
     expect(r).toMatchObject({ ok: false, refusal: 'APPLY_REQUIRED_BEFORE_DELETION' });
   });
@@ -281,7 +300,7 @@ describe('runRetireCowork — orchestration, dry-run by default, tiered apply ga
   it('--apply persists step 1-3 state to the injected state path', async () => {
     const runSchtasks = () => ({ status: 0 });
     const fsx = fakeFs();
-    await runRetireCowork({ sb: {}, argv: ['--apply'], runSchtasks, fsImpl: fsx, statePath: '/state.json' });
+    await runRetireCowork({ sb: {}, argv: ['--cowork-root', FAKE_COWORK_ROOT, '--apply'], runSchtasks, fsImpl: fsx, statePath: '/state.json' });
     expect(fsx._files['/state.json']).toBeDefined();
     const persisted = JSON.parse(fsx._files['/state.json']);
     expect(persisted).toMatchObject({ step1: 'ok' });
@@ -289,7 +308,7 @@ describe('runRetireCowork — orchestration, dry-run by default, tiered apply ga
 
   it('--apply-deletion refuses closed (PRIOR_STEPS_INCOMPLETE) when step 2 has not been confirmed — no --confirm-step2 in this call, so a fresh state write still leaves step2 pending', async () => {
     const r = await runRetireCowork({
-      sb: {}, argv: ['--apply', '--apply-deletion', '--window-start', '2026-01-01', '--archive-date', '2026-01-01'],
+      sb: {}, argv: ['--cowork-root', FAKE_COWORK_ROOT, '--apply', '--apply-deletion', '--window-start', '2026-01-01', '--archive-date', '2026-01-01'],
       runSchtasks: () => ({ status: 0 }), runPowershell: () => ({ status: 0 }), fsImpl: fakeFs(), statePath: '/state.json',
     });
     expect(r.steps.step4).toMatchObject({ outcome: 'refused', reason: 'PRIOR_STEPS_INCOMPLETE' });
@@ -300,7 +319,7 @@ describe('runRetireCowork — orchestration, dry-run by default, tiered apply ga
     const fsx = fakeFs({ '/state.json': 'not valid json{{{' });
     // First call: --apply only, no deletion requested. It overwrites the corrupt file with real results.
     await runRetireCowork({
-      sb: {}, argv: ['--apply', '--confirm-step2', '--archive-date', '2026-01-01'],
+      sb: {}, argv: ['--cowork-root', FAKE_COWORK_ROOT, '--apply', '--confirm-step2', '--archive-date', '2026-01-01'],
       runSchtasks: () => ({ status: 0 }), runPowershell: () => ({ status: 0 }), fsImpl: fsx, statePath: '/state.json',
     });
     const persisted = JSON.parse(fsx._files['/state.json']);
@@ -317,7 +336,7 @@ describe('runRetireCowork — orchestration, dry-run by default, tiered apply ga
   });
 
   it('the top-level report is never a single boolean — each step carries its own outcome', async () => {
-    const r = await runRetireCowork({ sb: {}, argv: [], fsImpl: fakeFs() });
+    const r = await runRetireCowork({ sb: {}, argv: ['--cowork-root', FAKE_COWORK_ROOT], fsImpl: fakeFs() });
     expect(r.steps.step1.outcome).toBe('would_disable');
     expect(r.steps.step2.outcome).toBe('pending');
     expect(r.steps.step3.outcome).toBe('would_archive');
