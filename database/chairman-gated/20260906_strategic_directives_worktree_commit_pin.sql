@@ -2,7 +2,7 @@
 -- strategic_directives_v2, alongside (never replacing) the existing worktree_path column.
 -- Target DB: EHG_Engineer
 --
--- @approved-by: <PENDING -- apply via the chairman's 3-factor ceremony>
+-- @approved-by: codestreetlabs@gmail.com
 --   approval on record. See database/chairman-gated/README.md: the approver header must match
 --   `git config user.email` at apply time and is checked against the chairman-approval record.
 --
