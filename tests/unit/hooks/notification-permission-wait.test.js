@@ -116,10 +116,10 @@ describe('extractBlockedAction (QF-20260905-884)', () => {
     const entries = [
       { type: 'user', message: { content: [{ type: 'text', text: 'go' }] } },
       { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }] } },
-      { type: 'assistant', message: { content: [{ type: 'text', text: 'about to run something' }, { type: 'tool_use', name: 'Bash', input: { command: 'git push --force origin main' } }] } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'about to run something' }, { type: 'tool_use', name: 'Bash', input: { command: 'git push --force-with-lease origin main' } }] } },
     ];
     const result = extractBlockedAction('/fake/transcript.jsonl', { readTailEntries: () => entries });
-    expect(result).toEqual({ tool: 'Bash', detail: 'git push --force origin main' });
+    expect(result).toEqual({ tool: 'Bash', detail: 'git push --force-with-lease origin main' });
   });
 
   it('falls back to input.file_path when there is no input.command (e.g. Edit/Write)', async () => {

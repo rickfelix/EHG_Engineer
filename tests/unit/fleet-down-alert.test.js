@@ -1208,13 +1208,13 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
 
   it('checkStuckPermissionWaits() threads payload.blocked_action into the page body when present (QF-20260905-884 second half)', async () => {
     const db = makeStuckWaitDb({
-      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1', blocked_action: { tool: 'Bash', detail: 'git push --force origin main' } }, created_at: minutesAgo(16) }],
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1', blocked_action: { tool: 'Bash', detail: 'git push --force-with-lease origin main' } }, created_at: minutesAgo(16) }],
       sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(16) }],
     });
     const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
     await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
     const [message] = sendChairmanSMSFn.mock.calls[0];
-    expect(message.body).toMatch(/Blocked on: Bash git push --force origin main/);
+    expect(message.body).toMatch(/Blocked on: Bash git push --force-with-lease origin main/);
   });
 
   it('checkStuckPermissionWaits() pages once for a genuinely stuck session, with the stuck-permission-wait message', async () => {
