@@ -1,0 +1,33 @@
+# E2E quarantine count guard — SD-LEO-INFRA-REPAIR-DECAYED-EHG-001 (FR-2).
+#
+# tests/e2e/quarantine.json is the checked-in scope-bounding device for e2e specs this SD could
+# not repair. It must never grow silently: this job fails a PR that adds entries beyond the
+# count already on main. A repaired spec being REMOVED from the list is the intended direction
+# of travel and always passes.
+name: E2E Quarantine Count Guard
+
+on:
+  pull_request:
+    paths:
+      - 'tests/e2e/quarantine.json'
+      - 'scripts/ci/e2e-quarantine-count-guard.mjs'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Assert quarantine count did not grow vs main
+        run: node scripts/ci/e2e-quarantine-count-guard.mjs --base origin/${{ github.event.pull_request.base.ref }}
