@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   parseArgs, routeDecision, effectivePriority, sortPending, priorityRank,
   partitionQueue, isTerminalRecord, isCorrectiveFinding, renderPendingLine,
-  deferralActorLabel,
+  deferralActorLabel, USAGE,
 } from '../../lib/chairman/decision-queue.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -343,5 +343,35 @@ describe('SD-LEO-INFRA-COMPLETED-UNAPPLIED-MIGRATION-001 AC-2 / PRD TS-3: a migr
     const lines = pending.map((r) => renderPendingLine(r));
     expect(lines).toHaveLength(0);
     expect(lines.join('\n')).not.toContain(fixtureTitle);
+  });
+});
+
+describe('SD-LEO-INFRA-CHAIRMAN-DECISION-VALUE-001 FR-4 — parseArgs withdraw command', () => {
+  it('withdraw requires --reason — an unattributed/unjustified withdrawal is refused, never defaulted', () => {
+    const p = parseArgs(['withdraw', 'some-id']);
+    expect(p.error).toMatch(/--reason/);
+  });
+
+  it('withdraw requires an id', () => {
+    const p = parseArgs(['withdraw', '--reason', 'test fixture']);
+    expect(p.error).toMatch(/<id>/);
+  });
+
+  it('parseArgs round-trips a valid withdraw with --reason', () => {
+    const p = parseArgs(['withdraw', 'row-1', '--reason', 'known test fixture']);
+    expect(p).toEqual({ command: 'withdraw', id: 'row-1', reason: 'known test fixture', decidedBy: null });
+  });
+
+  it('parseArgs extracts --decided-by alongside --reason, in either order', () => {
+    const a = parseArgs(['withdraw', 'row-1', '--reason', 'fixture', '--decided-by', 'ops-actor']);
+    expect(a).toEqual({ command: 'withdraw', id: 'row-1', reason: 'fixture', decidedBy: 'ops-actor' });
+
+    const b = parseArgs(['withdraw', 'row-1', '--decided-by', 'ops-actor', '--reason', 'fixture']);
+    expect(b).toEqual({ command: 'withdraw', id: 'row-1', reason: 'fixture', decidedBy: 'ops-actor' });
+  });
+
+  it('USAGE documents withdraw as a structurally distinct hygiene action, never a decision', () => {
+    expect(USAGE).toMatch(/withdraw is a STRUCTURALLY DISTINCT hygiene action/);
+    expect(USAGE).toMatch(/node scripts\/chairman-decisions\.mjs withdraw/);
   });
 });
