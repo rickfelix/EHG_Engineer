@@ -89,7 +89,8 @@ export async function runBriefDoc({ sb, argv = [], now = new Date(), createDoc =
   }
 
   const nextData = { ...(row.data_json || {}), logs: { ...((row.data_json || {}).logs || {}), brief_doc: created.docId } };
-  const w = await writeRows(sb, 'michael_brief_runs', (t) => t.update({ data_json: nextData, brief_md: briefMd }).eq('et_date', etDate).select('id'));
+  // et_date is uniquely indexed — exactly one row, bounded by design.
+  const w = await writeRows(sb, 'michael_brief_runs', (t) => t.update({ data_json: nextData, brief_md: briefMd }).eq('et_date', etDate).select('id').single());
   if (!w.ok) return refusal(w.refusal, w.error);
   return { ok: true, action: 'run', et_date: etDate, doc_id: created.docId, web_view_link: created.webViewLink };
 }
