@@ -35,4 +35,9 @@ describe('michael-retention-cron.yml wiring', () => {
       expect(ddl).toContain(`- '${p}'`);
     }
   });
+  it('SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J: the DDL workflow also lists the v1.1 migration pair and its DDL test literally', () => {
+    for (const p of ['database/migrations/20260907_michael_v1_1_tables.sql', 'database/migrations/20260907_michael_v1_1_tables_DOWN.sql', 'tests/ddl/michael-v1-1-tables-ddl.db.test.js']) {
+      expect(ddl).toContain(`- '${p}'`);
+    }
+  });
 });
