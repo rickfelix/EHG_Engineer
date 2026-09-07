@@ -13,6 +13,7 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 // Test constants
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
@@ -27,13 +28,12 @@ test.describe('Truth Layer Integration E2E Tests', () => {
     supabase = createClient(SUPABASE_URL, SUPABASE_KEY!);
 
     // Create test venture for truth layer tests
-    const { data: venture, error: ventureError } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture, error: ventureError } = await insertGuarded(supabase, 'ventures', {
         name: `Truth Layer Test Venture ${Date.now()}`,
         company_id: null, // Test venture
-        current_lifecycle_stage: 'Stage 10'
-      })
+        current_lifecycle_stage: 'Stage 10',
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/state-machine/truth-layer-integration.spec.ts' })
       .select('id')
       .single();
 

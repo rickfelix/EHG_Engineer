@@ -21,6 +21,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -222,15 +223,14 @@ test.describe('US-005: Unified Stage 1 Output', () => {
       const createdIds: string[] = [];
 
       for (const v of testVentures) {
-        const { data: venture } = await supabase
-          .from('ventures')
-          .insert({
+        const { data: venture } = await insertGuarded(supabase, 'ventures', {
             ...v,
             problem_statement: 'Standard problem',
             solution: 'Standard solution',
             target_market: 'Standard market',
-            stage: 1
-          })
+            stage: 1,
+            is_demo: true
+          }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/venture-creation/stage1-output-unification.spec.ts' })
           .select()
           .single();
 

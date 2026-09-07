@@ -6,6 +6,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 // Lazy-loaded Supabase client
 let supabaseClient = null;
@@ -335,12 +336,16 @@ export async function createTestVenture(data = {}) {
     description: data.description || 'Test venture description',
     status: data.status || 'draft',
     stage: data.stage || 'ideation',
+    is_demo: true,
     ...data,
   };
 
-  const { data: created, error } = await supabase
-    .from('ventures')
-    .insert([venture])
+  // SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-3): a single object, not an array (the array
+  // form evaluateDeclaration cannot classify), routed through insertGuarded so is_demo is never
+  // left to a name-pattern guess.
+  const { data: created, error } = await insertGuarded(supabase, 'ventures', venture, {
+      classification: CLASSIFICATION.FIXTURE, source: 'tests/helpers/database-helpers.js',
+    })
     .select()
     .single();
 
