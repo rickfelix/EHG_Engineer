@@ -1,4 +1,6 @@
--- @approved-by: PENDING — chairman-gated apply required (do NOT apply outside it)
+-- CHAIRMAN CEREMONY (2026-08-30 ~21:5xZ, verbal "Drain Set Approved" in-terminal; scribe Adam a78170fa)
+-- @approved-by: codestreetlabs@gmail.com
+-- (was: @approved-by: PENDING — chairman-gated apply required (do NOT apply outside it))
 -- QF-20260830-280 — role_drain_sets: register 'parent_completion' for role='worker'.
 --
 -- WHY. lib/checkin/steps/directed-assignment.cjs:230's orchestrator-parent completion
