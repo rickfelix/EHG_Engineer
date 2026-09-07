@@ -20,10 +20,13 @@ const SRC = readFileSync(join(process.cwd(), 'scripts', 'adam-advisory.cjs'), 'u
 
 describe('QF-20260902-100: assertTargetRole runs after every pre-insert refusal gate', () => {
   const assertCallIdx = SRC.indexOf('await assertTargetRole(supabase,');
-  const outboundGateExitIdx = SRC.indexOf("ERROR: NOT SENT — rationale bar:");
+  const outboundGateExitIdx = SRC.indexOf('ERROR: NOT SENT — rationale bar:');
   const alarmBarExitIdx = SRC.indexOf('2-HYPOTHESIS BAR (SD-REFILL-00XK256L)');
   const preSendHoldIdx = SRC.indexOf('PRE-SEND HOLD: consequential chairman-surface send');
-  const insertCallIdx = SRC.indexOf('const { data, error } = await insertCoordinationRow(');
+  // SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1: the call site now captures the
+  // whole result (checked via isDeliveredDispatchError before destructuring {data,error}),
+  // not a bare `const { data, error } = await insertCoordinationRow(` destructure.
+  const insertCallIdx = SRC.indexOf('const result = await insertCoordinationRow(');
 
   it('exactly one call site exists (the early call was moved, not duplicated)', () => {
     const count = SRC.split('await assertTargetRole(supabase,').length - 1;

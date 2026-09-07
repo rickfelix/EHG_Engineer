@@ -48,7 +48,7 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled 
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 // QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
 const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
-const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS, isDeliveredDispatchError } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
@@ -1385,23 +1385,25 @@ async function main() {
   // The 'broadcast-coordinator' sentinel short-circuits validation (no live coordinator).
   let inserted;
   try {
-    const { data, error } = await insertCoordinationRow(
+    // SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1: a delivered/parked outcome
+    // (DISPATCH_BACKPRESSURE with a successful park, or DISPATCH_ALREADY_DELIVERED) is now an
+    // ADDITIVE RETURN, not a throw — check isDeliveredDispatchError() on the result BEFORE
+    // treating it as an ordinary success/error, instead of catching it as a thrown exception.
+    const result = await insertCoordinationRow(
       supabase,
       { sender_session: sessionId, sender_type: 'adam', target_session: target, message_type: 'INFO', subject, body: payload.body, payload, expires_at: expiresAt },
       // SD-LEO-INFRA-SEND-TIME-TARGET-001 / FR-2: `--to solomon` is statically a Solomon-role
       // target — hint the target-drain warn so a resolved UUID needs no identity lookup.
       { select: 'id', single: true, targetRoleHint: toSolomon ? 'solomon' : undefined }
     );
+    if (isDeliveredDispatchError(result)) {
+      console.error(`[adam-advisory] DELIVERED (not a failure) — code=${result.code}, parkedRowId=${result.parkedRowId}`);
+      process.exit(0);
+    }
+    const { data, error } = result;
     if (error) { console.error('ERROR: failed to insert advisory:', error.message); process.exit(1); }
     inserted = data;
   } catch (e) {
-    // QF-20260902-160: a landed:true error means the content already reached the target (parked
-    // or a same-correlation dupe) — this is DELIVERED, not a failure. Exiting 1 here is what
-    // trained callers to resend and duplicate an ask that already landed.
-    if (e && e.landed) {
-      console.error(`[adam-advisory] DELIVERED (not a failure) — ${e.message}`);
-      process.exit(0);
-    }
     const code = e && e.code ? `${e.code}: ` : '';
     console.error(`ERROR: advisory not sent — ${code}${(e && e.message) || e}`);
     process.exit(1);

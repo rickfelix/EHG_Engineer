@@ -22,7 +22,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { getActiveCoordinatorId, isTwoWayV2Enabled } = require('../lib/coordinator/resolve.cjs');
 // SD-LEO-INFRA-THREE-WAY-COMMS-RELIABILITY-001-D (FR-3c): route all session_coordination inserts
 // through the validated dispatch choke point instead of raw .from().insert().
-const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, isDeliveredDispatchError } = require('../lib/coordinator/dispatch.cjs');
 // SD-LEO-INFRA-SOLOMON-CONSULT-001D: Solomon oracle consult lane (flag-gated, dormant by default).
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 const { evaluateSolomonTriage } = require('../lib/coordinator/solomon-triage.cjs');
@@ -31,17 +31,27 @@ const { PAYLOAD_KINDS } = require('../lib/fleet/worker-status.cjs');
 const { computeReplyExpectedBy } = require('../lib/coordinator/reply-class.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 
-// QF-20260902-160: a landed:true error means the content already reached the target (parked or a
-// same-correlation dupe) — DELIVERED, not a failure. Reporting it as "ERROR: failed to insert"
-// (exit 1) is what trained callers to resend and duplicate an ask that already landed.
+// SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1: DISPATCH_BACKPRESSURE (successful
+// park) and DISPATCH_ALREADY_DELIVERED no longer throw — each call site below checks
+// isDeliveredDispatchError() on the RESOLVED result before this function is ever reached. This
+// remains defensive for any other thrown error that happens to carry a landed:true flag.
 function reportDispatchError(e, label) {
-  if (e && e.landed) {
+  if (isDeliveredDispatchError(e)) {
     console.error(`[worker-signal] DELIVERED (not a failure) — ${e.message}`);
     process.exit(0);
   }
   const code = e && e.code ? `${e.code}: ` : '';
   console.error(`ERROR: failed to insert ${label}: ${code}${(e && e.message) || e}`);
   process.exit(1);
+}
+
+// SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1: shared check for the 4 call sites
+// below — a delivered/parked outcome is now an ADDITIVE RETURN, not a throw.
+function reportIfAlreadyDelivered(result, label) {
+  if (isDeliveredDispatchError(result)) {
+    console.error(`[worker-signal] DELIVERED (not a failure) — ${label} code=${result.code}, parkedRowId=${result.parkedRowId}`);
+    process.exit(0);
+  }
 }
 
 // SD-LEO-INFRA-WORKER-CLAIM-TIME-001 (FR-4): 'unfit' — a worker reporting an assignment it cannot
@@ -253,7 +263,7 @@ async function intentMain(flags, positional) {
 
   let inserted;
   try {
-    const { data, error } = await insertCoordinationRow(
+    const result = await insertCoordinationRow(
       supabase,
       {
         sender_session: sessionId,
@@ -269,6 +279,8 @@ async function intentMain(flags, positional) {
       },
       { select: 'id, created_at', single: true }
     );
+    reportIfAlreadyDelivered(result, 'intent');
+    const { data, error } = result;
     if (error) {
       console.error('ERROR: failed to insert intent:', error.message);
       process.exit(1);
@@ -407,7 +419,7 @@ async function requestMain(flags, positional) {
   const expiresAt = new Date(Date.now() + timeoutMs + 5 * 60_000).toISOString();
 
   try {
-    const { error: insErr } = await insertCoordinationRow(supabase, {
+    const result = await insertCoordinationRow(supabase, {
       sender_session: sessionId,
       sender_type: 'worker',
       target_session: coordinatorId,
@@ -417,6 +429,8 @@ async function requestMain(flags, positional) {
       payload,
       expires_at: expiresAt
     });
+    reportIfAlreadyDelivered(result, 'request');
+    const { error: insErr } = result;
     if (insErr) {
       console.error('ERROR: failed to insert request:', insErr.message);
       process.exit(1);
@@ -580,7 +594,7 @@ async function solomonConsultMain(flags, positional) {
   const expiresAt = new Date(Date.now() + timeoutMs + 5 * 60_000).toISOString();
 
   try {
-    const { error: insErr } = await insertCoordinationRow(supabase, {
+    const result = await insertCoordinationRow(supabase, {
       sender_session: sessionId,
       sender_type: 'worker',
       target_session: target,
@@ -590,6 +604,8 @@ async function solomonConsultMain(flags, positional) {
       payload,
       expires_at: expiresAt
     });
+    reportIfAlreadyDelivered(result, 'solomon-consult');
+    const { error: insErr } = result;
     if (insErr) {
       console.error('ERROR: failed to insert solomon-consult:', insErr.message);
       process.exit(1);
@@ -743,7 +759,7 @@ async function main() {
 
   let inserted;
   try {
-    const { data, error } = await insertCoordinationRow(
+    const result = await insertCoordinationRow(
       supabase,
       {
         sender_session: sessionId,
@@ -757,6 +773,8 @@ async function main() {
       },
       { select: 'id, created_at', single: true }
     );
+    reportIfAlreadyDelivered(result, 'signal');
+    const { data, error } = result;
     if (error) {
       console.error('ERROR: failed to insert signal:', error.message);
       process.exit(1);
@@ -825,7 +843,10 @@ module.exports = {
   // FR-7 (SD-LEO-INFRA-COMPLETE-TWO-WAY-001) — request/await round-trip
   buildRequestPayload, awaitCoordinatorReply, REQUEST_DEFAULT_TIMEOUT_MS, REQUEST_DEFAULT_POLL_MS,
   // SD-LEO-INFRA-SOLOMON-CONSULT-001D — Solomon oracle consult lane (flag-gated dormant)
-  isSolomonConsultEnabled, buildSolomonConsultPayload, solomonConsultMain
+  isSolomonConsultEnabled, buildSolomonConsultPayload, solomonConsultMain,
+  // SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-2 — exported so a behavioral test can
+  // drive the delivered/failure branches directly instead of spawning the CLI process.
+  reportDispatchError, reportIfAlreadyDelivered,
 };
 
 // QF-20260830-948: main() can make several SEQUENTIAL bounded Supabase calls (coordinator
