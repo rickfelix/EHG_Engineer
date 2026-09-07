@@ -234,8 +234,15 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
     expect(result.verdict).toBe(PRESERVE_VERDICT.PUSH_FAILED);
     expect(result.pushed).toBe(false);
     expect(gitRunner.mock.calls.some((c) => c[0][0] === 'push')).toBe(true);
-    // no ls-remote verify ever attempted once push failed
-    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'ls-remote')).toBe(false);
+    // no ls-remote verify ever attempted AFTER the push failed -- the ref-existence
+    // check (QF-20260904-693) runs once, upfront, before any staging/push work, so an
+    // ls-remote call earlier in the sequence is expected and does not indicate a
+    // post-failure verify was attempted.
+    const pushIndex = gitRunner.mock.calls.findIndex((c) => c[0][0] === 'push');
+    const lsRemoteAfterPush = gitRunner.mock.calls
+      .slice(pushIndex + 1)
+      .some((c) => c[0][0] === 'ls-remote');
+    expect(lsRemoteAfterPush).toBe(false);
   });
 
   it('TS-5 (secret hit holds and never pushes): zero push invocations, verdict preserve_held_secret', async () => {
@@ -294,6 +301,59 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
 
     expect(result.verdict).toBe(PRESERVE_VERDICT.VERIFY_FAILED);
     expect(result.pushed).toBe(true);
+  });
+});
+
+describe('runPreserveStage() skips a redundant push for an unchanged tip (QF-20260904-693)', () => {
+  it('skips the push entirely when an existing wip/reclaim/<key>/* ref already points at the current HEAD', async () => {
+    const sha = 'unchanged0tip0sha';
+    const gitRunner = makeGitRunner([
+      { match: /^rev-parse HEAD/, result: { code: 0, stdout: `${sha}\n` } },
+      {
+        match: /^ls-remote --heads origin wip\/reclaim\/foo\/\*/,
+        result: { code: 0, stdout: `${sha}\trefs/heads/wip/reclaim/foo/2026-09-01T00-00-00-000Z\n` },
+      },
+    ]);
+
+    const result = await runPreserveStage(
+      { wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' },
+      { gitRunner, nowMs: NOW }
+    );
+
+    expect(result.verdict).toBe(PRESERVE_VERDICT.PUSHED);
+    expect(result.pushed).toBe(false);
+    expect(result.sha).toBe(sha);
+    expect(result.ref).toBe('wip/reclaim/foo/2026-09-01T00-00-00-000Z');
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'push')).toBe(false);
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'commit')).toBe(false);
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'add')).toBe(false);
+  });
+
+  it('pushes a new ref when HEAD has moved past every existing wip/reclaim ref (moved tip)', async () => {
+    const oldSha = 'old0tip0sha';
+    const newSha = 'moved0tip0sha';
+    const gitRunner = makeGitRunner([
+      { match: /^rev-parse HEAD/, result: { code: 0, stdout: `${newSha}\n` } },
+      {
+        match: /^ls-remote --heads origin wip\/reclaim\/foo\/\*/,
+        result: { code: 0, stdout: `${oldSha}\trefs/heads/wip/reclaim/foo/2026-09-01T00-00-00-000Z\n` },
+      },
+      { match: /^ls-files --others/, result: { code: 0, stdout: '' } },
+      { match: /^diff --cached --quiet/, result: { code: 0, stdout: '' } }, // nothing staged
+      { match: /^push origin/, result: { code: 0, stdout: '' } },
+      { match: /^ls-remote origin refs\/heads/, result: { code: 0, stdout: `${newSha}\trefs/heads/wip/reclaim/foo\n` } },
+    ]);
+
+    const result = await runPreserveStage(
+      { wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' },
+      { gitRunner, nowMs: NOW }
+    );
+
+    expect(result.verdict).toBe(PRESERVE_VERDICT.PUSHED);
+    expect(result.pushed).toBe(true);
+    expect(result.sha).toBe(newSha);
+    expect(result.ref).not.toBe('wip/reclaim/foo/2026-09-01T00-00-00-000Z');
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'push')).toBe(true);
   });
 });
 
