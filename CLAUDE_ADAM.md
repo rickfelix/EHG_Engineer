@@ -1,8 +1,8 @@
-<!-- file_content_hash: 627316832639366b -->
+<!-- file_content_hash: beb73df651efe816 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-07 2:56:39 PM
+**Generated**: 2026-09-07 7:31:03 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -396,6 +396,15 @@ manual is read.
   The coordinator must VERIFY the per-capability gauge gap is REAL (not a stale-KR artifact) before
   dispatching. Then parallelize the (a)s across the whole weak layer, sized to idle capacity.
 
+- **RE-SCOPE PROPOSALS CITE THE DEFINING ARTIFACT.** A proposal to carve a requirement out from
+  behind a gate dependency (e.g. "FR-N is dependency-free") must quote the FR text AND its exit
+  predicate as the basis for that claim, before being routed to the gate owner — an exit predicate
+  is part of a requirement's own definition, and a dependency claim that has not read it has not
+  read the requirement. Citation requirement only: no new approval step, no blocked routing, no
+  change to who may propose. (QF-20260907-825: two seats independently forwarded an FR-1 scope
+  carve for SD-LEO-INFRA-E2E-REAL-TEST-001 without either citing FR-1's exit predicate, which
+  re-coupled it to a pending decision; a third seat caught it only by reading the source directly.)
+
 
 ### 5s. Chairman-ratified standing constraints (scribed 2026-08-25 sitting — ratification-ledger rows carry full quotes)
 
@@ -466,6 +475,8 @@ manual is read.
 - **AN UNRELEASED CHAIRMAN HOLD NOW BLOCKS DIRECTIVE COMPLETION (ratification 12ebdd61)** — Chairman in-terminal at the Adam seat 2026-09-07 ~01:50Z applied `20260904_strategic_directives_unreleased_chairman_hold_completion_guard.sql` (SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B FR-2 part 2; plan 0d63ffb9, 79 stmts). This one gets its own sentence because it changes what a seat may DO, not just what exists: completing a strategic directive whose metadata carries an unreleased chairman hold now raises **SDCW2** at the database, inside `enforce_canonical_lifecycle_write()`, on both the `aaa_` and `zzz_` triggers. Ten not-yet-completed directives were carrying such a hold when it went live and are the population this refuses. The escape hatch is real and was verified before the apply, not taken on the error text's word: `releaseHold()` at `lib/fleet/claim-eligibility.cjs:844`, which stamps `unfenced_at`/`by`/`reason`; the predicate reads false once `unfenced_at` is at or after the hold's set-at stamp and true when it precedes it. **Adam share:** an SDCW2 is not a gate bug and must never be bypassed — it means a hold this seat or another set was never released. Release it through `releaseHold()` with a reason, then complete. Adam also does not set a hold it has no intention of returning to clear.
 
 - **PHASE-SNAPSHOT WINDOW REGISTRATION IS WRITE-ONCE (ratification 72a3615a)** — Chairman in-terminal at the Adam seat 2026-09-07 ~02:15Z applied `20260829_phase_snapshot_windows_agent_class_rates.sql` (plan 97e518cf, 14 stmts). Its own sentence for the same reason: once `window_registered_at` is set on a `sd_phase_handoffs` row, that column and `baseline_snapshot` are **immutable** — a later change raises **P0001** from a BEFORE UPDATE freeze trigger. The guard is inert on the 37,940 existing rows because the column is new and NULL everywhere, so it bites only newly-registered windows. **Adam share, three parts.** (1) The migration alters `sd_phase_handoffs`; `phase_snapshot_windows` is a VIEW the same file creates. Adam told the chairman the wrong target relation and corrected it on the record — read the file's ALTER lines, never infer the table from the filename. (2) A baseline is a measurement, so register the window only when the snapshot is the one to keep; there is no second attempt. (3) The probe that first appeared to show this guard broken was selecting a different row on each statement because its id subquery had no ORDER BY. Pin the row before concluding a guard fails.
+
+- **RATIFICATIONS CAN NOW BIND MICHAEL: the chairman_ratifications target CHECK was widened on a chairman verbal (ratification 6a9688ae)** — Chairman by verified SMS 2026-09-07T22:33:37Z (staging row 7bb7f018, signature_valid true), verbatim: "Apply the stages migration so ratifications can bind Michael". Applied `database/chairman-gated/20260907_chairman_ratifications_add_michael_target.sql` (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-F; plan sha d39daee7, 9 statements, 1 declared object) under the 3c scribe ceremony, PR 8577. `cr_target_contracts_valid` now admits `michael` beside adam, coordinator, solomon and protocol, so `VALID_TARGET_CONTRACTS` in `lib/chairman/ratification-writer.mjs` and the DB CHECK finally agree — before this, a ratification naming the Michael contract was rejected by Postgres. **Precondition 4 was run BEFORE the scribe and is the reason this was safe:** the live constraint read `ARRAY[adam, coordinator, solomon, protocol]` and the staged list is a strict superset adding only `michael`, so the DROP and re-ADD revoked no already-applied sibling value. Readback was independent of the file's own verify block, and the capability was then proved against the live table with a NEGATIVE CONTROL — `[michael]` accepted, `[bogus]` REJECTED, both trials rolled back, 93 rows before and after — because without the control a pass is indistinguishable from the constraint having been dropped and never re-added. **Adam share, three parts.** (1) `cr_target_contracts_valid` is now a chairman-applied object; a later change to it is a fresh verbal, never a delegated apply. (2) STANDING GUARD adopted from Solomon's pre-apply hold this same evening: name the EXACT filename and its one-line effect back to the chairman before acting on any verbal apply. His noun — "the stages migration" — matched no file by that name and does match a large unrelated lifecycle-stage family; only his purpose clause ("so ratifications can bind Michael") disambiguated it, and a seat resolving that instruction by filename search could have applied the wrong file under a real authorisation. (3) A chairman-only migration filed under `database/migrations/` rather than `database/chairman-gated/` reads as absent to anyone searching the gated directory; state the full path when citing one.
 
 
 
