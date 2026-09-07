@@ -63,14 +63,19 @@ jobs:
         # drift -- only checkout/setup/install/compile could fail it, and today's own
         # measured red run was a CDN connection reset during an unrelated postinstall, not
         # drift. The check's name asserts a subject (drift) it never actually evaluated.
-        # PROMOTED, not renamed: drift-check.ts's own internal severity model already only
-        # exits 1 for prd_files/handoff_files (both are database-first migrations
-        # completed long ago -- `git ls-files` finds zero tracked matches for either
-        # pattern today), so this promotion is currently a no-op on a clean repo, not a
-        # newly-blocking gate. "Check for Filesystem Drift" is also NOT a required
-        # branch-protection status check (verified: only "Run Unit Tier (quarantine-aware)"
-        # is), so this cannot newly block any PR -- it only makes the job's own red/green
-        # status honestly reflect what it measured.
+        # PROMOTED, not renamed: three severity:'critical' checks can now actually fail
+        # this job -- prd_files, handoff_files, and boundary_violations (drift-check.ts).
+        # All three are currently 0 on this repo, verified before promoting, not assumed:
+        # prd_files has zero tracked matches; handoff_files' raw glob DOES match 3 real
+        # docs/**/handoff-*.md files, but ALL of them fall under the tool's own broad
+        # 'docs/**/*.md' ALLOWLIST_PATTERNS entry, so none currently violate (that
+        # allowlist entry makes this specific critical pattern effectively unreachable by
+        # construction -- a separate, pre-existing defect, not fixed here); boundary_violations'
+        # regex-based cross-repo import scan (src/** <-> lib/leo|validation, scripts/leo*)
+        # found zero matches on a direct grep replay. "Check for Filesystem Drift" is also
+        # NOT a required branch-protection status check (verified: only "Run Unit Tier
+        # (quarantine-aware)" is), so this cannot newly block any PR -- it only makes the
+        # job's own red/green status honestly reflect what it measured.
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
