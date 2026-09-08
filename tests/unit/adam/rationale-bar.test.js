@@ -9,6 +9,7 @@ import {
   formatAdvisoryBody,
   passesConstSelfCheck,
   hasLiveAnchor,
+  MANIPULATIVE_PATTERNS,
 } from '../../../lib/adam/rationale-bar.js';
 
 const validKrCandidate = () => ({
@@ -69,6 +70,30 @@ describe('evaluateCandidate', () => {
     const r = evaluateCandidate(c);
     expect(r.clears).toBe(false);
     expect(r.reasons.join(' ')).toMatch(/CONST-010/);
+  });
+
+  // QF-20260905-267 — QF-20260727-129 class recurrence: a live leg4 VERDICTS enum value
+  // ('DEFICIT-URGENT') was matched as urgency framing because the hyphen is a word boundary,
+  // refusing any advisory reporting that capacity verdict as data.
+  it('does not flag the live DEFICIT-URGENT verdict enum value as urgency framing', () => {
+    const c = validKrCandidate();
+    c.rationale = 'The leg4 capacity verdict is DEFICIT-URGENT=0, reported for context only.';
+    const r = evaluateCandidate(c);
+    expect(r.reasons.join(' ')).not.toMatch(/CONST-010/);
+  });
+
+  it('still blocks genuine "act urgently" framing after the DEFICIT-URGENT exemption', () => {
+    const c = validKrCandidate();
+    c.rationale = 'You must act urgently on this.';
+    const r = evaluateCandidate(c);
+    expect(r.clears).toBe(false);
+    expect(r.reasons.join(' ')).toMatch(/CONST-010/);
+  });
+
+  it('MANIPULATIVE_PATTERNS: DEFICIT-URGENT passes, but bare "urgent" and other DEFICIT-URGENT-adjacent forms still fail', () => {
+    expect(MANIPULATIVE_PATTERNS.test('DEFICIT-URGENT=0')).toBe(false);
+    expect(MANIPULATIVE_PATTERNS.test('act urgently')).toBe(true);
+    expect(MANIPULATIVE_PATTERNS.test('urgent')).toBe(true);
   });
 
   it('rejects a self-approval action (CONST-002)', () => {
