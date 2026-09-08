@@ -20,7 +20,7 @@ import { execFileSync } from 'child_process';
 import { getRepoRoot } from '../lib/repo-paths.js';
 import {
   HIDDEN_LAUNCHER_REL_PATH, buildWrapperScript, buildHiddenTrAction, buildCreateArgs,
-  buildRemoveArgs, buildQueryXmlArgs, verifyHiddenLaunch,
+  buildRemoveArgs, buildQueryXmlArgs, verifyHiddenLaunch, applyBatteryTolerantSettings,
 } from './setup-alarm-cron-tasks.mjs';
 
 export const TASK_NAME = 'EHG LEO Loop - Index Jam Detector';
@@ -83,8 +83,13 @@ export async function main(argv = process.argv, deps = {}) {
   fs.mkdirSync(path.dirname(wrapperPath), { recursive: true });
   fs.writeFileSync(wrapperPath, wrapperContent, 'utf8');
   const res = runSchtasks(createArgs);
-  if (res.ok) logger.log(`${tag} registered '${TASK_NAME}' — every ${INTERVAL_MINUTES} min from ${START_TIME} (hidden launch)`);
-  else logger.error(`${tag} schtasks /Create failed: ${res.stderr?.trim?.() || res.stderr}`);
+  if (res.ok) {
+    logger.log(`${tag} registered '${TASK_NAME}' — every ${INTERVAL_MINUTES} min from ${START_TIME} (hidden launch)`);
+    const powerFix = applyBatteryTolerantSettings(TASK_NAME);
+    if (!powerFix.ok) logger.warn(`${tag} WARNING: could not clear battery restrictions: ${powerFix.error}`);
+  } else {
+    logger.error(`${tag} schtasks /Create failed: ${res.stderr?.trim?.() || res.stderr}`);
+  }
   return { exitCode: res.ok ? 0 : 1 };
 }
 

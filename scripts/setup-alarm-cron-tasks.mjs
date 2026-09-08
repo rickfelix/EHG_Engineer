@@ -186,6 +186,29 @@ function runSchtasks(args) {
   }
 }
 
+/**
+ * QF-20260908-848: clear the two battery restrictions Task Scheduler applies by DEFAULT
+ * (DisallowStartIfOnBatteries, StopIfGoingOnBatteries) -- schtasks /Create has no flags for
+ * either; the ScheduledTasks PowerShell module does, and it operates unelevated on a task the
+ * current user owns. Mirrors setup-liveness-watcher-task.mjs's own clearBatterySettings exactly,
+ * MINUS -StartWhenAvailable: these are unbounded-repetition, sub-hour-interval tasks (unlike
+ * that watcher's once-per-boot startup companion), so a missed-run catch-up is near-moot and the
+ * ticket's own measurement explicitly declines to recommend it here. Non-fatal by design -- a
+ * PowerShell failure must never fail the schtasks registration this runs after.
+ */
+export function applyBatteryTolerantSettings(taskName) {
+  const ps = [
+    `$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew`,
+    `Set-ScheduledTask -TaskName '${taskName.replace(/'/g, "''")}' -Settings $s | Out-Null`,
+  ].join('; ');
+  try {
+    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: (err.stderr?.toString?.() || err.message || '').trim().split('\n')[0] };
+  }
+}
+
 export function parseArgs(argv) {
   const args = { mode: 'register', dryRun: false, help: false };
   for (let i = 2; i < argv.length; i++) {
@@ -295,6 +318,11 @@ export async function main(argv = process.argv, deps = {}) {
     const res = runSchtasks(p.createArgs);
     if (res.ok) {
       logger.log(`${tag} registered '${p.taskName}' — every ${p.intervalMinutes} min from ${p.startTime} → ${p.wrapperRelPath} (hidden launch)`);
+      const powerFix = applyBatteryTolerantSettings(p.taskName);
+      if (!powerFix.ok) {
+        logger.warn(`${tag} WARNING: could not clear battery restrictions for '${p.taskName}': ${powerFix.error}`);
+        logger.warn(`${tag} This fleet-down detector will NOT run while the host is on battery until that is fixed.`);
+      }
     } else {
       logger.error(`${tag} schtasks /Create failed for '${p.taskName}' (code ${res.code}): ${res.stderr?.trim?.() || res.stderr}`);
       allOk = false;
