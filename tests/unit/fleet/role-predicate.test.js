@@ -45,6 +45,19 @@ describe('verdictFromMetadata — the DB shape alone', () => {
     expect(verdictFromMetadata({ auto_proceed: true })).toBe(ROLE_VERDICT.WORKER);
   });
 
+  // QF-20260906-473: measured live -- the coordinator-election writer (lib/coordinator/resolve.cjs)
+  // stamps is_coordinator:true, never role:'coordinator'. Before this fix, that exact shape (no
+  // role key at all) fell through TS-3's own WORKER path, so every real coordinator session
+  // classified as WORKER and kept writing available:true roll_call rows through the same-turn-
+  // next-claim path in stop-loop-wakeup-reminder.cjs (41 leaked rows observed in one session).
+  it('QF-20260906-473: is_coordinator:true with NO role key -> ROLE (the real coordinator session shape)', () => {
+    expect(verdictFromMetadata({ is_coordinator: true, tier_rank: 4 })).toBe(ROLE_VERDICT.ROLE);
+  });
+
+  it('QF-20260906-473: is_coordinator is authoritative even alongside an unrelated role-like key', () => {
+    expect(verdictFromMetadata({ is_coordinator: true, role: 'gardener' })).toBe(ROLE_VERDICT.ROLE);
+  });
+
   it('an UNRECOGNISED role string is WORKER, not UNKNOWN — the key was set and read fine', () => {
     expect(verdictFromMetadata({ role: 'gardener' })).toBe(ROLE_VERDICT.WORKER);
   });
