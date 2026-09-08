@@ -97,22 +97,41 @@ describe('resolveArtifactOwner', () => {
     expect(result).toEqual({ token: 'tok-nowhere', resolved: false });
   });
 
-  it('treats a per-table error as "not found on that table", trying the next table rather than aborting', async () => {
+  // SECURITY evidence 00145217-33d6-458f-a7a7-63079e4afb1a (F1): a genuine DB/schema error
+  // is NOT "not found" -- .maybeSingle() already returns {data:null,error:null} for a real
+  // no-row result, so a returned `error` means the probe itself could not run (schema
+  // drift, outage) and MUST propagate, so the caller (pipeline.js) can fail OPEN on infra
+  // errors rather than silently hard-refusing the mint as if the token were unresolved.
+  it('propagates a returned PostgREST error rather than treating it as "not found"', async () => {
     const supabase = {
       from: (table) => ({
         select: () => ({
           eq: () => ({
             maybeSingle: async () => {
-              if (table === 'strategic_directives_v2') throw new Error('boom');
-              if (table === 'uat_test_runs') return { data: { id: 'tok-3', sd_id: 'SD-FALLBACK-001' }, error: null };
+              if (table === 'strategic_directives_v2') return { data: null, error: { message: 'schema drift' } };
               return { data: null, error: null };
             },
           }),
         }),
       }),
     };
-    const result = await resolveArtifactOwner(supabase, 'tok-3');
-    expect(result).toEqual({ token: 'tok-3', resolved: true, table: 'uat_test_runs', ownerKey: 'SD-FALLBACK-001' });
+    await expect(resolveArtifactOwner(supabase, 'tok-3')).rejects.toThrow(/strategic_directives_v2.*schema drift/);
+  });
+
+  it('propagates a thrown client exception (never silently falls through to the next table)', async () => {
+    const supabase = {
+      from: (table) => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => {
+              if (table === 'strategic_directives_v2') throw new Error('client threw: schema drift');
+              return { data: { id: 'tok-3', sd_id: 'SD-FALLBACK-001' }, error: null };
+            },
+          }),
+        }),
+      }),
+    };
+    await expect(resolveArtifactOwner(supabase, 'tok-3')).rejects.toThrow(/client threw/);
   });
 
   it('a real row with a NULL owner column resolves (not "not found"), with ownerKey null', async () => {
@@ -135,6 +154,16 @@ describe('resolveArtifactOwner', () => {
     expect(ARTIFACT_OWNER_ALLOWLIST.map((e) => e.table)).toEqual([
       'strategic_directives_v2', 'venture_artifacts', 'uat_test_runs',
     ]);
+  });
+
+  // SECURITY evidence 00145217-33d6-458f-a7a7-63079e4afb1a (F3): Object.freeze() on the
+  // outer array alone left each entry object mutable -- an entry's idColumn/ownerColumn
+  // could be reassigned at runtime to widen the columns actually read.
+  it('every allowlist entry is itself frozen, not just the containing array', () => {
+    expect(Object.isFrozen(ARTIFACT_OWNER_ALLOWLIST)).toBe(true);
+    for (const entry of ARTIFACT_OWNER_ALLOWLIST) {
+      expect(Object.isFrozen(entry)).toBe(true);
+    }
   });
 });
 
@@ -188,5 +217,37 @@ describe('annotateOwnerInText', () => {
     const t = 'aaaaaaaa-1111-2222-3333-444444444444';
     const text = `${t} appears twice: ${t}`;
     expect(annotateOwnerInText(text, t, 'SD-REAL-001')).toBe(`${t} (owner: SD-REAL-001) appears twice: ${t} (owner: SD-REAL-001)`);
+  });
+
+  // SECURITY evidence 00145217-33d6-458f-a7a7-63079e4afb1a (F5): an unescaped ownerKey
+  // could break annotation idempotency via a literal ')' (re-opening the "(owner: ...)"
+  // group on a later pass, growing without bound) or carry control/ANSI characters into a
+  // persisted SD field.
+  it('strips parens from ownerKey so they cannot break the annotation group', () => {
+    const t = 'aaaaaaaa-1111-2222-3333-444444444444';
+    const text = `Fixture: ${t} is the source row.`;
+    expect(annotateOwnerInText(text, t, 'SD-EVIL) rest of text('))
+      .toBe(`Fixture: ${t} (owner: SD-EVIL rest of text) is the source row.`);
+  });
+
+  it('strips control characters (including CR/LF/tab) from ownerKey', () => {
+    const t = 'aaaaaaaa-1111-2222-3333-444444444444';
+    expect(annotateOwnerInText(`${t} here`, t, 'SD-A\r\n\tB\x1b[31m'))
+      .toBe(`${t} (owner: SD-AB[31m) here`);
+  });
+
+  it('truncates an unbounded ownerKey to a bounded length', () => {
+    const t = 'aaaaaaaa-1111-2222-3333-444444444444';
+    const huge = 'X'.repeat(500);
+    const result = annotateOwnerInText(`${t} here`, t, huge);
+    expect(result).toContain(`${'X'.repeat(100)}…`);
+    expect(result).not.toContain('X'.repeat(101)); // the 101st X would prove no truncation happened
+  });
+
+  it('idempotency: re-annotating with an owner value that itself contains ")" cannot re-open the group', () => {
+    const t = 'aaaaaaaa-1111-2222-3333-444444444444';
+    const once = annotateOwnerInText(`${t} here`, t, 'SD-EVIL)');
+    const twice = annotateOwnerInText(once, t, 'SD-EVIL)');
+    expect(twice).toBe(once); // stable under re-application, never grows
   });
 });

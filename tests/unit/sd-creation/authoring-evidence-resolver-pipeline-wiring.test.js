@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const capturedInserts = vi.hoisted(() => []);
 const resolvableRows = vi.hoisted(() => ({ rows: {} })); // { [table]: { [id]: row } }
+const forceErrorTables = vi.hoisted(() => ({ tables: new Set() })); // simulates a genuine DB/schema error
 
 vi.mock('../../../lib/supabase-client.js', () => {
   function mkChain(table) {
@@ -40,6 +41,7 @@ vi.mock('../../../lib/supabase-client.js', () => {
         if (prop === 'maybeSingle' || prop === 'single') {
           return async () => {
             if (state.inserted) return resolveInsert();
+            if (forceErrorTables.tables.has(table)) return { data: null, error: { message: 'simulated schema drift' } };
             const rows = resolvableRows.rows[table] || {};
             const row = rows[state.eqVal] || null;
             return { data: row, error: null };
@@ -89,6 +91,7 @@ describe('SD-LEO-FIX-AUTHORING-TIME-EVIDENCE-001: artifact-owner resolution wire
     });
     capturedInserts.length = 0;
     resolvableRows.rows = {};
+    forceErrorTables.tables = new Set();
   });
   afterEach(() => {
     exitSpy.mockRestore();
@@ -201,5 +204,29 @@ describe('SD-LEO-FIX-AUTHORING-TIME-EVIDENCE-001: artifact-owner resolution wire
     expect(capturedInserts).toHaveLength(1);
     // Not refused (the row IS real), but also not annotated (nothing to annotate with).
     expect(capturedInserts[0].description).toBe(`Uses fixture row ${RESOLVABLE_TOKEN} as the test specimen.`);
+  });
+
+  // SECURITY evidence 00145217-33d6-458f-a7a7-63079e4afb1a (F1): a genuine DB/schema error
+  // during the probe must fail OPEN at the pipeline level (mint proceeds, unannotated) --
+  // never masquerade as an "unresolved token" hard refusal.
+  it('a genuine DB/schema error during resolution fails OPEN -- the mint proceeds, unannotated, never refused', async () => {
+    forceErrorTables.tables = new Set(['strategic_directives_v2', 'venture_artifacts', 'uat_test_runs']);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { createSD } = await import('../../../lib/sd-creation/pipeline.js');
+    const res = await createSD({
+      sdKey: 'SD-ARCH-HOTSPOT-TEST-ARTIFACT-007',
+      title: 'A mint whose resolver probe hits a live schema drift',
+      description: `Uses fixture row ${RESOLVABLE_TOKEN} as the test specimen.`,
+      type: 'infrastructure',
+      rationale: 'unit-test fixture',
+      metadata: { source: 'leo' },
+      checkArtifactOwners: true,
+    });
+    expect(res.ok).toBe(true);
+    expect(res.code).not.toBe('UNRESOLVED_ARTIFACT_TOKEN');
+    expect(capturedInserts).toHaveLength(1);
+    expect(capturedInserts[0].description).toBe(`Uses fixture row ${RESOLVABLE_TOKEN} as the test specimen.`);
+    expect(warnSpy.mock.calls.some((c) => String(c[0]).includes('artifact-owner resolution skipped'))).toBe(true);
+    warnSpy.mockRestore();
   });
 });
