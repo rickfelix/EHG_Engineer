@@ -17,6 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { amendSd, isInActiveBuildPhase, ACTIVE_BUILD_PHASES, PROTECTED_METADATA_KEYS } from '../../../lib/sd/amend-sd.js';
 import { extractSdFrs } from '../../../scripts/modules/handoff/executors/plan-to-exec/gates/sd-prd-drift.js';
 import { DIRECTIVE_KINDS, PAYLOAD_KINDS } from '../../../lib/fleet/worker-status.cjs';
+import { buildMandatoryChildOrderPatch } from '../../../lib/sd/build-mandatory-child-order-patch.js';
 
 const SD_UUID = '11111111-2222-3333-4444-555555555555';
 const CLAIM_SESSION = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -329,5 +330,45 @@ describe('TS-5 / FR-1 AC-4 (TC-5): no NEW payload kind is introduced', () => {
     expect(String(payload.kind).toLowerCase()).not.toBe('adam_advisory');
     expect(payload.reply_class).toBeUndefined();
     expect(payload.reply_to).toBeUndefined();
+  });
+});
+
+describe('QF-20260907-152 (QF-20260904-708 remainder): buildMandatoryChildOrderPatch', () => {
+  it('builds the structured {order, reason} shape from a comma-separated list', () => {
+    const result = buildMandatoryChildOrderPatch('e,a,b', 'ship E first');
+    expect(result.error).toBeUndefined();
+    expect(result.metadata).toEqual({
+      mandatory_child_order: { order: ['E', 'A', 'B'], reason: 'ship E first' },
+    });
+  });
+
+  it('uppercases and trims whitespace-padded tokens', () => {
+    const result = buildMandatoryChildOrderPatch(' e , a ,b ');
+    expect(result.metadata.mandatory_child_order.order).toEqual(['E', 'A', 'B']);
+  });
+
+  it('defaults reason to null when none is supplied', () => {
+    const result = buildMandatoryChildOrderPatch('e,a');
+    expect(result.metadata.mandatory_child_order.reason).toBeNull();
+  });
+
+  it('drops empty tokens from a trailing/doubled comma', () => {
+    const result = buildMandatoryChildOrderPatch('e,,a,');
+    expect(result.metadata.mandatory_child_order.order).toEqual(['E', 'A']);
+  });
+
+  it('errors on a single-token value (needs at least 2 children to order)', () => {
+    const result = buildMandatoryChildOrderPatch('e');
+    expect(result.metadata).toBeUndefined();
+    expect(result.error).toMatch(/at least 2 comma-separated/);
+  });
+
+  it('errors on an empty value', () => {
+    const result = buildMandatoryChildOrderPatch('');
+    expect(result.error).toMatch(/at least 2 comma-separated/);
+  });
+
+  it('the metadata key it writes is not on the protected-keys list (would silently break the CLI writer)', () => {
+    expect(PROTECTED_METADATA_KEYS).not.toContain('mandatory_child_order');
   });
 });
