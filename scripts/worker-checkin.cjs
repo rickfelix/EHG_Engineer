@@ -29,6 +29,12 @@
  *          THIS check-in call. No-op — byte-identical to today — when both flags are absent.
  *          A chairman/coordinator-set metadata.effort_source='chairman' always wins over a
  *          worker's own --effort self-report.)
+ *        node scripts/worker-checkin.cjs --stand-down
+ *          (QF-20260905-282: a chairman-dedicated seat self-reports coordinator_stand_down=
+ *          true on this SAME tick, so self-claim-gates already sees it and never pulls from
+ *          the belt -- roll_call, resume, directed WORK_ASSIGNMENT claiming and recovery are
+ *          all still honored. See docs/protocol/fleet-worker-loop-directive.md's
+ *          "Dedicated-seat directive" variant.)
  */
 
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
@@ -1997,7 +2003,7 @@ function mergeCheckinModelEffort(sessionMetadata, { model: cliModel = null, effo
   return changed ? { metadata: next, changed: true } : { metadata: sessionMetadata, changed: false };
 }
 
-async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId, model: cliModel = null, effort: cliEffort = null } = {}) {
+async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId, model: cliModel = null, effort: cliEffort = null, standDown: cliStandDown = false } = {}) {
   // 1. resolve coordinator (fail-open to null -> broadcast)
   let coordinatorId = null;
   try { coordinatorId = await getCoordinator(sb); } catch { coordinatorId = null; }
@@ -2019,7 +2025,7 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   const ctx = {
     sb,
     sessionId,
-    opts: { cliModel, cliEffort },
+    opts: { cliModel, cliEffort, cliStandDown },
     coordinatorId,
     callsign,
     mySd,
@@ -2074,7 +2080,9 @@ function parseCheckinArgs(argv) {
     const i = args.indexOf(flag);
     return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null;
   };
-  return { model: get('--model'), effort: get('--effort') };
+  // QF-20260905-282: --stand-down (boolean, no value) lets a dedicated seat self-report
+  // coordinator_stand_down=true on its first check-in -- see dedicated-seat-standdown.cjs.
+  return { model: get('--model'), effort: get('--effort'), standDown: args.includes('--stand-down') };
 }
 
 async function main() {
@@ -2087,7 +2095,7 @@ async function main() {
     console.log(JSON.stringify({ ok: false, action: 'error', error: 'CLAUDE_SESSION_ID env var required (set by the SessionStart hook).' }, null, 2));
     process.exit(1);
   }
-  const { model: cliModel, effort: cliEffort } = parseCheckinArgs(process.argv.slice(2));
+  const { model: cliModel, effort: cliEffort, standDown: cliStandDown } = parseCheckinArgs(process.argv.slice(2));
   let sb;
   try {
     sb = ws.getServiceClient();
@@ -2095,7 +2103,7 @@ async function main() {
     console.log(JSON.stringify({ ok: false, action: 'error', error: `supabase client unavailable: ${e.message}` }, null, 2));
     process.exit(1);
   }
-  const result = await runCheckin(sb, sessionId, { model: cliModel, effort: cliEffort });
+  const result = await runCheckin(sb, sessionId, { model: cliModel, effort: cliEffort, standDown: cliStandDown });
   // QF-20260822-955: standalone owed-row SMS dispatch tick, piggybacked on the check-in
   // every worker already runs — see lib/checkin/sms-outbound-tick.cjs for why (no new CI
   // Twilio secrets; reuses this session's own local env). Fail-soft/bounded by design;

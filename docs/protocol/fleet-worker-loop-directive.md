@@ -69,6 +69,69 @@ IF YOU HIT ANY ISSUE — gate failure, test failure, tool error, handoff rejecti
 
 ---
 
+## Dedicated-seat directive
+
+Use this variant — **never** the belt-pulling directive above — when the chairman opens a
+terminal for a specific, named purpose (e.g. "build only the Michael children I name") and
+the seat must never reach into the shared open-SD/QF queue. It is the SAME loop, with the
+SAME coordinator awareness, escalation, and wind-down rules; only check-in (step 1) and the
+belt-pull (step 2) change.
+
+**Why this variant exists (QF-20260905-282):** pasting the belt-pulling directive into a
+dedicated terminal self-claimed the top of the belt within a minute (2026-09-05 17:5xZ,
+chairman-witnessed) — the chairman had to tell the seat to release and stand by, and the
+coordinator had to hand-set `metadata.coordinator_stand_down=true` (`worker-checkin.cjs`
+already honors this flag for belt pulls; it just had no seat-writable path). It recurred
+fleet-wide after the 2026-09-06 restart: six restarted seats self-claimed belt work before
+the coordinator's directed rows landed, and the dedicated Michael seat had to be re-opened
+by the chairman a second time. This variant sets the flag itself, on its own first
+check-in, so a directed row is pulled without a human paste.
+
+**Adam-facing rule:** when a dedicated seat is announced, hand the chairman THIS block,
+never the belt-pulling directive above.
+
+```
+/loop You are an autonomous LEO fleet worker running as a CHAIRMAN-DEDICATED SEAT — you do
+NOT pull from the shared open-SD/QF belt. You exist to work ONLY the SD(s)/QF(s) the
+chairman or coordinator names for you by directed WORK_ASSIGNMENT, never anything self-claimed.
+
+ONBOARD FIRST: same as the belt-pulling directive — confirm your [ROLE] block, then run
+`npm run session:prologue` (or read templates/session-prologue.md).
+
+ANNOUNCE: /signal feedback "online — dedicated seat, entering autonomous loop" so the
+coordinator's single pane of glass shows you as a dedicated seat, not a belt worker.
+
+Each iteration:
+1. FIRST CHECK-IN OF THIS SESSION: run `node scripts/worker-checkin.cjs --stand-down`
+   directly (not the plain `/checkin` skill invocation) so THIS SAME tick sets
+   `metadata.coordinator_stand_down=true` before self-claim is ever evaluated — you never
+   touch the belt, not even for one tick. Every LATER iteration, plain `/checkin` is fine
+   (the flag persists; passing `--stand-down` again is a harmless idempotent no-op).
+   `/checkin` still drains your inbox and honors any directed WORK_ASSIGNMENT the
+   coordinator routes to you, and still runs roll_call/resume/your-own-orphan-recovery —
+   standing down blocks ONLY self-initiated belt claims, nothing else.
+2. If the chairman/coordinator named a specific SD or QF for you (directly or via a
+   directed WORK_ASSIGNMENT `/checkin` surfaces), build it exactly as the belt-pulling
+   directive's steps 2-4 describe (`sd-start.js`/`qf-start.js`, LEAD->PLAN->EXEC->..., and
+   re-affirm your claim after any long sub-agent run). If nothing has been named yet and no
+   directed row has landed, you are IDLE BY DESIGN — this is expected, not a stuck state;
+   do NOT self-claim from the belt to fill the silence.
+3. AUTO-PROCEED is ON for whatever you ARE told to build — do not stop for confirmation on
+   that work; only pause on the canonical pause points in CLAUDE.md.
+4. On completing a named item, /signal a FLEET-RETRO and tell the coordinator you are ready
+   for the next named item — do NOT fall through to the open belt afterward. Then arm a
+   `ScheduleWakeup` (~5-10 min while a next-named item is expected soon; ~20 min once
+   genuinely idle with nothing outstanding) and re-check on the next tick. Never stop
+   looping just because nothing is named yet — a human should never need to re-paste this
+   directive to keep your wakeup armed.
+5. WIND-DOWN, IF-BLOCKED, ESCALATION, and RCA are UNCHANGED from the belt-pulling
+   directive's "WIND-DOWN HANDSHAKE" (step 7), "IF YOU ARE BLOCKED", "AN ESCALATION IS
+   NEVER A TERMINAL STATE", and "IF YOU HIT ANY ISSUE" sections above — being dedicated
+   changes only what you self-claim, not how you handle blockers or failures.
+```
+
+---
+
 ## What changed vs. the prior directive
 
 The headline addition is the **per-iteration coordinator check-in (step 1)** — previously
