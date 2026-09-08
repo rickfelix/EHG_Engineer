@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-09-08](#2026-09-08)
+  - [Bugfix](#bugfix-4)
   - [Bugfix](#bugfix)
   - [Security](#security)
 - [2026-09-07](#2026-09-07)
@@ -195,6 +196,10 @@
 
 ### Bugfix
 
+- **`--scope-accepted` attested to scope satisfaction in its docs but read as "merge = done" in practice** - SD-LEO-FIX-SCOPE-ACCEPTED-ATTESTS-001 (escalated from QF-20260727-737, PR #8639)
+  - The `complete-quick-fix.js` reconcile-after-merge path documented `--scope-accepted` as attesting that "the QF's stated scope is satisfied," but nothing at the point of use said so — an operator could read a merged PR alone as proof scope was met. QF-20260726-423 was once force-completed under exactly this ambiguity, letting a security carve-out ship silently.
+  - `scripts/modules/complete-quick-fix/orchestrator.js` now exports `scopeAcceptedReminderLines()`, printed at the reconcile call site whenever `--scope-accepted` is used, restating the merge-vs-scope distinction inline; `cli.js`'s `--help` text carries the same wording. No change to what's written to the `quick_fixes` row (`force_completed`, `verified_by`, `verification_notes` unchanged) — the fix is purely informational, by design.
+  - Escalated from Quick-Fix QF-20260727-737 after its own completion gate refused to close a Tier-3 fix with no linked SD; the code had already merged before the SD was created, so this SD carries zero unique commits — a retroactive process wrapper, not new work.
 - **A fleet worker's account rotation never updated its session record, and the fleet-wide rotation sampler always read the machine-global login instead of a seat's own profile** - SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (escalated from QF-20260906-219, PR #8626 + #8633)
   - `captureAccountIdentity()` (`scripts/hooks/session-register.cjs`) previously stamped `claude_sessions.metadata.account_email` once, at registration, then never again — a later `/login` swap on the shared credentials file left the row permanently naming whoever registered first. It now re-resolves on every SessionStart and writes only when the resolved identity genuinely changed, compared across all 6 fields the resolver stamps (email, org name, org id, subscription type, auth method, uuid8) rather than just 2 — closing a gap where an auth-method upgrade (e.g. unauthenticated fallback → CLI-measured) with the same email/uuid8 silently skipped the write.
   - `adam-quiet-tick.mjs`'s account-switch sampler called the identity resolver bare, always reading the machine-global config; it now honors a seat's own `CLAUDE_CONFIG_DIR` profile when one is set, and its on-disk baseline file records the path actually read from rather than always the machine-global one. Both ship dormant today — no live seat has a profile yet — pending a separate, chairman-gated profile-per-account decision.
