@@ -560,7 +560,10 @@ export function autoDetectGitInfo(testDir, options = {}) {
 
     if (result.actualLoc == null) { // preserve an explicit 0 (QF-20260719-163)
       try {
-        const diffStats = execSync('git diff origin/main --shortstat', { encoding: 'utf-8', cwd: testDir, timeout: EXTERNAL_STEP_TIMEOUT_MS }).trim();
+        // QF-20260907-416: 3-dot, matching the split's own 3-dot fix (QF-20260511-205)
+        // just below. 2-dot inflated this figure with every unrelated commit that
+        // landed on origin/main after this branch's own PR merged.
+        const diffStats = execSync('git diff origin/main...HEAD --shortstat', { encoding: 'utf-8', cwd: testDir, timeout: EXTERNAL_STEP_TIMEOUT_MS }).trim();
         const match = diffStats.match(/(\d+) insertion/);
         if (match) {
           result.actualLoc = parseInt(match[1]);
