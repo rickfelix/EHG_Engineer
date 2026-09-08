@@ -10,7 +10,11 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
-import { resolveAccountSamplerIdentity } from '../../../scripts/adam-quiet-tick.mjs';
+import { createRequire } from 'node:module';
+import { resolveAccountSamplerIdentity, resolveAccountSamplerSourcePath } from '../../../scripts/adam-quiet-tick.mjs';
+
+const require_ = createRequire(import.meta.url);
+const { resolveRealConfigPath } = require_('../../../lib/fleet/account-identity.cjs');
 
 describe('resolveAccountSamplerIdentity (QF-20260906-219)', () => {
   it('DORMANT TODAY: with no CLAUDE_CONFIG_DIR set, calls identityFn with no argument (bare, machine-global) -- unchanged from pre-fix behavior', () => {
@@ -44,5 +48,34 @@ describe('resolveAccountSamplerIdentity (QF-20260906-219)', () => {
       : [];
     expect(identityFn.mock.calls[0]).toEqual(expectedArg);
     expect(result).toEqual({ email: 'default@example.com', orgName: 'Org', accountUuid8: 'cccccccc' });
+  });
+});
+
+/**
+ * SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (LEAD-phase prospective TESTING finding): the state file
+ * saveLastAccountIdentity() writes always stamped `source: resolveRealConfigPath()` (machine-
+ * global) unconditionally, even for a reading resolveAccountSamplerIdentity() actually took from a
+ * seat-scoped CLAUDE_CONFIG_DIR profile -- reintroducing the exact provenance lie QF-20260901-848's
+ * `source` field exists to prevent. resolveAccountSamplerSourcePath() is the SAME branch as
+ * resolveAccountSamplerIdentity(), extracted so main() can pass the genuinely-correct path to
+ * saveLastAccountIdentity() instead of always defaulting to the machine-global one.
+ */
+describe('resolveAccountSamplerSourcePath (SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001)', () => {
+  it('DORMANT TODAY: with no CLAUDE_CONFIG_DIR set, returns the machine-global resolveRealConfigPath() -- unchanged from pre-fix behavior', () => {
+    expect(resolveAccountSamplerSourcePath({})).toBe(resolveRealConfigPath());
+  });
+
+  it('ACTIVE ONCE A PROFILE EXISTS: with CLAUDE_CONFIG_DIR set, returns that seat own .claude.json path -- never the machine-global one', () => {
+    const profileDir = join('fleet-profiles', 'canary');
+    const result = resolveAccountSamplerSourcePath({ CLAUDE_CONFIG_DIR: profileDir });
+    expect(result).toBe(join(profileDir, '.claude.json'));
+    expect(result).not.toBe(resolveRealConfigPath());
+  });
+
+  it('agrees with resolveAccountSamplerIdentity() on WHICH branch fires, for the same env -- the two can never disagree by construction', () => {
+    const identityFn = vi.fn(() => ({ email: 'x@example.com', orgName: 'X', accountUuid8: 'xxxxxxxx' }));
+    const withProfile = { CLAUDE_CONFIG_DIR: join('fleet-profiles', 'canary') };
+    resolveAccountSamplerIdentity(withProfile, identityFn);
+    expect(identityFn).toHaveBeenCalledWith(resolveAccountSamplerSourcePath(withProfile));
   });
 });

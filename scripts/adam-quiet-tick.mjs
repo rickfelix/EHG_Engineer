@@ -165,6 +165,22 @@ export function resolveAccountSamplerIdentity(env = process.env, identityFn = ge
   return dir ? identityFn(join(dir, '.claude.json')) : identityFn();
 }
 
+/**
+ * SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (LEAD-phase prospective TESTING finding): the exact
+ * on-disk path resolveAccountSamplerIdentity() actually reads, for saveLastAccountIdentity()'s
+ * `source` stamp below. Kept as a SEPARATE function (not folded into resolveAccountSamplerIdentity
+ * itself) so the two can never disagree by construction -- same branch, same `dir` check, called
+ * from the same site in main(). Without this, saveLastAccountIdentity() always stamped
+ * resolveRealConfigPath() (the machine-global path) even when the reading it is stamping came from
+ * a seat-scoped CLAUDE_CONFIG_DIR profile — reintroducing the exact provenance lie
+ * QF-20260901-848's `source` field exists to prevent, the moment per-seat profiles activate.
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+export function resolveAccountSamplerSourcePath(env = process.env) {
+  const dir = env.CLAUDE_CONFIG_DIR;
+  return dir ? join(dir, '.claude.json') : resolveRealConfigPath();
+}
+
 function makeClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -1221,9 +1237,13 @@ function loadLastAccountIdentity() {
 // a reader of the state file (or the ACCOUNT_SWITCH notice below) can tell how stale `prior` was
 // at compare time -- previously unstamped, so a switch collapsed inside one ~15min tick cadence
 // (three logins in ~2min) read as a single, silently-stale edge with no way to detect it.
-function saveLastAccountIdentity(s) {
+// SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001: `sourcePath` defaults to resolveRealConfigPath() (the
+// pre-fix behavior, still correct for a seat with no CLAUDE_CONFIG_DIR) but the caller now passes
+// resolveAccountSamplerSourcePath() explicitly -- see that function's own docblock for why a
+// hardcoded machine-global default here would mislabel a seat-scoped reading once profiles exist.
+function saveLastAccountIdentity(s, sourcePath = resolveRealConfigPath()) {
   try {
-    writeFileSync(ACCOUNT_IDENTITY_STATE_FILE, JSON.stringify({ ...s, measured_at: new Date().toISOString(), source: resolveRealConfigPath() }));
+    writeFileSync(ACCOUNT_IDENTITY_STATE_FILE, JSON.stringify({ ...s, measured_at: new Date().toISOString(), source: sourcePath }));
   } catch { /* fail-soft */ }
 }
 
@@ -1249,6 +1269,9 @@ async function main() {
   // is set) rather than always the machine-global file — see that function's own docblock.
   const currentIdentity = resolveAccountSamplerIdentity();
   const acctLabel = (currentIdentity && currentIdentity.email) || 'unknown';
+  // SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001: the SAME env-derived branch resolveAccountSamplerIdentity()
+  // just took, so this can never disagree with what currentIdentity was actually read from.
+  const acctSourcePath = resolveAccountSamplerSourcePath();
 
   // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: enforce the role-aware compaction
   // threshold instead of leaving it classified-but-unread (predecessor SD-LEO-INFRA-COORDINATOR-
@@ -1444,7 +1467,7 @@ async function main() {
   let acctNotified = false;
   if (!acctSwitch.changed) {
     // Cold start / stable tick: no notification to send, always advance the baseline.
-    if (currentIdentity) saveLastAccountIdentity(currentIdentity);
+    if (currentIdentity) saveLastAccountIdentity(currentIdentity, acctSourcePath);
   } else {
     // Fail-soft, but NOT silent-drop: the baseline is only advanced on CONFIRMED delivery
     // (below). If the coordinator lookup fails or the DB insert throws, priorIdentity stays
@@ -1500,7 +1523,7 @@ async function main() {
         acctNotified = true;
       }
     } catch { /* fail-soft — see comment above; acctNotified stays false, baseline not advanced */ }
-    if (acctNotified && currentIdentity) saveLastAccountIdentity(currentIdentity);
+    if (acctNotified && currentIdentity) saveLastAccountIdentity(currentIdentity, acctSourcePath);
   }
 
   // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-H (FR-3): Adam is the delivery leg to the
