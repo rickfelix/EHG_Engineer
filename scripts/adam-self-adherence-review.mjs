@@ -308,11 +308,27 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
   try {
     const { data: openRows, error } = await supabase
       .from('adam_task_ledger')
-      .select('id, status')
+      .select('id, status, source_kind, source_ref')
       .eq('tier', 'child')
       .not('status', 'in', '(done,cancelled)');
     if (error) throw error;
-    facts.pmBoardSnapshot = (openRows || []).map((r) => ({ id: r.id, status: r.status }));
+    const rows = openRows || [];
+    // QF-20260908-919: no production writer ever transitions a sourced_sd child's status when the
+    // SD it tracks completes (task-rehydrate.js's OPEN_SD_STATUSES sweep only covers
+    // advisory_thread/awaited_reply) — the raw status column alone overcounts. Resolve sourced_sd
+    // rows against the SD's live status; an unresolved sd_key stays counted open (conservative).
+    const sdRefs = [...new Set(rows.filter((r) => r.source_kind === 'sourced_sd' && r.source_ref).map((r) => r.source_ref))];
+    const sdStatusByKey = new Map();
+    if (sdRefs.length) {
+      const { data: sdRows } = await supabase.from('strategic_directives_v2').select('sd_key, status').in('sd_key', sdRefs);
+      for (const sd of (sdRows || [])) sdStatusByKey.set(sd.sd_key, sd.status);
+    }
+    const genuinelyOpen = rows.filter((r) => {
+      if (r.source_kind !== 'sourced_sd') return true;
+      const status = sdStatusByKey.get(r.source_ref);
+      return status == null || ['draft', 'in_progress'].includes(status);
+    });
+    facts.pmBoardSnapshot = genuinelyOpen.map((r) => ({ id: r.id, status: r.status }));
   } catch { /* leave null -> unknown */ }
 
   // QF-20260725-469 pm-board (finding closure): the finding-class rows whose termination state the
