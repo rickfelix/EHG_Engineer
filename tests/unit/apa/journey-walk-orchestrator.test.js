@@ -142,6 +142,26 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
     expect(result.preflightResults).toEqual([{ name: 'land', success: true, url: 'http://fixture', renderedStateSummary: 'preflight ok' }]);
   });
 
+  // QF-20260906-826: durationMs (measured by runJourneyWalk) must reach recordResult, not be
+  // dropped on the floor between the walk and the writer.
+  it('QF-20260906-826: threads outcome.durationMs into recordResult', async () => {
+    const { deps } = makeDeps({
+      runJourneyWalk: vi.fn(async () => ({
+        outcomes: [
+          { step: 'stp-1', url: 'http://fixture/one', renderedStateSummary: 'ok', success: true, failureReason: null, durationMs: 842 },
+          { step: 'stp-2', url: null, renderedStateSummary: null, success: false, failureReason: 'no verified UI mapping', durationMs: 55 },
+        ],
+        completedAllSteps: false,
+        brokenAtStep: 'stp-2',
+      })),
+    });
+
+    await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    expect(deps.recordResult).toHaveBeenNthCalledWith(1, 'run-1', expect.objectContaining({ id: 'stp-1' }), 'PASS', expect.objectContaining({ durationMs: 842 }));
+    expect(deps.recordResult).toHaveBeenNthCalledWith(2, 'run-1', expect.objectContaining({ id: 'stp-2' }), 'FAIL', expect.objectContaining({ durationMs: 55 }));
+  });
+
   it('a step never reached by the walk is named in the manifest but absent from executedJourneys (never silently satisfied)', async () => {
     const { deps } = makeDeps({
       // Walk only produced ONE outcome even though STEPS defines two — mirrors a walk that

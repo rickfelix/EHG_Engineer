@@ -69,4 +69,29 @@ describe('recordResult() uat_test_results schema alignment (mocked)', () => {
       scenario_snapshot: { id: 's1', title: 'Scenario' },
     });
   });
+
+  // QF-20260906-826: duration_ms/failure_category are real columns this writer received as
+  // inputs (durationMs, failureType) but never persisted -- measured live against run
+  // b29e63cc, whose FAIL row carried the failing scenario in error_message/metadata.source_id
+  // but duration_ms=null and failure_category=null despite the caller having a real value for
+  // failureType ('functional') and never even offering a durationMs input at all.
+  it('QF-20260906-826: persists duration_ms and failure_category on the result row', async () => {
+    await recordResult('run-1', { id: 's1', title: 'Scenario' }, 'FAIL', {
+      errorMessage: 'boom',
+      failureType: 'functional',
+      durationMs: 1234,
+    });
+
+    const payload = resultsInsertChain.insert.mock.calls[0][0];
+    expect(payload.failure_category).toBe('functional');
+    expect(payload.duration_ms).toBe(1234);
+  });
+
+  it('QF-20260906-826: both are null (not omitted) when the caller supplies neither, matching every pre-existing caller', async () => {
+    await recordResult('run-1', { id: 's1', title: 'Scenario' }, 'PASS');
+
+    const payload = resultsInsertChain.insert.mock.calls[0][0];
+    expect(payload).toHaveProperty('failure_category', null);
+    expect(payload).toHaveProperty('duration_ms', null);
+  });
 });
