@@ -8,7 +8,7 @@
 // the CHECK without fabricating uat_verified.
 
 import { describe, it, expect } from 'vitest';
-import { buildMergedReconcileUpdate, witnessNameFrom, completionModeStamp, buildRuntimeObservation, completionStampFromOptions, assertReconcileFlagsSupported } from '../../../scripts/modules/complete-quick-fix/orchestrator.js';
+import { buildMergedReconcileUpdate, witnessNameFrom, completionModeStamp, buildRuntimeObservation, completionStampFromOptions, assertReconcileFlagsSupported, scopeAcceptedReminderLines } from '../../../scripts/modules/complete-quick-fix/orchestrator.js';
 
 // Mirror of the live completed_requires_verification CHECK predicate (asserted against the DB
 // constraint def: (tests_passing AND uat_verified) OR force_completed when status='completed').
@@ -510,5 +510,34 @@ describe('reconcile path no longer drops --actual-loc / --uat-verified (QF-20260
     const u = buildMergedReconcileUpdate({ ...base, options: { actualLoc: 42 } });
     expect(u.force_completed).toBe(true);
     expect(u.uat_verified).toBeUndefined();
+  });
+});
+
+// QF-20260727-737: --scope-accepted's documented meaning ("the QF's stated scope is satisfied")
+// diverged from its practical usage ("a merged PR proves code landed"), and nothing at the point
+// of consuming the flag restated the distinction — QF-20260726-423 force-completed on merge +
+// ancestry verification alone. scopeAcceptedReminderLines is the echo shown at that exact point.
+describe('scopeAcceptedReminderLines (QF-20260727-737)', () => {
+  const args = { qfId: 'QF-20260101-001', prUrl: 'https://github.com/rickfelix/EHG_Engineer/pull/9999', headBranch: 'qf/QF-20260101-001', scopeAcceptedBy: 'Alpha-2 — both named surfaces verified' };
+
+  it('names who accepted scope and the QF being completed', () => {
+    const lines = scopeAcceptedReminderLines(args).join('\n');
+    expect(lines).toContain('Alpha-2 — both named surfaces verified');
+    expect(lines).toContain('QF-20260101-001');
+  });
+
+  it('restates the QF-20260725-691 distinction: scope satisfied, not merely code landed', () => {
+    const lines = scopeAcceptedReminderLines(args).join('\n');
+    expect(lines).toMatch(/STATED SCOPE is satisfied/);
+    expect(lines).toMatch(/NOT merely/);
+    expect(lines).toMatch(/code landed/);
+    expect(lines).toContain('QF-20260725-691');
+  });
+
+  it('cites the merged PR as landing evidence, distinct from the scope attestation', () => {
+    const lines = scopeAcceptedReminderLines(args).join('\n');
+    expect(lines).toContain(args.prUrl);
+    expect(lines).toContain(args.headBranch);
+    expect(lines).toMatch(/MERGED \+ reachable from origin\/main/);
   });
 });

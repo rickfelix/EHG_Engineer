@@ -81,6 +81,26 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
  * @param {string|null} scopeAcceptedBy
  * @returns {string|null}
  */
+/**
+ * QF-20260727-737: the operator has ALREADY committed to --scope-accepted by the time the
+ * reconcile branch that consumes it runs, so the "re-read the scope first" message shown when
+ * the flag is ABSENT never reaches them — the exact gap that let QF-20260726-423 force-complete
+ * on merge + ancestry verification alone, mistaking "code landed" for "scope satisfied"
+ * (QF-20260725-691's own attestation text draws that line). Echo the distinction at the point
+ * the flag is actually consumed, not only when it is missing. Pure so it is unit-testable
+ * without mocking the console or the full completion pipeline.
+ * @param {{qfId: string, prUrl: string, headBranch: string, scopeAcceptedBy: string}} args
+ * @returns {string[]} lines to print, in order
+ */
+export function scopeAcceptedReminderLines({ qfId, prUrl, headBranch, scopeAcceptedBy }) {
+  return [
+    `\n✅ QF own PR ${prUrl} (head ${headBranch}) is MERGED + reachable from origin/main.`,
+    `   SCOPE ACCEPTED by ${scopeAcceptedBy} — completing ${qfId}.`,
+    '   Reminder (QF-20260725-691): this attests that the QF\'s STATED SCOPE is satisfied, NOT merely',
+    '   that the code landed. A merged PR alone proves landing; verify every named surface before attesting.\n',
+  ];
+}
+
 export function witnessNameFrom(scopeAcceptedBy) {
   if (!scopeAcceptedBy || typeof scopeAcceptedBy !== 'string') return null;
   const trimmed = scopeAcceptedBy.trim();
@@ -452,7 +472,9 @@ export async function completeQuickFix(qfId, options = {}) {
       // an explicit --scope-accepted attestation this records the merge and leaves the QF OPEN.
       const scopeAcceptedBy = options.scopeAccepted || null;
       if (scopeAcceptedBy) {
-        console.log(`\n✅ QF own PR ${probeWitness.prUrl} (head ${probeWitness.headBranch}) is MERGED + reachable from origin/main, and SCOPE ACCEPTED by ${scopeAcceptedBy} — completing ${qfId}.\n`);
+        for (const line of scopeAcceptedReminderLines({ qfId, prUrl: probeWitness.prUrl, headBranch: probeWitness.headBranch, scopeAcceptedBy })) {
+          console.log(line);
+        }
       } else {
         console.log(`\n📌 QF own PR ${probeWitness.prUrl} (head ${probeWitness.headBranch}) is MERGED + reachable from origin/main.`);
         console.log(`   Recording the merge and leaving ${qfId} IN_PROGRESS — a merged PR proves the code landed, NOT that this QF's scope is satisfied (QF-20260725-691).`);

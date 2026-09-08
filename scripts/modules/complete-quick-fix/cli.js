@@ -293,6 +293,9 @@ Options:
   --actual-source-loc   Source-only LOC override (excludes test files; cap policy applies here)
   --actual-test-loc     Test-only LOC override (separate sanity cap; not policy-relevant)
   --pr-url              GitHub PR URL (REQUIRED)
+  --scope-accepted      "<who> — <why>". Attests the QF's STATED SCOPE is satisfied, NOT merely
+                        that the PR merged (QF-20260725-691) -- a merge alone proves landing.
+                        Sets force_completed=true on the reconcile-after-merge path.
   --skip-tests          Skip running tests (trusts CI; testsPass=true by default)
   --tests-pass          Override testsPass explicitly (yes/no); optional with --skip-tests
   --skip-typecheck      Skip TypeScript verification (not recommended)
