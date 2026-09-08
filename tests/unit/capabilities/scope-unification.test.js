@@ -23,14 +23,12 @@ import {
 } from '../../../lib/capabilities/capability-taxonomy.js';
 import { toVentureCapabilityRow, VENTURE_MATURITY_LEVELS } from '../../../scripts/one-off/backfill-venture-capabilities.mjs';
 import { buildCrossVentureGraph } from '../../../lib/governance/cross-venture-capability-graph.js';
+// QF-20260705-022: this suite WRITEs (backfill/seed calls). The old local gate answered "is a
+// real DB reachable?" (true under every fleet worker's ambient .env, production included);
+// HAS_REAL_DB now means "is the target explicitly designated safe" — tests/helpers/db-available.js.
+import { HAS_REAL_DB } from '../../helpers/db-available.js';
 
 dotenv.config();
-
-// Gate: skip DB tests when no real DB is available (mirrors scoring-lifecycle.test.js).
-const HAS_REAL_DB = process.env.SUPABASE_URL
-  && !process.env.SUPABASE_URL.includes('test.invalid.local')
-  && process.env.SUPABASE_SERVICE_ROLE_KEY
-  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UNIT TESTS — no DB required
