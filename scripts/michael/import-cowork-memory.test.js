@@ -194,9 +194,36 @@ describe('parseSourceFiles', () => {
     ].sort());
   });
 
-  it('only gmail.md carries a sectionHeadingRe -- the other rule-typed files intentionally have none', () => {
+  it('QF-20260907-610: gmail.md, todoist.md and morning-brief-distillation.md carry a sectionHeadingRe; body-section.md and CLAUDE.md intentionally have none', () => {
     expect(SOURCE_FILES['memory/preferences/gmail.md'].sectionHeadingRe).toBeTruthy();
-    expect(SOURCE_FILES['memory/preferences/todoist.md'].sectionHeadingRe).toBeUndefined();
+    expect(SOURCE_FILES['memory/preferences/todoist.md'].sectionHeadingRe).toBeTruthy();
+    expect(Array.isArray(SOURCE_FILES['memory/preferences/morning-brief-distillation.md'].sectionHeadingRe)).toBe(true);
+    expect(SOURCE_FILES['memory/preferences/body-section.md'].sectionHeadingRe).toBeUndefined();
     expect(SOURCE_FILES['CLAUDE.md'].sectionHeadingRe).toBeUndefined();
+  });
+
+  it('QF-20260907-610: todoist.md and morning-brief-distillation.md parse a non-zero rule count end to end, via SOURCE_FILES + parseSourceFiles (real-shaped fixtures, not just parseRuleFile in isolation)', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'michael-cowork-qf610-'));
+    try {
+      fs.mkdirSync(path.join(root, 'memory', 'preferences'), { recursive: true });
+      fs.writeFileSync(
+        path.join(root, 'memory', 'preferences', 'todoist.md'),
+        ['## Effort + energy budget model (Phase 4/4b — added 2026-05-30)', '', "### Rick's review process (hard rule)", '', 'Rick reviews every estimate before it is trusted.', '', '## Change log', '', '### 2026-05-14 — initial setup', '', 'Historical prose, not a rule.', ''].join('\n'),
+      );
+      fs.writeFileSync(
+        path.join(root, 'memory', 'preferences', 'morning-brief-distillation.md'),
+        ['## Structural decisions (LOCKED)', '', '### Two-zone "newspaper" layout — CONFIRMED', '', 'The brief uses a two-zone layout.', '', '## Todoist intelligence — effort + energy-aware prioritization (Rick\'s direction, 2026-05-30)', '', '### Effort-budget model (Rick\'s refinement, 2026-05-30)', '', 'Effort budgets feed the morning brief too.', ''].join('\n'),
+      );
+      const { parsed } = parseSourceFiles(root);
+      expect(parsed['memory/preferences/todoist.md'].rules).toHaveLength(1);
+      expect(parsed['memory/preferences/todoist.md'].rules[0]).toMatchObject({ domain: 'todoist', rule_key: 'rick-s-review-process-hard-rule' });
+      expect(parsed['memory/preferences/morning-brief-distillation.md'].rules).toHaveLength(2);
+      expect(parsed['memory/preferences/morning-brief-distillation.md'].rules.map((r) => r.rule_key)).toEqual([
+        'two-zone-newspaper-layout-confirmed',
+        'effort-budget-model-rick-s-refinement-2026-05-30',
+      ]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

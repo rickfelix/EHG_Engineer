@@ -48,15 +48,20 @@ export const DEFAULT_MANIFEST_PATH = path.join('.artifacts', 'michael-cowork-man
  * REWRITTEN by SD-LEO-FIX-COWORK-IMPORTER-CANNOT-001: paths corrected to match the real corpus
  * layout (4 files live under memory/preferences/, not root), gmail-labels.md removed (no such
  * file exists anywhere in the corpus -- the label rules are prose inside gmail.md, out of scope
- * here), memory/doctrine.md added. Only gmail.md carries a sectionHeadingRe -- it is the sole rule
- * file with a genuine heading-per-rule structure; see cowork-parse.mjs's module doc comment for
- * why the other four rule-typed entries intentionally have none.
+ * here), memory/doctrine.md added.
+ * QF-20260907-610: todoist.md and morning-brief-distillation.md ARE heading-structured (measured
+ * live against the real corpus, 2026-09-07) and now carry a sectionHeadingRe too -- the prior
+ * comment here overgeneralised from one hand-encoded rule living in a sub-bullet to "no file but
+ * gmail.md has headings", which was true for body-section.md (genuinely mixed prose) and CLAUDE.md
+ * (a heading convention it does not use at all -- domain stays null, deliberately untouched: its
+ * calendar-code decoder needs a content-column decision first) but false for these two. See
+ * cowork-parse.mjs's parseRuleFile doc for why morning-brief-distillation.md's entry is an ARRAY.
  */
 export const SOURCE_FILES = Object.freeze({
   'memory/preferences/gmail.md': { kind: 'rules', domain: 'gmail', sectionHeadingRe: /^##\s+Triage rules/i },
-  'memory/preferences/todoist.md': { kind: 'rules', domain: 'todoist' },
+  'memory/preferences/todoist.md': { kind: 'rules', domain: 'todoist', sectionHeadingRe: /^##\s+Effort \+ energy budget model/i },
   'memory/preferences/body-section.md': { kind: 'rules', domain: 'body' },
-  'memory/preferences/morning-brief-distillation.md': { kind: 'rules', domain: 'brief' },
+  'memory/preferences/morning-brief-distillation.md': { kind: 'rules', domain: 'brief', sectionHeadingRe: [/^##\s+Structural decisions/i, /^##\s+Section-by-section decisions/i, /^##\s+Todoist intelligence/i] },
   'CLAUDE.md': { kind: 'rules', domain: null },
   'memory/closures.md': { kind: 'closures' },
   'memory/brief-feedback.md': { kind: 'feedback' },
