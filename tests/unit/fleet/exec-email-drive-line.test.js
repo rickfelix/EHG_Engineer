@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   driveBreakdownFactsFromReport, selectTopLeverLeg, composeDriveLine, driveFlatnessClause,
-  RATIFIED_POSSIBLE, TRAILING_WINDOW,
+  trailingLegValues, RATIFIED_POSSIBLE, TRAILING_WINDOW,
 } from '../../../lib/fleet/exec-email-drive-line.mjs';
 import { RATIFIED_LEG_IDS } from '../../../lib/drive-loop/score/drive-score-legs.js';
 
@@ -155,12 +155,14 @@ describe('composeDriveLine — the ONE query both chairman surfaces share', () =
     expect(call.ops.some((o) => o.m === 'limit' && o.args[0] === TRAILING_WINDOW)).toBe(true);
   });
 
-  it('returns the rendered line plus runId/generatedAt for traceability, plus the FR-4 distinct/N clause', async () => {
+  it('returns the rendered line plus runId/generatedAt for traceability, plus the FR-4 distinct/N clause and the QF-20260908-073 per-leg clause', async () => {
     const sb = makeDriveSupabase([ROW]);
     const result = await composeDriveLine({ supabase: sb });
     expect(result.runId).toBe('drive-2026-08-15');
     expect(result.generatedAt).toBe('2026-08-15T10:00:00Z');
-    expect(result.line).toMatch(/^4\/6 = leg1_landed 2 \+ leg2_uptake 1 \+ leg4_capacity 1; top lever: \w+ \(as of 2026-08-15\) \| distinct\/1 = 1 \(target >= 3\)$/);
+    expect(result.line).toMatch(
+      /^4\/6 = leg1_landed 2 \+ leg2_uptake 1 \+ leg4_capacity 1; top lever: \w+ \(as of 2026-08-15\) \| distinct\/1 = 1 \(target >= 3\) \| per-leg distinct: L1=1 L2=1 L4=1$/
+    );
   });
 
   it('fail-soft: no supabase client -> null, never throws', async () => {
@@ -221,6 +223,51 @@ describe('composeDriveLine — the ONE query both chairman surfaces share', () =
     expect(result).not.toBeNull();
     expect(result.line).not.toMatch(/flat/); // only 2 available, fewer than the 6-reading flat window
     expect(result.line).toMatch(/distinct\/2 = 1 \(target >= 3\)/); // 2, never a false 10
+  });
+
+  // QF-20260908-073: the ticket's own measured incident, reproduced. Two unrelated single-leg
+  // wobbles on DIFFERENT rows manufacture 3 distinct TOTALS with no leg itself ever varying more
+  // than twice -- the predicate ratified to catch a flat signal reads healthy at the level it is
+  // quoted and fails at every level it was meant to bite.
+  it('[QF-20260908-073] the TOTAL passes distinct>=3 while every individual leg still fails it', async () => {
+    const threeLegRow = (leg1, leg2, leg4, generatedAt) => ({
+      run_id: `r-${generatedAt}`,
+      generated_at: generatedAt,
+      drive_score: scoreFixture([
+        { leg: 'leg1_landed', value: leg1 },
+        { leg: 'leg2_uptake', value: leg2 },
+        { leg: 'leg4_capacity', value: leg4 },
+      ]),
+    });
+    const rows = [
+      threeLegRow(1.5, 2, 0, '2026-09-08T00:00:00Z'),    // leg4's one wobble
+      threeLegRow(1.45, 2, 1, '2026-09-07T00:00:00Z'),   // leg1's one wobble
+      ...Array.from({ length: 8 }, (_, i) => threeLegRow(1.5, 2, 1, `2026-09-0${6 - i}T00:00:00Z`)),
+    ];
+    const sb = makeDriveSupabase(rows);
+    const result = await composeDriveLine({ supabase: sb });
+
+    // The total (3.5, 4.45, 4.5) DOES clear the ratified target -- this is what "reads healthy at
+    // exactly the level it is usually quoted" means. The newest row's own total is 3.5.
+    expect(result.line).toMatch(/^3\.5\/6 = .*\| distinct\/10 = 3 \(target >= 3\)/);
+    // Every individual leg is still below target, and it is now visible without a human query.
+    expect(result.line).toContain('per-leg distinct: L1=2 L2=1 L4=2');
+  });
+});
+
+describe('trailingLegValues — PURE per-leg extraction (QF-20260908-073)', () => {
+  it('extracts one leg\'s value per row, newest-first, matching the row order given', () => {
+    const rows = [
+      { drive_score: { measured_legs: [{ leg: 'leg1_landed', value: 1.5 }, { leg: 'leg2_uptake', value: 2 }] } },
+      { drive_score: { measured_legs: [{ leg: 'leg1_landed', value: 1.45 }] } },
+    ];
+    expect(trailingLegValues(rows, 'leg1_landed')).toEqual([1.5, 1.45]);
+    expect(trailingLegValues(rows, 'leg2_uptake')).toEqual([2, null]); // absent from row 2 -> null, not fabricated
+  });
+
+  it('never throws on malformed/missing input', () => {
+    expect(trailingLegValues(null, 'leg1_landed')).toEqual([]);
+    expect(trailingLegValues([{}], 'leg1_landed')).toEqual([null]);
   });
 });
 

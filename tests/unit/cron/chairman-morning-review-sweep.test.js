@@ -479,7 +479,12 @@ describe('TS (drive line) — the 4th line, additive, fail-soft, never breaking 
     // SD-LEO-FIX-DRIVE-SCORE-GRADIENT-001 (FR-4): composeDriveLine() now appends a
     // "distinct/N = M (target >= 3)" clause -- N is 1 here because this mock's drive_reports
     // table returns only the single configured row regardless of the widened .limit().
-    expect(lines[3]).toBe('4/6 = leg1_landed 2 + leg2_uptake 1 + leg4_capacity 1; top lever: leg2_uptake (as of 2026-07-18) | distinct/1 = 1 (target >= 3)');
+    // QF-20260908-073: the SAME predicate is now also applied per leg, appended beside the total
+    // as a compact distinct-count (not the full sentence) -- this line is shared VERBATIM with the
+    // SMS surface's BODY_CEILING, which a verbose per-leg sentence pushed real bodies over.
+    expect(lines[3]).toBe(
+      '4/6 = leg1_landed 2 + leg2_uptake 1 + leg4_capacity 1; top lever: leg2_uptake (as of 2026-07-18) | distinct/1 = 1 (target >= 3) | per-leg distinct: L1=1 L2=1 L4=1'
+    );
   });
 
   it('queries drive_reports via composeDriveLine\'s .limit(TRAILING_WINDOW)+data[0] shape -- this mock exposes no .single()/.maybeSingle(), so that shape is REQUIRED for the wiring to work at all', async () => {
