@@ -165,9 +165,9 @@ async function gatherVerificationEvidence(sdId) {
   const subAgentResults = await safeQuery(
     supabase
       .from('sub_agent_execution_results')
-      .select('sub_agent_code, verdict, confidence, metadata, executed_at')
+      .select('sub_agent_code, verdict, confidence, metadata, created_at')
       .eq('sd_id', sdId)
-      .order('executed_at', { ascending: false }),
+      .order('created_at', { ascending: false }),
     { site: 'auto-complete-deliverables:sub_agent_results' }
   );
 
