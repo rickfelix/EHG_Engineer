@@ -41,7 +41,7 @@ vi.mock('../../../lib/notifications/email-templates.js', () => ({
   }))
 }));
 
-import { sendImmediateNotification, sendDailyDigest, sendWeeklySummary, sendVisionScoreNotification } from '../../../lib/notifications/orchestrator.js';
+import { sendImmediateNotification, sendDailyDigest, sendWeeklySummary, sendVisionScoreNotification, isInQuietHours } from '../../../lib/notifications/orchestrator.js';
 import { sendEmail } from '../../../lib/notifications/resend-adapter.js';
 import { checkRateLimit } from '../../../lib/notifications/rate-limiter.js';
 
@@ -236,7 +236,14 @@ describe('orchestrator', () => {
       expect(sendEmail).toHaveBeenCalledTimes(1);
     });
 
-    it('returns deferred when chairman is in quiet hours', async () => {
+    // QF-20260906-177: this test used to let isInQuietHours read the REAL wall clock with no
+    // explicit timezone in the mocked preference, so its verdict depended on when and where the
+    // test runner executed. Failed on a docs-only PR ('expected deferred, received sent') at the
+    // 23:59-00:00 boundary in the default zone; the re-run passed (the flaky-test signature, not
+    // a fix). params.now is now an explicit, injectable test seam -- these three cases pin a
+    // fixed instant (all 2026-01-15, solidly EST/UTC-5, no DST ambiguity) and an explicit
+    // timezone, so the verdict is deterministic regardless of when/where the suite runs.
+    it('returns deferred when chairman is in quiet hours (pinned clock: noon ET, well inside the window)', async () => {
       configureFromSequence([
         // 1. Insert notification
         insertChain({ data: { id: 'notif-002' } }),
@@ -246,7 +253,8 @@ describe('orchestrator', () => {
             preference_value: JSON.stringify({
               enabled: true,
               start: '00:00',
-              end: '23:59'
+              end: '23:59',
+              timezone: 'America/New_York'
             })
           }
         }),
@@ -254,11 +262,73 @@ describe('orchestrator', () => {
         updateChain()
       ]);
 
-      const result = await sendImmediateNotification(mockSupabase, baseParams);
+      const result = await sendImmediateNotification(mockSupabase, {
+        ...baseParams,
+        now: new Date('2026-01-15T17:00:00Z'), // 12:00:00 ET (noon) -- inside 00:00-23:59
+      });
 
       expect(result.notificationId).toBe('notif-002');
       expect(result.status).toBe('deferred');
       expect(sendEmail).not.toHaveBeenCalled();
+    });
+
+    it('returns sent when the pinned clock falls OUTSIDE the quiet-hours window (midnight ET, window is 09:00-17:00)', async () => {
+      configureFromSequence([
+        insertChain({ data: { id: 'notif-002b' } }),
+        selectSingleChain({
+          data: {
+            preference_value: JSON.stringify({
+              enabled: true,
+              start: '09:00',
+              end: '17:00',
+              timezone: 'America/New_York'
+            })
+          }
+        }),
+        // Rate limit check is fully mocked; next real from() call is the status update to 'sent'
+        updateChain()
+      ]);
+
+      const result = await sendImmediateNotification(mockSupabase, {
+        ...baseParams,
+        now: new Date('2026-01-15T05:00:00Z'), // 00:00:00 ET (midnight) -- outside 09:00-17:00
+      });
+
+      expect(result.notificationId).toBe('notif-002b');
+      expect(result.status).toBe('sent');
+      expect(sendEmail).toHaveBeenCalledTimes(1);
+    });
+
+    // The exact edge the flake exposed: an ALL-DAY-EXCEPT-THE-LAST-MINUTE window (00:00-23:59) is
+    // a non-overnight window (startTime < endTime), so the EXCLUSIVE end comparison
+    // (currentTime >= startTime && currentTime < endTime) reads 23:59:xx as NOT in quiet hours --
+    // the exact "expected deferred, received sent" symptom from PR 8322, now pinned and explained
+    // rather than silenced. This documents CURRENT behavior; changing the inclusive/exclusive
+    // boundary semantics is a separate, deliberate decision, not in scope here.
+    it('QF-20260906-177: at the 23:59 boundary of an all-day (00:00-23:59) window, current logic reads NOT in quiet hours (exclusive end) -- this is the exact flake PR 8322 hit, now deterministic', async () => {
+      configureFromSequence([
+        insertChain({ data: { id: 'notif-002c' } }),
+        selectSingleChain({
+          data: {
+            preference_value: JSON.stringify({
+              enabled: true,
+              start: '00:00',
+              end: '23:59',
+              timezone: 'America/New_York'
+            })
+          }
+        }),
+        updateChain()
+      ]);
+
+      const result = await sendImmediateNotification(mockSupabase, {
+        ...baseParams,
+        now: new Date('2026-01-16T04:59:30Z'), // 23:59:30 ET on 2026-01-15 -- the boundary minute
+      });
+
+      expect(result.notificationId).toBe('notif-002c');
+      expect(result.status).toBe('sent');
+      expect(sendEmail).toHaveBeenCalledTimes(1);
     });
 
     it('returns rate_limited when rate limit exceeded', async () => {
@@ -746,5 +816,52 @@ describe('orchestrator', () => {
         expect.objectContaining({ chairman_user_id: 'parity-user' })
       );
     });
+  });
+});
+
+/**
+ * QF-20260906-177: isInQuietHours accepts an injectable `now` (Date), like
+ * channel-health-recorder.js's computeHealthUpdate/evaluateAlarmTransition/checkCanaryFreshness
+ * already do -- exercised directly, without driving sendImmediateNotification's full pipeline.
+ */
+describe('isInQuietHours (injectable now)', () => {
+  function prefsChain(preference_value) {
+    return {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { preference_value: JSON.stringify(preference_value) } })
+            })
+          })
+        })
+      })
+    };
+  }
+
+  it('is deterministic for a pinned instant well inside the window, independent of the real clock', async () => {
+    const supabase = prefsChain({ enabled: true, start: '00:00', end: '23:59', timezone: 'America/New_York' });
+    const result = await isInQuietHours(supabase, 'user-x', new Date('2026-01-15T17:00:00Z')); // noon ET
+    expect(result).toBe(true);
+  });
+
+  it('is deterministic for a pinned instant outside a narrow daytime window', async () => {
+    const supabase = prefsChain({ enabled: true, start: '09:00', end: '17:00', timezone: 'America/New_York' });
+    const result = await isInQuietHours(supabase, 'user-x', new Date('2026-01-15T05:00:00Z')); // midnight ET
+    expect(result).toBe(false);
+  });
+
+  it('reads NOT in quiet hours at exactly 23:59 of an all-day (00:00-23:59) window (exclusive end) -- the exact PR 8322 flake, pinned', async () => {
+    const supabase = prefsChain({ enabled: true, start: '00:00', end: '23:59', timezone: 'America/New_York' });
+    const result = await isInQuietHours(supabase, 'user-x', new Date('2026-01-16T04:59:30Z')); // 23:59:30 ET
+    expect(result).toBe(false);
+  });
+
+  it('defaults to the real clock when now is omitted (production behavior unchanged)', async () => {
+    const supabase = prefsChain({ enabled: false });
+    // enabled:false short-circuits to false BEFORE the clock is ever read, so this proves the
+    // 2-arg call still works (no crash on a missing 3rd arg) without depending on wall-clock time.
+    const result = await isInQuietHours(supabase, 'user-x');
+    expect(result).toBe(false);
   });
 });
