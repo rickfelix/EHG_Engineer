@@ -11,7 +11,6 @@ import { safeTruncate as _safeTruncate } from '../../../../lib/utils/safe-trunca
 import { safeQuery } from '../../../../lib/db/safe-query.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 import { createRequire } from 'module';
 import { shouldSkipAndContinue, executeSkipAndContinue } from '../skip-and-continue.js';
 import { resolveRepoPath, ENGINEER_ROOT, isVentureRepo, resolveGateRepoContext } from '../../../../lib/repo-paths.js';
