@@ -80,7 +80,10 @@ describe('createChild wiring (QF-20260905-431): overrides passthrough and mechan
   const createSdBody = source.slice(createSdCallStart, createSdCallEnd);
 
   it('description uses overrides.description when supplied, else the auto-built template', () => {
-    expect(createSdBody).toContain('description: overrides.description || buildChildDescription(parent, sdKey, childTitle)');
+    // QF-20260907-765: hoisted into a `childDescription` variable (reused by the dry-run gate
+    // battery above this call) — same computation, no longer inlined at the createSD call site.
+    expect(source).toContain('const childDescription = overrides.description || buildChildDescription(parent, sdKey, childTitle)');
+    expect(createSdBody).toContain('description: childDescription');
   });
 
   it('success_criteria and smoke_test_steps forward overrides straight through (skip the generic template defaults)', () => {
