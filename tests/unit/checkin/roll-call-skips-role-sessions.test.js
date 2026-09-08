@@ -47,9 +47,24 @@ describe('QF-20260904-935: roll-call step skips role sessions', () => {
     expect(ctx.base.roll_call_id).toBeNull();
   });
 
-  it('the coordinator role session writes NO self-addressed roll_call row', async () => {
+  it('the coordinator role session (role:"coordinator" shape) writes NO self-addressed roll_call row', async () => {
     const calls = [];
     const ctx = makeCtx({ metadata: { role: 'coordinator' }, registerRollCallCalls: calls });
+
+    await runSteps([rollCallStep], ctx);
+
+    expect(calls).toEqual([]);
+    expect(ctx.base.roll_call_id).toBeNull();
+  });
+
+  // QF-20260906-473: the REAL coordinator-election writer (lib/coordinator/resolve.cjs) stamps
+  // is_coordinator:true, never role:'coordinator' -- the test above exercised a shape no live
+  // session actually produces. Live-measured: 41 available:true roll_call rows leaked from the
+  // real coordinator session (metadata carried is_coordinator:true with no role key at all)
+  // through this exact step, via the same-turn-next-claim path in stop-loop-wakeup-reminder.cjs.
+  it('QF-20260906-473: the REAL coordinator session shape (is_coordinator:true, no role key) writes NO roll_call row', async () => {
+    const calls = [];
+    const ctx = makeCtx({ metadata: { is_coordinator: true, tier_rank: 4 }, registerRollCallCalls: calls });
 
     await runSteps([rollCallStep], ctx);
 
