@@ -491,7 +491,7 @@ function isSolomonConsultEnabled() {
  * Stamping it reply-needed made every dutifully-acked mirror read as an open obligation
  * to SLA/ping-on-silence readers. informational/expects_reply:false/no deadline is honest.
  */
-function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo, severity, sdKey, triageScore, triageReason, isAwait, replyWindowMs, now, consultPurpose }) {
+function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo, severity, sdKey, triageScore, triageReason, isAwait, replyWindowMs, now, consultPurpose, originSession }) {
   const isPreSendMirror = consultPurpose === 'pre_send';
   const replyClass = isPreSendMirror ? 'informational' : (isAwait ? 'live-handshake' : 'reply-needed');
   const payload = {
@@ -514,6 +514,12 @@ function buildSolomonConsultPayload({ correlationId, body, senderCallsign, repo,
   // (adam-advisory.cjs:98-99), so a late-verdict reconciler would have had to match on prose.
   // Omitted when not supplied, so every existing caller's payload is byte-identical.
   if (consultPurpose) payload.consult_purpose = consultPurpose;
+  // QF-20260905-123: the raising session (e.g. an Adam seat), distinct from `sender_session` --
+  // which a lane like chairman-sms-gate may stamp as a documented non-session sentinel
+  // (CHAIRMAN_LANE_AUTOMATED_SENTINEL) when no live session was threaded to it. Solomon's
+  // originator-CC resolver (scripts/solomon-advisory.cjs resolveConsultOriginator) already
+  // prefers payload.origin_session over sender_session -- this only needs to populate it.
+  if (originSession) payload.origin_session = originSession;
   if (replyClass === 'reply-needed') payload.reply_expected_by = computeReplyExpectedBy(now, replyWindowMs);
   // INVARIANT: no signal_type / no intent_action on consult rows (off the friction router + intent sweep).
   return payload;

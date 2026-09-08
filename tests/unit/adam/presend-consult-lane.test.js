@@ -158,6 +158,37 @@ describe('runPreSendConsultLane — FR-1 non-blocking + FR-2 discriminator', () 
     expect(inserted[0].row.payload.body).toContain('1449a046');
   });
 
+  // ── QF-20260905-123 ──────────────────────────────────────────────────────────────────────────
+  // The lane must forward originatorSessionId into buildSolomonConsultPayload as originSession --
+  // same capturing-fake pattern as the addressee test above, for the same reason: a fake that
+  // silently discards an extra argument would pass whether or not the value was actually threaded.
+  it('forwards originatorSessionId into the consult payload as originSession (an Adam-seat hold names that seat)', async () => {
+    const seen = [];
+    const { deps, inserted } = makeDeps({
+      buildSolomonConsultPayload: (args) => {
+        seen.push(args.originSession);
+        return {
+          kind: 'solomon_consult',
+          correlation_id: args.correlationId,
+          reply_class: args.isAwait ? 'live-handshake' : 'reply-needed',
+          ...(args.originSession ? { origin_session: args.originSession } : {}),
+          ...(args.isAwait ? {} : { reply_expected_by: 'T+2h' }),
+          body: args.body,
+        };
+      },
+    });
+    await runPreSendConsultLane({ ...INPUT, originatorSessionId: 'adam-live-session-999' }, deps);
+
+    expect(seen).toEqual(['adam-live-session-999']);
+    expect(inserted[0].row.payload.origin_session).toBe('adam-live-session-999');
+  });
+
+  it('omitting originatorSessionId reproduces the previous envelope exactly (no origin_session key)', async () => {
+    const { deps, inserted } = makeDeps();
+    await runPreSendConsultLane(INPUT, deps); // INPUT carries no originatorSessionId
+    expect('origin_session' in inserted[0].row.payload).toBe(false);
+  });
+
   // ── SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-002 (FR-1) ──────────────────────────────────────────
   // Readback-verify the consult insert: previously insertCoordinationRow's return value was
   // discarded entirely, so a genuinely successful insert and a silently failed one were
