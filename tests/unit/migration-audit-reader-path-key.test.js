@@ -37,12 +37,14 @@ vi.mock('../../lib/repo-paths.js', () => ({
 
 let normalizeMigrationPath;
 let MIGRATION_ROOTS;
+let isTrackedMigrationPath;
 
 beforeEach(async () => {
   vi.resetModules();
   const mod = await import('../../lib/migration-audit-reader.js');
   normalizeMigrationPath = mod.normalizeMigrationPath;
   MIGRATION_ROOTS = mod.MIGRATION_ROOTS;
+  isTrackedMigrationPath = mod.isTrackedMigrationPath;
 });
 
 afterEach(() => vi.restoreAllMocks());
@@ -145,5 +147,39 @@ describe('MIGRATION_ROOTS is the single representation', () => {
   it('carries no duplicates and no trailing slashes', () => {
     expect(new Set(MIGRATION_ROOTS).size).toBe(MIGRATION_ROOTS.length);
     for (const r of MIGRATION_ROOTS) expect(r.endsWith('/')).toBe(false);
+  });
+});
+
+/**
+ * QF-20260903-622: isTrackedMigrationPath is the guard scripts/apply-migration.js's
+ * writeAuditRow() calls before recording success=true, so writing a ledger row for a path
+ * that never resolves to a git-tracked file is refused at write time. execFn is injected so
+ * these tests never shell out to real git.
+ */
+describe('isTrackedMigrationPath — write-time guard (QF-20260903-622)', () => {
+  it('a path git tracks is reported tracked', () => {
+    const execFn = vi.fn(() => ''); // git ls-files --error-unmatch: exit 0, no throw
+    expect(isTrackedMigrationPath(`${FAKE_ROOT}/${REPO_RELATIVE}`, { execFn })).toBe(true);
+    expect(execFn).toHaveBeenCalledTimes(1);
+    expect(execFn.mock.calls[0][0]).toContain(REPO_RELATIVE);
+  });
+
+  it('a nonexistent path (git ls-files throws) is refused', () => {
+    const execFn = vi.fn(() => { throw new Error('pathspec did not match any file(s) known to git'); });
+    expect(isTrackedMigrationPath(`${FAKE_ROOT}/database/migrations/QF-20260903-622-does-not-exist.sql`, { execFn })).toBe(false);
+  });
+
+  it('falsy and non-string inputs are refused without shelling out', () => {
+    const execFn = vi.fn();
+    expect(isTrackedMigrationPath('', { execFn })).toBe(false);
+    expect(isTrackedMigrationPath(null, { execFn })).toBe(false);
+    expect(isTrackedMigrationPath(undefined, { execFn })).toBe(false);
+    expect(execFn).not.toHaveBeenCalled();
+  });
+
+  it('defaults to a real execFn (child_process.execSync) when none is injected', () => {
+    // No execFn override — exercises the real default parameter wiring. The fake root does not
+    // exist on disk, so real git ls-files fails and this must resolve to false, not throw.
+    expect(isTrackedMigrationPath(`${FAKE_ROOT}/${REPO_RELATIVE}`)).toBe(false);
   });
 });

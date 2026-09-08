@@ -911,5 +911,21 @@
     "content": "// SEEDED DEFECT: imports the email transport directly with ZERO isolation evidence -- no\n// fetch mock, no vi.mock() of the module, no pure-signature-only import. This is the exact\n// incident shape (an unrelated test reaching a shared transport unguarded) the control exists\n// to catch.\nimport { sendEmailInternal } from '../lib/notifications/resend-adapter.js';\nexport const probe = sendEmailInternal;\n"
    }
   ]
+ },
+ {
+  "name": "migration-ledger-phantom-audit",
+  "script": "scripts/audit/migration-ledger-phantom-audit.mjs",
+  "rootFlag": null,
+  "seedTest": "tests/unit/lint/migration-ledger-phantom-audit.test.js",
+  "neuter": {
+   "find": "return phantomRows.filter((r) => !dispositions[r.id]);",
+   "replace": "return [];",
+   "why": "Makes undispositionedPhantoms() unconditionally report zero rows regardless of what phantomRows or dispositions actually contain -- the exact QF-20260903-622 defect shape (a ledger row asserting a successful apply for a path that never existed, sitting unreported forever). This is main()'s only suppression seam between the git/DB-derived phantom classification and the 'reads zero' assertion the ticket asks for: a neutered control would print '0 undispositioned phantom ledger row(s)' on every run, including one with a brand-new, wholly undispositioned phantom row, which is silently indistinguishable from a genuinely clean ledger."
+  },
+  "note": "QF-20260903-622. Uses the seedTest form, not fixtures, DELIBERATELY: this control's main() connects to a live Supabase table (schema_migrations_applied via lib/migration-audit-reader.js's listApplied) and shells out to git (git ls-files / git log) to classify each row -- there is no injectable target and no safe way to fixture-trial the live-DB half without either exposing real credentials to the seed-test harness or fabricating rows in production. undispositionedPhantoms() was extracted specifically to make the actual defect-catching seam (a phantom row present vs. absent from the dispositions ledger) independently unit-testable with plain objects, no DB or git subprocess; main()'s query/classification logic is gated behind isMainModule() so importing the module for the seed-test never attempts to connect. The git-dependent classification half (isGenuinePhantom -- tracked / deleted-on-HEAD / present-elsewhere) is not separately seed-tested; it was instead run live against production as part of this QF's own fix (21/21 known rows classified correctly, see PR description), which is the declared blind spot for future changes to that function.",
+  "observability_proof": {
+   "input": "Each schema_migrations_applied row returned by listApplied({success:true}) -- specifically its `id` (the ledger's primary key) and `migration_path` (used upstream by isGenuinePhantom to decide phantom-or-not). undispositionedPhantoms() itself consumes only `id`, checked for a matching key in docs/audits/migration-ledger-phantom-dispositions.json. It reads no other columns and no environment variables directly (listApplied, which it is composed with in main(), needs SUPABASE_URL/SUPABASE_*_KEY, but the extracted pure function does not).",
+   "seen": "Real positive observed live against production on 2026-09-08 (this QF's own root-cause investigation): a full sweep found 5 previously-ticketed phantom rows plus 13 more of the identical shape the ticket never named, all verified via git ls-files/git log and confirmed absent from the ledger's own docs/audits/migration-ledger-phantom-dispositions.json (nonexistent at the time). After this QF adds all 21 entries (18 PHANTOM_LEDGER_ROW + 3 RENAMED_LEDGER_ROW) to that ledger, a direct run of node scripts/audit/migration-ledger-phantom-audit.mjs against the live table returns '0 undispositioned phantom ledger row(s) (21 known-phantom, all dispositioned).'"
+  }
  }
 ]
