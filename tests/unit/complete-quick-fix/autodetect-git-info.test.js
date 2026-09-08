@@ -155,6 +155,25 @@ describe('autoDetectGitInfo — no --pr-url paths', () => {
     expect(result.branchName).toBe('qf/QF-20260424-808');
     expect(result.actualLoc).toBe(90);
   });
+
+  it('QF-20260907-416: the legacy actualLoc diff uses 3-dot, not 2-dot, against origin/main', () => {
+    // A 2-dot diff picks up every unrelated commit origin/main gained after this
+    // QF's own branch was cut (or merged), inflating LOC and falsely triggering the
+    // 75-line escalation cap on a QF whose real diff was tiny. 3-dot (symmetric
+    // difference from the merge-base) is immune to that — matching the sibling fix
+    // already applied to countLocBySplit (QF-20260511-205).
+    execSync
+      .mockReturnValueOnce('C:/repo/.git/worktrees/QF-X\n')
+      .mockReturnValueOnce('abc123\n')
+      .mockReturnValueOnce('qf/QF-X\n')
+      .mockReturnValueOnce(' 1 file changed, 9 insertions(+)\n');
+
+    autoDetectGitInfo('C:/repo/.worktrees/qf/QF-X', {});
+
+    const diffCall = execSync.mock.calls.find((c) => String(c[0]).includes('--shortstat'));
+    expect(diffCall).toBeDefined();
+    expect(diffCall[0]).toBe('git diff origin/main...HEAD --shortstat');
+  });
 });
 
 describe('autoDetectGitInfo — explicit options short-circuit', () => {
