@@ -22,6 +22,7 @@ import {
 import * as waveLinkage from '../../../lib/roadmap/wave-linkage-coverage.js';
 import * as genuineWorker from '../../../lib/fleet/genuine-worker.mjs';
 import * as coordinatorResolve from '../../../lib/coordinator/resolve.cjs';
+import * as parentCompletion from '../../../lib/fleet/parent-completion.mjs';
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
 
@@ -187,6 +188,40 @@ describe('computeUtilization (TS-1, TS-2)', () => {
     const result = await computeUtilization(supabase);
     expect(result.live_workers).toBe(1);
     expect(result.claimed).toBe(1);
+  });
+
+  // QF-20260908-764: countCompletionReadyParents already separates a genuinely-completable
+  // parent that's deliberately held from `ready` -- this reader previously discarded the `held`
+  // bucket entirely, so a held-but-completable parent read as zero, indistinguishable from no
+  // such parent existing (176h-unseen live specimen). Stubs countCompletionReadyParents directly
+  // (mirrors the liveFleetWorkers spy above) rather than re-deriving checkParentCompletable's own
+  // fake-supabase shape here -- that predicate is already covered by
+  // lib/fleet/parent-completion.test.js and is unchanged by this fix.
+  it('surfaces completion_ready_parents_held (count) and _held_reasons alongside ready, not silently dropped', async () => {
+    const spy = vi.spyOn(parentCompletion, 'countCompletionReadyParents').mockResolvedValue({
+      count: 1,
+      oldestAgeMs: 1000,
+      parents: [{ sd_key: 'SD-READY-1', age_ms: 1000 }],
+      held: [{ sd_key: 'SD-HELD-1', reason: 'needs_coordinator_review' }],
+    });
+    const supabase = makeFakeSupabase({ claude_sessions: [], strategic_directives_v2: [] });
+    const result = await computeUtilization(supabase);
+    expect(result.completion_ready_parents).toBe(1);
+    expect(result.completion_ready_parents_held).toBe(1);
+    expect(result.completion_ready_parents_held_reasons).toEqual([
+      { sd_key: 'SD-HELD-1', reason: 'needs_coordinator_review' },
+    ]);
+    spy.mockRestore();
+  });
+
+  it('defaults held to 0/[] (fail-soft) when countCompletionReadyParents throws -- never breaks the probe', async () => {
+    const spy = vi.spyOn(parentCompletion, 'countCompletionReadyParents').mockRejectedValue(new Error('query fault'));
+    const supabase = makeFakeSupabase({ claude_sessions: [], strategic_directives_v2: [] });
+    const result = await computeUtilization(supabase);
+    expect(result.completion_ready_parents).toBe(0);
+    expect(result.completion_ready_parents_held).toBe(0);
+    expect(result.completion_ready_parents_held_reasons).toEqual([]);
+    spy.mockRestore();
   });
 });
 
