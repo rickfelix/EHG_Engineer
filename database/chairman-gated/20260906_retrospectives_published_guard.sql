@@ -85,7 +85,18 @@
 --
 -- ROLLBACK: see the paired 20260906_retrospectives_published_guard_DOWN.sql (drops the new
 -- trigger, restores trg_retrospectives_audit() to its exact pre-this-migration body captured
--- above, drops retro_canonical_writer_policy(), drops the retro_write_token column).
+-- above, drops retro_canonical_writer_policy()). The retro_write_token column itself now ships
+-- via database/migrations/20260908_retrospectives_retro_write_token_column.sql (see SPLIT
+-- CORRECTION note below) and is dropped by that file's own rollback, not this one.
+--
+-- SPLIT CORRECTION (SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-1): the ADD COLUMN statement below
+-- was measured NOT to need the chairman-gate on its own -- classified tier:1
+-- (all_statements_provably_additive) by scripts/lib/migration-tier-classifier.mjs -- and has been
+-- moved to database/migrations/20260908_retrospectives_retro_write_token_column.sql, applied via the
+-- Adam delegated-apply path. retro_canonical_writer_policy() (a CREATE FUNCTION) classifies tier:2
+-- and stays here, chairman-gated, alongside the trigger -- both still require the same fresh
+-- chairman verbal this file always needed. This file assumes the column already exists live by the
+-- time it applies (IF NOT EXISTS below is now a defensive no-op, not the primary application).
 
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
 -- APPLY-TIME REQUIREMENT — lock_timeout. NOT OPTIONAL.

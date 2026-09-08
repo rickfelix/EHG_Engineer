@@ -16,6 +16,9 @@
 import readline from 'readline';
 import { safeTruncate } from '../../../../../lib/utils/safe-truncate.js';
 import { safeQuery } from '../../../../../lib/db/safe-query.mjs';
+// SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-3: PUBLISHED-guard same-statement token, fail-soft
+// until the retro_write_token column ships.
+import { updateRetrospectiveWithToken } from '../../../../../lib/retro/write-with-token.js';
 import { buildSDSpecificKeyLearnings, buildSDSpecificActionItems, buildSDSpecificImprovementAreas } from '../../retrospective-enricher.js'; // SD-LEARN-FIX-ADDRESS-PAT-AUTO-022
 
 /**
@@ -351,11 +354,13 @@ export async function createHandoffRetrospective(sdId, sd, handoffResult, retros
 
     let data, error;
     if (existing && !skipOverwrite) {
-      ({ data, error } = await supabase
-        .from('retrospectives')
-        .update(retrospective)
-        .eq('id', existing.id)
-        .select());
+      // SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-3: same-statement override for the
+      // PUBLISHED-guard trigger. Registered as 'handoff_lead_to_plan_retrospective'.
+      ({ data, error } = await updateRetrospectiveWithToken(
+        (payload) => supabase.from('retrospectives').update(payload).eq('id', existing.id).select(),
+        retrospective,
+        'handoff_lead_to_plan_retrospective'
+      ));
     } else if (!existing) {
       ({ data, error } = await supabase
         .from('retrospectives')
