@@ -1,8 +1,8 @@
-<!-- file_content_hash: 49548eb1d1b29e45 -->
+<!-- file_content_hash: 023232c5b8b46c3c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-07 7:15:43 PM
+**Generated**: 2026-09-07 7:50:24 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -476,6 +476,8 @@ manual is read.
 
 - **PHASE-SNAPSHOT WINDOW REGISTRATION IS WRITE-ONCE (ratification 72a3615a)** — Chairman in-terminal at the Adam seat 2026-09-07 ~02:15Z applied `20260829_phase_snapshot_windows_agent_class_rates.sql` (plan 97e518cf, 14 stmts). Its own sentence for the same reason: once `window_registered_at` is set on a `sd_phase_handoffs` row, that column and `baseline_snapshot` are **immutable** — a later change raises **P0001** from a BEFORE UPDATE freeze trigger. The guard is inert on the 37,940 existing rows because the column is new and NULL everywhere, so it bites only newly-registered windows. **Adam share, three parts.** (1) The migration alters `sd_phase_handoffs`; `phase_snapshot_windows` is a VIEW the same file creates. Adam told the chairman the wrong target relation and corrected it on the record — read the file's ALTER lines, never infer the table from the filename. (2) A baseline is a measurement, so register the window only when the snapshot is the one to keep; there is no second attempt. (3) The probe that first appeared to show this guard broken was selecting a different row on each statement because its id subquery had no ORDER BY. Pin the row before concluding a guard fails.
 
+- **RATIFICATIONS CAN NOW BIND MICHAEL: the chairman_ratifications target CHECK was widened on a chairman verbal (ratification 6a9688ae)** — Chairman by verified SMS 2026-09-07T22:33:37Z (staging row 7bb7f018, signature_valid true), verbatim: "Apply the stages migration so ratifications can bind Michael". Applied `database/chairman-gated/20260907_chairman_ratifications_add_michael_target.sql` (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-F; plan sha d39daee7, 9 statements, 1 declared object) under the 3c scribe ceremony, PR 8577. `cr_target_contracts_valid` now admits `michael` beside adam, coordinator, solomon and protocol, so `VALID_TARGET_CONTRACTS` in `lib/chairman/ratification-writer.mjs` and the DB CHECK finally agree — before this, a ratification naming the Michael contract was rejected by Postgres. **Precondition 4 was run BEFORE the scribe and is the reason this was safe:** the live constraint read `ARRAY[adam, coordinator, solomon, protocol]` and the staged list is a strict superset adding only `michael`, so the DROP and re-ADD revoked no already-applied sibling value. Readback was independent of the file's own verify block, and the capability was then proved against the live table with a NEGATIVE CONTROL — `[michael]` accepted, `[bogus]` REJECTED, both trials rolled back, 93 rows before and after — because without the control a pass is indistinguishable from the constraint having been dropped and never re-added. **Adam share, three parts.** (1) `cr_target_contracts_valid` is now a chairman-applied object; a later change to it is a fresh verbal, never a delegated apply. (2) STANDING GUARD adopted from Solomon's pre-apply hold this same evening: name the EXACT filename and its one-line effect back to the chairman before acting on any verbal apply. His noun — "the stages migration" — matched no file by that name and does match a large unrelated lifecycle-stage family; only his purpose clause ("so ratifications can bind Michael") disambiguated it, and a seat resolving that instruction by filename search could have applied the wrong file under a real authorisation. (3) A chairman-only migration filed under `database/migrations/` rather than `database/chairman-gated/` reads as absent to anyone searching the gated directory; state the full path when citing one.
+
 
 
 ## Crew-comms routing protocol (organizing layer)
@@ -517,6 +519,16 @@ Each dimension carries *good* / *failure* / *observable signal* / *data source* 
 _Single governed source of truth (section_type=role_partnership_contract), included — not copied — into the Adam and Coordinator role files via section-file-mapping.json; supersedes the interim hand-edits formerly in the two role contracts and the Adam private-memory note (SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001)._
 
 _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partnership operates UNDER the Adam governance-and-oversight clause now present in BOTH role contracts — partnership in method, oversight in accountability; the governance clause controls on conflict._
+
+## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
+
+**quick_fixes**: `id` IS the key and holds the literal string `QF-YYYYMMDD-NNN` (e.g. `QF-20260907-188`) -- there is no `qf_key` column. Filter dedup/lookup queries on `id`; use `title`/`description` via `ilike` for fuzzy SEARCH only, never as a join/match key. A query selecting a nonexistent `qf_key` column errors at PostgREST, the client sees `data: null`, and a bare `if (data && data.length)` guard prints nothing -- reading as "no existing QF" while the query never ran. (`lib/learning/feedback-clusterer.js`'s title-similarity clustering is a deliberate exception -- it groups by title for clustering, not for keying, and must not be "fixed".)
+
+**quick_fixes.disposition** IN (`premise_resolved`, `premise_unverified_stale`, `duplicate_of`, `re_verified`, `promoted`).
+
+**adam_task_ledger.status** IN (`open`, `in_progress`, `blocked`, `done`, `cancelled`) -- there is no `closed` value.
+
+**chairman_ratifications.id** is a UUID column -- Postgres has no `ilike`/`~~*` operator for `uuid`, so an `ilike` filter on it errors ("operator does not exist: uuid ~~* unknown"). Match on `id` via `eq` (full UUID) or read rows and filter client-side by string prefix for a short-form citation.
 
 ---
 

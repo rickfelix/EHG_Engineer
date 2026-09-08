@@ -38,6 +38,7 @@
       "sd_type_workflow_paths",
       "work_tracking_policy",
       "qf_lifecycle_reconciliation",
+    "quick_fixes_schema_traps",
       "queue_ranking_unified",
       "genesis_codebase",
       "cascade_invalidation_system",
@@ -203,7 +204,8 @@
     "sections": [
       "adam_role_contract",
       "adam_self_adherence_loop",
-      "role_partnership_contract"
+      "role_partnership_contract",
+      "quick_fixes_schema_traps"
     ]
   },
   "CLAUDE_ADAM_MANUAL.md": {
@@ -222,7 +224,8 @@
     "description": "Coordinator role contract + SRE charter — fleet supervisor/orchestration role. Loaded by the /coordinator skill or when orienting a fleet-coordinator session, as workers load CLAUDE_CORE.",
     "sections": [
       "coordinator_role_contract",
-      "role_partnership_contract"
+      "role_partnership_contract",
+      "quick_fixes_schema_traps"
     ]
   },
   "CLAUDE_COORDINATOR_MANUAL.md": {
@@ -240,7 +243,8 @@
   "CLAUDE_SOLOMON.md": {
     "description": "Solomon oracle role contract — deep-reasoning oracle session. Loaded by the /solomon skill or when orienting a deep-reasoning oracle session.",
     "sections": [
-      "solomon_role_contract"
+      "solomon_role_contract",
+      "quick_fixes_schema_traps"
     ]
   },
   "CLAUDE_SOLOMON_MANUAL.md": {
