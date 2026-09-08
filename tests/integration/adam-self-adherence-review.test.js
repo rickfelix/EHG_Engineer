@@ -102,13 +102,13 @@ describe('CONST-002 propose-only / no-build GUARD (FR-5)', () => {
  * failure for these specific query shapes. Every other table falls back to the same shape the
  * generic mock uses ({count/data: null, error: null}) so unrelated resolvers stay unaffected.
  */
-function makePmBoardSb({ openRows = [], priorDetail = undefined, taskLedgerError = false, ledgerReadError = false } = {}) {
+function makePmBoardSb({ openRows = [], priorDetail = undefined, taskLedgerError = false, ledgerReadError = false, sdStatusRows = null } = {}) {
   return {
     from(table) {
       if (table === 'adam_task_ledger') {
         const b = {};
         b.select = () => b; b.eq = () => b;
-        b.not = () => Promise.resolve(taskLedgerError ? { data: null, error: { message: 'boom' } } : { data: openRows, error: null });
+        b.not = () => ({ limit: () => Promise.resolve(taskLedgerError ? { data: null, error: { message: 'boom' } } : { data: openRows, error: null }) });
         return b;
       }
       if (table === 'adam_adherence_ledger') {
@@ -120,9 +120,16 @@ function makePmBoardSb({ openRows = [], priorDetail = undefined, taskLedgerError
         );
         return b;
       }
-      // Every other table (session_coordination, strategic_directives_v2, etc.): benign no-op.
+      // QF-20260908-919: sourced_sd terminal-status resolution.
+      if (table === 'strategic_directives_v2' && sdStatusRows !== null) {
+        const b = {};
+        b.select = () => b;
+        b.in = () => ({ limit: () => Promise.resolve({ data: sdStatusRows, error: null }) });
+        return b;
+      }
+      // Every other table (session_coordination, strategic_directives_v2 by default, etc.): benign no-op.
       const b = {};
-      b.select = () => b; b.eq = () => b; b.gte = () => b; b.in = () => b; b.not = () => b;
+      b.select = () => b; b.eq = () => b; b.gte = () => b; b.in = () => b; b.not = () => b; b.limit = () => b;
       b.then = (res) => res({ count: null, data: null, error: null });
       return b;
     },
@@ -143,6 +150,32 @@ describe('resolveFacts — pm_board fact-resolution (SD-LEO-INFRA-UPSCALE-ADAM-P
   it('is fail-soft: a current-snapshot query error leaves pmBoardSnapshot null, never throws', async () => {
     const facts = await resolveFacts(makePmBoardSb({ taskLedgerError: true }));
     expect(facts.pmBoardSnapshot).toBeNull();
+  });
+
+  // QF-20260908-919: a sourced_sd child row's own status column is never transitioned when the SD
+  // it tracks completes, so the census predicate must resolve the SD's LIVE status instead.
+  it('excludes a sourced_sd child row whose SD has already reached a terminal status', async () => {
+    const openRows = [{ id: 'a', status: 'open', source_kind: 'sourced_sd', source_ref: 'SD-DONE-001' }];
+    const facts = await resolveFacts(makePmBoardSb({ openRows, sdStatusRows: [{ sd_key: 'SD-DONE-001', status: 'completed' }] }));
+    expect(facts.pmBoardSnapshot).toEqual([]);
+  });
+
+  it('keeps a sourced_sd child row whose SD is still draft/in_progress', async () => {
+    const openRows = [{ id: 'a', status: 'open', source_kind: 'sourced_sd', source_ref: 'SD-LIVE-001' }];
+    const facts = await resolveFacts(makePmBoardSb({ openRows, sdStatusRows: [{ sd_key: 'SD-LIVE-001', status: 'in_progress' }] }));
+    expect(facts.pmBoardSnapshot).toEqual([{ id: 'a', status: 'open' }]);
+  });
+
+  it('conservatively keeps a sourced_sd child row whose sd_key does not resolve at all', async () => {
+    const openRows = [{ id: 'a', status: 'open', source_kind: 'sourced_sd', source_ref: 'SD-GHOST-001' }];
+    const facts = await resolveFacts(makePmBoardSb({ openRows, sdStatusRows: [] }));
+    expect(facts.pmBoardSnapshot).toEqual([{ id: 'a', status: 'open' }]);
+  });
+
+  it('leaves non-sourced_sd rows (manual, advisory_thread, etc.) untouched', async () => {
+    const openRows = [{ id: 'a', status: 'open', source_kind: 'manual', source_ref: null }];
+    const facts = await resolveFacts(makePmBoardSb({ openRows, sdStatusRows: [] }));
+    expect(facts.pmBoardSnapshot).toEqual([{ id: 'a', status: 'open' }]);
   });
 
   it('resolves pmBoardPriorSnapshot as null when no prior pm_board ledger row exists', async () => {
