@@ -43,14 +43,41 @@
  * cheap current-tracked check, scoped to HEAD only (not --all) -- this repo carries many
  * worktree/feature-branch refs, and --all made this check ~4x slower for no benefit: the
  * ticket's own standard is "never deleted", i.e. history reachable from the current branch.
+ *
+ * KNOWN LIMITATION: isGenuinePhantom() cannot detect a RENAMED row -- a same-day rename that
+ * changes the basename entirely (e.g. 20260719_x.sql -> 20260719a_x.sql, the exact shape three
+ * rows in this QF's own disposition ledger needed) passes both the current-tracked check
+ * (false, correctly) and the presentElsewhere/everDeletedOnHead checks (also false, since the
+ * OLD basename genuinely is gone and never resolves under a different root) -- it reports as an
+ * undispositioned phantom even though the content is real and just filed under a new name. This
+ * script does not attempt `git log --follow` per-candidate (measured too slow across this
+ * repo's many worktree/feature-branch refs to run routinely); a future rename will surface here
+ * as a false-flag needing the same one-time manual trace this QF did, not a code fix.
  */
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { listApplied, normalizeMigrationPath, isTrackedMigrationPath } from '../../lib/migration-audit-reader.js';
 
 const DISPOSITIONS_PATH = path.join('docs', 'audits', 'migration-ledger-phantom-dispositions.json');
+
+/**
+ * Pure: rows already classified as genuinely phantom, minus any already present in the
+ * dispositions ledger. Extracted so a seed-test can prove the suppression logic actually
+ * filters, without a live DB connection or a real git subprocess (SD-FDBK-INFRA-CONTROL-
+ * MERGE-WITHOUT-001's control-seed-test-lint gate -- this control's main() connects to a live
+ * Supabase table, so it cannot be fixture-trialed the way a file-scanning lint can; this
+ * seam is what main()'s query/classification logic gets extracted down to for that purpose).
+ *
+ * @param {Array<{id:string}>} phantomRows
+ * @param {Object<string,object>} dispositions
+ * @returns {Array<{id:string}>}
+ */
+export function undispositionedPhantoms(phantomRows, dispositions) {
+  return phantomRows.filter((r) => !dispositions[r.id]);
+}
 
 function loadDispositions() {
   try {
@@ -99,7 +126,7 @@ async function main() {
   const rows = await listApplied({ success: true, limit: 1000 });
 
   const phantoms = rows.filter(isGenuinePhantom);
-  const undispositioned = phantoms.filter((r) => !dispositions[r.id]);
+  const undispositioned = undispositionedPhantoms(phantoms, dispositions);
 
   if (undispositioned.length > 0) {
     console.error(`${undispositioned.length} undispositioned phantom ledger row(s):`);
@@ -114,4 +141,7 @@ async function main() {
   console.log(`0 undispositioned phantom ledger row(s) (${phantoms.length} known-phantom, all dispositioned).`);
 }
 
-main().catch((e) => { console.error('ERROR', e.message); process.exitCode = 1; });
+// Gated so importing this module (e.g. from the seed-test) never opens a live DB connection.
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('ERROR', e.message); process.exitCode = 1; });
+}
