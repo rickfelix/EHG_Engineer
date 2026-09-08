@@ -58,8 +58,8 @@ describe('the shared writer stamps a role session correctly', () => {
   });
 
   it('parses the same --model/--effort flags the worker path accepts', () => {
-    expect(parseCheckinArgs(['--model', 'opus', '--effort', 'high'])).toEqual({ model: 'opus', effort: 'high' });
-    expect(parseCheckinArgs([])).toEqual({ model: null, effort: null });
+    expect(parseCheckinArgs(['--model', 'opus', '--effort', 'high'])).toEqual({ model: 'opus', effort: 'high', standDown: false });
+    expect(parseCheckinArgs([])).toEqual({ model: null, effort: null, standDown: false });
   });
 });
 
