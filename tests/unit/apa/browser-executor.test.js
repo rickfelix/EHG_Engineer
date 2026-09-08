@@ -43,6 +43,18 @@ describe('runJourneyWalk() — TS-1 (happy path, injected step-executors)', () =
     // stepC's executor reads ctx.token, which only stepB's extra return key provides.
     expect(result.outcomes[2].url).toBe('http://fixture/c/tok-123');
   });
+
+  // QF-20260906-826: a RED run's uat_test_results row previously had duration_ms permanently
+  // null (measured live against run b29e63cc) because nothing upstream ever timed a step.
+  it('QF-20260906-826: attaches a numeric durationMs to every outcome', async () => {
+    const stepExecutors = makeHappyStepExecutors();
+    const result = await runJourneyWalk({}, PERSONA, JOURNEY_STEPS, stepExecutors, { baseUrl: 'http://fixture' });
+
+    for (const outcome of result.outcomes) {
+      expect(typeof outcome.durationMs).toBe('number');
+      expect(outcome.durationMs).toBeGreaterThanOrEqual(0);
+    }
+  });
 });
 
 describe('runJourneyWalk() — TS-2 (stop at first failure)', () => {
@@ -59,6 +71,16 @@ describe('runJourneyWalk() — TS-2 (stop at first failure)', () => {
     expect(result.outcomes[1].success).toBe(false);
     expect(result.outcomes[1].failureReason).toMatch(/element not found/);
     expect(stepExecutors.stepC).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260906-826: attaches durationMs on a FAILED outcome too, not only successful ones', async () => {
+    const stepExecutors = makeHappyStepExecutors();
+    stepExecutors.stepB = vi.fn(async () => { throw new Error('stepB: element not found'); });
+
+    const result = await runJourneyWalk({}, PERSONA, JOURNEY_STEPS, stepExecutors, { baseUrl: 'http://fixture' });
+
+    expect(typeof result.outcomes[1].durationMs).toBe('number');
+    expect(result.outcomes[1].durationMs).toBeGreaterThanOrEqual(0);
   });
 });
 
