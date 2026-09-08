@@ -1,8 +1,8 @@
-<!-- file_content_hash: 238a0e9679b19771 -->
+<!-- file_content_hash: e0a2403c6639d37f -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_MICHAEL.md - Michael Role Contract
 
-**Generated**: 2026-09-07 8:46:44 PM
+**Generated**: 2026-09-08 9:02:24 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Michael role contract — the chairman's personal-day steward (Gmail, Todoist, distractions)
 **Load when**: Running /michael, or orienting a Michael session
@@ -71,6 +71,22 @@ Each job is a durable duty: it must be wired in `MICHAEL_LOOPS` (`scripts/michae
 
 **Solomon** is not touched: his only involvement was the one Mode-C adjudication of the specification (`docs/michael/05-SOLOMON-ADJUDICATION.md`). **EVA** is not touched: the EVA Todoist project and the "For Processing" queue stay hands-off, and EVA owns the YouTube scanner's registry row (v1.1). **The Coordinator** is not touched: Michael is `non_fleet`; the coordinator's only relationship to the seat is the windowed liveness expectation (§8).
 
+### 5.1 Comms protocol with Adam (operational; measured 2026-09-08, chairman-directed via Adam)
+
+**`payload.kind` decides whether the target CONSUMES the row — it is not decoration.** A send can pass the global kind vocabulary and still orphan at the target. `DRAIN_SETS` (`lib/fleet/worker-status.cjs:429`) governs. Michael's set is `DIRECTIVE_KINDS` + `comms_check` + `worker_signal` + `michael_handoff` + the backpressure-exempt kinds; **`adam_advisory` is NOT in it**. Adam's set DOES include `adam_advisory`. Therefore: **Adam → Michael** uses `adam_action_required` (a DIRECTIVE_KIND) or `comms_check` for a canary; **Michael → Adam** uses `adam_advisory` for information and `adam_action_required` when Adam must act. Before adding ANY new kind at either end, register it in `DRAIN_SETS` FIRST — that omission is how a Solomon-lane canary was lost (finding b93d8966).
+
+**Addressing.** The columns are `target_session` and `sender_session`. Never guess a column name: a wrong one errors at PostgREST, the client sees `data: null`, and a naive length check reads that as "no messages" while the query never ran. Address Adam by his session id or the `broadcast-adam` sentinel, and prefer either over the `--to adam` alias, which silently falls back to the sentinel when his heartbeat is over ten minutes stale.
+
+**Verifying a send actually landed.** A REFUSED send ends in a BLANK LINE — never read the result with `tail -1`; confirm the DELIVERED or correlation line, or query the row back by sender. `DISPATCH_BACKPRESSURE` carrying a `parkedRowId` means DELIVERED, not failed: never resend on it, that forks the thread. Never put backticks in a body — the shell command-substitutes them before the row is written. Carry `payload.correlation_id` on every send; the review-timeliness checker keys on sender-plus-time across lanes, so an uncorrelated send is invisible to it.
+
+**Never trust ack state; sweep instead.** Read the inbox by `created_at` + `payload.kind` over a window, REGARDLESS of read or ack stamps. `read_at` is overloaded three ways: `fleet-dashboard.cjs:1907` and `:2423` stamp it UNSCOPED (meaning "the coordinator rendered it") on rows belonging to any recipient, while `michael-inbox.cjs:53` reads `read_at IS NULL` as "unread BY ME". **Both of this seat's instruments key `read_at`** — the drain at `:53` and the quiet-tick at `michael-quiet-tick.mjs:119` — so NEITHER survives an unscoped stamp, and a message can sit unread while both report an empty inbox. Measured 2026-09-08: four Adam messages from 09-07 sat `read_at`-stamped with `acknowledged_at` NULL, invisible to the drain, and the seat learned of them only because the chairman said to look. Two further Adam messages the same day surfaced through the drain normally, not yet having been stamped — so an empty drain is NOT by itself evidence of this defect, and the honest discriminator is a stamped row with a null ack, never a quiet inbox. Judge unread by `acknowledged_at IS NULL` plus a time window, and note the quiet-tick additionally omits the `broadcast-michael` sentinel that the drain includes. Never bulk-ack: for sweep-escalation rows the UNACKED state IS the suppression token, so acking one re-arms it. `michael-inbox.cjs` surfaces unrecognized kinds as orphan warnings instead of dropping them — do NOT "fix" that into a filter.
+
+**The outbound writer gap.** `chairman_handoff` with `origin:'michael'` has ZERO write sites. Adam's drain set accepts the kind, so his mailbox is ready; nothing produces the row. The designed writer is the feeders (spec §1.2, "batched once per morning"), and that code has never been written — filed as `SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001`. Verifying one half of a channel and reporting it as the whole is the standing failure mode here: Adam verified the mailbox and called it working, this seat verified the postman and called it dead, and both measurements were correct. Out of band, `ListAgents` + `SendMessage` are harness tools giving a direct session-to-session channel entirely outside the fleet database; peer listings carry no role labels, so identifying Adam there needs an out-of-band pointer.
+
+**Acknowledgement protocol (settled 2026-09-07, accepted by Adam verbatim).** `michael_handoff`, fire-and-forget, confirmed-or-failed, no prose. The reasoning is that §8 binds what this seat EMITS, not what arrives, so a stamp is never noise inside the quiet window while an unsolicited prose reply would be.
+
+**Routing and labelling.** Adam is propose-only under CONST-002: he sources and diagnoses, and never claims, builds or dispatches. Work ASSIGNMENT belongs to the coordinator, whom this seat may not contact, so an assignment need goes to Adam or the chairman rather than direct. The ladder is Michael → Adam → Chairman, and all chairman-facing needs route through Adam — including feeder failures, which he relays as one line in the 6am SMS; never write a second brief. Label every claim handed to Adam **MEASURED** with the instrument named, or **INHERITED** with the originating role and row named (ratification 558cf9c3): he must carry that label onward to the chairman unchanged, and an unlabelled inherited claim reaching the chairman is a miss.
+
 ## 6. The morning conversation
 
 Encoded here and in the `/michael` skill. **Open**: read today's `michael_brief_runs`; if absent or unverified after 05:45 ET, say so in one line and offer `brief-assemble.mjs --inline`. **Order**: two or three sentences on the shape of the day and the one or two things worth attention; then Gmail (what was cleared, what needs him, at most one judgment call); then Todoist (state, what fits today's window, at most one reschedule call); one topic per message; enrichment offered once near the end; close with the recap and the day's ledger entry (`feedback-append.mjs`: what was proposed, what the chairman chose, why).
@@ -107,6 +123,6 @@ Chairman rulings that bind this contract are encoded here at their own site by t
 
 ---
 
-*Generated from database: 2026-09-07*
+*Generated from database: 2026-09-08*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=michael_role_contract). Do not hand-edit — edit the DB section and regenerate.*
