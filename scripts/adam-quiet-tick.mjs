@@ -148,6 +148,23 @@ export function resolveMainRepoRoot(startDir = __dirname) {
 const ACCOUNT_IDENTITY_STATE_FILE = join(resolveMainRepoRoot(), '.account-identity-last.json');
 const ADAM_PARTY_OFFSET_S = 420; // phase Adam's park 7min after the coordinator's (FR-5).
 
+/**
+ * QF-20260906-219: a BARE getAccountIdentity() call always reads the machine-global
+ * ~/.claude.json (resolveRealConfigPath()), never this seat's own profile -- the exact trap
+ * session-register.cjs's resolveAccountFromConfigDir() already documents and guards against.
+ * Mirrors that established pattern so the sampler measures the SEAT, not the file, once a
+ * CLAUDE_CONFIG_DIR profile is in play. Extracted as its own exported function (mirrors
+ * resolveMainRepoRoot()'s own extraction above) so it is unit-testable without pulling all of
+ * main() apart. Ships dormant today: no live seat (Adam's own included) has CLAUDE_CONFIG_DIR
+ * set yet, so this resolves identically to a bare call until profiles exist.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @param {(source?: string) => object|null} [identityFn]
+ */
+export function resolveAccountSamplerIdentity(env = process.env, identityFn = getAccountIdentity) {
+  const dir = env.CLAUDE_CONFIG_DIR;
+  return dir ? identityFn(join(dir, '.claude.json')) : identityFn();
+}
+
 function makeClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
@@ -1227,8 +1244,10 @@ async function main() {
 
   // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2/FR-3): which Claude account is this fleet
   // running under, and did it just switch? getAccountIdentity() is fail-safe (never throws;
-  // null when the config is missing/malformed).
-  const currentIdentity = getAccountIdentity();
+  // null when the config is missing/malformed). QF-20260906-219: routed through
+  // resolveAccountSamplerIdentity() so the sampler measures THIS SEAT's own profile (when one
+  // is set) rather than always the machine-global file — see that function's own docblock.
+  const currentIdentity = resolveAccountSamplerIdentity();
   const acctLabel = (currentIdentity && currentIdentity.email) || 'unknown';
 
   // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: enforce the role-aware compaction

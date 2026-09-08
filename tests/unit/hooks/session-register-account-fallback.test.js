@@ -200,10 +200,27 @@ describe('QF-013 — darkness is recorded', () => {
     expect('account_email' in meta).toBe(false); // absence stays honest — no placeholder
   });
 
-  it('writes nothing at all when the account was already captured', async () => {
-    const sb = fakeSupabase({ account_email: 'already@example.com' });
-    await captureAccountIdentity(sb, 'sess-1');
+  it('QF-20260906-219: writes nothing when the resolved identity is UNCHANGED from what is already stored', async () => {
+    // Pre-QF-20260906-219 this skipped resolving entirely whenever account_email was already set.
+    // It now always re-resolves (so a later rotation is seen -- see the rotation test below) and
+    // skips only the WRITE when the freshly-resolved identity matches. Injecting resolveFn keeps
+    // this deterministic regardless of what this host's own `claude auth status`/on-disk config
+    // would otherwise resolve to.
+    const sb = fakeSupabase({ account_email: 'already@example.com', account_uuid8: 'aaaaaaaa' });
+    const resolveFn = () => ({ account_email: 'already@example.com', account_org_name: 'Org', account_uuid8: 'aaaaaaaa' });
+    await captureAccountIdentity(sb, 'sess-1', { resolveFn });
     expect(sb.writes).toEqual([]);
+  });
+
+  it('QF-20260906-219: a rotated account (freshly-resolved identity differs) DOES write the new identity', async () => {
+    const sb = fakeSupabase({ model: 'opus', account_email: 'stale@example.com', account_uuid8: 'aaaaaaaa' });
+    const resolveFn = () => ({ account_email: 'fresh@example.com', account_org_name: 'NewOrg', account_uuid8: 'bbbbbbbb' });
+    await captureAccountIdentity(sb, 'sess-1', { resolveFn });
+    expect(sb.writes).toHaveLength(1);
+    const meta = sb.writes[0].metadata;
+    expect(meta.account_email).toBe('fresh@example.com');
+    expect(meta.account_uuid8).toBe('bbbbbbbb');
+    expect(meta.model).toBe('opus'); // read-modify-write preserved, never clobbered
   });
 
   it('stamps launch_profile_expected=true only when FLEET_LAUNCH_PROFILE_INTENT=named, even on the unresolved-darkness write', async () => {
