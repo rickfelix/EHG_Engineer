@@ -33,6 +33,13 @@ verification-packages/
 .worktree.json
 .worktree-nm-mode
 
+# QF-20260908-981: SECURITY finding (SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 EXEC-TO-PLAN
+# evidence 53bfa26f) -- written by adam-quiet-tick.mjs's saveLastAccountIdentity() and was
+# NEVER gitignored, so it was committed and pushed live on 3 public wip/reclaim/* branches,
+# exposing a real account email + org name + OS username. Same class as .ehg-session.json
+# above: per-host state that must never be tracked.
+.account-identity-last.json
+
 # QF-20260808-951: regenerable pattern-cache written by lib/workflow-review/pattern-cache.js.
 # Same class as above -- tracking it means a `git merge --ff-only origin/main` aborts with
 # "local changes would be overwritten" whenever the local process and an upstream commit
