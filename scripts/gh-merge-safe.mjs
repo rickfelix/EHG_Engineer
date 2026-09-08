@@ -94,7 +94,7 @@ function main() {
   // Detect already-merged PRs up front to be idempotent. gh pr view does not expose
   // baseRepository, so resolve owner/name via gh repo view (works because the wrapper
   // already requires being inside the repo's working tree).
-  const preview = JSON.parse(sh(`gh pr view ${prNumber} --json state,mergeCommit,headRefName,statusCheckRollup`));
+  const preview = JSON.parse(sh(`gh pr view ${prNumber} --json state,mergeCommit,headRefName,statusCheckRollup,headRefOid`));
   const repoInfo = JSON.parse(sh(`gh repo view --json owner,name`));
   const owner = repoInfo.owner.login;
   const repo = repoInfo.name;
@@ -123,15 +123,33 @@ function main() {
     console.log(`⚠️  --allow-no-checks: merging PR #${prNumber} with zero registered check-suites.`);
   }
 
+  // QF-20260815-128: pin the merge to the head SHA just read (GitHub's own test-and-set `sha`
+  // param on this endpoint). Without it, a push landing between the `gh pr view` above and this
+  // call merges silently at the NEW head with no record the intended commit differed -- measured
+  // incident (PR #7060, Golf-2 signal 02302c4d): a post-arm push was dropped from main this way.
+  // With `sha` set, GitHub itself refuses (409 "Head branch was modified") rather than silently
+  // merging the wrong head, so this closes the race atomically instead of detecting it after.
   const apiPath = `repos/${owner}/${repo}/pulls/${prNumber}/merge`;
   let mergeCommitSha;
   try {
-    const raw = sh(`gh api --method PUT ${apiPath} -f merge_method=${method}`);
+    const raw = sh(`gh api --method PUT ${apiPath} -f merge_method=${method} -f sha=${preview.headRefOid}`);
     const result = JSON.parse(raw);
     mergeCommitSha = result.sha;
     console.log(`Merged PR #${prNumber} (${method}): ${mergeCommitSha}`);
   } catch (e) {
-    console.error(`Merge failed for PR #${prNumber}: ${e.stderr || e.message}`);
+    const stderr = e.stderr || e.message || '';
+    if (/head branch was modified|\b409\b/i.test(stderr)) {
+      let currentHead = 'unknown';
+      try { currentHead = JSON.parse(sh(`gh pr view ${prNumber} --json headRefOid`)).headRefOid; } catch { /* best-effort */ }
+      console.error(
+        `[MERGE_HEAD_MISMATCH] PR #${prNumber}: expected head ${preview.headRefOid}, but the branch's ` +
+        `current head is ${currentHead} — a push landed after this merge read its head. Re-run this ` +
+        `merge (it re-reads the new head), or open a recovery PR for the delta if part of the intended ` +
+        `change already reached main another way.`,
+      );
+      process.exit(1);
+    }
+    console.error(`Merge failed for PR #${prNumber}: ${stderr}`);
     process.exit(1);
   }
 
