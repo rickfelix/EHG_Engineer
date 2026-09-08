@@ -1,0 +1,74 @@
+{
+  "title": "Michael J: v1.1 feeders and tables",
+  "executive_summary": "Ships Michael's v1.1 enrichment layer: a 4-table migration (chairman-gated, unapplied), 3 new host/GHA-independent feeders (oracle-extract, health-sync, youtube-digest), the deferred youtube.md rules import, and a michaelLines() session-hook variant. The v1 go-live gauges cited as this child's fence are all disabled stubs with no working instrument (confirmed at LEAD), and every deliverable here is independently buildable/testable behind injected deps -- exactly the same posture as sibling child I. Two real design ambiguities in the spec were resolved before EXEC: youtube-digest never reads any eva_* table (module reuse only, Michael-owned channel list), and the '[Michael] Picks' playlist is staged rather than live-written (no OAuth scope widening).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "v1.1 migration: 4 new michael_* tables, chairman-gated",
+      "description": "New database/migrations/<date>_michael_v1_1_tables.sql follows child B's real shipped pattern (database/migrations/20260906_michael_tables.sql), not the spec's mis-cited template: michael_oracle_history (et_date DATE, entry_id UUID default gen_random_uuid(), PK (et_date, entry_id), content TEXT, tags TEXT[], created_at/updated_at), michael_oracle_alignment (et_date DATE PRIMARY KEY, dimension_scores JSONB, notes TEXT, created_at/updated_at), michael_health_daily (et_date DATE PRIMARY KEY, metrics JSONB, source TEXT, created_at/updated_at), michael_check_in_journal (et_date DATE, entry_id UUID default gen_random_uuid(), PK (et_date, entry_id), entry_text TEXT, mood TEXT, created_at/updated_at). Each: RLS enabled, <table>_service_role policy FOR ALL TO service_role, REVOKE ALL from anon/authenticated/PUBLIC, <table>_set_updated_at trigger reusing the existing public.michael_set_updated_at() function, natural-key unique index, COMMENT ON TABLE naming this SD. DO $verify$ block extends the same asserted checks as child B's (tables exist, RLS on, exactly one policy, no cross-role grants, updated_at + trigger present). @chairman-gated header, no @approved-by. Matching _DOWN.sql (plain DROP TABLE, reverse order, no CASCADE, does NOT drop michael_set_updated_at()).",
+      "impact": "Provides the storage layer for oracle-extract, health-sync, and (indirectly) youtube-digest's staged picks review, using a real, live-verified migration convention rather than the spec's factually incorrect template citation."
+    },
+    {
+      "id": "FR-2",
+      "title": "oracle-extract feeder (host venue, Drive read)",
+      "description": "New scripts/michael/oracle-extract.mjs, modeled on scripts/michael/tasks-classifier.mjs's shipped shape: exported async runOracleExtract({sb, argv, now, auth, drive, env}), assertHostVenue(env) first, dry-run by default (--apply required for writes), reads a Drive folder (new MICHAEL_ORACLE_DRIVE_FOLDER_ID constant in lib/michael/constants.mjs) via the existing read-only listDriveFiles/readDriveFileText, writes parsed entries to michael_oracle_history via lib/michael/db.mjs's writeRows. Registered in lib/michael/feeder.mjs's FEEDERS map as a host-venue feeder; NOT added to READINESS_REQUIREMENTS; no upstream dependency.",
+      "impact": "Delivers the v1.1 oracle-extract feeder using the exact proven host-venue Drive-read contract, with zero new credential surface (reuses the existing drive.readonly scope)."
+    },
+    {
+      "id": "FR-3",
+      "title": "health-sync feeder (host venue, Drive read)",
+      "description": "New scripts/michael/health-sync.mjs, identical shape to FR-2 but targeting michael_health_daily and a new MICHAEL_HEALTH_DRIVE_FOLDER_ID constant. Registered in feeder.mjs's FEEDERS map the same way as oracle-extract.",
+      "impact": "Delivers the v1.1 health-sync feeder with the same safe, zero-new-credential contract."
+    },
+    {
+      "id": "FR-4",
+      "title": "youtube-digest feeder (credential-free RSS, Michael-owned channel source)",
+      "description": "New scripts/michael/youtube-digest.mjs reuses lib/integrations/youtube/subscription-scanner.js's scanSubscriptions() directly (pure public RSS, zero credential) with a channel list read from michael_rules where domain='youtube' (the rows FR-5 imports) -- NEVER reads any eva_youtube_config/eva_youtube_scans table. New videos are staged to michael_staged_items with kind='youtube_pick' (never a live playlist write -- see FR-6's explicit non-goal). Registered in feeder.mjs's FEEDERS map as a GHA-venue feeder (no host credential needed); not in READINESS_REQUIREMENTS.",
+      "impact": "Delivers the real v1.1 function (surfacing new subscription videos) without crossing the EVA/Michael role boundary and without any new credential."
+    },
+    {
+      "id": "FR-5",
+      "title": "youtube.md rules import (deferred from child F)",
+      "description": "Adds 'youtube.md': 'rules' to scripts/michael/import-cowork-memory.mjs's SOURCE_FILES map. No new parser: lib/michael/cowork-parse.mjs's existing parseRuleFile already handles the youtube domain and shared rule-file format, and michael_rules.domain's CHECK constraint already admits 'youtube'.",
+      "impact": "Closes the deferred-from-child-F gap with a near-zero-diff change, reusing 100% of the existing import machinery."
+    },
+    {
+      "id": "FR-6",
+      "title": "Explicit non-goal: no live YouTube playlist write, no OAuth scope widening",
+      "description": "This SD does NOT add 'youtube' to lib/integrations/google/chairman-oauth.js's SCOPES array, does not call playlists.insert/playlistItems.insert anywhere, and does not trigger any host re-consent flow. '[Michael] Picks' is a staged michael_staged_items row a human or a future SD can act on.",
+      "impact": "Avoids taking on new, out-of-scope security surface (a live write credential) inside a child the spec itself scoped as an enrichment layer, matching sibling child I's own explicit precedent of never widening OAuth scope."
+    },
+    {
+      "id": "FR-7",
+      "title": "michaelLines() session-hook variant",
+      "description": "scripts/hooks/session-role-orient.cjs gains SEAT.MICHAEL, isMichaelSeat(meta) (exact role-string equality, mirroring isAdamSeat's own documented exact-equality requirement), and michaelLines(headline, suppressed) modeled directly on adamLines()'s three-way (suppressed/headline/unavailable) shape. resolveSeat's Michael check is placed BEFORE the generic ROLE-verdict fallthrough (the load-bearing ordering VALIDATION found -- a Michael seat already satisfies that broad rung today via lib/fleet/role-status-identity.cjs's existing michael callsign registration, so placing the new rung after it would make it unreachable dead code). The injected headline is michael_brief_runs.data_json.lede (read via real existing columns only, never a phantom column), newline-stripped and length-bounded before injection since it lands in a seat's SessionStart context.",
+      "impact": "Ships the spec-named v1.1 hook variant using the exact structural precedent already proven safe for Adam, while specifically avoiding the two concrete failure modes VALIDATION found in that precedent (an unreachable seat rung, and a phantom-column read that silently and permanently returns null)."
+    },
+    {
+      "id": "FR-8",
+      "title": "Update child I's retirement allow-list for any new _Cowork reference",
+      "description": "Any new file this SD adds that legitimately references _Cowork (e.g. a youtube.md-specific comment or test fixture) is added to lib/michael/cowork-retirement-grep.mjs's ALLOW_LIST, keeping child I's step-5 acceptance test (tests/unit/michael-cowork-retirement-grep.test.js) green.",
+      "impact": "Prevents this SD from silently breaking a sibling child's already-shipped acceptance test."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "fr": "FR-1", "scenario": "the v1.1 migration file structure matches child B's pattern (RLS, one service_role policy per table, REVOKE, updated_at trigger reusing the existing function, verify block); a source-pinned unit test on the file" },
+    { "id": "TS-2", "fr": "FR-2/FR-3", "scenario": "oracle-extract and health-sync are dry-run-safe by default (zero real Drive calls without --apply), each registered in feeder.mjs's FEEDERS map, neither in READINESS_REQUIREMENTS" },
+    { "id": "TS-3", "fr": "FR-4", "scenario": "youtube-digest's channel source is a mocked michael_rules youtube row, never an eva_* table -- grep-verified zero eva_youtube references anywhere in the new code" },
+    { "id": "TS-4", "fr": "FR-4", "scenario": "a scanned video is staged to michael_staged_items with kind='youtube_pick', never written to a live playlist" },
+    { "id": "TS-5", "fr": "FR-5", "scenario": "a fixture youtube.md round-trips through the existing parseRuleFile/writeRule path with zero new parser code" },
+    { "id": "TS-6", "fr": "FR-6", "scenario": "grep confirms zero playlists.insert/playlistItems.insert calls and zero edits to chairman-oauth.js's SCOPES array anywhere in the diff" },
+    { "id": "TS-7", "fr": "FR-7", "scenario": "an end-to-end decide()/orient() test (not michaelLines() called in isolation) with a Michael seat proves the Michael-specific line actually renders, distinct from generic roleLines('michael')" },
+    { "id": "TS-8", "fr": "FR-7", "scenario": "a lede string containing newlines and exceeding the length bound is stripped/truncated before injection" },
+    { "id": "TS-9", "fr": "FR-8", "scenario": "tests/unit/michael-cowork-retirement-grep.test.js still passes after this SD's changes" },
+    { "id": "TS-10", "fr": "FR-1/FR-2/FR-3", "scenario": "lib/michael/feeder.test.js (the shared v1 file) is still 100% green after the FEEDERS registry additions" }
+  ],
+  "out_of_scope": [
+    "Applying the v1.1 migration (chairman-gated, remains unapplied)",
+    "Registering oracle-extract/health-sync as live host Task Scheduler tasks",
+    "Any live YouTube playlist write or OAuth scope widening (FR-6)",
+    "Running youtube.md's import against the real _Cowork folder (--apply)",
+    "Reassigning the periodic_process_registry owner for the existing youtube-subscription-digest.yml row (a separate, EVA-side action)",
+    "Wiring the go-live gauges themselves (all 11 are pre-existing disabled stubs, unrelated to this child's own deliverables)"
+  ]
+}
