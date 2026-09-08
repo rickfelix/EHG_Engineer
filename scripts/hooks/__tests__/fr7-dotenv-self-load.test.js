@@ -126,5 +126,15 @@ describe('FR-7: hook subprocess self-loads dotenv', () => {
     expect(stderr).not.toMatch(/upsert skipped — supabaseUrl\/Key missing in env/);
     // Dry-run guard fired instead, proving credentials resolved AND no network write occurred.
     expect(stderr).toMatch(/dry-run — upsert skipped \(LEO_HOOK_DRY_RUN=1\), credentials resolved OK/);
+    // SD-LEO-FIX-RELEASED-TEST-FIXTURE-001 (VALIDATION finding): capture-session-id.cjs
+    // ALSO spawns a detached session-tick.cjs daemon that performs its OWN independent
+    // write to claude_sessions (source=session-tick-first). The upsertSessionRow() guard
+    // above does not cover it -- an earlier version of this test asserted "no live write"
+    // while the tick-daemon spawn silently created a real, undispositioned row on every
+    // run (measured live: a fr7-dryrun-* row with source=session-tick-first accumulated
+    // in production). This structural marker is the zero-write proof for BOTH paths
+    // without the unit tier reaching the live DB itself (vitest.config.js: "NO dotenv
+    // .env load — unit tests must not reach the live DB").
+    expect(stderr).toMatch(/session-tick: dry-run — spawn skipped \(LEO_HOOK_DRY_RUN=1\)/);
   });
 });
