@@ -116,7 +116,7 @@ BEGIN
 
   BEGIN
     INSERT INTO public.feedback (type, source_application, source_type, title)
-    VALUES ('bug', 'terminal:probe-verify', 'manual', 'probe: SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E verify')
+    VALUES ('issue', 'terminal:probe-verify', 'manual_feedback', 'probe: SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E verify')
     RETURNING id INTO probe_id;
 
     -- INSERT must still succeed (append-only means INSERT is unaffected) -- already proven by
