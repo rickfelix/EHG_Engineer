@@ -187,6 +187,78 @@ describe('chairman-sms-gate hold persistence (SD-LEO-INFRA-CHAIRMAN-DECISION-LAN
     expect(silentConsole.error).toHaveBeenCalledWith(expect.stringContaining('FAILED to persist held send'));
   });
 
+  // ── QF-20260905-123 ──────────────────────────────────────────────────────────────────────────
+  // Solomon's courtesy copy of a verdict to the originating Adam session was refused because the
+  // consult row named its sender as the literal CHAIRMAN_LANE_AUTOMATED_SENTINEL (not a real
+  // session id -- assertValidTarget's target-shape check rejects it). Fix: thread the raising
+  // session as originatorSessionId into the consult lane, and stamp it into the held-send row's
+  // metadata, without disturbing the sentinel-marked sessionId used elsewhere in this file.
+  it('QF-20260905-123: passes originatorSessionId (from CLAUDE_SESSION_ID) into the consult lane, and stamps it into the held-send row metadata', async () => {
+    const prevSessionId = process.env.CLAUDE_SESSION_ID;
+    process.env.CLAUDE_SESSION_ID = 'adam-seat-live-123';
+    try {
+      const supabase = makeFakeSupabaseForHold();
+      const sender = { send: vi.fn() };
+      const runPreSendConsultLane = vi.fn().mockResolvedValue({ action: 'hold-and-surface', correlationId: 'corr-origin-1' });
+
+      await sendChairmanSMS(
+        { type: 'decision', body: 'Approve X?', decisionId: 'dec-origin-1' },
+        {},
+        { evaluate: passEval, sender, resolveChairmanZone: zoneStub, runPreSendConsultLane, supabase },
+      );
+
+      expect(runPreSendConsultLane.mock.calls[0][0].originatorSessionId).toBe('adam-seat-live-123');
+      expect(supabase.inserted[0].metadata).toEqual({ originator_session_id: 'adam-seat-live-123' });
+    } finally {
+      if (prevSessionId === undefined) delete process.env.CLAUDE_SESSION_ID;
+      else process.env.CLAUDE_SESSION_ID = prevSessionId;
+    }
+  });
+
+  it('QF-20260905-123: an explicit message.sessionId wins over CLAUDE_SESSION_ID for originatorSessionId', async () => {
+    const prevSessionId = process.env.CLAUDE_SESSION_ID;
+    process.env.CLAUDE_SESSION_ID = 'process-env-session';
+    try {
+      const supabase = makeFakeSupabaseForHold();
+      const sender = { send: vi.fn() };
+      const runPreSendConsultLane = vi.fn().mockResolvedValue({ action: 'hold-and-surface', correlationId: 'corr-origin-2' });
+
+      await sendChairmanSMS(
+        { type: 'decision', body: 'Approve X?', decisionId: 'dec-origin-2', sessionId: 'explicit-caller-session' },
+        {},
+        { evaluate: passEval, sender, resolveChairmanZone: zoneStub, runPreSendConsultLane, supabase },
+      );
+
+      expect(runPreSendConsultLane.mock.calls[0][0].originatorSessionId).toBe('explicit-caller-session');
+      expect(supabase.inserted[0].metadata).toEqual({ originator_session_id: 'explicit-caller-session' });
+    } finally {
+      if (prevSessionId === undefined) delete process.env.CLAUDE_SESSION_ID;
+      else process.env.CLAUDE_SESSION_ID = prevSessionId;
+    }
+  });
+
+  it('QF-20260905-123: with no message.sessionId and no CLAUDE_SESSION_ID, originatorSessionId is null and metadata is null -- never fabricated', async () => {
+    const prevSessionId = process.env.CLAUDE_SESSION_ID;
+    delete process.env.CLAUDE_SESSION_ID;
+    try {
+      const supabase = makeFakeSupabaseForHold();
+      const sender = { send: vi.fn() };
+      const runPreSendConsultLane = vi.fn().mockResolvedValue({ action: 'hold-and-surface', correlationId: 'corr-origin-3' });
+
+      await sendChairmanSMS(
+        { type: 'decision', body: 'Approve X?', decisionId: 'dec-origin-3' },
+        {},
+        { evaluate: passEval, sender, resolveChairmanZone: zoneStub, runPreSendConsultLane, supabase },
+      );
+
+      expect(runPreSendConsultLane.mock.calls[0][0].originatorSessionId).toBeNull();
+      expect(supabase.inserted[0].metadata).toBeNull();
+    } finally {
+      if (prevSessionId === undefined) delete process.env.CLAUDE_SESSION_ID;
+      else process.env.CLAUDE_SESSION_ID = prevSessionId;
+    }
+  });
+
   it('an unresolvable chairman identity at hold time (resolver throws) does NOT change the hold outcome -- best-effort persistence, never blocks the hold', async () => {
     const supabase = makeFakeSupabaseForHold();
     supabase.rpc = vi.fn(async () => ({ data: null, error: { message: 'no auth.users row matches' } }));
