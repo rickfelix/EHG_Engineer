@@ -407,6 +407,17 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
     return;
   }
 
+  // QF-20260903-195: lets a test prove credential-resolution (dotenv self-load reached this
+  // point with real, truthy values) WITHOUT performing a live write against production --
+  // the FR-7 dotenv-self-load unit test previously required this real upsert to succeed to
+  // pass, writing a fresh heartbeat to a live sessions row on every local unit-suite run.
+  if (process.env.LEO_HOOK_DRY_RUN === '1') {
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.error('SessionStart:capture-session-id: dry-run — upsert skipped (LEO_HOOK_DRY_RUN=1), credentials resolved OK');
+    }
+    return;
+  }
+
   const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
   const now = new Date().toISOString();
   const pidNum = Number(ccPid);

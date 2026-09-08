@@ -197,7 +197,12 @@ function filterOutCoordinators(rows) {
 // only runs if the function is called WITHOUT an injected predicate (never in production).
 const GHOST_SESSION_ID_PREFIXES = ['drain_test_', 'test_execute_', 'test-session-', 'test_session_'];
 
-function isTestSessionId(sessionId) {
+function isTestSessionId(sessionIdOrRow) {
+  // QF-20260903-195: filterOutGhostSessions now passes the whole row (so the injected
+  // isFixtureSession can see metadata.source), so this default fallback must accept either
+  // shape too -- extracting session_id from a row keeps every existing string-input call/test
+  // byte-identical.
+  const sessionId = typeof sessionIdOrRow === 'string' ? sessionIdOrRow : sessionIdOrRow?.session_id;
   if (!sessionId || typeof sessionId !== 'string') return false;
   return GHOST_SESSION_ID_PREFIXES.some(p => sessionId.startsWith(p));
 }
@@ -207,9 +212,11 @@ function filterOutGhostSessions(rows, claimedSessionIds = new Set(), isFixture =
   const fixtureCheck = typeof isFixture === 'function' ? isFixture : isTestSessionId;
   return (rows || []).filter(w => {
     if (!w) return false;
-    // Fixture/test/probe session_ids never get a callsign, even if otherwise active. The shared
-    // isFixtureSession (injected by main) catches *-probe-*/QF-TEST-* the local prefix list missed.
-    if (fixtureCheck(w.session_id)) return false;
+    // Fixture/test/probe sessions never get a callsign, even if otherwise active. The shared
+    // isFixtureSession (injected by main) catches *-probe-*/QF-TEST-* the local prefix list missed,
+    // plus (QF-20260903-195) metadata.source ending in "-test" -- which needs the FULL row, not
+    // just the session_id, hence passing `w` rather than `w.session_id` here.
+    if (fixtureCheck(w)) return false;
     // Currently claiming an SD → real worker.
     if (w.sd_key) return true;
     // Between SDs but in the canonical claim cohort → real worker, momentarily idle.
@@ -491,7 +498,11 @@ async function main() {
     .from('claude_sessions')
     .select('session_id, sd_key, metadata, heartbeat_at')
     .gte('heartbeat_at', fiveMinAgo)
-    .neq('status', 'terminated');
+    // QF-20260903-195: excluded only ONE terminal status. A RELEASED row (session gave up its
+    // seat) is not active regardless of a stale-but-fresh heartbeat -- excluding it here is
+    // belt-and-suspenders alongside the isFixtureSession metadata.source fix below.
+    .neq('status', 'terminated')
+    .neq('status', 'released');
 
   if (excludeSession) {
     query = query.neq('session_id', excludeSession);
@@ -641,13 +652,16 @@ async function main() {
     .from('claude_sessions')
     .select('session_id, metadata')
     .neq('status', 'terminated')
+    .neq('status', 'released') // QF-20260903-195: a released row must not have its callsign reserved
     .gte('heartbeat_at', reserveWindow);
   const activeSessionIds = new Set(uniqueWorkers.map(w => w.session_id));
   // QF-20260803-932: mirror the same exclusion here — a build-forbidden session (coordinator /
   // non_fleet / adam / adam_retired / solomon) must never get its stray callsign RESERVED either,
   // or a leftover mis-stamped identity on a non-worker row parks a NATO letter unusable by real
   // workers for up to the 60-min window above.
-  const recentWorkerSessions = (recentSessions || []).filter(s => s && !isBuildForbiddenSession(s.metadata));
+  // QF-20260903-195: also exclude a fixture session (e.g. metadata.source ending in "-test") so
+  // it cannot reserve/park a NATO letter either.
+  const recentWorkerSessions = (recentSessions || []).filter(s => s && !isBuildForbiddenSession(s.metadata) && !isFixtureSession(s));
   reserveParkedIdentities(usedCallsigns, usedColors, recentWorkerSessions, activeSessionIds);
 
   // nextAvailable is now module-scoped (hoisted above) and shared with worker-checkin.cjs.
