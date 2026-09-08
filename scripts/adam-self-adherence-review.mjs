@@ -310,7 +310,8 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
       .from('adam_task_ledger')
       .select('id, status, source_kind, source_ref')
       .eq('tier', 'child')
-      .not('status', 'in', '(done,cancelled)');
+      .not('status', 'in', '(done,cancelled)')
+      .limit(500);
     if (error) throw error;
     const rows = openRows || [];
     // QF-20260908-919: no production writer ever transitions a sourced_sd child's status when the
@@ -320,7 +321,7 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     const sdRefs = [...new Set(rows.filter((r) => r.source_kind === 'sourced_sd' && r.source_ref).map((r) => r.source_ref))];
     const sdStatusByKey = new Map();
     if (sdRefs.length) {
-      const { data: sdRows } = await supabase.from('strategic_directives_v2').select('sd_key, status').in('sd_key', sdRefs);
+      const { data: sdRows } = await supabase.from('strategic_directives_v2').select('sd_key, status').in('sd_key', sdRefs).limit(500);
       for (const sd of (sdRows || [])) sdStatusByKey.set(sd.sd_key, sd.status);
     }
     const genuinelyOpen = rows.filter((r) => {
