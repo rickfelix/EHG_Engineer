@@ -47,7 +47,7 @@ import {
   hashToken,
   generateTokenValue,
 } from './lib/migration-guards.js';
-import { getLatestSuccessForPath } from '../lib/migration-audit-reader.js';
+import { getLatestSuccessForPath, isTrackedMigrationPath } from '../lib/migration-audit-reader.js';
 
 // SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001 (FR-4): audit-always ledger write for delegated
 // applies. SEPARATE short-lived connection so the row survives an apply-tx ROLLBACK (SEC-H cond 7).
@@ -153,6 +153,17 @@ async function tryAdvisoryLock(client, id) {
 }
 
 async function writeAuditRow(client, row) {
+  // QF-20260903-622: five ledger rows were found asserting a successful apply for a
+  // migration_path that never resolved to a tracked file — never queried live (harmless)
+  // but a record asserting something that never happened. Refuse loudly at write time
+  // rather than let another phantom in: any caller of writeAuditRow claiming success=true
+  // must point at a git-tracked path.
+  if (row.success === true && row.migration_path && !isTrackedMigrationPath(row.migration_path)) {
+    throw new Error(
+      `[MIGRATION_LEDGER_GUARD] refusing to record success=true for a migration_path that ` +
+      `does not resolve to a git-tracked file: ${row.migration_path}`
+    );
+  }
   const cols = Object.keys(row);
   const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
   const sql = `INSERT INTO public.schema_migrations_applied (${cols.join(', ')}) VALUES (${placeholders}) RETURNING id`;
