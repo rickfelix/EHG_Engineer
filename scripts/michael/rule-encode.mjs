@@ -45,6 +45,7 @@ export const REFUSALS = Object.freeze({
   VERIFIER_REJECTED: 'VERIFIER_REJECTED',
   VERIFIER_STALE: 'VERIFIER_STALE',
   RULE_ALREADY_SUPERSEDED: 'RULE_ALREADY_SUPERSEDED',
+  LABEL_VERB_NEEDS_LABEL_ID: 'LABEL_VERB_NEEDS_LABEL_ID',
   TABLES_ABSENT,
 });
 
@@ -103,6 +104,13 @@ export async function runRuleEncode({ sb, argv = [], now = new Date(), readVerdi
   let ruleJson = null;
   if (typeof a['rule-json'] === 'string') {
     try { ruleJson = JSON.parse(a['rule-json']); } catch (e) { return refusal(REFUSALS.RULE_JSON_INVALID, `--rule-json is not JSON: ${e.message}`); }
+  }
+  // QF-20260908-688: ruleUsable() (scripts/michael/gmail-triage.mjs) skips a rule at MATCH time when
+  // auto_apply_verb='label' but rule_json.action.label_id is missing -- a protective rule with no
+  // class/action could be silently disarmed this way with no signal on the row, only an aggregate
+  // counter. Refuse the contradiction at WRITE time instead, before it can ever persist.
+  if (verb === 'label' && !(ruleJson && ruleJson.action && ruleJson.action.label_id)) {
+    return refusal(REFUSALS.LABEL_VERB_NEEDS_LABEL_ID, "auto_apply_verb='label' requires rule_json.action.label_id -- without it, ruleUsable() would silently skip this rule at match time instead of enforcing it");
   }
 
   const priorRead = await readRows(sb, 'michael_rules', (q) => q.eq('domain', domain).eq('rule_key', ruleKey).order('created_at', { ascending: false }));
