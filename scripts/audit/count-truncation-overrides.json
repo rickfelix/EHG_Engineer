@@ -1,4 +1,19 @@
 {
+ "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:477": {
+  "classification": "bounded-by-design",
+  "match": ".eq('id', existing.id).select()",
+  "note": "SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001: pre-existing single-row update bounded by .eq('id', existing.id) on retrospectives.id (a primary key) -- the query shape is unchanged, only re-wrapped into an arrow-function callback (updateRetrospectiveWithToken()'s runUpdate param) for the PUBLISHED-guard token retry, which is why the diff-lint sees it as a new line."
+ },
+ "scripts/modules/handoff/executors/lead-to-plan/retrospective.js:360": {
+  "classification": "bounded-by-design",
+  "match": ".eq('id', existing.id).select()",
+  "note": "SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001: pre-existing single-row update bounded by .eq('id', existing.id) on retrospectives.id (a primary key) -- the query shape is unchanged, only re-wrapped into an arrow-function callback (updateRetrospectiveWithToken()'s runUpdate param) for the PUBLISHED-guard token retry, which is why the diff-lint sees it as a new line."
+ },
+ "scripts/modules/handoff/executors/plan-to-exec/retrospective.js:278": {
+  "classification": "bounded-by-design",
+  "match": ".eq('id', existing.id).select()",
+  "note": "SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001: pre-existing single-row update bounded by .eq('id', existing.id) on retrospectives.id (a primary key) -- the query shape is unchanged, only re-wrapped into an arrow-function callback (updateRetrospectiveWithToken()'s runUpdate param) for the PUBLISHED-guard token retry, which is why the diff-lint sees it as a new line."
+ },
  "lib/coordinator/reply-class.cjs:114": {
   "classification": "bounded-by-design",
   "match": "select('id, payload')",
