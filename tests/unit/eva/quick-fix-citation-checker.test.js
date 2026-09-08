@@ -134,6 +134,23 @@ describe('checkQuickFixCitation', () => {
     expect(r.reasonCode).toBe('no_deterministic_signal');
   });
 
+  // QF-20260903-040: a premise that NAMES its own external verification method (branch
+  // protection API, headRefOid diff, etc.) must not be labeled no_deterministic_signal --
+  // that reason code asserts no signal was named, which is false here.
+  it('premise naming an external verification method -> INCONCLUSIVE, named_verification_unattempted, not no_deterministic_signal', () => {
+    const qf = { title: 'only Unit Tier is a required status check on main, confirmed via branch protection API', description: 'Confirmed twice live by Golf-5 on a real PR chain' };
+    const r = checkQuickFixCitation(qf, { repoRoot: tmpDir, runTest: runTestStub });
+    expect(r.outcome).toBe(OUTCOMES.INCONCLUSIVE);
+    expect(r.reasonCode).toBe('named_verification_unattempted');
+  });
+
+  it('premise naming a measured signal via headRefOid -> INCONCLUSIVE, named_verification_unattempted', () => {
+    const qf = { title: 'auto-merge fired on a stale head', description: 'MEASURED via headRefOid plus a content diff on PR 7060, with the dropped commit and the recovery PR both named.' };
+    const r = checkQuickFixCitation(qf, { repoRoot: tmpDir, runTest: runTestStub });
+    expect(r.outcome).toBe(OUTCOMES.INCONCLUSIVE);
+    expect(r.reasonCode).toBe('named_verification_unattempted');
+  });
+
   it('a row with NO extractable content at all -> INCONCLUSIVE, no_citation', () => {
     const qf = { title: null, description: null };
     const r = checkQuickFixCitation(qf, { repoRoot: tmpDir, runTest: runTestStub });
