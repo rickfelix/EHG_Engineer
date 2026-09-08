@@ -1,8 +1,8 @@
-<!-- file_content_hash: 238a0e9679b19771 -->
+<!-- file_content_hash: a252d3a9ffdf4253 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_MICHAEL.md - Michael Role Contract
 
-**Generated**: 2026-09-07 8:46:44 PM
+**Generated**: 2026-09-08 7:17:16 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Michael role contract — the chairman's personal-day steward (Gmail, Todoist, distractions)
 **Load when**: Running /michael, or orienting a Michael session
@@ -107,6 +107,6 @@ Chairman rulings that bind this contract are encoded here at their own site by t
 
 ---
 
-*Generated from database: 2026-09-07*
+*Generated from database: 2026-09-08*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=michael_role_contract). Do not hand-edit — edit the DB section and regenerate.*
