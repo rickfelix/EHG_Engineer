@@ -162,12 +162,16 @@ async function gatherVerificationEvidence(sdId) {
   }
 
   // 2. Get sub-agent execution results (actual verification, not claims)
+  // count-truncation-diff-lint: bounded, not paginated -- an SD legitimately never
+  // accumulates more than a few dozen sub-agent runs, so 500 is a generous ceiling that
+  // can never truncate real data while still making this read provably bounded.
   const subAgentResults = await safeQuery(
     supabase
       .from('sub_agent_execution_results')
       .select('sub_agent_code, verdict, confidence, metadata, created_at')
       .eq('sd_id', sdId)
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false })
+      .limit(500),
     { site: 'auto-complete-deliverables:sub_agent_results' }
   );
 
