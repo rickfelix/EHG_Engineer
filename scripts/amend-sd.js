@@ -16,7 +16,11 @@
  *   node scripts/amend-sd.js <SD-KEY> --append "<text>"        append to description AND scope
  *   node scripts/amend-sd.js <SD-KEY> --description "<text>"   replace description
  *   node scripts/amend-sd.js <SD-KEY> --scope "<text>"         replace scope
- *   [--reason "<why>"]                                          carried in the notice body
+ *   node scripts/amend-sd.js <SD-KEY> --mandatory-child-order "E,A,B"   set an orchestrator
+ *     parent's declared child dispatch order (structured { order, reason } form; QF-20260907-152,
+ *     QF-20260904-708 remainder). Comma-separated child-suffix tokens, first-to-last dispatch order.
+ *   [--reason "<why>"]                                          carried in the notice body, and
+ *     (for --mandatory-child-order) stored as the order's own reason too
  */
 
 import path from 'path';
@@ -24,6 +28,7 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { amendSd } from '../lib/sd/amend-sd.js';
+import { buildMandatoryChildOrderPatch } from '../lib/sd/build-mandatory-child-order-patch.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
@@ -45,9 +50,10 @@ async function main() {
   const description = arg('--description');
   const scope = arg('--scope');
   const reason = arg('--reason');
+  const mandatoryChildOrder = arg('--mandatory-child-order');
 
-  if (!sdKey || sdKey.startsWith('--') || (!append && !description && !scope)) {
-    console.error('Usage: node scripts/amend-sd.js <SD-KEY> (--append|--description|--scope) "<text>" [--reason "<why>"]');
+  if (!sdKey || sdKey.startsWith('--') || (!append && !description && !scope && !mandatoryChildOrder)) {
+    console.error('Usage: node scripts/amend-sd.js <SD-KEY> (--append|--description|--scope|--mandatory-child-order) "<text>" [--reason "<why>"]');
     console.error('       <SD-KEY> must be the FIRST argument. Quote multi-word values.');
     process.exit(2);
   }
@@ -79,6 +85,17 @@ async function main() {
   } else {
     if (description) patch.description = description;
     if (scope) patch.scope = scope;
+  }
+
+  if (mandatoryChildOrder) {
+    // QF-20260907-152: structured form is primary (lib/fleet/claim-eligibility.cjs's
+    // parseMandatoryChildOrder reads it directly, no free-text arrow-chain parsing needed).
+    const result = buildMandatoryChildOrderPatch(mandatoryChildOrder, reason);
+    if (result.error) {
+      console.error(`[amend-sd] ${result.error}`);
+      process.exit(2);
+    }
+    patch.metadata = { ...patch.metadata, ...result.metadata };
   }
 
   const res = await amendSd(sb, sdKey, patch, { reason });
