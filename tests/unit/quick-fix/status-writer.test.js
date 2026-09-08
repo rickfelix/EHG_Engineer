@@ -11,8 +11,8 @@ const QF_ID = 'qf-fixture-1';
 const silentLog = { log() {}, warn() {}, error() {} };
 
 /** Stub supabase: one row's state lives in `rowState` (mutated by a successful update). */
-function stubSupabase({ initialStatus = 'open', initialReason = null, updateResult = 'success', notFound = false, lookupError = null } = {}) {
-  const rowState = { status: initialStatus, escalation_reason: initialReason };
+function stubSupabase({ initialStatus = 'open', initialReason = null, initialCompletedAt = null, updateResult = 'success', notFound = false, lookupError = null } = {}) {
+  const rowState = { status: initialStatus, escalation_reason: initialReason, completed_at: initialCompletedAt };
   const updateCalls = [];
   const sb = {
     from() {
@@ -25,7 +25,7 @@ function stubSupabase({ initialStatus = 'open', initialReason = null, updateResu
           if (!chain._updatePayload) {
             if (lookupError) return Promise.resolve({ data: null, error: lookupError });
             if (notFound) return Promise.resolve({ data: null, error: null });
-            return Promise.resolve({ data: { status: rowState.status, escalation_reason: rowState.escalation_reason }, error: null });
+            return Promise.resolve({ data: { status: rowState.status, escalation_reason: rowState.escalation_reason, completed_at: rowState.completed_at }, error: null });
           }
           // UPDATE branch
           updateCalls.push({ payload: chain._updatePayload, eqs: chain._eqs });
@@ -94,6 +94,37 @@ describe('setQuickFixStatus — TS-3: open->completed exempt from disposition re
     const { sb } = stubSupabase({ initialStatus: 'open' });
     const result = await setQuickFixStatus(sb, QF_ID, { status: 'completed' }, { logger: silentLog });
     expect(result.status).toBe('completed');
+  });
+});
+
+describe('setQuickFixStatus — QF-20260904-876: stamps completed_at on the transition to completed', () => {
+  it('stamps completed_at when absent and the caller does not supply one', async () => {
+    const { sb, rowState } = stubSupabase({ initialStatus: 'open' });
+    const before = Date.now();
+    const result = await setQuickFixStatus(sb, QF_ID, { status: 'completed' }, { logger: silentLog });
+    expect(result.status).toBe('completed');
+    expect(rowState.completed_at).toBeTruthy();
+    expect(new Date(rowState.completed_at).getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('never overwrites an already-stamped completed_at (a coordinator close after the code path already stamped it)', async () => {
+    const existing = '2026-01-01T00:00:00.000Z';
+    const { sb, rowState } = stubSupabase({ initialStatus: 'open', initialCompletedAt: existing });
+    await setQuickFixStatus(sb, QF_ID, { status: 'completed' }, { logger: silentLog });
+    expect(rowState.completed_at).toBe(existing);
+  });
+
+  it('respects an explicit patch.completed_at (e.g. a backfill script setting a historical value)', async () => {
+    const backfilled = '2026-05-31T16:53:15.146Z';
+    const { sb, rowState } = stubSupabase({ initialStatus: 'open' });
+    await setQuickFixStatus(sb, QF_ID, { status: 'completed', completed_at: backfilled }, { logger: silentLog });
+    expect(rowState.completed_at).toBe(backfilled);
+  });
+
+  it('does not stamp completed_at on a non-completed transition', async () => {
+    const { sb, rowState } = stubSupabase({ initialStatus: 'open' });
+    await setQuickFixStatus(sb, QF_ID, { status: 'open', escalation_reason: 'r' }, { logger: silentLog });
+    expect(rowState.completed_at).toBeNull();
   });
 });
 
