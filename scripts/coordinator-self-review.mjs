@@ -126,6 +126,17 @@ export function buildSolicitationHistory(sentRows, answerRows) {
 // `adamParticipants` is unchanged (still role==='adam' specifically) -- a non-Adam
 // non-fleet session (Solomon, or any future role) is simply not solicited by this
 // worker/Adam-scoped review, matching the QF's own explicit scope (no third bucket).
+// QF-20260906-891: coordinator self-review 14:02Z (row d9d8f7df) + Solomon read cc8cf7c3 --
+// solicited EVERY live worker at the 8-SD threshold regardless of phase, so a worker mid-deep-
+// EXEC took a context-switch hit from a COACHING ping (Golf-6). A seat awaiting its next tick
+// (loop_state) or still in LEAD/PLAN (current_phase, lighter-weight than EXEC) is a low-cost
+// interruption; a seat actively in EXEC is not. Pure + exported for unit testing.
+const INTERRUPTIBLE_LOOP_STATES = new Set(['awaiting_tick', 'idle']);
+const INTERRUPTIBLE_PHASES = new Set(['LEAD', 'PLAN']);
+export function isSeatInterruptibleForReview(row) {
+  return INTERRUPTIBLE_LOOP_STATES.has((row || {}).loop_state) || INTERRUPTIBLE_PHASES.has((row || {}).current_phase);
+}
+
 export function partitionParticipants(sess, me, adamReviewOn) {
   const active = (sess || []).filter(r => !(r.metadata || {}).is_coordinator && r.session_id !== me);
   const uniq = (rows) => [...new Set(rows.map(r => r.session_id))];
@@ -212,7 +223,7 @@ export async function selfReviewMain() {
   }
 
   // 3) DUE — solicit fresh critique from active workers + synthesize, then reset the counter
-  const { data: sess } = await db.from('claude_sessions').select('session_id,metadata,heartbeat_at,sd_key').gte('heartbeat_at', new Date(t - 30 * 60000).toISOString());
+  const { data: sess } = await db.from('claude_sessions').select('session_id,metadata,heartbeat_at,sd_key,current_phase,loop_state').gte('heartbeat_at', new Date(t - 30 * 60000).toISOString());
   // SD-...-001-D / FR-4: split workers vs Adam participants (default-OFF byte-identical).
   const { workers: rawWorkers, adamParticipants: rawAdam } = partitionParticipants(sess, me, adamReviewOn);
   // Fixture/garbage guard (live crash 2026-06-10 ×2): drain-test rows leak non-UUID session_ids
@@ -220,7 +231,16 @@ export async function selfReviewMain() {
   // rightly REFUSES them, but an uncaught throw here killed the whole solicitation AND (because
   // the counter stamps after the loops) put the review into a 5-min crash-loop. Filter to full
   // UUIDs up front; per-target try/catch below contains anything else.
-  const workers = rawWorkers.filter((w) => isFullUuid(w));
+  // QF-20260906-891: defer a non-interruptible seat (e.g. deep EXEC) to its next checkin rather
+  // than soliciting it now -- the row's loop_state/current_phase live on `sess`, not on the bare
+  // session_id string partitionParticipants() returns, so look each worker up before filtering.
+  const sessById = new Map((sess || []).map((r) => [r.session_id, r]));
+  let deferredNotInterruptible = 0;
+  const workers = rawWorkers.filter((w) => isFullUuid(w)).filter((w) => {
+    const interruptible = isSeatInterruptibleForReview(sessById.get(w));
+    if (!interruptible) { deferredNotInterruptible++; console.log('[COORD-REVIEW] solicit defer (not interruptible) ' + w); }
+    return interruptible;
+  });
   const adamParticipants = rawAdam.filter((a) => isFullUuid(a));
 
   // QF-20260821-607: per-target solicitation-due dedup/cooldown. A target with an unanswered
@@ -312,7 +332,7 @@ export async function selfReviewMain() {
 
   const since7 = new Date(t - 14 * 24 * 3600 * 1000).toISOString();
   const { data: all } = await db.from('feedback').select('description,created_at').eq('category', 'coordinator_review').gte('created_at', since7).order('created_at', { ascending: false }).limit(30);
-  console.log('[COORD-REVIEW] DUE (' + delta + ' SDs since last review). captured ' + captured + ' new; solicited ' + solicited + ' worker(s)' + (adamReviewOn ? ' + ' + adamSolicited + ' adam' : '') + (solicitSkipped ? '; skipped ' + solicitSkipped + ' (dedup/cooldown)' : '') + '; ' + ((all || []).length) + ' reviews on file.');
+  console.log('[COORD-REVIEW] DUE (' + delta + ' SDs since last review). captured ' + captured + ' new; solicited ' + solicited + ' worker(s)' + (adamReviewOn ? ' + ' + adamSolicited + ' adam' : '') + (solicitSkipped ? '; skipped ' + solicitSkipped + ' (dedup/cooldown)' : '') + (deferredNotInterruptible ? '; deferred ' + deferredNotInterruptible + ' (not interruptible)' : '') + '; ' + ((all || []).length) + ' reviews on file.');
   if ((all || []).length) {
     console.log('--- recent coordinator reviews (cluster what-worked / friction / one-fix; ADJUST + source concrete fixes as DRAFT SDs) ---');
     for (const r of (all || []).slice(0, 12)) console.log('  ' + (r.created_at || '').slice(5, 16) + ' | ' + String(r.description || '').replace(/\s+/g, ' ').slice(0, 160));
