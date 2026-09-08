@@ -41,6 +41,8 @@ vi.mock('@clerk/testing/playwright', () => ({
 function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible = {}, waitForVisibleSequence = {}, currentUrl = 'http://fixture/current', clickNavigations = {}, clickNavigationsSequence = {}, buttonTexts = ['Continue'], bodyText = '', codeFormButtons = null, hasCodeForm = true, codeInputCompletes = true, fillNavigations = {}, locatorTexts = {}, visibleSequence = {}, setInputFilesError = null } = {}) {
   const calls = { goto: [], fill: [], click: [] };
   let url = currentUrl;
+  // QF-20260906-282: registry backing the .on/.off/emitResponse trio below.
+  const responseListeners = {};
   // QF-20260902-614: getByRole('button', ...) is called fresh at each of the source module's
   // 3 submit points (sign-in, sign-up, verify) -- a per-matchedText count here (not a
   // per-locator-instance one) lets clickNavigationsSequence answer differently per submit.
@@ -207,6 +209,22 @@ function makeMockPage({ locatorCounts = {}, gotoResponses = {}, waitForVisible =
     async waitForFunction() {
       if (codeInputCompletes) return true;
       throw new Error('waitForFunction timeout: code input never reported completion');
+    },
+    // QF-20260906-282: minimal but REAL Playwright Page.on/off surface for
+    // altifyaiGenerateAltText's provider-response-class capture. A fixture that never calls
+    // emitResponse() below never invokes a listener, matching real Playwright behavior when
+    // no matching response arrives (providerResponseClass stays null).
+    on(event, listener) {
+      (responseListeners[event] ??= []).push(listener);
+    },
+    off(event, listener) {
+      responseListeners[event] = (responseListeners[event] || []).filter((l) => l !== listener);
+    },
+    // Test-only helper (not part of the real Playwright Page API): fires a fake 'response'
+    // event at every registered listener, mirroring res.url()/res.status()/res.text().
+    emitResponse({ url: resUrl, status, body = '' }) {
+      const fakeRes = { url: () => resUrl, status: () => status, text: async () => body };
+      for (const listener of responseListeners.response || []) listener(fakeRes);
     },
   };
 }
@@ -1144,6 +1162,54 @@ describe('buildStepExecutor() — ALTIFYAI stp-e3e6/stp-6219 overrides (QF-20260
 
         const assertion = expect(executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true }))
           .rejects.toThrow(/GENERATION_DID_NOT_RESOLVE.*still state-loading after 150s, no error surfaced/i);
+        await vi.advanceTimersByTimeAsync(150000);
+        await assertion;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('QF-20260906-282: attaches the observed provider response class (status, elapsed, error body prefix) to the thrown error when the wait expires', async () => {
+      vi.useFakeTimers();
+      try {
+        const executor = buildStepExecutor(e3e6Step, 'ALTIFYAI');
+        const page = makeMockPage({
+          locatorCounts: { [FILE_INPUT]: 1 },
+          waitForVisible: { [STATUS_SUCCESS]: true, [ALT_TEXT_DISPLAY]: true, [STATE_LOADING]: true },
+        });
+
+        const runPromise = executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true });
+        // Attach the rejection assertion BEFORE advancing timers (matches the sibling tests
+        // above) so Node never observes an unhandled rejection in between.
+        const assertion = expect(runPromise).rejects.toMatchObject({
+          providerResponseClass: expect.objectContaining({
+            status: 500,
+            errorBodyPrefix: '{"error":"GENERATION_FAILED"}',
+            elapsedMs: expect.any(Number),
+          }),
+        });
+        // Let the executor run past its goto/upload/status-success awaits (all instant in this
+        // mock) to the point where it registers the 'response' listener, before emitting.
+        await vi.advanceTimersByTimeAsync(0);
+        page.emitResponse({ url: 'http://fixture/api/alt-text', status: 500, body: '{"error":"GENERATION_FAILED"}' });
+        await vi.advanceTimersByTimeAsync(150000);
+        await assertion;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('QF-20260906-282: providerResponseClass is null (never fabricated) when no matching network response was observed', async () => {
+      vi.useFakeTimers();
+      try {
+        const executor = buildStepExecutor(e3e6Step, 'ALTIFYAI');
+        const page = makeMockPage({
+          locatorCounts: { [FILE_INPUT]: 1 },
+          waitForVisible: { [STATUS_SUCCESS]: true, [ALT_TEXT_DISPLAY]: true, [STATE_LOADING]: true },
+        });
+
+        const runPromise = executor(page, { type: 'existing' }, { baseUrl: 'http://fixture', authenticated: true });
+        const assertion = expect(runPromise).rejects.toMatchObject({ providerResponseClass: null });
         await vi.advanceTimersByTimeAsync(150000);
         await assertion;
       } finally {
