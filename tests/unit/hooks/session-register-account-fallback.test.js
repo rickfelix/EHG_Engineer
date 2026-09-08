@@ -206,8 +206,11 @@ describe('QF-013 — darkness is recorded', () => {
     // skips only the WRITE when the freshly-resolved identity matches. Injecting resolveFn keeps
     // this deterministic regardless of what this host's own `claude auth status`/on-disk config
     // would otherwise resolve to.
-    const sb = fakeSupabase({ account_email: 'already@example.com', account_uuid8: 'aaaaaaaa' });
-    const resolveFn = () => ({ account_email: 'already@example.com', account_org_name: 'Org', account_uuid8: 'aaaaaaaa' });
+    // Seeds ALL fields the stricter (SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001) 6-field predicate
+    // compares -- a partial seed would (correctly) read as changed on the unseeded fields.
+    const identity = { account_email: 'already@example.com', account_org_name: 'Org', account_uuid8: 'aaaaaaaa' };
+    const sb = fakeSupabase({ ...identity });
+    const resolveFn = () => ({ ...identity });
     await captureAccountIdentity(sb, 'sess-1', { resolveFn });
     expect(sb.writes).toEqual([]);
   });

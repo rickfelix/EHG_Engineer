@@ -300,7 +300,13 @@ function resolveAccountIdentity() {
  * real `claude auth status` CLI or on-disk config.
  */
 async function captureAccountIdentity(supabase, sessionId, opts = {}) {
-  const resolveFn = opts.resolveFn || resolveAccountIdentity;
+  // SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (LEAD-phase prospective TESTING finding): `opts = {}`
+  // is a default PARAMETER, which only fires on `undefined` — an explicit `null` (or any other
+  // non-object) reaches `opts.resolveFn` and throws OUTSIDE the try/catch below, escaping this
+  // function's "telemetry — never abort SessionStart" contract. This function is exported with no
+  // other guard on its 3rd argument, so that contract must hold for every input, not just the one
+  // production call site (which always passes exactly 2 args today).
+  const resolveFn = (opts && opts.resolveFn) || resolveAccountIdentity;
   try {
     const { data, error } = await supabase
       .from('claude_sessions').select('metadata').eq('session_id', sessionId).maybeSingle();
@@ -343,10 +349,22 @@ async function captureAccountIdentity(supabase, sessionId, opts = {}) {
       return;
     }
     if (launchProfileExpected) acct.launch_profile_expected = true;
-    // QF-20260906-219: skip the write only when the freshly-resolved identity is byte-identical
-    // to what is already stored -- an unchanged account on a routine SessionStart costs a
-    // resolve but no DB churn; a genuinely rotated account (or a first-time capture) still writes.
-    if (meta.account_email === acct.account_email && meta.account_uuid8 === acct.account_uuid8) return;
+    // SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (LEAD-phase prospective TESTING finding): the
+    // original 2-field (email, uuid8) comparison under-detects a change. lib/fleet/account-
+    // identity.cjs's detectAccountSwitch() — the fleet's OWN canonical "did the account change"
+    // predicate — already compares email+orgName+uuid8; this comparison must never disagree with
+    // it (a stale account_org_name would sit right beside a freshly-written account_email, and
+    // server/routes/fleet-panel.js renders account_org_name as the PRIMARY display field, email
+    // only as fallback). account_auth_method matters too: resolveAccountFromConfigDir() can stamp
+    // 'host_default' with the CLI unavailable, then the CLI later resolves the SAME email/uuid8
+    // with a richer 'claude.ai'/'config_dir' reading — skipping that write pins
+    // lib/fleet/handoff-account-attribution.cjs's provenance classification to 'host_default'
+    // forever for a seat that is now genuinely measured. Compare every field this function itself
+    // stamps except account_captured_at (which changes on every call by construction, so including
+    // it would defeat the skip entirely).
+    const IDENTITY_FIELDS = ['account_email', 'account_org_name', 'account_org_id', 'account_subscription_type', 'account_auth_method', 'account_uuid8'];
+    const identityUnchanged = IDENTITY_FIELDS.every((k) => meta[k] === acct[k]);
+    if (identityUnchanged) return;
     await supabase.from('claude_sessions')
       .update({ metadata: { ...meta, ...acct } })
       .eq('session_id', sessionId);
