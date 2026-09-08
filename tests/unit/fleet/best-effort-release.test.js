@@ -8,9 +8,80 @@
  * always proceeds (fail-CLOSED on the claim, best-effort on the cleanup).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { bestEffortReleaseSd } from '../../../lib/fleet/best-effort-release.mjs';
+
+const recordOrphanedWorktreeMock = vi.fn();
+vi.mock('../../../lib/fleet/record-orphaned-worktree.mjs', () => ({
+  recordOrphanedWorktree: (...args) => recordOrphanedWorktreeMock(...args),
+}));
+
+const { bestEffortReleaseSd, bestEffortReleaseSdByKey } = await import('../../../lib/fleet/best-effort-release.mjs');
 
 const silent = () => {};
+
+// QF-20260903-936: neither release_sd nor release_sd_by_key touch the filesystem/git worktree
+// registration -- both wrappers must capture claude_sessions.worktree_path/worktree_branch
+// BEFORE the RPC clears them, and record the orphan (never remove it inline) on success.
+function makeFromMock(row) {
+  return vi.fn((table) => {
+    expect(table).toBe('claude_sessions');
+    return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: row, error: null }) }) }) };
+  });
+}
+
+describe('bestEffortReleaseSd / bestEffortReleaseSdByKey — worktree-orphan recording (QF-20260903-936)', () => {
+  it('bestEffortReleaseSd captures worktree_path/branch and records the orphan on success', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const from = makeFromMock({ sd_key: 'SD-X', worktree_path: '.worktrees/SD-X', worktree_branch: 'feat/SD-X' });
+    const rpc = vi.fn(async () => ({ data: { success: true }, error: null }));
+    const r = await bestEffortReleaseSd({ rpc, from }, 'sess-1', 'manual', silent);
+    expect(r.released).toBe(true);
+    expect(recordOrphanedWorktreeMock).toHaveBeenCalledTimes(1);
+    expect(recordOrphanedWorktreeMock.mock.calls[0][1]).toMatchObject({
+      holder: 'sess-1', worktreePath: '.worktrees/SD-X', worktreeBranch: 'feat/SD-X', reason: 'manual',
+    });
+  });
+
+  it('bestEffortReleaseSd passes null worktree fields through when none was provisioned (recordOrphanedWorktree itself no-ops on null)', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const from = makeFromMock({ sd_key: 'SD-X', worktree_path: null, worktree_branch: null });
+    const rpc = vi.fn(async () => ({ data: { success: true }, error: null }));
+    await bestEffortReleaseSd({ rpc, from }, 'sess-1', 'manual', silent);
+    expect(recordOrphanedWorktreeMock).toHaveBeenCalledWith(
+      expect.anything(), expect.objectContaining({ worktreePath: null, worktreeBranch: null })
+    );
+  });
+
+  it('bestEffortReleaseSd skips the capture (no crash) when supabase has no .from', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const rpc = vi.fn(async () => ({ data: { success: true }, error: null }));
+    const r = await bestEffortReleaseSd({ rpc }, 'sess-1', 'manual', silent);
+    expect(r.released).toBe(true);
+    expect(recordOrphanedWorktreeMock).toHaveBeenCalledWith(
+      { rpc }, expect.objectContaining({ worktreePath: null, worktreeBranch: null })
+    );
+  });
+
+  it('bestEffortReleaseSdByKey captures worktree_path/branch and records the orphan on success', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const from = makeFromMock({ worktree_path: '.worktrees/qf/QF-1', worktree_branch: 'qf/QF-1' });
+    const rpc = vi.fn(async () => ({ data: { success: true }, error: null }));
+    const r = await bestEffortReleaseSdByKey({ rpc, from }, 'sess-2', 'QF-1', 'manual', silent);
+    expect(r.released).toBe(true);
+    expect(recordOrphanedWorktreeMock).toHaveBeenCalledTimes(1);
+    expect(recordOrphanedWorktreeMock.mock.calls[0][1]).toMatchObject({
+      sdKey: 'QF-1', holder: 'sess-2', worktreePath: '.worktrees/qf/QF-1', worktreeBranch: 'qf/QF-1', reason: 'manual',
+    });
+  });
+
+  it('bestEffortReleaseSdByKey does not record on a failed release', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const from = makeFromMock({ worktree_path: '.worktrees/qf/QF-1', worktree_branch: 'qf/QF-1' });
+    const rpc = vi.fn(async () => ({ data: null, error: { message: 'boom' } }));
+    const r = await bestEffortReleaseSdByKey({ rpc, from }, 'sess-2', 'QF-1', 'manual', silent);
+    expect(r.released).toBe(false);
+    expect(recordOrphanedWorktreeMock).not.toHaveBeenCalled();
+  });
+});
 
 describe('bestEffortReleaseSd', () => {
   it('REPRO: a PostgREST builder is thenable but has NO .catch (calling .catch on it throws)', () => {

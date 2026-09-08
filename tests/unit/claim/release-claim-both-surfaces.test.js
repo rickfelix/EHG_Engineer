@@ -11,8 +11,14 @@
  * Uses a tiny in-memory Supabase stub so CAS + readback are exercised end-to-end (no live DB).
  */
 
-import { describe, it, expect } from 'vitest';
-import { releaseClaimBothSurfaces } from '../../../lib/claim/release-claim-both-surfaces.mjs';
+import { describe, it, expect, vi } from 'vitest';
+
+const recordOrphanedWorktreeMock = vi.fn();
+vi.mock('../../../lib/fleet/record-orphaned-worktree.mjs', () => ({
+  recordOrphanedWorktree: (...args) => recordOrphanedWorktreeMock(...args),
+}));
+
+const { releaseClaimBothSurfaces } = await import('../../../lib/claim/release-claim-both-surfaces.mjs');
 
 // ── Minimal in-memory Supabase double ────────────────────────────────────────
 function makeDb({ sds = [], sessions = [], errorOn = null } = {}) {
@@ -200,5 +206,50 @@ describe('releaseClaimBothSurfaces', () => {
     const r = await releaseClaimBothSurfaces(db.client, { holderSessionId: 'H1' });
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/sdKey is required/);
+  });
+});
+
+// QF-20260903-936: this helper clears worktree_path/worktree_branch on EVERY release path
+// (see the R3 test above) but neither the RPC nor the direct clear touch the filesystem/git
+// worktree registration itself -- a claim-then-release cycle with no work done leaks a full
+// worktree pool slot. recordOrphanedWorktree must be called, on every success path, with the
+// holder's worktree_path/branch CAPTURED BEFORE the clear below nulls them.
+describe('releaseClaimBothSurfaces — worktree-orphan recording (QF-20260903-936)', () => {
+  it('direct-clear success records the orphaned worktree with the pre-clear path/branch', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const db = makeDb(seed()); // seed() sessions[0] has worktree_path:'/w', worktree_branch:'feat/x'
+    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1' });
+    expect(recordOrphanedWorktreeMock).toHaveBeenCalledTimes(1);
+    expect(recordOrphanedWorktreeMock.mock.calls[0][1]).toMatchObject({
+      sdKey: 'SD-X', holder: 'H1', worktreePath: '/w', worktreeBranch: 'feat/x', reason: 'release',
+    });
+  });
+
+  it('tryRpc success ALSO records the orphaned worktree (both exit paths wired)', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const db = makeDb(seed());
+    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1', tryRpc: true });
+    expect(recordOrphanedWorktreeMock).toHaveBeenCalledTimes(1);
+    expect(recordOrphanedWorktreeMock.mock.calls[0][1]).toMatchObject({
+      sdKey: 'SD-X', holder: 'H1', worktreePath: '/w', worktreeBranch: 'feat/x',
+    });
+  });
+
+  it('does not record when the holder had no worktree provisioned (null path passed through)', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const db = makeDb(seed({
+      sessions: [{ session_id: 'H1', sd_key: 'SD-X', worktree_path: null, worktree_branch: null, status: 'active' }],
+    }));
+    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1' });
+    expect(recordOrphanedWorktreeMock).toHaveBeenCalledWith(
+      db.client, expect.objectContaining({ worktreePath: null, worktreeBranch: null })
+    );
+  });
+
+  it('does not record on the no-op (no holder) path', async () => {
+    recordOrphanedWorktreeMock.mockClear();
+    const db = makeDb(seed({ sds: [{ sd_key: 'SD-X', claiming_session_id: null }], sessions: [] }));
+    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X' });
+    expect(recordOrphanedWorktreeMock).not.toHaveBeenCalled();
   });
 });
