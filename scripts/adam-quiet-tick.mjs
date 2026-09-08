@@ -605,9 +605,13 @@ export async function checkOversightStaleness(sb, { nowMs = Date.now() } = {}) {
 // a breach is caught within one quiet-tick cycle instead of waiting up to 46 more minutes for the
 // next hourly check. Fail-soft: a read error or a heartbeat that has never been sent reports
 // nothing (never a false alarm) -- mirrors checkOversightStaleness's contract exactly.
-// Cadence re-ratified EVERY 3 HOURS (chairman verbal 2026-08-28, ratification 9eebe200,
-// supersedes the 2026-07-31 hourly verbal): threshold = cadence minus 5min grace, same
-// shape as the old 55min-under-60min bar.
+// QF-20260905-680: cadence is FIXED ET SLOTS 6/9/12/3/6/9 (ratification 7010e20f,
+// supersedes the ">=170min gap since last send" rule of ratification 9eebe200, itself a
+// supersession of the 2026-07-31 hourly verbal). This threshold is the OVERDUE BACKSTOP
+// only (a genuine multi-slot lapse), not the primary send trigger -- that lives in the
+// 'heartbeat-sms' ADAM_LOOPS prompt (scripts/adam-startup-check.mjs), which reasons about
+// slots via lib/time/chairman-et-wall-clock.js. Threshold value unchanged (slots are
+// themselves 3h apart): cadence minus 5min grace, same shape as the old 55min-under-60min bar.
 export const HEARTBEAT_OVERDUE_THRESHOLD_MS = 175 * 60 * 1000;
 export async function checkHeartbeatCadence(sb, { nowMs = Date.now() } = {}) {
   try {
@@ -636,9 +640,9 @@ export async function checkHeartbeatCadence(sb, { nowMs = Date.now() } = {}) {
 export function formatHeartbeatCadenceLine(overdueMin, isQuiet) {
   if (overdueMin == null) return null;
   if (isQuiet) {
-    return `QUIET_TICK_HEARTBEAT_SUPPRESSED=adam gapMin=${overdueMin} — 3-hourly heartbeat cadence contract breached, but within the 22:00-06:00 ET quiet window; the send gate would drop it. INFORMATIONAL, not actionable. Cadence resumes at 06:00 ET.`;
+    return `QUIET_TICK_HEARTBEAT_SUPPRESSED=adam gapMin=${overdueMin} — a fixed ET heartbeat slot (6/9/12/3/6/9, ratification 7010e20f) was missed, but within the 22:00-06:00 ET quiet window; the send gate would drop it. INFORMATIONAL, not actionable. Cadence resumes at 06:00 ET.`;
   }
-  return `QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${overdueMin} — 3-hourly heartbeat cadence contract breached (>=175min since last send; chairman verbal 2026-08-28); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`;
+  return `QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${overdueMin} — a fixed ET heartbeat slot (6/9/12/3/6/9, ratification 7010e20f) was missed for >=175min (overdue backstop, not the primary trigger); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`;
 }
 
 /** QF-20260808-673: how far back to look for an unanswered chairman inbound. */
@@ -1590,8 +1594,9 @@ async function main() {
     if (oversightStale.selfScoreOverdueH) {
       console.log(`QUIET_TICK_SELFSCORE_OVERDUE=adam lastScoreAgeH=${oversightStale.selfScoreOverdueH} — run node scripts/adam-self-assessment-writer.cjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
     }
-    // QF-20260823-131 (re-tuned 2026-08-28, ratification 9eebe200: cadence now EVERY 3 HOURS):
-    // re-checks the SAME >=175min measured-gap bar the durable cron uses, every 15min via this tick.
+    // QF-20260823-131 (re-tuned per QF-20260905-680: cadence is FIXED ET SLOTS, ratification
+    // 7010e20f, this bar is the overdue backstop only): re-checks the SAME >=175min
+    // measured-gap bar the durable cron uses, every 15min via this tick.
     const heartbeatCadence = await checkHeartbeatCadence(sb);
     const heartbeatCadenceLine = formatHeartbeatCadenceLine(heartbeatCadence.overdueMin, inQuietHours({ now: Date.now() }));
     if (heartbeatCadenceLine) console.log(heartbeatCadenceLine);

@@ -243,10 +243,18 @@ export const ADAM_LOOPS = [
     // (22:00-06:00 ET) + rate caps are enforced inside sendChairmanSMS's rubric gate. Was
     // SESSION-ONLY (session c514430f hand-armed as interim); registered here for durability.
     key: 'heartbeat-sms',
-    label: 'Hourly brief status SMS (quiet-hours-respecting, silence-by-default on truly-nothing ticks)',
+    label: 'Brief status SMS at fixed ET slots (quiet-hours-respecting, silence-by-default on truly-nothing ticks)',
     script: 'adam-chairman-sms.mjs',
-    cron: '18 */3 * * *', // 3-HOURLY per chairman verbal 2026-08-28 (ratification 9eebe200, supersedes hourly)
-    prompt: 'Adam heartbeat-sms tick: REQUIRED FIRST STEP (coordinator ruling e1b923a2, durable fix of the 08-18 69-min lapse) — query sms_outbound_obligations for the most recent kind=\'heartbeat_status\' row (order by created_at desc, limit 1) and compute the real elapsed gap since its created_at. Never decide from session recall of when you last sent — a session restart loses that memory entirely, which is exactly how the lapse happened. Only proceed once the MEASURED gap is >=~170min and the chairman is awake (3-HOURLY cadence, chairman verbal 2026-08-28, ratification 9eebe200); otherwise stay silent this tick. If the gap has been reached: if there is truly nothing plan-relevant to report, stay SILENT (silence-by-default) — otherwise compose ONE short (1-2 sentence), professional-casual, plan-relevant status line and run node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<line>" (quiet hours and rate caps are enforced by the send gate itself — do not skip the call to pre-empt them). Never send a false all-good; if something is actually wrong, send the decision/alert email instead (node scripts/adam-decision-email.mjs) rather than this heartbeat.',
+    cron: '18 */3 * * *', // wake cadence only -- the SLOT the prompt targets is fixed ET, see below
+    // QF-20260905-680: cadence is FIXED ET SLOTS 6/9/12/3/6/9 (10/13/16/19/22/01Z EDT,
+    // DST-shifts by 1h), ratification 7010e20f ("I think I prefer set schedules"),
+    // superseding the ">=170min gap since last send" rule (ratification 9eebe200) this
+    // prompt used to encode -- that rule let the cadence silently drift ~1h/day because
+    // each send moved the measured-gap anchor. lib/time/chairman-et-wall-clock.js's
+    // nextHeartbeatSlotIso/currentHeartbeatSlotIso are the testable reference; this tick
+    // fires more often than the slots (catch-up), so it must reason about which slot,
+    // not how long since the last send.
+    prompt: 'Adam heartbeat-sms tick: cadence is FIXED ET SLOTS 6:00am/9:00am/12:00pm/3:00pm/6:00pm/9:00pm America/New_York (ratification 7010e20f; NOT a gap-since-last-send rule -- that rule, ratification 9eebe200, is SUPERSEDED). REQUIRED FIRST STEP (coordinator ruling e1b923a2, durable fix of the 08-18 69-min lapse) — query sms_outbound_obligations for the most recent kind=\'heartbeat_status\' row (order by created_at desc, limit 1). Never decide from session recall of when you last sent — a session restart loses that memory entirely, which is exactly how the lapse happened. Compute the most recently-passed fixed ET slot from the current time (America/New_York, DST-aware). If that slot\'s boundary is AFTER the last send\'s created_at (i.e. this slot has not yet been filled) and the chairman is awake (not the 22:00-06:00 ET quiet window): if there is truly nothing plan-relevant to report, stay SILENT (silence-by-default) — otherwise compose ONE short (1-2 sentence), professional-casual, plan-relevant status line and run node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<line>" (quiet hours and rate caps are enforced by the send gate itself — do not skip the call to pre-empt them). If the current slot is already filled, stay silent this tick — the >=170min gap check is an OVERDUE BACKSTOP ONLY (a real lapse across slots), never the primary trigger. Never send a false all-good; if something is actually wrong, send the decision/alert email instead (node scripts/adam-decision-email.mjs) rather than this heartbeat.',
   },
   {
     // QF-20260719-343 (contract c4, leo_protocol_sections id=601, chairman-directed 2026-07-19):
