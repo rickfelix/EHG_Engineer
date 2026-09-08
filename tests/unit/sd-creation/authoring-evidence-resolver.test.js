@@ -123,6 +123,14 @@ describe('resolveArtifactOwner', () => {
     expect(result).toEqual({ token: 'tok-orphan', resolved: true, table: 'strategic_directives_v2', ownerKey: null });
   });
 
+  it('a real row with an EMPTY-STRING owner column resolves with ownerKey null, not the literal empty string', async () => {
+    const supabase = makeSupabase({
+      strategic_directives_v2: [{ id: 'tok-empty', sd_key: '' }],
+    });
+    const result = await resolveArtifactOwner(supabase, 'tok-empty');
+    expect(result).toEqual({ token: 'tok-empty', resolved: true, table: 'strategic_directives_v2', ownerKey: null });
+  });
+
   it('probes tables in the declared allowlist order', () => {
     expect(ARTIFACT_OWNER_ALLOWLIST.map((e) => e.table)).toEqual([
       'strategic_directives_v2', 'venture_artifacts', 'uat_test_runs',
