@@ -1,8 +1,8 @@
-<!-- file_content_hash: 47113a5ce1544e0b -->
+<!-- file_content_hash: 88a01f138424a88c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-07 11:03:53 PM
+**Generated**: 2026-09-08 9:02:29 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -377,6 +377,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-09-07*
+*Generated from database: 2026-09-08*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_manual). Do not hand-edit — edit the DB section and regenerate.*

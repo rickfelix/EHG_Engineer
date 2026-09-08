@@ -1,8 +1,8 @@
-<!-- file_content_hash: b02fdb62850ff637 -->
+<!-- file_content_hash: 0ec8e5aa4a9aab92 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_LEAD_MANUAL.md — LEAD Manual (reference companion)
 
-**Generated**: 2026-09-07 11:03:53 PM
+**Generated**: 2026-09-08 8:50:54 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form LEAD reference — the Q9 strategic-validation rubric, parent/child SD governance, multi-track parallel execution, directive submission review
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every LEAD phase entry
@@ -10,6 +10,280 @@
 > This companion carries REFERENCE AND PROCEDURE. Every RULE and PROHIBITION that governs LEAD stays in CLAUDE_LEAD.md and is in force whether or not this file is read. If you are ever unsure whether something belongs here, it belongs in CLAUDE_LEAD.md — this file exists to make that file readable, not to relieve it of anything that binds.
 
 ---
+
+## Common SD Creation Errors and Solutions
+
+### Database Constraint Errors
+
+#### Error: `null value in column "sd_key" violates not-null constraint`
+
+**Cause**: Missing `sd_key` field when creating SD
+**Solution**:
+```javascript
+const sd = {
+  id: 'SD-XXX-001',
+  sd_key: 'SD-XXX-001',  // MUST be present and match id format
+  // ... other fields
+};
+```
+**Reference**: `docs/database/strategic_directives_v2_field_reference.md` line 20
+
+#### Error: `duplicate key value violates unique constraint`
+
+**Cause**: SD with that id or sd_key already exists
+**Solution**: Use UPDATE instead of INSERT, or choose a different ID
+```javascript
+// Check if exists first
+const { data: existing } = await supabase
+  .from('strategic_directives_v2')
+  .select('id')
+  .eq('sd_key', 'SD-XXX-001')
+  .single();
+
+if (existing) {
+  // Update existing
+  await supabase.from('strategic_directives_v2').update(sd).eq('id', 'SD-XXX-001');
+} else {
+  // Insert new
+  await supabase.from('strategic_directives_v2').insert(sd);
+}
+```
+
+#### Error: `invalid input syntax for type json`
+
+**Cause**: Invalid JSON in `metadata`, `success_criteria`, or other JSONB fields
+**Solution**: Ensure JSONB fields are valid JSON objects/arrays, not strings
+> Why: JSONB fields are validated at insert time by PostgreSQL — a malformed string does not become an error until a downstream read fails silently. Supabase type inference will not catch a plain string where an object is expected, so the error surfaces during gate evaluation rather than at creation.
+
+### Handoff Validation Errors
+
+#### Error: `ERR_NO_PRD` during PLAN-TO-EXEC
+
+**Cause**: No PRD found for SD
+**Solution**: Create PRD before executing handoff
+```bash
+node scripts/add-prd-to-database.js --sd-id SD-XXX-001 --title "PRD Title"
+```
+**Reference**: CLAUDE_EXEC.md line 84
+
+#### Error: `ERR_CHAIN_INCOMPLETE` during handoff
+
+**Cause**: Missing prerequisite handoff in chain
+**Solution**: Complete the missing prerequisite handoff first
+
+| Handoff | Requires First |
+|---------|---------------|
+| PLAN-TO-EXEC | LEAD-TO-PLAN |
+| EXEC-TO-PLAN | PLAN-TO-EXEC |
+| PLAN-TO-LEAD | EXEC-TO-PLAN |
+| LEAD-FINAL | PLAN-TO-LEAD |
+
+#### Error: `ERR_TESTING_REQUIRED` during EXEC-TO-PLAN
+
+**Cause**: TESTING sub-agent must run before EXEC-TO-PLAN for feature/bugfix SDs
+**Solution**: Run TESTING sub-agent first
+```
+Task(subagent_type="testing-agent", prompt="Execute TESTING validation for SD-XXX-001")
+```
+
+### SD Type Errors
+
+#### Error: SD blocked by TESTING validation but no code changes
+
+**Cause**: `sd_type` not set correctly for documentation-only SD
+**Solution**: Set `sd_type = 'documentation'` to skip code validation
+```sql
+UPDATE strategic_directives_v2 SET sd_type = 'documentation' WHERE sd_key = 'SD-XXX-001';
+```
+**Evidence**: SD-TECH-DEBT-DOCS-001 was blocked until sd_type was set correctly
+
+#### Error: Refactor SD missing intensity level
+
+**Cause**: Refactor SDs require `intensity_level` field
+**Solution**: Set intensity level before LEAD approval
+```sql
+UPDATE strategic_directives_v2
+SET intensity_level = 'structural'  -- cosmetic, structural, or architectural
+WHERE sd_key = 'SD-REFACTOR-001';
+```
+
+### Branch and Git Errors
+
+#### Error: `Branch is stale (>7 days)`
+
+**Cause**: Feature branch has diverged from main for too long
+**Solution**: Sync with main before handoff
+```bash
+git fetch origin main
+git merge origin/main --no-edit
+```
+
+#### Error: Multiple SDs detected on branch
+
+**Cause**: Branch contains commits from multiple SDs
+**Solution**: Create separate branches for each SD
+
+### Quick Diagnostic Commands
+
+```bash
+# Check SD exists and get status
+node -e "require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY).from('strategic_directives_v2').select('id,sd_key,status,sd_type').eq('sd_key','SD-XXX-001').single().then(r=>console.log(r.data||r.error));"
+
+# Check handoff chain
+node scripts/handoff.js list SD-XXX-001
+
+# Validate before handoff (find all issues)
+node scripts/handoff.js precheck PLAN-TO-EXEC SD-XXX-001
+```
+
+
+### SDKeyGenerator Errors (SD-LEO-SDKEY-001)
+
+#### Error: `Invalid SD type` or `new value for domain sd_type violates check constraint`
+
+**Cause**: Using user-friendly type names that don't match database constraint
+**Solution**: SDKeyGenerator automatically maps user types to valid database types:
+```javascript
+// User-friendly types → Database types
+fix, bugfix → bugfix
+feature, feat → feature
+enhancement → feature
+refactor, refactoring → refactor
+infrastructure, infra → infrastructure
+documentation, docs → documentation
+testing, test → testing
+security → security
+```
+
+**Reference**: `scripts/modules/sd-key-generator.js` line 45-60
+
+#### Error: `SD key collision detected` or duplicate key in different format
+
+**Cause**: Proposed SD key matches existing SD in either `sd_key` OR `id` column
+**Solution**: SDKeyGenerator checks BOTH columns automatically:
+```javascript
+// Checks both columns
+const { data: existing } = await supabase
+  .from('strategic_directives_v2')
+  .select('id, sd_key')
+  .or(`sd_key.eq.${proposedKey},id.eq.${proposedKey}`);
+```
+If collision detected, sequential number auto-increments (001 → 002 → 003).
+
+**Reference**: `scripts/modules/sd-key-generator.js` keyExists() function
+
+#### Error: Semantic extraction produces unclear abbreviations
+
+**Cause**: Title contains many small words or acronyms
+**Solution**: SDKeyGenerator extracts 2-3 meaningful words, skipping common words:
+```javascript
+// "Fix navigation route not working" → "NAV-ROUTE"
+// "Add user authentication feature" → "USER-AUTH"
+// Skips: the, a, an, and, or, but, to, from, with, of, for, in, on, at
+```
+
+**Manual override available**:
+```javascript
+await generateSDKey({
+  source: 'UAT',
+  type: 'bugfix',
+  title: 'Fix navigation route not working',
+  semanticOverride: 'NAV-FIX'  // Force specific semantic
+});
+```
+
+**Reference**: `scripts/modules/sd-key-generator.js` extractSemanticWords() function
+
+#### Error: Child SD key format incorrect (e.g., `SD-UAT-FIX-NAV-001-A` vs `SD-UAT-FIX-NAV-001A`)
+
+**Cause**: Manual child key creation without using SDKeyGenerator hierarchy functions
+**Solution**: Use SDKeyGenerator hierarchy functions for consistent encoding:
+```javascript
+// Root SD
+const rootKey = await generateSDKey({...}); // SD-UAT-FIX-NAV-001
+
+// Child (no hyphen before suffix)
+const childKey = generateChildKey(rootKey, 'A'); // SD-UAT-FIX-NAV-001A
+
+// Grandchild (hyphen before numeric suffix)
+const grandchildKey = generateGrandchildKey(childKey, '1'); // SD-UAT-FIX-NAV-001A-1
+
+// Great-grandchild (dot separator)
+const greatGrandchildKey = generateGreatGrandchildKey(grandchildKey, '1'); // SD-UAT-FIX-NAV-001A-1.1
+```
+
+**Hierarchy encoding rules**:
+- Root: `SD-SOURCE-TYPE-SEMANTIC-NUM`
+- Child: Append letter (no hyphen): `-NUMA`
+- Grandchild: Add hyphen + number: `-NUMA-1`
+- Great-grandchild: Add dot + number: `-NUMA-1.1`
+
+**Reference**: `docs/reference/sd-key-generator-guide.md` Hierarchy Support section
+
+#### Error: Sequential numbering gaps (e.g., 001, 002, 005)
+
+**Cause**: Deleted SDs or manual key creation creating gaps
+**Solution**: SDKeyGenerator automatically finds next available number:
+```javascript
+// If SD-UAT-FIX-NAV-001 and SD-UAT-FIX-NAV-003 exist
+// Next key will be SD-UAT-FIX-NAV-002 (fills gap)
+// Then SD-UAT-FIX-NAV-004 (next sequential)
+```
+
+**Reference**: `scripts/modules/sd-key-generator.js` getNextSequentialNumber() function
+
+### Using /leo create Command
+
+#### Recommended: Unified SD creation interface (SD-LEO-SDKEY-001)
+
+Instead of manually calling SDKeyGenerator or legacy scripts, use `/leo create`:
+
+```bash
+# Interactive mode - Prompts for all fields
+/leo create
+
+# From UAT finding
+/leo create --from-uat <test-id>
+
+# From /learn pattern
+/leo create --from-learn <pattern-id>
+
+# From /inbox feedback
+/leo create --from-feedback <feedback-id>
+
+# Create child SD
+/leo create --child SD-UAT-FIX-NAV-001 A
+```
+
+**Features**:
+- Automatic source detection (UAT, LEARN, FEEDBACK, etc.)
+- Type mapping to valid database constraints
+- Collision detection across both `sd_key` and `id` columns
+- Sequential numbering with gap detection
+- Hierarchy support (4 levels)
+
+**Reference**: `docs/reference/npm-scripts-guide.md` line 121-148, `docs/reference/sd-key-generator-guide.md`
+
+#### Migration from legacy scripts
+
+If you have code using old SD creation patterns, migrate to SDKeyGenerator:
+
+```javascript
+// OLD (manual key generation)
+const sdKey = `SD-${source}-${type.toUpperCase()}-${semantic}-001`;
+
+// NEW (SDKeyGenerator)
+import { generateSDKey } from './modules/sd-key-generator.js';
+const sdKey = await generateSDKey({ source, type, title });
+```
+
+**Migrated scripts**:
+1. `scripts/uat-to-strategic-directive-ai.js`
+2. `scripts/sd-from-feedback.js`
+3. `scripts/pattern-alert-sd-creator.js`
+4. `scripts/create-sd.js`
+5. `scripts/modules/learning/executor.js`
+
 
 ## 🎯 Strategic Validation Question 9: Human-Verifiable Outcome
 
@@ -209,6 +483,6 @@ npm run sd:status    # Overall progress by track
 
 ---
 
-*Generated from database: 2026-09-07*
+*Generated from database: 2026-09-08*
 *Protocol Version: 4.4.1*
-*Source of truth: leo_protocol_sections (section_type=parent_child_sd_governance, multi_track_parallel_execution, lead_strategic_validation_q9). Do not hand-edit — edit the DB section and regenerate.*
+*Source of truth: leo_protocol_sections (section_type=parent_child_sd_governance, multi_track_parallel_execution, lead_strategic_validation_q9, sd_creation_errors). Do not hand-edit — edit the DB section and regenerate.*
