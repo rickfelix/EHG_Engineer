@@ -562,6 +562,17 @@ export class BaseExecutor {
           });
 
           if (!skipCheck.shouldSkip && skipCheck.reason.includes('etry')) {
+            // QF-20260905-565: a WAIT verdict (e.g. GATE_SUBAGENT_EVIDENCE's "phase started
+            // <30s ago" grace period) has gateResults.passed=false but is not a failed attempt
+            // — SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001's own ceiling already owns consecutive-wait
+            // escalation. Counting it here duplicated that accounting and fired a false gate-2x
+            // stuck signal on a handoff that accepted moments later. Still retry (the whole
+            // point of WAIT is "check again"), just don't charge it against the fail-retry count
+            // or let it reach the auto-signal capture below.
+            if (gateResults.waitVerdict) {
+              console.log(`\n   ⏳ Gate wait (not counted as a retry): ${skipCheck.reason}`);
+              continue;
+            }
             // Retry eligible — increment and loop
             currentRetryCount++;
             console.log(`\n   🔄 Gate retry ${currentRetryCount}/${maxGateRetries}: ${skipCheck.reason}`);
@@ -598,8 +609,10 @@ export class BaseExecutor {
       // QF-20260705-788: emit the captured gate-2x auto-signal ONLY if the handoff's gates are
       // STILL failing after the retry loop exhausted (genuine exhaustion) — a subsequent PASS
       // within this same loop (the self-healing WIRE_CHECK_GATE case) suppresses it entirely.
+      // QF-20260905-565: also suppressed if the FINAL attempt landed on a WAIT verdict — a
+      // waiting gate is blocked, not failed (see BLOCKED — WAIT VERDICT branch just below).
       // Fire-and-forget (detached + unref), same safety contract as before.
-      if (_pendingGateAutoSignalArgs && !gateResults.passed) {
+      if (_pendingGateAutoSignalArgs && !gateResults.passed && !gateResults.waitVerdict) {
         try {
           const _req = createRequire(import.meta.url);
           const { spawn } = _req('child_process');
