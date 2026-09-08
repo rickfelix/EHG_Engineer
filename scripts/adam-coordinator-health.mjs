@@ -128,7 +128,7 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
   // accepted, unclaimed) is a DIFFERENT supply class from dispatchable_backlog_size by construction
   // (it's pending_approval, not draft) -- surfaced beside it so the belt/gauges read it as supply
   // too. Fail-soft: this is an advisory KPI, never allowed to break the health probe.
-  let completionReadyParents = { count: 0, oldestAgeMs: null, parents: [] };
+  let completionReadyParents = { count: 0, oldestAgeMs: null, parents: [], held: [] };
   try {
     completionReadyParents = await countCompletionReadyParents(supabase, { nowMs });
   } catch { /* advisory only -- a query fault here must never break the health probe */ }
@@ -155,6 +155,13 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
     raw_unclaimed_drafts: rawUnclaimedDrafts,
     completion_ready_parents: completionReadyParents.count,
     completion_ready_parents_oldest_age_ms: completionReadyParents.oldestAgeMs,
+    // QF-20260908-764: countCompletionReadyParents already separates a genuinely-completable
+    // parent that's deliberately held (needs_coordinator_review / blocked_by_sd_key) from `ready`
+    // -- this reader previously discarded that `held` bucket entirely, so a held-but-completable
+    // parent read as zero, indistinguishable from no such parent existing at all (176h-unseen live
+    // specimen). Surfaced alongside ready: count for the gauge, reasons for the report body.
+    completion_ready_parents_held: completionReadyParents.held.length,
+    completion_ready_parents_held_reasons: completionReadyParents.held,
   };
 }
 
