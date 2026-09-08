@@ -104,6 +104,36 @@ function candidateFilesAll() {
   return out;
 }
 
+/**
+ * QF-20260907-544: NEW-file line numbers actually added/changed for `file` per `git diff -U0`, so
+ * findings can be scoped to the real diff hunks instead of the whole file. Without this,
+ * candidateFiles() selects whole FILES (any line touched), then the scan below re-lints each
+ * file's ENTIRE current content -- any PRE-EXISTING allowlisted-by-line-number finding whose line
+ * has since SHIFTED (an earlier unrelated edit added/removed lines above it) reports as a fresh,
+ * unallowlisted violation, even though neither the flagged line's content nor the PR touched it.
+ * Measured twice on this exact lint (QF-20260905-562, QF-20260904-610: scripts/leo-create-sd.js's
+ * --min-tier-rank help text shifted 177->178->179 from unrelated edits above it). Mirrors
+ * scripts/lint/session-coordination-insert-classguard-lint.mjs's changedLineNumbers() -- same
+ * proven pattern, same fix shape. Returns null (caller falls back to unfiltered) when the diff is
+ * unavailable for this file.
+ */
+function changedLineNumbers(file, base) {
+  try {
+    const out = execSync(`git diff -U0 --diff-filter=ACMR ${base}...HEAD -- ${file}`, { encoding: 'utf8', timeout: 30000 });
+    const lines = new Set();
+    for (const line of out.split('\n')) {
+      const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+      if (!m) continue;
+      const start = Number(m[1]);
+      const count = m[2] === undefined ? 1 : Number(m[2]);
+      for (let i = 0; i < count; i += 1) lines.add(start + i);
+    }
+    return lines;
+  } catch {
+    return null;
+  }
+}
+
 function candidateFiles() {
   if (mode !== 'diff') return candidateFilesAll();
   try {
@@ -125,6 +155,7 @@ function candidateFiles() {
   }
 }
 
+const diffBase = process.env.TIER_RANK_COMPARISON_LINT_BASE || 'origin/main';
 const files = candidateFiles();
 const allViolations = [];
 for (const file of files) {
@@ -132,10 +163,16 @@ for (const file of files) {
   let text;
   try { text = readFileSync(file, 'utf8'); } catch { continue; }
   if (!MENTIONS_MIN_TIER_RANK_RE.test(text)) continue;
+  // QF-20260907-544: in diff mode, scope findings to lines this diff actually changed -- a
+  // pre-existing (and possibly already-allowlisted-by-now-stale-line-number) violation elsewhere
+  // in a touched file must never re-trigger just because candidateFiles() selects whole files.
+  // null (diff unavailable for this file) fails OPEN -- unfiltered, same as before this fix.
+  const changedLines = mode === 'diff' ? changedLineNumbers(file, diffBase) : null;
   const lines = text.split('\n');
   const allowedLines = allowedByFile.get(file);
   lines.forEach((line, idx) => {
     const lineNumber = idx + 1;
+    if (changedLines && !changedLines.has(lineNumber)) return;
     if (line.includes(DISABLE_PRAGMA)) return;
     if (COMMENT_LINE_RE.test(line)) return;
     if (line.includes('tierRankVerdict(')) return; // the call site IS the reuse
