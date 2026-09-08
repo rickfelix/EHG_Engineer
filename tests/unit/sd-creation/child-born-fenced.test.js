@@ -70,3 +70,45 @@ describe('leo-create-sd.js --depends-on CLI wiring (QF-20260711-841)', () => {
     expect(source.slice(flagSetStart, flagSetEnd)).toContain('childDependsOnIdx');
   });
 });
+
+// QF-20260904-610: --roadmap-link-reason had NO path at all on --child -- every child mint
+// recorded a reasonless roadmap-link exception unconditionally. Same shape as the --depends-on
+// fix above: parsed on leo-create-sd.js's --child branch, threaded through createChild's
+// overrides, passed straight into the SAME createSD() insert (never a separate write).
+describe('createChild wiring — roadmap_link_reason (QF-20260904-610)', () => {
+  it('passes roadmap_link_reason straight into the SAME createSD() insert when the operator supplied one', () => {
+    const source = readFileSync('lib/sd-creation/source-adapters/child.js', 'utf8');
+    const createSdCallStart = source.indexOf('const sd = await createSD({');
+    const createSdCallEnd = source.indexOf('});', createSdCallStart);
+    const createSdBody = source.slice(createSdCallStart, createSdCallEnd);
+    expect(createSdBody).toContain('overrides.roadmapLinkReason');
+    expect(createSdBody).toContain('roadmap_link_reason: overrides.roadmapLinkReason');
+  });
+
+  it('roadmap_link_reason is a TOP-LEVEL createSD param, not nested under metadata (pipeline.js destructures it there)', () => {
+    const source = readFileSync('lib/sd-creation/source-adapters/child.js', 'utf8');
+    const createSdCallStart = source.indexOf('const sd = await createSD({');
+    const metadataStart = source.indexOf('metadata: {', createSdCallStart);
+    const reasonIdx = source.indexOf('roadmap_link_reason: overrides.roadmapLinkReason', createSdCallStart);
+    expect(reasonIdx).toBeGreaterThan(-1);
+    expect(reasonIdx).toBeLessThan(metadataStart); // set BEFORE the metadata block, i.e. top-level
+  });
+});
+
+describe('leo-create-sd.js --roadmap-link-reason CLI wiring for --child (QF-20260904-610)', () => {
+  it('parses --roadmap-link-reason onto childOverrides.roadmapLinkReason', () => {
+    const source = readFileSync('scripts/leo-create-sd.js', 'utf8');
+    const childStart = source.indexOf("args[0] === '--child'");
+    const childEnd = source.indexOf('const childRes = await createChild(');
+    const childBody = source.slice(childStart, childEnd);
+    expect(childBody).toContain("args.indexOf('--roadmap-link-reason')");
+    expect(childBody).toContain('childOverrides.roadmapLinkReason');
+  });
+
+  it('excludes the --roadmap-link-reason value from index-arg detection (so it is never mistaken for the child index)', () => {
+    const source = readFileSync('scripts/leo-create-sd.js', 'utf8');
+    const flagSetStart = source.indexOf('const flagValuePositionsChild = new Set(');
+    const flagSetEnd = source.indexOf(');', flagSetStart);
+    expect(source.slice(flagSetStart, flagSetEnd)).toContain('childLinkReasonIdx');
+  });
+});

@@ -205,6 +205,13 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
     ? parseTargetReposArg(proposal.metadata.target_repos.join(','))
     : null;
 
+  // QF-20260904-610: a threaded CLI --roadmap-link-reason (opts.roadmapLinkReason) is a more
+  // deliberate, at-mint-time operator action than a JSON field baked into the proposal file, so
+  // it wins when both are present. Either source is optional; absence is legal (see below).
+  const cliRoadmapLinkReason = typeof opts.roadmapLinkReason === 'string' && opts.roadmapLinkReason.trim() ? opts.roadmapLinkReason : null;
+  const jsonRoadmapLinkReason = typeof proposal.roadmap_link_reason === 'string' && proposal.roadmap_link_reason.trim() ? proposal.roadmap_link_reason : null;
+  const roadmapLinkReason = cliRoadmapLinkReason || jsonRoadmapLinkReason;
+
   return {
     sdKey: normalized.sdKey,
     title: normalized.title,
@@ -258,9 +265,9 @@ export function mapProposalToCreateArgs(normalized, proposal, filePath, opts = {
     // drive-to-zero target could not be moved by the very route that produces most of the gap,
     // which is the "recorded but unmovable" defect this SD exists to close, reproduced inside its
     // own fix. Absent is legal and still records the explicit marker; it never refuses.
-    ...(typeof proposal.roadmap_link_reason === 'string' && proposal.roadmap_link_reason.trim()
-      ? { roadmap_link_reason: proposal.roadmap_link_reason }
-      : {}),
+    // QF-20260904-610: also accept a THREADED CLI --roadmap-link-reason (opts.roadmapLinkReason),
+    // mirroring the direct-lane/plan-lane flag — resolved above (CLI wins over the JSON field).
+    ...(roadmapLinkReason ? { roadmap_link_reason: roadmapLinkReason } : {}),
     metadata: {
       // FR-1: full proposal metadata preserved (minus leak-guard keys), then canonical defaults
       // below WIN over any same-named proposal key (source, provenance, validated target_repos, …).
@@ -416,7 +423,7 @@ function resolveProposalFiles(pathOrGlob) {
  * @param {{dryRun?:boolean, deps?:{keyExists?:Function, createSD?:Function}}} options
  */
 export async function ingestProposalObject(proposal, source, options = {}) {
-  const { dryRun = false, deps = {}, migrationReviewed = false, securityReviewed = false } = options;
+  const { dryRun = false, deps = {}, migrationReviewed = false, securityReviewed = false, roadmapLinkReason = null } = options;
   const _keyExists = deps.keyExists || keyExists;
   const _createSD = deps.createSD || createSDWithCliExits;
   // SD-LEO-INFRA-PREMISE-LIVENESS-GATE-SOURCING-001 FR-2: injectable premise-liveness
@@ -452,7 +459,7 @@ export async function ingestProposalObject(proposal, source, options = {}) {
   // FR-2: forward the threaded review-attestation flags (from --migration-reviewed /
   // --security-reviewed on the proposal-ingest CLI routes) to the mapper, which honors them
   // ONLY on an explicit `=== true` (FR-3 guard lives in mapProposalToCreateArgs).
-  const args = mapProposalToCreateArgs(normalized, proposal, source, { migrationReviewed, securityReviewed });
+  const args = mapProposalToCreateArgs(normalized, proposal, source, { migrationReviewed, securityReviewed, roadmapLinkReason });
   if (dryRun) {
     console.log(`🔎 [dry-run] would create ${args.sdKey} (${args.type}/${args.priority}) — ${args.title}`);
     return { sdKey: normalized.sdKey, file: source, action: 'dry-run' };
