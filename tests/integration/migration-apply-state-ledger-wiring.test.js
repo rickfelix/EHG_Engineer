@@ -284,13 +284,28 @@ describe('SD-LEO-ORCH-CAPA-SCHEMA-TRUTH-001-D TS-1 — excluded[] promoted to --
     expect(report.excluded[0].id).toContain('20251129_musk_algorithm_pareto.sql');
   }, 300000);
 
-  it('TS-1 real regression assertion: files[] (forward count) is UNCHANGED at 1592 -- the 4 reconciled basenames were never absent from the scan to begin with', () => {
+  it('TS-1 real regression assertion: files[] (forward count) still contains the 4 reconciled basenames -- they were never absent from the scan to begin with', async () => {
     // testing-agent evidence c5c4ad80 (EXEC phase): this is the assertion that actually
     // distinguishes "reconciled correctly" from "silently dropped a migration" -- the earlier
-    // excluded-count assertion alone cannot tell the two apart.
+    // excluded-count assertion alone cannot tell the two apart. QF-20260906-002: a literal
+    // toHaveLength(1592) broke on every legitimate new forward migration since; membership of
+    // the 4 reconciled basenames plus a live on-disk count (never a hardcoded total) is the
+    // actual regression this test guards.
+    const { listForwardMigrations } = await import(path.join(ROOT, 'scripts', 'verify-migration-apply-state.mjs'));
+    const { forward: liveForward } = listForwardMigrations();
+
     const { stdout } = run(['--json']);
     const report = parseLikeChairmanApplyState(stdout);
-    expect(report.files).toHaveLength(1592);
+    const basenames = report.files.map((f) => f.file);
+    for (const name of [
+      '20251205_russian_judge_sd_type_awareness.sql',
+      '20260105_automated_shipping_decisions.sql',
+      '20260108_capability_ledger_v2.sql',
+      '20260731_fix_chairman_privilege_app_metadata.sql',
+    ]) {
+      expect(basenames, `report.files should still contain ${name}`).toContain(name);
+    }
+    expect(report.files).toHaveLength(liveForward.length);
   }, 300000);
 
   it('the divergent pair is untouched: both the scanned and the excluded copy still exist on disk (FR-3 — neither file is deleted)', () => {
