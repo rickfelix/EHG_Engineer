@@ -106,7 +106,7 @@ BEGIN
 
   BEGIN
     INSERT INTO public.governance_audit_log (table_name, record_id, operation)
-    VALUES ('probe_table', gen_random_uuid()::text, 'probe')
+    VALUES ('probe_table', gen_random_uuid()::text, 'STATE_CHANGE')
     RETURNING id INTO probe_id;
 
     IF NOT EXISTS (SELECT 1 FROM public.governance_audit_log WHERE id = probe_id) THEN
