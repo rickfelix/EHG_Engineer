@@ -418,13 +418,45 @@ async function countPriorHintsDefault(supabase, { qfId, targetSession }) {
  */
 export const HINT_SEND_CAP = 3;
 
-export async function deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun = false, insertRow = insertCoordinationRow, countPriorHints = countPriorHintsDefault } = {}) {
+// QF-20260905-498: HINT_SEND_CAP stops an ADDRESSEE after 3 sends EVER, but the reported
+// incident (3 verbatim hints in 15 minutes to a seat on coordinator-standdown) hit the cap
+// exactly AT the 3rd send -- the lifetime cap never engaged in time to prevent the rapid-fire
+// repeat itself. This is a complementary, faster-acting guard: the SAME body to the SAME
+// target within this window is a duplicate, independent of how many lifetime sends remain.
+export const DUPLICATE_HINT_WINDOW_MS = 30 * 60 * 1000; // 30 min
+
+/**
+ * QF-20260905-498: is there already an identical hint (same target_session, same body) sent to
+ * this seat within DUPLICATE_HINT_WINDOW_MS? UNKNOWN IS NOT ZERO, same reasoning as
+ * countPriorHintsDefault above -- a read failure must not silently re-open the sender.
+ */
+async function findRecentDuplicateHintDefault(supabase, { targetSession, body, nowMs = Date.now() }) {
+  try {
+    const sinceIso = new Date(nowMs - DUPLICATE_HINT_WINDOW_MS).toISOString();
+    const { data, error } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', targetSession)
+      .eq('body', body)
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) return { unknown: true };
+    return { duplicateOf: data && data.length ? data[0].id : null };
+  } catch {
+    return { unknown: true };
+  }
+}
+
+export async function deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun = false, insertRow = insertCoordinationRow, countPriorHints = countPriorHintsDefault, findRecentDuplicate = findRecentDuplicateHintDefault, nowMs = Date.now() } = {}) {
   // QF-20260903-789: this section is genuinely REACHED now -- promote its owned counters from
   // UNDETERMINED (null) to a real measurement (0) even if the loop below never increments them.
   // `??` (not `||`) so an already-real 0/number from a prior call in the same object is preserved.
   if (summary) {
     summary.skippedCapped = summary.skippedCapped ?? 0;
     summary.capUnknown = summary.capUnknown ?? 0;
+    summary.skippedDuplicate = summary.skippedDuplicate ?? 0;
+    summary.duplicateUnknown = summary.duplicateUnknown ?? 0;
   }
   // One-hint-per-worker, one-QF-per-hint this tick: consume the ranked list as we go so no QF
   // is double-hinted and no worker gets more than one suggestion.
@@ -436,6 +468,25 @@ export async function deliverHints(idle, ranked, { summary, supabase, coordinato
     );
     if (idx === -1) continue;
     const [qf] = remaining.splice(idx, 1);
+
+    const hintRow = buildHintRow({ qf, coordinatorId, targetSession: worker.session_id });
+
+    // QF-20260905-498: dedupe on (target_session, body) within DUPLICATE_HINT_WINDOW_MS, checked
+    // BEFORE the lifetime cap below -- a rapid-fire repeat inside the window is a duplicate
+    // regardless of how many lifetime sends the (qf, target) pair has left. Same "goes back on
+    // the list" reasoning as the cap: this worker has already gotten this exact message, but the
+    // work is still unhinted for another worker.
+    if (!dryRun) {
+      const dup = await findRecentDuplicate(supabase, { targetSession: worker.session_id, body: hintRow.body, nowMs });
+      if (dup.unknown) {
+        summary.duplicateUnknown = (summary.duplicateUnknown || 0) + 1;
+      } else if (dup.duplicateOf) {
+        summary.skippedDuplicate = (summary.skippedDuplicate || 0) + 1;
+        console.log(`[coordinator-idle-qf-hint] skipped duplicate hint for ${qf.id} -> ${worker.session_id}, prior row ${dup.duplicateOf}`);
+        remaining.splice(idx, 0, qf);
+        continue;
+      }
+    }
 
     // QF-20260808-782: CAP AND STOP. Checked BEFORE `attempted` because a capped pair was never
     // attempted — counting it would inflate the denominator of the delivery ratio and make a
@@ -472,7 +523,7 @@ export async function deliverHints(idle, ranked, { summary, supabase, coordinato
       // silent starvation for that seat, and aborting would have been the safer choice.
       let res;
       try {
-        res = await insertRow(supabase, buildHintRow({ qf, coordinatorId, targetSession: worker.session_id }));
+        res = await insertRow(supabase, hintRow);
       } catch (e) {
         recordUndelivered(summary, worker, e && e.code ? e.code : (e && e.message) || 'unknown');
         // Put the QF back: this worker could not be reached, but the work is still unhinted and
