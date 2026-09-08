@@ -1,4 +1,5 @@
 -- @chairman-gated: applied by the chairman after sign-off (Tier 3: schema; personal data)
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J (Michael v1.1 data model) — docs/michael/02-SPEC.md §2.
 -- Four new v1.1 tables: michael_oracle_history, michael_oracle_alignment, michael_health_daily,
 -- michael_check_in_journal. The spec gives NO column detail for any of the four (§2's table only
