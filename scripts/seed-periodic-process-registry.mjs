@@ -33,6 +33,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { discoverAllProcesses } from '../lib/periodic-liveness/enumerate-processes.mjs';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
+import { FEEDERS } from '../lib/michael/feeder.mjs';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
@@ -212,6 +213,32 @@ export async function seedHostAlarmCrons() {
   ];
 }
 
+// QF-20260907-830: Michael's task_scheduler-venue feeders (tasks-classifier, calendar-read,
+// gmail-triage, oracle-extract, health-sync) are host Windows Task Scheduler tasks, invisible to
+// discoverAllProcesses() (GHA workflows + scripts/cron/* only) -- same gap seedHostAlarmCrons()
+// already covers for the two host-local alarm crons. Derived from lib/michael/feeder.mjs's own
+// FEEDERS registry rather than hand-copied windows, so a window change there can never drift this
+// row out of sync with the real schedule (the exact consumer-vs-producer mismatch this QF's own
+// evidence warns about). self_stamped + no last_fired_at: reports UNVERIFIED until each feeder
+// wires its own stamp, same as every other self_stamped row -- no watcher change needed.
+export async function seedMichaelFeederCrons() {
+  return Object.entries(FEEDERS)
+    .filter(([, reg]) => reg.venue === 'task_scheduler')
+    .map(([feederId, reg]) => ({
+      process_key: `host_cron:michael-${feederId}`,
+      display_name: `Host Task Scheduler: michael-${feederId} (${reg.window.start}-${reg.window.end} ET)`,
+      owner: 'coordinator-fleet',
+      process_type: 'standalone_cron',
+      expected_interval_seconds: reg.intervalMinutes * 60,
+      expected_window_et: reg.window,
+      liveness_source: 'self_stamped',
+      liveness_source_ref: { discovered_from: 'qf_20260907_830_michael_feeder_enrollment', script: `scripts/michael/${feederId}.mjs`, venue: 'task_scheduler' },
+      session_bound: false,
+      currently_expected_active: true,
+      updated_at: new Date().toISOString(),
+    }));
+}
+
 // FR-2: standalone_cron pass — one owned row per discovered recurring process. New rows get the
 // coordinator interim owner ('coordinator-fleet') per the parent LEAD condition (never silently
 // unowned); EXISTING rows keep their current owner — a re-run must never clobber a later
@@ -268,7 +295,8 @@ export async function main() {
   const roundUpserts = await seedSchedulerRounds();
   const cronUpserts = await seedStandaloneCrons();
   const hostAlarmCronUpserts = await seedHostAlarmCrons();
-  const all = [...roleUpserts, ...roundUpserts, ...cronUpserts, ...hostAlarmCronUpserts];
+  const michaelFeederCronUpserts = await seedMichaelFeederCrons();
+  const all = [...roleUpserts, ...roundUpserts, ...cronUpserts, ...hostAlarmCronUpserts, ...michaelFeederCronUpserts];
 
   if (all.length === 0) {
     console.log('No mechanically-derivable registry rows found (0 role sessions, 0 scheduler rounds) -- nothing to seed.');
@@ -286,6 +314,7 @@ export async function main() {
   console.log(`  scheduler_round: ${roundUpserts.length}`);
   console.log(`  standalone_cron: ${cronUpserts.length}`);
   console.log(`  host_alarm_cron: ${hostAlarmCronUpserts.length}`);
+  console.log(`  michael_feeder_cron: ${michaelFeederCronUpserts.length}`);
   for (const row of data) console.log(`  - ${row.process_key}`);
 }
 
