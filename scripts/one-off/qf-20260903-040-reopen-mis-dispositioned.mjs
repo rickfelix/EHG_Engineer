@@ -14,6 +14,7 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { setQuickFixStatus } from '../../lib/quick-fix/status-writer.cjs';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const TARGET_IDS = ['QF-20260812-717', 'QF-20260815-128'];
 
@@ -48,4 +49,6 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error('FATAL:', e && e.message); process.exitCode = 1; });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('FATAL:', e && e.message); process.exitCode = 1; });
+}
