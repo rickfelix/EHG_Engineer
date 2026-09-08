@@ -85,10 +85,10 @@ export async function runRetention({ sb, argv = [], now = new Date() } = {}) {
   const mode = apply ? 'apply' : 'dry_run';
   const perTable = [];
   let anyError = false;
-  let tablesAbsent = false;
+  let absentCount = 0;
   for (const target of RETENTION_TARGETS) {
     const c = await countEligible(sb, target, cutoff);
-    if (c.tables_absent) { tablesAbsent = true; perTable.push({ table: target.table, action: target.action, eligible: null, tables_absent: true }); continue; }
+    if (c.tables_absent) { absentCount++; perTable.push({ table: target.table, action: target.action, eligible: null, tables_absent: true }); continue; }
     const entry = { table: target.table, action: target.action, columns: target.columns, eligible: c.count, error: c.error || null };
     if (c.error) anyError = true;
     if (apply && !c.error && c.count > 0) {
@@ -102,26 +102,36 @@ export async function runRetention({ sb, argv = [], now = new Date() } = {}) {
     }
     perTable.push(entry);
   }
-  if (tablesAbsent) return { ok: true, tables_absent: true, mode, days, cutoff, per_table: perTable, stamped: false };
+  // QF-20260907-930: an absent table used to short-circuit BEFORE the stamp and before any
+  // present target was enforced (total no-op reporting success). Now every present target is
+  // still enforced above (the `continue` only skips the absent one), and the stamp always
+  // fires below (unless michael_feeder_runs itself is absent, in which case there is nowhere
+  // to write it -- that case still surfaces via stamped:false/ok:false), so a missing table
+  // degrades this run's status instead of erasing it.
+  const tablesAbsent = absentCount > 0;
 
   // Liveness stamp — every run, dry or apply (retention-enforce.js:212-223 precedence).
   const et = todayEt(now);
   const prev = await readRows(sb, 'michael_feeder_runs', (q) => q.eq('feeder', 'retention').eq('et_date', et).order('attempt', { ascending: false }), { select: 'attempt' });
   const attempt = 1 + (prev.rows[0] ? Number(prev.rows[0].attempt) || 0 : 0);
+  const status = anyError ? 'failed' : tablesAbsent ? 'degraded' : 'ok';
   const stamp = await writeRows(sb, 'michael_feeder_runs', (t) => t.insert({
-    feeder: 'retention', et_date: et, attempt, venue: 'gha', status: anyError ? 'failed' : 'ok',
-    counts: { mode, days, cutoff, per_table: perTable },
+    feeder: 'retention', et_date: et, attempt, venue: 'gha', status,
+    counts: { mode, days, cutoff, per_table: perTable, enforced: RETENTION_TARGETS.length - absentCount, total: RETENTION_TARGETS.length },
     started_at: started, finished_at: new Date().toISOString(),
   }).select('id').single());
   if (!stamp.ok) anyError = true;
-  return { ok: !anyError, tables_absent: false, mode, days, cutoff, per_table: perTable, stamped: stamp.ok, attempt, stamp_error: stamp.ok ? null : stamp.error };
+  return { ok: !anyError, tables_absent: tablesAbsent, mode, days, cutoff, per_table: perTable, stamped: stamp.ok, attempt, stamp_error: stamp.ok ? null : stamp.error };
 }
 
 /** Human rendering. */
 export function renderRetention(r) {
   const out = [`— michael retention (${r.mode}, days=${r.days}, cutoff et_date < ${r.cutoff}) —`];
-  if (r.tables_absent) { out.push('  michael_* tables not applied yet — nothing to do (inert).'); return out; }
-  for (const t of r.per_table) out.push(`  ${t.table.padEnd(28)} ${t.action.padEnd(6)} eligible=${t.eligible}${t.applied !== undefined ? ` applied=${t.applied}` : ''}${t.error ? ` ERROR: ${t.error}` : ''}`);
+  const enforced = r.per_table.filter((t) => !t.tables_absent).length;
+  if (r.tables_absent) out.push(`  ${enforced} of ${r.per_table.length} target(s) enforced — the rest are not applied yet:`);
+  for (const t of r.per_table) out.push(t.tables_absent
+    ? `  ${t.table.padEnd(28)} ${t.action.padEnd(6)} ABSENT (not applied yet)`
+    : `  ${t.table.padEnd(28)} ${t.action.padEnd(6)} eligible=${t.eligible}${t.applied !== undefined ? ` applied=${t.applied}` : ''}${t.error ? ` ERROR: ${t.error}` : ''}`);
   out.push(r.stamped ? `  ✓ michael_feeder_runs stamp written (retention attempt ${r.attempt})` : `  ⚠ stamp failed: ${r.stamp_error}`);
   return out;
 }
