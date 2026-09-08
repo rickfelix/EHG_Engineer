@@ -48,6 +48,12 @@ describe('base identity exclusions (always applied, no ctx needed)', () => {
   it('excludes role=adam', () => {
     expect(seatIdleVerdict(session({ metadata: { role: 'adam' } })).reason).toBe('role-adam');
   });
+  it('QF-20260904-962: excludes role=coordinator even with is_coordinator/non_fleet both absent', () => {
+    expect(seatIdleVerdict(session({ metadata: { role: 'coordinator' } })).reason).toBe('role-singleton');
+  });
+  it('QF-20260904-962: excludes role=solomon even with is_coordinator/non_fleet both absent', () => {
+    expect(seatIdleVerdict(session({ metadata: { role: 'solomon' } })).reason).toBe('role-singleton');
+  });
   it('excludes non_fleet', () => {
     expect(seatIdleVerdict(session({ metadata: { non_fleet: true } })).reason).toBe('non-fleet');
   });
