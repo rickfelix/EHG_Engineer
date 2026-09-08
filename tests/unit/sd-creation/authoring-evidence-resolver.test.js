@@ -115,6 +115,14 @@ describe('resolveArtifactOwner', () => {
     expect(result).toEqual({ token: 'tok-3', resolved: true, table: 'uat_test_runs', ownerKey: 'SD-FALLBACK-001' });
   });
 
+  it('a real row with a NULL owner column resolves (not "not found"), with ownerKey null', async () => {
+    const supabase = makeSupabase({
+      strategic_directives_v2: [{ id: 'tok-orphan', sd_key: null }],
+    });
+    const result = await resolveArtifactOwner(supabase, 'tok-orphan');
+    expect(result).toEqual({ token: 'tok-orphan', resolved: true, table: 'strategic_directives_v2', ownerKey: null });
+  });
+
   it('probes tables in the declared allowlist order', () => {
     expect(ARTIFACT_OWNER_ALLOWLIST.map((e) => e.table)).toEqual([
       'strategic_directives_v2', 'venture_artifacts', 'uat_test_runs',
