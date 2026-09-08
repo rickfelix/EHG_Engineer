@@ -223,7 +223,10 @@ export async function selfReviewMain() {
   }
 
   // 3) DUE — solicit fresh critique from active workers + synthesize, then reset the counter
-  const { data: sess } = await db.from('claude_sessions').select('session_id,metadata,heartbeat_at,sd_key,current_phase,loop_state').gte('heartbeat_at', new Date(t - 30 * 60000).toISOString());
+  // count-truncation-diff-lint: explicit bound (well above any realistic concurrent-fleet size,
+  // matching the QF-20260905-229 precedent) -- naturally small already (heartbeat-windowed), but
+  // this diff touched the line by adding columns, and the lint requires a visible cap regardless.
+  const { data: sess } = await db.from('claude_sessions').select('session_id,metadata,heartbeat_at,sd_key,current_phase,loop_state').gte('heartbeat_at', new Date(t - 30 * 60000).toISOString()).limit(500);
   // SD-...-001-D / FR-4: split workers vs Adam participants (default-OFF byte-identical).
   const { workers: rawWorkers, adamParticipants: rawAdam } = partitionParticipants(sess, me, adamReviewOn);
   // Fixture/garbage guard (live crash 2026-06-10 ×2): drain-test rows leak non-UUID session_ids
