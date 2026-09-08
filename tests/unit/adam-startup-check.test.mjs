@@ -66,6 +66,21 @@ test('QF-20260818-063: heartbeat-sms prompt makes the measured-cadence query (sm
   assert.match(heartbeat.prompt, /session recall/i);
 });
 
+// QF-20260905-680: ratification 7010e20f fixed the cadence to SET-SCHEDULE ET slots
+// (6/9/12/3/6/9), superseding the ">=170min gap since last send" rule (9eebe200) this prompt
+// used to encode verbatim -- a seat following the old wording drifted ~1h/day from the slots.
+test('QF-20260905-680: heartbeat-sms prompt names the fixed ET slots and ratification 7010e20f, not the superseded gap rule', () => {
+  const heartbeat = ADAM_LOOPS.find((l) => l.key === 'heartbeat-sms');
+  assert.ok(heartbeat, 'heartbeat-sms loop exists');
+  assert.match(heartbeat.prompt, /FIXED ET SLOTS/);
+  assert.match(heartbeat.prompt, /6:00am\/9:00am\/12:00pm\/3:00pm\/6:00pm\/9:00pm/);
+  assert.match(heartbeat.prompt, /7010e20f/);
+  assert.match(heartbeat.prompt, /SUPERSEDED/);
+  // The old primary-trigger phrasing must be gone; the gap rule survives only as a backstop.
+  assert.doesNotMatch(heartbeat.prompt, /Only proceed once the MEASURED gap is/);
+  assert.match(heartbeat.prompt, /OVERDUE BACKSTOP ONLY/);
+});
+
 // SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): the consumer-side invariant for the loop
 // registry — every DURABLE contract-named duty in CLAUDE_ADAM.md must exist in ADAM_LOOPS, or
 // it silently dies every Adam session (the belt-countdown failure mode).

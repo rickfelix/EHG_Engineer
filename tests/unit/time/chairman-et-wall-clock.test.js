@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
   isSmsQuietHour, smsQuietWindowReleaseIso, etLocalHour, etLocalMinute, et6amIso, etDateStr,
   etPrior545Iso, isValidCanonicalZone, formatChairmanTimestamp,
+  nextHeartbeatSlotIso, currentHeartbeatSlotIso, HEARTBEAT_ET_SLOT_HOURS,
 } from '../../../lib/time/chairman-et-wall-clock.js';
 
 // QF-20260828-884 (QF-20260828-188 leg 4): the mechanical chairman-facing timestamp formatter.
@@ -186,5 +187,54 @@ describe('isValidCanonicalZone', () => {
     expect(isValidCanonicalZone(undefined)).toBe(false);
     expect(isValidCanonicalZone(['America/Jamaica'])).toBe(false);
     expect(isValidCanonicalZone({ zone: 'America/Jamaica' })).toBe(false);
+  });
+});
+
+// QF-20260905-680: ratification 7010e20f fixed the heartbeat cadence to SET-SCHEDULE ET slots
+// (6/9/12/3/6/9), superseding the ">=170min gap since last send" rule (9eebe200) that let the
+// cadence silently drift. Both EST and EDT specimens, per the acceptance criterion's explicit
+// "across DST" requirement.
+describe('nextHeartbeatSlotIso / currentHeartbeatSlotIso — fixed ET heartbeat slots', () => {
+  it('pins the slot set itself', () => {
+    expect(HEARTBEAT_ET_SLOT_HOURS).toEqual([6, 9, 12, 15, 18, 21]);
+  });
+
+  it('EST (UTC-5): mid-morning before the 9am slot rolls forward to it', () => {
+    // 2026-03-01 07:00 ET (EST) -> next slot 09:00 ET = 14:00Z
+    expect(nextHeartbeatSlotIso(new Date('2026-03-01T12:00:00.000Z'))).toBe('2026-03-01T14:00:00.000Z');
+  });
+
+  it('EST: sitting exactly on a slot boundary returns that same instant (inclusive)', () => {
+    expect(nextHeartbeatSlotIso(new Date('2026-03-01T14:00:00.000Z'))).toBe('2026-03-01T14:00:00.000Z');
+  });
+
+  it('EST: between the 6pm and 9pm slots rolls forward to 9pm', () => {
+    // 2026-03-01 19:30 ET -> next slot 21:00 ET = 02:00Z (March 2)
+    expect(nextHeartbeatSlotIso(new Date('2026-03-02T00:30:00.000Z'))).toBe('2026-03-02T02:00:00.000Z');
+  });
+
+  it('EST: past the last (9pm) slot wraps to tomorrow\'s first (6am) slot', () => {
+    // 2026-03-01 22:00 ET -> next slot 06:00 ET tomorrow = 2026-03-02T11:00:00Z
+    expect(nextHeartbeatSlotIso(new Date('2026-03-02T03:00:00.000Z'))).toBe('2026-03-02T11:00:00.000Z');
+  });
+
+  it('EDT (UTC-4, post spring-forward): before the 6am slot rolls forward to it', () => {
+    // 2026-03-15 05:00 ET (EDT) -> next slot 06:00 ET = 10:00Z
+    expect(nextHeartbeatSlotIso(new Date('2026-03-15T09:00:00.000Z'))).toBe('2026-03-15T10:00:00.000Z');
+  });
+
+  it('EDT: before today\'s first slot, the current/most-recent slot is yesterday\'s 9pm', () => {
+    // 2026-03-15 05:00 ET -> most recent slot is 2026-03-14 21:00 ET = 2026-03-15T01:00:00Z
+    expect(currentHeartbeatSlotIso(new Date('2026-03-15T09:00:00.000Z'))).toBe('2026-03-15T01:00:00.000Z');
+  });
+
+  it('EDT: between the 9am and 12pm slots, the current/most-recent slot is 9am', () => {
+    // 2026-03-15 10:00 ET -> most recent slot is 09:00 ET = 13:00Z
+    expect(currentHeartbeatSlotIso(new Date('2026-03-15T14:00:00.000Z'))).toBe('2026-03-15T13:00:00.000Z');
+  });
+
+  it('currentHeartbeatSlotIso and nextHeartbeatSlotIso agree exactly on a slot boundary', () => {
+    const boundary = new Date('2026-03-15T13:00:00.000Z'); // 9am ET (EDT)
+    expect(currentHeartbeatSlotIso(boundary)).toBe(nextHeartbeatSlotIso(boundary));
   });
 });

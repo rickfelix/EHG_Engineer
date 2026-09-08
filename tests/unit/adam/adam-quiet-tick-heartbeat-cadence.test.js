@@ -117,6 +117,20 @@ describe('formatHeartbeatCadenceLine', () => {
     expect(line).not.toContain('send NOW');
     expect(line).not.toContain('QUIET_TICK_HEARTBEAT_OVERDUE');
   });
+
+  // QF-20260905-680: ratification 7010e20f fixed the cadence to SET-SCHEDULE ET slots,
+  // superseding the ">=170min gap since last send" rule (9eebe200) this line used to cite as
+  // the primary cadence contract, rather than the overdue-only backstop it actually is.
+  it('names the fixed ET slot + ratification 7010e20f, not the superseded "3-hourly cadence contract" wording', () => {
+    const outside = formatHeartbeatCadenceLine(180, false);
+    const inside = formatHeartbeatCadenceLine(180, true);
+    for (const line of [outside, inside]) {
+      expect(line).toContain('7010e20f');
+      expect(line).not.toContain('3-hourly heartbeat cadence contract');
+      expect(line).not.toContain('chairman verbal 2026-08-28');
+    }
+    expect(outside).toContain('overdue backstop');
+  });
 });
 
 // QF-20260907-365: PR #8458 wired inQuietHours() into the heartbeat cadence line but called it
