@@ -16,7 +16,7 @@
  * Usage: node scripts/adam-quiet-tick.mjs [--json]
  */
 import { createRequire } from 'node:module';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
@@ -117,11 +117,35 @@ const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 const LAST_STATE_FILE = join(REPO_ROOT, '.adam-quiet-tick-last.json');
+
+// QF-20260906-601: this script is routinely executed from a QF/SD worktree (not just the main
+// checkout), where `resolve(__dirname, '..')` resolves to THAT worktree's own root -- a
+// filesystem location private to it. An account-identity baseline written there is invisible
+// to every other worktree/process running this same tick, so each one independently discovers
+// the same real account switch and independently notifies, producing one row per live worktree
+// rather than one per transition (measured: 7 rows for a single switch). detectAccountSwitch's
+// compare-and-persist-on-confirmed-delivery logic below is already correct; the defect is that
+// its persisted baseline was never actually shared. Mirrors resolveMainRepoRoot() in
+// scripts/audit-worktree-env-divergence.mjs, which fixed the identical class of bug for env-key
+// divergence checks: `git rev-parse --git-common-dir` resolves to the MAIN .git directory from
+// any worktree, so its parent is the one true shared repo root.
+export function resolveMainRepoRoot(startDir = __dirname) {
+  try {
+    const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+      cwd: startDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+    if (common) return dirname(common);
+  } catch { /* fall through */ }
+  return REPO_ROOT;
+}
+
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-3): a SEPARATE identity-only state file, kept
 // independent of detectSalientDelta's tracked-field set (beltZero/openSignalCount/venture1State)
 // so the two concerns don't have to share a shape. Mirrors LAST_STATE_FILE's own
 // try/catch-load, JSON.stringify-write, single-slot pattern (see loadLastState/saveLastState).
-const ACCOUNT_IDENTITY_STATE_FILE = join(REPO_ROOT, '.account-identity-last.json');
+// QF-20260906-601: anchored to the SHARED main repo root (not REPO_ROOT, which is
+// worktree-local) -- see resolveMainRepoRoot() above.
+const ACCOUNT_IDENTITY_STATE_FILE = join(resolveMainRepoRoot(), '.account-identity-last.json');
 const ADAM_PARTY_OFFSET_S = 420; // phase Adam's park 7min after the coordinator's (FR-5).
 
 function makeClient() {
