@@ -554,7 +554,8 @@ class SubAgentEnforcementSystem {
     const { data } = await this.supabase
       .from('subagent_activations')
       .select('subagent_code')
-      .eq('sd_id', sdId);
+      .eq('sd_id', sdId)
+      .limit(500);
 
     if (!data) return [];
 
