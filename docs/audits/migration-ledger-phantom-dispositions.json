@@ -1,0 +1,149 @@
+{
+  "1e3519fa-e212-4fe8-834b-f3cfa61b07d3": {
+    "migration_path": "database/migrations/20260704_drop_storm_quarantine_20260610.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622: schema_migrations_applied row asserts a successful apply for this path, but the file is untracked, absent from disk, and never appears as a deleted path in git history on main -- it was never a real file on this branch. Verified via git ls-files --error-unmatch (fails) and a deleted-file history search over main.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "88eb584e-ba34-43e0-bede-91f80876f4e8": {
+    "migration_path": "database/migrations/20260706_drop_management_reviews_quarantine_20260610.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622: schema_migrations_applied row asserts a successful apply for this path, but the file is untracked, absent from disk, and never appears as a deleted path in git history on main -- it was never a real file on this branch. Verified via git ls-files --error-unmatch (fails) and a deleted-file history search over main.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "6061b137-9a00-483c-a3d3-d3e96d06f354": {
+    "migration_path": "database/migrations/20260706_quick_fixes_target_application_registry_widening.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622: schema_migrations_applied row asserts a successful apply for this path, but the file is untracked, absent from disk, and never appears as a deleted path in git history on main. The row's object_diffs shows real before/after DDL (fn_quick_fixes_validate_target_application, trg_quick_fixes_validate_target_application) -- the apply likely ran against a local file on a branch that never merged to main, not fabricated, but the source file was never committed here.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "96cfad33-bcf5-4311-8d45-8ad409c2af88": {
+    "migration_path": "database/migrations/20260718_sms_outbound_obligations_APPROVED.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622: schema_migrations_applied row asserts a successful apply for this path, but the file is untracked, absent from disk, and never appears as a deleted path in git history on main. The row's object_diffs shows real before/after DDL (idx_sms_outbound_obligations_claimable, idx_sms_outbound_obligations_provider_message_id) -- the apply likely ran against a local file on a branch that never merged to main, not fabricated, but the source file was never committed here.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "d0f0efc1-67bf-46d7-8971-517f031f21af": {
+    "migration_path": "database/migrations/20260717_fable_suitability_map_APPROVED.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622: schema_migrations_applied row asserts a successful apply for this path, but the file is untracked, absent from disk, and never appears as a deleted path in git history on main. The row's object_diffs shows real before/after DDL (v_fable_suitability_map_current, idx_fable_suitability_cluster, idx_fable_suitability_region) -- the apply likely ran against a local file on a branch that never merged to main, not fabricated, but the source file was never committed here.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "2877d2a8-ad2b-464a-9329-88b08cd5fcf8": {
+    "migration_path": "database/chairman-gated/20260902_repair_ratification_marker_611.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep (scripts/audit/migration-ledger-phantom-audit.mjs): recorded from a worktree-absolute path (.worktrees/adhoc/marker-repair/...) whose branch never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree -- genuinely never landed here, not a stale reference to a moved/removed file.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "62cd1c41-03b7-4e64-9637-fe602b67536d": {
+    "migration_path": "database/migrations/20260902_testing_verdict_validation_trigger.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a worktree-absolute path (.worktrees/SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012/...) whose branch never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "6d68072e-7ffa-4029-a0e5-b30c50a1a374": {
+    "migration_path": "database/chairman-gated/20260830_drop_legacy_advance_venture_stage_overload.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a sibling-checkout-absolute path (EHG_Engineer-scribe-doctrine/...) never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "fcdbc9dd-85d7-468a-a019-bbafefe367b8": {
+    "migration_path": "database/chairman-gated/20260822_drop_anon_select_policy_claude_sessions.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a worktree-absolute path (.worktrees/packet2/...) whose branch never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "f58984c2-adda-40b8-a200-370af9bf5ca6": {
+    "migration_path": "database/chairman-gated/20260819_gha_cron_liveness_source_github_actions_api.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a sibling-checkout-absolute path (EHG_Engineer-worktrees/ceremony-20260819-afternoon/...) never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "66852362-817e-44bd-a370-6608d9b52ab9": {
+    "migration_path": "database/chairman-gated/20260819_node_modules_lock_partial_unique_index.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from the same abandoned sibling-checkout branch as 2026-08-19 ceremony session (EHG_Engineer-worktrees/ceremony-20260819-afternoon/...) never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "d6c3bc95-d4de-43ab-800c-7db93d5bb808": {
+    "migration_path": "database/chairman-gated/20260819_chairman_all_decision_signals_exclude_dispositioned_feedback.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from the same abandoned sibling-checkout branch as 2026-08-19 ceremony session (EHG_Engineer-worktrees/ceremony-20260819-afternoon/...) never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "f5f070f2-2b9a-4101-80f7-73b4df7ded86": {
+    "migration_path": "database/migrations/20260801_revoke_anon_writes_burn_rate_snapshots.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a worktree-absolute path (.worktrees/scribe-rls-batch2/...) whose branch never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "9af32de0-6b50-4f32-9199-aa65491e92af": {
+    "migration_path": "database/migrations/20260801_revoke_anon_writes_forecasting_tables.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from the same abandoned branch as the burn-rate-snapshots sibling row (.worktrees/scribe-rls-batch2/...) never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "4ddab236-4369-40a8-9a3c-6d47c869a7dc": {
+    "migration_path": "database/migrations/20260801_revoke_anon_writes_session_tables.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a worktree-absolute path (.worktrees/scribe-rls-sessions/...) whose branch never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "dd404a2e-cf79-49ed-86de-9bd143a5b846": {
+    "migration_path": "database/migrations/20260728_revoke_public_execute_role_flag_rpcs.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a worktree-absolute path (.worktrees/ADAM-CEREMONY-ROLEFLAG-REVOKE/...) whose branch never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "abb348ae-cc9f-4a60-91b8-a730ce03b33c": {
+    "migration_path": "database/migrations/20260719_widen_backlog_disposition_curation.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a worktree-absolute path (.worktrees/adam-disposition-vocab/...) whose branch never merged to main. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in the tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "1e4ae63b-cb53-443c-9455-3ed347710ff8": {
+    "migration_path": "supabase/migrations/20260624030500_venture_revenue_entries.sql",
+    "disposition": "PHANTOM_LEDGER_ROW",
+    "reason": "QF-20260903-622 wider sweep: recorded from a DIFFERENT REPOSITORY'S checkout (ehg-revenue-wt, not EHG_Engineer) -- the migration_path was never a file in this repo at all. Not currently tracked, no delete commit on HEAD, no file of this basename present anywhere else in this tree.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "bdd78a21-8cf5-4b1d-95d0-a0b2cc69f97a": {
+    "migration_path": "database/migrations/20260719_plan_of_record_remainder_view_add_metadata.sql",
+    "disposition": "RENAMED_LEDGER_ROW",
+    "reason": "NOT PHANTOM -- renamed, not fabricated. Commit 65389586eebae907a6f41e12ad96d4cbceb7e3f3 (SD-LEO-INFRA-PLAN-OF-RECORD-REMAINDER-VIEW-001, adversarial review findings) renamed this same-day file to the repo's lettered convention: current file is database/migrations/20260719c_plan_of_record_remainder_view_add_metadata.sql. The commit message states the live DB was already applied in the correct order manually and is unaffected by the rename -- content and effect are real, only the ledger's recorded basename is stale.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "ecf06948-6d8f-418a-b156-6e936787e013": {
+    "migration_path": "database/migrations/20260719_plan_of_record_remainder_backfill.sql",
+    "disposition": "RENAMED_LEDGER_ROW",
+    "reason": "NOT PHANTOM -- renamed, not fabricated. Same rename commit as bdd78a21 (65389586eebae907a6f41e12ad96d4cbceb7e3f3): current file is database/migrations/20260719b_plan_of_record_remainder_backfill.sql.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  },
+  "4bbff978-fb87-4ad7-9905-136c636ce622": {
+    "migration_path": "database/migrations/20260719_plan_of_record_remainder_view.sql",
+    "disposition": "RENAMED_LEDGER_ROW",
+    "reason": "NOT PHANTOM -- renamed, not fabricated. Same rename commit as bdd78a21 (65389586eebae907a6f41e12ad96d4cbceb7e3f3): current file is database/migrations/20260719a_plan_of_record_remainder_view.sql.",
+    "disposed_at": "2026-09-08",
+    "qf_key": "QF-20260903-622"
+  }
+}
