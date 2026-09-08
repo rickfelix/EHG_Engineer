@@ -52,11 +52,40 @@ describe('QF-514: account capture writes only what it could read', () => {
     expect(calls.updates).toHaveLength(0);
   });
 
-  test('an ALREADY-CAPTURED session is a no-op — no repeat CLI spawn per resume', async () => {
+  test('an ALREADY-CAPTURED session whose account is UNCHANGED skips the write (no DB churn), but still resolves — QF-20260906-219', async () => {
+    // QF-20260906-219: captureAccountIdentity no longer treats an already-captured session as an
+    // early-exit before resolving -- it must re-resolve on every call so a LATER account rotation
+    // is seen (see the sibling rotation test below), and only skip the WRITE when nothing changed.
+    const resolveFn = () => ({ account_email: 'someone@example.com', account_org_name: 'Org', account_uuid8: 'abcd1234' });
     const { api, calls } = makeDb({
-      selectData: { metadata: { ...EXISTING, account_email: 'someone@example.com' } },
+      selectData: { metadata: { ...EXISTING, account_email: 'someone@example.com', account_uuid8: 'abcd1234' } },
     });
-    await captureAccountIdentity(api, SID);
+    await captureAccountIdentity(api, SID, { resolveFn });
+    expect(calls.updates).toHaveLength(0);
+  });
+
+  test('QF-20260906-219: a ROTATED account (resolved identity differs from stored) DOES write, updating the row', async () => {
+    const resolveFn = () => ({ account_email: 'new-account@example.com', account_org_name: 'New Org', account_uuid8: 'ffff9999' });
+    const { api, calls } = makeDb({
+      selectData: { metadata: { ...EXISTING, account_email: 'old-account@example.com', account_uuid8: 'aaaa1111' } },
+    });
+    await captureAccountIdentity(api, SID, { resolveFn });
+    expect(calls.updates).toHaveLength(1);
+    const written = calls.updates[0].metadata;
+    expect(written.account_email).toBe('new-account@example.com');
+    expect(written.account_uuid8).toBe('ffff9999');
+    // siblings survive the merge
+    expect(written.model).toBe('opus');
+    expect(written.effort).toBe('xhigh');
+    expect(written.tier_rank).toBe(4);
+  });
+
+  test('QF-20260906-219: a transient resolve failure on a LATER call never clobbers an already-good account_email', async () => {
+    const resolveFn = () => null; // simulates `claude auth status` failing on this call
+    const { api, calls } = makeDb({
+      selectData: { metadata: { ...EXISTING, account_email: 'someone@example.com', account_uuid8: 'abcd1234' } },
+    });
+    await captureAccountIdentity(api, SID, { resolveFn });
     expect(calls.updates).toHaveLength(0);
   });
 
