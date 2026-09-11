@@ -1,8 +1,8 @@
-<!-- file_content_hash: a23ce1d311c40721 -->
+<!-- file_content_hash: ef62f26277697c3a -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC_MANUAL.md — EXEC Manual (reference companion)
 
-**Generated**: 2026-09-11 10:49:02 AM
+**Generated**: 2026-09-11 11:21:48 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form EXEC reference — skills catalogue, human-like E2E fixtures, Playwright MCP, deliverable tracking mechanics, the EXEC-TO-PLAN gate descriptions, runtime-audit protocol, branch creation, /batch, code-quality and KR procedures, the Database Schema Constraints and LEO Process Scripts references
 **Load when**: At the MOMENT OF DOING one of these procedures or looking up one of these references — not at every EXEC phase entry
@@ -451,39 +451,6 @@ UI Parity Status:
 - Coverage: Y/X (Z%)
 - Missing: [list]
 - Gate 2.5 Status: PASS/FAIL
-```
-
-## Auto-Merge Workflow for SD Completion
-
-### Auto-Merge Workflow (RECOMMENDED)
-
-After creating a PR, enable auto-merge to allow Claude to continue to the next SD without waiting:
-
-```bash
-# Create PR and enable auto-merge in one step
-gh pr create --title "feat(SD-XXX): title" --body "..." --base main
-gh pr merge --auto --squash --delete-branch  # gh-merge-guard-exempt: --auto is unsupported by gh-merge-safe.mjs (Category D, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
-```
-
-**Benefits**:
-- Claude continues to next SD immediately
-- Merge happens automatically when CI passes
-- No manual intervention required
-- Branch auto-deleted after merge
-
-**Requirements for Auto-Merge**:
-- Repository must have auto-merge enabled in GitHub settings
-- All required status checks must pass
-- No merge conflicts with main
-
-**Usage Pattern**:
-```bash
-# After EXEC phase tests pass:
-git add . && git commit -m "feat(SD-XXX): description"
-git push origin feat/SD-XXX-branch
-gh pr create --title "feat(SD-XXX): title" --body "## Summary..."  --base main
-gh pr merge --auto --squash --delete-branch  # gh-merge-guard-exempt: --auto is unsupported by gh-merge-safe.mjs (Category D, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
-# Claude immediately continues to next SD
 ```
 
 ## /batch Command Reference
@@ -1501,4 +1468,4 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 *Generated from database: 2026-09-11*
 *Protocol Version: 4.4.1*
-*Source of truth: leo_protocol_sections (section_type=workflow, exec_skill_integration, exec_requirement, exec_component_sizing_guidelines, exec_todo_comment_standard, auto_merge_workflow, exec_ui_parity_verification, exec_edge_case_testing_checklist, testing_tools, e2e_testing_mode_configuration, human_like_testing, test_coverage_quality_gate, integration_test_requirement_gate, governance_kr_progress_exec, code_quality_pre_commit, worktree_freshness_precheck, exec_manual_reference, exec_manual). Do not hand-edit — edit the DB section and regenerate.*
+*Source of truth: leo_protocol_sections (section_type=workflow, exec_skill_integration, exec_requirement, exec_component_sizing_guidelines, exec_todo_comment_standard, exec_ui_parity_verification, exec_edge_case_testing_checklist, testing_tools, e2e_testing_mode_configuration, human_like_testing, test_coverage_quality_gate, integration_test_requirement_gate, governance_kr_progress_exec, code_quality_pre_commit, worktree_freshness_precheck, exec_manual_reference, exec_manual). Do not hand-edit — edit the DB section and regenerate.*

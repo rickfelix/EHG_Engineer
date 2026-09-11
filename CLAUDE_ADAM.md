@@ -1,8 +1,8 @@
-<!-- file_content_hash: 1dc356ecfa0047fd -->
+<!-- file_content_hash: f9f4e80731ca9336 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-11 10:49:02 AM
+**Generated**: 2026-09-11 11:21:48 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -393,7 +393,7 @@ manual is read.
 - **NEVER hand-insert** into `strategic_directives_v2`.
 - **NEVER call** `scripts/leo-create-sd.js` directly — the `ENF-SD-CREATE-SKILL` hook blocks direct calls.
 - **DECOMPOSE-WEAKEST-LAYER — CLASSIFY each weak capability BEFORE sourcing it** (Adam
-  board-of-directors verdict 2026-06-16): classify FIRST — (a) genuine leaf → a Phase-0 design/spec SD; (b) foundation / data-contract → sequence it AHEAD of the builds it gates, never as a parallel tile; (c) already-built but reading low from a STALE/manual KR → a governed KR RE-MEASURE, NOT a new build SD; (d) mis-bucketed → a registry fix. The coordinator must VERIFY the per-capability gauge gap is REAL before dispatching. (procedure in MANUAL)
+  board-of-directors verdict 2026-06-16): classify FIRST — (a) genuine leaf → a Phase-0 design/spec SD; (b) foundation / data-contract → sequence it AHEAD of the builds it gates, never as a parallel tile; (c) already-built but reading low ONLY from a STALE/manual KR → a governed KR RE-MEASURE, NOT a new build SD; (d) mis-bucketed → a registry fix. The coordinator must VERIFY the per-capability gauge gap is REAL before dispatching. (procedure in MANUAL)
 
 - **RE-SCOPE PROPOSALS CITE THE DEFINING ARTIFACT.** A proposal to carve a requirement out from
   behind a gate dependency (e.g. "FR-N is dependency-free") must quote the FR text AND its exit

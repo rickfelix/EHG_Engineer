@@ -161,6 +161,7 @@
       "exec_retrospective_anti_patterns",
       "exec_dual_test_requirement",
       "exec_completion_merge_requirement",
+      "auto_merge_workflow",
       "branch_hygiene_gate",
       "multi_instance_coordination",
       "parent_child_exec",
@@ -369,7 +370,6 @@
       "exec_requirement",
       "exec_component_sizing_guidelines",
       "exec_todo_comment_standard",
-      "auto_merge_workflow",
       "exec_ui_parity_verification",
       "exec_edge_case_testing_checklist",
       "testing_tools",
@@ -389,7 +389,6 @@
       "exec_requirement": "Describes the AUTOMATED deliverable-tracking mechanism (triggers, sync, verification functions, the manual-update snippet); informational; the EXEC-TO-PLAN verification gate itself is code.",
       "exec_component_sizing_guidelines": "A sizing table with retrospective evidence; guidance, no prohibition.",
       "exec_todo_comment_standard": "A comment template; reference.",
-      "auto_merge_workflow": "A recommended command sequence; procedure. The MANDATORY commit/push/merge rule stays (exec_completion_merge_requirement).",
       "exec_ui_parity_verification": "A pre-completion checklist. The binding rule is NC-EXEC-005 (negative_constraints_exec, stays) and the CORE UI Parity Requirement.",
       "exec_edge_case_testing_checklist": "A test-authoring checklist; reference.",
       "testing_tools": "The Playwright MCP tool catalogue; reference.",
@@ -403,7 +402,7 @@
       "exec_manual_reference": "Rows 375 (Validation Rules: gate descriptions), 524 (/batch command reference) and 590 (PRD metadata.db_content_assertions field guide) retyped from the generic \"reference\" type so they can move without taking rows 536/537 (Context Compaction Nudges Are NOT Pause Points; Directive Priority Hierarchy, both RULES) with them.",
       "exec_manual": "Procedure carved out of rules that stay in CLAUDE_EXEC.md (implementation-checklist template, Gate-0 enforcement-layer list, worktree/merge command blocks, the branch health-check script)."
     },
-    "_allow_list_note": "This list is an ALLOW-LIST reviewed section by section (same discipline as CLAUDE_LEAD_MANUAL.md / CLAUDE_CORE_MANUAL.md). Sections that carry a live rule were EXCLUDED despite reading as reference: negative_constraints_exec, exec_implementation_requirements (ambiguity-resolution and application-check rules), exec_dual_test_requirement, exec_acceptance_criteria_verification, exec_completion_merge_requirement, branch_hygiene_gate, multi_instance_coordination, migration_script_pattern, exec_atomic_insert_writer_consumer_pattern, sanctioned_ci_wait_pattern, vision_v2_exec, parent_child_exec, vision_arch_doc_check, fleet_worker_loop_continuity, sub_agent_phase_guidance_exec, exec_retrospective_anti_patterns, and the two reference rows 536/537."
+    "_allow_list_note": "This list is an ALLOW-LIST reviewed section by section (same discipline as CLAUDE_LEAD_MANUAL.md / CLAUDE_CORE_MANUAL.md). Sections that carry a live rule were EXCLUDED despite reading as reference: negative_constraints_exec, exec_implementation_requirements (ambiguity-resolution and application-check rules), exec_dual_test_requirement, exec_acceptance_criteria_verification, exec_completion_merge_requirement, branch_hygiene_gate, multi_instance_coordination, migration_script_pattern, exec_atomic_insert_writer_consumer_pattern, sanctioned_ci_wait_pattern, vision_v2_exec, parent_child_exec, vision_arch_doc_check, fleet_worker_loop_continuity, sub_agent_phase_guidance_exec, exec_retrospective_anti_patterns, and the two reference rows 536/537. auto_merge_workflow STAYS in CLAUDE_EXEC.md: tests/unit/lint/gh-merge-guard-lint.test.js pins its id=306 --auto command text and gh-merge-guard-exempt pragma inside CLAUDE_EXEC.md (SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001 FR-3), and it is the sanctioned merge path rather than pure reference."
   },
   "CLAUDE_EXEC_PROVENANCE.md": {
     "description": "EXEC provenance companion (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001, FR-3). Dated retrospective evidence, incident narratives and rationale carved out of rule sections that stay in CLAUDE_EXEC.md. Every rule in CLAUDE_EXEC.md is in force regardless of whether its history is read here.",

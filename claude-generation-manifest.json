@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-11T14:49:02.326Z",
-  "git_commit": "96b905ec",
+  "generated_at": "2026-09-11T15:21:48.592Z",
+  "git_commit": "d0d93cc6",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -69,18 +69,18 @@
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 45733,
-      "bytes": 45994,
-      "estimated_tokens": 11434,
-      "content_hash": "6c53e04d9ef09b5f",
+      "chars": 46980,
+      "bytes": 47241,
+      "estimated_tokens": 11745,
+      "content_hash": "89a82d7bb9578f02",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_EXEC.md"
     },
     "CLAUDE_EXEC_MANUAL.md": {
       "type": "full",
-      "chars": 60097,
-      "bytes": 60305,
-      "estimated_tokens": 15025,
-      "content_hash": "a23ce1d311c40721",
+      "chars": 58829,
+      "bytes": 59037,
+      "estimated_tokens": 14708,
+      "content_hash": "ef62f26277697c3a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_EXEC_MANUAL.md"
     },
     "CLAUDE_EXEC_PROVENANCE.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 80896,
-      "bytes": 81768,
-      "estimated_tokens": 20224,
-      "content_hash": "1dc356ecfa0047fd",
+      "chars": 80901,
+      "bytes": 81773,
+      "estimated_tokens": 20226,
+      "content_hash": "f9f4e80731ca9336",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "21225c0119288ab4",
+    "global": "0b6774c920a52429",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -507,7 +507,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "f80174e820814a6d",
+      "601": "1c9c2e22b9c0505b",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "f5d0c5029c6a3524",

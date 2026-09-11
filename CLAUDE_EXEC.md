@@ -1,8 +1,8 @@
-<!-- file_content_hash: 6c53e04d9ef09b5f -->
+<!-- file_content_hash: 89a82d7bb9578f02 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC.md - EXEC Phase Operations
 
-**Generated**: 2026-09-11 10:49:02 AM
+**Generated**: 2026-09-11 11:21:48 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: EXEC agent implementation requirements and testing
 **Effort**: xhigh (implementation + testing require maximum reasoning for agentic coding per Opus 4.8 guidance)
@@ -606,6 +606,39 @@ After merge, confirm:
 git checkout main
 git pull origin main
 git log --oneline -5  # Should show your merge commit
+```
+
+## Auto-Merge Workflow for SD Completion
+
+### Auto-Merge Workflow (RECOMMENDED)
+
+After creating a PR, enable auto-merge to allow Claude to continue to the next SD without waiting:
+
+```bash
+# Create PR and enable auto-merge in one step
+gh pr create --title "feat(SD-XXX): title" --body "..." --base main
+gh pr merge --auto --squash --delete-branch  # gh-merge-guard-exempt: --auto is unsupported by gh-merge-safe.mjs (Category D, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
+```
+
+**Benefits**:
+- Claude continues to next SD immediately
+- Merge happens automatically when CI passes
+- No manual intervention required
+- Branch auto-deleted after merge
+
+**Requirements for Auto-Merge**:
+- Repository must have auto-merge enabled in GitHub settings
+- All required status checks must pass
+- No merge conflicts with main
+
+**Usage Pattern**:
+```bash
+# After EXEC phase tests pass:
+git add . && git commit -m "feat(SD-XXX): description"
+git push origin feat/SD-XXX-branch
+gh pr create --title "feat(SD-XXX): title" --body "## Summary..."  --base main
+gh pr merge --auto --squash --delete-branch  # gh-merge-guard-exempt: --auto is unsupported by gh-merge-safe.mjs (Category D, SD-LEO-INFRA-GH-MERGE-SAFE-WIRING-001)
+# Claude immediately continues to next SD
 ```
 
 ## Working with Child SDs During EXEC
