@@ -127,3 +127,57 @@ describe('ORDER: a cheap always-available check must not sit behind a DB-depende
     expect(called).toBe(0);
   });
 });
+
+// SD-LEO-INFRA-RATIFICATION-ENCODE-VERIFICATION-001 (FR-1/FR-1a): the content read now prefers a
+// pinned commit over the working tree, resolved via an injectable deps seam.
+describe('verifyMarkerAgainstLiveSection — pinned-commit content read (SD-LEO-INFRA-RATIFICATION-ENCODE-VERIFICATION-001)', () => {
+  it('FR-1a: resolveEncodeCommit is called with relPath=target_file and a fresh encoded_at (the pre-fix call omitted both, making tier 2 unreachable)', async () => {
+    const resolveEncodeCommit = async (row, opts) => {
+      expect(opts.relPath).toBe('CLAUDE_SOLOMON.md');
+      expect(typeof row.encoded_at).toBe('string');
+      return { tier: 'db_section_content', commit: null, approximate: false };
+    };
+    const result = await verifyMarkerAgainstLiveSection(SECTION, MARKER, {
+      repoRoot: makeRoot(), driftProbe: cleanProbe, deps: { resolveEncodeCommit },
+    });
+    expect(result.verified).toBe(true);
+    expect(result.pin_tier).toBe('db_section_content');
+  });
+
+  it('FR-1: reads the marker AT the resolved commit (not the working tree) when a pin resolves and the injected reader succeeds — content_verified_at_pin is true', async () => {
+    const root = makeRoot({ content: 'STALE working-tree content, no marker here' });
+    const resolveEncodeCommit = async () => ({ tier: 'exact_commit_pin', commit: 'deadbeef', approximate: false });
+    const readContractAtCommit = async (commit, relPath) => {
+      expect(commit).toBe('deadbeef');
+      expect(relPath).toBe('CLAUDE_SOLOMON.md');
+      return `pinned content with ${MARKER} present`;
+    };
+    const result = await verifyMarkerAgainstLiveSection(SECTION, MARKER, {
+      repoRoot: root, driftProbe: cleanProbe, deps: { resolveEncodeCommit, readContractAtCommit },
+    });
+    expect(result.verified).toBe(true);
+    expect(result.content_verified_at_pin).toBe(true);
+    expect(result.pin_tier).toBe('exact_commit_pin');
+    expect(result.commit).toBe('deadbeef');
+    expect(result.content).toContain(MARKER);
+  });
+
+  it('falls back to the working tree (content_verified_at_pin:false) when the pinned read fails, and still catches a genuinely absent marker there', async () => {
+    const resolveEncodeCommit = async () => ({ tier: 'exact_commit_pin', commit: 'deadbeef', approximate: false });
+    const readContractAtCommit = async () => { throw new Error('shallow clone: object not found'); };
+    await expect(verifyMarkerAgainstLiveSection(SECTION, 'absent from the working tree too', {
+      repoRoot: makeRoot(), driftProbe: cleanProbe, deps: { resolveEncodeCommit, readContractAtCommit },
+    })).rejects.toThrow(/is not present in the live content/);
+  });
+
+  it('falls back to the working tree when no commit pin is derivable at all, and the marker-presence check still runs (never skipped)', async () => {
+    const resolveEncodeCommit = async () => ({ tier: 'db_section_content', commit: null, approximate: false });
+    const result = await verifyMarkerAgainstLiveSection(SECTION, MARKER, {
+      repoRoot: makeRoot(), driftProbe: cleanProbe, deps: { resolveEncodeCommit },
+    });
+    expect(result.verified).toBe(true);
+    expect(result.content_verified_at_pin).toBe(false);
+    expect(result.pin_tier).toBe('db_section_content');
+    expect(result.commit).toBeUndefined();
+  });
+});
