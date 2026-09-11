@@ -28,6 +28,7 @@ import { runPrerequisitePreflight } from './pre-checks/prerequisite-preflight.js
 import { isAutoInvokeEnabled, autoInvokeMissingSubAgents } from '../../../lib/handoff/preflight-auto-invoke.js';
 import { executeSubAgent } from '../../../lib/sub-agent-executor.js';
 import { buildBypassStamp, applyBypassToResult } from '../../../lib/handoff/bypass-stamp.js';
+import { formatMeasuredLine } from '../../../lib/governance/verdict-measured-provenance.js';
 
 /**
  * SD-LEO-INFRA-CLOSE-PHASE-TRANSITION-001 (FR-1/FR-2): prerequisite-preflight.js now
@@ -631,6 +632,10 @@ export class HandoffOrchestrator {
           }
           const status = gr.passed !== false ? '✅' : '❌';
           console.log(`   ${status} ${gateName}: ${pct}% (threshold: ${threshold}%)`);
+          // QF-20260903-379: when a validator names what it measured, show it here too -- the
+          // point this exists for is an operator reading THIS line, not the write site.
+          const measuredLine = formatMeasuredLine(gr);
+          if (measuredLine) console.log(measuredLine);
         }
         console.log(`   📈 Overall: ${result.normalizedScore || 0}%`);
         if (skipped.size > 0) {
