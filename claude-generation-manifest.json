@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-11T15:21:48.592Z",
-  "git_commit": "d0d93cc6",
+  "generated_at": "2026-09-11T21:03:23.416Z",
+  "git_commit": "bf7c91ee",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -93,27 +93,27 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 80901,
-      "bytes": 81773,
-      "estimated_tokens": 20226,
-      "content_hash": "f9f4e80731ca9336",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM.md"
+      "chars": 88277,
+      "bytes": 89171,
+      "estimated_tokens": 22070,
+      "content_hash": "82d074b014015aed",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 27196,
-      "bytes": 27468,
+      "chars": 27195,
+      "bytes": 27467,
       "estimated_tokens": 6799,
       "content_hash": "dfeb831334ee8127",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 95086,
-      "bytes": 95427,
+      "chars": 95085,
+      "bytes": 95426,
       "estimated_tokens": 23772,
       "content_hash": "f9dde4b902c1ac80",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
@@ -141,27 +141,27 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 52169,
-      "bytes": 52684,
-      "estimated_tokens": 13043,
-      "content_hash": "198744bb2cce723a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_SOLOMON.md"
+      "chars": 54628,
+      "bytes": 55153,
+      "estimated_tokens": 13657,
+      "content_hash": "373237279c88c6ee",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 58773,
-      "bytes": 59106,
-      "estimated_tokens": 14694,
+      "chars": 58772,
+      "bytes": 59105,
+      "estimated_tokens": 14693,
       "content_hash": "812fa6e7a539c841",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_SOLOMON_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
       "type": "full",
-      "chars": 24779,
-      "bytes": 24987,
+      "chars": 24778,
+      "bytes": 24986,
       "estimated_tokens": 6195,
       "content_hash": "ca8ab289aef2db41",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_SOLOMON_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_SOLOMON_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
       "type": "full",
@@ -173,11 +173,11 @@
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 25992,
-      "bytes": 26100,
-      "estimated_tokens": 6498,
-      "content_hash": "07d8ad4cd57379ea",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_MICHAEL.md"
+      "chars": 27825,
+      "bytes": 27939,
+      "estimated_tokens": 6957,
+      "content_hash": "1831dc50a94a2e3b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
       "type": "full",
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "0b6774c920a52429",
+    "global": "ab13cf5291cb1cee",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -507,14 +507,14 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "1c9c2e22b9c0505b",
+      "601": "514e19a8f547df2c",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "f5d0c5029c6a3524",
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "aee3c46d653e2d5a",
+      "611": "e1f45e93a0853957",
       "612": "7eae71fb94ef4f0e",
       "613": "1e1de64689c1ad82",
       "614": "d48bc892b437a0fa",
@@ -537,7 +537,7 @@
       "655": "59137a758bb13a65",
       "656": "d2ccb43f1edf9602",
       "657": "11c9181c9e30ef9c",
-      "658": "531011540a7b0515",
+      "658": "928b521a1df3a67e",
       "659": "f07759022446ffb1",
       "660": "61acc95edefef269",
       "661": "5a43f70cb1e2438d",

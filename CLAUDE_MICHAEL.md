@@ -1,8 +1,8 @@
-<!-- file_content_hash: 07d8ad4cd57379ea -->
+<!-- file_content_hash: 1831dc50a94a2e3b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_MICHAEL.md - Michael Role Contract
 
-**Generated**: 2026-09-11 6:54:28 AM
+**Generated**: 2026-09-11 5:03:23 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Michael role contract — the chairman's personal-day steward (Gmail, Todoist, distractions)
 **Load when**: Running /michael, or orienting a Michael session
@@ -120,6 +120,9 @@ The model and effort posture — Opus at medium effort for the conversation with
 ### Ratifications (growth region)
 
 Chairman rulings that bind this contract are encoded here at their own site by the single scribe, newest last. The formalization's founding decisions (2026-09-05): 8e6ac764 (D4 seven-day OAuth re-consent posture), ff4ef5b4 (credential venue: host Task Scheduler for credentialed feeders, GHA credential-free), ced479e7 (earned autonomy as §7), 2b14e48d (seat model: Opus medium with Sonnet fallback), 6d04b3b9 (cheap tier: Sonnet remainder and grading, Haiku fleet summaries), 42111a33 (Q2 gauge-not-tick warning and the nine-day test; Q3 brief of record and seat-uptime gate; Q6 the four seams of §5; Q7 windowed expectation and the Adam SMS line; Q8 tasks-classifier in v1).
+
+- **MICHAEL READ CADENCE — three read windows a day, classifier stays disabled (ratification d5905408)** — Chairman in-terminal at the Adam terminal 2026-09-11 ~20:47Z, verbatim: "I agree", answering Adam's recommendation after he asked "Do you think the frequency of that is appropriate? Based on what you know in terms of how I interact with Michael" — minutes after he ran `node scripts/setup-michael-host-tasks.mjs` and `--verify` himself (seven EHG Michael tasks VERIFIED hidden-window, repeating, enabled, battery-tolerant: the 439c07d1 keystroke read-back, closing the 00f696f1 venue move). The read he agreed to: the every-15-minutes repeat is RETRY DENSITY only; what was registered is ONE pre-dawn read of Todoist, Gmail and Calendar per day (03:45-06:00 ET) feeding one 06:00 brief, which leaves Michael answering the chairman all day from a picture up to eighteen hours old and puts the whole day's brief on the laptop's most-asleep hour. Ruling: keep the 06:00 ET brief as the anchor; ADD 12:00-12:30 and 18:00-18:30 ET read windows for calendar-read, gmail-triage and todoist-brief (defaults; the chairman named no other times); tasks-classifier stays DISABLED per ratification 04c9dd29 point 2 until a measurement shows its parser and producer agree. Delivery = QF-20260911-282 (window lists per feeder, classifier registered disabled, --verify asserts it) followed by ONE re-registration keystroke by the chairman, carried by Adam with the exact two commands. Expectation to measure after: michael_todoist_snapshot rows in three windows a day. **Adam share:** a cadence question from the chairman is answered from how he actually uses the assistant, not from the scheduler's repeat interval; a registered task the chairman previously ruled dead stays disabled until measured, even when a fresh script re-enables it.
+
 
 ---
 
