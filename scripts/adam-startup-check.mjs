@@ -26,6 +26,15 @@ import { fileURLToPath } from 'url';
 import { checkoutFreshness, freshnessBadge, CRITICAL_PROTOCOL_FILES } from '../lib/governance/checkout-freshness.js';
 import { formatDemandDecision, BELT_DEPTH_GATED_PRODUCERS } from '../lib/governance/demand-gate.js';
 import { readLastDemandDecision, readLastProductionOutcome } from '../lib/governance/demand-gate-emit.js';
+// QF-20260903-433: the durable-duty-marker parser is IMPORTED from solomon-startup-check.mjs
+// (same precedent michael-startup-check.mjs already follows) rather than re-implemented here.
+// Adam's own copy used a BARE-marker-only regex while Solomon's was broadened
+// (SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001) to also accept the qualifier form
+// "(durable; <note>)" -- one documented marker convention had two parsers that disagreed, so a
+// qualifier-form duty written into CLAUDE_ADAM.md (already idiomatic on the Solomon side) would
+// have gone silently unrecognized -- unarmed, with the parity check still reading CLEAN. Sharing
+// the parser makes that a structural impossibility instead of a regex to keep in sync by hand.
+import { parseDurableDutyMarkers, slugifyDuty } from './solomon-startup-check.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -334,28 +343,12 @@ export function parseArmedSet(argv = [], env = {}) {
   return { provided, set };
 }
 
-// SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): parse the contract's DURABLE recurring-duty
-// markers from CLAUDE_ADAM.md. A durable duty is bolded as `**<NAME> DUTY (durable)**`; the
-// captured NAME is slugged (lowercase, spaces→hyphens) so it can be matched against an
-// ADAM_LOOPS key. The "(durable)" qualifier is load-bearing: TEMPORARY, self-deleting watchers
-// (e.g. the .PUSHED-lifecycle autonomy-completion-watcher) are NOT marked durable, so they are
-// excluded here and correctly stay session-scoped (NOT required in ADAM_LOOPS). Pure; no I/O.
-// MARKER CONVENTION (keep CLAUDE_ADAM.md authors aware): a durable recurring duty is bolded as
-//   **<NAME> DUTY (durable)**
-// where <NAME> is a human label (letters/digits/spaces/hyphens, any case) and the literal token
-// " DUTY (durable)" follows (case-insensitive on "durable", whitespace-tolerant). The slug is
-// <NAME> lowercased with spaces→hyphens. The regex is deliberately FORGIVING so a stylistic
-// variation (hyphenated name, mixed case, uppercase DURABLE) never SILENTLY drops a duty from
-// enforcement — a false negative here = an unenforced duty, the exact failure this guards.
-export function parseDurableDutyMarkers(markdown) {
-  const slugs = new Set();
-  const re = /\*\*\s*([A-Za-z0-9][A-Za-z0-9 -]*?)\s+DUTY\s*\(\s*durable\s*\)\s*\*\*/gi;
-  let m;
-  while ((m = re.exec(String(markdown || ''))) !== null) {
-    slugs.add(m[1].trim().toLowerCase().replace(/\s+/g, '-'));
-  }
-  return [...slugs];
-}
+// SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2), reconciled under QF-20260903-433: Adam's
+// contract marker convention is the same one Solomon's (and Michael's) contracts use, so
+// parseDurableDutyMarkers / slugifyDuty are the SHARED implementation imported above, not a
+// second, independently-drifting copy. Re-exported here so adam-startup-check.mjs's own
+// importers (this file's test suite included) keep a stable import path.
+export { parseDurableDutyMarkers, slugifyDuty };
 
 // FR2: which contract-named durable duties are MISSING from ADAM_LOOPS. [] === parity holds.
 // This is the consumer-side invariant for the loop registry: a duty the contract PROMISES must

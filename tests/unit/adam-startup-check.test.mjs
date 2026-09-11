@@ -2,9 +2,10 @@
 // SD-LEO-INFRA-ENABLE-ADAM-GOVERNANCE-001 (FR-1)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { readFileSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
 import {
   ADAM_LOOPS,
   RESPONSIBILITIES,
@@ -265,4 +266,42 @@ test('renderFreshness is fail-open and reports a CHECKOUT FRESHNESS section', ()
   assert.doesNotThrow(() => renderFreshness('/no/such/path'));
   const out = renderFreshness(process.cwd());
   assert.match(out, /CHECKOUT FRESHNESS/);
+});
+
+// QF-20260903-433: regex/parser asymmetry between adam-startup-check.mjs and
+// solomon-startup-check.mjs. Adam's OWN regex previously required a BARE "(durable)" marker
+// with no allowance for Solomon's idiomatic qualifier form "(durable; <note>)"
+// (SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001 broadened Solomon's regex for exactly
+// this; Adam's was never recalibrated) -- a duty written in qualifier form would have parsed
+// to zero markers found, reading as CLEAN while being completely unarmed. parseDurableDutyMarkers
+// is now the SAME imported implementation Solomon/Michael use, so this is a structural
+// impossibility rather than a regex to keep hand-in-sync across files.
+test('QF-20260903-433: parseDurableDutyMarkers recognizes the qualifier form "(durable; <note>)", matching Solomon\'s idiomatic contract style', () => {
+  const md = '**PLAN-ALIGNMENT REVIEW DUTY (durable; chairman-ratified 2026-07-20, heavy-now / light-later)**';
+  assert.deepEqual(parseDurableDutyMarkers(md), ['plan-alignment-review']);
+  // the consumer-side invariant (missingDurableDuties) must ALSO see it -- a duty this fix
+  // still failed to wire into a real ADAM_LOOPS key would be the exact unarmed-duty failure
+  // this guard exists to catch, just moved one step over.
+  assert.deepEqual(missingDurableDuties(md, ADAM_LOOPS), ['plan-alignment-review']);
+  assert.deepEqual(missingDurableDuties(md, [...ADAM_LOOPS, { key: 'plan-alignment-review' }]), []);
+});
+
+// QF-20260903-433 (BEHAVIOR, negative case): renderContractParity's own zero-marker guard
+// (QF-20260828-890) existed before this QF but had NO test anywhere -- this file was never
+// collected by vitest's --project unit (it uses node:test/node:assert, not vitest globals; see
+// the package.json/unit-tier.yml wiring this QF also adds), so none of its 23 prior assertions,
+// this safeguard's correctness included, were ever actually verified by CI. A contract that goes
+// to zero durable markers must report CONTRACT DRIFT, never a vacuous "all present" CLEAN.
+test('QF-20260903-433: renderContractParity reports CONTRACT DRIFT (never a vacuous CLEAN) when a large contract has zero durable markers', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'adam-contract-drift-'));
+  try {
+    const blank = '# Adam Contract\n\n' + 'No durable duty markers remain in this document at all.\n'.repeat(40);
+    assert.ok(blank.length > 1000, 'fixture must exceed the >1000-char drift-check threshold');
+    writeFileSync(join(dir, ROLE_CONTEXT_DOC), blank, 'utf8');
+    const out = renderContractParity(dir);
+    assert.match(out, /CONTRACT DRIFT/);
+    assert.doesNotMatch(out, /all durable .* duties present/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
