@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-09-07T23:18:32.596Z -->
-<!-- git_commit: 6c43b2f6 -->
-<!-- db_snapshot_hash: e8156a0352cac564 -->
-<!-- file_content_hash: 4ac403ee41d4bfb5 -->
+<!-- generated_at: 2026-09-11T14:49:02.326Z -->
+<!-- git_commit: 96b905ec -->
+<!-- db_snapshot_hash: 99a244a75eacde8a -->
+<!-- file_content_hash: 39b0e916f98da56f -->
 
 # CLAUDE_EXEC_DIGEST.md - EXEC Phase (Enforcement)
 
@@ -20,6 +20,8 @@ Recurrence / about-to-bypass / spec friction / harness bug / memory-trend → `/
 ## 🚨 EXEC Agent Implementation Requirements
 
 ### MANDATORY Pre-Implementation Verification
+
+_(procedure: MANUAL § Implementation requirements — ambiguity examples, checklist template, Gate 0 enforcement detail)_
 Before writing ANY code, EXEC MUST:
 
 0. **AMBIGUITY RESOLUTION** 🔍 CRITICAL FIRST STEP
@@ -33,14 +35,8 @@ Before writing ANY code, EXEC MUST:
    - Document resolution: "Ambiguity in [area] resolved via [method]: [resolution]"
    - **If still unclear after escalation**: BLOCK implementation and await user clarification
 
-**Common Ambiguities to Watch For**:
-- Vague feature descriptions ("improve UX", "make it better")
-- Missing edge case handling ("what if user inputs invalid data?")
-- Unclear success criteria ("should be fast", "should look good")
-- Conflicting requirements between PRD sections
-- Undefined behavior for error states
+(Common ambiguities to watch for and a worked resolution example: MANUAL.)
 
-**Example Ambiguity Resolution**:
 0.5. **PRD INTEGRATION SECTION CHECK** 📋 CRITICAL
    > Why: This section defines who consumes the feature, what breaks if it fails, and what observability to wire in. Skipping it produces features that work in isolation but break downstream consumers or ship without rollback paths.
    - Read PRD `integration_operationalization` section BEFORE coding
@@ -59,7 +55,8 @@ Before writing ANY code, EXEC MUST:
    - **ALL UI changes** (user AND admin) go to `C:/Users/rickf/Projects/_EHG/ehg/`
    - **User features**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/` and `/src/pages/`
    - **Admin features**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/admin/` and `/src/pages/admin/`
-   - **Stage components**: `C:
+   - **Stage components**: `C:/Users/rickf/Projects/_EHG/ehg/src/components/stages/admin/`
+   - **Backend API only**: `C:/Users/rickf/Projects/_EHG/EHG_Engineer/` (routes, scripts, no UI
 
 *...truncated. Read full file for complete section.*
 
@@ -106,9 +103,7 @@ These anti-patterns are specific to the EXEC phase. Violating them leads to fail
 
 ### ⚠️ MANDATORY: Dual Test Execution
 
-**CRITICAL**: "Smoke tests" means BOTH test types, not just one!
-
-**Evidence**: SD-EXPORT-001 - Tests existed but weren't executed. 30-minute gap between "complete" and validation. SD-EVA-MEETING-002 - 67% E2E failure rate when finally run.
+**CRITICAL**: "Smoke tests" means BOTH test types, not just one! (provenance: PROVENANCE § Dual test requirement — evidence, common mistakes, why-this-matters)
 
 Before creating EXEC→PLAN handoff, EXEC MUST run:
 
@@ -135,25 +130,13 @@ Before creating EXEC→PLAN handoff, EXEC MUST run:
 
 **❌ BLOCKING**: Cannot create EXEC→PLAN handoff without BOTH test types passing.
 
-**Common Mistakes** (from SD-EXPORT-001):
-- ❌ "Tests exist" ≠ "Tests passed"
-- ❌ Running only E2E tests and claiming "all tests passed"
-- ❌ Marking SD complete before running any tests
-- ❌ Creating handoff without test evidence documentation
-- ✅ Run BOTH unit AND E2E tests explicitly
-- ✅ Document pass/fail counts in handoff
-- ✅ Include screenshots for visual evidence
-
-### Why This Matters
-- **SD-EXPORT-001**: 30-minute gap between marking "complete" and discovering tests weren't run
-- **SD-EVA-MEETING-002**: 67% E2E failure rate revealed only when tests finally executed
-- **Impact**: Testing enforcement prevents claiming "done" without proof
+**Why**: the SD-EXPORT-001 and SD-EVA-MEETING-002 incidents, in PROVENANCE.
 
 ## 🌿 Branch Hygiene Gate (MANDATORY)
 
 ## Branch Hygiene Gate (MANDATORY)
 
-**Evidence from Retrospectives**: SD-STAGE4-UX-EDGE-CASES-001 revealed a feature branch with 14 commits, 450 files, and 13 days of divergence became unsalvageable due to accumulated unrelated changes.
+**Evidence**: the SD-STAGE4-UX-EDGE-CASES-001 unsalvageable-branch incident, in PROVENANCE. (procedure: MANUAL § Branch hygiene gate — originating incident, health-check script, why-this-matters)
 
 ### MANDATORY Before PLAN-TO-EXEC Handoff
 
@@ -201,7 +184,7 @@ it is accepted here specifically because it keeps the worker unblocked without a
 
 **ESCAPE HATCH (only if a genuine rebase/linear-history is required, or the merge itself cannot
 be resolved cleanly): replay as a new branch.**
-The original branch/PR is closed, never force-pushed. Used prec
+The original branch/PR is closed, never force-pushed. Used precedent
 
 *...truncated. Read full file for complete section.*
 
@@ -222,5 +205,5 @@ The original branch/PR is closed, never force-pushed. Used prec
 
 ---
 
-*DIGEST generated: 2026-09-07 7:18:32 PM*
+*DIGEST generated: 2026-09-11 10:49:02 AM*
 *Protocol: 4.4.1*

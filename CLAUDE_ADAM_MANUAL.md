@@ -1,8 +1,8 @@
-<!-- file_content_hash: 9bce22935a8ea8c8 -->
+<!-- file_content_hash: dfeb831334ee8127 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM_MANUAL.md — Adam Manual (how-to companion)
 
-**Generated**: 2026-09-08 9:02:29 AM
+**Generated**: 2026-09-11 6:54:28 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — SD creation field shapes, migration ceremony steps, gauge inputs
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -110,9 +110,110 @@ Before ANY chairman-ask, Adam runs the deterministic 3-gate classifier (canonica
 
 It guards two opposed failure modes, both probed by the self-adherence review (`scripts/adam-self-adherence-review.mjs`, probe `decision_rubric`): **over-ask** (Adam asked when the rubric says execute) and **under-escalate** (Adam executed when the rubric says escalate). The over-ask text-classifier (`classifyDecisionQuestion`) routes its verdict through `classifyDecision` so the 3-gate rubric is the single authority.
 
+---
+
+### Solomon oversight — elaborations (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+Reach him via `node scripts/adam-advisory.cjs send --to solomon "<body>"` (target-verify the printed target is the live `role=solomon` session). Check in; never take over his work.
 
 ---
 
-*Generated from database: 2026-09-08*
+### North star and gauges — elaborations (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+(VISION BUILD-% defaults to honest: could-not-measure ≠ zero, presence ≠ realized, a tracking-row ≠ built. Read it as "what we can prove is built", never a vanity number.)
+
+---
+
+### Sourcing SSOT — mechanics (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+**(a) The OPERATIVE gate is a DB ROW, not an env flag.** `sourcing_engine_activation_state.arm='auto-refill'` gates the highest-blast-radius producer (hourly `refill-cron.mjs --apply`), in three states — on / off / **`NO ROW: state unknown, not "off"`**. Only `SOURCING_GAUGE_GAP_MINER_V1` and `SOURCING_DEFERRED_WATCHER_V1` have executable readers, and both are already hardcoded ON in the only context that runs them. **RETIRED — proposing a flip of these is a NO-OP, not an activation:** `SOURCING_ENGINE_V1`, `SOURCING_ROADMAP_ENGINE_V1`, `SOURCING_PROACTIVE_POPULATOR_V1`, `LEO_ROADMAP_AUTOSOURCE` have **zero executable readers**; setting them changed nothing while *looking* like activation.
+   **(b) "On" no longer means "floods".** The **four** producers that mint belt depth consult a **belt-DEMAND gate** (`lib/governance/demand-gate.js`): they produce only when their OWN lane’s depth is at or below a floor — the two SD minters read SD depth, the two QF minters read QF depth (SD-LEO-INFRA-GATE-SIDE-BELT-001), because the default gauge cannot see a quick_fix, and **an unreadable gauge is `unmeasurable` → WITHHOLD, never a licence to produce.** Every run emits its verdict to `audit_log`, so a correctly-quiet engine is distinguishable from a dead one.
+
+**(a) Predicate 1, non-terminal ("is-anyone-working")** — the existing claim/belt check for an in-flight SD covering this ask.
+   **(b) Predicate 2, completed ("was-this-built")** — call `checkAlreadyBuilt({supabase, io, title, description})` from `lib/sourcing-engine/manual-precheck.js` (reuses the SAME shipped router.js/dedup-autostamp.js matching machinery the automated belt-refill pipeline already runs — do not hand-roll a second dedup check). Returns `ALREADY-BUILT` + the completed `citedSdKey` when a matched SD is BOTH shipped AND VDR-outcome-realized; `re_emit` when shipped but the VDR gauge has not yet caught up (the anti-inflation-cap trap — reconcile+probe-flip the existing SD's gauge reading instead of minting a parallel rebuild); `NOT-FOUND` only when genuinely novel.
+   **(c) ROOT-CAUSE NOTE**: the two 2026-08-30 re-mints were not caused by a missing predicate — `routeCandidate()`/`stampCandidate()` already correctly matched against ALL existing SDs (completed or not). The gap was that a hand-fed mint never called it at all. This rule closes that gap at the STEP-0 entry point itself.
+   **(d) AMEND-SD NOTICE GAP (documented limitation, coordinator findings a1aaabc3/afdb2547)**: when an existing SD is annotated/re-premised (e.g. to redirect it toward a reconcile+probe-flip instead of a rebuild), NEITHER the current claimant NOR the SD's original author is automatically notified — the annotation is silent unless someone reads the row. WORKAROUND until a notification path ships: send a DIRECTED message (worker-signal / session_coordination) to the current claimant (if any) the moment an amend-sd annotation lands, citing the amended row explicitly. Do not rely on the annotation alone to be seen.
+
+---
+
+### Chairman SMS channel — elaborations (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+every SMS-decide is self-contained: terse context → LABELED options (A/B/C, or YES/NO) → Adam's RECOMMENDED option + one-line rationale → explicit reply instruction. **ONE question per message; ONE decision outstanding at a time** (serialized; urgent jumps the queue). DETAILS returns fuller context. Unexpected replies get a CLARIFYING reply, **never a silent drop**; parsing accepts natural variants.
+
+(default America/New_York, DST-aware IANA timezone, never a hardcoded UTC offset; resolves to a different zone only when Adam has recorded a captured chairman-location ruling via `notifications.timezone` — SD-LEO-INFRA-CHAIRMAN-QUIET-WINDOW-001)
+
+---
+
+### Plan Check format — the four blocks, tone, mechanics (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+1. **What slipped** — items from the prior forward list that did not close, one sentence of reason each. **FIRST because it is the only block that cannot flatter.**
+2. **What got done (last 48h)** — filtered to what shrank the current phase's exit list; never raw merge counts.
+3. **Next 6 hours** — **L1 = "expect to see"** (decisions reaching him, chairman-visible milestones); **L2 = "happening underneath"**. L3 omitted by default. Estimates carry "~"; **never apologize for an hour's drift.** Empty L1 → "quiet stretch — nothing needs you before morning"; **never manufacture milestones.**
+4. **Committing to (next 48h)** — 3–5 plan-movers MAX; this list is the next window's report card. Dependent items likely to land past the window are named as "next window's headline", never padded in.
+
+**Tone**: professional-casual prose (1/2/4) + tight bullets (3). No ID soup. Phone-readable in about a minute.
+**In-chat extras**: end with 2–3 anticipated follow-ups tailored to THAT report; a repeat ask within ~2h LEADS with a "since the last update at <time>" delta block.
+**Mechanics**: facts are DERIVED FROM THE ROADMAP (`roadmap_waves` + `roadmap_wave_items`), not eyeballed from the task ledger. **"Done" requires a JOIN to `strategic_directives_v2.status='completed'` — a roadmap item merely having `promoted_to_sd_key` set is NOT done.**
+
+---
+
+### Web research — HOW and the ladder (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+**HOW**: prefer PRIMARY sources; independence = different ORIGINS, not different URLs (syndication makes 10 URLs one source); time-box; cite sources; state web-sourced vs internal.
+
+**SOURCE-ESCALATION LADDER** (for JUDGMENT under uncertainty, not lookups): form your own read + confidence → get the independent peer read → **on divergence, CLASSIFY THE QUESTION FIRST** (internal-fact → repo/DB ground truth, NEVER the web; world-fact → web as tiebreaker) → synthesize explicitly, surfacing disagreements rather than papering over them.
+
+---
+
+### Governance heartbeat — per-scope block, per-idea bar, anchoring (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+**Per-scope block**: strategy briefing (read-only) → board-scan → OKR/KR-stall → vision-drift → SD-stall → **EVA-DRAIN** (triage pending recommendations toward a chairman decision — **NEVER set status=accepted**) → OKR-drift-patch.
+**Per-idea bar**: opportunity / objective+KR advanced with off-track delta / evidence citing the live row / rationale / risk + **REQUIRED counterfactual** / confidence. Dedup vs open SDs; CONST-002 + CONST-010 self-check.
+**Anchoring (honest)**: harness → O-GOV; platform → O-GOV-3 + the SSOT invariant; per-venture → the chairman-approved L2 vision + a LIVE metric, **OR FAIL the bar and surface the missing data as a GAP — NEVER fabricate a KR.**
+
+---
+
+### SD sourcing hard rules — procedure (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+board-of-directors verdict 2026-06-16): do **NOT** blindly source one design SD per capability —
+  a live-grounded board pass found the naive one-tile-per-capability framing can yield ZERO valid
+  SDs. Classify each FIRST, because **only (a) becomes a parallel design SD**:
+  **(a) genuine leaf** → a Phase-0 design/spec SD (the default).
+  **(b) foundation / data-contract** — an upstream target-of-record that build SDs depend on →
+  **sequence it AHEAD of the builds it gates**, never as a parallel tile.
+  **(c) already-built but reading low ONLY from a STALE/manual KR** → a governed **KR RE-MEASURE /
+  repoint-to-live-derivation**, NOT a new build SD.
+  **(d) mis-bucketed** (wrong layer / registry entry) → a **registry fix**.
+  The coordinator must VERIFY the per-capability gauge gap is REAL (not a stale-KR artifact) before
+  dispatching. Then parallelize the (a)s across the whole weak layer, sized to idle capacity.
+
+---
+
+### Self-score cadence — operating reality and live-enablement blast radius (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+**Self-score cadence — the operating reality**: the scorer gates on `ADAM_SELF_SCORE_CADENCE` and no-ops unless it is exactly `on`; the default is `off` and it is set nowhere. **`--force` IS the chairman-directed operating path, not a workaround** — scoring is expected every ~6h via `--force`, and the staleness gauge trips at 8h because that expectation is real. A session that reads "ships inert" as "no score is expected" has misread this. **`leo_feature_flags` is a GAUGE for this flag, not a GATE** — the writer reads `process.env` only, so flipping `is_enabled` has **no runtime effect whatsoever**: it changes a dashboard, not a behaviour. Do not "turn on the scorer" by editing that table.
+
+> **If live enablement is genuinely wanted**, it is its own change with its own blast radius (review noise and feedback-table write saturation across the parallel sessions) and it MUST go through `SD-LEO-INFRA-ENABLE-TRI-PARTY-001` — **currently CANCELLED** — rather than arriving as a side effect of a fix. The three staleness gauges in `lib/governance/gauge-registry.js` ship `enabled:false` DELIBERATELY PAIRED with these cadence flags: enabling the writers alone gives scoring with no staleness detection; enabling the gauges alone gives a permanent false trip. **Flip both together or neither.**
+
+---
+
+### Crew-comms routing — the five bounding rules (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+
+It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman.
+
+
+## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
+
+**quick_fixes**: `id` IS the key and holds the literal string `QF-YYYYMMDD-NNN` (e.g. `QF-20260907-188`) -- there is no `qf_key` column. Filter dedup/lookup queries on `id`; use `title`/`description` via `ilike` for fuzzy SEARCH only, never as a join/match key. A query selecting a nonexistent `qf_key` column errors at PostgREST, the client sees `data: null`, and a bare `if (data && data.length)` guard prints nothing -- reading as "no existing QF" while the query never ran. (`lib/learning/feedback-clusterer.js`'s title-similarity clustering is a deliberate exception -- it groups by title for clustering, not for keying, and must not be "fixed".)
+
+**quick_fixes.disposition** IN (`premise_resolved`, `premise_unverified_stale`, `duplicate_of`, `re_verified`, `promoted`).
+
+**adam_task_ledger.status** IN (`open`, `in_progress`, `blocked`, `done`, `cancelled`) -- there is no `closed` value.
+
+**chairman_ratifications.id** is a UUID column -- Postgres has no `ilike`/`~~*` operator for `uuid`, so an `ilike` filter on it errors ("operator does not exist: uuid ~~* unknown"). Match on `id` via `eq` (full UUID) or read rows and filter client-side by string prefix for a short-form citation.
+
+---
+
+*Generated from database: 2026-09-11*
 *Protocol Version: 4.4.1*
-*Source of truth: leo_protocol_sections (section_type=adam_manual). Do not hand-edit — edit the DB section and regenerate.*
+*Source of truth: leo_protocol_sections (section_type=adam_manual, quick_fixes_schema_traps). Do not hand-edit — edit the DB section and regenerate.*
