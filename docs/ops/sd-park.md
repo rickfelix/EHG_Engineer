@@ -1,9 +1,9 @@
 ---
 category: documentation
 status: approved
-version: 1.0.0
+version: 1.1.0
 author: rickfelix
-last_updated: 2026-06-05
+last_updated: 2026-09-11
 tags: [documentation, ops]
 ---
 
@@ -19,8 +19,9 @@ To set an SD aside **without abandoning it**, *park* it — do **not** cancel it
 # Park (set aside, recoverable, excluded from sd:next + the sweep):
 node scripts/sd-park.js park SD-XXX-001 --reason "fleet wind-down; resume after epic #3"
 
-# Unpark (back to a workable, claimable status):
-node scripts/sd-park.js unpark SD-XXX-001
+# Unpark (back to a workable, claimable status). --reason is REQUIRED, like park:
+node scripts/sd-park.js unpark SD-XXX-001 --reason "epic #3 shipped; resuming"
+# (equivalent: npm run sd:unpark -- SD-XXX-001 --reason "...")
 # then re-claim normally:
 node scripts/sd-start.js SD-XXX-001
 ```
@@ -48,6 +49,42 @@ Using `status='cancelled'` to defer an SD is harmful:
 - It pollutes the `cancelled` set, mixing truly-abandoned SDs with merely-parked ones.
 
 Park (`deferred`) fires **none** of those cascades.
+
+## Unpark: the audited exit (SD-LEO-INFRA-DEFERRED-STATE-ENTRANCE-001)
+
+`deferred` is **parked, not finished**. Claim paths say so: the claim-guard banner and
+`sd-start`'s `TARGET_ALREADY_TERMINAL` message name the exact exit command
+(`npm run sd:unpark -- <SD-KEY> --reason "<why>"`) for a deferred SD instead of the old
+"finished/closed" wording. `completed` / `cancelled` wording is unchanged.
+
+Unpark now mirrors park's discipline:
+
+- **`--reason` is required.** Unpark stamps `metadata.unparked_by`, `unparked_at`,
+  `unparked_reason` and `stamped_by_session` through the same provenanced-stamp helper park
+  uses. A later re-park strips those fields so a park → unpark → park cycle never leaves a
+  stale "last unparked at" reading as current.
+- **The restore status is never guessed.** Unpark restores `metadata.parked_from_status`
+  only when it was genuinely recorded by `park()`. If it is missing, not a workable status,
+  or was **backfill-inferred** (`parked_from_status_source='backfill_inferred'` — the 25 of
+  29 live deferred rows that predated recording), unpark refuses with
+  `UNPARK_RESTORE_STATUS_REQUIRED` and you must pass `--restore <status>` explicitly.
+- **`--restore` must itself be workable** (`draft`, `active`, `planning`, `in_progress`).
+  `--restore completed` or `--restore cancelled` is refused with
+  `UNPARK_RESTORE_STATUS_INVALID`: an unpark straight into a terminal status would fire the
+  full SD-completion trigger cascade through the allowlisted writer and skip
+  LEAD-FINAL-APPROVAL.
+- **The write is guarded by `WHERE status='deferred'`**, so two operators unparking the same
+  SD cannot both succeed.
+- **Actor rule is the same as park**: non-EXEC actor required (CLI default `cli`).
+
+```bash
+# Row parked before parked_from_status was recorded (backfill-inferred) — be explicit:
+node scripts/sd-park.js unpark SD-XXX-001 --reason "resuming" --restore in_progress
+```
+
+The pure planner `computeUnparkPlan()` in `lib/sd-park.js` holds these decisions and is
+unit-tested (`tests/unit/sd-park.computeUnparkPlan.test.js`), because the DB-tier
+integration suite runs zero tests where no non-production target is designated.
 
 ## Retired: `metadata.do_not_auto_start`
 
