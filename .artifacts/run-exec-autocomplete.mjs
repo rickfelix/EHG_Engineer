@@ -1,0 +1,11 @@
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { autoValidateStories, autoCompleteDeliverablesForSD } from '../scripts/modules/handoff/executors/exec-to-plan/test-evidence.js';
+const supabase = createSupabaseServiceClient();
+const sdId = '346eaa99-8d8a-4233-b593-50b21149c958';
+await autoValidateStories(supabase, sdId);
+const r = await autoCompleteDeliverablesForSD(supabase, sdId);
+console.log('RESULT', JSON.stringify(r && { completed: r.completed?.map(c => c.name || c.deliverable_name || c), tiers: r.tierBreakdown, errors: r.errors }, null, 1));
+const { data } = await supabase.from('sd_scope_deliverables').select('deliverable_name,completion_status').eq('sd_id', sdId);
+console.log('DELIVERABLES', JSON.stringify(data));
+const { data: us } = await supabase.from('user_stories').select('story_key,status,validation_status').eq('sd_id', sdId);
+console.log('STORIES', JSON.stringify(us));
