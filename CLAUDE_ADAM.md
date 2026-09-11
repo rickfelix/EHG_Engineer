@@ -1,8 +1,8 @@
-<!-- file_content_hash: 9d9b0d6fd788f3b5 -->
+<!-- file_content_hash: 1dc356ecfa0047fd -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-11 6:54:28 AM
+**Generated**: 2026-09-11 10:49:02 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -24,6 +24,7 @@
 ---
 > **How-to procedures** (SD creation field shapes, migration ceremony steps, gauge inputs) live in the companion `CLAUDE_ADAM_MANUAL.md` — read at the moment of doing, not at session start.
 > **Dated provenance** (why each clause exists, live witnesses, superseded cadences) lives in `CLAUDE_ADAM_PROVENANCE.md`. Every rule below is in force regardless of whether its history is read.
+> **Companion-first encode convention** (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-5): a new ruling is encoded here as its clause header (the ledger marker), its binding half and a site pointer; the verbatim, dated rationale and procedure are written into the companions by default — `CLAUDE_ADAM_PROVENANCE.md` for the why, `CLAUDE_ADAM_MANUAL.md` for the how. The header stays in this file so the ledger marker and the quiet-tick regression check keep resolving here.
 
 ---
 

@@ -45,6 +45,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { applyMoves } from '../../lib/protocol/contract-carve.mjs';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -381,93 +382,17 @@ async function fetchMarkers() {
   return data.filter((r) => String(r.encoded_ref?.section_id) === MARKER_SECTION_ID).map((r) => ({ id: r.id, marker: r.marker_text.trim() }));
 }
 
-function headingFor(name) { return `### ${name} (${TAG})`; }
-
-/** The site pointer cites the ratification ids when the name carries them, else the heading name. */
-function pointerRef(name) {
-  const m = name.match(/\(([0-9a-f]{8}(?:, [0-9a-f]{8})*(?: \+ [0-9a-f]{8})?)\)$/);
-  return m ? m[1] : name;
-}
-
-/** Apply one move to `content`. Returns {content, removed: {provenance: string[], manual: string[]}, applied}. */
-export function applyMove(content, move, companions) {
-  // The companion heading is the applied-marker: once a move has landed, re-running is a no-op by construction.
-  if (companions.provenance.includes(headingFor(move.name)) || companions.manual.includes(headingFor(move.name))) {
-    return { content, removed: { provenance: [], manual: [] }, applied: false };
-  }
-  const keyIdx = content.indexOf(move.key);
-  if (keyIdx < 0) throw new Error(`MOVE "${move.name}": key not found in section ${move.section} — the contract drifted; re-derive the anchor.`);
-  if (content.indexOf(move.key, keyIdx + 1) >= 0) throw new Error(`MOVE "${move.name}": key is not unique in section ${move.section}.`);
-  const removed = { provenance: [], manual: [] };
-  let touched = 0;
-  for (const cut of move.cuts) {
-    const dest = cut.dest || 'provenance';
-    const fromIdx = content.indexOf(cut.from, keyIdx);
-    if (fromIdx < 0) {
-      if (companions[dest].includes(headingFor(move.name))) continue; // already applied on a prior run
-      throw new Error(`MOVE "${move.name}": cut anchor not found: ${JSON.stringify(cut.from.slice(0, 80))}`);
-    }
-    let toIdx;
-    if (cut.to === null) {
-      const nl = content.indexOf('\n', fromIdx);
-      toIdx = nl < 0 ? content.length : nl;
-    } else {
-      toIdx = content.indexOf(cut.to, fromIdx + cut.from.length);
-      if (toIdx < 0) throw new Error(`MOVE "${move.name}": cut end not found: ${JSON.stringify(cut.to.slice(0, 80))}`);
-    }
-    removed[dest].push(content.slice(fromIdx, toIdx).trim());
-    content = content.slice(0, fromIdx) + (cut.with || '') + content.slice(toIdx);
-    touched++;
-  }
-  if (touched === 0) return { content, removed, applied: false };
-  // SITE-EDIT pointer: on the clause's own line for a bullet/paragraph key, or as its own line right
-  // under a heading key. Skipped when the clause already names the companion.
-  const lineStart = content.lastIndexOf('\n', keyIdx) + 1;
-  let lineEnd = content.indexOf('\n', keyIdx);
-  if (lineEnd < 0) lineEnd = content.length;
-  let line = content.slice(lineStart, lineEnd);
-  const ref = pointerRef(move.name);
-  const pointers = [];
-  if (removed.provenance.length && !/PROVENANCE/.test(line)) pointers.push(`(provenance: PROVENANCE § ${ref})`);
-  if (removed.manual.length && !/MANUAL/.test(line)) pointers.push(`(procedure: MANUAL § ${ref})`);
-  if (pointers.length) {
-    if (line.startsWith('#')) {
-      content = content.slice(0, lineEnd) + `\n\n_${pointers.join(' ')}_` + content.slice(lineEnd);
-    } else {
-      const tail = line.match(/ \(Ratifications? [^()]*\.\)\s*$/);
-      const ptr = ' ' + pointers.join(' ');
-      line = tail ? line.slice(0, tail.index) + ptr + line.slice(tail.index) : line + ptr;
-      content = content.slice(0, lineStart) + line + content.slice(lineEnd);
-    }
-  }
-  return { content, removed, applied: true };
-}
-
-function appendToCompanion(companion, name, segments) {
-  const heading = headingFor(name);
-  if (companion.includes(heading)) return companion;
-  return companion.trimEnd() + `\n\n---\n\n${heading}\n\n${segments.join('\n\n')}\n`;
-}
-
 async function main() {
   const apply = process.argv.includes('--apply');
   const before = {};
   for (const id of [...MAIN_IDS, ...Object.values(COMPANION_IDS)]) before[id] = await fetchContent(id);
   const after = { ...before };
   const companions = { manual: before[COMPANION_IDS.manual], provenance: before[COMPANION_IDS.provenance] };
-  const applied = []; const skipped = [];
-
-  for (const move of MOVES) {
-    const r = applyMove(after[move.section], move, companions);
-    after[move.section] = r.content;
-    if (!r.applied) { skipped.push(move.name); continue; }
-    for (const dest of ['provenance', 'manual']) {
-      if (r.removed[dest].length) companions[dest] = appendToCompanion(companions[dest], move.name, r.removed[dest]);
-    }
-    applied.push(move.name);
-  }
-  after[COMPANION_IDS.manual] = companions.manual;
-  after[COMPANION_IDS.provenance] = companions.provenance;
+  const carved = applyMoves(after, MOVES, companions, TAG);
+  Object.assign(after, carved.contents);
+  const { applied, skipped } = carved;
+  after[COMPANION_IDS.manual] = carved.companions.manual;
+  after[COMPANION_IDS.provenance] = carved.companions.provenance;
 
   // FAIL CLOSED: every marker present before the carve must still be present in the main contract row.
   const markers = await fetchMarkers();

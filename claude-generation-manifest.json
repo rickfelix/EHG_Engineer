@@ -1,206 +1,230 @@
 {
-  "generated_at": "2026-09-11T10:54:28.076Z",
-  "git_commit": "50b076a4",
-  "db_snapshot_hash": "e8156a0352cac564",
+  "generated_at": "2026-09-11T14:49:02.326Z",
+  "git_commit": "96b905ec",
+  "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 20246,
-      "bytes": 20385,
+      "chars": 20247,
+      "bytes": 20386,
       "estimated_tokens": 5062,
       "content_hash": "2de2c24d047b0824",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 74949,
-      "bytes": 75454,
-      "estimated_tokens": 18738,
-      "content_hash": "d5fab2516d1abd1d",
+      "chars": 57243,
+      "bytes": 57664,
+      "estimated_tokens": 14311,
+      "content_hash": "00fe4895f2a984f0",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_CORE.md"
     },
     "CLAUDE_CORE_MANUAL.md": {
       "type": "full",
-      "chars": 21440,
-      "bytes": 21518,
-      "estimated_tokens": 5360,
-      "content_hash": "3d9bf584b67e4686",
+      "chars": 39565,
+      "bytes": 39727,
+      "estimated_tokens": 9892,
+      "content_hash": "23548014907e87ce",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_CORE_MANUAL.md"
+    },
+    "CLAUDE_CORE_PROVENANCE.md": {
+      "type": "full",
+      "chars": 1864,
+      "bytes": 1876,
+      "estimated_tokens": 466,
+      "content_hash": "1246ea40122203af",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_CORE_PROVENANCE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 49484,
-      "bytes": 49652,
-      "estimated_tokens": 12371,
-      "content_hash": "f4e5700e75a230b4",
+      "chars": 50011,
+      "bytes": 50181,
+      "estimated_tokens": 12503,
+      "content_hash": "facc1cf7c1dc1af3",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
-      "chars": 17779,
-      "bytes": 17851,
+      "chars": 17780,
+      "bytes": 17852,
       "estimated_tokens": 4445,
       "content_hash": "50b719e3dfd22cb5",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 54854,
-      "bytes": 55111,
+      "chars": 54855,
+      "bytes": 55112,
       "estimated_tokens": 13714,
       "content_hash": "54f3e517405a07c7",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
-      "chars": 38353,
-      "bytes": 38460,
+      "chars": 38354,
+      "bytes": 38461,
       "estimated_tokens": 9589,
       "content_hash": "99d62d75ab74a439",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 103690,
-      "bytes": 104128,
-      "estimated_tokens": 25923,
-      "content_hash": "16b461c3e41548a2",
+      "chars": 45733,
+      "bytes": 45994,
+      "estimated_tokens": 11434,
+      "content_hash": "6c53e04d9ef09b5f",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_EXEC.md"
+    },
+    "CLAUDE_EXEC_MANUAL.md": {
+      "type": "full",
+      "chars": 60097,
+      "bytes": 60305,
+      "estimated_tokens": 15025,
+      "content_hash": "a23ce1d311c40721",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_EXEC_MANUAL.md"
+    },
+    "CLAUDE_EXEC_PROVENANCE.md": {
+      "type": "full",
+      "chars": 4746,
+      "bytes": 4780,
+      "estimated_tokens": 1187,
+      "content_hash": "b05c81eb5bcb336e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_EXEC_PROVENANCE.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 80431,
-      "bytes": 81301,
-      "estimated_tokens": 20108,
-      "content_hash": "9d9b0d6fd788f3b5",
+      "chars": 80896,
+      "bytes": 81768,
+      "estimated_tokens": 20224,
+      "content_hash": "1dc356ecfa0047fd",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 27195,
-      "bytes": 27467,
+      "chars": 27196,
+      "bytes": 27468,
       "estimated_tokens": 6799,
       "content_hash": "dfeb831334ee8127",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 95085,
-      "bytes": 95426,
+      "chars": 95086,
+      "bytes": 95427,
       "estimated_tokens": 23772,
       "content_hash": "f9dde4b902c1ac80",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 51241,
-      "bytes": 51578,
+      "chars": 51242,
+      "bytes": 51579,
       "estimated_tokens": 12811,
       "content_hash": "c4a4b36ed7e8bf11",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
       "type": "full",
-      "chars": 12643,
-      "bytes": 12707,
+      "chars": 12644,
+      "bytes": 12708,
       "estimated_tokens": 3161,
       "content_hash": "f18925a33af0e90a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_COORDINATOR_MANUAL.md"
     },
     "CLAUDE_COORDINATOR_PROVENANCE.md": {
       "type": "full",
-      "chars": 10531,
-      "bytes": 10561,
+      "chars": 10532,
+      "bytes": 10562,
       "estimated_tokens": 2633,
       "content_hash": "04b90d85dd92abcd",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_COORDINATOR_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 52168,
-      "bytes": 52683,
-      "estimated_tokens": 13042,
+      "chars": 52169,
+      "bytes": 52684,
+      "estimated_tokens": 13043,
       "content_hash": "198744bb2cce723a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 58772,
-      "bytes": 59105,
-      "estimated_tokens": 14693,
+      "chars": 58773,
+      "bytes": 59106,
+      "estimated_tokens": 14694,
       "content_hash": "812fa6e7a539c841",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
       "type": "full",
-      "chars": 24778,
-      "bytes": 24986,
+      "chars": 24779,
+      "bytes": 24987,
       "estimated_tokens": 6195,
       "content_hash": "ca8ab289aef2db41",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_SOLOMON_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
       "type": "full",
-      "chars": 3580,
-      "bytes": 3607,
-      "estimated_tokens": 895,
+      "chars": 3581,
+      "bytes": 3608,
+      "estimated_tokens": 896,
       "content_hash": "ea725325ffa82b3e",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_SOLOMON_MODEL_POSTURE.md"
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 25991,
-      "bytes": 26099,
+      "chars": 25992,
+      "bytes": 26100,
       "estimated_tokens": 6498,
       "content_hash": "07d8ad4cd57379ea",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
       "type": "full",
-      "chars": 5172,
-      "bytes": 5181,
-      "estimated_tokens": 1293,
+      "chars": 5173,
+      "bytes": 5182,
+      "estimated_tokens": 1294,
       "content_hash": "b6d80995643c5c97",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_MICHAEL_MODEL_POSTURE.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9611,
-      "bytes": 9649,
+      "chars": 9612,
+      "bytes": 9650,
       "estimated_tokens": 2403,
-      "content_hash": "44b59d8720d8a5dd",
+      "content_hash": "4f660346fa8b0b7b",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 13265,
-      "bytes": 13375,
+      "chars": 13266,
+      "bytes": 13376,
       "estimated_tokens": 3317,
-      "content_hash": "aaf49eecfcf83e14",
+      "content_hash": "698f34f7355317b5",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5551,
-      "bytes": 5571,
+      "chars": 5552,
+      "bytes": 5572,
       "estimated_tokens": 1388,
-      "content_hash": "90feafbe144f1e84",
+      "content_hash": "1ec5134d706f6db7",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8541,
-      "bytes": 8581,
+      "chars": 8542,
+      "bytes": 8582,
       "estimated_tokens": 2136,
-      "content_hash": "98d3e7b48e47fb62",
+      "content_hash": "9db58685e569e0d6",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 12539,
-      "bytes": 12619,
-      "estimated_tokens": 3135,
-      "content_hash": "4ac403ee41d4bfb5",
+      "chars": 11885,
+      "bytes": 11958,
+      "estimated_tokens": 2972,
+      "content_hash": "39b0e916f98da56f",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
@@ -208,7 +232,7 @@
       "chars": 17438,
       "bytes": 17701,
       "estimated_tokens": 4360,
-      "content_hash": "a3deea1ce4be5f1f",
+      "content_hash": "b779e057bd39e9b9",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
@@ -216,7 +240,7 @@
       "chars": 12955,
       "bytes": 13063,
       "estimated_tokens": 3239,
-      "content_hash": "01f1723a18acad4f",
+      "content_hash": "a3c29b7b660a922a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
@@ -224,16 +248,16 @@
       "chars": 3968,
       "bytes": 4012,
       "estimated_tokens": 992,
-      "content_hash": "35f7fc319ac674bf",
+      "content_hash": "5edae88971cb06b8",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "895aa6e8c4e7471a",
+    "global": "21225c0119288ab4",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
-      "190": "b63751b7baf327ef",
+      "190": "9d5db2d38335769a",
       "191": "22bfa253c667b537",
       "192": "47bb75dc50f88454",
       "193": "b08aee786e136af8",
@@ -251,7 +275,7 @@
       "207": "e445b9976ac071e4",
       "208": "a7d1a5ecfdf8499c",
       "209": "1ae226bdd12ed412",
-      "210": "7ae76b9f93023eec",
+      "210": "3d8916656964ed7f",
       "211": "5d137550e1e954b7",
       "212": "53916ba04560d9cf",
       "213": "05620e243a2c48a1",
@@ -307,8 +331,8 @@
       "280": "b74fa08ccc3ba6ac",
       "281": "53f5ab89a2f5e19a",
       "282": "87fd6e852562a3a2",
-      "284": "abec0a8576ae53f0",
-      "286": "69392119bbbb76b3",
+      "284": "93156cb19e414cbb",
+      "286": "0ad8b7c21700b62d",
       "287": "9cd7f602ff4fecd8",
       "288": "c7f7324a8090c87e",
       "289": "38e17ba9d7a8d144",
@@ -319,12 +343,12 @@
       "294": "9bfc656114c59db0",
       "295": "447331e1e6f386f3",
       "296": "c6ccef265c848ffd",
-      "297": "2c7f8c8b1bf5dd4f",
+      "297": "10cf1a78986be7bd",
       "299": "ee0885ebefc14f26",
       "300": "87e4aa2892c00fd2",
       "301": "cec5f28b18b461a4",
       "303": "9ccb23f56cde7b93",
-      "305": "2c0c44c179cb7f37",
+      "305": "1e2796941b64dbfc",
       "306": "10e6c6909692a458",
       "307": "4a5e9b832ae9c14e",
       "308": "654bca933e754da2",
@@ -367,7 +391,7 @@
       "370": "2d2f62f10a40d590",
       "371": "70ef0843cca84b6a",
       "372": "b22dee3afacbd3ce",
-      "375": "8b08cc11ab858a95",
+      "375": "169df1e67c6db8e1",
       "376": "2d6c6ac7b6c7a00f",
       "377": "198d28803cf8132c",
       "378": "8cef93059452a0d8",
@@ -445,7 +469,7 @@
       "520": "8997c803f49046a7",
       "521": "3a41c86e6d321678",
       "522": "f6c3d5c2a90a4eb1",
-      "524": "0b517bbcc30ec9ff",
+      "524": "898b54d51db99fca",
       "525": "d553f3c1dceb8887",
       "526": "a6ad4a059caf827b",
       "529": "2d15257e180cc154",
@@ -475,7 +499,7 @@
       "580": "4232fb5222f35163",
       "584": "768510d24242f194",
       "589": "34719a2e3fd508a7",
-      "590": "22b0c691a6adc98d",
+      "590": "1b876bf30f8eb194",
       "592": "775e8922b58033b1",
       "593": "5aa3c836ecc1752c",
       "594": "ac4c90927e1cff29",
@@ -483,7 +507,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "426ac699d490cc29",
+      "601": "f80174e820814a6d",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "f5d0c5029c6a3524",
@@ -491,13 +515,13 @@
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
       "611": "aee3c46d653e2d5a",
-      "612": "13e03eddf5300bcc",
+      "612": "7eae71fb94ef4f0e",
       "613": "1e1de64689c1ad82",
       "614": "d48bc892b437a0fa",
       "615": "1ac30c8d7046c470",
       "616": "cc3b2a117dc15f14",
       "620": "3fd2f83a068a8381",
-      "621": "5d93172c5c9c2138",
+      "621": "ca18074b03a84c1e",
       "622": "94a8df85a96ad041",
       "626": "32f06fccc41d79a1",
       "627": "cad72e9081e7afda",
@@ -515,7 +539,10 @@
       "657": "11c9181c9e30ef9c",
       "658": "531011540a7b0515",
       "659": "f07759022446ffb1",
-      "660": "61acc95edefef269"
+      "660": "61acc95edefef269",
+      "661": "5a43f70cb1e2438d",
+      "662": "2b52248ee0face95",
+      "663": "d3811cf43ce1db67"
     },
     "meta": {
       "94": {
@@ -1199,7 +1226,7 @@
         "title": "Sub-Agent Trigger Guidance"
       },
       "375": {
-        "section_type": "reference",
+        "section_type": "exec_manual_reference",
         "target_file": "CLAUDE_PLAN.md",
         "title": "Validation Rules (SD-LEARN-008)"
       },
@@ -1589,7 +1616,7 @@
         "title": "KR Progress Tracking in EXEC"
       },
       "524": {
-        "section_type": "reference",
+        "section_type": "exec_manual_reference",
         "target_file": "CLAUDE_EXEC.md",
         "title": "/batch Command Reference"
       },
@@ -1739,7 +1766,7 @@
         "title": "Queue Ranking and QF Track Inference"
       },
       "590": {
-        "section_type": "reference",
+        "section_type": "exec_manual_reference",
         "target_file": "CLAUDE_PLAN.md",
         "title": "PRD metadata.db_content_assertions field guide"
       },
@@ -1819,7 +1846,7 @@
         "title": "Solomon Role Contract"
       },
       "612": {
-        "section_type": "signaling_friction",
+        "section_type": "solomon_consultation_protocol",
         "target_file": "CLAUDE_CORE.md",
         "title": "Solomon Consultation Protocol"
       },
@@ -1942,6 +1969,21 @@
         "section_type": "quick_fixes_schema_traps",
         "target_file": null,
         "title": "Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)"
+      },
+      "661": {
+        "section_type": "exec_manual",
+        "target_file": null,
+        "title": "EXEC Manual — carved procedure (companion)"
+      },
+      "662": {
+        "section_type": "exec_provenance",
+        "target_file": null,
+        "title": "EXEC Provenance — dated evidence and rationale (companion)"
+      },
+      "663": {
+        "section_type": "core_provenance",
+        "target_file": null,
+        "title": "Core Provenance — dated rationale (companion)"
       }
     }
   }

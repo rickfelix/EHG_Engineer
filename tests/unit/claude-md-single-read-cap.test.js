@@ -81,7 +81,9 @@ describe('FR-4: single-read cap enforcement', () => {
     // the cap and would throw today, whereas Michael's is authored UNDER a 6,200-word budget that the
     // seed one-off enforces before --apply (DESIGN evidence 8601cbdd: 25,000 x 2.4177 bytes with a 20%
     // margin at the worst measured density of 7.77 bytes/word), so it fits from its first generation.
-    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md']);
+    // CLAUDE_EXEC.md joined under SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-3): the companion split took it
+    // from 43,069 to ~19,000 tokens, so its SD has landed and the list's own rule says to add it.
+    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md', 'CLAUDE_EXEC.md']);
   });
 
   it('uses the MEASURED bytes-per-token, not a borrowed or estimated one', () => {

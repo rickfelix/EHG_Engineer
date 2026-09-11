@@ -130,10 +130,13 @@ describe('the confirmed-fit tier is opt-in and empty on landing', () => {
   it('MUST_CONFIRM_SINGLE_READ_FIT contains only files whose SDs have actually trimmed them', () => {
     // Same discipline as MUST_FIT_SINGLE_READ: adding CLAUDE_ADAM.md here BEFORE the carve that shrinks
     // it would throw on the next regeneration. Membership is earned by a landed trim, not by intent.
-    // CLAUDE_LEAD.md joined under SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-1) -- that SD landed. ADAM and
-    // SOLOMON have not yet been trimmed, so they stay absent.
-    expect(MUST_CONFIRM_SINGLE_READ_FIT).toEqual(['CLAUDE_LEAD.md']);
+    // CLAUDE_LEAD.md joined under SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-1) and CLAUDE_EXEC.md under
+    // its FR-3 (43,069 -> ~19,000 tokens after the companion split) -- both landed. ADAM (FR-2:
+    // fits:false with every ledger marker pinned in the main file, pending a section-choice ruling)
+    // and CORE (FR-4: 23,851, inside the marginal band) have NOT been confirmed, so they stay absent.
+    expect(MUST_CONFIRM_SINGLE_READ_FIT).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_EXEC.md']);
     expect(MUST_CONFIRM_SINGLE_READ_FIT).not.toContain('CLAUDE_ADAM.md');
+    expect(MUST_CONFIRM_SINGLE_READ_FIT).not.toContain('CLAUDE_CORE.md');
     expect(MUST_CONFIRM_SINGLE_READ_FIT).not.toContain('CLAUDE_SOLOMON.md');
   });
 
@@ -173,6 +176,7 @@ describe('the confirmed-fit tier is opt-in and empty on landing', () => {
   it('MUST_FIT_SINGLE_READ carries only files whose SDs have landed (CLAUDE_MICHAEL.md joined under SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A)', () => {
     // The confirmed-fit tier below is still opt-in and empty; this pin only tracks the hard-cap list,
     // whose membership tests/unit/claude-md-single-read-cap.test.js argues file by file.
-    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md']);
+    // CLAUDE_EXEC.md joined under SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-3), after its split landed.
+    expect(MUST_FIT_SINGLE_READ).toEqual(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md', 'CLAUDE_MICHAEL.md', 'CLAUDE_EXEC.md']);
   });
 });

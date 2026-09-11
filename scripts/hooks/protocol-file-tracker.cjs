@@ -94,7 +94,13 @@ const PROTOCOL_FILES = [
   // companions (line 55 above) were added to prevent.
   'CLAUDE_COORDINATOR.md',
   'CLAUDE_COORDINATOR_MANUAL.md',
-  'CLAUDE_COORDINATOR_PROVENANCE.md'
+  'CLAUDE_COORDINATOR_PROVENANCE.md',
+  // SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-3/FR-4): the EXEC and CORE companions. Same reason as
+  // every companion above — a read of a file absent from this list is invisible to session
+  // state, so a companion nothing records is a companion nobody can prove was read.
+  'CLAUDE_EXEC_MANUAL.md',
+  'CLAUDE_EXEC_PROVENANCE.md',
+  'CLAUDE_CORE_PROVENANCE.md'
 ];
 
 // SD-LEO-INFRA-OPTIMIZE-PROTOCOL-FILE-001: Equivalence mapping for gate compatibility
