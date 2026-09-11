@@ -206,6 +206,37 @@ function defaultIsPromptBoundary(e) {
 }
 
 /**
+ * QF-20260903-916 — a PRIOR turn's arm that is NOT YET DUE, on a turn opened by a task-notification.
+ * MEASURED (43 fleet transcripts, 2026-09-06..11): the arm's tool_result row carries
+ * toolUseResult.scheduledFor (epoch ms); a wakeup-opened turn carries scheduledFireId; a
+ * notification-opened turn carries origin.kind='task-notification'. In 10 early re-invocations with
+ * no re-arm between, the pending wake STILL fired — so it governs, and re-demanding an arm here only
+ * burns a turn. Scans backwards from the turn boundary; a fire or a stop:true arm ends the search.
+ */
+function findPendingPriorArm(entries, { nowMs = Date.now(), isPromptBoundary } = {}) {
+  const list = Array.isArray(entries) ? entries : [];
+  const { idx } = findTurnStart(list, isPromptBoundary || defaultIsPromptBoundary);
+  const opener = idx >= 0 ? list[idx] : null;
+  const notificationOpened = Boolean(opener && opener.type === 'user' && opener.origin && opener.origin.kind === 'task-notification');
+  for (let i = idx - 1; i >= 0; i--) {
+    const e = list[i];
+    if (!e) continue;
+    if (e.type === 'assistant' && Array.isArray(e.message && e.message.content)
+        && e.message.content.some((b) => b && b.type === 'tool_use' && b.name === WAKEUP_TOOL && b.input && b.input.stop === true)) {
+      return { pending: false, notificationOpened, reason: 'prior turn stopped the loop' };
+    }
+    if (e.type !== 'user') continue;
+    if (e.scheduledFireId) return { pending: false, notificationOpened, reason: 'prior arm already fired' };
+    const scheduledFor = e.toolUseResult && e.toolUseResult.scheduledFor;
+    if (typeof scheduledFor === 'number') {
+      const dueInMs = scheduledFor - nowMs;
+      return { pending: dueInMs > 0, notificationOpened, scheduledFor, dueInMs, reason: dueInMs > 0 ? 'prior-turn ScheduleWakeup not yet due' : 'prior-turn ScheduleWakeup already due' };
+    }
+  }
+  return { pending: false, notificationOpened, reason: idx === -1 ? 'no turn boundary in tail window' : 'no prior-turn ScheduleWakeup in tail window' };
+}
+
+/**
  * FLUSH-RACE GUARD (pattern copied from print-before-park.cjs:211-226, which shipped with ZERO
  * tests — this is where it finally gets them). The final assistant block can flush to the JSONL
  * AFTER the Stop hook begins reading, so a single read reports 'unarmed' for a turn that DID arm.
@@ -266,6 +297,7 @@ module.exports = {
   isEnforcementDisabled,
   recentSenderRows,
   findArmInCurrentTurn,
+  findPendingPriorArm,
   awaitStableVerdict,
   formatPendingWake,
 };

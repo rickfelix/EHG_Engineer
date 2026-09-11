@@ -126,10 +126,13 @@ async function shutdown() {
  * which arms on the worker's behalf and is the actual enforcement.
  *
  * @param {{ armVerdict?: 'armed'|'unarmed'|'unknown', loopState?: string|null, stopHookActive?: boolean,
- *           flagEnabled?: boolean, enforcementDisabled?: boolean, hasActiveClaim?: boolean }} args
+ *           flagEnabled?: boolean, enforcementDisabled?: boolean, hasActiveClaim?: boolean,
+ *           priorArmCarries?: boolean }} args — priorArmCarries (QF-20260903-916): this turn was
+ *           opened by a task-notification while the PRIOR turn's ScheduleWakeup is not yet due;
+ *           that armed wake still governs the seat, so an unarmed stop here is not a lapse.
  * @returns {boolean}
  */
-function shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim }) {
+function shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim, priorArmCarries }) {
   if (!flagEnabled) return false;                       // default-OFF: no-op
   if (enforcementDisabled) return false;                // runtime kill switch (FR-2)
   if (stopHookActive) return false;                     // never block twice — already reminded
@@ -152,7 +155,7 @@ function shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enfo
   // the old one read loop_state='awaiting_tick', which post-tool-loop-state.cjs sets from the
   // worker's own claim about itself, so the enforcement was asking the suspect for an alibi.
   if (armVerdict === 'armed') return false;
-  if (armVerdict === 'unarmed') return true;
+  if (armVerdict === 'unarmed') return !priorArmCarries;
   // 'unknown' — no boundary in the tail window, or no transcript. Absence of evidence is not
   // evidence of absence: fail open rather than trap a worker on an unreadable transcript.
   return false;
@@ -768,7 +771,8 @@ async function main() {
         const { readTailEntries } = require('./print-before-park.cjs');
         const read = () => {
           if (!fs.existsSync(payload.transcript_path)) return { verdict: 'unknown', reason: 'transcript absent', armCount: 0 };
-          return armEvidence.findArmInCurrentTurn(readTailEntries(payload.transcript_path));
+          const entries = readTailEntries(payload.transcript_path);
+          return { ...armEvidence.findArmInCurrentTurn(entries), priorArm: armEvidence.findPendingPriorArm(entries) };
         };
         // Whatever is LEFT of the budget — the DB round-trips above already spent some of it.
         armObservation = await armEvidence.awaitStableVerdict({
@@ -786,7 +790,15 @@ async function main() {
       }
     }
 
-    if (shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim })) {
+    // QF-20260903-916: a task-notification re-invoked the seat before its armed delay elapsed. The
+    // pending wake survives this turn (measured), so the seat owes no fresh arm — say so in ONE line.
+    const priorArm = (armObservation && armObservation.stable && armObservation.stable.priorArm) || null;
+    const priorArmCarries = armVerdict === 'unarmed' && Boolean(priorArm && priorArm.pending && priorArm.notificationOpened);
+    if (priorArmCarries) {
+      process.stderr.write(`[stop-loop-wakeup-reminder] notification-opened turn; prior-turn ScheduleWakeup due in ${Math.round(priorArm.dueInMs / 1000)}s still governs — no reminder (QF-20260903-916)
+`);
+    }
+    if (shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim, priorArmCarries })) {
       // BLOCK — the worker must arm its OWN ScheduleWakeup; do not park on its behalf (parking here
       // would let it cold-exit anyway by satisfying the recoverable-state check it should set itself).
       // The block reason is the ONLY channel that reaches the model, so the pending-wake state
@@ -867,7 +879,7 @@ async function main() {
           emitDecision({ decision: 'block', reason: `SAME-TURN NEXT-CLAIM: claimed ${key} via the wind-down handshake — no idle gap. Continue building it now.${detail}${messageDetail}` });
           return shutdown();
         }
-        const messageDecision = decideMessageBlock({ pendingMessages, armVerdict });
+        const messageDecision = decideMessageBlock({ pendingMessages, armVerdict: priorArmCarries ? 'armed' : armVerdict });
         if (messageDecision.block) {
           emitDecision({ decision: 'block', reason: `SAME-TURN CHECKIN (${messageDecision.reason}): nothing claimable, but the coordinator has message(s) for you.${messageDecision.detail}` });
           return shutdown();
