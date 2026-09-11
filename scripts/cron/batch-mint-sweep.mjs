@@ -46,7 +46,14 @@ const { insertCoordinationRow } = require('../../lib/coordinator/dispatch.cjs');
  * row to the coordinator as coordinator_reminder 16 minutes after send (measured: row 885ad953,
  * payload.reroute from_target=<solomon> to_target=<coordinator>) -- the "wrong addressee" facet.
  */
-export async function openConsultRow(supabase, group, { insertRow = insertCoordinationRow, resolveSolomon = getActiveSolomonId, logger = console } = {}) {
+// Thin wrapper so the default-injected value is a literal insertCoordinationRow( call site that
+// the committed caller census (lib/coordinator/insert-coordination-row-callers.cjs) can verify by
+// source text; tests inject a stub via opts.insertRow instead of hitting this wrapper at all.
+async function defaultInsertConsultRow(...args) {
+  return insertCoordinationRow(...args);
+}
+
+export async function openConsultRow(supabase, group, { insertRow = defaultInsertConsultRow, resolveSolomon = getActiveSolomonId, logger = console } = {}) {
   try {
     const solomonId = await resolveSolomon(supabase, {}).catch(() => null);
     // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-2): correlation_id lets a reply route back to
