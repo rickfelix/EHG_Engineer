@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-11](#2026-09-11)
+  - [Bugfix](#bugfix)
 - [2026-09-08](#2026-09-08)
   - [Bugfix](#bugfix-4)
   - [Bugfix](#bugfix)
@@ -192,6 +194,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-11
+
+### Bugfix
+
+- **The Stop hook demanded a fresh wakeup arm on every notification-opened turn, so seats parked on CI waits burned consecutive re-poll turns** - SD-LEO-FIX-STOP-HOOK-OVERRIDES-001 (escalated from QF-20260903-916, PR #8664, supersedes #8658)
+  - `scripts/hooks/stop-loop-wakeup-reminder.cjs` admitted only a `ScheduleWakeup` after the current turn's promptId boundary, which is correct for a fresh turn but wrong when a Monitor task-notification re-invokes a seat a minute into a multi-minute armed wake: the hook blocked, the seat re-armed and re-polled, and the cycle repeated (measured 66s re-fire on a 459s arm; 3 identical reminders; 25-30s re-fires during CI waits).
+  - `scripts/hooks/lib/wakeup-arm-evidence.cjs` gains `findPendingPriorArm()`: it reads the prior turn's `toolUseResult.scheduledFor` (harness-written, not forgeable by message content), bounded to the immediately prior turn and ended by a `scheduledFireId` (consumed) or a `stop:true` arm. `shouldRemind` stays silent only when the opener is `origin.kind=task-notification` and that arm is not yet due, printing one stderr line instead of the reminder. Every non-match and every error path fails toward the old block, never toward silence.
+  - Hardening from TESTING/RISK/SECURITY conditions: the predicate is total and isolated from the current-turn verdict; the carried allow is countable (`classifyWindDownReason` → `turn_end_carried_by_prior_arm`); `expected_silence_until` is sized from the pending wake (capped as before); the suppression has its own kill id `stop_loop_prior_arm_carry`. The premise that a pending wake survives an unarmed early re-invocation was confirmed by a live test on the implementing seat (wake armed for 15:26:00Z survived three early turns and fired at 15:26:01Z).
+  - Escalated from Quick-Fix QF-20260903-916 because the diff touched `scripts/hooks/**`, a charter-designated sensitive path with no autonomous-completion bypass. Deferred: peer-opened turns (`origin.kind=peer`) are not admitted; the early re-invoker itself is out of scope.
 
 ## 2026-09-08
 
