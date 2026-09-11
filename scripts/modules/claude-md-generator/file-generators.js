@@ -314,7 +314,8 @@ function generateCore(data, fileMapping) {
 > Sub-agent routing enforced by PreToolUse hook. See \`scripts/hooks/pre-tool-enforce.cjs\`.
 > For Five-Point Brief (sub-agent prompt quality), see CLAUDE.md Issue Resolution section.
 > For Strunkian writing standards, see \`.strunkian-rules.json\` (enforced by \`scripts/docmon.js\` at pre-push; the former \`docs/reference/strunkian-writing-standards.md\` guide is retired).
-> For long-form reference (governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge rubric, built-in agent architecture, pattern search CLI), see CLAUDE_CORE_MANUAL.md.
+> For long-form reference (governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge rubric, built-in agent architecture, pattern search CLI, DB ops pitfalls, QF lifecycle reconciliation, queue ranking, cascade invalidation, DB sub-agent auto-invocation, retrospective-gate invariants, Solomon consultation procedure, schema traps), see CLAUDE_CORE_MANUAL.md; incident narratives and rationale behind the rules live in CLAUDE_CORE_PROVENANCE.md. Every rule here binds whether or not either companion is read.
+> **Companion-first encode convention** (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-5): new content for this file is encoded as the RULE plus a one-line pointer here, with its procedure written into CLAUDE_CORE_MANUAL.md and its evidence/rationale into CLAUDE_CORE_PROVENANCE.md by default — the gated file carries what binds, the companions carry the how and the why.
 
 ---
 
@@ -392,6 +393,8 @@ function generateLead(data, fileMapping) {
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
+> For long-form reference (Q9 strategic-validation rubric, parent/child SD governance, multi-track execution, SD creation errors), see CLAUDE_LEAD_MANUAL.md. Every rule here binds whether or not the companion is read.
+> **Companion-first encode convention** (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-5): new content for this phase is encoded as the RULE plus a one-line pointer here, with its procedure and reference written into CLAUDE_LEAD_MANUAL.md by default — the gated file carries what binds, the companion carries the how.
 
 ---
 
@@ -480,8 +483,12 @@ function generateExec(data, fileMapping) {
   const execSections = getSectionsByMapping(sections, 'CLAUDE_EXEC.md', fileMapping);
   const execContent = execSections.map(s => formatSection(s)).join('\n\n');
 
-  const constraintsSection = generateSchemaConstraintsSection(schemaConstraints);
-  const scriptsSection = generateProcessScriptsSection(processScripts);
+  // SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-3): the Database Schema Constraints and LEO Process
+  // Scripts reference blocks (~12.6 KB of generated tables) now render into CLAUDE_EXEC_MANUAL.md
+  // — see generateExecManual. They are reference consulted while writing a query or invoking a
+  // script, and were the single largest non-rule block in a phase file that measured 43,069
+  // tokens against the 25,000 single-read cap.
+  void schemaConstraints; void processScripts;
   const directivesSection = generateAutonomousDirectivesSection(autonomousDirectives, 'EXEC');
 
   // SD-LEO-INFRA-VISION-PROTOCOL-FEEDBACK-001: live VGAP implementation reminders
@@ -504,16 +511,14 @@ function generateExec(data, fileMapping) {
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
+> For long-form reference (skills catalogue, E2E fixtures, Playwright MCP, gate descriptions, runtime-audit protocol, deliverable tracking, /batch, the Database Schema Constraints and LEO Process Scripts references), see CLAUDE_EXEC_MANUAL.md; retrospective evidence and rationale behind the rules live in CLAUDE_EXEC_PROVENANCE.md. Every rule here binds whether or not either companion is read.
+> **Companion-first encode convention** (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-5): new content for this phase is encoded as the RULE plus a one-line pointer here, with its procedure written into CLAUDE_EXEC_MANUAL.md and its evidence/rationale into CLAUDE_EXEC_PROVENANCE.md by default — the gated file carries what binds, the companions carry the how and the why.
 
 ---
 
 ${directivesSection}
 ${visionRemindersSection ? '\n' + visionRemindersSection : ''}
 ${execContent}
-
-${constraintsSection}
-
-${scriptsSection}
 
 ---
 
@@ -552,6 +557,10 @@ function generateAdamCompanion(data, fileMapping, fileKey, spec) {
   const sections = getSectionsByMapping(protocol.sections, fileKey, fileMapping);
   const body = sections.map(s => formatSection(s)).join('\n\n');
   const types = (fileMapping[fileKey]?.sections || []).join(', ');
+  // SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-3): a companion may carry generated reference blocks that
+  // are not leo_protocol_sections rows (CLAUDE_EXEC_MANUAL.md carries the schema-constraints and
+  // process-scripts references that used to sit in CLAUDE_EXEC.md). Rendered after the row body.
+  const extra = spec.extra ? `\n\n${spec.extra.trim()}\n` : '';
 
   return `# ${fileKey} — ${spec.heading}
 
@@ -565,7 +574,7 @@ function generateAdamCompanion(data, fileMapping, fileKey, spec) {
 ---
 
 ${body}
-
+${extra}
 ---
 
 *Generated from database: ${today}*
@@ -654,6 +663,55 @@ function generateCoreManual(data, fileMapping) {
     purpose: 'Long-form CORE reference — strategic governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge quality rubric, built-in agent architecture, pattern search CLI',
     loadWhen: 'At the MOMENT OF DOING one of these procedures — not at every session start',
     note: 'This companion carries REFERENCE ONLY. Every RULE that governs a session (Small PRs, Global Negative Constraints, Gate Failure Protocol, migration/model-routing/supabase-connection prohibitions, etc.) stays in CLAUDE_CORE.md and is in force whether or not this file is read.',
+  });
+}
+
+/**
+ * CLAUDE_EXEC_MANUAL.md — SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-3).
+ *
+ * CLAUDE_EXEC.md measured 104,128 bytes / 43,069 harness tokens against the 25,000 single-read cap
+ * — the largest phase file, and one with NO companion of either kind (KNOWN_GENERATED_FILES had
+ * EXEC alone among the phase files without a _MANUAL). It carries zero chairman_ratifications
+ * markers, so this is a content-volume split only.
+ *
+ * WHAT MAY MOVE HERE IS AN ALLOW-LIST, NOT A REGEX VERDICT (same discipline as the LEAD/CORE/PLAN
+ * manuals). The sixteen section_types in section-file-mapping.json's CLAUDE_EXEC_MANUAL.md entry
+ * were each read for rule content and justified individually in `_move_justification`; the rule
+ * sections that stayed behind despite reading as reference are named in `_allow_list_note`.
+ * Two generated blocks come along that are not rows at all: the Database Schema Constraints
+ * reference and the LEO Process Scripts reference (~12.6 KB of tables consulted while writing a
+ * query or invoking a script) — rendered via the companion's `extra` slot.
+ */
+function generateExecManual(data, fileMapping) {
+  const { schemaConstraints, processScripts } = data;
+  const extra = [generateSchemaConstraintsSection(schemaConstraints), generateProcessScriptsSection(processScripts)]
+    .filter(Boolean).join('\n\n');
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_EXEC_MANUAL.md', {
+    heading: 'EXEC Manual (reference companion)',
+    purpose: 'Long-form EXEC reference — skills catalogue, human-like E2E fixtures, Playwright MCP, deliverable tracking mechanics, the EXEC-TO-PLAN gate descriptions, runtime-audit protocol, branch creation, /batch, code-quality and KR procedures, the Database Schema Constraints and LEO Process Scripts references',
+    loadWhen: 'At the MOMENT OF DOING one of these procedures or looking up one of these references — not at every EXEC phase entry',
+    note: 'This companion carries REFERENCE AND PROCEDURE. Every RULE and PROHIBITION that governs EXEC stays in CLAUDE_EXEC.md and is in force whether or not this file is read. The negative constraints, the dual-test requirement, the acceptance-criteria verification, the branch-hygiene and multi-instance rules, the migration and atomic-INSERT patterns all stayed behind deliberately — this file exists to make that one readable, not to relieve it of anything that binds.',
+    extra,
+  });
+}
+
+/** CLAUDE_EXEC_PROVENANCE.md — SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-3): the dated-evidence companion. */
+function generateExecProvenance(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_EXEC_PROVENANCE.md', {
+    heading: 'EXEC Provenance (dated evidence and rationale)',
+    purpose: 'Why each EXEC rule exists — retrospective evidence, incident narratives, measured costs',
+    loadWhen: 'When you need to know WHY a rule exists, or before proposing to change one',
+    note: 'Every rule in CLAUDE_EXEC.md is IN FORCE regardless of whether its history is read here. This file explains; it does not govern.',
+  });
+}
+
+/** CLAUDE_CORE_PROVENANCE.md — SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-4): the dated-rationale companion. */
+function generateCoreProvenance(data, fileMapping) {
+  return generateAdamCompanion(data, fileMapping, 'CLAUDE_CORE_PROVENANCE.md', {
+    heading: 'Core Provenance (dated rationale)',
+    purpose: 'Why each CORE rule exists — the incident narratives and measurements behind the always-read rules',
+    loadWhen: 'When you need to know WHY a rule exists, or before proposing to change one',
+    note: 'Every rule in CLAUDE_CORE.md is IN FORCE regardless of whether its history is read here. This file explains; it does not govern.',
   });
 }
 
@@ -944,6 +1002,9 @@ export {
   generateAdamProvenance,
   generateLeadManual,
   generateCoreManual,
+  generateCoreProvenance,
+  generateExecManual,
+  generateExecProvenance,
   generatePlanManual,
   generateCoordinator,
   generateCoordinatorManual,

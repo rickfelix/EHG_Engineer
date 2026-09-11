@@ -221,7 +221,16 @@ describe('FR-4: --only scoped regeneration', () => {
     // -> 28 (SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A FR-4: CLAUDE_MICHAEL.md, the Michael role
     // contract, and CLAUDE_MICHAEL_MODEL_POSTURE.md, its BINDING model-posture companion, both in the
     // Solomon shape and wired at all five sites. No digest for Michael in v1.)
-    expect(KNOWN_GENERATED_FILES).toHaveLength(28);
+    // -> 31 (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-3/FR-4: CLAUDE_EXEC_MANUAL.md, CLAUDE_EXEC_PROVENANCE.md
+    // and CLAUDE_CORE_PROVENANCE.md. EXEC was the only phase file with no companion at 43,069 tokens
+    // against the 25,000 cap; CORE had a manual but nowhere for rationale to go. None of the three
+    // binds — every rule stays in its gated file. Counted here for the reason this assertion exists:
+    // a mapping entry alone renders NOWHERE, so a companion missing from KNOWN_GENERATED_FILES is
+    // content that silently left the protocol.)
+    expect(KNOWN_GENERATED_FILES).toHaveLength(31);
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_EXEC_MANUAL.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_EXEC_PROVENANCE.md');
+    expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_CORE_PROVENANCE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_MICHAEL.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_MICHAEL_MODEL_POSTURE.md');
     expect(KNOWN_GENERATED_FILES).toContain('CLAUDE_CORE_MANUAL.md');

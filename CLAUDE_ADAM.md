@@ -1,8 +1,8 @@
-<!-- file_content_hash: cbfb780274a510de -->
+<!-- file_content_hash: f9f4e80731ca9336 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-11 7:02:34 AM
+**Generated**: 2026-09-11 11:21:48 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -24,6 +24,7 @@
 ---
 > **How-to procedures** (SD creation field shapes, migration ceremony steps, gauge inputs) live in the companion `CLAUDE_ADAM_MANUAL.md` — read at the moment of doing, not at session start.
 > **Dated provenance** (why each clause exists, live witnesses, superseded cadences) lives in `CLAUDE_ADAM_PROVENANCE.md`. Every rule below is in force regardless of whether its history is read.
+> **Companion-first encode convention** (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-5): a new ruling is encoded here as its clause header (the ledger marker), its binding half and a site pointer; the verbatim, dated rationale and procedure are written into the companions by default — `CLAUDE_ADAM_PROVENANCE.md` for the why, `CLAUDE_ADAM_MANUAL.md` for the how. The header stays in this file so the ledger marker and the quiet-tick regression check keep resolving here.
 
 ---
 
@@ -392,7 +393,7 @@ manual is read.
 - **NEVER hand-insert** into `strategic_directives_v2`.
 - **NEVER call** `scripts/leo-create-sd.js` directly — the `ENF-SD-CREATE-SKILL` hook blocks direct calls.
 - **DECOMPOSE-WEAKEST-LAYER — CLASSIFY each weak capability BEFORE sourcing it** (Adam
-  board-of-directors verdict 2026-06-16): classify FIRST — (a) genuine leaf → a Phase-0 design/spec SD; (b) foundation / data-contract → sequence it AHEAD of the builds it gates, never as a parallel tile; (c) already-built but reading low from a STALE/manual KR → a governed KR RE-MEASURE, NOT a new build SD; (d) mis-bucketed → a registry fix. The coordinator must VERIFY the per-capability gauge gap is REAL before dispatching. (procedure in MANUAL)
+  board-of-directors verdict 2026-06-16): classify FIRST — (a) genuine leaf → a Phase-0 design/spec SD; (b) foundation / data-contract → sequence it AHEAD of the builds it gates, never as a parallel tile; (c) already-built but reading low ONLY from a STALE/manual KR → a governed KR RE-MEASURE, NOT a new build SD; (d) mis-bucketed → a registry fix. The coordinator must VERIFY the per-capability gauge gap is REAL before dispatching. (procedure in MANUAL)
 
 - **RE-SCOPE PROPOSALS CITE THE DEFINING ARTIFACT.** A proposal to carve a requirement out from
   behind a gate dependency (e.g. "FR-N is dependency-free") must quote the FR text AND its exit
@@ -520,16 +521,6 @@ Each dimension carries *good* / *failure* / *observable signal* / *data source* 
 _Single governed source of truth (section_type=role_partnership_contract), included — not copied — into the Adam and Coordinator role files via section-file-mapping.json; supersedes the interim hand-edits formerly in the two role contracts and the Adam private-memory note (SD-LEO-INFRA-ROLE-PARTNERSHIP-CONTRACT-001)._
 
 _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partnership operates UNDER the Adam governance-and-oversight clause now present in BOTH role contracts — partnership in method, oversight in accountability; the governance clause controls on conflict._
-
-## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
-
-**quick_fixes**: `id` IS the key and holds the literal string `QF-YYYYMMDD-NNN` (e.g. `QF-20260907-188`) -- there is no `qf_key` column. Filter dedup/lookup queries on `id`; use `title`/`description` via `ilike` for fuzzy SEARCH only, never as a join/match key. A query selecting a nonexistent `qf_key` column errors at PostgREST, the client sees `data: null`, and a bare `if (data && data.length)` guard prints nothing -- reading as "no existing QF" while the query never ran. (`lib/learning/feedback-clusterer.js`'s title-similarity clustering is a deliberate exception -- it groups by title for clustering, not for keying, and must not be "fixed".)
-
-**quick_fixes.disposition** IN (`premise_resolved`, `premise_unverified_stale`, `duplicate_of`, `re_verified`, `promoted`).
-
-**adam_task_ledger.status** IN (`open`, `in_progress`, `blocked`, `done`, `cancelled`) -- there is no `closed` value.
-
-**chairman_ratifications.id** is a UUID column -- Postgres has no `ilike`/`~~*` operator for `uuid`, so an `ilike` filter on it errors ("operator does not exist: uuid ~~* unknown"). Match on `id` via `eq` (full UUID) or read rows and filter client-side by string prefix for a short-form citation.
 
 ---
 

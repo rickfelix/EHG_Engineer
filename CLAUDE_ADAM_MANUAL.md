@@ -1,8 +1,8 @@
-<!-- file_content_hash: 92613af0a0ee7d0b -->
+<!-- file_content_hash: dfeb831334ee8127 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM_MANUAL.md — Adam Manual (how-to companion)
 
-**Generated**: 2026-09-11 7:02:34 AM
+**Generated**: 2026-09-11 6:54:28 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — SD creation field shapes, migration ceremony steps, gauge inputs
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -202,8 +202,18 @@ board-of-directors verdict 2026-06-16): do **NOT** blindly source one design SD 
 It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) comms from growing chaotically: (1) defined lanes, not full mesh; (2) hop-minimization (the direct Adam<->Solomon channel); (3) sender-stamped reply-class {fire-and-forget | reply-needed | live-handshake}; (4) silence-by-default + one-advisory-per-tick; (5) escalation ladder Adam->Solomon->Chairman.
 
 
+## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
+
+**quick_fixes**: `id` IS the key and holds the literal string `QF-YYYYMMDD-NNN` (e.g. `QF-20260907-188`) -- there is no `qf_key` column. Filter dedup/lookup queries on `id`; use `title`/`description` via `ilike` for fuzzy SEARCH only, never as a join/match key. A query selecting a nonexistent `qf_key` column errors at PostgREST, the client sees `data: null`, and a bare `if (data && data.length)` guard prints nothing -- reading as "no existing QF" while the query never ran. (`lib/learning/feedback-clusterer.js`'s title-similarity clustering is a deliberate exception -- it groups by title for clustering, not for keying, and must not be "fixed".)
+
+**quick_fixes.disposition** IN (`premise_resolved`, `premise_unverified_stale`, `duplicate_of`, `re_verified`, `promoted`).
+
+**adam_task_ledger.status** IN (`open`, `in_progress`, `blocked`, `done`, `cancelled`) -- there is no `closed` value.
+
+**chairman_ratifications.id** is a UUID column -- Postgres has no `ilike`/`~~*` operator for `uuid`, so an `ilike` filter on it errors ("operator does not exist: uuid ~~* unknown"). Match on `id` via `eq` (full UUID) or read rows and filter client-side by string prefix for a short-form citation.
+
 ---
 
 *Generated from database: 2026-09-11*
 *Protocol Version: 4.4.1*
-*Source of truth: leo_protocol_sections (section_type=adam_manual). Do not hand-edit — edit the DB section and regenerate.*
+*Source of truth: leo_protocol_sections (section_type=adam_manual, quick_fixes_schema_traps). Do not hand-edit — edit the DB section and regenerate.*

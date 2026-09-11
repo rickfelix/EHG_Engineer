@@ -1,14 +1,16 @@
-<!-- file_content_hash: b61eb5e71d22bef5 -->
+<!-- file_content_hash: facc1cf7c1dc1af3 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_LEAD.md - LEAD Phase Operations
 
-**Generated**: 2026-09-08 8:50:54 AM
+**Generated**: 2026-09-11 10:49:02 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: LEAD agent operations and strategic validation
 **Effort**: high (strategic framing, scope bounding, and sub-agent routing require full reasoning depth)
 
 > For Issue Resolution Protocol + Five-Point Brief, see CLAUDE.md.
 > For migration execution and phase transitions, see CLAUDE_CORE.md.
+> For long-form reference (Q9 strategic-validation rubric, parent/child SD governance, multi-track execution, SD creation errors), see CLAUDE_LEAD_MANUAL.md. Every rule here binds whether or not the companion is read.
+> **Companion-first encode convention** (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-5): new content for this phase is encoded as the RULE plus a one-line pointer here, with its procedure and reference written into CLAUDE_LEAD_MANUAL.md by default — the gated file carries what binds, the companion carries the how.
 
 ---
 
@@ -1116,6 +1118,6 @@ At LEAD-phase scope-lock, before running `add-prd-to-database.js`, invoke `testi
 
 ---
 
-*Generated from database: 2026-09-08*
+*Generated from database: 2026-09-11*
 *Protocol Version: 4.4.1*
 *Load when: User mentions LEAD, approval, strategic validation, or over-engineering*

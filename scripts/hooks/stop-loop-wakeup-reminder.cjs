@@ -126,10 +126,13 @@ async function shutdown() {
  * which arms on the worker's behalf and is the actual enforcement.
  *
  * @param {{ armVerdict?: 'armed'|'unarmed'|'unknown', loopState?: string|null, stopHookActive?: boolean,
- *           flagEnabled?: boolean, enforcementDisabled?: boolean, hasActiveClaim?: boolean }} args
+ *           flagEnabled?: boolean, enforcementDisabled?: boolean, hasActiveClaim?: boolean,
+ *           priorArmCarries?: boolean }} args — priorArmCarries (QF-20260903-916): this turn was
+ *           opened by a task-notification while the PRIOR turn's ScheduleWakeup is not yet due;
+ *           that armed wake still governs the seat, so an unarmed stop here is not a lapse.
  * @returns {boolean}
  */
-function shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim }) {
+function shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim, priorArmCarries }) {
   if (!flagEnabled) return false;                       // default-OFF: no-op
   if (enforcementDisabled) return false;                // runtime kill switch (FR-2)
   if (stopHookActive) return false;                     // never block twice — already reminded
@@ -152,7 +155,7 @@ function shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enfo
   // the old one read loop_state='awaiting_tick', which post-tool-loop-state.cjs sets from the
   // worker's own claim about itself, so the enforcement was asking the suspect for an alibi.
   if (armVerdict === 'armed') return false;
-  if (armVerdict === 'unarmed') return true;
+  if (armVerdict === 'unarmed') return !priorArmCarries;
   // 'unknown' — no boundary in the tail window, or no transcript. Absence of evidence is not
   // evidence of absence: fail open rather than trap a worker on an unreadable transcript.
   return false;
@@ -399,7 +402,7 @@ function shouldParkRecoverable({ loopState, hasActiveClaim, windDownSignaled } =
  *
  * Best-effort / fail-open — any failure is logged and never blocks the stop.
  */
-async function parkSessionRecoverable(sessionId, { armVerdict } = {}) {
+async function parkSessionRecoverable(sessionId, { armVerdict, pendingWakeMs } = {}) {
   if (armVerdict === 'armed') {
     try {
       const { setLoopState } = require('../lib/sessions/loop-state-tracker.cjs');
@@ -411,7 +414,10 @@ async function parkSessionRecoverable(sessionId, { armVerdict } = {}) {
   try {
     const { computeSilenceMinutes } = require('../park-worker.cjs');
     const { writeTelemetryAwait } = require('./lib/session-telemetry-writer.cjs');
-    const silenceMin = computeSilenceMinutes(undefined); // undefined wake → safe DEFAULT, pre-capped
+    // FR-8: when a PRIOR turn's wake is still pending, size the window from it (capped as always)
+    // so a wake due beyond the default window is not read as a dead seat by the staleness sweep.
+    const wakeMinutes = Number.isFinite(pendingWakeMs) && pendingWakeMs > 0 ? Math.ceil(pendingWakeMs / 60000) : undefined;
+    const silenceMin = computeSilenceMinutes(wakeMinutes); // undefined wake → safe DEFAULT, pre-capped
     const nowMs = Date.now();
     await writeTelemetryAwait(sessionId, {
       heartbeat_at: new Date(nowMs).toISOString(),
@@ -453,7 +459,7 @@ async function parkSessionRecoverable(sessionId, { armVerdict } = {}) {
  * @param {{ windDownSignaled?:boolean, stopHookActive?:boolean, hasActiveClaim?:boolean, loopState?:string|null }} args
  * @returns {'signaled'|'second_stop'|'turn_end_with_claim_wakeup_scheduled'|'turn_end_wakeup_scheduled'|'turn_end_with_claim_no_wakeup'|'no_claim_idle'}
  */
-function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState, armVerdict } = {}) {
+function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState, armVerdict, priorArmCarries } = {}) {
   // STEP A — THE COUNTABLE IGNORE. A worker that reached a SECOND stop while still carrying no
   // arm evidence saw the reminder and stopped anyway. This is the population step A cannot save
   // (the anti-infinite-loop guard lets it through) and the exact population step C exists for.
@@ -462,6 +468,11 @@ function classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveCla
   if (stopHookActive && armVerdict === 'unarmed' && hasActiveClaim) return 'second_stop_still_unarmed';
   if (windDownSignaled) return 'signaled';
   if (stopHookActive) return 'second_stop';
+  // SD-LEO-FIX-STOP-HOOK-OVERRIDES-001 FR-8: a notification-opened turn allowed because the PRIOR
+  // turn's wake is still pending. Without its own value these turns landed in
+  // turn_end_with_claim_no_wakeup -- the step-C target bucket -- and the suppression was
+  // uncountable (RISK fa2a41f4, TESTING 4b182e6d).
+  if (priorArmCarries) return 'turn_end_carried_by_prior_arm';
   if (loopState === LOOP_STATE_AWAITING_TICK) {
     return hasActiveClaim ? 'turn_end_with_claim_wakeup_scheduled' : 'turn_end_wakeup_scheduled';
   }
@@ -731,6 +742,7 @@ async function main() {
     // It rides the SAME round-trip as the wind-down probe (widened or-filter), adding no call to
     // the Stop path, and FAILS OPEN TO OFF: unreadable switch ⇒ treat as disabled.
     let enforcementDisabled = true;
+    let carryDisabled = false;       // FR-9: the suppression's own kill id (fails toward block)
     try {
       const nowMs = Date.now();
       const sinceIso = new Date(nowMs - armEvidence.WIND_DOWN_WINDOW_MS).toISOString();
@@ -743,6 +755,7 @@ async function main() {
       if (!coordErr) {
         const { killRows, senderRows } = armEvidence.partitionCoordinationRows(coordRows);
         enforcementDisabled = armEvidence.isEnforcementDisabled(killRows, { nowMs });
+        carryDisabled = armEvidence.isEnforcementDisabled(killRows, { nowMs, enforcement: armEvidence.ENFORCEMENT_ID_PRIOR_ARM_CARRY });
         // Scan ONLY this session's own rows: widening the query above changed this consumer's
         // input, and a broadcast row whose text mentions "winding down" must never flip this.
         windDownSignaled = armEvidence.recentSenderRows(senderRows, { nowMs, sessionId }).some((r) => {
@@ -768,7 +781,13 @@ async function main() {
         const { readTailEntries } = require('./print-before-park.cjs');
         const read = () => {
           if (!fs.existsSync(payload.transcript_path)) return { verdict: 'unknown', reason: 'transcript absent', armCount: 0 };
-          return armEvidence.findArmInCurrentTurn(readTailEntries(payload.transcript_path));
+          const entries = readTailEntries(payload.transcript_path);
+          const current = armEvidence.findArmInCurrentTurn(entries);
+          // FR-7 belt-and-braces: the predicate is total, but the ADVISORY probe must never be able
+          // to take the decision-critical verdict down with it, whatever a future edit does.
+          let priorArm = null;
+          try { priorArm = armEvidence.findPendingPriorArm(entries); } catch { priorArm = null; }
+          return { ...current, priorArm };
         };
         // Whatever is LEFT of the budget — the DB round-trips above already spent some of it.
         armObservation = await armEvidence.awaitStableVerdict({
@@ -786,7 +805,15 @@ async function main() {
       }
     }
 
-    if (shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim })) {
+    // QF-20260903-916: a task-notification re-invoked the seat before its armed delay elapsed. The
+    // pending wake survives this turn (measured), so the seat owes no fresh arm — say so in ONE line.
+    const priorArm = (armObservation && armObservation.stable && armObservation.stable.priorArm) || null;
+    const priorArmCarries = armVerdict === 'unarmed' && !carryDisabled && Boolean(priorArm && priorArm.pending && priorArm.notificationOpened);
+    if (priorArmCarries) {
+      process.stderr.write(`[stop-loop-wakeup-reminder] notification-opened turn; prior-turn ScheduleWakeup due in ${Math.round(priorArm.dueInMs / 1000)}s still governs — no reminder (QF-20260903-916)
+`);
+    }
+    if (shouldRemind({ armVerdict, loopState, stopHookActive, flagEnabled, enforcementDisabled, hasActiveClaim, priorArmCarries })) {
       // BLOCK — the worker must arm its OWN ScheduleWakeup; do not park on its behalf (parking here
       // would let it cold-exit anyway by satisfying the recoverable-state check it should set itself).
       // The block reason is the ONLY channel that reaches the model, so the pending-wake state
@@ -867,7 +894,7 @@ async function main() {
           emitDecision({ decision: 'block', reason: `SAME-TURN NEXT-CLAIM: claimed ${key} via the wind-down handshake — no idle gap. Continue building it now.${detail}${messageDetail}` });
           return shutdown();
         }
-        const messageDecision = decideMessageBlock({ pendingMessages, armVerdict });
+        const messageDecision = decideMessageBlock({ pendingMessages, armVerdict: priorArmCarries ? 'armed' : armVerdict });
         if (messageDecision.block) {
           emitDecision({ decision: 'block', reason: `SAME-TURN CHECKIN (${messageDecision.reason}): nothing claimable, but the coordinator has message(s) for you.${messageDecision.detail}` });
           return shutdown();
@@ -878,11 +905,11 @@ async function main() {
           process.stderr.write(`[same-turn-checkin] armed — surfacing informationally, not blocking:${messageDecision.detail}\n`);
         }
       }
-      await parkSessionRecoverable(sessionId, { armVerdict });
+      await parkSessionRecoverable(sessionId, { armVerdict, pendingWakeMs: priorArmCarries ? priorArm.dueInMs : undefined });
       // SD-LEO-INFRA-WORKER-WINDDOWN-SURVEY-001 (a)+(c): capture WHY this worker wound down
       // (same worker-gate as the park, so no false telemetry on a non-worker operator session).
       await recordWindDown(supabase, sessionId, {
-        reason: classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState, armVerdict }),
+        reason: classifyWindDownReason({ windDownSignaled, stopHookActive, hasActiveClaim, loopState, armVerdict, priorArmCarries }),
         hadClaim: hasActiveClaim,
       });
     }

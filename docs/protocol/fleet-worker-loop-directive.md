@@ -31,6 +31,11 @@ overlooked even if the full directive was never pasted.
 > `scripts/hooks/stop-loop-wakeup-reminder.cjs`. This doc, that DB section, and the WORKER
 > block must all carry the same four exit-modes (4a-4d) + the allow-path (operator-stop /
 > canonical pause point / announced `/signal` wind-down).
+>
+> Since SD-LEO-FIX-STOP-HOOK-OVERRIDES-001 the hook also ALLOWS a turn opened by a task-notification
+> while the previous turn's `ScheduleWakeup` is not yet due — the pending wake still governs and fires on
+> schedule (live-tested 2026-09-11), so you owe no fresh arm on such a turn. It prints one stderr line
+> instead of the reminder. Human-opened turns, already-due arms, and peer-opened turns still block once.
 
 ---
 

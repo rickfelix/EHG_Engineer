@@ -1,8 +1,8 @@
-<!-- file_content_hash: 2666c36a5cc3c99f -->
+<!-- file_content_hash: 00fe4895f2a984f0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-09-08 9:02:29 AM
+**Generated**: 2026-09-11 10:49:02 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -10,7 +10,8 @@
 > Sub-agent routing enforced by PreToolUse hook. See `scripts/hooks/pre-tool-enforce.cjs`.
 > For Five-Point Brief (sub-agent prompt quality), see CLAUDE.md Issue Resolution section.
 > For Strunkian writing standards, see `.strunkian-rules.json` (enforced by `scripts/docmon.js` at pre-push; the former `docs/reference/strunkian-writing-standards.md` guide is retired).
-> For long-form reference (governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge rubric, built-in agent architecture, pattern search CLI), see CLAUDE_CORE_MANUAL.md.
+> For long-form reference (governance hierarchy, Chairman/CEO roles, PR size tier rationale, Russian Judge rubric, built-in agent architecture, pattern search CLI, DB ops pitfalls, QF lifecycle reconciliation, queue ranking, cascade invalidation, DB sub-agent auto-invocation, retrospective-gate invariants, Solomon consultation procedure, schema traps), see CLAUDE_CORE_MANUAL.md; incident narratives and rationale behind the rules live in CLAUDE_CORE_PROVENANCE.md. Every rule here binds whether or not either companion is read.
+> **Companion-first encode convention** (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-5): new content for this file is encoded as the RULE plus a one-line pointer here, with its procedure written into CLAUDE_CORE_MANUAL.md and its evidence/rationale into CLAUDE_CORE_PROVENANCE.md by default — the gated file carries what binds, the companions carry the how and the why.
 
 ---
 
@@ -34,39 +35,6 @@ Task tool with subagent_type="database-agent":
 
 > Full tiered auto-apply policy mechanics (TIER-1/TIER-2 definitions, feature-flag polarity, Adam-delegated-apply scope check): see CLAUDE_CORE_MANUAL.md.
 
-
-## Cascade Invalidation System
-
-**Purpose**: When a vision document evolves (version bump), all downstream architecture plans and objectives are automatically flagged for review.
-
-### How It Works
-1. **Trigger**: `trg_cascade_invalidation_on_vision_update` fires on `eva_vision_documents` when `version` column changes
-2. **Effect**: Sets `needs_review_since = now()` on all linked `eva_architecture_plans` and `objectives`
-3. **Audit**: Creates entries in `cascade_invalidation_log` (append-only) and `cascade_invalidation_flags` (work queue)
-
-### Flag Lifecycle
-| Status | Meaning |
-|--------|---------|
-| pending | Document needs review after upstream change |
-| acknowledged | Reviewer has seen the flag |
-| resolved | Document updated to reflect upstream changes |
-| dismissed | Flag reviewed and no action needed |
-
-### Commands
-```bash
-# View cascade health summary
-node scripts/modules/governance/cascade-invalidation-engine.js summary
-
-# List stale documents needing review
-node scripts/modules/governance/cascade-invalidation-engine.js stale
-
-# Resolve a flag after review
-node scripts/modules/governance/cascade-invalidation-engine.js resolve <flagId> "Updated to reflect vision v3"
-```
-
-### Key Columns
-- `eva_architecture_plans.needs_review_since` — auto-set by trigger, NULL when resolved
-- `eva_architecture_plans.vision_version_aligned_to` — tracks which vision version the plan was last aligned with
 
 ## 🏗️ Application Architecture - UNIFIED FRONTEND
 
@@ -370,107 +338,6 @@ Before marking any stage/feature as complete:
 
 **BLOCKING**: Features cannot be marked EXEC_COMPLETE without UI parity verification.
 
-## QF Lifecycle Reconciliation
-
-**Problem**: quick_fixes rows stay `status=open` after a PR is merged via direct `gh pr merge` (any path that skips complete-quick-fix.js). sd:next then recommends phantom work. Root cause documented in feedback memory `feedback_qf_db_stale_after_merge.md`.
-
-**Solution**: Two complementary reconciliation layers — pre-merge filter + post-merge sweep. Both are idempotent and safe to run on any schedule.
-
-### Layer 1 — Pre-Merge Filter (sd:next data loader)
-`scripts/modules/sd-next/data-loaders.js` exposes two functions:
-- `loadOpenQuickFixes()` — returns rows where `pr_url IS NULL` AND `commit_sha IS NULL`. Filters out QFs with in-flight PRs so sd:next does not restart work a parallel session is already merging (QF-380 merge-race fix).
-- `loadReadyToMergeQuickFixes()` — queries the inverse pool (`pr_url IS NOT NULL`), cross-checks each PR state via `gh api` with a 60-second in-memory cache, returns only OPEN + all-checks-green rows tagged `ready_to_merge=true`. Lets the sd:next dispatcher emit a `qf_merge` action for adoption-ready work instead of `qf_start`.
-
-> Why the cache: sd:next runs many times per session. Without the 60s dedup, each invocation hits the GitHub API for every open QF — rate limits bite within minutes.
-
-### Layer 2 — Post-Merge Sweep (orphan-qf-reaper)
-`scripts/orphan-qf-reaper.mjs` sweeps rows where `status IN (open, in_progress)` AND `pr_url` points to a MERGED PR, and flips them to `status=completed`. Protections:
-- **Idempotency**: `.eq(status, current)` guard on the update — a concurrent complete-quick-fix.js flip wins without erroring.
-- **5-minute safety window**: skips rows whose `pr_url` was set within the last 5 minutes, giving complete-quick-fix.js time to finish its own flip.
-- **Structured JSON logging**: one line per row evaluated, durable artifact for debugging races.
-
-### Scheduled Execution
-`.github/workflows/orphan-qf-reaper.yml` runs Layer 2 every 15 minutes on cron plus `workflow_dispatch`, with a `dry-run` input, a concurrency group to prevent overlap, and a per-run `reaper.log` artifact.
-
-### When to Reach For This
-- **`sd:next` recommends a QF you know was merged**: check `loadOpenQuickFixes` is filtering on `pr_url IS NULL`; inspect that QF's `pr_url` / `commit_sha` columns. If they're set, the reaper will close it on its next cron; for immediate cleanup, run `node scripts/orphan-qf-reaper.mjs`.
-- **Two sessions on the same QF**: verify `loadReadyToMergeQuickFixes` is wired into the dispatcher and emitting `qf_merge` for rows with open PRs.
-- **QF with open PR but sd:next ignores it**: the PR's checks are not all green — expected. Layer 1 only surfaces merge-ready work.
-
-### Anti-Pattern
-Do **not** replace these layers with a blanket "close all QFs with any pr_url set". The 5-minute window and merged-state check prevent closing a QF whose PR is still under review.
-
-> Background: This section is FR5 of SD-LEO-INFRA-LIFECYCLE-RECONCILIATION-ORPHAN-001. Layer 1 first shipped as QF-20260423-380; Layer 2 + scheduled sweep ship with this SD.
-
-## Queue Ranking and QF Track Inference
-
-**Purpose**: Document the unified queue ranking model used by `npm run sd:next`,
-established by SD-LEO-INFRA-UNIFY-QUICK-FIX-001.
-
-### Single Source of Truth: `scripts/modules/sd-next/rank-items.js`
-
-Both the baseline-active path (`SDNextSelector.js::displayTracks`) and the
-no-baseline fallback path (`display/fallback-queue.js::showFallbackQueue`)
-delegate ranking to the same pure `rankItems(items, context)` function. The
-urgency bands, vision gap weighting, OKR impact blending, and policy boost
-apply uniformly regardless of whether a baseline is active.
-
-Do NOT reintroduce inline sort logic or `composite_rank` arithmetic in the
-orchestrator files — that divergence was the bug this SD fixed.
-
-### QF Track Inference
-
-Quick Fixes rank alongside SDs in the same track sections. The QF → track
-assignment is inferred from existing `quick_fixes` columns; there is no
-`quick_fixes.track` schema column and none should be added.
-
-| `quick_fixes.type` | Default Track | Override |
-|---------------------|---------------|----------|
-| `bug`               | C (Quality)   | Track A if `branch_name` contains an infra keyword |
-| `polish`            | C (Quality)   | Track A if `branch_name` contains an infra keyword |
-| `documentation`     | STANDALONE    | (none) |
-| anything else       | STANDALONE    | (none) |
-
-Infra keyword set (in `rank-items.js::TRACK_A_BRANCH_KEYWORDS`): `infra`,
-`hook`, `gate`, `protocol`, `workflow`, `sd-next`, `handoff`. The
-heuristic is conservative by design — false-positive Track A assignment
-pollutes the Infrastructure track with mis-categorised work.
-
-### QF Severity → sequence_rank + urgency band
-
-| Severity   | sequence_rank | Default band (fresh) | Band (age > 7 days) |
-|------------|---------------|----------------------|---------------------|
-| `critical` | 100           | P0                   | P0                  |
-| `high`     | 200           | P1                   | P0                  |
-| `medium`   | 500           | P2                   | P0                  |
-| `low`      | 1000          | P3                   | P3                  |
-
-Tuning: edit `SEVERITY_TO_RANK` and `qfUrgencyBand` in `rank-items.js` —
-single-line changes; do not propagate these constants elsewhere.
-
-### Anti-patterns
-
-- ❌ Adding a `quick_fixes.track` column. We infer at read time on purpose.
-- ❌ Duplicating ranking logic in a new caller. Import `rankItems` instead.
-- ❌ Reintroducing a separate `OPEN QUICK FIXES` section at the bottom of
-  `sd:next` output. QFs render inline inside their track via
-  `display/tracks.js::displaySDItem` (branch on `item.kind === 'qf'`).
-- ❌ Conflating `item.kind` (routing discriminator) with `qf.type`
-  (DB column holding bug/polish/documentation). They are separate signals.
-
-### AUTO_PROCEED_ACTION envelope (unchanged)
-
-The refactor preserves the existing envelope shape exactly:
-
-```
-AUTO_PROCEED_ACTION:{"action":"start"|"qf_start"|"continue"|...,
-                     "sd_id": "<key>"|null, "qf_id": "<id>"|null,
-                     "reason": "<text>"}
-```
-
-Downstream consumers (`coordination-inbox.cjs`, integration tests) continue
-to parse without modification.
-
 ## Sub-Agent Routing Reference
 
 All 16 specialized sub-agents are available in EVERY phase (LEAD, PLAN, EXEC). Use the Task tool with the appropriate `subagent_type` to invoke them. See phase-specific guidance in each phase's CLAUDE file for recommended priorities.
@@ -491,32 +358,6 @@ apply_migration is blocked by PreToolUse hook — use database-agent instead.
 - **Error routing**: ANY database WRITE error triggers database-agent (reads use MCP tools directly); ANY test failure triggers testing-agent
 
 *Added: SD-LEO-INFRA-SUB-AGENT-ROUTING-001-B*
-
-## DB Ops Protocol (Common Pitfalls)
-
-**ID Field Confusion**: Three distinct ID columns exist in `strategic_directives_v2`:
-- `id` — UUID primary key (use for FK references like `parent_sd_id`, `sd_id` in other tables)
-- `sd_key` — Human-readable key (e.g., `SD-FIX-NAV-001`). Use `.eq('sd_key', ...)` for lookups.
-- `uuid_id` — Separate auto-generated UUID. Rarely needed.
-
-**JSONB Double-Stringification**: Supabase JS client serializes automatically. Passing `JSON.stringify()` on arrays/objects before `.insert()` wraps the value in extra quotes, producing `'"[...]"'` instead of `'[...]'`. Fix: pass native JS arrays/objects directly.
-
-**Numeric Scale Checks**: Fields like `progress` (0-100) and `priority` (text enum: critical/high/medium/low) have CHECK constraints. Supabase returns a generic error on violation — always validate before insert.
-
-**Silent Empty Returns**: Supabase returns `{ data: [], error: null }` when column names are wrong. Always `.select('*').limit(1)` on unfamiliar tables first to discover actual column names.
-
-**NOT NULL Pre-Validation**: Before inserting rows, check which columns are NOT NULL without defaults. Query `information_schema.columns` if unsure:
-```sql
-SELECT column_name, is_nullable, column_default FROM information_schema.columns
-WHERE table_name = '<table>' AND is_nullable = 'NO' AND column_default IS NULL;
-```
-> Why: Supabase returns generic constraint errors on NOT NULL violations. Pre-checking avoids trial-and-error inserts.
-
-**Migration Safety — IF EXISTS**: All DDL in migration scripts must use defensive guards:
-- `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`
-- `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
-- `DROP TABLE IF EXISTS`, `DROP INDEX IF EXISTS`
-> Why: Migrations may run against databases in different states (dev vs prod, partial prior runs). Without IF EXISTS, re-running a migration fails on the first already-applied statement.
 
 ## 🚫 Stage 7 Hard Block: UI Coverage Prerequisite
 
@@ -786,69 +627,6 @@ node scripts/handoff.js workflow SD-XXX-001  # See recommended path
 
 Reference: `lib/utils/sd-type-validation.js`
 
-## Database Sub-Agent Auto-Invocation
-
-## Database Sub-Agent Semantic Triggering
-
-When SQL execution intent is detected, the database sub-agent should be auto-invoked instead of outputting manual execution instructions.
-
-### Intent Detection Triggers
-
-The following phrases trigger automatic database sub-agent invocation:
-
-| Category | Example Phrases | Priority |
-|----------|-----------------|----------|
-| **Direct Command** | "run this sql", "execute the query" | 9 |
-| **Delegation** | "use database sub-agent", "have the database agent" | 8 |
-| **Imperative** | "please run", "can you execute" | 8 |
-| **Operational** | "update the table", "create the table" | 7 |
-| **Result-Oriented** | "make this change in the database" | 6 |
-| **Contextual** | "run it", "execute it" (requires SQL context) | 5 |
-
-### Denylist Phrases (Block Execution Intent)
-
-These phrases force NO_EXECUTION intent:
-- "do not execute"
-- "for reference only"
-- "example query"
-- "sample sql"
-- "here is an example"
-
-### Integration
-
-When Claude generates SQL with execution instructions:
-1. Check for SQL execution intent using `shouldAutoInvokeAndExecute()`
-2. If intent detected with confidence >= 80%, use Task tool with database-agent
-3. Never output "run this manually" when auto-invocation is permitted
-
-```javascript
-// Import
-import { shouldAutoInvokeAndExecute } from 'lib/utils/db-agent-auto-invoker.js';
-
-// Check before outputting SQL
-const result = await shouldAutoInvokeAndExecute(sqlMessage);
-if (result.shouldInvoke) {
-  // Use Task tool instead of manual instructions
-  Task({ subagent_type: 'database-agent', prompt: result.taskParams.prompt });
-}
-```
-
-### Configuration
-
-Runtime configuration in `db_agent_config` table:
-- `MIN_CONFIDENCE_TO_INVOKE`: 0.80 (default)
-- `DB_AGENT_ENABLED`: true (default)
-- `DENYLIST_PHRASES`: Array of blocking phrases
-
-### Audit Trail
-
-All invocation decisions logged to `db_agent_invocations` table with:
-- correlation_id for tracing
-- intent and confidence scores
-- matched trigger IDs
-- decision outcome
-
-
 ## Database-First Enforcement - Expanded
 
 **Database-First Enforcement (MANDATORY)**:
@@ -1104,39 +882,6 @@ These anti-patterns apply across ALL phases. Violating them leads to failed hand
 - `node scripts/add-prd-to-database.js ...`
 - `node scripts/phase-preflight.js ...`
 
-## Retrospective-Gate Invariants
-
-## Retrospective-Gate Invariants (FR4 of SD-LEO-INFRA-RETROSPECTIVE-GATES-FAIL-001)
-
-Both LEO handoff gates that check for a completion retrospective — `RETROSPECTIVE_QUALITY_GATE` at PLAN-TO-LEAD (`scripts/modules/handoff/executors/plan-to-lead/gates/retrospective-quality.js`) and `createRetrospectiveExistsGate` at LEAD-FINAL-APPROVAL (`scripts/modules/handoff/executors/lead-final-approval/gates.js`) — enforce **three invariants** via the shared helper `scripts/modules/handoff/retro-filters.js`:
-
-### The Three Invariants
-
-| # | Invariant | Query filter | Why |
-|---|-----------|--------------|-----|
-| 1 | **Existence** | `sd_id = <uuid>` plus `.maybeSingle()` with null-guard | A missing retrospective must be a hard-fail. Never fall through to `validateSDCompletionReadiness(sd, null)` — that function scores on SD quality alone, silently passing the gate. |
-| 2 | **Type** | `.eq('retro_type', 'SD_COMPLETION')` | Handoff-time retros (LEAD_TO_PLAN, PLAN_TO_EXEC) are stored in the same table with a `retrospective_type` column for the phase label — but they still set `retro_type='SD_COMPLETION'` (see `lead-to-plan/retrospective.js:283`). The type filter excludes SPRINT / INCIDENT / AUDIT retros but is NOT sufficient on its own. |
-| 3 | **Freshness** | `.gt('created_at', leadToPlanAcceptedAt)` | The one axis that reliably separates handoff-time retros from true SD-completion retros is creation time — SD-completion retros are authored *after* the SD actually ships. `leadToPlanAcceptedAt` comes from the most-recent `sd_phase_handoffs` row where `from_phase='LEAD'`, `to_phase='PLAN'`, `status='accepted'`. Falls back to `SD.created_at` when no such handoff exists (Phase-0 / unusual SDs). |
-
-### Why Binary Pass/Fail, Not Percentage
-
-Artifact-existence gates must query the artifact table directly, never heuristic-score. The original bug (`PAT-RETRO-EXISTS-GATE-FALSE-PASS`) manifested precisely because `validateSDCompletionReadiness` returned a percentage score based on SD quality when the retro was missing — and that score was high enough to pass the threshold. Hard-fail with remediation is the only way to make the absence loud.
-
-### Touching These Gates
-
-If you modify either gate, preserve the three-invariant invariant:
-
-- Use `getFilteredRetrospective(sdUuid, sdCreatedAt, supabase)` from `scripts/modules/handoff/retro-filters.js`. Do **not** re-roll the query.
-- Preserve the zero-rows hard-fail branch **before** `checkAutoPassConditions`. The auto-pass fast-paths for orchestrator / database / bugfix / corrective / enhancement / infrastructure assume a valid retro is present — they must never run on null.
-- Add a test case for each new behavior: see `scripts/modules/handoff/retro-filters.test.js`, `retrospective-quality.test.js` (4 new failure-mode cases), and `lead-final-approval/gates/retrospective-exists.test.js` (mirror tests, previously zero coverage).
-
-### Reference
-
-- Evidence row (VALIDATION sub-agent, predecessor SD): `sub_agent_execution_results.id = e6cf78c4-427b-4c94-9fb9-b9b030604871`
-- Evidence row (VALIDATION sub-agent, this SD): `sub_agent_execution_results.id = eb55ea9b-712c-4dcb-ad37-123c15d26d0f`
-- Hot pattern: `PAT-RETRO-EXISTS-GATE-FALSE-PASS` (critical severity, process category)
-
-
 ## Signaling friction to the coordinator
 
 Workers signal mid-execution friction back to the active coordinator via session_coordination (no new schema). Two-way channel reuses existing INFO message_type with payload-based discrimination — discriminator lives in payload.signal_type.
@@ -1153,34 +898,6 @@ Workers signal mid-execution friction back to the active coordinator via session
 **Severity heuristic:** low (single-cycle inconvenience), medium (recurring within session — default), high (blocking SD or requires bypass), critical (DB inconsistency / gate fail-open / security — bypasses ≥3 aggregation threshold).
 
 **How to send:** `/signal <type> "<body>"` slash command — see /signal --help. Or directly: `node scripts/worker-signal.cjs <type> "<body>"`. Types: stuck | need-sweep | prd-ambiguous | gate-bug | spec-conflict | harness-bug | feedback | other. SD-LEO-INFRA-TWO-WAY-COORDINATOR-001.
-
-## Solomon Consultation Protocol
-
-**Solomon Consultation Protocol** — the deep-reasoning oracle on the cognitive ladder.
-
-> Discoverability: when local reasoning AND the rca-agent are exhausted on a genuinely hard
-> *cognitive* problem, escalate to **Solomon** (the propose-only deep-reasoning oracle) — do not
-> spin. Solomon advises; you remain the actor. **Dormant by default** behind `SOLOMON_CONSULT_V1`
-> (flag-off = byte-identical; the flip is chairman-only).
-
-**Cognitive escalation ladder:** local reasoning → rca-agent → **Solomon** → Chairman.
-Solomon sits between Canonical Pause Point #3 (RCA after 2 retries) and human escalation.
-
-**How to consult** (flag-gated, dormant until `SOLOMON_CONSULT_V1=on`):
-```bash
-node scripts/worker-signal.cjs solomon-consult "<packet>" --severity high \
-  --rca-count <N> --tool-attempts <N> [--type spec-conflict] [--await]
-```
-Counter-gated by the triage SSOT (`lib/coordinator/solomon-triage.cjs` `isSolomonEligible`): eligible
-only when rca-agent ran ≥2× OR a gate failed ≥3× (Pause-Point-#3 exhausted), or a first-encounter
-spec-conflict/arch-ambiguity WITH a logged self-resolution attempt. Flag OFF → prints
-"Solomon dormant — handle locally" and inserts nothing. The reply returns under the existing
-`adam_advisory` kind (+`oracle:true`). Solomon is propose-only: it NEVER claims, edits, gates, or sources.
-
-**Observe pending consults:** `node scripts/fleet-dashboard.cjs solomon` (PENDING SOLOMON CONSULTS).
-**Model:** Opus 4.8 (`claude-opus-4-8`) at high effort; no Fable dependency (Fable-swappable later).
-**Activation:** chairman-gated, graduated (Mode A reactive consults, then Mode B sweeps) —
-see `docs/architecture/solomon-activation-runbook.md`.
 
 ## Claim Heartbeat Protocol
 
@@ -1203,7 +920,7 @@ see `docs/architecture/solomon-activation-runbook.md`.
 
 **G3 (SD-LEO-INFRA-DEFINITION-DONE-ACTIVATION-001, chairman-ratified 2026-07-02): "done" for event-processing machinery now requires ACTIVATED or ARMED evidence, not just merged code + green tests.**
 
-**The problem this closes**: SDs/QFs whose deliverable is event-processing machinery (a worker, watcher, router, gate, cron, or hook) have repeatedly reached "completed" status while the machinery never processed a single real production event — cold-recovery never wired, a quarantined test, dormant verifiers, an eva-scheduler watcher dead 13 days, a frozen capture gauge, a remediation router with writers never injected at the call site. Each was individually root-caused; this amendment closes the shared root: the protocol's own Definition-of-Done never asked "did it run?"
+**The problem this closes**: the cold-recovered dormant-machinery specimens, in PROVENANCE.
 
 **Machinery-class taxonomy** (`lib/machinery-class/classify.js`): an SD/QF is machinery-class when its `key_changes[].type` or free text (negation-aware) affirmatively signals a worker/consumer/job/cron/watcher/router/gate/hook/service deliverable. Deliberately does NOT require a schema match (unlike the activation-invariant trigger-evaluator, which needs schema+consumer) — a pure cron/watcher fix with no schema change is still machinery-class.
 
@@ -1216,16 +933,6 @@ see `docs/architecture/solomon-activation-runbook.md`.
 **Parent-orchestrator exemption**: an orchestrator parent (`isOrchestratorSync(sd)`) is exempt from this check entirely — machinery lives on children; a parent completes via `PARENT_DELEGATED_COMPLETION` regardless of its own rollup text.
 
 **Validity check**: `node scripts/machinery-class-retro-sweep.mjs` runs the classifier over the last 30 days of completed SDs, detection-only, zero writes — re-finding the named dormant specimens is the smoke test of the classifier itself.
-
-## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
-
-**quick_fixes**: `id` IS the key and holds the literal string `QF-YYYYMMDD-NNN` (e.g. `QF-20260907-188`) -- there is no `qf_key` column. Filter dedup/lookup queries on `id`; use `title`/`description` via `ilike` for fuzzy SEARCH only, never as a join/match key. A query selecting a nonexistent `qf_key` column errors at PostgREST, the client sees `data: null`, and a bare `if (data && data.length)` guard prints nothing -- reading as "no existing QF" while the query never ran. (`lib/learning/feedback-clusterer.js`'s title-similarity clustering is a deliberate exception -- it groups by title for clustering, not for keying, and must not be "fixed".)
-
-**quick_fixes.disposition** IN (`premise_resolved`, `premise_unverified_stale`, `duplicate_of`, `re_verified`, `promoted`).
-
-**adam_task_ledger.status** IN (`open`, `in_progress`, `blocked`, `done`, `cancelled`) -- there is no `closed` value.
-
-**chairman_ratifications.id** is a UUID column -- Postgres has no `ilike`/`~~*` operator for `uuid`, so an `ilike` filter on it errors ("operator does not exist: uuid ~~* unknown"). Match on `id` via `eq` (full UUID) or read rows and filter client-side by string prefix for a short-form citation.
 
 
 
@@ -1385,7 +1092,7 @@ Results MUST be persisted to `sub_agent_execution_results` table.
 
 ---
 
-*Generated from database: 2026-09-08*
+*Generated from database: 2026-09-11*
 *Protocol Version: 4.4.1*
 *Includes: Proposals (0) + Hot Patterns (5) + Lessons (5)*
 *Load this file first in all sessions*

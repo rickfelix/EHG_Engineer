@@ -5,7 +5,11 @@
  *
  *   node scripts/sd-park.js park   <SD-KEY> --reason "<why>" [--actor <role>] \
  *     [--review-at <ISO-timestamp>] [--release-condition "<text>"]
- *   node scripts/sd-park.js unpark <SD-KEY> [--restore <status>] [--actor <role>]
+ *   node scripts/sd-park.js unpark <SD-KEY> --reason "<why>" [--restore <status>] [--actor <role>]
+ *
+ * --reason is REQUIRED on unpark (mirrors park()) as of SD-LEO-INFRA-DEFERRED-STATE-ENTRANCE-001.
+ * --restore is REQUIRED whenever metadata.parked_from_status is missing or not a workable
+ * status (e.g. an 'unknown' backfill sentinel) — unpark never silently defaults to 'draft'.
  *
  * Park excludes the SD from sd:next recommendations + the stale-session sweep while
  * keeping it fully queryable; unpark restores a workable status (re-claim via sd-start).
@@ -29,7 +33,7 @@ async function main() {
   if (!['park', 'unpark'].includes(verb) || !sdKey) {
     console.error('Usage:');
     console.error('  node scripts/sd-park.js park   <SD-KEY> --reason "<why>" [--actor <role>] [--review-at <ISO-timestamp>] [--release-condition "<text>"]');
-    console.error('  node scripts/sd-park.js unpark <SD-KEY> [--restore <status>] [--actor <role>]');
+    console.error('  node scripts/sd-park.js unpark <SD-KEY> --reason "<why>" [--restore <status>] [--actor <role>]');
     process.exit(1);
   }
   const actor = flag(rest, 'actor') || 'cli';
@@ -61,7 +65,12 @@ async function main() {
       });
       console.log(`✓ parked ${r.sdKey}: ${r.parked_from_status} → ${r.status}${r.edge ? ' (progress normalized to dodge auto_transition)' : ''}; claim released`);
     } else {
-      const r = await unpark(client, sdKey, { actor, restoreStatus: flag(rest, 'restore') });
+      const reason = flag(rest, 'reason');
+      if (!reason) { console.error('unpark requires --reason "<why>"'); process.exit(1); }
+      const r = await unpark(client, sdKey, {
+        reason, actor, restoreStatus: flag(rest, 'restore'),
+        writingSessionId: process.env.CLAUDE_SESSION_ID || null,
+      });
       console.log(`✓ unparked ${r.sdKey} → ${r.status} (re-claim via: node scripts/sd-start.js ${r.sdKey})`);
     }
   } finally {

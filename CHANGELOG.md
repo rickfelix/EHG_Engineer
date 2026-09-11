@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-11](#2026-09-11)
+  - [Bugfix](#bugfix)
 - [2026-09-08](#2026-09-08)
   - [Bugfix](#bugfix-4)
   - [Bugfix](#bugfix)
@@ -193,6 +195,16 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
+## 2026-09-11
+
+### Bugfix
+
+- **The Stop hook demanded a fresh wakeup arm on every notification-opened turn, so seats parked on CI waits burned consecutive re-poll turns** - SD-LEO-FIX-STOP-HOOK-OVERRIDES-001 (escalated from QF-20260903-916, PR #8664, supersedes #8658)
+  - `scripts/hooks/stop-loop-wakeup-reminder.cjs` admitted only a `ScheduleWakeup` after the current turn's promptId boundary, which is correct for a fresh turn but wrong when a Monitor task-notification re-invokes a seat a minute into a multi-minute armed wake: the hook blocked, the seat re-armed and re-polled, and the cycle repeated (measured 66s re-fire on a 459s arm; 3 identical reminders; 25-30s re-fires during CI waits).
+  - `scripts/hooks/lib/wakeup-arm-evidence.cjs` gains `findPendingPriorArm()`: it reads the prior turn's `toolUseResult.scheduledFor` (harness-written, not forgeable by message content), bounded to the immediately prior turn and ended by a `scheduledFireId` (consumed) or a `stop:true` arm. `shouldRemind` stays silent only when the opener is `origin.kind=task-notification` and that arm is not yet due, printing one stderr line instead of the reminder. Every non-match and every error path fails toward the old block, never toward silence.
+  - Hardening from TESTING/RISK/SECURITY conditions: the predicate is total and isolated from the current-turn verdict; the carried allow is countable (`classifyWindDownReason` → `turn_end_carried_by_prior_arm`); `expected_silence_until` is sized from the pending wake (capped as before); the suppression has its own kill id `stop_loop_prior_arm_carry`. The premise that a pending wake survives an unarmed early re-invocation was confirmed by a live test on the implementing seat (wake armed for 15:26:00Z survived three early turns and fired at 15:26:01Z).
+  - Escalated from Quick-Fix QF-20260903-916 because the diff touched `scripts/hooks/**`, a charter-designated sensitive path with no autonomous-completion bypass. Deferred: peer-opened turns (`origin.kind=peer`) are not admitted; the early re-invoker itself is out of scope.
+
 ## 2026-09-08
 
 ### Bugfix
@@ -313,6 +325,12 @@
 
 ### Infrastructure
 
+- **Deferred (parked) SDs: the existing `sd:unpark` exit is now discoverable, audited, and safe against a data-integrity gap** - SD-LEO-INFRA-DEFERRED-STATE-ENTRANCE-001
+  - `lib/claim-guard.mjs`'s TERMINAL banner and `scripts/sd-start.js`'s `TARGET_ALREADY_TERMINAL` message now name `npm run sd:unpark` for a `status=deferred` SD instead of the misleading "finished/closed" wording, with no spurious `Completed:` label; `completed`/`cancelled` wording is unchanged (regression-pinned).
+  - `unpark()` now requires `--reason` (mirroring `park()`) and stamps `unparked_by`/`unparked_at`/`unparked_reason`/`stamped_by_session` via the existing `buildProvenancedStamp` helper. It never silently defaults a missing, non-workable, or backfill-inferred `parked_from_status` to `'draft'` -- an explicit `--restore` is required, which must itself be a workable status (closes an escalation path where `--restore completed`/`cancelled` would have fired the full SD-completion trigger cascade through the allowlisted writer, bypassing LEAD-FINAL-APPROVAL). `park()` strips stale unpark audit fields on re-park, and `unpark()`'s write is guarded by `WHERE status='deferred'` to close a TOCTOU race.
+  - Backfilled `metadata.parked_from_status` on the 25 of 29 live deferred rows missing it (current_phase-based inference: LEAD→draft, PLAN_PRD→planning, EXEC→in_progress), each marked `parked_from_status_source='backfill_inferred'` so `unpark()` never auto-trusts an inferred value the way it trusts a genuinely recorded one.
+  - New `computeUnparkPlan()` mirrors the existing `computeParkPlan` pattern, since the DB-tier integration test file executes zero tests in this environment (empty non-prod-ref allowlist) -- the core decisions are real, runnable unit tests instead.
+  - Two independent PLAN/EXEC-phase TESTING and SECURITY sub-agent review rounds caught and the SD fixed before shipping: a message-extraction refactor that broke an established static-pin regression test (QF-20260704-825), a stale hygiene-lint baseline, the `--restore` escalation path above, and the backfill-inference trust gap above.
 - **Migration apply-state verifier now detects a stale live function body, not just whether the function exists** - SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 (PR #8535)
   - `scripts/verify-migration-apply-state.mjs`'s function-class classification (feeding `CHAIRMAN_APPLY_VERIFICATION` at LEAD-FINAL-APPROVAL) previously checked only `pg_proc.proname` existence — a `CREATE OR REPLACE FUNCTION` migration whose live function had a stale prior body, or an aborted REPLACE, read as fully `APPLIED`. Now fetches `pg_proc.prosrc` alongside the name, extracts the migration file's own dollar-quoted body from the raw (unstripped) SQL text — both bare `$$` and named `$tag$` delimiters — normalizes both sides, and surfaces a new `BODY_MISMATCH` status when they diverge. Live-verified against the real DB: found 46 pre-existing mismatches (one, `check_gate_weights`, manually diffed and confirmed genuine drift).
   - Two independent SECURITY sub-agent reviews and one adversarial `/ship` deep-tier review found and closed real bugs before merge: `BODY_MISMATCH` initially polluted the `gaps` array consumed by the disposition-ledger seeder (would have permanently mis-stamped 6 already-applied functions as chairman-sign-off-blocked) and by the chairman-gated `CEREMONY_PENDING` relabel; raw function body text briefly leaked into `--json` output; a downstream gate's exclusion-list filter needed its own accurate WAIT message for the new status; and the raw-text body extraction could pick up a stale body from a commented-out `CREATE FUNCTION` sharing the real one's name. `BODY_MISMATCH` ships advisory-only (its own report line/`--json` key, never blocking `--strict` CI) given the volume of pre-existing drift this first rollout surfaced and the tool's own pre-existing bare-name-only function identity (no arg-signature disambiguation for overloads).
