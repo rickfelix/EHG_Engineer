@@ -33,6 +33,45 @@ describe('redactText', () => {
     expect(redactText(undefined)).toBe('');
     expect(redactText('')).toBe('');
   });
+
+  // SECURITY finding SEC-1 (EXEC-TO-PLAN review, evidence bb933a3d): the leading `\b`
+  // anchor never fires between `_` and a keyword (`_` is a word character), so a compound
+  // env-var name like SUPABASE_SERVICE_ROLE_KEY= — an entirely ordinary shape for a Worker
+  // crash-handler env dump — passed through unredacted before this fix.
+  it('SEC-1: redacts compound underscore-joined env-var names ending in a credential keyword', () => {
+    const out = redactText('SUPABASE_SERVICE_ROLE_KEY=eyJabc.def.ghi DB_PASSWORD=hunter2value STRIPE_SECRET_KEY=sk_live_abcXYZ');
+    expect(out).not.toContain('SUPABASE_SERVICE_ROLE_KEY=eyJabc');
+    expect(out).not.toContain('hunter2value');
+    expect(out).not.toContain('sk_live_abcXYZ');
+  });
+
+  // SECURITY finding SEC-2 (EXEC-TO-PLAN review, evidence bb933a3d): the base64 fallback
+  // used the standard alphabet only; a base64URL JWT fragments at every '-'/'_' into
+  // sub-32-char pieces that individually escape a >=32-char length check.
+  it('SEC-2: redacts a JWT-shaped value (eyJ-prefixed, three dot-separated base64URL segments) as one unit', () => {
+    // Segments deliberately kept short (this repo's own commit-time secret scanner flags
+    // any eyJ<20+chars>.<20+chars> shape as a likely real Supabase/JWT token, even in test
+    // fixtures) -- still exercises the exact structural shape redactText's JWT pattern
+    // matches (`eyJ` prefix, three dot-separated [A-Za-z0-9_-]+ segments).
+    const jwt = 'eyJfake.payFAKE.sig-FAKE_9';
+    const out = redactText(`Authorization: Bearer ${jwt}`);
+    expect(out).not.toContain('payFAKE');
+    expect(out).not.toContain('sig-FAKE_9');
+    expect(out).not.toContain('eyJfake');
+  });
+
+  it('SEC-2b: redacts a base64URL secret even without JWT dot-structure', () => {
+    const out = redactText('session=abcDEF123-_abcDEF123-_abcDEF123-_abc');
+    expect(out).not.toContain('abcDEF123-_abcDEF123-_abcDEF123-_abc');
+  });
+
+  // SECURITY finding SEC-6 (EXEC-TO-PLAN re-review, evidence 6d46d0ee): HTTP Basic auth
+  // has neither a credential keyword nor a length-threshold-crossing base64 blob (real
+  // Basic-auth values are frequently short), so it escaped every other rule.
+  it('SEC-6: redacts an HTTP Basic auth header value', () => {
+    const out = redactText('Authorization: Basic dXNlcjpwYXNzd29yZA==');
+    expect(out).not.toContain('dXNlcjpwYXNzd29yZA==');
+  });
 });
 
 describe('boundedLeg', () => {
@@ -161,6 +200,25 @@ describe('queryVentureD1', () => {
     const leg = await queryVentureD1({ databaseName: null, window: WINDOW, env: {} });
     expect(leg.absent).toBe(true);
     expect(leg.absent_reason).toBe(ABSENT_REASONS.NOT_ATTEMPTED);
+  });
+
+  // SECURITY finding SEC-5 (EXEC-TO-PLAN review, evidence bb933a3d): `table` is
+  // interpolated into the SQL TEXT itself (D1's `?` placeholders bind values, not
+  // identifiers) -- an identifier allowlist refuses anything that isn't a bare
+  // [A-Za-z_][A-Za-z0-9_]* token before it ever reaches string interpolation.
+  it('SEC-5: refuses a non-identifier table name rather than interpolating it into SQL', async () => {
+    const fetchImpl = vi.fn();
+    const leg = await queryVentureD1({ databaseName: 'altifyai', table: 'x; DROP TABLE users;--', window: WINDOW, env: { CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'a' }, fetchImpl });
+    expect(leg.absent).toBe(true);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('accepts the default table name and ordinary identifier-shaped overrides', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, result: [{ uuid: 'db-1', name: 'altifyai' }] }) })
+      .mockResolvedValueOnce({ ok: true, headers: { get: () => null }, json: async () => ({ success: true, result: [{ results: [] }] }) });
+    const leg = await queryVentureD1({ databaseName: 'altifyai', table: 'generated_alt_texts', window: WINDOW, env: { CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'a' }, fetchImpl });
+    expect(leg.absent).toBe(false);
   });
 
   it('resolves the database id live, then queries generated_alt_texts', async () => {
