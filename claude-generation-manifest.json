@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-11T10:03:54.973Z",
-  "git_commit": "50b076a4",
+  "generated_at": "2026-09-11T11:02:34.466Z",
+  "git_commit": "069125b4",
   "db_snapshot_hash": "e8156a0352cac564",
   "files": {
     "CLAUDE.md": {
@@ -69,27 +69,27 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 144049,
-      "bytes": 145010,
-      "estimated_tokens": 36013,
-      "content_hash": "ca9a6cdf7a335f46",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260911\\CLAUDE_ADAM.md"
+      "chars": 81718,
+      "bytes": 82588,
+      "estimated_tokens": 20430,
+      "content_hash": "cbfb780274a510de",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260911b\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 15698,
-      "bytes": 15842,
-      "estimated_tokens": 3925,
-      "content_hash": "9bce22935a8ea8c8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM_MANUAL.md"
+      "chars": 25882,
+      "bytes": 26154,
+      "estimated_tokens": 6471,
+      "content_hash": "92613af0a0ee7d0b",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260911b\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 6924,
-      "bytes": 6988,
-      "estimated_tokens": 1731,
-      "content_hash": "50cea982fb95b805",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM_PROVENANCE.md"
+      "chars": 95085,
+      "bytes": 95426,
+      "estimated_tokens": 23772,
+      "content_hash": "f9dde4b902c1ac80",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260911b\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
@@ -229,7 +229,7 @@
     }
   },
   "section_digests": {
-    "global": "408aa091deec917a",
+    "global": "895aa6e8c4e7471a",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -483,8 +483,8 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "9f2e47998f45c636",
-      "602": "52425599b58d0a12",
+      "601": "426ac699d490cc29",
+      "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "f5d0c5029c6a3524",
       "608": "7f99a4321502367e",
@@ -493,14 +493,14 @@
       "611": "aee3c46d653e2d5a",
       "612": "13e03eddf5300bcc",
       "613": "1e1de64689c1ad82",
-      "614": "a4d5064f0ffbe97c",
+      "614": "d48bc892b437a0fa",
       "615": "1ac30c8d7046c470",
       "616": "cc3b2a117dc15f14",
       "620": "3fd2f83a068a8381",
       "621": "5d93172c5c9c2138",
       "622": "94a8df85a96ad041",
-      "626": "f9a040104b9c6234",
-      "627": "c1f5247af6cc9d08",
+      "626": "32f06fccc41d79a1",
+      "627": "cad72e9081e7afda",
       "629": "3a1955efac218f9f",
       "630": "7851b31f692ec87c",
       "632": "df3f3261b608ddbd",
