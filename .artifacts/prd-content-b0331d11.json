@@ -1,0 +1,232 @@
+{
+  "id": "PRD-SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001",
+  "directive_id": "SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001",
+  "sd_id": "b0331d11-b360-4fd1-b1e7-6b97676654bf",
+  "title": "Automated venture troubleshooting: walker captures cause with provenance, CI provisions bindings",
+  "status": "approved",
+  "category": "technical",
+  "priority": "high",
+  "goal_summary": "Stage-23 walker attaches provenanced captured_cause (Worker logs, venture_errors, D1 failures) to every failed journey; altifyai Deploy fails loud on missing secrets; chairman never reads a log or sets a secret by hand.",
+  "executive_summary": "Automate AltifyAI venture troubleshooting per ratification 1afdeaac: the stage-23 walker attaches provenanced captured_cause to every failed journey, altifyai CI provisions/verifies bindings and fails loud, replacing a manual log-read + secret-provision step.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "The stage-23 journey walk (lib/apa/journey-walk-orchestrator.js) attaches captured_cause to every failed step's uat_test_results.metadata, with a summary rollup folded into strategic_directives_v2.metadata.journey_walk_result.captured_cause",
+      "description": "captured_cause = {window:{from,to}, worker_logs:LEG, venture_errors:LEG, d1_failures:LEG, summary}. LEG = {producer, run_id, content_hash, item_count, items[], items_truncated, absent, absent_reason}. worker_logs is fetched via the Cloudflare Workers Observability telemetry query API (CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID env, same credential contract as lib/operator/cloudflare-cost-adapter.js) for the journey step's time window; venture_errors is read from public.feedback WHERE venture_id=$1 AND feedback_type='venture_error' AND last_seen BETWEEN $2 AND $3 (existing idx_feedback_venture_error_created index); d1_failures is read from the venture's Cloudflare D1 generated_alt_texts table (failure_code, failure_detail, created_at) via the D1 HTTP API, resolving database_id at runtime via Cloudflare's list-D1-databases API matched against the venture's workers.dev subdomain slug (no stored database_id exists in ventures.metadata). run_id/content_hash are required non-null whenever absent===false (ratification 6c263823: evidence without provenance is absent). Total captured_cause JSON is bounded to ~8KB (10 items/leg, 200 chars/item post-redaction) with a JSON.stringify().length backstop. Two named injectable seams on runVentureJourneyWalk: deps.captureCloudflareLogs and deps.queryVentureD1 (deps.queryVentureErrors already resolvable via existing Supabase client), so unit tests fixture all three legs without live network calls.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: A forced-failing stage-23 journey step (fixture failure) produces a uat_test_results row whose metadata.captured_cause.worker_logs/venture_errors/d1_failures each carry non-null producer+run_id+content_hash when absent===false",
+        "AC-2: When a leg genuinely returns zero matching rows (item_count=0, absent=false), the rendered summary reads '<leg>: no matching entries in window (capture succeeded)' — never conflated with absent=true's 'capture unavailable (<absent_reason>)'",
+        "AC-3: strategic_directives_v2.metadata.journey_walk_result.captured_cause is populated only when status='fail' and brokenAtStep is set, via the existing stampJourneyWalkResult() merge point"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "The altifyai Deploy workflow (rickfelix/altifyai .github/workflows/deploy.yml) runs an idempotent secret-provisioning step for EHG_ENGINEER_SUPABASE_URL, EHG_ENGINEER_SUPABASE_ANON_KEY, VENTURE_ID and fails the run loud when any GitHub secret is absent",
+      "description": "Reuses the existing one-shot-secret-provision.yml (altifyai PR #90) loop byte-identically inside deploy.yml — same per-secret empty-value check emitting ::error:: and exit 1, same idempotent `wrangler secret put` — placed as a new step immediately after 'Deploy to Cloudflare'. No new provisioning logic is authored; this FR only wires the already-shipped, already-tested loop into the always-run Deploy path so forwarding secrets are never silently unprovisioned in production (per the venture doc's own finding that they are 'currently dormant in production').",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: Deploying with one of the three GitHub secrets unset fails the workflow at the new provisioning step with the ::error:: line naming the missing secret, before the deploy is considered complete",
+        "AC-2: Deploying with all three secrets set succeeds and `wrangler secret list --name altifyai` (already part of the reused step) shows all three present in the step summary",
+        "AC-3: Re-running Deploy with unchanged secrets is a no-op (idempotent `wrangler secret put` behavior, unchanged from PR #90)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "A CI step in the altifyai repo verifies the Cloudflare deploy token reaches Workers AI (/ai/run) and observability read; on a missing scope it emits exactly one named chairman keystroke and never a log-reading instruction",
+      "description": "Extends the existing one-shot-ai-probe.yml (PR #92, which already measured a 401 from the Deploy token lacking Workers AI scope) into a Deploy-path CI step. On success: silent pass. On a 401/403 from either probe: one ::error:: line in the exact format 'Cloudflare token is missing permission \"<capability>\" — add it at https://dash.cloudflare.com/profile/api-tokens (edit the Deploy token, add the scope, save)' — <capability> is the literal Cloudflare permission-group name for the failing probe (Workers AI Read for /ai/run, Logs Read for observability), never a placeholder token name since it is not retrievable from CI, and never an instruction to read a dashboard or log stream.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: With the current under-scoped token, the CI step emits the single named-keystroke line and fails the run; the line names one concrete permission to add, nothing else",
+        "AC-2: With a correctly-scoped token (test fixture / mocked HTTP 200 responses), the step passes silently with no chairman-facing output",
+        "AC-3: The step never emits a wrangler tail command, a dashboard URL for log reading, or any instruction requiring the chairman to interpret raw logs"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "altifyai lib/error-capture/capture.js emits console.error (not console.warn) when forwarding is disabled due to missing env, and the warn-once latch correctly suppresses repeats within one isolate",
+      "description": "REDUCED AT LEAD from the original scope: the composeFailureDetail redacted-message-prefix half is CUT because it collides with pinned security tests TS-10/TS-12 in altifyai tests/alt-text-generate.test.js (failure_detail is pinned to carry zero provider message text) — an unresolved spec-conflict signal (b9787bf4) already exists for this and PLAN does not reopen it; diagnosis for that path travels through FR-1's D1 capture instead. This FR is scoped to capture.js's checkEnv() path only (lines ~13-28): the three console.warn calls (missing-env, unparseable-response, record_venture_error-failure-reported, forward-attempt-threw) become console.error so a bounded wrangler-tail window during a repro (one-shot-wrangler-tail.yml) surfaces the failure. The warn-once latch (module-level warnedMissingEnv) is preserved but its existing test gap is closed: altifyai tests/error-capture.test.js TS-9 currently calls captureError() only once and never proves the latch suppresses a second call.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: A missing-env forward attempt emits console.error (not console.warn) with the existing message text unchanged",
+        "AC-2: A second captureError() call within the same isolate after a missing-env failure emits no further console output (latch holds) — a NEW test proves this by calling captureError() twice and asserting exactly one console.error invocation",
+        "AC-3: composeFailureDetail in lib/alt-text/generate.js is NOT modified by this SD; TS-10/TS-12 continue to pass unchanged"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "The walk result's captured_cause and the completion-ready probe surface the diagnosis in the AltifyAI status line consumed by scripts/adam-exec-summary.mjs and scripts/adam-decision-email.mjs, without altering venture-build-status.mjs's closed BUILD_STATUS enum",
+      "description": "New pure function formatCauseLine(captured_cause) renders a single ASCII line ≤160 chars: 'cause: <summary> (<producer>, <run_id-short>)' for a real cause, or the three-state absent/empty renderings from FR-1's AC-2. cause is an ADDITIVE sibling key returned alongside deriveVentureBuildStatus()'s existing BUILD_STATUS output — never a new enum value — populated only in the IO wrapper that already joins ventures+venture_deployments, using the existing metadata->>venture_id lookup pattern from lib/eva/quality-findings/db-sourced-findings.js (not the incompletely-backfilled top-level venture_id FK). lib/fleet/parent-completion.mjs re-fetches parent.metadata fresh immediately after its runHandoff('PLAN-TO-LEAD', ...) call resolves (not the pre-handoff parent object) and appends the cause line to its returned message, fail-soft (a fetch error never blocks the completion-ready computation itself).",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: adam-exec-summary.mjs's plain-text and HTML-escaped render paths both show the cause line for a venture with a captured RED walk, with no markdown and no line break inside the 160-char budget",
+        "AC-2: deriveVentureBuildStatus()'s BUILD_STATUS enum value is byte-identical before and after this change for every existing fixture (additive-only regression test)",
+        "AC-3: parent-completion.mjs's countCompletionReadyParents() output includes the cause line for a parent SD whose child carries a failed journey_walk_result, verified by a re-fetch (not the stale pre-handoff object) in a unit test"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "requirement": "altifyai docs/usage-event-ingest-secret-provisioning.md's 'human step' section is rewritten to describe the CI path built by FR-2/FR-3, removing the now-inaccurate 'why this is a human step' framing",
+      "description": "The doc already partially refutes its own premise (Option B was described before it was built); this FR closes the loop by replacing the 'human step' heading and its rationale with a description of the automated Deploy-time provisioning (FR-2) and token-scope verification (FR-3), retaining only the genuinely one-time steps that remain human (minting the initial ingest key via fn_provision_venture_ingest_key) as an explicitly-labeled bootstrap step, not a recurring troubleshooting step.",
+      "priority": "LOW",
+      "acceptance_criteria": [
+        "AC-1: The rewritten section no longer instructs a human to run `wrangler secret put` locally as the primary path",
+        "AC-2: The section names FR-2's Deploy-time provisioning and FR-3's token-scope check as the enforced mechanism",
+        "AC-3: The one genuinely-human bootstrap step (initial key minting) is clearly labeled as one-time, not recurring troubleshooting"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "runVentureJourneyWalk (lib/apa/journey-walk-orchestrator.js) accepts two new optional injectable deps: deps.captureCloudflareLogs(ventureId, window) and deps.queryVentureD1(ventureId, table, window), both defaulting to real Cloudflare API implementations but overridable in tests",
+      "rationale": "TESTING evidence (45f25a18, blocking finding B2) confirmed zero existing callable client exists in EHG_Engineer for Cloudflare Worker log tail or D1 reads; without named injectable seams, EXEC cannot write real code or PLAN cannot spec provable unit tests, and the provenance-forgery risk (RISK evidence 0ec29338 R4) is unmitigated if the walker both dispatches and authors its own gating evidence."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "All captured_cause content passes through the existing altifyai redaction module pattern (composeFailureDetail's allowlist-only assembly: provider_status;provider_code;classification) before storage — no raw provider message text, headers, or request bodies are persisted in uat_test_results.metadata or the feedback table",
+      "rationale": "RISK evidence 0ec29338 (R2, hard EXEC-completion gate): the altifyai redaction module is scoped to app-error shape, not raw wrangler-tail output, and uat_test_results.metadata has no DB-level size or content cap; shipping without a redaction-coverage test risks leaking secrets or PII into an evidence row that downstream gates and Adam's status line both read."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "The Cloudflare API credential used by the walker is read once at construction from CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (fleet-wide env, same contract as lib/operator/cloudflare-cost-adapter.js), never a per-venture credential stored in ventures.metadata",
+      "rationale": "DATABASE evidence (0d33d5d5) confirmed no venture row carries a Cloudflare account_id or D1 database_id in metadata across all 56 distinct top-level keys fleet-wide; the D1 database_id must be resolved live via Cloudflare's list-D1-databases API matched by database_name against the venture's workers.dev subdomain, since wrangler.toml commits only a placeholder id."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "The altifyai Deploy workflow changes (FR-2/FR-3) and the doc rewrite (FR-6) ship as one PR in rickfelix/altifyai branched from a fresh pull of origin/main (140e971 or newer); EHG_Engineer changes (FR-1/FR-5) ship as a separate PR in this repo; the altifyai PR URL is attached as EXEC evidence on the EHG_Engineer SD since this repo's gate pipeline has no visibility into the altifyai repo",
+      "rationale": "VALIDATION evidence (CONDITIONAL_PASS 90) confirmed both local altifyai checkouts are 73-132 commits behind origin/main with an unrelated uncommitted feature in one working tree; building on the stale checkout risks silent conflicts with PRs #90-#94 already merged there."
+    }
+  ],
+  "system_architecture": {
+    "overview": "Two independently-deployed halves connected by a shared, versioned captured_cause data contract. In EHG_Engineer, the existing stage-23 journey walk pipeline (lib/apa -> lib/uat/result-recorder.js -> uat_test_results/uat_test_runs -> strategic_directives_v2.metadata.journey_walk_result) gains a new evidence-attachment step that queries three independent sources per failed step and writes a bounded, provenanced object. In the altifyai Cloudflare Worker repo, the Deploy workflow gains a fail-loud provisioning step and a token-scope probe, and the error-capture module's silent-failure path becomes observable during a bounded tail window. Neither half depends on the other at runtime; they are connected only by the data the walker reads (venture_errors via the already-shipped record_venture_error RPC, D1 failures via the venture's own database) and by CI evidence attachment (the altifyai PR URL referenced from the EHG_Engineer SD).",
+    "components": [
+      {"name": "captureCloudflareLogs (new)", "responsibility": "Query the Cloudflare Workers Observability telemetry API for a bounded journey-window log slice for the AltifyAI worker; returns a LEG object with provenance or absent+reason", "technology": "Node.js fetch against Cloudflare API, CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID"},
+      {"name": "queryVentureD1 (new)", "responsibility": "Resolve the venture's D1 database_id live via Cloudflare's list-D1-databases API, then query generated_alt_texts for failure rows in the journey window", "technology": "Cloudflare D1 HTTP API"},
+      {"name": "queryVentureErrors (reuses existing Supabase client)", "responsibility": "Read public.feedback rows written by record_venture_error for the venture in the journey window", "technology": "Supabase/Postgres, existing idx_feedback_venture_error_created index"},
+      {"name": "journey-walk-orchestrator.js (modified)", "responsibility": "Orchestrates the three capture calls per failed step, assembles the bounded captured_cause object, folds a summary into the SD-level journey_walk_result rollup", "technology": "Node.js, existing lib/apa module"},
+      {"name": "formatCauseLine (new)", "responsibility": "Pure function rendering captured_cause into the single-line ASCII status-line string with three-state (absent/empty/populated) handling", "technology": "Node.js pure function, lib/governance"},
+      {"name": "deploy.yml secret-provisioning step (new, altifyai)", "responsibility": "Reuses PR #90's idempotent wrangler secret put loop as a Deploy-path step; fails loud on a missing GitHub secret", "technology": "GitHub Actions, wrangler CLI"},
+      {"name": "deploy.yml token-scope probe (new, altifyai)", "responsibility": "Reuses PR #92's Workers AI probe shape plus an observability-read probe; emits one named keystroke on a missing scope", "technology": "GitHub Actions, Cloudflare API"},
+      {"name": "capture.js checkEnv() (modified, altifyai)", "responsibility": "Switches console.warn to console.error on the forwarding-disabled path, latch behavior unchanged", "technology": "Cloudflare Worker JS"}
+    ],
+    "data_flow": "Journey step fails -> journey-walk-orchestrator.js calls the three capture functions in parallel with the step's time window -> each returns a LEG (data + provenance, or absent) -> assembled into captured_cause, redacted, size-bounded -> written to uat_test_results.metadata.captured_cause via the existing recordResult() call -> on walk completion, summary folded into strategic_directives_v2.metadata.journey_walk_result.captured_cause via the existing stampJourneyWalkResult() merge -> downstream: (a) venture-build-status.mjs's IO wrapper reads the SD row and adds the additive `cause` field, consumed by adam-exec-summary.mjs/adam-decision-email.mjs; (b) parent-completion.mjs re-reads parent.metadata post-handoff and appends the cause line. In altifyai: a GitHub Actions push to main triggers deploy.yml -> D1 migrations -> wrangler deploy -> [NEW] secret-provisioning step (fail loud if a GitHub secret is absent) -> [NEW] token-scope probe (fail with one named keystroke if a scope is missing) -> existing post-deploy-signed-in-uat step.",
+    "integration_points": [
+      "lib/uat/result-recorder.js recordResult() — existing insertion point for captured_cause, no signature change (metadata is already a passthrough jsonb param)",
+      "public.feedback / record_venture_error RPC (existing, unmodified) — read-only consumer relationship",
+      "Cloudflare Workers Observability API and D1 HTTP API — new external dependencies, credentialed via existing fleet-wide CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID",
+      "scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js and lib/eva/quality-findings/db-sourced-findings.js — existing unmodified consumers of journey_walk_result.status; captured_cause is an additive field they may optionally surface later, not a required read for this SD",
+      "GitHub Actions in rickfelix/altifyai — deploy.yml gains two new steps; one-shot-secret-provision.yml and one-shot-ai-probe.yml logic is reused, not duplicated as new modules"
+    ]
+  },
+  "test_scenarios": [
+    {"id": "TS-1", "scenario": "Forced-failing stage-23 journey step produces captured_cause with full provenance on all three legs", "test_type": "unit", "given": "runVentureJourneyWalk is invoked with fixture deps.captureCloudflareLogs/queryVentureD1/queryVentureErrors each returning a populated LEG with producer+run_id+content_hash, and a journey step configured to fail", "when": "the walk executes and the failed step is recorded", "then": "the resulting uat_test_results row's metadata.captured_cause has all three legs with absent=false and non-null producer/run_id/content_hash, and the SD-level journey_walk_result.captured_cause carries the summary"},
+    {"id": "TS-2", "scenario": "An empty-but-successful capture never reads as 'no cause'", "test_type": "unit", "given": "all three fixture deps return absent=false with item_count=0", "when": "formatCauseLine() renders the captured_cause", "then": "the output text is '...no matching entries in window (capture succeeded)...' and is textually distinct from the absent=true rendering, per RISK finding R3 (empty-capture-reads-as-no-cause)"},
+    {"id": "TS-3", "scenario": "A capture that could not run at all is distinguishable from an empty one", "test_type": "unit", "given": "deps.captureCloudflareLogs throws / times out for the journey window", "when": "the walk assembles captured_cause", "then": "worker_logs.absent=true with absent_reason='fetch_failed' (not item_count=0), and formatCauseLine() renders 'capture unavailable (fetch_failed)'"},
+    {"id": "TS-4", "scenario": "captured_cause respects the ~8KB size bound under a worst-case fixture", "test_type": "unit", "given": "each of the three fixture legs returns the maximum 10 items at 200 chars each", "when": "the walker assembles and serializes captured_cause", "then": "JSON.stringify(captured_cause).length stays under the documented backstop and items_truncated is set on any leg that exceeded the per-leg cap"},
+    {"id": "TS-5", "scenario": "altifyai Deploy fails loud when a forwarding secret is missing", "test_type": "integration", "given": "a workflow-lint or extracted-shell-script test harness invokes the secret-provisioning step's logic with one of EHG_ENGINEER_SUPABASE_URL/EHG_ENGINEER_SUPABASE_ANON_KEY/VENTURE_ID unset", "when": "the step logic runs", "then": "it exits non-zero with an ::error:: line naming the missing secret, matching the exit predicate from Solomon c2cba209 ('Deploy run fails when a forwarding secret is missing')"},
+    {"id": "TS-6", "scenario": "altifyai Deploy succeeds and is idempotent when all forwarding secrets are present", "test_type": "integration", "given": "all three GitHub secrets are set (already the case per RISK evidence 0ec29338 R5/R6, confirmed via gh secret list)", "when": "the secret-provisioning step runs twice in succession", "then": "both runs succeed and `wrangler secret list --name altifyai` shows all three secrets present after each run"},
+    {"id": "TS-7", "scenario": "Token-scope probe emits exactly one named keystroke on a missing Workers AI scope", "test_type": "integration", "given": "a mocked Cloudflare API response returning 401/403 for the /ai/run probe (reproducing PR #92's measured live 401)", "when": "the token-scope-check step runs", "then": "it emits exactly one ::error:: line in the FR-3 format naming a concrete permission to add, and no other chairman-facing output"},
+    {"id": "TS-8", "scenario": "capture.js's warn-once latch suppresses a second console.error within the same isolate", "test_type": "unit", "given": "captureError() is called twice in succession within one isolate with the same missing-env condition, using the existing _resetWarnedMissingEnvForTests() test hook to control latch state", "when": "both calls complete", "then": "console.error is invoked exactly once (closing the existing TS-9 test gap that only ever called captureError() a single time)"},
+    {"id": "TS-9", "scenario": "composeFailureDetail is unmodified and TS-10/TS-12 continue to pass", "test_type": "unit", "given": "the altifyai test suite tests/alt-text-generate.test.js is run unchanged after this SD's FR-4 changes land", "when": "TS-10 and TS-12 execute", "then": "both pass exactly as before — failure_detail still carries zero provider message text — proving FR-4's scope reduction did not regress the pinned security tests"},
+    {"id": "TS-10", "scenario": "venture-build-status.mjs's BUILD_STATUS enum is unchanged for every existing fixture", "test_type": "unit", "given": "the existing venture-build-status.mjs test fixtures are run before and after the FR-5 additive `cause` field is introduced", "when": "deriveVentureBuildStatus() is called", "then": "every existing fixture's BUILD_STATUS enum value is byte-identical to its pre-change value (additive-only regression guard)"}
+  ],
+  "acceptance_criteria": [
+    "A failed stage-23 journey result row carries captured_cause with provenance (producer, run_id, content_hash) populated from FR-1 for every non-absent leg — the CI-form exit predicate from Solomon c2cba209",
+    "The altifyai Deploy run fails when a forwarding secret (EHG_ENGINEER_SUPABASE_URL, EHG_ENGINEER_SUPABASE_ANON_KEY, or VENTURE_ID) is missing — the second half of Solomon c2cba209's exit predicate",
+    "No chairman-facing keyboard packet after merge instructs reading a Cloudflare dashboard or log stream; the only allowed CI-failure surface is the one named keystroke from FR-3",
+    "The AltifyAI status line Adam carries (adam-exec-summary.mjs / adam-decision-email.mjs output) shows the captured cause for a venture with a RED stage-23 walk, distinguishing populated / empty-but-succeeded / capture-unavailable states"
+  ],
+  "risks": [
+    {
+      "risk": "An 8KB-unbounded or unredacted Worker log capture leaks a secret, API key, or PII fragment into uat_test_results.metadata, which multiple downstream readers (gates, Adam's status line, exec summaries) then propagate",
+      "probability": "MEDIUM",
+      "impact": "HIGH",
+      "mitigation": "TR-2 mandates routing all captured text through the existing allowlist-only redaction pattern before storage, plus the explicit per-leg/total size caps in FR-1; TS-4 tests the size bound and EXEC must add a dedicated redaction-coverage test before this FR is considered complete (per RISK evidence 0ec29338 R2, documented as a hard EXEC-completion gate, not optional)",
+      "rollback_plan": "Feature is additive (captured_cause is a new, optional metadata field); rollback is reverting the EHG_Engineer PR, which removes the write path with no schema migration to undo"
+    },
+    {
+      "risk": "An empty-but-successful capture (item_count=0) is indistinguishable from an absent/failed capture in the rendered status line, so a RED walk with genuinely no matching evidence reads identically to 'the harness never even tried' — silently defeating the SD's purpose of always surfacing a diagnosis",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "The three-state absent/empty/populated render contract (FR-1 AC-2, tested by TS-2/TS-3) makes the two cases textually distinct by construction; DESIGN evidence 1a71cf03 specifies the exact wording for each state",
+      "rollback_plan": "Rendering logic lives entirely in the pure formatCauseLine() function; a wording regression is fixed forward with no data migration"
+    },
+    {
+      "risk": "The walker becomes its own evidence's producer (dispatches the Cloudflare/D1 queries AND authors the provenance that gates read), reproducing the provenance-forgery pattern ratification 6c263823 was written to close",
+      "probability": "LOW",
+      "impact": "HIGH",
+      "mitigation": "content_hash is computed over the actual API response bytes (not a self-asserted claim) using the existing computeDedupHash pattern already used for evidence_hash; run_id is the Cloudflare API's own request/ray id where available, not a walker-generated string; TR-1's injectable-deps design makes the boundary between dispatcher and evidence author auditable in tests",
+      "rollback_plan": "If provenance is later found insufficiently independent, the acceptance-artifact-gate's existing PROVENANCE_PREDICATES pattern can be extended to validate captured_cause the same way it validates uat_test_runs, without a schema change"
+    },
+    {
+      "risk": "EXEC branches the altifyai changes from one of the two stale local checkouts (73-132 commits behind origin/main, one with an unrelated uncommitted feature) instead of a fresh pull, silently reintroducing already-reverted code or conflicting with PRs #90-#94",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "TR-4 explicitly requires branching from a fresh `git fetch origin && git checkout -b <branch> origin/main`; EXEC must state the exact commit SHA branched from in its handoff evidence",
+      "rollback_plan": "If a stale-base conflict is discovered post-PR, close the PR and re-branch from a fresh origin/main pull; no altifyai production state is affected until the PR merges"
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      {"phase": "Phase 1 (EHG_Engineer): captured_cause data contract", "description": "Implement the three capture functions with injectable deps, the redaction pass, the size bound, and the two-tier storage (per-step metadata + SD-level rollup)", "deliverables": ["deps.captureCloudflareLogs", "deps.queryVentureD1", "captured_cause assembly in journey-walk-orchestrator.js", "unit tests TS-1 through TS-4"]},
+      {"phase": "Phase 2 (EHG_Engineer): status-line surfacing", "description": "Add formatCauseLine(), the additive venture-build-status.mjs field, and the parent-completion.mjs re-read", "deliverables": ["formatCauseLine() pure function + tests", "venture-build-status.mjs additive field + regression test TS-10", "parent-completion.mjs re-read"]},
+      {"phase": "Phase 3 (rickfelix/altifyai): Deploy hardening", "description": "Wire the existing one-shot-secret-provision.yml loop and one-shot-ai-probe.yml probe shape into deploy.yml as fail-loud steps; flip capture.js to console.error; rewrite the doc", "deliverables": ["deploy.yml secret-provisioning step", "deploy.yml token-scope probe step", "capture.js console.error change + TS-8 latch test", "docs/usage-event-ingest-secret-provisioning.md rewrite"]},
+      {"phase": "Phase 4: cross-repo verification", "description": "Confirm both PRs together satisfy the exit predicate end-to-end against a real forced-failure walk", "deliverables": ["EHG_Engineer PR with altifyai PR URL attached as evidence", "manual verification run: forced-fail journey -> captured_cause populated -> status line shows cause"]}
+    ],
+    "technical_decisions": [
+      "captured_cause is stored as a nested object (not flat keys like authForensics) because it aggregates three independently-provenanced sources rather than one observation stream — DESIGN evidence 1a71cf03 evaluated the flat-20-key alternative and rejected it as worse",
+      "FR-2/FR-3 reuse existing shipped altifyai workflow logic (PR #90, #92) rather than authoring new provisioning/probe code, per LEAD's scope-reduction finding that the underlying mechanisms already exist and are tested",
+      "FR-4's composeFailureDetail half is cut at LEAD (not reopened at PLAN) because it directly conflicts with pinned security tests TS-10/TS-12 in altifyai; diagnosis for that specific failure path is carried by FR-1's D1 capture instead, which reads the same generated_alt_texts.failure_code/failure_detail data without needing to relax the redaction"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      {"name": "Adam (autonomous coordinator role)", "interaction": "Reads the cause line via adam-exec-summary.mjs and adam-decision-email.mjs when reviewing venture status; reads captured_cause directly when investigating a RED stage-23 walk", "frequency": "Every venture status review cycle and every RED walk"},
+      {"name": "Chairman", "interaction": "Receives the cause line embedded in exec summaries / decision emails; never needs to read a Cloudflare dashboard or Worker log directly", "frequency": "Whenever a status/decision email is sent for AltifyAI"},
+      {"name": "plan-to-lead prerequisite-check.js and db-sourced-findings.js (existing, unmodified)", "interaction": "Continue reading journey_walk_result.status as today; captured_cause is an additive field available to them but not required by this SD's scope", "frequency": "Every PLAN-TO-LEAD handoff and quality-findings pass touching a journey-walk SD"}
+    ],
+    "dependencies": [
+      {"name": "Cloudflare Workers Observability API + D1 HTTP API", "type": "downstream", "contract": "Read-only HTTP calls credentialed via CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID (existing fleet-wide env, same contract as lib/operator/cloudflare-cost-adapter.js)", "failure_handling": "A failed/timed-out call sets that leg's absent=true with absent_reason='fetch_failed'; the walk itself is never blocked by a capture failure"},
+      {"name": "public.feedback / record_venture_error RPC (existing, unmodified)", "type": "downstream", "contract": "Read-only query against existing idx_feedback_venture_error_created index; no schema change", "failure_handling": "A query error sets venture_errors.absent=true with absent_reason='fetch_failed'"},
+      {"name": "rickfelix/altifyai Deploy workflow", "type": "upstream", "contract": "The EHG_Engineer walker's D1/Observability reads depend on the venture continuing to deploy with the same worker name and D1 database naming convention used to resolve database_id live", "failure_handling": "If the venture's worker/D1 naming changes, queryVentureD1's live resolution fails closed to absent=true rather than querying the wrong venture's data"}
+    ],
+    "data_contracts": [
+      {"contract_name": "captured_cause (uat_test_results.metadata.captured_cause)", "schema": "{window:{from,to}, worker_logs:LEG, venture_errors:LEG, d1_failures:LEG, summary}; LEG={producer,run_id,content_hash,item_count,items[],items_truncated,absent,absent_reason}", "validation": "run_id/content_hash required non-null whenever absent=false; total serialized size bounded ~8KB with a hard backstop", "versioning": "New field, additive only; no existing reader is required to understand it, so no version negotiation is needed"}
+    ],
+    "runtime_config": {
+      "environment_variables": ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "EHG_ENGINEER_SUPABASE_URL (altifyai secret)", "EHG_ENGINEER_SUPABASE_ANON_KEY (altifyai secret)", "VENTURE_ID (altifyai secret)"],
+      "feature_flags": [],
+      "deployment_considerations": "EHG_Engineer half deploys with the normal LEO PR/merge flow. altifyai half deploys via its existing deploy.yml on push to main; the new provisioning/probe steps are additive to that same workflow, so no separate deployment sequencing is required."
+    },
+    "observability_rollout": {
+      "monitoring": ["captured_cause presence rate on failed uat_test_results rows (should approach 100% over time per the SD's own success criterion of 0 exceptions over 5 walks)", "Deploy workflow failure rate at the new provisioning/probe steps (expected near-zero once secrets/scopes are correct)"],
+      "alerts": ["A failed journey result with all three captured_cause legs absent=true for 2+ consecutive walks (capture infrastructure itself is failing, not just finding nothing)"],
+      "rollout_strategy": "Land Phase 1-2 (EHG_Engineer) first since they are purely additive and low-risk; land Phase 3 (altifyai) once Phase 1 confirms captured_cause is correctly populated against a real forced-failure walk",
+      "rollback_trigger": "captured_cause writes cause uat_test_results insert failures, or the altifyai Deploy workflow's new steps fail on a deploy where all secrets/scopes are actually correct (false-positive fail-loud)",
+      "rollback_procedure": "EHG_Engineer: revert the PR (additive field, no migration to undo). altifyai: revert the deploy.yml step additions; the reused provisioning/probe logic already exists independently as workflow_dispatch one-shots (#90, #92) so the manual fallback path remains available during rollback"
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/apa/journey-walk-orchestrator.js", "lib/apa/browser-executor.js", "lib/uat/result-recorder.js",
+      "database/migrations/20260704d_venture_error_aggregation_rpc.sql", "lib/governance/venture-build-status.mjs",
+      "lib/fleet/parent-completion.mjs", "scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js",
+      "lib/eva/quality-findings/db-sourced-findings.js", "scripts/modules/handoff/executors/lead-final-approval/gates/acceptance-artifact-gate.js",
+      "lib/operator/cloudflare-cost-adapter.js", "altifyai lib/error-capture/capture.js", "altifyai lib/alt-text/generate.js",
+      "altifyai .github/workflows/deploy.yml, one-shot-secret-provision.yml, one-shot-ai-probe.yml, one-shot-wrangler-tail.yml",
+      "altifyai wrangler.toml", "altifyai migrations/0003_create_generated_alt_texts_table.sql", "altifyai docs/usage-event-ingest-secret-provisioning.md"
+    ],
+    "patterns_identified": [
+      "absent-unless-observed metadata convention (authForensics, providerResponseClass) is the precedent for captured_cause",
+      "record_venture_error's storm-limited RPC + existing feedback indexes are directly reusable for the venture_errors leg with no schema change",
+      "altifyai already ships tested, idempotent one-shot workflows (#90 secret provision, #92 AI probe) that this SD wires into the always-run Deploy path rather than reimplementing"
+    ],
+    "key_decisions": [
+      "captured_cause lives in uat_test_results.metadata (no migration) with a summary rollup in strategic_directives_v2.metadata.journey_walk_result",
+      "FR-4's composeFailureDetail half is cut at LEAD due to a confirmed conflict with pinned altifyai security tests TS-10/TS-12",
+      "Cloudflare credentials are fleet-wide env (CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID), not per-venture stored values, since none exist in ventures.metadata today"
+    ],
+    "exploration_date": "2026-09-11"
+  }
+}

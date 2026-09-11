@@ -1,0 +1,29 @@
+{
+ "verdict": "PASS",
+ "confidence": 90,
+ "phase": "LEAD",
+ "handoff": "LEAD-TO-PLAN",
+ "summary": "Explore discovery for SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001: mapped the current state of every surface the six FRs touch across EHG_Engineer and the altifyai venture repo; no existing implementation of captured_cause/provenance exists, so the SD is net-new on FR-1/FR-5 and an extension of shipped one-shots on FR-2/3/4.",
+ "findings": [
+  "No lib/uat stage-23 walker: the walk is lib/apa/journey-walk-orchestrator.js:67 runVentureJourneyWalk + lib/apa/browser-executor.js:193 runJourneyWalk; lib/uat/result-recorder.js writes uat_test_runs (:117-147) and per-step uat_test_results (:216-262) with lowercased status pass/fail/blocked/skip; FAIL rows also emit a feedback row (:412-449); walk summary stamped to strategic_directives_v2.metadata.journey_walk_result (:240-259).",
+  "captured_cause / producer / content_hash do not exist on any walk row; provenance today = metadata.commit_sha (orchestrator :33-39), metadata.evidence_hash via computeDedupHash (:170-180), env_snapshot_at; acceptance-artifact-gate.js:25-31 and :101-103 explicitly disclaim these as producer-independent.",
+  "No canonical stage-23 walk runner CLI; only scripts/one-off/rerun-stage23-walk-eleven-001-fr13.mjs with a hardcoded base URL; the stage-23 template step (lib/eva/stage-templates/analysis-steps/stage-23-dedicated-venture-uat.js) does not run the walk.",
+  "record_venture_error RPC: database/migrations/20260704d_venture_error_aggregation_rpc.sql:76, SECURITY DEFINER, anon-executable, writes public.feedback rows feedback_type='venture_error' source_type='error_capture' (no venture_errors table); no dedicated reader exists.",
+  "Completion-ready probe lib/fleet/parent-completion.mjs:251 reads only strategic_directives_v2 children/handoff state, no walk input; the measured AltifyAI status line is lib/governance/venture-build-status.mjs (ventures + venture_deployments only, closed BUILD_STATUS enum) consumed by scripts/adam-exec-summary.mjs and adam-decision-email.mjs.",
+  "Walk result consumers: plan-to-lead prerequisite-check.js:285-314 (WAIT unless journey_walk_result.status==='pass'), lib/eva/quality-findings/db-sourced-findings.js:312-332, lead-final-approval acceptance-artifact-gate.js (observe-only unless ACCEPTANCE_ARTIFACT_GATE_BINDING=true).",
+  "EHG_Engineer has zero Cloudflare log/tail/observability/Workers-AI integration; wrangler appears only in scaffolding writers and cost adapter.",
+  "altifyai: two local checkouts (C:/Users/rickf/Projects/_EHG/altifyai main@e9a6e19 with uncommitted feedback feature and no .github dir; altifyai-exec-e2e on a docs branch), both ~73-132 commits behind origin/main 140e971 (PR #94). PRs #90 one-shot-secret-provision.yml, #91 one-shot-d1-query.yml, #92 one-shot-ai-probe.yml exist only on origin/main. deploy.yml runs D1 migrations + wrangler deploy + post-deploy-signed-in-uat but no wrangler secret put. one-shot-wrangler-tail.yml is a bounded tail; wrangler.toml has no observability/logpush so Cloudflare retains no history.",
+  "altifyai lib/error-capture/capture.js: forwarding-disabled path is console.warn behind a warn-once latch (:13,:24,:28), no console.error anywhere; forward() POSTs rest/v1/rpc/record_venture_error with the anon key. composeFailureDetail at lib/alt-text/generate.js:294 is allowlist-only (provider_status;provider_code;classification) and PR #94 already added a console.error failure_code line at :223. TS-10/TS-12 in tests/alt-text-generate.test.js pin failure_detail to carry no provider message text.",
+  "docs/usage-event-ingest-secret-provisioning.md already refutes its own 'human step' premise and names Option B (workflow_dispatch one-shot) which PR #90 built; it records that EHG_ENGINEER_SUPABASE_URL/_ANON_KEY/VENTURE_ID are dormant in production; EHG_ENGINEER_INGEST_SECRET is missing from the #90 loop.",
+  "QF-20260906-282 is implemented in EHG_Engineer (providerResponseClass threaded venture-step-executors.js:863 -> browser-executor.js:152 -> orchestrator :141 -> result-recorder :192/:250); QF-986 exists only as contract prose here and altifyai #90/#94; QF-363 only altifyai #93; QF-687 has no code hits.",
+  "Walker tests: tests/unit/apa/journey-walk-orchestrator.test.js (4 describes incl. metadata stamp), browser-executor.test.js, venture-step-executors*.test.js, tests/unit/uat/result-recorder-*.test.js."
+ ],
+ "recommendations": [
+  "PLAN: place per-step captured_cause in uat_test_results.metadata (absent-unless-observed convention like authForensics/providerResponseClass) AND fold a summary into journey_walk_result so prerequisite-check and db-sourced-findings can read it.",
+  "PLAN: name injectable seams deps.captureCloudflareLogs and deps.queryVentureD1 on runVentureJourneyWalk; unit tests fixture them.",
+  "PLAN: altifyai work branches from fresh origin/main (140e971); FR-2 reuses the #90 loop inside deploy.yml; FR-3 reuses #92's probe shape as a CI step."
+ ],
+ "producer": "Explore built-in agent via Task tool, session 689a1237-33b7-406f-9772-668958b289d6",
+ "executed_at": "2026-09-11T19:20:00Z",
+ "confidence_score": 90
+}
