@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const SD_KEY = 'SD-LEO-FIX-IMPLEMENTATION-FIDELITY-GATE-001';
@@ -59,4 +60,6 @@ async function main() {
   console.log('OK: SECURITY follow-up folded into SD metadata and PRD FR-2/FR-4 corrected for', SD_KEY);
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => { console.error(err); process.exit(1); });
+}
