@@ -15,6 +15,8 @@ import jsyaml from 'js-yaml';
 const parseYaml = (s) => jsyaml.load(s);
 import {
   classifyFirstArg, scanLine, stripForScan, findViolations, loadAllowlist,
+  normalizeLine, violationKey, partitionByBaseline, parseAddedLines, parseRenameMap,
+  baselineKeysForFile, runDiffMode, collectDiff,
 } from '../../../scripts/lint/shell-injection-argv-lint.mjs';
 import { stripStringLiterals, scannableText } from '../../../lib/lint/added-line-text.mjs';
 
@@ -140,42 +142,178 @@ describe('TS-6: allowlist reasons are enforced (ledger, not bypass)', () => {
   });
 });
 
-describe('TS-7/TS-10: advisory flip contract on PARSED YAML, self-enforcing deadline', () => {
+describe('TS-7/TS-10: BLOCKING flip contract on PARSED YAML (SD-MAN-INFRA-FLIP-SHELL-INJECTION-001)', () => {
   const WF = path.join(ROOT, '.github', 'workflows', 'shell-injection-argv-lint.yml');
-  // EXTENSION RECORDED 2026-09-11 (QF-20260911-228): the original 2026-09-09 deadline passed with
-  // no actor. The flip is NOT safe yet — the B-3 reflow precondition (violationKey identity in the
-  // lint) is still unaddressed, so blocking would hand the backlog to every toucher. The flip is
-  // owned by SD-MAN-INFRA-FLIP-SHELL-INJECTION-001, which lands B-3, removes continue-on-error and
-  // rewrites the workflow's dated note (a QF may not touch .github/workflows — sensitive path), so
-  // the workflow header still carries the original 2026-09-09 date until that SD ships.
-  const FLIP_DEADLINE = Date.parse('2026-10-09T23:59:59Z');
-  it('workflow is advisory (continue-on-error: true as a parsed property) with the dated note', () => {
+  // FLIPPED 2026-09-11: the advisory soak (2026-08-10 → extended to 2026-10-09 by QF-20260911-228)
+  // ended when B-3 landed — violationKey identity + merge-base baseline partition in the lint. The
+  // self-enforcing contract now guards the BLOCKING state: the step carries an EXPLICIT
+  // continue-on-error: false (grep-pinnable, mirroring schema-reference-lint.yml) and the dated
+  // advisory note is gone. tests/unit/shell-injection-argv-lint-workflow-blocking.test.js pins the
+  // header prose; this block pins the parsed property so a YAML reflow cannot fool a regex.
+  it('workflow lint step is blocking (continue-on-error: false as a parsed property)', () => {
     const doc = parseYaml(fs.readFileSync(WF, 'utf8'));
     const steps = doc.jobs['shell-injection-argv'].steps;
     const lintStep = steps.find((s) => s.run && s.run.includes('shell-injection-argv-lint.mjs'));
-    expect(lintStep['continue-on-error']).toBe(true);
-    expect(fs.readFileSync(WF, 'utf8')).toContain('2026-09-09');
+    expect(lintStep['continue-on-error']).toBe(false);
   });
-  it('B-2: once the soak deadline passes, advisory mode FAILS this test — the flip has an actor', () => {
-    const doc = parseYaml(fs.readFileSync(WF, 'utf8'));
-    const steps = doc.jobs['shell-injection-argv'].steps;
-    const lintStep = steps.find((s) => s.run && s.run.includes('shell-injection-argv-lint.mjs'));
-    const stillAdvisory = lintStep['continue-on-error'] === true;
-    if (Date.now() > FLIP_DEADLINE) {
-      expect(stillAdvisory, 'the 2026-10-09 soak has ended: flip the workflow to blocking (remove continue-on-error) or extend the dated note WITH a recorded reason').toBe(false);
-    } else {
-      expect(stillAdvisory).toBe(true);
-    }
+  it('the dated advisory-soak note is retired from the workflow', () => {
+    const src = fs.readFileSync(WF, 'utf8');
+    expect(src).not.toContain('2026-09-09');
+    expect(src).not.toMatch(/continue-on-error:\s*true/);
   });
 });
 
-describe('TS-11: reflow precondition (B-3) — same content on a new line is scanned again', () => {
-  it('DOCUMENTS the resurfacing behavior: added-line scoping re-presents moved latent sites; this is a NAMED FLIP PRECONDITION, not a silent surprise', () => {
-    // The lint scans whatever the diff marks as added — a moved pre-existing violation IS
-    // re-scanned (schema-lint-scope.test.js:34,64 solves this with violationKey identity; adopt
-    // that shape at flip time). While advisory, resurfacing costs an annotation, not a block.
-    const moved = { file: 'lib/moved.js', line: 99, text: 'execSync(cmd);' };
-    expect(findViolations([moved], {}).length).toBe(1);
+describe('TS-11: B-3 reflow-safe identity — a moved pre-existing site is PRE-EXISTING, not new', () => {
+  it('violationKey ignores the line number and surrounding whitespace', () => {
+    const a = violationKey({ file: 'lib/a.js', selector: 'S1', text: '  execSync(cmd);', line: 99 });
+    const b = violationKey({ file: 'lib/a.js', selector: 'S1', text: 'execSync(cmd);', line: 278 });
+    expect(a).toBe(b);
+    expect(a).not.toMatch(/\|\d+$/);
+    expect(normalizeLine('  execSync(  cmd );\t')).toBe('execSync( cmd );');
+  });
+  it('violationKey is content-sensitive (string contents are part of the identity, unlike stripForScan)', () => {
+    const a = violationKey({ file: 'lib/a.js', selector: 'S1', text: "execSync('a' + x);" });
+    const b = violationKey({ file: 'lib/a.js', selector: 'S1', text: "execSync('b' + x);" });
+    expect(a).not.toBe(b);
+    expect(violationKey({ file: 'lib/a.js', selector: 'S1', text: 'x' })).not.toBe(violationKey({ file: 'lib/b.js', selector: 'S1', text: 'x' }));
+  });
+  it('findViolations carries key = violationKey(v) built from the FULL raw line, not the 120-char excerpt', () => {
+    const longTail = 'execSync(cmd, { encoding: "utf8" }); // ' + 'x'.repeat(150) + ' END';
+    const [v] = findViolations([{ file: 'lib/a.js', line: 3, text: longTail }], {});
+    expect(v.key).toBe(violationKey({ file: 'lib/a.js', selector: 'S1', rawText: longTail }));
+    expect(v.key.endsWith('END')).toBe(true);
+    expect(v.text.length).toBeLessThanOrEqual(120);
+  });
+  it('the SAME site moved to a new line partitions as pre-existing; a new site in the same file is new', () => {
+    const baseline = new Set([violationKey({ file: 'lib/moved.js', selector: 'S1', text: 'execSync(cmd);' })]);
+    const moved = findViolations([{ file: 'lib/moved.js', line: 99, text: 'execSync(cmd);' }], {});
+    const fresh = findViolations([{ file: 'lib/moved.js', line: 120, text: 'execSync(other);' }], {});
+    const split = partitionByBaseline([...moved, ...fresh], baseline);
+    expect(split.preExisting.map((v) => v.line)).toEqual([99]);
+    expect(split.newViolations.map((v) => v.line)).toEqual([120]);
+  });
+  it('a NULL baseline (no merge base) proves nothing pre-existing — everything is new, never the reverse', () => {
+    const v = findViolations([{ file: 'lib/moved.js', line: 99, text: 'execSync(cmd);' }], {});
+    expect(partitionByBaseline(v, null)).toEqual({ newViolations: v, preExisting: [] });
+    expect(partitionByBaseline(v, new Set()).newViolations).toHaveLength(1);
+  });
+});
+
+/** Injected git runner for runDiffMode: `script` maps a regex on args.join(' ') to a result. */
+function makeRunner(script) {
+  const calls = [];
+  const run = (args, opts = {}) => {
+    calls.push({ args, opts });
+    const cmd = args.join(' ');
+    for (const s of script) {
+      if (s.match.test(cmd)) {
+        if (s.throws) throw new Error(s.throws);
+        return opts.result ? { status: s.status ?? 0, stdout: s.stdout ?? '', stderr: s.stderr ?? '' } : (s.stdout ?? '');
+      }
+    }
+    return opts.result ? { status: 0, stdout: '', stderr: '' } : '';
+  };
+  run.calls = calls;
+  return run;
+}
+const MB = 'abc123def4560000000000000000000000000000';
+const patchFor = (file, added) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n`
+  + added.map(([line, text]) => `@@ -${line},0 +${line},1 @@\n+${text}`).join('\n') + '\n';
+
+describe('TS-2/TS-3/TS-4/TS-5: merge-base baseline partition through the git-runner seam (FR-2/FR-3)', () => {
+  it('TS-2: a touch-only change above a baseline site reports it pre-existing and blocks nothing', () => {
+    const run = makeRunner([
+      { match: /^merge-base /, stdout: MB + '\n' },
+      { match: /^diff --unified=0/, stdout: patchFor('lib/x.js', [[1, '// comment inserted above'], [12, 'execSync(cmd);']]) },
+      { match: /^diff --name-status/, stdout: 'M\tlib/x.js\n' },
+      { match: new RegExp('^show ' + MB + ':lib/x.js$'), stdout: 'const a = 1;\nexecSync(cmd);\n' },
+    ]);
+    const r = runDiffMode('origin/main', { run, allow: {} });
+    expect(r.mode).toBe('diff');
+    expect(r.mergeBase).toBe(MB);
+    expect(r.newViolations).toHaveLength(0);
+    expect(r.preExisting.map((v) => v.line)).toEqual([12]);
+    // the baseline read is argv-only, single-token object name, non-throwing, stderr silenced
+    const show = run.calls.find((c) => c.args[0] === 'show');
+    expect(show.args).toEqual(['show', `${MB}:lib/x.js`]);
+    expect(show.opts.result).toBe(true);
+    expect(show.opts.stdio).toEqual(['ignore', 'pipe', 'ignore']);
+  });
+  it('TS-3: a genuinely new site in the same touched file blocks; the moved site stays pre-existing', () => {
+    const run = makeRunner([
+      { match: /^merge-base /, stdout: MB },
+      { match: /^diff --unified=0/, stdout: patchFor('lib/x.js', [[12, 'execSync(cmd);'], [20, 'execSync(' + BT + 'git ' + D + '{x}' + BT + ');']]) },
+      { match: /^diff --name-status/, stdout: 'M\tlib/x.js\n' },
+      { match: new RegExp('^show ' + MB + ':lib/x.js$'), stdout: 'execSync(cmd);\n' },
+    ]);
+    const r = runDiffMode('origin/main', { run, allow: {} });
+    expect(r.newViolations.map((v) => v.line)).toEqual([20]);
+    expect(r.preExisting.map((v) => v.line)).toEqual([12]);
+  });
+  it('TS-4: a renamed file reads its baseline at the OLD path (the precedent would have read every old site as new)', () => {
+    const run = makeRunner([
+      { match: /^merge-base /, stdout: MB },
+      { match: /^diff --unified=0/, stdout: patchFor('lib/new.js', [[5, 'execSync(cmd);']]) },
+      { match: /^diff --name-status/, stdout: 'R100\tlib/old.js\tlib/new.js\n' },
+      { match: new RegExp('^show ' + MB + ':lib/old.js$'), stdout: 'execSync(cmd);\n' },
+      { match: new RegExp('^show ' + MB + ':lib/new.js$'), status: 128, stderr: 'fatal: path does not exist' },
+    ]);
+    const r = runDiffMode('origin/main', { run, allow: {} });
+    expect(r.newViolations).toHaveLength(0);
+    expect(r.preExisting).toHaveLength(1);
+    expect(parseRenameMap('R100\tlib/old.js\tlib/new.js\nM\tlib/x.js\nA\tlib/fresh.js\n')).toEqual(new Map([['lib/new.js', 'lib/old.js']]));
+  });
+  it('TS-5: a file absent at the merge base has an EMPTY baseline — its violation is new', () => {
+    const run = makeRunner([
+      { match: /^merge-base /, stdout: MB },
+      { match: /^diff --unified=0/, stdout: patchFor('lib/fresh.js', [[1, 'execSync(cmd);']]) },
+      { match: /^diff --name-status/, stdout: 'A\tlib/fresh.js\n' },
+      { match: /^show /, status: 128, stderr: 'fatal: path does not exist' },
+    ]);
+    const r = runDiffMode('origin/main', { run, allow: {} });
+    expect(r.newViolations).toHaveLength(1);
+    expect(r.preExisting).toHaveLength(0);
+    expect(baselineKeysForFile({ run, mergeBase: MB, file: 'lib/fresh.js' })).toEqual(new Set());
+  });
+  it('baselines are read lazily — only files carrying a HEAD violation hit git show', () => {
+    const run = makeRunner([
+      { match: /^merge-base /, stdout: MB },
+      { match: /^diff --unified=0/, stdout: patchFor('lib/clean.js', [[1, 'const ok = 1;']]) + patchFor('lib/x.js', [[3, 'execSync(cmd);']]) },
+      { match: /^diff --name-status/, stdout: 'M\tlib/clean.js\nM\tlib/x.js\n' },
+      { match: /^show /, stdout: '' },
+    ]);
+    runDiffMode('origin/main', { run, allow: {} });
+    const shows = run.calls.filter((c) => c.args[0] === 'show').map((c) => c.args[1]);
+    expect(shows).toEqual([`${MB}:lib/x.js`]);
+  });
+  it('the archive fence (scripts/one-off, archive, _deprecated) applies in diff mode too, matching --all and the _scope_note', () => {
+    const patch = patchFor('scripts/one-off/x.mjs', [[1, 'execSync(cmd);']]) + patchFor('scripts/archive/y.js', [[1, 'execSync(cmd);']]) + patchFor('lib/z.js', [[1, 'execSync(cmd);']]);
+    expect(parseAddedLines(patch).map((e) => e.file)).toEqual(['lib/z.js']);
+  });
+});
+
+describe('TS-6: base-ref guard is LOUD, unresolvable merge base is DEGRADED-advisory (FR-4)', () => {
+  it('an unreachable base degrades: nothing scanned, nothing blocked, nothing proven pre-existing', () => {
+    const run = makeRunner([{ match: /^merge-base /, throws: 'fatal: Not a valid object name refs/no/such' }]);
+    const r = runDiffMode('refs/no/such', { run, allow: {} });
+    expect(r.mode).toBe('diff (degraded)');
+    expect(r.mergeBase).toBeNull();
+    expect(r.scanned).toBe(0);
+    expect(r.newViolations).toEqual([]);
+    expect(r.preExisting).toEqual([]);
+    expect(r.degradedReason).toMatch(/Not a valid object name/);
+  });
+  it('an empty merge-base (shallow clone) also degrades rather than reading baselines against ""', () => {
+    const run = makeRunner([{ match: /^merge-base /, stdout: '\n' }]);
+    expect(runDiffMode('origin/main', { run, allow: {} }).mode).toBe('diff (degraded)');
+  });
+  it('an option-shaped base ref is refused by collectDiff BEFORE any git call (main() hoists the same guard and exits 2)', () => {
+    const run = makeRunner([]);
+    expect(() => collectDiff('--upload-pack=x', run)).toThrow(/invalid base ref/);
+    expect(run.calls).toHaveLength(0);
+    const src = fs.readFileSync(path.join(ROOT, 'scripts', 'lint', 'shell-injection-argv-lint.mjs'), 'utf8');
+    // The guard must sit OUTSIDE runDiffMode's degrade path: main validates, then exits 2, before runDiffMode.
+    expect(src).toMatch(/HOSTILE_BASE_REF[\s\S]*process\.exit\(2\)[\s\S]*runDiffMode\(baseRef/);
   });
 });
 

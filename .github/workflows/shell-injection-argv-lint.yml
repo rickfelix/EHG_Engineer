@@ -1,15 +1,24 @@
-# shell-injection-argv-lint — SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-B.
+# shell-injection-argv-lint — SD-LEO-INFRA-PUBLISH-SHELL-INJECTION-001-B (advisory soak),
+# flipped to BLOCKING by SD-MAN-INFRA-FLIP-SHELL-INJECTION-001 on 2026-09-11.
 #
-# ADVISORY-FIRST (FR-6): the lint step is `continue-on-error: true` so it CANNOT turn an
-# in-flight PR red while the measured ~324-site backlog soaks (baseline in
-# scripts/lint/shell-injection-argv-allowlist.json _scope_note).
+# BLOCKING: the lint step runs with an EXPLICIT `continue-on-error: false` (grep-pinnable, mirroring
+# schema-reference-lint.yml) — a NEW template-literal/bare-variable exec or shell:<non-literal-false>
+# argv site fails the PR check. The soak (2026-08-10 → 2026-10-09, extended once by QF-20260911-228)
+# ended when the one named precondition landed:
 #
-# DATED FLIP: soak through 2026-09-09, then remove continue-on-error (flip to blocking) or
-# record why not. THE DEADLINE IS SELF-ENFORCING — tests/unit/lint/shell-injection-argv-lint.test.js
-# carries a case that FAILS once the date passes while this file is still advisory, so the parked
-# state cannot decay silently (testing-agent B-2). FLIP PRECONDITION (B-3): the moved/reflowed-line
-# resurfacing behavior must be addressed (see the reflow test) before blocking, per the
-# schema-lint-scope precedent ("the backlog must not become the toucher's problem").
+# B-3 REFLOW-SAFE IDENTITY (what makes blocking safe): in diff mode every violation carries
+# violationKey = file | selector | normalized full line (NO line number) and is partitioned against
+# the keys found in the SAME file at the merge base (git show <mergeBase>:<oldPath>, renames mapped).
+# Only NEW keys set the exit code; pre-existing sites are reported, never blocking — the measured
+# backlog (237 sites / 130 files at the flip, ledger in scripts/lint/shell-injection-argv-allowlist.json
+# _scope_note) can never become the toucher's problem. An unresolvable merge base stays advisory
+# (exit 0, nothing scanned); a hostile SHELL_INJECTION_ARGV_BASE is a loud exit 2.
+#
+# Escape hatches for a reviewed false positive (always available, never a bypass):
+#   inline pragma on the flagged line: shell-injection-argv-disable-line
+#   scripts/lint/shell-injection-argv-allowlist.json  (file:line or file, WITH a non-empty reason)
+# Pinned by tests/unit/shell-injection-argv-lint-workflow-blocking.test.js and the TS-7 block of
+# tests/unit/lint/shell-injection-argv-lint.test.js.
 name: shell-injection-argv-lint
 
 on:
@@ -24,6 +33,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: shell-injection-argv-lint-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   shell-injection-argv:
     runs-on: ubuntu-latest
@@ -36,8 +49,9 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Run shell-injection-argv-lint (advisory soak — see dated flip note in header)
-        continue-on-error: true
+      - name: Run shell-injection-argv-lint (BLOCKING — B-3 baseline partition, see header)
+        # BLOCKING (SD-MAN-INFRA-FLIP-SHELL-INJECTION-001): only NEW sites fail; pre-existing are reported.
+        continue-on-error: false
         env:
           SHELL_INJECTION_ARGV_BASE: origin/${{ github.base_ref }}
         run: node scripts/lint/shell-injection-argv-lint.mjs

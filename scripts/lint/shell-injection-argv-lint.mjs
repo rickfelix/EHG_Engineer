@@ -12,9 +12,19 @@
  *   S2  shell: true in a spawn-family options object. The safe spawn shape is an argv array
  *       with no shell — see lib/git/hardened-runner.cjs, the published runner.
  *
- * ADVISORY-FIRST (FR-6 convention): the workflow runs with continue-on-error: true through the
- * dated soak (flip note in .github/workflows/shell-injection-argv-lint.yml). Pre-existing sites
- * are a LEDGER (see the allowlist _scope_note for the measured baseline), not a day-one block.
+ * BLOCKING since SD-MAN-INFRA-FLIP-SHELL-INJECTION-001 (2026-09-11), made safe by B-3 reflow-safe
+ * violation identity: in diff mode every HEAD violation carries violationKey() =
+ * `file|selector|normalized full line` (NO line number), and is partitioned against the keys found
+ * in the SAME file at the merge base (git show <mergeBase>:<oldPath>, renames mapped). Only NEW
+ * keys set the exit code; pre-existing sites are REPORTED, never blocking — the measured backlog
+ * (237 sites / 130 files at the flip, see the allowlist _scope_note) is a ledger that never becomes
+ * the toucher's problem. Mirrors scripts/lint/schema-lint-scope.mjs's partition polarity (a null
+ * baseline proves nothing pre-existing) with a LOCAL key — that module's violationKey is
+ * schema-shaped (file|type|table|column|kind) and hard-coded inside its partition, so it is
+ * mirrored, not imported. Accepted limit: two byte-identical violating lines in one file share a
+ * key, so adding a duplicate of an already-present site reads as pre-existing (same trade-off as
+ * the schema-lint precedent). --all is a whole-tree census with no baseline (every site "new", exit 1
+ * on the backlog) — scripts/audit/control-seed-test.mjs:205 keys a registered control on exactly that.
  *
  * DISCHARGES REAPER-GH flag d5c57a01 ("no lint covers shell:true anywhere in scripts/lint/;
  * prose-is-the-artefact, no gate reads it" — lib/claim/wip-detector.cjs:41-46 records the defect
@@ -41,7 +51,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isFixturePath, stripComments, stripStringLiterals } from '../../lib/lint/added-line-text.mjs';
-import { runHardenedGit, VALID_BASE_REF } from '../../lib/git/hardened-runner.cjs';
+import { makeHardenedGitRunner, VALID_BASE_REF } from '../../lib/git/hardened-runner.cjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ALLOWLIST_PATH = path.join(REPO_ROOT, 'scripts', 'lint', 'shell-injection-argv-allowlist.json');
@@ -121,24 +131,20 @@ function isAllowed(allow, file, line) {
 const SCAN_EXT = /\.(?:js|cjs|mjs)$/;
 const SKIP_DIR = /(?:^|\/)(?:node_modules|\.worktrees|archive|one-off|_deprecated|archived-[\w-]+)(?:\/|$)/;
 
-/** Diff mode: added lines vs merge-base, parsed from -U0 patch text. */
-function collectDiffAdded(baseRef) {
-  if (!VALID_BASE_REF.test(baseRef)) throw new Error(`invalid base ref ${JSON.stringify(baseRef)}`);
-  const mergeBase = runHardenedGit(['merge-base', baseRef, 'HEAD'], { cwd: REPO_ROOT }).trim();
-  // No git pathspec here ON PURPOSE: the published runner defaults --literal-pathspecs ON (its
-  // whole point), which would treat '*.js' as a literal filename and silently scan NOTHING —
-  // measured on this lint's own first committed run. Extension filtering happens in JS below.
-  const patch = runHardenedGit(
-    ['diff', '--unified=0', `${mergeBase}..HEAD`],
-    { cwd: REPO_ROOT, maxBuffer: 64 * 1024 * 1024 },
-  );
+const DIFF_MAX_BUFFER = 64 * 1024 * 1024;
+
+/** Parse -U0 patch text into added-line entries for scannable files. Exported for the unit tests. */
+export function parseAddedLines(patch) {
   const out = [];
   let file = null;
   let lineNo = 0;
-  for (const line of patch.split('\n')) {
+  for (const line of String(patch || '').split('\n')) {
     if (line.startsWith('+++ b/')) {
       const p = line.slice(6).trim();
-      file = SCAN_EXT.test(p) ? p : null;
+      // The ARCHIVE FENCE (allowlist _scope_note: scripts/archive/**, one-off/**, _deprecated/**,
+      // archived-*) applied only to the --all walker before the flip; diff mode scanned those
+      // paths anyway. Now that the check blocks, the documented fence holds in both modes.
+      file = SCAN_EXT.test(p) && !SKIP_DIR.test(p) ? p : null;
       continue;
     }
     if (line.startsWith('@@')) {
@@ -152,6 +158,86 @@ function collectDiffAdded(baseRef) {
     }
   }
   return out;
+}
+
+/**
+ * Parse `git diff --name-status -M` output into a Map of newPath -> oldPath for renames (R entries).
+ * The precedent (schema-reference-lint.mjs:187) lists ACMR by name only and so reads a renamed
+ * file's baseline at the NEW path, which does not exist at the merge base — every old site in a
+ * renamed file would read as new. Exported for the unit tests.
+ */
+export function parseRenameMap(nameStatus) {
+  const renames = new Map();
+  for (const line of String(nameStatus || '').split('\n')) {
+    const parts = line.split('\t');
+    if (parts.length >= 3 && /^R\d*$/.test(parts[0])) renames.set(parts[2].trim(), parts[1].trim());
+  }
+  return renames;
+}
+
+/**
+ * Diff mode collection: merge base resolved ONCE, added lines vs that base, rename map.
+ * `baseRef` is validated by the CALLER (main hoists it out of the degrade path — FR-4); the
+ * check here only guards direct callers. Throws when the base is unreachable (shallow clone,
+ * no fetch) — main() turns that into the degraded-advisory verdict.
+ */
+export function collectDiff(baseRef, run) {
+  if (!VALID_BASE_REF.test(baseRef)) throw new Error(`invalid base ref ${JSON.stringify(baseRef)}`);
+  const mergeBase = String(run(['merge-base', baseRef, 'HEAD'])).trim();
+  if (!mergeBase) throw new Error(`merge-base ${baseRef}..HEAD resolved empty (shallow clone?)`);
+  // No git pathspec here ON PURPOSE: the published runner defaults --literal-pathspecs ON (its
+  // whole point), which would treat '*.js' as a literal filename and silently scan NOTHING —
+  // measured on this lint's own first committed run. Extension filtering happens in JS.
+  const patch = run(['diff', '--unified=0', `${mergeBase}..HEAD`], { maxBuffer: DIFF_MAX_BUFFER });
+  const nameStatus = run(['diff', '--name-status', '-M', `${mergeBase}..HEAD`], { maxBuffer: DIFF_MAX_BUFFER });
+  return { mergeBase, entries: parseAddedLines(patch), renames: parseRenameMap(nameStatus) };
+}
+
+/**
+ * Keys of the violations present in `file` at the merge base. Reads the blob at the OLD path
+ * (renames mapped) via the single-token `<sha>:<path>` object-name form — no pathspec exists to
+ * make literal. A missing blob (file is new) is an EMPTY baseline: all of its violations are
+ * genuinely new. The file:line allowlist is NOT applied to the baseline (TR-3): it is keyed to
+ * HEAD line numbers, and a HEAD violation that is allowlisted never reaches the partition anyway.
+ */
+export function baselineKeysForFile({ run, mergeBase, file, renames = new Map() }) {
+  const oldPath = renames.get(file) || file;
+  const r = run(['show', `${mergeBase}:${oldPath}`], { result: true, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: DIFF_MAX_BUFFER });
+  if (!r || r.status !== 0) return new Set();
+  const entries = String(r.stdout || '').split('\n').map((text, i) => ({ file, line: i + 1, text }));
+  return new Set(findViolations(entries, {}).map((v) => v.key));
+}
+
+/**
+ * The whole diff-mode verdict, side-effect free so the unit tests can drive it with an injected
+ * git runner (the same seam lib/worktree-reaper/preserve-stage.js exposes). Baselines are read
+ * LAZILY — only for files that actually carry a HEAD violation.
+ * @returns {{mode:string, mergeBase:string|null, scanned:number, newViolations:Array, preExisting:Array, degradedReason?:string}}
+ */
+export function runDiffMode(baseRef, { run, allow = {} }) {
+  let collected;
+  try {
+    collected = collectDiff(baseRef, run);
+  } catch (e) {
+    // SD-LEO-INFRA-SCHEMA-LINT-DEGRADED-FAILOPEN-001 rule: an UNRESOLVABLE base is advisory —
+    // nothing scanned, nothing blocked, and (partition polarity) nothing proven pre-existing.
+    return { mode: 'diff (degraded)', mergeBase: null, scanned: 0, newViolations: [], preExisting: [], degradedReason: String(e.message).split('\n')[0] };
+  }
+  const { mergeBase, entries, renames } = collected;
+  const violations = findViolations(entries, allow);
+  const byFile = new Map();
+  for (const v of violations) {
+    if (!byFile.has(v.file)) byFile.set(v.file, []);
+    byFile.get(v.file).push(v);
+  }
+  const newViolations = [];
+  const preExisting = [];
+  for (const [file, list] of byFile) {
+    const split = partitionByBaseline(list, baselineKeysForFile({ run, mergeBase, file, renames }));
+    newViolations.push(...split.newViolations);
+    preExisting.push(...split.preExisting);
+  }
+  return { mode: 'diff', mergeBase, scanned: entries.length, newViolations, preExisting };
 }
 
 /** --all mode: whole-tree ledger census. Diagnostic only — NEVER the CI entry point. */
@@ -175,6 +261,34 @@ function collectAll() {
   return out;
 }
 
+/**
+ * B-3 identity (SD-MAN-INFRA-FLIP-SHELL-INJECTION-001 FR-1): whitespace-collapsed FULL raw line.
+ * NOT stripForScan output (string contents are part of a site's identity — `execSync('a'+x)` and
+ * `execSync('b'+x)` must differ) and NOT the 120-char report excerpt below.
+ */
+export function normalizeLine(text) {
+  return String(text ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** Reflow-safe key: file | selector | normalized full line. Deliberately excludes the line number. */
+export function violationKey(v) {
+  return `${v.file}|${v.selector}|${normalizeLine(v.rawText ?? v.text)}`;
+}
+
+/**
+ * Split HEAD violations into NEW (block) vs pre-existing (report only). `baselineKeys === null`
+ * means NO BASELINE IS AVAILABLE (--all, or a degraded --diff whose base could not be resolved):
+ * nothing can be proven pre-existing, so everything is new — never "everything is pre-existing"
+ * (schema-lint-scope.mjs:46-51 polarity, mirrored locally on purpose; see the header).
+ */
+export function partitionByBaseline(violations, baselineKeys) {
+  if (!baselineKeys) return { newViolations: violations, preExisting: [] };
+  const newViolations = [];
+  const preExisting = [];
+  for (const v of violations) (baselineKeys.has(v.key) ? preExisting : newViolations).push(v);
+  return { newViolations, preExisting };
+}
+
 export function findViolations(entries, allow) {
   const violations = [];
   for (const { file, line, text } of entries) {
@@ -182,7 +296,11 @@ export function findViolations(entries, allow) {
     const hits = scanLine(stripForScan(text), text);
     for (const h of hits) {
       if (isAllowed(allow, file, line)) continue;
-      violations.push({ file, line, selector: h.selector, detail: h.detail, text: text.trim().slice(0, 120) });
+      violations.push({
+        file, line, selector: h.selector, detail: h.detail,
+        text: text.trim().slice(0, 120),
+        key: violationKey({ file, selector: h.selector, rawText: text }),
+      });
     }
   }
   return violations;
@@ -194,32 +312,50 @@ function main() {
   const wantAll = argv.includes('--all');
   const { allow } = loadAllowlist();
 
-  let entries;
-  let mode = 'diff';
   if (wantAll) {
-    mode = 'all';
-    entries = collectAll();
-  } else {
-    try {
-      entries = collectDiffAdded(process.env.SHELL_INJECTION_ARGV_BASE || 'origin/main');
-    } catch (e) {
-      console.warn(`⚠️  diff base unavailable (${String(e.message).split('\n')[0]}) — nothing scanned (advisory; NOT falling back to --all, which is diagnostic-only)`);
-      entries = [];
-      mode = 'diff (degraded)';
+    // --all: whole-tree census, NO baseline (every site is "new"), exit 1 on the backlog — this is
+    // diagnostic-only, never the CI entry point, and its exit semantics are load-bearing for the
+    // registered control trial (scripts/audit/control-seed-test.mjs:205). Unchanged by the flip.
+    const entries = collectAll();
+    const violations = findViolations(entries, allow);
+    if (asJson) {
+      console.log(JSON.stringify({ mode: 'all', scanned: entries.length, merge_base: null, violations, newViolations: violations, preExisting: [] }, null, 2));
+    } else {
+      for (const v of violations) console.error(`  ${v.selector}  ${v.file}:${v.line}  ${v.detail}\n      ${v.text}`);
+      console.log(`${violations.length === 0 ? '✅' : '❌'} shell-injection-argv-lint (all): ${entries.length} added line(s) scanned, ${violations.length} violation(s)`);
     }
+    process.exit(violations.length === 0 ? 0 : 1);
   }
 
-  const violations = findViolations(entries, allow);
+  // FR-4: the base-ref guard is HOISTED out of the degrade path. An option-shaped or garbage
+  // SHELL_INJECTION_ARGV_BASE is a loud failure of the check, never "degraded, nothing scanned,
+  // exit 0" — that would be a fail-open on exactly the day the check became load-bearing
+  // (precedent: scripts/lint/schema-reference-lint.mjs hoists the same guard, on purpose).
+  const baseRef = process.env.SHELL_INJECTION_ARGV_BASE || 'origin/main';
+  if (typeof baseRef !== 'string' || !VALID_BASE_REF.test(baseRef)) {
+    console.error(`❌ shell-injection-argv-lint: HOSTILE_BASE_REF — refusing SHELL_INJECTION_ARGV_BASE=${JSON.stringify(baseRef)} (must match ${VALID_BASE_REF}); not degrading, not scanning`);
+    process.exit(2);
+  }
+
+  const run = makeHardenedGitRunner(REPO_ROOT);
+  const result = runDiffMode(baseRef, { run, allow });
+  const { mode, mergeBase, scanned, newViolations, preExisting } = result;
+  if (result.degradedReason) {
+    console.warn(`⚠️  diff base unavailable (${result.degradedReason}) — nothing scanned (advisory; NOT falling back to --all, which is diagnostic-only)`);
+  }
   if (asJson) {
-    console.log(JSON.stringify({ mode, scanned: entries.length, violations }, null, 2));
+    console.log(JSON.stringify({ mode, scanned, merge_base: mergeBase, violations: newViolations, newViolations, preExisting }, null, 2));
   } else {
-    for (const v of violations) {
+    for (const v of preExisting) {
+      console.error(`  pre-existing  ${v.selector}  ${v.file}:${v.line}  (present at merge base ${mergeBase.slice(0, 8)} — reported, not blocking)\n      ${v.text}`);
+    }
+    for (const v of newViolations) {
       console.error(`  ${v.selector}  ${v.file}:${v.line}  ${v.detail}\n      ${v.text}`);
     }
-    const verdict = violations.length === 0 ? '✅' : '❌';
-    console.log(`${verdict} shell-injection-argv-lint (${mode}): ${entries.length} added line(s) scanned, ${violations.length} violation(s)`);
+    const verdict = newViolations.length === 0 ? '✅' : '❌';
+    console.log(`${verdict} shell-injection-argv-lint (${mode}): ${scanned} added line(s) scanned, ${newViolations.length} new violation(s), ${preExisting.length} pre-existing (reported, not blocking)`);
   }
-  process.exit(violations.length === 0 ? 0 : 1);
+  process.exit(newViolations.length === 0 ? 0 : 1);
 }
 
 const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
