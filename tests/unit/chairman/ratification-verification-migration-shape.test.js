@@ -89,6 +89,11 @@ describe('chairman_ratification_verifications migration shape', () => {
     expect(forwardStmts).toMatch(/crv_marker_absent_never_persisted/);
   });
 
+  it('a NULL pin_tier is admitted for BOTH not_applicable and unverifiable_infrastructure — TESTING (evidence f3c383cf) measured the stricter not_applicable-only version rejects a real, reachable writer output (178 of 288 manifest sections carry target_file:null)', () => {
+    expect(forwardStmts).toMatch(/crv_tier_null_only_for_uncheckable_outcomes/);
+    expect(forwardStmts).not.toMatch(/crv_not_applicable_has_no_tier/);
+  });
+
   it('carries all four insert-only guard triggers, all ENABLE ALWAYS', () => {
     for (const trg of [
       'chairman_ratification_verifications_no_update',

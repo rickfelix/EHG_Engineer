@@ -131,8 +131,19 @@ CREATE TABLE IF NOT EXISTS public.chairman_ratification_verifications (
     (pin_tier IS NULL AND commit_sha IS NULL)
     OR (pin_tier IS NOT NULL AND ((pin_tier = 'db_section_content') = (commit_sha IS NULL)))
   ),
-  CONSTRAINT crv_not_applicable_has_no_tier
-    CHECK ((outcome = 'not_applicable') = (pin_tier IS NULL)),
+  -- NULL pin_tier is legitimate for TWO outcomes, not just one: 'not_applicable' (an encoded_ref
+  -- shape with no rendered file -- no tier question was ever asked) AND
+  -- 'unverifiable_infrastructure' when the writer never got as far as resolving a pin at all (no
+  -- manifest, or the section is unknown to it) -- pin resolution needs a target_file, which these
+  -- two cases never obtain. TESTING (EXEC-TO-PLAN, evidence f3c383cf) measured that requiring
+  -- pin_tier non-null for every 'unverifiable_infrastructure' row rejects a real, reachable writer
+  -- output (178 of 288 manifest sections carry target_file:null) with a 23514 the recorder then
+  -- silently swallows as a degrade -- the opposite of this table's purpose. verified/marker_absent/
+  -- no_commit_pin still REQUIRE a resolved tier (pin resolution always ran before any of those
+  -- three outcomes could be reached).
+  CONSTRAINT crv_tier_null_only_for_uncheckable_outcomes CHECK (
+    pin_tier IS NOT NULL OR outcome IN ('not_applicable', 'unverifiable_infrastructure')
+  ),
   CONSTRAINT crv_no_commit_pin_is_tier3
     CHECK (outcome <> 'no_commit_pin' OR pin_tier = 'db_section_content'),
   CONSTRAINT crv_marker_offset_requires_a_read CHECK (
