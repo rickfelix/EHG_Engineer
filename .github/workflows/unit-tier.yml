@@ -103,6 +103,16 @@ jobs:
         # actually run in CI instead of only on the author's machine.
         run: npm run test:adam-github-assessment
 
+      - name: Run adam-startup-check node:test suite (QF-20260903-433)
+        # Same gap as the two steps above, found a third time: this suite uses node:test/
+        # node:assert, so `--project unit` never collected it ("No test files found" — measured).
+        # Three of its 23 prior assertions (the contract↔tooling durable-duty parity check and
+        # its regex) were never actually load-bearing in CI, which is how a documented marker
+        # convention ("(durable; <qualifier>)") could diverge silently between Adam's own
+        # regex and Solomon's broadened one (this QF also reconciles them onto one shared
+        # implementation) without any gate ever catching it.
+        run: npm run test:adam-startup-check
+
       - name: Verify coordinator pointer-file isolation (SD-LEO-FIX-ENF-TRUSTS-FILE-001)
         # Serialized on purpose, run AFTER the parallel unit tier above (not as a vitest test
         # inside it) -- a check racing the same pool:forks parallelism it verifies would be the
