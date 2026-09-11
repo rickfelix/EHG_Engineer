@@ -38,7 +38,7 @@
       "sd_type_workflow_paths",
       "work_tracking_policy",
       "qf_lifecycle_reconciliation",
-    "quick_fixes_schema_traps",
+      "quick_fixes_schema_traps",
       "queue_ranking_unified",
       "genesis_codebase",
       "cascade_invalidation_system",
@@ -205,15 +205,18 @@
     "sections": [
       "adam_role_contract",
       "adam_self_adherence_loop",
-      "role_partnership_contract",
-      "quick_fixes_schema_traps"
+      "role_partnership_contract"
     ]
   },
   "CLAUDE_ADAM_MANUAL.md": {
     "description": "Adam MANUAL companion — how-to procedures (SD creation field shapes, migration ceremony steps, gauge inputs). Read at the moment of doing, not at session start. Governed: chairman decision A-GOVERN 2026-07-31.",
     "sections": [
-      "adam_manual"
-    ]
+      "adam_manual",
+      "quick_fixes_schema_traps"
+    ],
+    "_move_justification": {
+      "quick_fixes_schema_traps": "SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2: a column/enum reference (which key holds the QF id, which disposition values exist, why ilike on a uuid errors) consulted at the moment of writing a query — reference, no standing instruction; it still renders into CLAUDE_CORE.md for workers."
+    }
   },
   "CLAUDE_ADAM_PROVENANCE.md": {
     "description": "Adam PROVENANCE companion — dated rationale, live witnesses, superseded cadences. Every rule in CLAUDE_ADAM.md is in force regardless of whether its history is read. Governed: chairman decision A-GOVERN 2026-07-31.",
