@@ -1,7 +1,10 @@
 // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-E / FR-7 — pins that this is the ONLY workflow in the
-// repo referencing GOOGLE_SERVICE_ACCOUNT_JSON alongside the Michael Supabase pair, and that
-// michael-brief-assemble-cron.yml stays credential-free regardless (cross-checked here, not just
-// asserted from the other file, so a future edit to either file cannot silently break the split).
+// repo referencing GOOGLE_SERVICE_ACCOUNT_JSON alongside the Michael Supabase pair.
+//
+// QF-20260911-110 / ratification 00f696f1: the original cross-check here ("michael-brief-assemble-
+// cron.yml stays credential-free") is removed, not just no-longer-true -- that workflow file no
+// longer exists at all (brief-assemble moved from the 'gha' venue to 'task_scheduler', ratification
+// 00f696f1), so there is nothing left to read or cross-check against.
 import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,7 +12,6 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const wf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'michael-brief-doc-cron.yml'), 'utf8');
-const assembleWf = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'michael-brief-assemble-cron.yml'), 'utf8');
 
 describe('michael-brief-doc-cron.yml wiring', () => {
   it('references EXACTLY the Supabase pair plus GOOGLE_SERVICE_ACCOUNT_JSON', () => {
@@ -29,11 +31,6 @@ describe('michael-brief-doc-cron.yml wiring', () => {
     expect(wf).toContain('run: npm ci --ignore-scripts');
     expect(wf).toContain('run: node scripts/michael/brief-doc.mjs --apply');
     expect(wf).not.toMatch(/\bcd\s+\S+\s*&&/);
-  });
-  it('michael-brief-assemble-cron.yml stays credential-free even though this sibling workflow now exists', () => {
-    expect(assembleWf).not.toMatch(/GOOGLE_SERVICE_ACCOUNT_JSON/);
-    const assembleSecrets = [...assembleWf.matchAll(/secrets\.([A-Z0-9_]+)/g)].map((m) => m[1]);
-    expect(new Set(assembleSecrets)).toEqual(new Set(['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']));
   });
   it('is the ONLY workflow file in the repo (besides the pre-existing daily-review path) referencing GOOGLE_SERVICE_ACCOUNT_JSON among michael-*.yml files', () => {
     const dir = path.join(ROOT, '.github', 'workflows');
