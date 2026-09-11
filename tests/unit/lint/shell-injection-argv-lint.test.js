@@ -142,13 +142,13 @@ describe('TS-6: allowlist reasons are enforced (ledger, not bypass)', () => {
 
 describe('TS-7/TS-10: advisory flip contract on PARSED YAML, self-enforcing deadline', () => {
   const WF = path.join(ROOT, '.github', 'workflows', 'shell-injection-argv-lint.yml');
-  const FLIP_DEADLINE = Date.parse('2026-09-09T23:59:59Z');
+  const FLIP_DEADLINE = Date.parse('2026-10-09T23:59:59Z');
   it('workflow is advisory (continue-on-error: true as a parsed property) with the dated note', () => {
     const doc = parseYaml(fs.readFileSync(WF, 'utf8'));
     const steps = doc.jobs['shell-injection-argv'].steps;
     const lintStep = steps.find((s) => s.run && s.run.includes('shell-injection-argv-lint.mjs'));
     expect(lintStep['continue-on-error']).toBe(true);
-    expect(fs.readFileSync(WF, 'utf8')).toContain('2026-09-09');
+    expect(fs.readFileSync(WF, 'utf8')).toContain('2026-10-09');
   });
   it('B-2: once the soak deadline passes, advisory mode FAILS this test — the flip has an actor', () => {
     const doc = parseYaml(fs.readFileSync(WF, 'utf8'));
@@ -156,7 +156,7 @@ describe('TS-7/TS-10: advisory flip contract on PARSED YAML, self-enforcing dead
     const lintStep = steps.find((s) => s.run && s.run.includes('shell-injection-argv-lint.mjs'));
     const stillAdvisory = lintStep['continue-on-error'] === true;
     if (Date.now() > FLIP_DEADLINE) {
-      expect(stillAdvisory, 'the 2026-09-09 soak has ended: flip the workflow to blocking (remove continue-on-error) or extend the dated note WITH a recorded reason').toBe(false);
+      expect(stillAdvisory, 'the 2026-10-09 soak has ended: flip the workflow to blocking (remove continue-on-error) or extend the dated note WITH a recorded reason').toBe(false);
     } else {
       expect(stillAdvisory).toBe(true);
     }
