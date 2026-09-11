@@ -4,12 +4,8 @@
 # in-flight PR red while the measured ~324-site backlog soaks (baseline in
 # scripts/lint/shell-injection-argv-allowlist.json _scope_note).
 #
-# DATED FLIP: soak through 2026-10-09, then remove continue-on-error (flip to blocking) or
-# record why not. EXTENSION RECORDED 2026-09-11 (QF-20260911-228): the original 2026-09-09 date
-# passed with no actor; the B-3 reflow precondition below is still unaddressed (the lint has no
-# violationKey identity), so blocking today would hand the backlog to every toucher. The flip is
-# now owned by SD-MAN-INFRA-FLIP-SHELL-INJECTION-001, which must land B-3 and remove
-# continue-on-error before 2026-10-09. THE DEADLINE IS SELF-ENFORCING — tests/unit/lint/shell-injection-argv-lint.test.js
+# DATED FLIP: soak through 2026-09-09, then remove continue-on-error (flip to blocking) or
+# record why not. THE DEADLINE IS SELF-ENFORCING — tests/unit/lint/shell-injection-argv-lint.test.js
 # carries a case that FAILS once the date passes while this file is still advisory, so the parked
 # state cannot decay silently (testing-agent B-2). FLIP PRECONDITION (B-3): the moved/reflowed-line
 # resurfacing behavior must be addressed (see the reflow test) before blocking, per the
