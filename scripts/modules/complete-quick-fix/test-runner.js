@@ -199,13 +199,59 @@ export function runTests(testType, options = {}) {
       };
     }
 
+    const summary = extractTestSummary(output, testType);
+    // QF-20260911-755: a Playwright config that REFUSES to load (the e2e-db-target prod-ref
+    // guard from SD-LEO-INFRA-E2E-REAL-TEST-001 throws before any browser opens) is not a
+    // failing test — zero tests ran. Report it as e2e_not_runnable_here so the orchestrator can
+    // fall through to CI evidence instead of failing the gate on a run that never started.
+    // The guard itself is correct and stays; this only names what happened truthfully.
+    if (testType === 'e2e' && classifyE2eNotRunnable(output, summary)) {
+      return {
+        passed: false,
+        notRunnable: true,
+        reason: E2E_NOT_RUNNABLE_REASON,
+        output: output.substring(0, 2000),
+        exitCode: err.status || 1,
+        summary
+      };
+    }
+
     return {
       passed: false,
       output: output.substring(0, 2000),
       exitCode: err.status || 1,
-      summary: extractTestSummary(output, testType)
+      summary
     };
   }
+}
+
+/** The marker the e2e-db-target guard prints when it refuses a Playwright run before any test. */
+export const E2E_GUARD_REFUSAL = /\[e2e-db-target-guard\] Refused/;
+export const E2E_NOT_RUNNABLE_REASON = 'e2e_not_runnable_here';
+
+/**
+ * QF-20260911-755: true when the e2e run was refused by the prod-ref guard BEFORE any test
+ * executed. Both halves are required — the guard marker alone is not enough if tests did run
+ * (a later test failure must still fail the gate).
+ * @param {string} output
+ * @param {{total:number}} [summary]
+ */
+export function classifyE2eNotRunnable(output, summary) {
+  const total = Number(summary?.total ?? 0);
+  return E2E_GUARD_REFUSAL.test(String(output || '')) && total === 0;
+}
+
+/**
+ * QF-20260911-755: the gate's pass verdict, in one place. E2E gates only when it actually RAN:
+ * a skipped e2e (backend-only diff → null) and a not-runnable e2e (guard refusal) both leave the
+ * verdict to the unit run; a run that executed and failed still pulls it down.
+ * @param {{passed:boolean}|null} unitResult
+ * @param {{passed:boolean, notRunnable?:boolean}|null} e2eResult
+ */
+export function computeTestsPass(unitResult, e2eResult) {
+  const unitOk = Boolean(unitResult?.passed);
+  if (!e2eResult || e2eResult.notRunnable) return unitOk;
+  return unitOk && Boolean(e2eResult.passed);
 }
 
 /**
@@ -318,7 +364,12 @@ export function displayTestResults(unitResult, e2eResult) {
   }
 
   if (e2eResult) {
-    if (e2eResult.passed) {
+    if (e2eResult.notRunnable) {
+      // QF-20260911-755: the prod-ref guard refused the run before any test executed — this is
+      // neither a pass nor a failure; the verdict falls through to the unit run + CI evidence.
+      console.log('   ⏭️  E2E tests NOT RUNNABLE HERE (e2e-db-target guard refused the Playwright run before any test executed — no non-production ref configured on this host)');
+      console.log(`      Recorded as ${E2E_NOT_RUNNABLE_REASON}; unit run + PR CI are the test evidence for this completion.`);
+    } else if (e2eResult.passed) {
       console.log('   ✅ E2E tests PASSED');
       if (e2eResult.summary) {
         console.log(`      ${e2eResult.summary.passed} passed, ${e2eResult.summary.failed} failed`);
