@@ -157,12 +157,17 @@ export function formatSessionRow(row) {
     // number rather than parsing prose. Null-safe: `?? null` not `|| null`, because 0 is a
     // legitimate age and the falsy form would report a just-heartbeated session as unknown.
     heartbeat_age_seconds: row.heartbeat_age_seconds ?? null,
+    // QF-20260906-553: exposed so the default-view filter below can drop released rows without
+    // re-deriving the badge first — released_at is the DIRECT signal; computed_status was
+    // measured to stay 'stale' rather than flip to 'released'.
+    released_at: row.released_at || null,
     badge: computeSessionBadge({
       loopState: meta.loop_state,
       pAlive: meta.p_alive,
       isSilent: meta.is_silent,
       failCount: meta.fail_count,
       computedStatus: row.computed_status,
+      releasedAt: row.released_at,
       role: identity.role,
       model,
       effort,
@@ -190,7 +195,11 @@ export async function getFleetPanel(req, res) {
   // ("6s ago", "15m ago", "4500h ago") and sorting it lexicographically scrambled the list.
   let query = supabase
     .from('v_active_sessions')
-    .select('session_id, sd_key, computed_status, metadata, heartbeat_age_human, heartbeat_age_seconds')
+    // QF-20260906-553: released_at added — computed_status alone cannot discriminate a
+    // released seat (measured: it stays 'stale', never flips to 'released'), and orphan
+    // session-tick daemons keep a dead seat's heartbeat advancing, so heartbeat recency cannot
+    // either. released_reason travels alongside for showAll's operator-facing detail.
+    .select('session_id, sd_key, computed_status, metadata, heartbeat_age_human, heartbeat_age_seconds, released_at, released_reason')
     .order('heartbeat_age_seconds', { ascending: true })
     .limit(PANEL_ROW_CAP);
 
@@ -199,9 +208,12 @@ export async function getFleetPanel(req, res) {
   const { data: sessionRows, error: sessionsError } = await query;
 
   const allRows = sessionsError || !sessionRows ? [] : sessionRows.map(formatSessionRow);
-  // Drop identity-less ghosts from the default view (they heartbeat, so the recency filter
-  // above cannot catch them). ?all=1 still shows everything.
-  const sessions = showAll ? allRows : allRows.filter((r) => r.identity_kind !== null);
+  // Drop identity-less ghosts AND released seats from the default view — both heartbeat, so
+  // the recency filter above cannot catch either. ?all=1 still shows everything (with the
+  // corrected OFF badge from computeSessionBadge above, never WORKING for a released seat).
+  const sessions = showAll ? allRows : allRows.filter((r) => r.identity_kind !== null && !r.released_at);
+  // NAME UNCHANGED for API back-compat (existing consumers read filter.ghostsHidden) — the
+  // count now also includes released seats hidden by the QF-20260906-553 filter above.
   const ghostsHidden = allRows.length - sessions.length;
 
   // Surface truncation rather than silently returning a capped page (PostgREST defaults to 1000,

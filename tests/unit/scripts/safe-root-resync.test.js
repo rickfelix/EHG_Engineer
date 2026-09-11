@@ -291,13 +291,12 @@ describe('TS-3: default non-destructive path', () => {
     expect(cleanCalls.length).toBe(0);
   });
 
-  it('returns skipped:dirty when tree has uncommitted tracked changes', async () => {
+  it('QF-20260903-428: proceeds with the ff-only merge even when the tree has an unrelated tracked modification', async () => {
     const CWD = SHARED_ROOT;
     const execSpy = makeExecSpy([
-      {
-        args_match: ['status', '--porcelain', '--untracked-files=no'],
-        stdout: ' M scripts/some-file.js\n'
-      },
+      { args_match: ['status', '--porcelain', '--untracked-files=no'], stdout: ' M scripts/unrelated-file.js\n' },
+      { args_match: ['rev-list', '--count', 'HEAD..origin/main'], stdout: '3\n' },
+      { args_match: ['merge', '--ff-only', 'origin/main', '--quiet'], stdout: '' },
     ]);
 
     const result = await safeRootResync({
@@ -308,24 +307,21 @@ describe('TS-3: default non-destructive path', () => {
       ...noopRestoreSeams,
     });
 
+    // No dirty-tree gate: a tracked modification elsewhere does NOT skip the resync.
     expect(result.ok).toBe(true);
-    expect(result.skipped).toBe('dirty');
-    // QF-20260902-805: the dirty file list rides along so a durable SKIPPED_DIRTY verdict can be
-    // written without re-deriving it — capped, never unbounded.
-    expect(result.dirtyFiles).toEqual([' M scripts/some-file.js']);
-    // No merge, no clean
-    expect(execSpy.calls.filter(a => a[0] === 'merge').length).toBe(0);
-    expect(execSpy.calls.filter(a => a[0] === 'clean').length).toBe(0);
+    expect(result.synced).toBe(true);
+    expect(result.skipped).toBeUndefined();
+    const mergeCall = execSpy.calls.find(a => a[0] === 'merge');
+    expect(mergeCall).toBeDefined();
   });
 
-  it('caps the dirty file list at 10 entries', async () => {
+  it('QF-20260903-428: on a genuinely conflicting root, aborts with conflict:true and reports git\'s message (naming the files) verbatim', async () => {
     const CWD = SHARED_ROOT;
-    const manyFiles = Array.from({ length: 15 }, (_, i) => ` M file${i}.js`).join('\n');
+    const gitConflictMessage = 'error: Your local changes to the following files would be overwritten by merge:\n\tscripts/some-file.js\nPlease commit your changes or stash them before you merge.\nAborting';
     const execSpy = makeExecSpy([
-      {
-        args_match: ['status', '--porcelain', '--untracked-files=no'],
-        stdout: manyFiles + '\n',
-      },
+      { args_match: ['status', '--porcelain', '--untracked-files=no'], stdout: ' M scripts/some-file.js\n' },
+      { args_match: ['rev-list', '--count', 'HEAD..origin/main'], stdout: '2\n' },
+      { args_match: ['merge', '--ff-only', 'origin/main', '--quiet'], throws: gitConflictMessage },
     ]);
 
     const result = await safeRootResync({
@@ -336,8 +332,9 @@ describe('TS-3: default non-destructive path', () => {
       ...noopRestoreSeams,
     });
 
-    expect(result.skipped).toBe('dirty');
-    expect(result.dirtyFiles.length).toBe(10);
+    expect(result.ok).toBe(false);
+    expect(result.conflict).toBe(true);
+    expect(result.message).toContain('scripts/some-file.js');
   });
 
   it('returns conflict:true when ff-only merge is declined', async () => {
@@ -358,6 +355,7 @@ describe('TS-3: default non-destructive path', () => {
 
     expect(result.ok).toBe(false);
     expect(result.conflict).toBe(true);
+    expect(result.message).toBe('Not possible to fast-forward');
   });
 
   // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A / TS-8: the scheduled periodic job passes

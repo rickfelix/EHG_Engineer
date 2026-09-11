@@ -12,6 +12,9 @@ describe('checkin step registry (lib/checkin/steps/index.cjs)', () => {
   it('exports the documented steps in the documented order', () => {
     expect(CHECKIN_STEPS.map((s) => s.name)).toEqual([
       'model-effort-merge',
+      // QF-20260905-282: a dedicated seat's --stand-down self-report, merged strictly before
+      // self-claim-gates (below) so it takes effect on THIS SAME check-in tick.
+      'dedicated-seat-standdown',
       'quarantine-self-clear',
       'callsign-rehydrate',
       'roll-call',

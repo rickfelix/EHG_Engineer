@@ -302,6 +302,31 @@ describe('ensureOriginatorCc — idempotent CC delivery (review W1/W3, FR-5)', (
     expect(inserts).toHaveLength(0);
   });
 
+  // QF-20260904-225: a backpressure-parked prior CC never actually reached the originator, so
+  // it must not suppress a retry -- otherwise the originator never receives the CC at all.
+  it('QF-20260904-225: a backpressure-parked prior row does NOT suppress the CC (it never delivered)', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ existingCc: [{ id: 'parked-cc', payload: { backpressure_parked: true } }] }),
+      BASE_ARGS,
+      { insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(true);
+    expect(inserts).toHaveLength(1);
+  });
+
+  // A genuinely delivered prior CC (no parked marker) must still dedupe as before.
+  it('QF-20260904-225: a delivered (non-parked) prior row still suppresses the CC', async () => {
+    const inserts = [];
+    const res = await ensureOriginatorCc(
+      ccFakeSb({ existingCc: [{ id: 'delivered-cc', payload: { backpressure_parked: false } }] }),
+      BASE_ARGS,
+      { insertRow: captureInsertRow(inserts) },
+    );
+    expect(res.inserted).toBe(false);
+    expect(inserts).toHaveLength(0);
+  });
+
   it('re-resolves a dead adam consult-time session to the LIVE adam session (W3)', async () => {
     const inserts = [];
     const LIVE_ADAM = 'adam-sess-9999';

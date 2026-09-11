@@ -413,7 +413,7 @@ function michaelReplyMirror() {
     '  • DRAIN your inbox:  node scripts/michael-inbox.cjs   (quiet-tick form: --quiet)',
     '  • Michael SENDS nothing to the fleet: fleet-class items reach Adam as chairman_handoff rows',
     '    with origin michael, batched once per morning by the feeders (spec §1.2).',
-    '  (michael-inbox.cjs ships in child G; until then the drain is a documented no-op.)',
+    '  (drainInbox() stamps read_at on every drained row -- SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001.)',
   ].join('\n');
 }
 

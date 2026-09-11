@@ -156,12 +156,15 @@ router.post('/start', (req, res) => {
       args.push('--smoke-only');
     }
 
+    // QF-20260906-335: windowsHide -- a detached child without it opens a visible console window
+    // on Windows.
     activeCampaignProcess = spawn(
       'node',
       args,
       {
         detached: true,
-        stdio: 'ignore'
+        stdio: 'ignore',
+        windowsHide: true
       }
     );
 

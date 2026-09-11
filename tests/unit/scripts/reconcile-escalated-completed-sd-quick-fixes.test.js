@@ -177,8 +177,11 @@ describe('TS-2: live mode transitions through setQuickFixStatus with every Guard
     expect(payload.disposed_by).toContain('reconcile-escalated-completed-sd-quick-fixes.mjs');
     expect(payload.disposed_at).toBeTruthy();
     expect(payload.resolution_sd_id).toBe('sd-5');
-    // Never the unrelated `disposition` enum column (coordinator-stale-qf-disposition-sweep.mjs's vocabulary).
-    expect(payload).not.toHaveProperty('disposition');
+    // QF-20260904-757: disposition (the column of record) alongside disposition_reason_code --
+    // omitting this left every reconciled row disposition=NULL, which both blocked
+    // quick_fixes_closed_requires_disposition's VALIDATE step and undercounted disposition-keyed
+    // reports. 'promoted' is correct: the row's work was tracked to completion via an SD.
+    expect(payload.disposition).toBe('promoted');
   });
 });
 

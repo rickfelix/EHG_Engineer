@@ -29,6 +29,12 @@
  *          THIS check-in call. No-op — byte-identical to today — when both flags are absent.
  *          A chairman/coordinator-set metadata.effort_source='chairman' always wins over a
  *          worker's own --effort self-report.)
+ *        node scripts/worker-checkin.cjs --stand-down
+ *          (QF-20260905-282: a chairman-dedicated seat self-reports coordinator_stand_down=
+ *          true on this SAME tick, so self-claim-gates already sees it and never pulls from
+ *          the belt -- roll_call, resume, directed WORK_ASSIGNMENT claiming and recovery are
+ *          all still honored. See docs/protocol/fleet-worker-loop-directive.md's
+ *          "Dedicated-seat directive" variant.)
  */
 
 const { getActiveCoordinatorId } = require('../lib/coordinator/resolve.cjs');
@@ -60,7 +66,7 @@ const { ensureActiveBaseline } = require('../lib/fleet/ensure-active-baseline.cj
 const { fetchOutstandingSignals, formatOutstandingWarning } = require('../lib/fleet/outstanding-signals.cjs');
 // SD-LEO-FIX-COORDINATOR-SWEEP-CLAIMED-001: shared dispatch-eligibility predicate, also used by
 // scripts/stale-session-sweep.cjs CLAIM_FIX (closes the self_claim-vs-sweep writer-consumer-asymmetry).
-const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, parentLeadPending, liveClaimWriteFenceReason } = require('../lib/fleet/claim-eligibility.cjs');
+const { draftDepsSatisfied, baselinedCandidateEligible, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, parentLeadPending, liveClaimWriteFenceReason, mandatoryChildOrderPending } = require('../lib/fleet/claim-eligibility.cjs');
 // SD-LEO-INFRA-QF-SUPPLY-PREDICATE-AUTO-START-001 (FR-1/FR-2): the auto-start predicate moved
 // to lib/fleet/qf-auto-start.cjs so belt-depth.cjs can share it (previously duplicated by
 // nothing — belt-depth used the looser qf-supply-predicate.cjs instead). Imported here in
@@ -1072,6 +1078,10 @@ async function tryClaimDraftCandidate(sb, sessionId, base, d, tierCtx = {}) {
   // SD-REFILL-00SO4HZY: skip an orchestrator child whose parent has not yet passed LEAD (a worker would
   // otherwise drive PLAN then hit the hard EXEC-transition block). Fail-open inside parentLeadPending.
   if (await parentLeadPending(sb, d)) return null;
+  // QF-20260904-708: a parent's metadata.mandatory_child_order names an intended dispatch
+  // sequence (e.g. E -> A -> B); self-claim must not pick a child ahead of a non-terminal
+  // predecessor (out-of-order dispatch ships a dead guard). Fail-open inside the gate.
+  if ((await mandatoryChildOrderPending(sb, d)).held) return null;
   if (await isSdInFlight(sb, d.sd_key, sessionId)) return null; // dedup: started or live-foreign-held
   // SD-ARCH-HOTSPOT-SD-START-001 FR-7 (D8 placement): AFTER every other gate, immediately
   // BEFORE the claim write — so the observe-mode WOULD-DENY set equals exactly the set
@@ -1806,8 +1816,13 @@ async function assignFleetIdentityAtCheckin(sb, sessionId, claimSd) {
         body: `The coordinator assigned you callsign "${callsign}" with color "${color}" at check-in. Your statusline will update automatically.`,
         // QF-20260829-312: tier_rank rides alongside the identity as a CURRENT ATTRIBUTE for
         // display only — it never feeds back into whether this worker gets renamed.
-        payload: { color, callsign, display_name, tier_rank: tierRankOf({ metadata: myMeta }) },
+        // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sibling-divergence bug -- assign-fleet-identities.cjs's
+        // own SET_IDENTITY rebroadcast already sets payload.kind + sender_session, this one (fired
+        // at checkin time rather than rename time) never did, making it BOTH untyped_row and
+        // empty_sender_row (23 rows each, largest untyped_row source measured).
+        payload: { kind: 'SET_IDENTITY', color, callsign, display_name, tier_rank: tierRankOf({ metadata: myMeta }) },
         sender_type: 'coordinator',
+        sender_session: 'worker-checkin',
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       });
     } catch { /* best-effort: cron re-emits within 5 min */ }
@@ -1988,7 +2003,7 @@ function mergeCheckinModelEffort(sessionMetadata, { model: cliModel = null, effo
   return changed ? { metadata: next, changed: true } : { metadata: sessionMetadata, changed: false };
 }
 
-async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId, model: cliModel = null, effort: cliEffort = null } = {}) {
+async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordinatorId, model: cliModel = null, effort: cliEffort = null, standDown: cliStandDown = false } = {}) {
   // 1. resolve coordinator (fail-open to null -> broadcast)
   let coordinatorId = null;
   try { coordinatorId = await getCoordinator(sb); } catch { coordinatorId = null; }
@@ -2010,7 +2025,7 @@ async function resolveCheckin(sb, sessionId, { getCoordinator = getActiveCoordin
   const ctx = {
     sb,
     sessionId,
-    opts: { cliModel, cliEffort },
+    opts: { cliModel, cliEffort, cliStandDown },
     coordinatorId,
     callsign,
     mySd,
@@ -2065,7 +2080,9 @@ function parseCheckinArgs(argv) {
     const i = args.indexOf(flag);
     return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : null;
   };
-  return { model: get('--model'), effort: get('--effort') };
+  // QF-20260905-282: --stand-down (boolean, no value) lets a dedicated seat self-report
+  // coordinator_stand_down=true on its first check-in -- see dedicated-seat-standdown.cjs.
+  return { model: get('--model'), effort: get('--effort'), standDown: args.includes('--stand-down') };
 }
 
 async function main() {
@@ -2078,7 +2095,7 @@ async function main() {
     console.log(JSON.stringify({ ok: false, action: 'error', error: 'CLAUDE_SESSION_ID env var required (set by the SessionStart hook).' }, null, 2));
     process.exit(1);
   }
-  const { model: cliModel, effort: cliEffort } = parseCheckinArgs(process.argv.slice(2));
+  const { model: cliModel, effort: cliEffort, standDown: cliStandDown } = parseCheckinArgs(process.argv.slice(2));
   let sb;
   try {
     sb = ws.getServiceClient();
@@ -2086,7 +2103,7 @@ async function main() {
     console.log(JSON.stringify({ ok: false, action: 'error', error: `supabase client unavailable: ${e.message}` }, null, 2));
     process.exit(1);
   }
-  const result = await runCheckin(sb, sessionId, { model: cliModel, effort: cliEffort });
+  const result = await runCheckin(sb, sessionId, { model: cliModel, effort: cliEffort, standDown: cliStandDown });
   // QF-20260822-955: standalone owed-row SMS dispatch tick, piggybacked on the check-in
   // every worker already runs — see lib/checkin/sms-outbound-tick.cjs for why (no new CI
   // Twilio secrets; reuses this session's own local env). Fail-soft/bounded by design;

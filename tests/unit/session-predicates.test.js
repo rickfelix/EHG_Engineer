@@ -74,6 +74,25 @@ describe('isFixtureSession — fixture/probe/test id detection', () => {
     expect(isFixtureSession(12345)).toBe(false);
     expect(isFixtureSession({})).toBe(false);
   });
+
+  // QF-20260903-195: a sentinel row whose id is an ordinary-looking UUID (no FIXTURE_SESSION_RE
+  // marker) escaped every id-shape check and consumed a live callsign (Alpha-5) with a heartbeat
+  // refreshed by a unit test that upserted it against production on every local suite run.
+  it('flags a session via metadata.source ending in "-test" even when the id has no fixture marker (QF-20260903-195)', () => {
+    expect(isFixtureSession({
+      session_id: '00000000-0000-0000-0000-fff7000fffff',
+      metadata: { source: 'fr7-test' },
+    })).toBe(true);
+  });
+
+  it('does NOT flag metadata.source that merely contains "test" mid-word, only a "-test" suffix', () => {
+    expect(isFixtureSession({ session_id: 'real-worker', metadata: { source: 'latest-build' } })).toBe(false);
+    expect(isFixtureSession({ session_id: 'real-worker', metadata: { source: 'attestation' } })).toBe(false);
+  });
+
+  it('a bare session_id string (no row) is unaffected by the metadata.source check', () => {
+    expect(isFixtureSession('00000000-0000-0000-0000-fff7000fffff')).toBe(false);
+  });
 });
 
 describe('genuine-worker SoT re-export (single source of truth)', () => {

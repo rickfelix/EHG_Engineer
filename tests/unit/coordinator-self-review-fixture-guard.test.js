@@ -18,7 +18,7 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { partitionParticipants, isSolicitationDue, buildSolicitationHistory } from '../../scripts/coordinator-self-review.mjs';
+import { partitionParticipants, isSolicitationDue, buildSolicitationHistory, isSeatInterruptibleForReview } from '../../scripts/coordinator-self-review.mjs';
 
 const { isFullUuid } = createRequire(import.meta.url)('../../lib/coordinator/dispatch.cjs');
 
@@ -86,6 +86,43 @@ describe('coordinator self-review — fixture/non-UUID session guard (SD-LEO-FEA
       { session_id: REAL2, metadata: {}, heartbeat_at: 'now' },
     ];
     expect(solicitableWorkers(sess, me)).toEqual([REAL2]);
+  });
+});
+
+// QF-20260906-891: coordinator self-review 14:02Z (row d9d8f7df) -- solicited every live worker
+// at the 8-SD threshold regardless of phase, costing a deep-EXEC seat a context switch (Golf-6).
+// isSeatInterruptibleForReview restricts solicitation to a low-cost-to-interrupt seat.
+describe('coordinator self-review — interruptibility gate defers a deep-EXEC seat (QF-20260906-891)', () => {
+  it('a seat with loop_state=awaiting_tick is interruptible', () => {
+    expect(isSeatInterruptibleForReview({ loop_state: 'awaiting_tick' })).toBe(true);
+  });
+
+  it('a seat with loop_state=idle is interruptible', () => {
+    expect(isSeatInterruptibleForReview({ loop_state: 'idle' })).toBe(true);
+  });
+
+  it('a seat in current_phase=LEAD or PLAN is interruptible regardless of loop_state', () => {
+    expect(isSeatInterruptibleForReview({ loop_state: 'active', current_phase: 'LEAD' })).toBe(true);
+    expect(isSeatInterruptibleForReview({ loop_state: 'active', current_phase: 'PLAN' })).toBe(true);
+  });
+
+  it('a seat with loop_state=active and current_phase=EXEC is NOT interruptible -- the incident specimen', () => {
+    expect(isSeatInterruptibleForReview({ loop_state: 'active', current_phase: 'EXEC' })).toBe(false);
+  });
+
+  it('a null/undefined row is not interruptible (fail-closed, never throws)', () => {
+    expect(isSeatInterruptibleForReview(null)).toBe(false);
+    expect(isSeatInterruptibleForReview(undefined)).toBe(false);
+  });
+
+  it('end-to-end: a deep-EXEC worker is excluded from the solicit-eligible set; an awaiting_tick worker stays in', () => {
+    const sess = [
+      { session_id: REAL, metadata: {}, heartbeat_at: 'now', loop_state: 'active', current_phase: 'EXEC' },
+      { session_id: REAL2, metadata: {}, heartbeat_at: 'now', loop_state: 'awaiting_tick', current_phase: 'EXEC' },
+    ];
+    const sessById = new Map(sess.map((r) => [r.session_id, r]));
+    const eligible = solicitableWorkers(sess, 'me').filter((w) => isSeatInterruptibleForReview(sessById.get(w)));
+    expect(eligible).toEqual([REAL2]);
   });
 });
 

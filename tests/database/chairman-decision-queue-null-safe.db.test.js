@@ -108,4 +108,41 @@ describe('FR-1 / FR-5 — behavioural (runs only where the DDL is applied)', () 
     const { rows: got } = await client.query('SELECT decision FROM chairman_decisions WHERE id = $1', [ventureless]);
     expect(got[0].decision).toBe(expected[0].v);   // type decided it, venture-absence did not
   });
+
+  // SD-LEO-INFRA-CHAIRMAN-DECISION-VALUE-001 FR-1/FR-3: the test above ('[axes] semantics follow
+  // decision_type') compares fn_chairman_decision_value's output against ITSELF -- it proves axis
+  // independence (venture-presence does not change the resolved value) but is silent on whether
+  // chairman_approval actually HAS a mapping; it passes identically whether the value is NULL or
+  // 'approve'. This test pins the ACTUAL verb, gated on the FR-1 migration
+  // (database/chairman-gated/20260907_add_chairman_approval_to_decision_value.sql) being applied
+  // -- SKIPS (not a false pass) until then, matching this file's cannot-fail-on-absence contract.
+  it('FR-1: chairman_approval resolves to a real, non-NULL verb once the migration is applied', async (ctx) => {
+    if (!ddlApplied) return ctx.skip('STAGED, NOT APPLIED — fn_chairman_decision_value absent.');
+    const { rows: approvedRow } = await client.query(
+      'SELECT fn_chairman_decision_value($1, $2) AS v', ['chairman_approval', 'approved'],
+    );
+    const { rows: rejectedRow } = await client.query(
+      'SELECT fn_chairman_decision_value($1, $2) AS v', ['chairman_approval', 'rejected'],
+    );
+    if (approvedRow[0].v === null) {
+      return ctx.skip('chairman_approval not yet mapped — 20260907_add_chairman_approval_to_decision_value.sql not yet chairman-applied.');
+    }
+    expect(approvedRow[0].v).toBe('approve');
+    expect(rejectedRow[0].v).toBe('reject');
+  });
+
+  it('FR-1: a live chairman_approval decision actually closes through fn_chairman_decide once mapped', async (ctx) => {
+    if (!ddlApplied) return ctx.skip('STAGED, NOT APPLIED — fn_chairman_decision_value absent.');
+    const { rows: probe } = await client.query(
+      'SELECT fn_chairman_decision_value($1, $2) AS v', ['chairman_approval', 'approved'],
+    );
+    if (probe[0].v === null) {
+      return ctx.skip('chairman_approval not yet mapped — 20260907_add_chairman_approval_to_decision_value.sql not yet chairman-applied.');
+    }
+    const id = await seed({ decisionType: 'chairman_approval' });
+    await client.query('SELECT fn_chairman_decide($1, $2, $3)', [id, 'approved', 'db-tier test']);
+    const { rows } = await client.query('SELECT status, decision FROM chairman_decisions WHERE id = $1', [id]);
+    expect(rows[0].status).not.toBe('pending');
+    expect(rows[0].decision).toBe('approve');
+  });
 });

@@ -24,7 +24,7 @@ import { CRITICAL_PROTOCOL_FILES } from '../../lib/governance/checkout-freshness
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-test('ADAM_LOOPS has the 17 expected tick loops with the expected keys', () => {
+test('ADAM_LOOPS has the 18 expected tick loops with the expected keys', () => {
   // self-adherence added by SD-LEO-INFRA-AUTOMATED-RECURRING-ADAM-001 (child E);
   // belt-countdown added by SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2 — durable contract duty);
   // doc-drift + github-assessment added by SD-LEO-INFRA-REGISTER-TWO-EVERY-001 (every-3-day propose-only duties);
@@ -41,8 +41,11 @@ test('ADAM_LOOPS has the 17 expected tick loops with the expected keys', () => {
   //   (composed by adam-quiet-tick, never armed standalone), GHA-backed by role-capture-gate-cron.yml.
   // triangulation-audit added by QF-20260830-939 (durable contract duty, ratification 7b28b8f0 —
   //   was session-only and would have died before its first Monday cycle).
-  assert.equal(ADAM_LOOPS.length, 17);
-  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'capture-gate', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'self-score', 'solomon-health', 'heartbeat-sms', 'morning-brief-sms', 'decision-driving-sweep', 'triangulation-audit']);
+  // bandwidth-forecast added by QF-20260905-121 (Solomon audit #7 item 2, 0df6a79f — the
+  //   ratification-63ff6ef2-retained 21:30 ET bandwidth forecast had NO durable trigger and
+  //   went dark two nights running before this).
+  assert.equal(ADAM_LOOPS.length, 18);
+  assert.deepEqual(ADAM_LOOPS.map((l) => l.key), ['quiet-tick', 'governance-scan', 'inbox-monitor', 'capture-gate', 'offer-help', 'self-adherence', 'coordinator-health', 'belt-countdown', 'doc-drift', 'github-assessment', 'board-reconcile', 'self-score', 'solomon-health', 'heartbeat-sms', 'morning-brief-sms', 'decision-driving-sweep', 'triangulation-audit', 'bandwidth-forecast']);
   ADAM_LOOPS.forEach((l) => {
     assert.ok(l.cron && typeof l.cron === 'string', `${l.key} has a cron`);
     assert.ok(l.prompt && typeof l.prompt === 'string', `${l.key} has a prompt`);
@@ -61,6 +64,21 @@ test('QF-20260818-063: heartbeat-sms prompt makes the measured-cadence query (sm
   assert.match(heartbeat.prompt, /REQUIRED FIRST STEP/);
   assert.match(heartbeat.prompt, /sms_outbound_obligations/);
   assert.match(heartbeat.prompt, /session recall/i);
+});
+
+// QF-20260905-680: ratification 7010e20f fixed the cadence to SET-SCHEDULE ET slots
+// (6/9/12/3/6/9), superseding the ">=170min gap since last send" rule (9eebe200) this prompt
+// used to encode verbatim -- a seat following the old wording drifted ~1h/day from the slots.
+test('QF-20260905-680: heartbeat-sms prompt names the fixed ET slots and ratification 7010e20f, not the superseded gap rule', () => {
+  const heartbeat = ADAM_LOOPS.find((l) => l.key === 'heartbeat-sms');
+  assert.ok(heartbeat, 'heartbeat-sms loop exists');
+  assert.match(heartbeat.prompt, /FIXED ET SLOTS/);
+  assert.match(heartbeat.prompt, /6:00am\/9:00am\/12:00pm\/3:00pm\/6:00pm\/9:00pm/);
+  assert.match(heartbeat.prompt, /7010e20f/);
+  assert.match(heartbeat.prompt, /SUPERSEDED/);
+  // The old primary-trigger phrasing must be gone; the gap rule survives only as a backstop.
+  assert.doesNotMatch(heartbeat.prompt, /Only proceed once the MEASURED gap is/);
+  assert.match(heartbeat.prompt, /OVERDUE BACKSTOP ONLY/);
 });
 
 // SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): the consumer-side invariant for the loop
@@ -146,6 +164,22 @@ test('QF-20260830-939: triangulation-audit is a weekly Monday agent-judgment tic
   assert.match(ta.prompt, /ONE feedback row.*category self_analytics/is);
   assert.match(ta.prompt, /adam-triangulation-audit-stamp\.mjs/, 'stamps the registry liveness backstop');
   assert.match(ta.prompt, /SKIP LOUDLY/, 'never a silent no-op during recovery');
+});
+
+test('QF-20260905-121: bandwidth-forecast is a durable 21:30 ET tick that ALWAYS records a durable trace, sent or silent', () => {
+  const bf = ADAM_LOOPS.find((l) => l.key === 'bandwidth-forecast');
+  assert.ok(bf, 'bandwidth-forecast loop exists');
+  assert.equal(bf.script, 'account-usage-paste-projection.mjs');
+  assert.equal(bf.cron, '30 21 * * *', 'fires at 21:30 local (ET), the retained duty\'s own slot');
+  assert.match(bf.prompt, /account-usage-paste-projection\.mjs/, 'runs the projection CLI');
+  assert.match(bf.prompt, /category='adam_duty_log'.*metadata\.duty='bandwidth_forecast'/s, 'reads the last-sent stamp from a durable DB row, not session memory');
+  assert.match(bf.prompt, /session restart loses that memory entirely/i, 'never decides from session recall');
+  assert.match(bf.prompt, /adam-chairman-sms\.mjs --kind bandwidth_forecast/, 'sends via the canonical chairman-SMS CLI on the new-paste path');
+  assert.match(bf.prompt, /stay SILENT on SMS/i, 'silence-by-default when no new paste');
+  assert.match(bf.prompt, /emitFeedback\(/, 'silent path still calls the canonical feedback writer');
+  assert.match(bf.prompt, /category:"adam_duty_log"/, 'durable trace lands in a dedicated, non-harness-backlog category');
+  assert.match(bf.prompt, /silent:true/, 'silent-path row is distinguishable from a sent-path row');
+  assert.match(bf.prompt, /NOT optional cosmetic logging/i, 'the durable trace is framed as the acceptance criterion, not an afterthought');
 });
 
 test('QF-20260830-939: loopStatus is TWO-SIDED for triangulation-audit — MISSING without the key, armed with it', () => {

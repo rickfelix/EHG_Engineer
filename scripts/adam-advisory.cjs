@@ -48,7 +48,7 @@ const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled 
 const { getActiveSolomonId } = require('../lib/coordinator/solomon-identity.cjs');
 // QF-20260719-387: fail-closed sender-role guard + target-role assert at the send/request chokes.
 const { assertSenderRole, assertTargetRole } = require('../lib/coordinator/role-comms-guard.cjs');
-const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, isSentinelTarget, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS, isDeliveredDispatchError } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PEER_KINDS } = require('../lib/coordinator/peer-target.cjs');
@@ -1266,12 +1266,43 @@ async function main() {
   // to bound ONLY awaitCoordinatorReply below.
   const expiresAt = advisoryExpiresAt(Date.now());
 
+  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 (AC-2): PRE-SEND dedup, mirroring
+  // solomon-advisory.cjs:1012 verbatim in shape. Adam had NO dedup wiring at all — zero
+  // alreadyAnswered call sites — so a re-run answered the same correlation twice while Solomon's
+  // identical path short-circuited.
+  //
+  // The discriminators are the point. Passing message_kind and part_index makes the guard ask "has
+  // THIS kind of message already been posted here?" rather than "has anything been posted here?",
+  // which is what lets FR-1's multi-part consults share ONE correlation without the dedup eating
+  // parts 2..N. Omitting them would make --part unusable on Adam the moment it shipped.
+  //
+  // WHY THIS IS A GRACEFUL RETURN, NOT A THROW: I initially deferred this, arguing it added a
+  // blocking refusal to a path that never refuses, and cited QF-20260705-488. VALIDATION (evidence
+  // a499aa47) pushed back and was right — that incident was the FR-2 CHOKE-level lock swallowing
+  // ensureOriginatorCc's throw, a different layer. This check short-circuits before the insert and
+  // returns cleanly, which is the same mechanism that CLOSED that incident, not the one that caused
+  // it. Adam has no originator-CC leg to heal (grep: ensureOriginatorCc is Solomon-only), so the
+  // heal branch is deliberately absent rather than copied.
+  //
+  // QF-20260905-317: moved BEFORE the pre-send-consult block below (was after it). A resend of an
+  // already-answered correlation used to reach the consult block first, inserting a fresh Solomon
+  // consult row every time before this dedup check ever ran — measured as 4 consult rows on
+  // Solomon for one intended ruling relay. Running dedup first means a deduped resend returns here
+  // and never reaches the consult call below.
+  if (replyTo && (await alreadyAnswered(supabase, replyTo, { messageKind: payload.message_kind, partIndex: payload.part_index }))) {
+    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending. To send anyway: re-send with --message-kind amend|supersede|retraction (a correction), or --part N/M (an ordered part of the same consult).`);
+    return;
+  }
+
   // SD-LEO-INFRA-ADAM-PRE-SEND-001 (FR-1/3/4/5): PRE-SEND Solomon-consult gate at the send
   // choke — mirrors the sanityCheckUrgentAdvisory precedent (runs AFTER payload build, BEFORE
   // insertCoordinationRow). ALL logic lives in the unit-tested lib/adam/should-consult-solomon.js;
   // this is the minimal live-path wiring. Skips a send that IS a consult to Solomon (no recursion).
   // Default ACTIVE (kill switch: ADAM_PRE_SEND_CONSULT=off) and DEGRADE-SAFE: any gate error
   // fails OPEN so a gate bug can never block Adam's send (Adam is never hard-blocked on Solomon).
+  //
+  // QF-20260905-317: moved to run AFTER the dedup check above (was before it) — see that block's
+  // comment for why.
   if ((process.env.ADAM_PRE_SEND_CONSULT || 'on') !== 'off' && peerArg !== 'solomon') {
     try {
       // SD-LEO-INFRA-SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-6: the ~50 inline lines that used to
@@ -1350,30 +1381,8 @@ async function main() {
     console.warn('[adam-advisory] ⚠ PRE-SEND CONSULT GATE DISABLED (ADAM_PRE_SEND_CONSULT=off) — sending without Solomon-consult review.');
   }
 
-  // SD-LEO-INFRA-CONSULT-CORRELATION-CONVENTIONS-001 / FR-1 (AC-2): PRE-SEND dedup, mirroring
-  // solomon-advisory.cjs:1012 verbatim in shape. Adam had NO dedup wiring at all — zero
-  // alreadyAnswered call sites — so a re-run answered the same correlation twice while Solomon's
-  // identical path short-circuited.
-  //
-  // The discriminators are the point. Passing message_kind and part_index makes the guard ask "has
-  // THIS kind of message already been posted here?" rather than "has anything been posted here?",
-  // which is what lets FR-1's multi-part consults share ONE correlation without the dedup eating
-  // parts 2..N. Omitting them would make --part unusable on Adam the moment it shipped.
-  //
-  // WHY THIS IS A GRACEFUL RETURN, NOT A THROW: I initially deferred this, arguing it added a
-  // blocking refusal to a path that never refuses, and cited QF-20260705-488. VALIDATION (evidence
-  // a499aa47) pushed back and was right — that incident was the FR-2 CHOKE-level lock swallowing
-  // ensureOriginatorCc's throw, a different layer. This check short-circuits before the insert and
-  // returns cleanly, which is the same mechanism that CLOSED that incident, not the one that caused
-  // it. Adam has no originator-CC leg to heal (grep: ensureOriginatorCc is Solomon-only), so the
-  // heal branch is deliberately absent rather than copied.
-  if (replyTo && (await alreadyAnswered(supabase, replyTo, { messageKind: payload.message_kind, partIndex: payload.part_index }))) {
-    console.log(`(dedup) consult ${String(replyTo).slice(0, 8)} already answered — not re-sending. To send anyway: re-send with --message-kind amend|supersede|retraction (a correction), or --part N/M (an ordered part of the same consult).`);
-    return;
-  }
-
   // QF-20260902-100: run LAST, immediately before the insert -- after every gate above that can
-  // still refuse or skip this send (alarm bar, outbound gate, pre-send consult, dedup). Still
+  // still refuse or skip this send (alarm bar, outbound gate, dedup, pre-send consult). Still
   // exits 4 immediately on its own role-mismatch refusal (unchanged); deferPrint:true holds the
   // SUCCESS line instead of printing it here -- it prints only once the row id exists below,
   // alongside correlation_id, per the coordinator's acceptance clause on this QF.
@@ -1385,23 +1394,25 @@ async function main() {
   // The 'broadcast-coordinator' sentinel short-circuits validation (no live coordinator).
   let inserted;
   try {
-    const { data, error } = await insertCoordinationRow(
+    // SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1: a delivered/parked outcome
+    // (DISPATCH_BACKPRESSURE with a successful park, or DISPATCH_ALREADY_DELIVERED) is now an
+    // ADDITIVE RETURN, not a throw — check isDeliveredDispatchError() on the result BEFORE
+    // treating it as an ordinary success/error, instead of catching it as a thrown exception.
+    const result = await insertCoordinationRow(
       supabase,
       { sender_session: sessionId, sender_type: 'adam', target_session: target, message_type: 'INFO', subject, body: payload.body, payload, expires_at: expiresAt },
       // SD-LEO-INFRA-SEND-TIME-TARGET-001 / FR-2: `--to solomon` is statically a Solomon-role
       // target — hint the target-drain warn so a resolved UUID needs no identity lookup.
       { select: 'id', single: true, targetRoleHint: toSolomon ? 'solomon' : undefined }
     );
+    if (isDeliveredDispatchError(result)) {
+      console.error(`[adam-advisory] DELIVERED (not a failure) — code=${result.code}, parkedRowId=${result.parkedRowId}`);
+      process.exit(0);
+    }
+    const { data, error } = result;
     if (error) { console.error('ERROR: failed to insert advisory:', error.message); process.exit(1); }
     inserted = data;
   } catch (e) {
-    // QF-20260902-160: a landed:true error means the content already reached the target (parked
-    // or a same-correlation dupe) — this is DELIVERED, not a failure. Exiting 1 here is what
-    // trained callers to resend and duplicate an ask that already landed.
-    if (e && e.landed) {
-      console.error(`[adam-advisory] DELIVERED (not a failure) — ${e.message}`);
-      process.exit(0);
-    }
     const code = e && e.code ? `${e.code}: ` : '';
     console.error(`ERROR: advisory not sent — ${code}${(e && e.message) || e}`);
     process.exit(1);

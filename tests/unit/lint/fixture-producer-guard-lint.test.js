@@ -115,8 +115,11 @@ describe('the allowlist refuses a blank justification', () => {
 
 describe('the scanned boundary is deliberate', () => {
   it('names its roots explicitly rather than globbing the tree', () => {
+    // SD-LEO-INFRA-FIXTURE-VENTURES-IDENTIFIED-001 (FR-1): tests/e2e added -- 48-of-53 unguarded
+    // producers measured there. tests/ddl (0 producers) and tests/unit (only the lint's own
+    // positive-control test-fixture strings) are deliberately excluded.
     expect(SCAN_ROOTS).toEqual([
-      'tests/integration', 'tests/database', 'scripts/harness', 'scripts/canary',
+      'tests/integration', 'tests/database', 'scripts/harness', 'scripts/canary', 'tests/e2e',
     ]);
   });
 });

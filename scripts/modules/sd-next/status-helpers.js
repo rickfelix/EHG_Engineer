@@ -180,6 +180,12 @@ export function getPhaseAwareStatus(item) {
     return `${colors.red}STUCK${colors.reset}`;
   }
 
+  // QF-20260904-708: held behind a non-terminal predecessor in the parent's declared
+  // mandatory_child_order (out-of-order dispatch ships a dead guard).
+  if (item.childOrderHold && item.childOrderHold.held) {
+    return `${colors.yellow}HELD${colors.reset}`;
+  }
+
   // QF-20260511-565: LEAD strategic pause via metadata.lead_decision.verdict
   // outranks phase-based status — an SD paused at LEAD that happens to sit in
   // PLAN_PRD must not display PLANNING (would mislead operators per CLAUDE.md
@@ -295,6 +301,12 @@ export function isActionableForLead(item) {
 
   // SD-LEO-INFRA-HANDOFF-INTEGRITY-RECOVERY-001: Not actionable if stuck
   if (item._stuck) {
+    return false;
+  }
+
+  // QF-20260904-708: not actionable if held behind a non-terminal predecessor in the
+  // parent's mandatory_child_order.
+  if (item.childOrderHold && item.childOrderHold.held) {
     return false;
   }
 

@@ -17,10 +17,12 @@ import {
   COORDINATOR_LIVENESS_MAX_AGE_MINUTES,
   computeSharpenings,
   gitGrepMainForSd,
+  gitOriginMainSha,
 } from '../../../scripts/adam-coordinator-health.mjs';
 import * as waveLinkage from '../../../lib/roadmap/wave-linkage-coverage.js';
 import * as genuineWorker from '../../../lib/fleet/genuine-worker.mjs';
 import * as coordinatorResolve from '../../../lib/coordinator/resolve.cjs';
+import * as parentCompletion from '../../../lib/fleet/parent-completion.mjs';
 
 const minutesAgo = (m) => new Date(Date.now() - m * 60_000).toISOString();
 
@@ -187,6 +189,40 @@ describe('computeUtilization (TS-1, TS-2)', () => {
     expect(result.live_workers).toBe(1);
     expect(result.claimed).toBe(1);
   });
+
+  // QF-20260908-764: countCompletionReadyParents already separates a genuinely-completable
+  // parent that's deliberately held from `ready` -- this reader previously discarded the `held`
+  // bucket entirely, so a held-but-completable parent read as zero, indistinguishable from no
+  // such parent existing (176h-unseen live specimen). Stubs countCompletionReadyParents directly
+  // (mirrors the liveFleetWorkers spy above) rather than re-deriving checkParentCompletable's own
+  // fake-supabase shape here -- that predicate is already covered by
+  // lib/fleet/parent-completion.test.js and is unchanged by this fix.
+  it('surfaces completion_ready_parents_held (count) and _held_reasons alongside ready, not silently dropped', async () => {
+    const spy = vi.spyOn(parentCompletion, 'countCompletionReadyParents').mockResolvedValue({
+      count: 1,
+      oldestAgeMs: 1000,
+      parents: [{ sd_key: 'SD-READY-1', age_ms: 1000 }],
+      held: [{ sd_key: 'SD-HELD-1', reason: 'needs_coordinator_review' }],
+    });
+    const supabase = makeFakeSupabase({ claude_sessions: [], strategic_directives_v2: [] });
+    const result = await computeUtilization(supabase);
+    expect(result.completion_ready_parents).toBe(1);
+    expect(result.completion_ready_parents_held).toBe(1);
+    expect(result.completion_ready_parents_held_reasons).toEqual([
+      { sd_key: 'SD-HELD-1', reason: 'needs_coordinator_review' },
+    ]);
+    spy.mockRestore();
+  });
+
+  it('defaults held to 0/[] (fail-soft) when countCompletionReadyParents throws -- never breaks the probe', async () => {
+    const spy = vi.spyOn(parentCompletion, 'countCompletionReadyParents').mockRejectedValue(new Error('query fault'));
+    const supabase = makeFakeSupabase({ claude_sessions: [], strategic_directives_v2: [] });
+    const result = await computeUtilization(supabase);
+    expect(result.completion_ready_parents).toBe(0);
+    expect(result.completion_ready_parents_held).toBe(0);
+    expect(result.completion_ready_parents_held_reasons).toEqual([]);
+    spy.mockRestore();
+  });
 });
 
 /**
@@ -261,36 +297,66 @@ describe('computeSharpenings FALSE_COMPLETION sample (FR-5 wiring)', () => {
  * guaranteed by the 'unverifiable' exclusion above, in place before this QF).
  */
 describe('gitGrepMainForSd retry-once (QF-20260813-510)', () => {
-  it('a transient failure on the first attempt is retried once and succeeds', () => {
+  it('a transient failure on the first attempt is retried once and succeeds (fetch, grep-fail, grep-retry)', () => {
     const exec = vi.fn()
+      .mockImplementationOnce(() => '') // fetch
       .mockImplementationOnce(() => { throw new Error('ETIMEDOUT'); })
       .mockImplementationOnce(() => 'abc1234\n');
 
     expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe(true);
-    expect(exec).toHaveBeenCalledTimes(2);
+    expect(exec).toHaveBeenCalledTimes(3);
+    expect(exec.mock.calls[0][0]).toBe('git fetch origin main');
   });
 
-  it('two consecutive failures return "unverifiable", not a crash', () => {
+  it('two consecutive grep failures (after a successful fetch) return "unverifiable", not a crash', () => {
     const exec = vi.fn()
+      .mockImplementationOnce(() => '') // fetch
       .mockImplementationOnce(() => { throw new Error('ETIMEDOUT'); })
       .mockImplementationOnce(() => { throw new Error('ETIMEDOUT'); });
 
     expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe('unverifiable');
+    expect(exec).toHaveBeenCalledTimes(3);
+  });
+
+  it('a genuine first-attempt hit never triggers a grep retry', () => {
+    const exec = vi.fn()
+      .mockImplementationOnce(() => '') // fetch
+      .mockImplementationOnce(() => 'def5678\n');
+
+    expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe(true);
     expect(exec).toHaveBeenCalledTimes(2);
   });
 
-  it('a genuine first-attempt hit never triggers a retry', () => {
-    const exec = vi.fn(() => 'def5678\n');
-
-    expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe(true);
-    expect(exec).toHaveBeenCalledTimes(1);
-  });
-
   it('a genuine not-found (empty output, no exception) never triggers a retry', () => {
-    const exec = vi.fn(() => '');
+    const exec = vi.fn(() => ''); // fetch AND grep both return empty
 
     expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe(false);
+    expect(exec).toHaveBeenCalledTimes(2);
+  });
+
+  it('QF-20260905-464: a failed fetch is "unverifiable" WITHOUT ever attempting the grep -- never reads a stale local ref', () => {
+    const exec = vi.fn(() => { throw new Error('fetch failed: network unreachable'); });
+
+    expect(gitGrepMainForSd('SD-KEY-001', undefined, exec)).toBe('unverifiable');
     expect(exec).toHaveBeenCalledTimes(1);
+    expect(exec.mock.calls[0][0]).toBe('git fetch origin main');
+  });
+});
+
+describe('gitOriginMainSha (QF-20260905-464)', () => {
+  it('returns the trimmed sha on a successful read', () => {
+    const exec = vi.fn(() => 'deadbeef1234\n');
+    expect(gitOriginMainSha(undefined, exec)).toBe('deadbeef1234');
+  });
+
+  it('returns null (never throws) when the read fails', () => {
+    const exec = vi.fn(() => { throw new Error('not a git repo'); });
+    expect(gitOriginMainSha(undefined, exec)).toBeNull();
+  });
+
+  it('returns null on empty output rather than an empty string', () => {
+    const exec = vi.fn(() => '');
+    expect(gitOriginMainSha(undefined, exec)).toBeNull();
   });
 });
 

@@ -17,6 +17,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -33,15 +34,13 @@ test.describe('Golden Nugget Validation E2E Tests', () => {
 
   test.beforeAll(async () => {
     // Create test venture at stage 5 (ready for stage 6 transition)
-    const { data: venture, error: ventureError } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture, error: ventureError } = await insertGuarded(supabase, 'ventures', {
         name: `GoldenNugget Test Venture ${timestamp}`,
         description: 'Testing Golden Nugget validation during stage transitions',
         status: 'active',
         current_lifecycle_stage: 5,
         is_demo: true
-      })
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/state-machine/golden-nugget-validation.spec.ts' })
       .select()
       .single();
 

@@ -10,21 +10,34 @@ const { parseCheckinArgs, mergeCheckinModelEffort } = require('../../scripts/wor
 
 describe('FR-3: parseCheckinArgs', () => {
   it('parses --model and --effort from argv', () => {
-    expect(parseCheckinArgs(['--model', 'sonnet', '--effort', 'xhigh'])).toEqual({ model: 'sonnet', effort: 'xhigh' });
+    expect(parseCheckinArgs(['--model', 'sonnet', '--effort', 'xhigh'])).toEqual({ model: 'sonnet', effort: 'xhigh', standDown: false });
   });
 
   it('returns null for absent flags', () => {
-    expect(parseCheckinArgs([])).toEqual({ model: null, effort: null });
-    expect(parseCheckinArgs(['--json'])).toEqual({ model: null, effort: null });
+    expect(parseCheckinArgs([])).toEqual({ model: null, effort: null, standDown: false });
+    expect(parseCheckinArgs(['--json'])).toEqual({ model: null, effort: null, standDown: false });
   });
 
   it('does not treat the next flag as a value', () => {
-    expect(parseCheckinArgs(['--model', '--effort', 'xhigh'])).toEqual({ model: null, effort: 'xhigh' });
+    expect(parseCheckinArgs(['--model', '--effort', 'xhigh'])).toEqual({ model: null, effort: 'xhigh', standDown: false });
   });
 
   it('supports either flag alone', () => {
-    expect(parseCheckinArgs(['--model', 'opus'])).toEqual({ model: 'opus', effort: null });
-    expect(parseCheckinArgs(['--effort', 'high'])).toEqual({ model: null, effort: 'high' });
+    expect(parseCheckinArgs(['--model', 'opus'])).toEqual({ model: 'opus', effort: null, standDown: false });
+    expect(parseCheckinArgs(['--effort', 'high'])).toEqual({ model: null, effort: 'high', standDown: false });
+  });
+});
+
+// QF-20260905-282: --stand-down (boolean, no value) lets a dedicated seat self-report
+// coordinator_stand_down=true on its own first check-in.
+describe('QF-20260905-282: parseCheckinArgs — --stand-down', () => {
+  it('parses --stand-down as true, independent of --model/--effort', () => {
+    expect(parseCheckinArgs(['--stand-down'])).toEqual({ model: null, effort: null, standDown: true });
+    expect(parseCheckinArgs(['--model', 'sonnet', '--stand-down'])).toEqual({ model: 'sonnet', effort: null, standDown: true });
+  });
+
+  it('defaults to false when absent (byte-identical to before this QF)', () => {
+    expect(parseCheckinArgs(['--model', 'opus', '--effort', 'high']).standDown).toBe(false);
   });
 });
 

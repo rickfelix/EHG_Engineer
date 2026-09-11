@@ -37,6 +37,7 @@ import { loadActiveApplications, validateTargetApplication, detectMisdesignation
 // arrivals are UAT filings and 60% come in elevated; both gates live HERE, at the filing
 // site, because the drain cannot outrun the faucet.
 import { applySeverityRule, findDuplicateFinding } from '../lib/quick-fix/uat-filing-gate.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -69,6 +70,28 @@ function generateQuickFixId() {
   const random = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
 
   return `QF-${year}${month}${day}-${random}`;
+}
+
+/**
+ * QF-20260904-344: quick_fixes.created_by DB-defaults to the literal 'UAT_AGENT' (migration
+ * 20251117_create_quick_fixes_table.sql:48) when the INSERT omits the column, so every mint
+ * -- regardless of who actually sourced it -- read as UAT_AGENT-authored, and the batch-mint
+ * detector grouped unrelated seats' mints into one false batch. Resolves the real caller
+ * instead of ever falling through to that DB default. Pure enough to unit-test directly with
+ * a stub supabase client (no real DB needed).
+ * @param {{supabase: object, sessionId: string|null, override: string|null}} args
+ * @returns {Promise<string>} the created_by value to stamp on the new row
+ */
+export async function resolveCreatedBy({ supabase, sessionId, override }) {
+  if (override && String(override).trim()) return override.trim();
+  if (!sessionId) return 'UNKNOWN_CALLER';
+  const { data } = await supabase
+    .from('claude_sessions')
+    .select('metadata')
+    .eq('session_id', sessionId)
+    .maybeSingle();
+  const role = data?.metadata?.role;
+  return role ? `${role}-${sessionId}` : sessionId;
 }
 
 // Interactive prompting
@@ -427,6 +450,15 @@ async function createQuickFix(options = {}) {
   // suffix and fail on quick_fixes_pkey (23505), forcing a manual re-run. Redraw and
   // retry, bounded, logging each collision; a non-23505 error still fails immediately.
   const MAX_ID_ATTEMPTS = 5;
+  // QF-20260904-344: the created_by column DEFAULTs to the literal 'UAT_AGENT'
+  // (migration 20251117_create_quick_fixes_table.sql:48) when omitted from the insert --
+  // stamp the real caller so a mint sourced by Adam/the coordinator/another seat never
+  // reads as UAT_AGENT-authored and false-groups into the batch-mint detector.
+  const createdBy = await resolveCreatedBy({
+    supabase,
+    sessionId: process.env.CLAUDE_SESSION_ID || null,
+    override: options.createdBy || null,
+  });
   let qfId;
   let insertErr;
   for (let attempt = 1; attempt <= MAX_ID_ATTEMPTS; attempt++) {
@@ -448,6 +480,7 @@ async function createQuickFix(options = {}) {
         escalation_reason: isTier3 ? routingDecision.escalationReason : null,
         routing_tier: routingDecision.tier,
         routing_threshold_id: routingDecision.thresholdId !== 'fallback' && routingDecision.thresholdId !== 'error-multiple-active' ? routingDecision.thresholdId : null,
+        created_by: createdBy,
         created_at: new Date().toISOString()
       }));
     if (!insertErr) break;
@@ -572,6 +605,32 @@ async function createQuickFix(options = {}) {
 
   // Re-read the just-inserted row to keep the original return shape for callers.
   const { data } = await supabase.from('quick_fixes').select('*').eq('id', qfId).single();
+
+  // QF-20260903-266 — PERSISTED-CONTENT ECHO, extending the QF-20260903-787 precedent
+  // (scripts/worker-signal.cjs) to operator-authored prose write paths beyond signals. The
+  // precedent's own governance description ("tier-ladder.cjs:487 guards .") took exactly this
+  // hit: a backticked expression inside a double-quoted shell argument was command-substituted
+  // away, and the create still reported success with no way to notice at write time.
+  // Read-back-and-report ONLY -- this must never be able to fail the write it observes (the
+  // description is already durably persisted above; this block is purely observational).
+  try {
+    const persisted = data && data.description;
+    if (persisted === undefined || persisted === null) {
+      console.log('  persisted_description: (none)');
+    } else {
+      const text = String(persisted);
+      const digest = require('crypto').createHash('sha256').update(text).digest('hex').slice(0, 8);
+      console.log(`  persisted_description: ${text.length} chars, sha256:${digest}`);
+      console.log('    ^ compare against what you MEANT to send. A shorter-than-expected count is the');
+      console.log('      signature of shell command-substitution eating part of your message.');
+      if (typeof description === 'string' && text.length !== description.length) {
+        console.log(`  ⚠ WRITE-SIDE TRUNCATION: submitted ${description.length} chars, stored ${text.length}. The row does NOT match what this process submitted.`);
+      }
+    }
+  } catch {
+    // Never let the echo turn a successful create into a failure — observability aid, not a gate.
+    console.log('  persisted_description: (read-back unavailable)');
+  }
 
   // Tier 3: Escalate to full Strategic Directive
   if (isTier3) {
@@ -808,6 +867,10 @@ function printNextSteps(qfId, branchCreated, worktreePath) {
 }
 
 // CLI argument parsing
+// QF-20260904-344: guarded so tests can import resolveCreatedBy without the CLI's own argv
+// parsing (which would exit(1) on vitest's own argv) or its DB/interactive-prompt side
+// effects running as an import-time side effect.
+if (isMainModule(import.meta.url)) {
 const args = process.argv.slice(2);
 const options = {};
 
@@ -854,6 +917,10 @@ for (let i = 0; i < args.length; i++) {
       console.error('❌ --allow-duplicate requires a non-empty reason');
       process.exit(1);
     }
+  } else if (arg === '--created-by') {
+    // QF-20260904-344: override for scripted callers with no CLAUDE_SESSION_ID
+    // (or that want a specific attribution rather than the resolved session/role tag).
+    options.createdBy = args[++i];
   } else if (arg === '--force-liveness') {
     // SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001: audited override for the STALE_PREMISE gate.
     options.forceLiveness = args[++i];
@@ -884,6 +951,7 @@ Options:
   --target-application   Target repo: any active applications-registry name (auto-detected from cwd)
   --allow-duplicate      Audited override for dedup gate; requires non-empty <reason>
   --force-liveness       Audited override for STALE_PREMISE gate; requires non-empty <reason>
+  --created-by           Override attribution (default: resolved from CLAUDE_SESSION_ID's role, or the raw session id)
   --help, -h             Show this help
 
 Examples:
@@ -919,3 +987,4 @@ createQuickFix(options)
     console.error('❌ Error:', err.message);
     return armCliTeardown(1);
   });
+}

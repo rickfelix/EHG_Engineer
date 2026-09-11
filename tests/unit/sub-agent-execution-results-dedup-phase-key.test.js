@@ -240,7 +240,7 @@ describe('storeSubAgentResults: phase-scoped dedup (SD-LEO-INFRA-EVIDENCE-DEDUP-
       expect(rows[0].phase).toBe('LEAD_FINAL_APPROVAL');
     });
 
-    it('a derived phase (FR-1 fallback) is format-normalized, but an explicitly-supplied phase is left byte-identical', async () => {
+    it('QF-20260906-403: BOTH a derived phase (FR-1 fallback) and an explicitly-supplied phase are now format-normalized', async () => {
       // Derived path: current_phase has mixed casing/hyphens -> normalized on the way in.
       sdTable['SD-TEST-006'] = { id: 'SD-TEST-006', current_phase: 'plan-verification' };
       const { storeSubAgentResults } = await import('../../lib/sub-agent-executor/results-storage.js');
@@ -248,12 +248,16 @@ describe('storeSubAgentResults: phase-scoped dedup (SD-LEO-INFRA-EVIDENCE-DEDUP-
       await storeSubAgentResults('VALIDATION', 'SD-TEST-006', null, { verdict: 'PASS', confidence: 90 });
       expect(rows[0].phase).toBe('PLAN_VERIFICATION');
 
-      // Explicit path: many real writers intentionally use a hyphenated convention
-      // (e.g. handoff executors writing 'PLAN-TO-EXEC') and HandoffRepository does an
-      // exact .eq('phase', phase) lookup against it -- this must NOT be rewritten.
+      // Explicit path: many real writers intentionally use a hyphenated convention (e.g.
+      // handoff executors writing 'PLAN-TO-EXEC') -- one SD carried five case/separator
+      // spellings of the same phase across its own evidence rows, so exact-match readers
+      // (HandoffRepository, evidence-status.js, subagent-orchestrator.js) missed evidence
+      // that genuinely existed under a differently-spelled phase. QF-20260906-403
+      // normalizes BOTH the write and every reader's query param, so a hyphenated caller
+      // and an underscored caller now collapse to the same stored/queried token.
       await storeSubAgentResults('TESTING', 'SD-TEST-007', null, { verdict: 'PASS', confidence: 91, metadata: { test_execution: { tests_executed: 1, tests_passed: 1, tests_failed: 0, tests_skipped: 0 } } }, { phase: 'PLAN-TO-EXEC' });
       const explicitRow = rows.find((r) => r.sub_agent_code === 'TESTING');
-      expect(explicitRow.phase).toBe('PLAN-TO-EXEC');
+      expect(explicitRow.phase).toBe('PLAN_TO_EXEC');
     });
   });
 });

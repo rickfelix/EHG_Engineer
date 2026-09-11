@@ -7,6 +7,13 @@
  *   - phase falls back to results.phase, then results.metadata.phase
  *   - both the native `phase` column AND metadata.phase are populated (dual-write)
  *   - writer tolerates missing phase (writes phase: null, preserves existing metadata.phase)
+ *
+ * QF-20260906-403: whichever source wins is now normalized (normalizePhaseToken --
+ * uppercase, hyphens/spaces collapsed to underscores) before being stored, instead of
+ * byte-identical. Source PRIORITY is unchanged (options > results.phase > metadata.phase);
+ * only the STORED FORMAT of the winning value changed. Expected values below were updated
+ * from their original hyphenated fixtures (e.g. 'LEAD-TO-PLAN') to the canonical
+ * underscored form ('LEAD_TO_PLAN') this fix now produces.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -61,7 +68,6 @@ function makeMockSupabase(captureTarget) {
 
 describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-C)', () => {
   const capture = {};
-  let originalFetch;
 
   beforeEach(async () => {
     // Reset capture
@@ -102,8 +108,8 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
 
     expect(capture.insertedTable).toBe('sub_agent_execution_results');
     const row = capture.inserted;
-    expect(row.phase).toBe('LEAD-TO-PLAN');
-    expect(row.metadata.phase).toBe('LEAD-TO-PLAN');
+    expect(row.phase).toBe('LEAD_TO_PLAN');
+    expect(row.metadata.phase).toBe('LEAD_TO_PLAN');
   });
 
   it('falls back to results.phase when options.phase is absent', async () => {
@@ -115,8 +121,8 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
     });
 
     const row = capture.inserted;
-    expect(row.phase).toBe('PLAN-TO-EXEC');
-    expect(row.metadata.phase).toBe('PLAN-TO-EXEC');
+    expect(row.phase).toBe('PLAN_TO_EXEC');
+    expect(row.metadata.phase).toBe('PLAN_TO_EXEC');
   });
 
   it('falls back to results.metadata.phase when neither options.phase nor results.phase is set', async () => {
@@ -128,8 +134,8 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
     });
 
     const row = capture.inserted;
-    expect(row.phase).toBe('EXEC-TO-PLAN');
-    expect(row.metadata.phase).toBe('EXEC-TO-PLAN');
+    expect(row.phase).toBe('EXEC_TO_PLAN');
+    expect(row.metadata.phase).toBe('EXEC_TO_PLAN');
     expect(row.metadata.other).toBe('preserved');
   });
 
@@ -156,8 +162,8 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
     }, { phase: 'LEAD-FINAL-APPROVAL' });
 
     const row = capture.inserted;
-    expect(row.phase).toBe('LEAD-FINAL-APPROVAL');
-    expect(row.metadata.phase).toBe('LEAD-FINAL-APPROVAL');
+    expect(row.phase).toBe('LEAD_FINAL_APPROVAL');
+    expect(row.metadata.phase).toBe('LEAD_FINAL_APPROVAL');
   });
 
   it('ignores whitespace-only phase values and falls through to the next source', async () => {
@@ -169,8 +175,8 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
     }, { phase: '   ' });
 
     const row = capture.inserted;
-    expect(row.phase).toBe('EXEC-TO-PLAN');
-    expect(row.metadata.phase).toBe('EXEC-TO-PLAN');
+    expect(row.phase).toBe('EXEC_TO_PLAN');
+    expect(row.metadata.phase).toBe('EXEC_TO_PLAN');
   });
 
   it('ignores non-string phase values (type guard)', async () => {
@@ -183,6 +189,6 @@ describe('storeSubAgentResults: phase dual-write (SD-LEO-PROTOCOL-INFRASTRUCTURE
     });
 
     const row = capture.inserted;
-    expect(row.phase).toBe('VALID-PHASE');
+    expect(row.phase).toBe('VALID_PHASE');
   });
 });

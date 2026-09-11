@@ -6,7 +6,9 @@
  * + correctness invariants so a future edit can't silently regress them:
  *   - printSolomonInbox exists and is wired into the `all` view, a `solomon` command,
  *     and the usage list.
- *   - It gates on `acknowledged_at IS NULL` (the ACTIONED signal), NOT read_at.
+ *   - It gates on payload.verdict / payload.late_verdict_reconciled_at being absent (the
+ *     oracle's actual-answer signal), NOT acknowledged_at (QF-20260908-699: acknowledged_at
+ *     only proves the row was SEEN, not answered) and NOT read_at.
  *   - It is PURE-READ: the function body never stamps read_at/acknowledged_at — so a
  *     dashboard render can NEVER hide an unactioned consult from solomon-advisory.cjs
  *     drainInbox (which filters on read_at IS NULL). This is the parked-render-hides-
@@ -49,9 +51,11 @@ describe('Phase F — printSolomonInbox dashboard surface', () => {
     expect(SRC).toMatch(/Sections:[^\n]*\bsolomon\b/);
   });
 
-  it('gates pending on acknowledged_at IS NULL (the actioned signal), not read_at', () => {
+  it('gates pending on payload.verdict / payload.late_verdict_reconciled_at absence, not acknowledged_at', () => {
     const body = printSolomonInboxBody();
-    expect(body).toMatch(/\.is\(\s*['"]acknowledged_at['"]\s*,\s*null\s*\)/);
+    expect(body).toMatch(/payload\.verdict\s*==\s*null/);
+    expect(body).toMatch(/payload\.late_verdict_reconciled_at\s*==\s*null/);
+    expect(body).not.toMatch(/\.is\(\s*['"]acknowledged_at['"]\s*,\s*null\s*\)/);
   });
 
   it('is PURE-READ — never stamps read_at or acknowledged_at (cannot hide a consult from the oracle drain)', () => {

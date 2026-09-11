@@ -95,11 +95,18 @@ async function fetchWorkerWorktrees(workerSessionIds) {
 }
 
 async function emitCoordinationMessage(targetSession, messageType, subject, payload = {}) {
+  // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: this insert had none of sender_type, sender_session,
+  // or a body/payload.kind -- a triple-class violation (untyped_row + empty_sender_row +
+  // bodyless_row). subject already carries a human-readable description, so it doubles as body.
+  // eslint-disable-next-line session-coordination-insert-classguard/no-raw-session-coordination-insert -- pre-existing site (classguard backlog), swept into this diff's scan only because SD-LEO-INFRA-LANE-HYGIENE-OVER-001 adds sender_type/sender_session/payload.kind to this existing insert. targetSession here is a caller-supplied worker virtual_session_id/slot, not fresh identity-resolver output, so routing through insertCoordinationRow's assertValidTarget is a separate behavior change out of this SD's scope.
   const { error } = await supabase.from('session_coordination').insert({
     target_session: targetSession,
     message_type: messageType,
     subject,
-    payload
+    body: subject,
+    sender_type: 'execute-stop',
+    sender_session: 'execute-stop',
+    payload: { kind: messageType.toLowerCase(), ...payload }
   });
   if (error) {
     console.error(`[execute-stop] Failed to emit ${messageType} for ${targetSession}: ${error.message}`);

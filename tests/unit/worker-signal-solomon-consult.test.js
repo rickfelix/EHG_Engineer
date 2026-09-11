@@ -158,3 +158,27 @@ describe('FR-2 — consult_purpose emitted by the REAL buildSolomonConsultPayloa
     expect(matches(ws.buildSolomonConsultPayload(base))).toBe(false);
   });
 });
+
+// QF-20260905-123: chairman-sms-gate's consult row named its sender as the literal
+// CHAIRMAN_LANE_AUTOMATED_SENTINEL, so Solomon's courtesy copy to the originator was refused
+// (the sentinel is not a session id -- assertValidTarget's target-shape check rejects it).
+// scripts/solomon-advisory.cjs resolveConsultOriginator already prefers payload.origin_session
+// over sender_session; this only needed to populate that key.
+describe('origin_session — QF-20260905-123', () => {
+  const base = { correlationId: 'corr-1', body: 'packet', senderCallsign: 'Bravo' };
+
+  it('maps originSession → payload.origin_session', () => {
+    const p = ws.buildSolomonConsultPayload({ ...base, originSession: 'adam-session-abc' });
+    expect(p.origin_session).toBe('adam-session-abc');
+  });
+
+  it('OMITS the key entirely when no originSession is supplied (byte-identical for existing callers)', () => {
+    const p = ws.buildSolomonConsultPayload(base);
+    expect('origin_session' in p).toBe(false);
+  });
+
+  it('OMITS the key when originSession is null (the sentinel-only, no-live-session case)', () => {
+    const p = ws.buildSolomonConsultPayload({ ...base, originSession: null });
+    expect('origin_session' in p).toBe(false);
+  });
+});

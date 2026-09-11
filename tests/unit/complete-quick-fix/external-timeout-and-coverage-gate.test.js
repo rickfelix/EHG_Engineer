@@ -118,7 +118,7 @@ describe('FR-2 external execSync sites are bounded', () => {
   it('the legacy autodetect git rev-parse / diff calls pass the timeout', () => {
     expect(gitopsSrc).toMatch(/git rev-parse HEAD',\s*\{[^}]*timeout:\s*EXTERNAL_STEP_TIMEOUT_MS/);
     expect(gitopsSrc).toMatch(/git rev-parse --abbrev-ref HEAD',\s*\{[^}]*timeout:\s*EXTERNAL_STEP_TIMEOUT_MS/);
-    expect(gitopsSrc).toMatch(/git diff origin\/main --shortstat',\s*\{[^}]*timeout:\s*EXTERNAL_STEP_TIMEOUT_MS/);
+    expect(gitopsSrc).toMatch(/git diff origin\/main\.\.\.HEAD --shortstat',\s*\{[^}]*timeout:\s*EXTERNAL_STEP_TIMEOUT_MS/);
   });
 });
 

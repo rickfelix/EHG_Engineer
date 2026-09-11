@@ -1760,6 +1760,11 @@ async function writeSignalReceipts(supabase, coordinatorId, signals) {
           enumerated_row_id: s.id,
           correlation_id: s.id,
           receipt: disposition,
+          // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: readCanonicalBody() (lane-contract.cjs)
+          // reads payload.body first -- this row had none, so it counted as bodyless_row
+          // (51% of all live lane-lint-gauge violations, QF-20260907-462's own comment
+          // above already deferred this exact site).
+          body: `Signal receipted: ${disposition}`,
         },
       });
       written++;
@@ -1781,6 +1786,25 @@ async function writeSignalReceipts(supabase, coordinatorId, signals) {
 // coordinator-ack-signal.cjs (stamps acknowledged_at). The prior code marked read_at on
 // render AND queried read_at IS NULL — so one filtered/parked render silently lost the
 // signal (high-sev consults were missed). Mirrors the Adam-lane fix (QF-20260621-174).
+// SD-LEO-INFRA-READ-WRITTEN-UNSCOPED-001 (FR-1): stamp read_at = DELIVERED (transport-level
+// "the coordinator rendered it"), but NEVER acknowledged_at — the signal is retired ONLY by
+// coordinator-ack-signal.cjs (ACTIONED). So a filtered/skimmed/parked-cron render can no
+// longer silently hide an unacked signal; it re-surfaces (printInbox's own SELECT gates on
+// acknowledged_at IS NULL) until explicitly acked. Gated on read_at IS NULL so the stamp is
+// idempotent (first-delivery timestamp), matching every other census-cataloged write site
+// (solomon-advisory.cjs, adam-advisory.cjs, michael-inbox.cjs) — previously unconditional, so
+// every render overwrote read_at to now(). Safe: the SELECT above already gates on
+// acknowledged_at, not read_at, so this cannot reopen the drain-on-display RCA
+// (SD-LEO-INFRA-SIGNAL-INBOX-DRAIN-ON-DISPLAY-001) this write's model exists to satisfy.
+async function stampInboxReadAt(client, ids) {
+  if (!ids || ids.length === 0) return;
+  await client
+    .from('session_coordination')
+    .update({ read_at: new Date().toISOString() })
+    .in('id', ids)
+    .is('read_at', null);
+}
+
 async function printInbox() {
   const getActiveCoordinatorId = _getActiveCoordinatorIdForInbox;
 
@@ -1899,16 +1923,9 @@ async function printInbox() {
     ids.push(s.id);
   }
 
-  // Stamp read_at = DELIVERED (transport-level "the coordinator rendered it"), but NEVER
-  // acknowledged_at — the signal is retired ONLY by coordinator-ack-signal.cjs (ACTIONED).
-  // So a filtered/skimmed/parked-cron render can no longer silently hide an unacked signal;
-  // it re-surfaces (SELECT gates on acknowledged_at IS NULL) until explicitly acked.
-  if (ids.length > 0) {
-    await supabase
-      .from('session_coordination')
-      .update({ read_at: new Date().toISOString() })
-      .in('id', ids);
-  }
+  // QF-style write site, extracted for direct unit testing — printInbox itself has no
+  // injectable client (mirrors writeSignalReceipts above, same constraint).
+  await stampInboxReadAt(supabase, ids);
 
   console.log('');
 }
@@ -2419,12 +2436,11 @@ async function printAdamInbox() {
   // but NEVER actioned_at — the advisory is retired ONLY by coordinator-ack-adam.cjs. So a
   // parked-cron render can no longer silently hide an unactioned advisory; it re-surfaces
   // (gate above is payload.actioned_at IS NULL) until the coordinator explicitly acks it.
-  if (ids.length > 0) {
-    await supabase
-      .from('session_coordination')
-      .update({ read_at: new Date().toISOString() })
-      .in('id', ids);
-  }
+  // SD-LEO-INFRA-READ-WRITTEN-UNSCOPED-001: this was the SECOND unscoped write site the SD's
+  // filing named (fleet-dashboard.cjs's "advisory render") — reuses stampInboxReadAt (same
+  // idempotent read_at IS NULL gate as printInbox's fix; the SELECT above already gates on
+  // payload->>actioned_at, not read_at, per adam-advisory-store.cjs:49, so this is safe).
+  await stampInboxReadAt(supabase, ids);
 
   console.log('');
 }
@@ -2436,12 +2452,15 @@ async function printAdamInbox() {
 // drainInbox filters on `read_at IS NULL` and stamps read_at on delivery, so a
 // dashboard render that stamped read_at would HIDE an unactioned consult from the
 // oracle's own inbox drain (the parked-render-hides-consult bug class the Adam lane
-// fixed by gating re-surfacing on actioned state, not read_at). We therefore gate
-// on `acknowledged_at IS NULL` (the ACTIONED signal — a consult is retired only when
-// the oracle answers it) so this view shows genuinely-pending consults regardless of
-// delivery, and never perturbs the oracle's drain. Dormant-safe: when
-// SOLOMON_CONSULT_V1 is off no solomon_consult rows are ever written, so this renders
-// "(no pending Solomon consults)" silently.
+// fixed by gating re-surfacing on actioned state, not read_at). QF-20260908-699:
+// acknowledged_at only records that the row was SEEN (an administrative `ack`, or
+// the 14d TTL convergence sweep, both stamp it without an answer ever arriving) — the
+// oracle's actual answer lives in payload.verdict, with payload.late_verdict_reconciled_at
+// as the reconciliation stamp for late-arriving verdicts. We therefore gate pending on
+// BOTH being absent, so this view shows genuinely-pending consults regardless of ack
+// state, and never perturbs the oracle's drain. Dormant-safe: when SOLOMON_CONSULT_V1
+// is off no solomon_consult rows are ever written, so this renders "(no pending Solomon
+// consults)" silently.
 async function printSolomonInbox() {
   console.log('PENDING SOLOMON CONSULTS');
   console.log('─'.repeat(72));
@@ -2464,7 +2483,6 @@ async function printSolomonInbox() {
       .select('id, payload, body, sender_session, created_at')
       .in('target_session', targets)
       .eq('message_type', 'INFO')
-      .is('acknowledged_at', null) // pending = not yet actioned/answered (survives the read_at stamp)
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) {
@@ -2473,7 +2491,11 @@ async function printSolomonInbox() {
       return;
     }
     // payload.kind discriminates the consult lane from any other broadcast-solomon row.
-    rows = (data || []).filter((r) => r.payload && r.payload.kind === 'solomon_consult');
+    // QF-20260908-699: pending = the oracle hasn't actually answered yet — payload.verdict
+    // and payload.late_verdict_reconciled_at absent, NOT acknowledged_at (which only proves
+    // the row was seen).
+    rows = (data || []).filter((r) => r.payload && r.payload.kind === 'solomon_consult'
+      && r.payload.verdict == null && r.payload.late_verdict_reconciled_at == null);
   } catch (e) {
     console.log('  (solomon consult query failed: ' + (e && e.message ? e.message : e) + ')');
     console.log('');
@@ -3423,7 +3445,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate, writeSignalReceipts };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate, writeSignalReceipts, stampInboxReadAt };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.

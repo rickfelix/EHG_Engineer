@@ -3,8 +3,14 @@
  * subprocess-restart supervision, exercised with an injected fake spawnFn. No live subprocess.
  */
 import { EventEmitter } from 'node:events';
-import { describe, it, expect } from 'vitest';
-import { parseEventLine, runWatcher, buildWmiListenerScript } from '../../../scripts/run-console-creation-watcher.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { describe, it, expect, afterEach } from 'vitest';
+import {
+  parseEventLine, runWatcher, buildWmiListenerScript,
+  acquireSingletonLock, releaseSingletonLock,
+} from '../../../scripts/run-console-creation-watcher.mjs';
 
 describe('parseEventLine', () => {
   it('parses a valid JSON event line', () => {
@@ -24,10 +30,48 @@ describe('parseEventLine', () => {
 });
 
 describe('buildWmiListenerScript', () => {
-  it('scopes the WQL query to OpenConsole.exe', () => {
+  it('QF-20260905-766: defaults to the unelevated __InstanceCreationEvent source, scoped to OpenConsole.exe', () => {
     const script = buildWmiListenerScript();
-    expect(script).toContain("WHERE ProcessName='OpenConsole.exe'");
+    expect(script).toContain('__InstanceCreationEvent');
+    expect(script).toContain("TargetInstance.Name='OpenConsole.exe'");
+    expect(script).toContain('$e.SourceEventArgs.NewEvent.TargetInstance.ProcessId');
+    expect(script).not.toContain('Win32_ProcessStartTrace');
     expect(script).toContain('Register-WmiEvent');
+  });
+  it('elevated:true opts back into the Win32_ProcessStartTrace source', () => {
+    const script = buildWmiListenerScript({ elevated: true });
+    expect(script).toContain("WHERE ProcessName='OpenConsole.exe'");
+    expect(script).toContain('Win32_ProcessStartTrace');
+    expect(script).toContain('$e.SourceEventArgs.NewEvent.ProcessID');
+    expect(script).not.toContain('__InstanceCreationEvent');
+  });
+});
+
+describe('singleton pid lock (QF-20260905-766)', () => {
+  let lockPath;
+  afterEach(() => { try { fs.unlinkSync(lockPath); } catch { /* already removed by the test */ } });
+
+  it('acquires the lock when no lock file exists', () => {
+    lockPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ccw-lock-')), 'watcher.pid');
+    expect(acquireSingletonLock(lockPath)).toBe(lockPath);
+    expect(fs.readFileSync(lockPath, 'utf8').trim()).toBe(String(process.pid));
+  });
+  it('refuses to acquire when a live pid already holds the lock', () => {
+    lockPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ccw-lock-')), 'watcher.pid');
+    fs.writeFileSync(lockPath, String(process.pid)); // this test process is itself alive
+    expect(acquireSingletonLock(lockPath)).toBeNull();
+  });
+  it('acquires the lock when the recorded pid is dead (stale lock from a crashed instance)', () => {
+    lockPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ccw-lock-')), 'watcher.pid');
+    fs.writeFileSync(lockPath, '999999999'); // astronomically unlikely to be a live pid
+    expect(acquireSingletonLock(lockPath)).toBe(lockPath);
+  });
+  it('releaseSingletonLock removes the file and is a no-op if already gone', () => {
+    lockPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ccw-lock-')), 'watcher.pid');
+    fs.writeFileSync(lockPath, String(process.pid));
+    releaseSingletonLock(lockPath);
+    expect(fs.existsSync(lockPath)).toBe(false);
+    expect(() => releaseSingletonLock(lockPath)).not.toThrow();
   });
 });
 
@@ -92,5 +136,34 @@ describe('runWatcher — subprocess supervision', () => {
 
     expect(spawnCount).toBe(1);
     expect(logs.some((l) => l.includes('spawn error'))).toBe(true);
+  });
+
+  it('QF-20260905-766: stops (fail loud, not hot) after 3 consecutive fast failures instead of restarting forever', async () => {
+    let spawnCount = 0;
+    const logs = [];
+    const result = await runWatcher({
+      spawnFn: () => { spawnCount += 1; const c = fakeChild(); setTimeout(() => c.emit('close', 1), 0); return c; },
+      onEvent: async () => {},
+      onLog: (m) => logs.push(m),
+      shouldContinue: () => true, // would loop forever without the ceiling
+      delay: async () => {},
+    });
+    expect(spawnCount).toBe(3);
+    expect(result).toEqual({ stopped: 'consecutive_failures' });
+    expect(logs.some((l) => l.includes('consecutive fast failures'))).toBe(true);
+  });
+
+  it('a clean exit (code 0) never counts toward the consecutive-failure ceiling', async () => {
+    let spawnCount = 0;
+    const shouldContinue = () => spawnCount < 5;
+    const result = await runWatcher({
+      spawnFn: () => { spawnCount += 1; const c = fakeChild(); setTimeout(() => c.emit('close', 0), 0); return c; },
+      onEvent: async () => {},
+      onLog: () => {},
+      shouldContinue,
+      delay: async () => {},
+    });
+    expect(spawnCount).toBe(5);
+    expect(result).toEqual({ stopped: 'shouldContinue' });
   });
 });

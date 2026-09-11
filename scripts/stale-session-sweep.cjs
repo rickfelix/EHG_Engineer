@@ -429,6 +429,8 @@ const _signalRouterModule = require('../lib/coordinator/signal-router.cjs');
 const _coordEventsModule = require('../lib/coordinator/coordination-events.cjs'); // SD-LEO-INFRA-COORDINATION-OBSERVABILITY-ANOMALY-001 (epic #4) — top-level require so WIRE_CHECK reaches detectors.cjs
 // QF-20260905-230 — top-level require so WIRE_CHECK reaches the findings sink.
 const { recordFinding } = require('../lib/fleet/sweep-findings-sink.cjs');
+// QF-20260905-594 — top-level require so WIRE_CHECK reaches the consecutive-run escalator.
+const { guardedRecordFinding } = require('../lib/fleet/sweep-consecutive-escalation.cjs');
 // SD-LEO-INFRA-COORDINATOR-PENDING-QUESTION-001 — top-level require so WIRE_CHECK reaches the
 // pending-question timer (auto-proceed on a stale, non-critical, unanswered operator question).
 const _pendingQuestionTimer = require('../lib/coordinator/pending-question-timer.cjs');
@@ -778,8 +780,8 @@ async function isSweepResetAllowed(sdKey, targetResetPhase, contextLabel) {
     if (err && err.code === 'ACCEPTED_HANDOFF_OVERRIDE') {
       const summary = sdKey + ' — ' + contextLabel +
         ' — accepted handoff past ' + targetResetPhase + ' exists: ' + err.message;
-      console.log('  SKIP_RESET: ' + summary);
-      await recordFinding(supabase, { findingClass: 'skip_reset', subject: sdKey, summary });
+      const g1 = await guardedRecordFinding(supabase, { findingClass: 'skip_reset', subject: sdKey, summary });
+      if (g1.printed) console.log('  SKIP_RESET: ' + summary);
       return false;
     }
     // SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 (FR-1): a vanished SD (TOCTOU — a
@@ -793,8 +795,8 @@ async function isSweepResetAllowed(sdKey, targetResetPhase, contextLabel) {
     if (err && err.code === 'SD_NOT_FOUND') {
       const summary = sdKey + ' — ' + contextLabel +
         ' — SD vanished before handoff-gate lookup (TOCTOU); skipping reset (non-fatal)';
-      console.log('  SKIP_RESET: ' + summary);
-      await recordFinding(supabase, { findingClass: 'skip_reset', subject: sdKey, summary });
+      const g2 = await guardedRecordFinding(supabase, { findingClass: 'skip_reset', subject: sdKey, summary });
+      if (g2.printed) console.log('  SKIP_RESET: ' + summary);
       return false;
     }
     // SD-LEO-INFRA-SWEEP-CLAIM-SAFETY-001 (FR-2): any other unexpected error
@@ -2160,6 +2162,27 @@ async function notifySignalResolvedByDisposition(supabase) {
         continue;
       }
 
+      // QF-20260905-666: coordinator-ack-signal.cjs --reply writes the verdict as a SEPARATE
+      // coordinator_reply row (payload.reply_to = the signal's payload.correlation_id, NOT
+      // sig.id — buildReplyPayload in scripts/coordinator-reply.cjs), unlinked from this notice.
+      // Look it up and embed the verdict here so the worker doesn't have to re-query the DB.
+      const correlationId = sig.payload?.correlation_id;
+      let replyBody = null;
+      let replyRowId = null;
+      if (correlationId) {
+        const { data: replyRows } = await supabase
+          .from('session_coordination')
+          .select('id, body')
+          .eq('payload->>kind', 'coordinator_reply')
+          .eq('payload->>reply_to', correlationId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (replyRows && replyRows[0]) {
+          replyRowId = replyRows[0].id;
+          replyBody = (replyRows[0].body || '').slice(0, 500);
+        }
+      }
+
       // SD-LEO-INFRA-LANE-HYGIENE-MACHINE-WRITERS-001 (FR-4): sender_session is a named
       // system principal (not null) so the lane-lint gauge stops counting this row as
       // empty_sender_row. sender_type stays 'coordinator' deliberately — michael-identity.cjs,
@@ -2171,7 +2194,9 @@ async function notifySignalResolvedByDisposition(supabase) {
         target_session: owner.session_id,
         message_type: 'INFO',
         subject: `[SIGNAL_RESOLVED] ${sig.payload?.signal_type || 'signal'} → dispositioned`,
-        body: `Your earlier signal ("${(sig.body || '').slice(0, 200)}") has been dispositioned by the coordinator.`,
+        body: replyBody
+          ? `Your earlier signal ("${(sig.body || '').slice(0, 200)}") has been dispositioned by the coordinator: ${replyBody}`
+          : `Your earlier signal ("${(sig.body || '').slice(0, 200)}") has been dispositioned by the coordinator.`,
         payload: {
           // QF-20260830-144: kind must be an ADVISORY_KIND (lib/fleet/worker-status.cjs) so
           // worker-ack-advisory.cjs can retire this row — without it the row was unackable by
@@ -2182,6 +2207,7 @@ async function notifySignalResolvedByDisposition(supabase) {
           original_body: (sig.body || '').slice(0, 500),
           original_signal_id: sig.id,
           resolution_kind: 'disposition',
+          ...(replyBody ? { reply_body: replyBody, reply_row_id: replyRowId } : {}),
         },
         expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
       });
@@ -4269,16 +4295,16 @@ async function main() {
     console.log('CONFLICTS DETECTED: ' + (conflicts.length + multiClaimSessions.length));
     for (const [sdId, arr] of conflicts) {
       const summary = sdId + ': ' + arr.map(s => s.session_id.substring(0, 20) + '(' + s.status + ')').join(' vs ');
-      console.log('  ' + summary);
-      await recordFinding(supabase, { findingClass: 'conflict', subject: sdId, summary });
+      const g3 = await guardedRecordFinding(supabase, { findingClass: 'conflict', subject: sdId, summary });
+      if (g3.printed) console.log('  ' + summary);
     }
     for (const m of multiClaimSessions) {
       const all = m.claims.map(c => c.kind + ':' + c.key).join(' + ');
       const invisible = m.unpointed.map(c => c.kind + ':' + c.key).join(', ') || '(mirror names none)';
       const summary = m.session_id.substring(0, 20) + ' holds ' + m.claims.length + ' claims: ' + all
         + ' — UN-POINTED (invisibly blocked): ' + invisible;
-      console.log('  ' + summary);
-      await recordFinding(supabase, { findingClass: 'conflict', subject: m.session_id, summary });
+      const g4 = await guardedRecordFinding(supabase, { findingClass: 'conflict', subject: m.session_id, summary });
+      if (g4.printed) console.log('  ' + summary);
     }
     console.log('');
   } else {

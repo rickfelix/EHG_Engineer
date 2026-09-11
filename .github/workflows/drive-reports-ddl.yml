@@ -127,6 +127,12 @@ on:
       - 'database/migrations/20260906_michael_tables.sql'
       - 'database/migrations/20260906_michael_tables_DOWN.sql'
       - 'tests/ddl/michael-tables-ddl.db.test.js'
+      # SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J: the four v1.1 michael_* tables -- same TR-5
+      # fix, applied again -- a PR touching only this SD's migration and its ddl test would
+      # otherwise trigger nothing.
+      - 'database/migrations/20260907_michael_v1_1_tables.sql'
+      - 'database/migrations/20260907_michael_v1_1_tables_DOWN.sql'
+      - 'tests/ddl/michael-v1-1-tables-ddl.db.test.js'
       # SD-LEO-INFRA-RETRO-PUBLISHED-GUARD-001 FR-1/FR-3(a): same TR-5 fix, applied again -- a PR
       # touching only this SD's migration and its ddl test would otherwise trigger nothing.
       - 'database/chairman-gated/20260906_retrospectives_published_guard.sql'

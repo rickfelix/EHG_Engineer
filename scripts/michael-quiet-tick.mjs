@@ -110,8 +110,13 @@ export async function runQuietTick({ sb, now = new Date(), env = process.env } =
   // michael_handoff is deliberately absent until child G registers it in one PR (see the
   // DRAIN_SETS.michael note in lib/fleet/worker-status.cjs); the derived set picks it up then.
   const inboxKinds = sid ? await resolveRecognizedKinds({ supabase: sb, role: 'michael' }) : [];
+  // SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001 FR-2: keyed on read_at, not acknowledged_at -- Michael
+  // has no two-stage ack model (unlike Solomon) and no background/cron split (unlike Adam's
+  // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 precedent). read_at is the single lifecycle
+  // column scripts/michael-inbox.cjs's drainInbox() actually stamps (FR-1), so this counter must
+  // key on the same column or it never converges with a genuine drain.
   const inbox = sid
-    ? await c('session_coordination', (q) => q.eq('target_session', sid).is('acknowledged_at', null).in('payload->>kind', inboxKinds))
+    ? await c('session_coordination', (q) => q.eq('target_session', sid).is('read_at', null).in('payload->>kind', inboxKinds))
     : null;
 
   // Brief state: 'verified' | 'finalize' | 'missing' | 'pending' | '?'

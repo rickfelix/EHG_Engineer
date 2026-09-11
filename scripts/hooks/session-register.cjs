@@ -293,17 +293,35 @@ function resolveAccountIdentity() {
  * OUT of the upsert payload above for the same reason (that upsert also runs on every resume
  * and compaction, where it would overwrite metadata wholesale).
  *
- * Capture-if-absent: the account for a given session does not change, so re-running the CLI
- * on every resume would spend a subprocess to rewrite the same value.
+ * QF-20260906-219: re-resolves on EVERY call (not capture-if-absent) so a later account
+ * rotation is seen -- see the inline comment below for why. `opts.resolveFn` is an injectable
+ * seam (mirrors account-usage-reader.cjs's opts.getAccountIdentity convention) so tests can
+ * exercise the changed/unchanged/unresolved branches deterministically without touching the
+ * real `claude auth status` CLI or on-disk config.
  */
-async function captureAccountIdentity(supabase, sessionId) {
+async function captureAccountIdentity(supabase, sessionId, opts = {}) {
+  // SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (LEAD-phase prospective TESTING finding): `opts = {}`
+  // is a default PARAMETER, which only fires on `undefined` — an explicit `null` (or any other
+  // non-object) reaches `opts.resolveFn` and throws OUTSIDE the try/catch below, escaping this
+  // function's "telemetry — never abort SessionStart" contract. This function is exported with no
+  // other guard on its 3rd argument, so that contract must hold for every input, not just the one
+  // production call site (which always passes exactly 2 args today).
+  const resolveFn = (opts && opts.resolveFn) || resolveAccountIdentity;
   try {
     const { data, error } = await supabase
       .from('claude_sessions').select('metadata').eq('session_id', sessionId).maybeSingle();
     if (error || !data) return;                       // could not read => do not write
     const meta = data.metadata && typeof data.metadata === 'object' && !Array.isArray(data.metadata)
       ? data.metadata : {};
-    if (meta.account_email) return;                   // already captured — nothing to do
+    // QF-20260906-219: previously returned HERE whenever meta.account_email was already set, so
+    // the stamp only ever happened once, at registration. A later /login rotation on the shared
+    // machine-global credentials file swaps every seat's LIVE account while this DB column keeps
+    // naming whoever registered first -- nine live rows measured 2026-09-06 still said
+    // codestreetlabs while every seat was actually running on rickfelix2000. This hook already
+    // fires on every SessionStart, including a compaction/resume restart (not just true
+    // registration), so re-resolving here is a natural token-refresh-adjacent cadence -- the fix
+    // is to keep resolving on every call and only SKIP THE WRITE when nothing changed, never to
+    // skip the resolve itself.
     // SD-FDBK-INFRA-SESSION-NAMED-ACCOUNT-001 FR-1 (coordinator ruling 1cbade73): stamp whether a
     // NAMED per-profile identity was expected for this seat — set true only when
     // build-session-launch.cjs recorded that intent; absent (not false) otherwise, matching this
@@ -311,7 +329,7 @@ async function captureAccountIdentity(supabase, sessionId) {
     // never treat a host_default-sourced account_email the same as a measured per-profile one
     // without this label traveling with it.
     const launchProfileExpected = process.env.FLEET_LAUNCH_PROFILE_INTENT === 'named' ? true : undefined;
-    const acct = resolveAccountIdentity();
+    const acct = resolveFn();
     if (!acct) {
       // QF-20260727-013: RECORD THE DARKNESS. Leaving the identity keys absent is still right —
       // a null account stored as a value is indistinguishable from a real answer downstream.
@@ -319,6 +337,10 @@ async function captureAccountIdentity(supabase, sessionId) {
       // and that is why a 100%-dark instrument survived unnoticed from 2026-07-26: nothing said
       // it was dark. This key answers only "did we ask and fail", so the identity fields keep
       // their honest absence while the failure itself stops being silent.
+      // QF-20260906-219: a transient resolve failure on a LATER call must never clobber an
+      // already-good account_email from an earlier successful capture -- only record the
+      // darkness when there is nothing better already on the row.
+      if (meta.account_email) return;
       const patch = { ...meta, account_unresolved_at: new Date().toISOString() };
       if (launchProfileExpected) patch.launch_profile_expected = true;
       await supabase.from('claude_sessions')
@@ -327,6 +349,22 @@ async function captureAccountIdentity(supabase, sessionId) {
       return;
     }
     if (launchProfileExpected) acct.launch_profile_expected = true;
+    // SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (LEAD-phase prospective TESTING finding): the
+    // original 2-field (email, uuid8) comparison under-detects a change. lib/fleet/account-
+    // identity.cjs's detectAccountSwitch() — the fleet's OWN canonical "did the account change"
+    // predicate — already compares email+orgName+uuid8; this comparison must never disagree with
+    // it (a stale account_org_name would sit right beside a freshly-written account_email, and
+    // server/routes/fleet-panel.js renders account_org_name as the PRIMARY display field, email
+    // only as fallback). account_auth_method matters too: resolveAccountFromConfigDir() can stamp
+    // 'host_default' with the CLI unavailable, then the CLI later resolves the SAME email/uuid8
+    // with a richer 'claude.ai'/'config_dir' reading — skipping that write pins
+    // lib/fleet/handoff-account-attribution.cjs's provenance classification to 'host_default'
+    // forever for a seat that is now genuinely measured. Compare every field this function itself
+    // stamps except account_captured_at (which changes on every call by construction, so including
+    // it would defeat the skip entirely).
+    const IDENTITY_FIELDS = ['account_email', 'account_org_name', 'account_org_id', 'account_subscription_type', 'account_auth_method', 'account_uuid8'];
+    const identityUnchanged = IDENTITY_FIELDS.every((k) => meta[k] === acct[k]);
+    if (identityUnchanged) return;
     await supabase.from('claude_sessions')
       .update({ metadata: { ...meta, ...acct } })
       .eq('session_id', sessionId);

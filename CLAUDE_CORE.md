@@ -1,8 +1,8 @@
-<!-- file_content_hash: 03552525573476b5 -->
+<!-- file_content_hash: 93b74375153e0e1c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE.md - LEO Protocol Core Context
 
-**Generated**: 2026-09-07 11:03:53 PM
+**Generated**: 2026-09-07 7:18:32 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Essential workflow context for all sessions
 **Effort**: medium (core context; phase-specific files tag their own effort for phase work)
@@ -1216,6 +1216,16 @@ see `docs/architecture/solomon-activation-runbook.md`.
 **Parent-orchestrator exemption**: an orchestrator parent (`isOrchestratorSync(sd)`) is exempt from this check entirely — machinery lives on children; a parent completes via `PARENT_DELEGATED_COMPLETION` regardless of its own rollup text.
 
 **Validity check**: `node scripts/machinery-class-retro-sweep.mjs` runs the classifier over the last 30 days of completed SDs, detection-only, zero writes — re-finding the named dormant specimens is the smoke test of the classifier itself.
+
+## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
+
+**quick_fixes**: `id` IS the key and holds the literal string `QF-YYYYMMDD-NNN` (e.g. `QF-20260907-188`) -- there is no `qf_key` column. Filter dedup/lookup queries on `id`; use `title`/`description` via `ilike` for fuzzy SEARCH only, never as a join/match key. A query selecting a nonexistent `qf_key` column errors at PostgREST, the client sees `data: null`, and a bare `if (data && data.length)` guard prints nothing -- reading as "no existing QF" while the query never ran. (`lib/learning/feedback-clusterer.js`'s title-similarity clustering is a deliberate exception -- it groups by title for clustering, not for keying, and must not be "fixed".)
+
+**quick_fixes.disposition** IN (`premise_resolved`, `premise_unverified_stale`, `duplicate_of`, `re_verified`, `promoted`).
+
+**adam_task_ledger.status** IN (`open`, `in_progress`, `blocked`, `done`, `cancelled`) -- there is no `closed` value.
+
+**chairman_ratifications.id** is a UUID column -- Postgres has no `ilike`/`~~*` operator for `uuid`, so an `ilike` filter on it errors ("operator does not exist: uuid ~~* unknown"). Match on `id` via `eq` (full UUID) or read rows and filter client-side by string prefix for a short-form citation.
 
 
 

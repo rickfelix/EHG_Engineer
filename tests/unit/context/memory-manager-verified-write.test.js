@@ -25,6 +25,22 @@ describe('sectionLanded (pure)', () => {
     const md = '# State\n\n## Pre-Compaction Snapshot\nstale leftover text\n\n## Other\nx';
     expect(sectionLanded(md, 'Pre-Compaction Snapshot', 'SD: SD-FOO-001, phase EXEC')).toBe(false);
   });
+
+  // QF-20260907-330: the regex previously carried a bare-$ alternative under the 'm' flag,
+  // which matches before EVERY internal newline -- so a multi-paragraph write that landed
+  // correctly still read back as truncated after just its first line. Every prior test here
+  // used single-line content, which never exercised this path.
+  it('is true for genuinely multi-paragraph content, followed by another section', () => {
+    const content = 'Line one of a long snapshot.\nLine two continues here.\nLine three, more detail.';
+    const md = `# State\n\n## Pre-Compaction Snapshot\n${content}\n\n## Other\nx`;
+    expect(sectionLanded(md, 'Pre-Compaction Snapshot', content)).toBe(true);
+  });
+
+  it('is true for genuinely multi-paragraph content at the true end of the file (no following section)', () => {
+    const content = 'Line one of a long snapshot.\nLine two continues here.\nLine three, more detail.';
+    const md = `# State\n\n## Pre-Compaction Snapshot\n${content}\n`;
+    expect(sectionLanded(md, 'Pre-Compaction Snapshot', content)).toBe(true);
+  });
 });
 
 describe('MemoryManager.updateSectionVerified', () => {
@@ -65,5 +81,21 @@ describe('MemoryManager.updateSectionVerified', () => {
     await memory.startSession('SD-FOO-001', 'EXEC');
     memory.updateSection = async () => true;
     await expect(memory.updateSectionVerified('Pre-Compaction Snapshot', 'this text was never written')).rejects.toThrow(/read-back check failed/);
+  });
+
+  it('QF-20260907-330: re-writing an existing multi-line section fully replaces it, with no orphaned leftover text', async () => {
+    const memory = new MemoryManager(tmpDir);
+    await memory.startSession('SD-FOO-001', 'EXEC');
+
+    const oldContent = 'Old line one.\nOld line two.\nOld line three, should be fully gone.';
+    await memory.updateSectionVerified('Pre-Compaction Snapshot', oldContent);
+
+    const newContent = 'New line one.\nNew line two.\nNew line three.';
+    await memory.updateSectionVerified('Pre-Compaction Snapshot', newContent);
+
+    const onDisk = await fs.readFile(memory.sessionFile, 'utf8');
+    expect(onDisk).toContain(newContent);
+    expect(onDisk).not.toContain('Old line two');
+    expect(onDisk).not.toContain('should be fully gone');
   });
 });

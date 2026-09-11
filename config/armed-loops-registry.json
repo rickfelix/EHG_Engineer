@@ -1,0 +1,9 @@
+[
+  {
+    "loop_key": "index-jam-detector",
+    "script": "scripts/cron/index-jam-detector.mjs",
+    "venue": "task_scheduler",
+    "needs_model": false,
+    "justification": "Strictly observational git-index-lock stat, no reasoning required. Retired from CronCreate (harness cron, one model turn per run x 565 runs/week measured) to Windows Task Scheduler (QF-20260906-831)."
+  }
+]

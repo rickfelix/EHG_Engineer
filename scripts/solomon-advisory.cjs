@@ -44,7 +44,7 @@ const crypto = require('crypto');
 const { createSupabaseServiceClient } = require('../lib/supabase-client.cjs');
 const { capBody, awaitCoordinatorReply } = require('./worker-signal.cjs');
 const { getActiveCoordinatorId, isTwoWayV2Enabled, isAdamSolomonTwoWayV1Enabled } = require('../lib/coordinator/resolve.cjs');
-const { insertCoordinationRow, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS } = require('../lib/coordinator/dispatch.cjs');
+const { insertCoordinationRow, FULL_UUID_RE, BACKPRESSURE_EXEMPT_KINDS, isDeliveredDispatchError } = require('../lib/coordinator/dispatch.cjs');
 const { detectVersionSkew } = require('../lib/coordinator/protocol-comms-version.cjs');
 const { warnIfCheckoutStale } = require('../lib/coordinator/checkout-staleness.cjs');
 const { PAYLOAD_KINDS, DIRECTIVE_KINDS, FRAMING_CLASSES, DRAIN_SETS } = require('../lib/fleet/worker-status.cjs');
@@ -750,15 +750,18 @@ async function ensureOriginatorCc(supabase, { replyRef, replyTo, target, session
     try {
       let q = supabase
         .from('session_coordination')
-        .select('id')
+        .select('id, payload')
         .eq('target_session', originator)
         .eq('payload->>reply_to', String(replyTo));
       const ccMessageKind = payload && payload.message_kind;
       if (ccMessageKind != null) q = q.eq('payload->>message_kind', String(ccMessageKind));
       const ccPartIndex = payload && payload.part_index;
       if (ccPartIndex != null) q = q.eq('payload->>part_index', String(ccPartIndex));
-      const { data: existing } = await q.limit(1);
-      if (Array.isArray(existing) && existing.length > 0) return { inserted: false, originator };
+      // QF-20260904-225: a backpressure_parked row never actually reached the originator,
+      // so it must not count as "already delivered" (mirrors the alreadyAnswered fix below).
+      const { data: existingRaw } = await q.limit(20);
+      const existing = (Array.isArray(existingRaw) ? existingRaw : []).filter((r) => !(r.payload && r.payload.backpressure_parked === true));
+      if (existing.length > 0) return { inserted: false, originator };
     } catch { /* fail-open: attempt the CC */ }
     const { error: ccErr } = await insertRow(
       supabase,
@@ -1330,6 +1333,16 @@ async function main() {
   const coordinatorId = await getActiveCoordinatorId(supabase);
   const toAdam = peerArg === 'adam';
   const adamId = toAdam && twoWayV1On ? await getActiveAdamId(supabase).catch(() => null) : null;
+  // QF-20260907-834: getActiveAdamId returns null whenever the Adam heartbeat exceeds
+  // ADAM_FRESH_MS (10 min), but Adam idles between ticks for longer than that by design --
+  // resolveSolomonAdvisoryTarget then falls back to the broadcast-adam sentinel with no
+  // caller-visible signal that identity resolution failed. Only adam-advisory.cjs's inbox
+  // drain reads that lane (a session-keyed sweep does not), so a silent fallback here is a
+  // silent dead-drop risk. Make the fallback visible instead of eliminating it (widening the
+  // freshness window is out of scope -- it mirrors a shared coordinator/detector convention).
+  if (toAdam && twoWayV1On && !adamId) {
+    console.error('WARN: [ADAM_IDENTITY_STALE] no Adam session has a heartbeat inside the freshness window -- falling back to the broadcast-adam sentinel. Only adam-advisory.cjs\'s inbox drain reads that lane; a session-keyed sweep does not.');
+  }
   const { target, via } = resolveSolomonAdvisoryTarget({ toAdam, flagOn: twoWayV1On, coordinatorId, adamId });
   // QF-20260719-387: read back the resolved target's registered role and hard-error on a
   // recipient-class mismatch (--to adam -> role=adam; default -> the active coordinator).
@@ -1418,24 +1431,25 @@ async function main() {
 
   let inserted;
   try {
-    const { data, error } = await insertCoordinationRow(
+    // SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1: a delivered/parked outcome
+    // (DISPATCH_BACKPRESSURE with a successful park, or DISPATCH_ALREADY_DELIVERED) is now an
+    // ADDITIVE RETURN, not a throw — check isDeliveredDispatchError() on the result BEFORE
+    // treating it as an ordinary success/error, instead of catching it as a thrown exception.
+    const result = await insertCoordinationRow(
       supabase,
       { sender_session: sessionId, sender_type: 'solomon', target_session: target, message_type: 'INFO', subject, body: payload.body, payload, expires_at: expiresAt },
       // SD-LEO-INFRA-SEND-TIME-TARGET-001 / FR-2: `--to adam` is statically an Adam-role
       // target — hint the target-drain warn so a resolved UUID needs no identity lookup.
       { select: 'id', single: true, targetRoleHint: toAdam ? 'adam' : undefined }
     );
+    if (isDeliveredDispatchError(result)) {
+      console.error(`[solomon-advisory] DELIVERED (not a failure) — code=${result.code}, parkedRowId=${result.parkedRowId}`);
+      process.exit(0);
+    }
+    const { data, error } = result;
     if (error) { console.error('ERROR: failed to insert advisory:', error.message); process.exit(1); }
     inserted = data;
   } catch (e) {
-    // QF-20260902-160 (ported from adam-advisory.cjs under QF-20260906-523): a landed:true error
-    // means the content already reached the target (parked or a same-correlation dupe) — this is
-    // DELIVERED, not a failure. Exiting 1 here is what trained callers to resend and duplicate an
-    // ask that already landed.
-    if (e && e.landed) {
-      console.error(`[solomon-advisory] DELIVERED (not a failure) — ${e.message}`);
-      process.exit(0);
-    }
     const code = e && e.code ? `${e.code}: ` : '';
     console.error(`ERROR: advisory not sent — ${code}${(e && e.message) || e}`);
     process.exit(1);

@@ -30,6 +30,7 @@ function makeBuilder(table) {
   const builder = {
     select: () => builder,
     eq: () => builder,
+    neq: () => builder,
     or: () => builder,
     in: () => builder,
     update: () => builder,
@@ -68,12 +69,23 @@ vi.mock('../../../lib/eva/stage-zero/data-pollers/retry.js', () => ({
 }));
 
 const createSDMock = vi.fn().mockImplementation(async (input) => ({ id: 'sd-uuid-new', ...input }));
-vi.mock('../../../lib/sd-creation/pipeline.js', () => ({
-  resolveVenturePrefix: vi.fn().mockResolvedValue(null),
-  mapPriority: (p) => p || 'medium',
-  inheritStrategicFields: vi.fn().mockReturnValue({}),
-  createSDOrThrow: createSDMock,
-}));
+// QF-20260907-765: createChild now dry-runs the LEAD-TO-PLAN gate battery pre-insert, using the
+// SAME buildDefault*() functions createSD() itself uses — these are real, pure, DB-free, so
+// delegate to the actual implementations rather than adding a 6th hand-rolled mock shape.
+vi.mock('../../../lib/sd-creation/pipeline.js', async () => {
+  const actual = await vi.importActual('../../../lib/sd-creation/pipeline.js');
+  return {
+    resolveVenturePrefix: vi.fn().mockResolvedValue(null),
+    mapPriority: (p) => p || 'medium',
+    inheritStrategicFields: vi.fn().mockReturnValue({}),
+    createSDOrThrow: createSDMock,
+    buildDefaultSuccessCriteria: actual.buildDefaultSuccessCriteria,
+    buildDefaultSmokeTestSteps: actual.buildDefaultSmokeTestSteps,
+    buildDefaultStrategicObjectives: actual.buildDefaultStrategicObjectives,
+    buildDefaultKeyChanges: actual.buildDefaultKeyChanges,
+    buildDefaultSuccessMetrics: actual.buildDefaultSuccessMetrics,
+  };
+});
 
 beforeEach(() => {
   createSDMock.mockClear();
@@ -113,11 +125,33 @@ describe('SD-LEO-INFRA-PLAN-LINKAGE-BELT-001 (FR-1): every mockable adapter stam
 
   it('createChild under a wave-linked parent inherits linked=true (not just "defined")', async () => {
     const { createChild } = await import('../../../lib/sd-creation/source-adapters/child.js');
-    await createChild('SD-EHG-PRODUCT-PARENT-001', 0, {});
+    // QF-20260907-765: a bare {} would now be REFUSED pre-insert by the new dry-run gate battery
+    // (generic-boilerplate success_criteria/smoke_test_steps fail GATE_PLACEHOLDER_CONTENT_
+    // DETECTION / GATE_SMOKE_TEST_SPECIFICATION) — supply real per-child content so this test
+    // reaches createSD, same as every other adapter here already does via its fixture.
+    await createChild('SD-EHG-PRODUCT-PARENT-001', 0, {
+      successCriteria: [{ criterion: 'Ship the widget migration end-to-end', measure: 'All widgets migrated, verified via smoke test' }],
+      smokeTestSteps: [{ step_number: 1, instruction: 'Run the widget migration script against staging', expected_outcome: 'All widgets report migrated status in the admin dashboard' }],
+    });
     const [sdInput] = createSDMock.mock.calls.at(-1);
     expect(sdInput.metadata.plan_linkage).toBeDefined();
     expect(sdInput.metadata.plan_linkage.linked).toBe(true);
     expect(sdInput.metadata.plan_linkage.wave_id).toBe('w1');
+  });
+});
+
+// QF-20260907-765 (deferred half (b) of QF-20260905-431): createChild's new pre-insert dry-run
+// gate battery, exercised through this file's already-live createSD mock — a REFUSED mint never
+// reaches createSDMock at all.
+describe('createChild — pre-insert LEAD-TO-PLAN dry-run refusal (QF-20260907-765)', () => {
+  it('refuses (never calls createSD) when no per-child content overrides are supplied', async () => {
+    const { createChild } = await import('../../../lib/sd-creation/source-adapters/child.js');
+    createSDMock.mockClear();
+    const result = await createChild('SD-EHG-PRODUCT-PARENT-001', 0, {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/LEAD-TO-PLAN/);
+    expect(result.error).toMatch(/GATE_PLACEHOLDER_CONTENT_DETECTION|GATE_SMOKE_TEST_SPECIFICATION/);
+    expect(createSDMock).not.toHaveBeenCalled();
   });
 });
 

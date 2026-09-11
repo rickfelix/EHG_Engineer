@@ -16,7 +16,7 @@
  * Usage: node scripts/adam-quiet-tick.mjs [--json]
  */
 import { createRequire } from 'node:module';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
@@ -117,12 +117,69 @@ const execFileAsync = promisify(execFile);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 const LAST_STATE_FILE = join(REPO_ROOT, '.adam-quiet-tick-last.json');
+
+// QF-20260906-601: this script is routinely executed from a QF/SD worktree (not just the main
+// checkout), where `resolve(__dirname, '..')` resolves to THAT worktree's own root -- a
+// filesystem location private to it. An account-identity baseline written there is invisible
+// to every other worktree/process running this same tick, so each one independently discovers
+// the same real account switch and independently notifies, producing one row per live worktree
+// rather than one per transition (measured: 7 rows for a single switch). detectAccountSwitch's
+// compare-and-persist-on-confirmed-delivery logic below is already correct; the defect is that
+// its persisted baseline was never actually shared. Mirrors resolveMainRepoRoot() in
+// scripts/audit-worktree-env-divergence.mjs, which fixed the identical class of bug for env-key
+// divergence checks: `git rev-parse --git-common-dir` resolves to the MAIN .git directory from
+// any worktree, so its parent is the one true shared repo root.
+export function resolveMainRepoRoot(startDir = __dirname) {
+  try {
+    const common = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+      cwd: startDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+    if (common) return dirname(common);
+  } catch { /* fall through */ }
+  return REPO_ROOT;
+}
+
 // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-3): a SEPARATE identity-only state file, kept
 // independent of detectSalientDelta's tracked-field set (beltZero/openSignalCount/venture1State)
 // so the two concerns don't have to share a shape. Mirrors LAST_STATE_FILE's own
 // try/catch-load, JSON.stringify-write, single-slot pattern (see loadLastState/saveLastState).
-const ACCOUNT_IDENTITY_STATE_FILE = join(REPO_ROOT, '.account-identity-last.json');
+// QF-20260906-601: anchored to the SHARED main repo root (not REPO_ROOT, which is
+// worktree-local) -- see resolveMainRepoRoot() above.
+const ACCOUNT_IDENTITY_STATE_FILE = join(resolveMainRepoRoot(), '.account-identity-last.json');
 const ADAM_PARTY_OFFSET_S = 420; // phase Adam's park 7min after the coordinator's (FR-5).
+
+/**
+ * QF-20260906-219: a BARE getAccountIdentity() call always reads the machine-global
+ * ~/.claude.json (resolveRealConfigPath()), never this seat's own profile -- the exact trap
+ * session-register.cjs's resolveAccountFromConfigDir() already documents and guards against.
+ * Mirrors that established pattern so the sampler measures the SEAT, not the file, once a
+ * CLAUDE_CONFIG_DIR profile is in play. Extracted as its own exported function (mirrors
+ * resolveMainRepoRoot()'s own extraction above) so it is unit-testable without pulling all of
+ * main() apart. Ships dormant today: no live seat (Adam's own included) has CLAUDE_CONFIG_DIR
+ * set yet, so this resolves identically to a bare call until profiles exist.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @param {(source?: string) => object|null} [identityFn]
+ */
+export function resolveAccountSamplerIdentity(env = process.env, identityFn = getAccountIdentity) {
+  const dir = env.CLAUDE_CONFIG_DIR;
+  return dir ? identityFn(join(dir, '.claude.json')) : identityFn();
+}
+
+/**
+ * SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (LEAD-phase prospective TESTING finding): the exact
+ * on-disk path resolveAccountSamplerIdentity() actually reads, for saveLastAccountIdentity()'s
+ * `source` stamp below. Kept as a SEPARATE function (not folded into resolveAccountSamplerIdentity
+ * itself) so the two can never disagree by construction -- same branch, same `dir` check, called
+ * from the same site in main(). Without this, saveLastAccountIdentity() always stamped
+ * resolveRealConfigPath() (the machine-global path) even when the reading it is stamping came from
+ * a seat-scoped CLAUDE_CONFIG_DIR profile — reintroducing the exact provenance lie
+ * QF-20260901-848's `source` field exists to prevent, the moment per-seat profiles activate.
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+export function resolveAccountSamplerSourcePath(env = process.env) {
+  const dir = env.CLAUDE_CONFIG_DIR;
+  return dir ? join(dir, '.claude.json') : resolveRealConfigPath();
+}
 
 function makeClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -605,9 +662,13 @@ export async function checkOversightStaleness(sb, { nowMs = Date.now() } = {}) {
 // a breach is caught within one quiet-tick cycle instead of waiting up to 46 more minutes for the
 // next hourly check. Fail-soft: a read error or a heartbeat that has never been sent reports
 // nothing (never a false alarm) -- mirrors checkOversightStaleness's contract exactly.
-// Cadence re-ratified EVERY 3 HOURS (chairman verbal 2026-08-28, ratification 9eebe200,
-// supersedes the 2026-07-31 hourly verbal): threshold = cadence minus 5min grace, same
-// shape as the old 55min-under-60min bar.
+// QF-20260905-680: cadence is FIXED ET SLOTS 6/9/12/3/6/9 (ratification 7010e20f,
+// supersedes the ">=170min gap since last send" rule of ratification 9eebe200, itself a
+// supersession of the 2026-07-31 hourly verbal). This threshold is the OVERDUE BACKSTOP
+// only (a genuine multi-slot lapse), not the primary send trigger -- that lives in the
+// 'heartbeat-sms' ADAM_LOOPS prompt (scripts/adam-startup-check.mjs), which reasons about
+// slots via lib/time/chairman-et-wall-clock.js. Threshold value unchanged (slots are
+// themselves 3h apart): cadence minus 5min grace, same shape as the old 55min-under-60min bar.
 export const HEARTBEAT_OVERDUE_THRESHOLD_MS = 175 * 60 * 1000;
 export async function checkHeartbeatCadence(sb, { nowMs = Date.now() } = {}) {
   try {
@@ -636,9 +697,9 @@ export async function checkHeartbeatCadence(sb, { nowMs = Date.now() } = {}) {
 export function formatHeartbeatCadenceLine(overdueMin, isQuiet) {
   if (overdueMin == null) return null;
   if (isQuiet) {
-    return `QUIET_TICK_HEARTBEAT_SUPPRESSED=adam gapMin=${overdueMin} — 3-hourly heartbeat cadence contract breached, but within the 22:00-06:00 ET quiet window; the send gate would drop it. INFORMATIONAL, not actionable. Cadence resumes at 06:00 ET.`;
+    return `QUIET_TICK_HEARTBEAT_SUPPRESSED=adam gapMin=${overdueMin} — a fixed ET heartbeat slot (6/9/12/3/6/9, ratification 7010e20f) was missed, but within the 22:00-06:00 ET quiet window; the send gate would drop it. INFORMATIONAL, not actionable. Cadence resumes at 06:00 ET.`;
   }
-  return `QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${overdueMin} — 3-hourly heartbeat cadence contract breached (>=175min since last send; chairman verbal 2026-08-28); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`;
+  return `QUIET_TICK_HEARTBEAT_OVERDUE=adam gapMin=${overdueMin} — a fixed ET heartbeat slot (6/9/12/3/6/9, ratification 7010e20f) was missed for >=175min (overdue backstop, not the primary trigger); send NOW: node scripts/adam-chairman-sms.mjs --kind heartbeat_status --body "<short status line>" (quiet hours/rate caps enforced by the send gate itself)`;
 }
 
 /** QF-20260808-673: how far back to look for an unanswered chairman inbound. */
@@ -1176,9 +1237,13 @@ function loadLastAccountIdentity() {
 // a reader of the state file (or the ACCOUNT_SWITCH notice below) can tell how stale `prior` was
 // at compare time -- previously unstamped, so a switch collapsed inside one ~15min tick cadence
 // (three logins in ~2min) read as a single, silently-stale edge with no way to detect it.
-function saveLastAccountIdentity(s) {
+// SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001: `sourcePath` defaults to resolveRealConfigPath() (the
+// pre-fix behavior, still correct for a seat with no CLAUDE_CONFIG_DIR) but the caller now passes
+// resolveAccountSamplerSourcePath() explicitly -- see that function's own docblock for why a
+// hardcoded machine-global default here would mislabel a seat-scoped reading once profiles exist.
+function saveLastAccountIdentity(s, sourcePath = resolveRealConfigPath()) {
   try {
-    writeFileSync(ACCOUNT_IDENTITY_STATE_FILE, JSON.stringify({ ...s, measured_at: new Date().toISOString(), source: resolveRealConfigPath() }));
+    writeFileSync(ACCOUNT_IDENTITY_STATE_FILE, JSON.stringify({ ...s, measured_at: new Date().toISOString(), source: sourcePath }));
   } catch { /* fail-soft */ }
 }
 
@@ -1199,9 +1264,14 @@ async function main() {
 
   // SD-LEO-INFRA-FLEET-ACCOUNT-IDENTITY-001 (FR-2/FR-3): which Claude account is this fleet
   // running under, and did it just switch? getAccountIdentity() is fail-safe (never throws;
-  // null when the config is missing/malformed).
-  const currentIdentity = getAccountIdentity();
+  // null when the config is missing/malformed). QF-20260906-219: routed through
+  // resolveAccountSamplerIdentity() so the sampler measures THIS SEAT's own profile (when one
+  // is set) rather than always the machine-global file — see that function's own docblock.
+  const currentIdentity = resolveAccountSamplerIdentity();
   const acctLabel = (currentIdentity && currentIdentity.email) || 'unknown';
+  // SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001: the SAME env-derived branch resolveAccountSamplerIdentity()
+  // just took, so this can never disagree with what currentIdentity was actually read from.
+  const acctSourcePath = resolveAccountSamplerSourcePath();
 
   // SD-FDBK-INFRA-COORDINATION-VOLUME-DEGRADES-001 FR-1: enforce the role-aware compaction
   // threshold instead of leaving it classified-but-unread (predecessor SD-LEO-INFRA-COORDINATOR-
@@ -1397,7 +1467,7 @@ async function main() {
   let acctNotified = false;
   if (!acctSwitch.changed) {
     // Cold start / stable tick: no notification to send, always advance the baseline.
-    if (currentIdentity) saveLastAccountIdentity(currentIdentity);
+    if (currentIdentity) saveLastAccountIdentity(currentIdentity, acctSourcePath);
   } else {
     // Fail-soft, but NOT silent-drop: the baseline is only advanced on CONFIRMED delivery
     // (below). If the coordinator lookup fails or the DB insert throws, priorIdentity stays
@@ -1431,10 +1501,18 @@ async function main() {
             // a CC needing no answer hold a real question behind it. The field has existed since
             // SOLOMON-CONSULT-CANNOT-DELIVER-001 FR-2; this producer simply never passed it.
             const cp = buildSolomonConsultPayload({ correlationId: crypto.randomUUID(), body: `[PRE-SEND CONSULT] ${body}`, senderCallsign: 'adam-quiet-tick', repo: process.cwd(), severity: 'high', consultPurpose: 'pre_send' });
-            await insertCoordinationRow(sb, { sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: '[SOLOMON_CONSULT] pre-send', body: cp.body, payload: cp }, { targetRoleHint: 'solomon' });
+            // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: sender_session/sender_type were missing here
+            // (empty_sender_row) -- static writer-identity, no per-tick session id available.
+            await insertCoordinationRow(sb, { sender_session: 'adam-quiet-tick', sender_type: 'adam', target_session: solomonId || 'broadcast-solomon', message_type: 'INFO', subject: '[SOLOMON_CONSULT] pre-send', body: cp.body, payload: cp }, { targetRoleHint: 'solomon' });
           }
         } catch { /* fail-open — see comment above */ }
         await insertCoordinationRow(sb, {
+          // SD-LEO-INFRA-LANE-HYGIENE-OVER-001: insertCoordinationRow only INFERS sender_type
+          // FROM an already-present sender_session, it does not stamp one -- this row had
+          // neither, counting as empty_sender_row. Static writer-identity string, matching the
+          // convention already used by other background/tick writers (e.g. 'stale-session-sweep',
+          // 'periodic-liveness-watcher') rather than a per-tick session lookup.
+          sender_session: 'adam-quiet-tick',
           sender_type: 'adam',
           target_session: coordinatorId,
           message_type: 'INFO',
@@ -1445,7 +1523,7 @@ async function main() {
         acctNotified = true;
       }
     } catch { /* fail-soft — see comment above; acctNotified stays false, baseline not advanced */ }
-    if (acctNotified && currentIdentity) saveLastAccountIdentity(currentIdentity);
+    if (acctNotified && currentIdentity) saveLastAccountIdentity(currentIdentity, acctSourcePath);
   }
 
   // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-H (FR-3): Adam is the delivery leg to the
@@ -1582,8 +1660,9 @@ async function main() {
     if (oversightStale.selfScoreOverdueH) {
       console.log(`QUIET_TICK_SELFSCORE_OVERDUE=adam lastScoreAgeH=${oversightStale.selfScoreOverdueH} — run node scripts/adam-self-assessment-writer.cjs NOW (durable cron lost or failing; cadence 6h, threshold 2x)`);
     }
-    // QF-20260823-131 (re-tuned 2026-08-28, ratification 9eebe200: cadence now EVERY 3 HOURS):
-    // re-checks the SAME >=175min measured-gap bar the durable cron uses, every 15min via this tick.
+    // QF-20260823-131 (re-tuned per QF-20260905-680: cadence is FIXED ET SLOTS, ratification
+    // 7010e20f, this bar is the overdue backstop only): re-checks the SAME >=175min
+    // measured-gap bar the durable cron uses, every 15min via this tick.
     const heartbeatCadence = await checkHeartbeatCadence(sb);
     const heartbeatCadenceLine = formatHeartbeatCadenceLine(heartbeatCadence.overdueMin, inQuietHours({ now: Date.now() }));
     if (heartbeatCadenceLine) console.log(heartbeatCadenceLine);

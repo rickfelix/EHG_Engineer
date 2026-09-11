@@ -1,4 +1,14 @@
 {
+ "lib/coordinator/reply-class.cjs:114": {
+  "classification": "bounded-by-design",
+  "match": "select('id, payload')",
+  "note": "QF-20260904-225: bounded by an explicit .limit(20) on the awaited statement several lines below (`await q.limit(20)`) -- the select/eq chain is built onto a `let q = ...;` builder variable that a later, separate statement calls .limit() on, so the classifier's single-statement chainWindow (which stops at the first blank/non-chained line) cannot trace across the reassignment. Same class as the best-effort-release.mjs:297 entry above."
+ },
+ "scripts/solomon-advisory.cjs:753": {
+  "classification": "bounded-by-design",
+  "match": "select('id, payload')",
+  "note": "QF-20260904-225: bounded by an explicit .limit(20) on the awaited statement several lines below (`await q.limit(20)`) -- same builder-variable-reassignment pattern as lib/coordinator/reply-class.cjs:114 (see that entry), which the classifier's single-statement chainWindow cannot trace across."
+ },
  "lib/fleet/best-effort-release.mjs:297": {
   "classification": "bounded-by-design",
   "match": "select('id').eq('id', qfId)",

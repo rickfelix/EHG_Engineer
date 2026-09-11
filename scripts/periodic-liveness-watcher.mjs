@@ -655,7 +655,10 @@ async function main({ includeFixtures = false } = {}) {
       if (result.emitted) {
         await supabase
           .from('periodic_process_registry')
-          .update({ last_state: evaluation.state })
+          // QF-20260907-090: updated_at explicitly bumped every tick -- hasCrossedUnverifiedThreshold
+          // (and stampStateChangeAnchor's own early-return on a stable state) both assume it advances
+          // on every cycle regardless of state; with no DB trigger on this table, nothing else does.
+          .update({ last_state: evaluation.state, updated_at: new Date().toISOString() })
           .eq('process_key', row.process_key);
         await stampStateChangeAnchor(row, evaluation);
       } else {
@@ -699,7 +702,8 @@ async function main({ includeFixtures = false } = {}) {
       } catch (err) {
         console.error(`[periodic-liveness-watcher] ladder climb FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
       }
-      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
+      // QF-20260907-090: updated_at bumped every tick, same reasoning as the OVERDUE-transition site above.
+      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state, updated_at: new Date().toISOString() }).eq('process_key', row.process_key);
       await stampStateChangeAnchor(row, evaluation);
     } else {
       // OK/UNVERIFIED/INTENTIONALLY_DOWN all end any active OVERDUE episode -- reset the ladder
@@ -734,7 +738,8 @@ async function main({ includeFixtures = false } = {}) {
           console.error(`[periodic-liveness-watcher] persistent-UNVERIFIED escalation FAILED (non-fatal) for ${row.process_key}: ${err.message}`);
         }
       }
-      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state }).eq('process_key', row.process_key);
+      // QF-20260907-090: updated_at bumped every tick, same reasoning as the OVERDUE-transition site above.
+      await supabase.from('periodic_process_registry').update({ last_state: evaluation.state, updated_at: new Date().toISOString() }).eq('process_key', row.process_key);
       await stampStateChangeAnchor(row, evaluation);
     }
   }

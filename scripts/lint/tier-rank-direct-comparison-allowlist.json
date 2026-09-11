@@ -2,8 +2,8 @@
   "entries": [
     {
       "file": "scripts/leo-create-sd.js",
-      "line": 177,
-      "note": "CLI help text: '--min-tier-rank <N>' is an argv placeholder, not a numeric comparison of a worker rank against a floor."
+      "line": 179,
+      "note": "CLI help text: '--min-tier-rank <N>' is an argv placeholder, not a numeric comparison of a worker rank against a floor. QF-20260905-562 shifted this line from 177 -> 178 by adding an import earlier in the file; QF-20260904-610 shifted it again 178 -> 179 by extending the --roadmap-link-reason help text a few lines above. SECOND recurrence of the same class of break -- this allowlist is line-number-pinned against a file where earlier prose edits routinely shift later line numbers, so it should be treated as fragile; see the QF-20260904-610 PR description for a filed follow-up recommending content-based matching or a line-scoped diff fix (mirrors QF-20260907-023's fix to session-coordination-insert-classguard-lint.mjs) instead of another line-number bump next time."
     }
   ]
 }

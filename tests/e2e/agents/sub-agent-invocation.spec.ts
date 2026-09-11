@@ -15,6 +15,7 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -37,13 +38,12 @@ test.describe('Sub-Agent Invocation E2E Tests', () => {
     if (company) testCompanyId = company.id;
 
     // Create test venture with budget
-    const { data: venture } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture } = await insertGuarded(supabase, 'ventures', {
         name: `Sub-Agent Test Venture ${Date.now()}`,
         company_id: testCompanyId,
-        current_lifecycle_stage: 1
-      })
+        current_lifecycle_stage: 1,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/sub-agent-invocation.spec.ts' })
       .select('id')
       .single();
 
@@ -230,13 +230,12 @@ test.describe('Sub-Agent Invocation E2E Tests', () => {
   test.describe('Budget Enforcement at Creation', () => {
     test('SA-007: should throw BudgetExhaustedException when budget is zero', async () => {
       // Given: Venture with zero budget
-      const { data: zeroBudgetVenture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: zeroBudgetVenture } = await insertGuarded(supabase, 'ventures', {
           name: `Zero Budget Venture ${Date.now()}`,
           company_id: testCompanyId,
-          current_lifecycle_stage: 1
-        })
+          current_lifecycle_stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/sub-agent-invocation.spec.ts' })
         .select('id')
         .single();
 
@@ -276,13 +275,12 @@ test.describe('Sub-Agent Invocation E2E Tests', () => {
 
     test('SA-008: should throw BudgetConfigurationException when no budget record', async () => {
       // Given: Venture WITHOUT budget record
-      const { data: noBudgetVenture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: noBudgetVenture } = await insertGuarded(supabase, 'ventures', {
           name: `No Budget Venture ${Date.now()}`,
           company_id: testCompanyId,
-          current_lifecycle_stage: 1
-        })
+          current_lifecycle_stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/sub-agent-invocation.spec.ts' })
         .select('id')
         .single();
 
@@ -359,13 +357,12 @@ test.describe('Sub-Agent Invocation E2E Tests', () => {
 
     test('SA-011: should fallback to venture_phase_budgets', async () => {
       // Given: Venture with only phase budget
-      const { data: phaseBudgetVenture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: phaseBudgetVenture } = await insertGuarded(supabase, 'ventures', {
           name: `Phase Budget Venture ${Date.now()}`,
           company_id: testCompanyId,
-          current_lifecycle_stage: 1
-        })
+          current_lifecycle_stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/sub-agent-invocation.spec.ts' })
         .select('id')
         .single();
 

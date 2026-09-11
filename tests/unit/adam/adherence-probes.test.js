@@ -177,6 +177,25 @@ describe('probeDispatchBoundary (P6) — QF-20260727-397', () => {
     // The guards are exclusions, not a global off-switch: one real crossing anywhere still fails.
     expect(verdict('add real session attribution, and also spin up a worker')).toBe('fail');
   });
+
+  // QF-20260906-775: twice-witnessed false FAIL (self-adherence runs 3025f07e, c6c723d0) — a
+  // fourth guard, same NOT_A_CAPACITY_SENSE mechanism as the guards above. Adopted exit predicate:
+  // assert all four together so the fix cannot silently disarm the real check.
+  it('QF-20260906-775: "Cloudflare Workers AI" is a product name, not fleet dispatch, but the boundary still holds', () => {
+    // FAIL (correct) — genuine dispatch language must still fire.
+    expect(verdict('spin up two more workers and reassign the belt')).toBe('fail');
+    // PASS (was the false FAIL) — "Workers AI" is Cloudflare Workers AI, not capacity dispatch.
+    expect(verdict('the Deploy token lacks Workers AI scope')).toBe('pass');
+    // PASS (correct) — no dispatch verb + fleet-noun shape present at all.
+    expect(verdict('the venture already had a Deploy token and an error forwarder')).toBe('pass');
+    // PASS (correct) — "deploy" here has no fleet noun in its filler window.
+    expect(verdict('Deploy provisions the forwarding bindings idempotently')).toBe('pass');
+  });
+
+  it('QF-20260906-775: "Worker secret"/"Worker binding" are also Cloudflare Workers terms, not capacity dispatch', () => {
+    expect(verdict('assign a worker secret for the deploy step')).toBe('pass');
+    expect(verdict('add a worker binding to the wrangler config')).toBe('pass');
+  });
 });
 
 describe('probePmBoard (P8) — SD-LEO-INFRA-UPSCALE-ADAM-PROJECT-MANAGEMENT-DISCIPLINE-001-C', () => {

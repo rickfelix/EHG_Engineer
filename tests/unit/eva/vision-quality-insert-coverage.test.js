@@ -11,6 +11,10 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { config } from 'dotenv';
+// QF-20260705-022: this suite WRITEs (real INSERT/UPDATE). The old local gate answered "is a
+// real DB reachable?" (true under every fleet worker's ambient .env, production included);
+// HAS_REAL_DB now means "is the target explicitly designated safe" — tests/helpers/db-available.js.
+import { HAS_REAL_DB } from '../../helpers/db-available.js';
 
 config();
 
@@ -22,11 +26,6 @@ const supabase = createClient(
 // venture_id is nullable on eva_vision_documents (confirmed via DATABASE sub-agent live dry-run) —
 // use NULL rather than a fabricated venture UUID to avoid a foreign-key/format dependency.
 const TEST_VENTURE_ID = null;
-
-const HAS_REAL_DB = process.env.SUPABASE_URL
-  && !process.env.SUPABASE_URL.includes('test.invalid.local')
-  && process.env.SUPABASE_SERVICE_ROLE_KEY
-  && !process.env.SUPABASE_SERVICE_ROLE_KEY.includes('test-service-role-key-not-real');
 
 const testVisionKeys = [];
 

@@ -103,6 +103,22 @@ describe('alreadyAnswered — the guard NARROWS, it never widens (FR-2, AC-3)', 
     expect(await alreadyAnswered(sb, 'c1', { partIndex: 1 })).toBe(true);
     expect(await alreadyAnswered(sb, 'c1', { partIndex: 2 })).toBe(false);
   });
+
+  // QF-20260904-225: a row parked by backpressure never reached the originator, so it must
+  // never count as "answered" -- otherwise a genuine second reply on the correlation is
+  // refused even though the first copy was never delivered.
+  it('QF-20260904-225: a backpressure-parked answer row does NOT count as answered', async () => {
+    const sb = filteringSb([{ id: 'parked-1', payload: { reply_to: 'c1', kind: 'adam_advisory', backpressure_parked: true } }]);
+    expect(await alreadyAnswered(sb, 'c1')).toBe(false);
+  });
+
+  it('QF-20260904-225: a genuinely delivered answer among parked rows on the same correlation still dedupes', async () => {
+    const sb = filteringSb([
+      { id: 'parked-1', payload: { reply_to: 'c1', kind: 'adam_advisory', backpressure_parked: true } },
+      { id: 'delivered-1', payload: { reply_to: 'c1', kind: 'adam_advisory' } },
+    ]);
+    expect(await alreadyAnswered(sb, 'c1')).toBe(true);
+  });
 });
 
 describe('buildAdvisoryPayload — correction discriminator (FR-1, FR-4, AC-4)', () => {

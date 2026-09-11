@@ -6,8 +6,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  PATH_BAN, WITNESS_CONTENT_FILE, SETTINGS_JSON_PATH, findBannedTouches, hasNetWitnessMarkerLoss,
+  PATH_BAN, SETTINGS_JSON_PATH, findBannedTouches, hasNetWitnessMarkerLoss,
   evaluateCeremonyScopeLock, evaluateSettingsJsonChange,
+  extractRatificationId, ratificationNamesSettingsPath,
 } from '../../../lib/governance/ceremony-scope-lock.js';
 
 const BASE_SETTINGS = JSON.stringify({
@@ -193,6 +194,63 @@ describe('evaluateSettingsJsonChange', () => {
     expect(result.protectedKey).toBe('permissions');
   });
 
+  // QF-20260905-229: PR 8296/8491 both carried a chairman-keystroked, ratified permissions change
+  // and both merged with this lint red -- the sanctioned path had no pass path.
+  describe('QF-20260905-229: ratification-verified exception', () => {
+    it('[TWO-SIDED] the SAME permissions edit passes when ratificationVerified is true', () => {
+      const mutated = JSON.parse(BASE_SETTINGS);
+      mutated.permissions.allow = ['Bash(*)'];
+      const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated), { ratificationVerified: true });
+      expect(result).toEqual({ pass: true, protectedKey: null });
+    });
+
+    it('a statusLine edit is UNAFFECTED by ratificationVerified -- only permissions gets the exception', () => {
+      const mutated = JSON.parse(BASE_SETTINGS);
+      mutated.statusLine.command = 'node other.cjs';
+      const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated), { ratificationVerified: true });
+      expect(result.pass).toBe(false);
+      expect(result.protectedKey).toBe('statusLine');
+    });
+
+    it('a Stop-hook edit is UNAFFECTED by ratificationVerified', () => {
+      const mutated = JSON.parse(BASE_SETTINGS);
+      mutated.hooks.Stop[0].hooks[0].command = 'node scripts/hooks/post-completion-tail-enforcement.cjs --loud';
+      const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated), { ratificationVerified: true });
+      expect(result.pass).toBe(false);
+      expect(result.protectedKey).toBe('hooks.Stop');
+    });
+
+    it('defaults to false when opts is omitted -- byte-identical to every pre-QF caller', () => {
+      const mutated = JSON.parse(BASE_SETTINGS);
+      mutated.permissions.allow = ['Bash(*)'];
+      const result = evaluateSettingsJsonChange(BASE_SETTINGS, JSON.stringify(mutated));
+      expect(result.pass).toBe(false);
+      expect(result.protectedKey).toBe('permissions');
+    });
+  });
+
+  describe('evaluateCeremonyScopeLock threads ratificationVerified through to evaluateSettingsJsonChange', () => {
+    it('passes a permissions-only settings.json diff when ratificationVerified is true', () => {
+      const mutated = JSON.parse(BASE_SETTINGS);
+      mutated.permissions.allow = ['Bash(*)'];
+      const result = evaluateCeremonyScopeLock(
+        [SETTINGS_JSON_PATH], null, { oldText: BASE_SETTINGS, newText: JSON.stringify(mutated) },
+        { ratificationVerified: true },
+      );
+      expect(result.pass).toBe(true);
+    });
+
+    it('still refuses the same diff when ratificationVerified is omitted', () => {
+      const mutated = JSON.parse(BASE_SETTINGS);
+      mutated.permissions.allow = ['Bash(*)'];
+      const result = evaluateCeremonyScopeLock(
+        [SETTINGS_JSON_PATH], null, { oldText: BASE_SETTINGS, newText: JSON.stringify(mutated) },
+      );
+      expect(result.pass).toBe(false);
+      expect(result.settingsJsonProtectedKey).toBe('permissions');
+    });
+  });
+
   it('refuses a statusLine edit', () => {
     const mutated = JSON.parse(BASE_SETTINGS);
     mutated.statusLine.command = 'node other.cjs';
@@ -218,5 +276,57 @@ describe('evaluateSettingsJsonChange', () => {
   it('passes on a byte-identical settings.json (no-op diff)', () => {
     const result = evaluateSettingsJsonChange(BASE_SETTINGS, BASE_SETTINGS);
     expect(result).toEqual({ pass: true, protectedKey: null });
+  });
+});
+
+// QF-20260905-229
+describe('extractRatificationId', () => {
+  it('extracts an 8-hex short form after the word "ratification"', () => {
+    expect(extractRatificationId('fix: apply chairman-ratified permissions (ratification 8002ec7a)')).toBe('8002ec7a');
+  });
+
+  it('extracts a full UUID after the word "ratification"', () => {
+    expect(extractRatificationId('see ratification 42e6a0fb-a2c9-44a6-8f6c-6b6d0c753a2c for context')).toBe('42e6a0fb-a2c9-44a6-8f6c-6b6d0c753a2c');
+  });
+
+  it('is case-insensitive on the word "ratification" and lowercases the returned id', () => {
+    expect(extractRatificationId('Ratification 8002EC7A applies here')).toBe('8002ec7a');
+  });
+
+  it('returns null when no citation is present -- the common case for every ordinary commit', () => {
+    expect(extractRatificationId('fix: typo in README')).toBeNull();
+  });
+
+  it('returns null for non-string input rather than throwing', () => {
+    expect(extractRatificationId(null)).toBeNull();
+    expect(extractRatificationId(undefined)).toBeNull();
+  });
+
+  it('takes the FIRST citation when multiple commits in the range cite different ids', () => {
+    const log = 'ratification 11111111 first commit\n\nratification 22222222 second commit';
+    expect(extractRatificationId(log)).toBe('11111111');
+  });
+});
+
+describe('ratificationNamesSettingsPath', () => {
+  it('true when the row\'s source text names .claude/settings.json', () => {
+    expect(ratificationNamesSettingsPath({ quote: 'allow lines applied', source: 'chairman typed the lines into .claude/settings.json himself' })).toBe(true);
+  });
+
+  it('true when named in quote instead of source', () => {
+    expect(ratificationNamesSettingsPath({ quote: 'edited .claude/settings.json', source: 'unrelated' })).toBe(true);
+  });
+
+  it('false when the row exists but never mentions the path -- a real but UNRELATED ratification must not pass', () => {
+    expect(ratificationNamesSettingsPath({ quote: 'approved the budget increase', source: 'chairman verbal, 2026-01-01' })).toBe(false);
+  });
+
+  it('false for a null/undefined row (not found, or the DB read failed)', () => {
+    expect(ratificationNamesSettingsPath(null)).toBe(false);
+    expect(ratificationNamesSettingsPath(undefined)).toBe(false);
+  });
+
+  it('false for an empty row shape', () => {
+    expect(ratificationNamesSettingsPath({})).toBe(false);
   });
 });

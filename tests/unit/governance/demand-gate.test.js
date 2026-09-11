@@ -50,6 +50,20 @@ describe('TS-1: the gate discriminates across all three decisions', () => {
     expect(d.reason).toContain('9');
     expect(d.reason).toContain('3');
   });
+
+  // QF-20260908-019: the reason string hardcoded "dispatchable" for every caller, so a reading
+  // from a NON-default gauge (e.g. qf-mint-gate.js injects countClaimableQuickFixes, a totally
+  // different population from the default countDispatchableBacklog) still rendered
+  // "dispatchable N" -- misleading callers into reconciling unrelated numbers as if they were
+  // the same metric (measured cost: three parties reconciling 51 against 8 against 6).
+  it('the reason names the ENGINE, not a fixed "dispatchable" label that only fits the default gauge', () => {
+    const sourced = decideDemand(ok(8), 3, { engine: 'feedback-fingerprint-promoter' });
+    const withheld = decideDemand(ok(50), 3, { engine: 'feedback-fingerprint-promoter' });
+    expect(sourced.reason).toContain('feedback-fingerprint-promoter');
+    expect(sourced.reason).not.toContain('dispatchable');
+    expect(withheld.reason).toContain('feedback-fingerprint-promoter');
+    expect(withheld.reason).not.toContain('dispatchable');
+  });
 });
 
 describe('TS-2: a null gauge can NEVER be read as below the floor (the fail-open flood)', () => {

@@ -213,6 +213,67 @@ describe('FR-4 — the key set is a new dependency, and it fails CLOSED', () => 
   });
 });
 
+describe('SD-LEO-INFRA-MERGE-VERIFICATION-CANNOT-001: Scan D — QF-escalation branch evidence', () => {
+  // A QF-escalated SD's real code lands on a PRE-EXISTING qf/<QF-ID> branch, created before the
+  // SD's own key ever existed. branchBelongsToSd can never attribute that branch to the SD
+  // (its "rest" after qf/ is a QF-ID, never the SD key or a hyphenated extension of it), so
+  // without Scan D these SDs false-fail as never_pushed even though their code genuinely
+  // shipped. createFromQF (lib/sd-creation/source-adapters/qf.js) already records the exact
+  // originating branch as metadata.escalated_from_branch at escalation time — Scan D reads it.
+  const ESCALATED_BRANCH = 'qf/QF-20260906-999';
+
+  const makeEscalatedCtx = (sdKey, escalatedFromBranch) => ({
+    sd: {
+      id: 'test-uuid', sd_key: sdKey, sd_type: 'infrastructure', target_application: 'EHG_Engineer',
+      metadata: escalatedFromBranch ? { escalated_from_branch: escalatedFromBranch } : {},
+    },
+    sdId: 'test-uuid',
+  });
+
+  it('TS-1: an escalated SD with a merged PR on its recorded escalated_from_branch passes, not never_pushed', async () => {
+    mockBothExecs((cmd) => {
+      if (cmd.includes('gh pr list') && cmd.includes('--state open')) return '[]';
+      // Scan C (--search) and Scan C2 (--head feat|fix|docs|test|sd/<sdId>) find nothing —
+      // only Scan D's exact-branch --head probe returns evidence.
+      if (cmd.includes('gh pr list') && cmd.includes('--state merged') && cmd.includes(`--head ${ESCALATED_BRANCH}`)) {
+        return JSON.stringify([{ number: 999, headRefName: ESCALATED_BRANCH, url: 'u', mergedAt: '2026-09-06' }]);
+      }
+      if (cmd.includes('gh pr list') && cmd.includes('--state merged')) return '[]';
+      if (cmd.includes('git branch -r')) return '  origin/main\n';
+      if (cmd.includes('git fetch')) return '';
+      if (cmd.includes('git for-each-ref')) return '';
+      return '';
+    });
+    const gate = createPRMergeVerificationGate(null, { loadKeySet: keys(SD) });
+    const r = await gate.validator(makeEscalatedCtx(SD, ESCALATED_BRANCH));
+    expect(r.passed).toBe(true);
+    expect(r.details?.reason).not.toBe('never_pushed');
+  });
+
+  it('TS-2 (regression guard): an SD with NO escalated_from_branch metadata is unaffected — still never_pushed on zero evidence', async () => {
+    mockGh({ openPrs: [] }); // no open PR, no merged PR anywhere — identical to the pre-existing chore/ test's fixture shape
+    const gate = createPRMergeVerificationGate(null, { loadKeySet: keys(SD) });
+    const r = await gate.validator(makeEscalatedCtx(SD, null));
+    expect(r.passed).toBe(false);
+    expect(r.details?.reason).toBe('never_pushed');
+  });
+
+  it('TS-3: an escalated SD whose escalated_from_branch was never actually merged still correctly fails never_pushed', async () => {
+    mockBothExecs((cmd) => {
+      if (cmd.includes('gh pr list') && cmd.includes('--state open')) return '[]';
+      if (cmd.includes('gh pr list') && cmd.includes('--state merged')) return '[]'; // Scan D's --head probe finds nothing either
+      if (cmd.includes('git branch -r')) return '  origin/main\n';
+      if (cmd.includes('git fetch')) return '';
+      if (cmd.includes('git for-each-ref')) return '';
+      return '';
+    });
+    const gate = createPRMergeVerificationGate(null, { loadKeySet: keys(SD) });
+    const r = await gate.validator(makeEscalatedCtx(SD, ESCALATED_BRANCH));
+    expect(r.passed).toBe(false);
+    expect(r.details?.reason).toBe('never_pushed');
+  });
+});
+
 describe('PR_PRECHECK — same resolver, deliberately asymmetric on an unavailable key set', () => {
   it('blocks on a suffixed open PR', async () => {
     mockGh({ openPrs: [{ number: 6727, headRefName: `fix/${SD}-fr5-drop-recreate` }] });

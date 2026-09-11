@@ -13,6 +13,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -29,15 +30,14 @@ test.describe('Brand Variants - Domain Validation', () => {
 
   test.beforeAll(async () => {
     // Create test venture
-    const { data: venture } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture } = await insertGuarded(supabase, 'ventures', {
         name: `Domain Test Venture ${timestamp}`,
         problem_statement: 'Test problem',
         solution: 'Test solution',
         target_market: 'Test market',
-        stage: 12
-      })
+        stage: 12,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/domain-validation.spec.ts' })
       .select()
       .single();
 

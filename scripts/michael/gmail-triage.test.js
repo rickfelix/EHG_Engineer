@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { stubClient } from '../../lib/michael/db.test.js';
+import { THREADS_MAX_RESULTS } from '../../lib/michael/gmail-client.mjs';
 import { runGmailTriage, inboxQueries, intentFor, itemRow, firstMatch, ruleUsable, labelChangeFor, budgetFor, LEDGER_RECHECK_EVERY, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
 
 // 05:00 ET on 2026-09-06 (EDT) -> 09:00Z (inside 04:30-05:30); 02:00 ET -> 06:00Z.
@@ -25,14 +26,14 @@ const THREADS = {
 };
 
 /** Gmail factory: labels.list, threads.list (per query), threads.get (metadata). Records calls. */
-function gmailFactory({ labels = [{ id: 'L_receipts', name: 'Receipts', type: 'user' }, { id: 'L_keep', name: 'Keep Me', type: 'user' }], fresh = ['t1', 't2', 't3', 't4', 't5'], sweep = ['t4'], threads = THREADS, reject = {} } = {}, calls = []) {
+function gmailFactory({ labels = [{ id: 'L_receipts', name: 'Receipts', type: 'user' }, { id: 'L_keep', name: 'Keep Me', type: 'user' }], unread = [], fresh = ['t1', 't2', 't3', 't4', 't5'], sweep = ['t4'], threads = THREADS, reject = {} } = {}, calls = []) {
   const meta = (id) => ({ id, messages: [{ id: threads[id].lastMessageId, labelIds: ['INBOX'], payload: { headers: [{ name: 'From', value: threads[id].from }, { name: 'Subject', value: threads[id].subject }] } }] });
   return async (auth) => {
     calls.push(['factory', auth]);
     return { users: {
       labels: { list: async (args) => { calls.push(['labels.list', args]); if (reject.labels) throw reject.labels; return { data: { labels } }; } },
       threads: {
-        list: async (args) => { calls.push(['threads.list', args]); if (reject.list) throw reject.list; const ids = args.q.startsWith('in:inbox newer') ? fresh : sweep; return { data: { threads: ids.map((id) => ({ id })) } }; },
+        list: async (args) => { calls.push(['threads.list', args]); if (reject.list) throw reject.list; const ids = args.q.startsWith('is:unread') ? unread : args.q.startsWith('in:inbox newer') ? fresh : sweep; return { data: { threads: ids.map((id) => ({ id })) } }; },
         get: async (args) => { calls.push(['threads.get', args]); if (reject.get && reject.get.has(args.id)) throw new Error('boom'); return { data: meta(args.id) }; },
         modify: async (args) => { calls.push(['threads.modify', args]); if (reject.modify && reject.modify.has(args.id)) throw Object.assign(new Error('modify refused'), { code: 403 }); return { data: { id: args.id, messages: [{}] } }; },
       },
@@ -80,9 +81,28 @@ function db({ runs = [], labels = [], rules = RULES, absent = false, archived = 
 }
 
 describe('pure helpers', () => {
-  it('inboxQueries excludes keep_in_inbox label names from the fresh query only', () => {
-    expect(inboxQueries([])).toEqual(['in:inbox newer_than:1d', 'in:inbox older_than:1d']);
-    expect(inboxQueries(['Keep Me', 'Family'])).toEqual(['in:inbox newer_than:1d -label:"Keep Me" -label:"Family"', 'in:inbox older_than:1d']);
+  it('inboxQueries puts unread first (CHAIRMAN RULING 2026-09-07), excludes keep_in_inbox label names from the fresh query only, and never scopes unread to it', () => {
+    expect(inboxQueries([])).toEqual([
+      { label: 'unread', q: 'is:unread in:inbox' },
+      { label: 'fresh', q: 'in:inbox newer_than:1d' },
+      { label: 'sweep', q: 'in:inbox older_than:1d', maxResults: THREADS_MAX_RESULTS },
+    ]);
+    expect(inboxQueries(['Keep Me', 'Family'])).toEqual([
+      { label: 'unread', q: 'is:unread in:inbox' },
+      { label: 'fresh', q: 'in:inbox newer_than:1d -label:"Keep Me" -label:"Family"' },
+      { label: 'sweep', q: 'in:inbox older_than:1d', maxResults: THREADS_MAX_RESULTS },
+    ]);
+  });
+  it('inboxQueries bounds the sweep leg to modifyCeiling, never the unread or fresh queries (unread is a priority surface, never an exclusive gate)', () => {
+    const qs = inboxQueries([], 60);
+    expect(qs.find((e) => e.label === 'sweep').maxResults).toBe(60);
+    expect(qs.find((e) => e.label === 'unread').maxResults).toBeUndefined();
+    expect(qs.find((e) => e.label === 'fresh').maxResults).toBeUndefined();
+  });
+  it('inboxQueries clamps modifyCeiling above THREADS_MAX_RESULTS and falls back on a non-positive-integer ceiling', () => {
+    expect(inboxQueries([], 500).find((e) => e.label === 'sweep').maxResults).toBe(THREADS_MAX_RESULTS);
+    expect(inboxQueries([], 0).find((e) => e.label === 'sweep').maxResults).toBe(THREADS_MAX_RESULTS);
+    expect(inboxQueries([], undefined).find((e) => e.label === 'sweep').maxResults).toBe(THREADS_MAX_RESULTS);
   });
   it('intentFor yields an intent only for auto_apply=true with verb label or archive (SECURITY F-2)', () => {
     expect(intentFor(RULES[0], { action: { verb: 'archive' } })).toBe('archive');
@@ -149,8 +169,9 @@ describe('runGmailTriage', () => {
     const r = await runGmailTriage({ sb, argv: [], now: NOW, auth: 'AUTH', gmail: gmailFactory({}, calls), env });
     expect(r).toMatchObject({ ok: true, action: 'dry_run', status: 'ok', et_date: '2026-09-06' });
     expect(calls.filter((c) => c[0] === 'threads.list').map((c) => c[1])).toEqual([
+      { userId: 'me', q: 'is:unread in:inbox', maxResults: 200 },
       { userId: 'me', q: 'in:inbox newer_than:1d -label:"Keep Me"', maxResults: 200 },
-      { userId: 'me', q: 'in:inbox older_than:1d', maxResults: 200 },
+      { userId: 'me', q: 'in:inbox older_than:1d', maxResults: 60 }, // sweep bounded to the default MICHAEL_GMAIL_MODIFY_CEILING (60)
     ]);
     for (const g of calls.filter((c) => c[0] === 'threads.get')) expect(g[1]).toMatchObject({ format: 'metadata', metadataHeaders: ['From', 'Subject', 'List-Id', 'Date'] });
     expect(calls.filter((c) => c[0] === 'threads.get')).toHaveLength(5);

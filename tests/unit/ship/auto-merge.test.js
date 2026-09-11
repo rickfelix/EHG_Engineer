@@ -14,6 +14,7 @@ import {
   detectBranchProtectionEnabled,
   buildMergeArgs,
   verifyMerged,
+  fetchHeadRefOid,
   verifyBranchDeleted,
   isPlatformRepo,
   createRegistryNarrowedTrustGate,
@@ -225,11 +226,16 @@ describe('attemptAutoMerge — happy path (FR-1, FR-2)', () => {
     // QF-20260703-363: the ladder's P4 rung now also probes live branch
     // protection (same endpoint detectEnforceAdmins already reads above),
     // appending one more `api .../protection` call at the end.
+    // QF-20260815-128: two more `pr view` reads bracket the merge call itself —
+    // fetchHeadRefOid's pre-merge snapshot (right before `pr merge`) and its
+    // post-merge re-check (right after verifyMerged confirms).
     expect(calls.map((c) => c.slice(0, 2))).toEqual([
       ['pr', 'view'],
       ['pr', 'ready'],
       ['api', 'repos/rickfelix/EHG_Engineer/branches/main/protection'],
+      ['pr', 'view'],
       ['pr', 'merge'],
+      ['pr', 'view'],
       ['pr', 'view'],
       ['pr', 'view'],
       ['pr', 'view'],
@@ -384,6 +390,78 @@ describe('verifyMerged (QF-20260504-195, QF-20260516-082, QF-20260703-197)', () 
       { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-05-13T23:25:00Z', { state: 'OPEN' }) } },
     ]);
     expect(verifyMerged(600, 'rickfelix', 'ehg', runner)).toBe(false);
+  });
+});
+
+describe('fetchHeadRefOid (QF-20260815-128)', () => {
+  it('returns the trimmed headRefOid on success', () => {
+    const { runner } = makeRunner([
+      { match: (a) => a[0] === 'pr' && a[1] === 'view' && a.includes('headRefOid'), result: { stdout: 'abc123\n' } },
+    ]);
+    expect(fetchHeadRefOid(42, 'rickfelix', 'ehg', runner)).toBe('abc123');
+  });
+
+  it('returns null (never a false pass) when repoOwner or repoName is missing', () => {
+    const noopRunner = () => ({ code: 1, stdout: '', stderr: '' });
+    expect(fetchHeadRefOid(42, '', 'ehg', noopRunner)).toBeNull();
+    expect(fetchHeadRefOid(42, 'rickfelix', '', noopRunner)).toBeNull();
+  });
+
+  it('returns null on lookup failure', () => {
+    const runner = () => ({ code: 1, stdout: '', stderr: 'not found' });
+    expect(fetchHeadRefOid(42, 'rickfelix', 'ehg', runner)).toBeNull();
+  });
+});
+
+describe('attemptAutoMerge — MERGE_HEAD_MISMATCH detection (QF-20260815-128)', () => {
+  // Reproduces the measured incident (PR #7060): a push lands between the pre-merge head
+  // snapshot and the confirmed-merge check. Two headRefOid reads via a stateful mock (same argv
+  // both times, different answers) since fetchHeadRefOid's own call shape can't distinguish them.
+  it('logs [MERGE_HEAD_MISMATCH] when the head changed between the pre-merge snapshot and the confirmed merge', async () => {
+    let headReads = 0;
+    const runner = (args) => {
+      if (argvMatchers.prViewIsDraft(args)) return { code: 0, stdout: 'false\n', stderr: '' };
+      if (argvMatchers.apiProtection(args)) return { code: 0, stdout: 'false\n', stderr: '' };
+      if (args[0] === 'pr' && args[1] === 'view' && args.includes('headRefOid')) {
+        headReads += 1;
+        return { code: 0, stdout: (headReads === 1 ? 'intended-head-sha' : 'later-pushed-head-sha') + '\n', stderr: '' };
+      }
+      if (argvMatchers.prMerge(args)) return { code: 0, stdout: '', stderr: '' };
+      if (argvMatchers.prViewMergedAt(args)) return { code: 0, stdout: mergedJson('2026-08-15T00:00:00Z'), stderr: '' };
+      return { code: 1, stdout: '', stderr: 'unmatched gh call' };
+    };
+    const errors = [];
+    const logger = { info: () => {}, warn: () => {}, error: (m) => errors.push(m) };
+
+    const r = await attemptAutoMerge({
+      prNumber: 7060, repoOwner: 'rickfelix', repoName: 'ehg', allowExternalMerge: true, runner, logger,
+    });
+
+    expect(r.ok).toBe(true); // the merge itself still succeeded -- this is advisory, not a block
+    expect(headReads).toBe(2);
+    const mismatch = errors.find((m) => m.includes('[MERGE_HEAD_MISMATCH]'));
+    expect(mismatch).toBeDefined();
+    expect(mismatch).toContain('intended-head-sha');
+    expect(mismatch).toContain('later-pushed-head-sha');
+  });
+
+  it('does NOT log [MERGE_HEAD_MISMATCH] when the head is unchanged (the common case)', async () => {
+    const { runner } = makeRunner([
+      { match: argvMatchers.prViewIsDraft, result: { stdout: 'false\n' } },
+      { match: argvMatchers.apiProtection, result: { stdout: 'false\n' } },
+      { match: (a) => a[0] === 'pr' && a[1] === 'view' && a.includes('headRefOid'), result: { stdout: 'same-head-sha\n' } },
+      { match: argvMatchers.prMerge, result: { stdout: '' } },
+      { match: argvMatchers.prViewMergedAt, result: { stdout: mergedJson('2026-08-15T00:00:00Z') } },
+    ]);
+    const errors = [];
+    const logger = { info: () => {}, warn: () => {}, error: (m) => errors.push(m) };
+
+    const r = await attemptAutoMerge({
+      prNumber: 42, repoOwner: 'rickfelix', repoName: 'ehg', allowExternalMerge: true, runner, logger,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(errors.find((m) => m.includes('[MERGE_HEAD_MISMATCH]'))).toBeUndefined();
   });
 });
 

@@ -774,10 +774,13 @@ async function invokeParentHeal(supabase, orchestratorId, orchestratorTitle, cor
   const healCmd = 'node';
   const healArgs = ['scripts/eva/heal-command.mjs', 'sd', '--sd-id', sdKey];
 
+  // QF-20260906-335: windowsHide -- a detached child without it opens a visible console window
+  // on Windows.
   const child = spawn(healCmd, healArgs, {
     cwd: repoRoot,
     detached: true,
     stdio: 'ignore',
+    windowsHide: true,
     env: { ...process.env }
   });
   child.unref();

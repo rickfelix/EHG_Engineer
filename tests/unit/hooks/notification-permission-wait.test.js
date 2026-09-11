@@ -108,6 +108,92 @@ describe('notification-permission-wait-core', () => {
   });
 });
 
+// QF-20260905-884 (second appended half): the row must name the blocked command, not just
+// "Claude needs your permission" — read from the last assistant tool_use in the transcript.
+describe('extractBlockedAction (QF-20260905-884)', () => {
+  it('returns the last assistant tool_use block (name + input.command), truncated', async () => {
+    const { extractBlockedAction } = await freshCore();
+    const entries = [
+      { type: 'user', message: { content: [{ type: 'text', text: 'go' }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }] } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'about to run something' }, { type: 'tool_use', name: 'Bash', input: { command: 'git push --force-with-lease origin main' } }] } },
+    ];
+    const result = extractBlockedAction('/fake/transcript.jsonl', { readTailEntries: () => entries });
+    expect(result).toEqual({ tool: 'Bash', detail: 'git push --force-with-lease origin main' });
+  });
+
+  it('falls back to input.file_path when there is no input.command (e.g. Edit/Write)', async () => {
+    const { extractBlockedAction } = await freshCore();
+    const entries = [
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Write', input: { file_path: '/repo/src/foo.js', content: 'irrelevant' } }] } },
+    ];
+    const result = extractBlockedAction('/fake/transcript.jsonl', { readTailEntries: () => entries });
+    expect(result).toEqual({ tool: 'Write', detail: '/repo/src/foo.js' });
+  });
+
+  it('truncates an overlong command to 200 chars', async () => {
+    const { extractBlockedAction } = await freshCore();
+    const longCmd = 'x'.repeat(500);
+    const entries = [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: longCmd } }] } }];
+    const result = extractBlockedAction('/fake/transcript.jsonl', { readTailEntries: () => entries });
+    expect(result.detail.length).toBe(200);
+  });
+
+  it('returns null when no transcript_path is given', async () => {
+    const { extractBlockedAction } = await freshCore();
+    expect(extractBlockedAction(null, {})).toBeNull();
+    expect(extractBlockedAction(undefined, {})).toBeNull();
+  });
+
+  it('returns null (fail-open) when the transcript reader throws', async () => {
+    const { extractBlockedAction } = await freshCore();
+    const result = extractBlockedAction('/fake/transcript.jsonl', { readTailEntries: () => { throw new Error('boom'); } });
+    expect(result).toBeNull();
+  });
+
+  it('returns null when no assistant tool_use block exists in the tail', async () => {
+    const { extractBlockedAction } = await freshCore();
+    const entries = [{ type: 'user', message: { content: [{ type: 'text', text: 'hi' }] } }, { type: 'assistant', message: { content: [{ type: 'text', text: 'thinking...' }] } }];
+    const result = extractBlockedAction('/fake/transcript.jsonl', { readTailEntries: () => entries });
+    expect(result).toBeNull();
+  });
+
+  it('redacts a live credential embedded in the blocked command before returning it (adversarial review finding: this detail is persisted AND broadcast over chairman SMS)', async () => {
+    const { extractBlockedAction } = await freshCore();
+    const entries = [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'curl -H "Authorization: Bearer sk-liveTestKeyPlaceholder1234567890" https://api.example.com' } }] } }];
+    const result = extractBlockedAction('/fake/transcript.jsonl', { readTailEntries: () => entries });
+    expect(result.tool).toBe('Bash');
+    expect(result.detail).not.toMatch(/sk-liveTestKeyPlaceholder1234567890/);
+    expect(result.detail).toMatch(/\[REDACTED/);
+  });
+
+  it('writeNotificationRow threads payload.blocked_action from the transcript into the persisted row', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { writeNotificationRow } = await freshCore();
+    const entries = [{ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'rm -rf .worktrees/stale' } }] } }];
+    await writeNotificationRow(
+      { session_id: 'seat-abc', message: 'Claude needs your permission', transcript_path: '/fake/transcript.jsonl' },
+      { readPointerFile: () => null, credentials: PRESENT_CREDS, readTailEntries: () => entries },
+    );
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.payload.blocked_action).toEqual({ tool: 'Bash', detail: 'rm -rf .worktrees/stale' });
+  });
+
+  it('writeNotificationRow writes blocked_action: null when transcript_path is absent (no regression on the QF-346 shape)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { writeNotificationRow } = await freshCore();
+    await writeNotificationRow({ session_id: 'seat-abc', message: 'Claude needs your permission' }, { readPointerFile: () => null, credentials: PRESENT_CREDS });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.payload.blocked_action).toBeNull();
+  });
+});
+
 describe('notification-permission-wait CLI wrapper (source-level, never required directly)', () => {
   it('reads stdin, calls the core writer, then drains undici before the fire-and-forget exit', () => {
     const src = readFileSync(HOOK_PATH, 'utf8');

@@ -407,6 +407,17 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
     return;
   }
 
+  // QF-20260903-195: lets a test prove credential-resolution (dotenv self-load reached this
+  // point with real, truthy values) WITHOUT performing a live write against production --
+  // the FR-7 dotenv-self-load unit test previously required this real upsert to succeed to
+  // pass, writing a fresh heartbeat to a live sessions row on every local unit-suite run.
+  if (process.env.LEO_HOOK_DRY_RUN === '1') {
+    if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+      console.error('SessionStart:capture-session-id: dry-run — upsert skipped (LEO_HOOK_DRY_RUN=1), credentials resolved OK');
+    }
+    return;
+  }
+
   const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
   const now = new Date().toISOString();
   const pidNum = Number(ccPid);
@@ -750,6 +761,21 @@ function main() {
         // Fire-and-forget — never blocks SessionStart.
         // SD-LEO-INFRA-PROTOCOL-ENFORCEMENT-001: spawn errors are default-on logged
         // to .claude/pids/spawn-errors.log + stderr so silent failures surface.
+        // SD-LEO-FIX-RELEASED-TEST-FIXTURE-001 (VALIDATION finding, LEAD phase): the
+        // LEO_HOOK_DRY_RUN guard in upsertSessionRow() above only covers THIS function's own
+        // write. session-tick.cjs (spawned below) performs its OWN independent upsert against
+        // claude_sessions (source=session-tick-first) that inherits process.env and is
+        // completely unguarded -- a dry-run test that skips the upsertSessionRow() write still
+        // creates a live row via this spawn a few lines later. Measured live: the FR-7 test's
+        // fr7-dryrun-* id created a real, undispositioned active row while asserting "no live
+        // write occurred" (a false witness). Skip the spawn entirely in dry-run.
+        if (process.env.LEO_HOOK_DRY_RUN === '1') {
+          if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+            console.error('SessionStart:session-tick: dry-run — spawn skipped (LEO_HOOK_DRY_RUN=1)');
+          }
+          resolve();
+          return;
+        }
         try {
           // Two DIFFERENT roots, deliberately: `cwd` pins the daemon PROCESS somewhere that will
           // never need to be `git worktree remove`d (the shared main-repo root) -- this is the

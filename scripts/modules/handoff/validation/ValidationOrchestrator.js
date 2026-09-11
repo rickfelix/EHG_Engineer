@@ -227,6 +227,79 @@ export class ValidationOrchestrator {
   }
 
   /**
+   * QF-20260905-405: shared SD_TYPE_THRESHOLD evaluation, called identically by validateGates
+   * (execute path) and validateGatesAll (precheck path) so the two never disagree on the
+   * threshold verdict for the same gate set -- precheck was previously reporting "safe to
+   * execute" while execute failed the same SD moments later on this exact check.
+   * @param {number} normalizedScore - weighted-average score already computed by the caller
+   * @param {object} context - must include context.sd
+   * @param {number} totalWeight - 0 means no weighted gates were applicable (skip, not a real 0%)
+   * @param {object} [gateResultsByName] - gateResults keyed by gate name, for the GATE2 yellow-zone accept check
+   * @returns {Promise<{skip:true}|{disabled:true,reason:string}|{ok:true}|{blocked:true,sdType:string,required:number,actual:number,issue:string}|{yellowZoneAccept:object}>}
+   */
+  async _evaluateSdTypeThreshold(normalizedScore, context, totalWeight, gateResultsByName) {
+    if (!context.sd?.sd_type) return { skip: true };
+
+    // QF-20260812-365: totalWeight=0 means no weighted gates were applicable to this
+    // phase/sd_type combination -- normalizedScore is a synthetic 0 (no content ran),
+    // not a real score of zero. Comparing it against the threshold produces a misleading
+    // "requires 85%, got 0%" block on a handoff that has no weighted gate content to fail.
+    if (totalWeight === 0) {
+      console.log('   [GatePolicyResolver] SKIPPED: SD_TYPE_THRESHOLD (no weighted gates applicable, totalWeight=0)');
+      return { skip: true };
+    }
+
+    const sdType = context.sd.sd_type;
+    const thresholdOverride = await this._isThresholdDisabledByRegistry(sdType);
+    if (thresholdOverride.disabled) {
+      console.log(`   [GatePolicyResolver] DISABLED: SD_TYPE_THRESHOLD (sd_type: ${thresholdOverride.reason})`);
+      return { disabled: true, reason: thresholdOverride.reason };
+    }
+
+    const profile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
+    const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
+
+    if (normalizedScore >= threshold) return { ok: true };
+
+    // FR-9 (SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-A, coordinator ruling 3e1b027b):
+    // GATE2_IMPLEMENTATION_FIDELITY already grants near-miss tolerance (its own adaptive
+    // YELLOW zone, adaptive-threshold-calculator.js) over this SAME run's gate set.
+    // SD_TYPE_THRESHOLD re-applying a zero-tolerance cut on the identical evidence
+    // double-penalizes the same near-miss. Bounded exactly: feature type only, GATE2 must
+    // have PASSED in in-run YELLOW (not GREEN, not RED), and must be a fresh evaluation from
+    // THIS run (a gate-verdict-cache reuse is explicitly excluded).
+    const gate2Result = gateResultsByName?.GATE2_IMPLEMENTATION_FIDELITY;
+    const gate2YellowAccept = sdType === 'feature'
+      && gate2Result?.passed === true
+      && gate2Result?.zone === 'YELLOW'
+      && !gate2Result?.cache_hit
+      && (threshold - normalizedScore) <= YELLOW_BAND_WIDTH;
+
+    if (gate2YellowAccept) {
+      console.log(`   🟡 SD-Type Threshold ACCEPTED via GATE2 yellow-zone: ${sdType} scored ${normalizedScore}% (requires ${threshold}%), but GATE2_IMPLEMENTATION_FIDELITY PASSED YELLOW (${gate2Result.score}%) over the same reduced set — yellow_zone_accept stamped.`);
+      return {
+        yellowZoneAccept: {
+          gate: 'SD_TYPE_THRESHOLD',
+          sd_type: sdType,
+          sd_type_threshold_score: normalizedScore,
+          sd_type_threshold_required: threshold,
+          gate2_score: gate2Result.score,
+          gate2_zone: gate2Result.zone
+        }
+      };
+    }
+
+    console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${normalizedScore}%`);
+    return {
+      blocked: true,
+      sdType,
+      required: threshold,
+      actual: normalizedScore,
+      issue: `SD type '${sdType}' requires ${threshold}% gate score, got ${normalizedScore}%`
+    };
+  }
+
+  /**
    * Run multiple gates in sequence, stopping on first failure
    * @param {array} gates - Array of gate definitions
    * @param {object} context - Shared context
@@ -526,77 +599,19 @@ export class ValidationOrchestrator {
 
     // SD-LEO-INFRA-HARDENING-001: Enforce SD-type-specific thresholds
     // This ensures security SDs require 90%, features require 85%, etc.
-    // SD-MAN-FEAT-VISION-DASHBOARD-VALIDATE-001: Check registry for DISABLED override
-    if (results.passed && context.sd?.sd_type && totalWeight === 0) {
-      // QF-20260812-365: totalWeight=0 means no weighted gates were applicable to this
-      // phase/sd_type combination -- normalizedScore is a synthetic 0 (no content ran),
-      // not a real score of zero. Comparing it against the threshold produces a misleading
-      // "requires 85%, got 0%" block on a handoff that has no weighted gate content to fail.
-      console.log('   [GatePolicyResolver] SKIPPED: SD_TYPE_THRESHOLD (no weighted gates applicable, totalWeight=0)');
-    } else if (results.passed && context.sd?.sd_type) {
-      const sdType = context.sd.sd_type;
-
-      // Check if SD_TYPE_THRESHOLD is DISABLED in validation_gate_registry
-      const thresholdOverride = await this._isThresholdDisabledByRegistry(sdType);
-      if (thresholdOverride.disabled) {
-        console.log(`   [GatePolicyResolver] DISABLED: SD_TYPE_THRESHOLD (sd_type: ${thresholdOverride.reason})`);
-      } else {
-        const profile = THRESHOLD_PROFILES[sdType] || THRESHOLD_PROFILES.default;
-        const threshold = profile.gateThreshold || THRESHOLD_PROFILES.default.gateThreshold;
-
-        if (results.normalizedScore < threshold) {
-          // FR-9 (SD-LEO-INFRA-GATE-THRESHOLD-TUNING-003-A, coordinator ruling 3e1b027b):
-          // GATE2_IMPLEMENTATION_FIDELITY already grants near-miss tolerance (its own adaptive
-          // YELLOW zone, adaptive-threshold-calculator.js) over this SAME run's gate set.
-          // SD_TYPE_THRESHOLD re-applying a zero-tolerance cut on the identical evidence
-          // double-penalizes the same near-miss (specimen: SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-
-          // ELEVEN-001-A, 907/1100=82.45% vs feature's 85%, GATE2 82% PASSED YELLOW over the
-          // same reduced set). Bounded exactly: feature type only (per-type review, "others
-          // only on their own evidence" -- coordinator ruling), GATE2 must have PASSED in
-          // in-run YELLOW (not GREEN, not RED), and must be a fresh evaluation from THIS
-          // validateGates() call -- a gate-verdict-cache reuse (cache_hit) is explicitly
-          // excluded because a cached verdict may have been computed over a DIFFERENT
-          // reduced gate set than the one that produced this run's normalizedScore.
-          // SEC-003A-01 (SECURITY sub-agent finding, EXEC-TO-PLAN review, post-merge follow-up):
-          // the accept had no floor on results.normalizedScore -- GATE2's own YELLOW zone bounds
-          // ONLY gate2Result.score against ITS threshold, a different quantity than the weighted
-          // normalizedScore across all gates. Without this conjunct, a run with several
-          // required:false advisory gates scoring 0 (a real, non-adversarial shape -- see the
-          // zeroScoreGates warning above) could reach normalizedScore as low as ~8% and still be
-          // accepted, a waiver far beyond the 2.55-point near-miss this mechanism was scoped for.
-          // Reusing YELLOW_BAND_WIDTH (not a new constant) keeps the accept bounded to the same
-          // near-miss tolerance GATE2 itself grants.
-          const gate2Result = results.gateResults?.GATE2_IMPLEMENTATION_FIDELITY;
-          const gate2YellowAccept = sdType === 'feature'
-            && gate2Result?.passed === true
-            && gate2Result?.zone === 'YELLOW'
-            && !gate2Result?.cache_hit
-            && (threshold - results.normalizedScore) <= YELLOW_BAND_WIDTH;
-
-          if (gate2YellowAccept) {
-            results.yellowZoneAccept = {
-              gate: 'SD_TYPE_THRESHOLD',
-              sd_type: sdType,
-              sd_type_threshold_score: results.normalizedScore,
-              sd_type_threshold_required: threshold,
-              gate2_score: gate2Result.score,
-              gate2_zone: gate2Result.zone
-            };
-            console.log(`   🟡 SD-Type Threshold ACCEPTED via GATE2 yellow-zone: ${sdType} scored ${results.normalizedScore}% (requires ${threshold}%), but GATE2_IMPLEMENTATION_FIDELITY PASSED YELLOW (${gate2Result.score}%) over the same reduced set — yellow_zone_accept stamped.`);
-          } else {
-            results.passed = false;
-            results.failedGate = 'SD_TYPE_THRESHOLD';
-            results.thresholdViolation = {
-              sdType,
-              required: threshold,
-              actual: results.normalizedScore
-            };
-            results.issues.push(
-              `SD type '${sdType}' requires ${threshold}% gate score, got ${results.normalizedScore}%`
-            );
-            console.log(`   ❌ SD-Type Threshold BLOCKED: ${sdType} requires ${threshold}%, got ${results.normalizedScore}%`);
-          }
-        }
+    // QF-20260905-405: extracted to _evaluateSdTypeThreshold(), shared with validateGatesAll()
+    // so precheck and execute never disagree on the threshold verdict for the same gate set.
+    if (results.passed) {
+      const verdict = await this._evaluateSdTypeThreshold(
+        results.normalizedScore, context, totalWeight, results.gateResults
+      );
+      if (verdict.yellowZoneAccept) {
+        results.yellowZoneAccept = verdict.yellowZoneAccept;
+      } else if (verdict.blocked) {
+        results.passed = false;
+        results.failedGate = 'SD_TYPE_THRESHOLD';
+        results.thresholdViolation = { sdType: verdict.sdType, required: verdict.required, actual: verdict.actual };
+        results.issues.push(verdict.issue);
       }
     }
 
@@ -1390,6 +1405,28 @@ export class ValidationOrchestrator {
     results.normalizedScore = totalWeight > 0
       ? Math.round(weightedScoreSum / totalWeight)
       : 0;
+
+    // QF-20260905-405: precheck must evaluate SD_TYPE_THRESHOLD exactly as execute
+    // (validateGates) does -- previously this batch/precheck path reported "safe to execute"
+    // for every threshold-bearing sd_type, then execute failed the same SD on this same check.
+    if (results.passed) {
+      const verdict = await this._evaluateSdTypeThreshold(
+        results.normalizedScore, context, totalWeight, results.gateResults
+      );
+      if (verdict.yellowZoneAccept) {
+        results.yellowZoneAccept = verdict.yellowZoneAccept;
+      } else if (verdict.blocked) {
+        results.passed = false;
+        results.thresholdViolation = { sdType: verdict.sdType, required: verdict.required, actual: verdict.actual };
+        results.failedGates.push({
+          name: 'SD_TYPE_THRESHOLD',
+          issues: [verdict.issue],
+          score: verdict.actual,
+          maxScore: verdict.required
+        });
+        results.issues.push({ gate: 'SD_TYPE_THRESHOLD', issue: verdict.issue });
+      }
+    }
 
     // Summary
     console.log('');

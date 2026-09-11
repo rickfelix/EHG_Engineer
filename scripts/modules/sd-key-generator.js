@@ -842,6 +842,26 @@ export function generateChildKey(parentKey, childIndex) {
  * @param {number|null} explicitIndex - Explicit 0-based index, or null to derive
  * @returns {{index: number, bumped: boolean, takenIndexes: number[]}}
  */
+/**
+ * Parse a --child index CLI argument: a letter A-Z (case-insensitive) or a non-negative integer
+ * string. QF-20260905-562: leo-create-sd.js's --child lane parseInt()'d a letter to NaN, then
+ * passed it on as if it were an explicit index — silently deriving the next free letter instead
+ * of failing loud or honoring the letter, mirroring THIS module's own --child CLI convention
+ * below (which already accepted letters correctly).
+ * @param {string} rawIndex
+ * @returns {{ok:true, index:number}|{ok:false, error:string}}
+ */
+export function parseChildIndexArg(rawIndex) {
+  if (/^[A-Z]$/i.test(rawIndex)) {
+    return { ok: true, index: HIERARCHY_LETTERS.indexOf(rawIndex.toUpperCase()) };
+  }
+  const index = parseInt(rawIndex, 10);
+  if (!Number.isInteger(index) || index < 0) {
+    return { ok: false, error: `Invalid child index: "${rawIndex}". Use a letter (A-Z) or a 0-based integer (0-25).` };
+  }
+  return { ok: true, index };
+}
+
 export function deriveChildIndex(parentKey, existingChildKeys, explicitIndex = null) {
   const taken = new Set();
   for (const key of existingChildKeys || []) {
@@ -1005,19 +1025,12 @@ Examples:
       if (args[0] === '--child') {
         const parentKey = args[1];
         const rawIndex = args[2] || '0';
-        // Accept both letter suffixes (A, B, C) and numeric indices (0, 1, 2)
-        let index;
-        if (/^[A-Z]$/i.test(rawIndex)) {
-          index = HIERARCHY_LETTERS.indexOf(rawIndex.toUpperCase());
-          if (index === -1) index = 0;
-        } else {
-          index = parseInt(rawIndex, 10);
-          if (isNaN(index)) {
-            console.error(`Invalid child index: "${rawIndex}". Use a letter (A-Z) or number (0-25).`);
-            process.exit(1);
-          }
+        const parsed = parseChildIndexArg(rawIndex);
+        if (!parsed.ok) {
+          console.error(parsed.error);
+          process.exit(1);
         }
-        const childKey = generateChildKey(parentKey, index);
+        const childKey = generateChildKey(parentKey, parsed.index);
         console.log('Generated child key:', childKey);
       } else if (args[0] === '--parse') {
         const sdKey = args[1];

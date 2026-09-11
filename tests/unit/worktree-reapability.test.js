@@ -6,7 +6,7 @@
  * "path gone" case. This is the single source of truth every removal path
  * consults, so the truth table is pinned here.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -16,6 +16,8 @@ import {
   countUnpushedCommits,
   normalizePath,
   REAP_REASONS,
+  fetchUpstreamOnce,
+  _resetUpstreamFetchCache,
 } from '../../lib/worktree-reapability.js';
 
 // Mock git runner: (args, cwd) -> { stdout, stderr, code }. Simulates a
@@ -130,5 +132,64 @@ describe('worktree-reapability — helpers', () => {
 
   it('REAP_REASONS is frozen', () => {
     expect(Object.isFrozen(REAP_REASONS)).toBe(true);
+  });
+});
+
+// QF-20260906-756: countUnpushedCommitsResult's `git cherry <upstream> HEAD` reads whatever local
+// upstream ref the last fetch left behind, and nothing on the reap path fetched, so a squash-merged
+// worktree read unsafe-to-reap for the fetch lag (PAT-LES-9256aa38dfc8). fetchUpstreamOnce is the
+// once-per-run fix; these pin its memoization and fail-closed provenance shape.
+describe('fetchUpstreamOnce (QF-20260906-756)', () => {
+  function mockFetchGit({ fetchCode = 0, sha = 'abc123', revParseCode = 0, showCode = 0, ts = 1000 } = {}) {
+    const calls = [];
+    const runner = (args) => {
+      calls.push(args);
+      if (args[0] === 'fetch') return { code: fetchCode, stdout: '', stderr: fetchCode === 0 ? '' : 'network unreachable' };
+      if (args[0] === 'rev-parse') return { code: revParseCode, stdout: revParseCode === 0 ? sha : '', stderr: '' };
+      if (args[0] === 'show') return { code: showCode, stdout: showCode === 0 ? String(ts) : '', stderr: '' };
+      return { code: 1, stdout: '', stderr: 'unexpected' };
+    };
+    runner.calls = calls;
+    return runner;
+  }
+
+  beforeEach(() => { _resetUpstreamFetchCache(); });
+
+  it('a successful fetch reports the ref, sha and a non-negative age', () => {
+    const now = Date.now();
+    const runner = mockFetchGit({ ts: Math.round(now / 1000) - 5 });
+    const r = fetchUpstreamOnce('origin/main', { gitRunner: runner });
+    expect(r).toEqual({ ref: 'origin/main', sha: 'abc123', age_s: expect.any(Number), fetched: true, error: null });
+    expect(r.age_s).toBeGreaterThanOrEqual(0);
+  });
+
+  it('a failed fetch is fail-closed: fetched:false with the stderr as error, sha still read from the existing local ref', () => {
+    const runner = mockFetchGit({ fetchCode: 1 });
+    const r = fetchUpstreamOnce('origin/main', { gitRunner: runner });
+    expect(r.fetched).toBe(false);
+    expect(r.error).toMatch(/network unreachable/);
+    expect(r.sha).toBe('abc123'); // rev-parse still answers from whatever local ref exists
+  });
+
+  it('memoizes per process: a second call with the same upstream does not re-invoke git at all', () => {
+    const runner = mockFetchGit();
+    fetchUpstreamOnce('origin/main', { gitRunner: runner });
+    const callsAfterFirst = runner.calls.length;
+    fetchUpstreamOnce('origin/main', { gitRunner: runner });
+    expect(runner.calls.length).toBe(callsAfterFirst);
+  });
+
+  it('_resetUpstreamFetchCache clears the memo so the next call re-fetches', () => {
+    const runner = mockFetchGit();
+    fetchUpstreamOnce('origin/main', { gitRunner: runner });
+    _resetUpstreamFetchCache();
+    fetchUpstreamOnce('origin/main', { gitRunner: runner });
+    expect(runner.calls.filter((a) => a[0] === 'fetch').length).toBe(2);
+  });
+
+  it('splits a remote/branch upstream correctly (fetch <remote> <branch>)', () => {
+    const runner = mockFetchGit();
+    fetchUpstreamOnce('origin/main', { gitRunner: runner });
+    expect(runner.calls[0]).toEqual(['fetch', 'origin', 'main']);
   });
 });

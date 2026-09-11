@@ -15,6 +15,7 @@
 // window was still up, or there is no prior pulse); do NOT re-spam every 15 min during a long
 // outage. The next alert only fires after the fleet recovers (a pulse>0) and goes down again.
 
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'url';
 import path from 'path';
@@ -215,6 +216,143 @@ export function buildDeadCoordinatorMessage(verdict, now = new Date()) {
     kind: 'dead_coordinator_alert',
     dedupeKey: `dead-coordinator-${now.toISOString().slice(0, 13)}`,
   };
+}
+
+// QF-20260905-884: the QF-20260905-346 hook writes a notification_permission_wait row when a
+// seat waits on a permission prompt, but nothing ever consumed it -- confirmed 0 consumers by
+// grep. This is the un-shipped second half named in that QF's own scope. Deliberately the SAME
+// windowed edge-trigger shape as evaluateDeadCoordinatorAlert above (no separate DB dedup state):
+// fires only in [staleMin, staleMin+cronIntervalMin) after the wait was observed, never again on
+// later ticks. Re-uses DEAD_COORDINATOR_STALE_MIN/DEAD_COORDINATOR_CRON_INTERVAL_MIN (this file's
+// existing quiet-tick-shaped thresholds for "one seat has gone quiet too long") per the QF's own
+// instruction: "N from the existing quiet-tick threshold table, not a new constant".
+//
+// lastToolAt (claude_sessions.last_tool_at), not heartbeat_at, is the "no later tool activity"
+// signal -- heartbeat_at is written by a background timer independent of actual tool use (the
+// SAME frozen-while-heartbeating gap checkWorkerFleetDown's own doc comment names above), so a
+// permission-frozen seat can show a fresh heartbeat while last_tool_at stays pinned at the block.
+export function evaluateStuckPermissionWait({
+  notifiedAt,
+  lastToolAt,
+  now = new Date(),
+  staleMin = DEAD_COORDINATOR_STALE_MIN,
+  cronIntervalMin = DEAD_COORDINATOR_CRON_INTERVAL_MIN,
+} = {}) {
+  if (!notifiedAt) return { alert: false, reason: 'no notification_permission_wait row', elapsedMin: null };
+  const notified = new Date(notifiedAt);
+  if (Number.isNaN(notified.getTime())) return { alert: false, reason: 'invalid notifiedAt', elapsedMin: null };
+  const nowTs = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  const elapsedMin = (nowTs.getTime() - notified.getTime()) / 60000;
+
+  const lastTool = lastToolAt ? new Date(lastToolAt) : null;
+  const recovered = lastTool && !Number.isNaN(lastTool.getTime()) && lastTool.getTime() > notified.getTime();
+  if (recovered) {
+    return { alert: false, reason: 'last_tool_at advanced past the wait — seat recovered on its own', elapsedMin };
+  }
+  if (elapsedMin < staleMin) {
+    return { alert: false, reason: `permission wait is ${elapsedMin.toFixed(1)}min old, within the ${staleMin}min window`, elapsedMin };
+  }
+  if (elapsedMin >= staleMin + cronIntervalMin) {
+    return { alert: false, reason: `wait has persisted ${elapsedMin.toFixed(1)}min — already past the first alertable tick (edge-trigger dedup)`, elapsedMin };
+  }
+  return {
+    alert: true,
+    reason: `STUCK SEAT: no tool activity for ${elapsedMin.toFixed(0)}min since a permission-wait notification (>= ${staleMin}min threshold)`,
+    elapsedMin,
+  };
+}
+
+/**
+ * Pure: the chairman-SMS message payload for a stuck-permission-wait trip.
+ * `blockedAction` ({tool, detail} | null) comes from the row's payload.blocked_action —
+ * QF-20260905-884's second half (lib/hooks/notification-permission-wait-core.cjs) — and,
+ * when present, names the blocked command so the page is self-describing instead of
+ * requiring the chairman to open the transcript to find out what to approve/deny.
+ *
+ * ADVERSARIAL REVIEW FINDING (deep-tier /ship gate, this SD): every notification_permission_wait
+ * row shares one hardcoded payload.kind regardless of the underlying Notification sub-type (the
+ * writer, scripts/hooks/notification-permission-wait.cjs, says its own trigger is "most commonly"
+ * -- not exclusively -- a permission prompt); this arm never inspected payload.notification_type.
+ * Only assert "permission prompt" when blockedAction corroborates it (a pending tool_use IS
+ * permission-prompt-shaped); otherwise use neutral, still-actionable wording.
+ */
+export function buildStuckPermissionWaitMessage(verdict, sessionId, now = new Date(), blockedAction = null) {
+  const shortId = String(sessionId || 'unknown').slice(0, 12);
+  const body = blockedAction && blockedAction.tool
+    ? `STUCK SEAT ${shortId}: waiting on a permission prompt for ${verdict.elapsedMin.toFixed(0)}min with no further tool activity. Blocked on: ${blockedAction.tool}${blockedAction.detail ? ' ' + blockedAction.detail : ''}. Check its transcript and approve/deny.`
+    : `STUCK SEAT ${shortId}: no further tool activity for ${verdict.elapsedMin.toFixed(0)}min since a Notification event (commonly a permission prompt). Check its transcript.`;
+  return {
+    type: 'status',
+    body,
+    kind: 'stuck_permission_wait_alert',
+    dedupeKey: `stuck-permission-wait-${shortId}-${now.toISOString().slice(0, 13)}`,
+  };
+}
+
+// Deliberately independent of checkDeadCoordinator: a per-SEAT freeze (this) is a different
+// outage class from a dead coordinator (that one is per-fleet). Bounded lookback window (4h)
+// keeps the query cheap; a wait older than that has long since either recovered or already
+// exhausted the single alertable tick above, so it is correctly silent, not re-scanned forever.
+const STUCK_PERMISSION_WAIT_LOOKBACK_H = 4;
+// Explicit, generous bound (count-truncation-diff-lint requires a literal-digit .limit(N<1000)
+// in-chain, not just the lookback window above) -- a 4h window realistically holds far fewer
+// than 500 distinct waits; truncation past that is a loud console line, not a silent drop.
+const STUCK_PERMISSION_WAIT_ROW_LIMIT = 500;
+
+export async function checkStuckPermissionWaits(db, DRY, sendChairmanSMSFn = null, now = new Date()) {
+  const windowStartIso = new Date(now.getTime() - STUCK_PERMISSION_WAIT_LOOKBACK_H * 3600000).toISOString();
+  const { data: rows, error } = await db
+    .from('session_coordination')
+    .select('payload, created_at')
+    .eq('payload->>kind', 'notification_permission_wait')
+    .gte('created_at', windowStartIso)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) { console.error('[stuck-permission-wait] query failed:', error.message); return; }
+  if ((rows || []).length >= STUCK_PERMISSION_WAIT_ROW_LIMIT) {
+    console.error(`[stuck-permission-wait] rows TRUNCATED at ${STUCK_PERMISSION_WAIT_ROW_LIMIT} -- a genuinely stuck seat may be missing from this pass.`);
+  }
+
+  // Most-recent row per session_id (rows are already newest-first).
+  const latestBySession = new Map();
+  for (const r of rows || []) {
+    const sid = r.payload?.session_id;
+    if (sid && !latestBySession.has(sid)) latestBySession.set(sid, r);
+  }
+  if (latestBySession.size === 0) { console.log('[stuck-permission-wait] no-alert: no waits in window'); return; }
+
+  const { data: sessions, error: sErr } = await db
+    .from('claude_sessions')
+    .select('session_id, last_tool_at')
+    .in('session_id', [...latestBySession.keys()])
+    .limit(500);
+  if (sErr) { console.error('[stuck-permission-wait] session query failed:', sErr.message); return; }
+  const lastToolBySession = new Map((sessions || []).map((s) => [s.session_id, s.last_tool_at]));
+
+  let sendFn = sendChairmanSMSFn;
+  let chairmanZone = null;
+  for (const [sessionId, row] of latestBySession) {
+    const verdict = evaluateStuckPermissionWait({
+      notifiedAt: row.created_at,
+      lastToolAt: lastToolBySession.get(sessionId) ?? null,
+      now,
+    });
+    console.log(`[stuck-permission-wait] session=${sessionId} ${verdict.alert ? 'ALERT' : 'no-alert'}: ${verdict.reason}`);
+    if (!verdict.alert) continue;
+
+    const message = buildStuckPermissionWaitMessage(verdict, sessionId, now, row.payload?.blocked_action || null);
+    if (DRY) {
+      console.log('[stuck-permission-wait] [DRY] would page chairman via sendChairmanSMS:', message.body);
+      continue;
+    }
+    if (!sendFn) {
+      sendFn = (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
+      const { resolveChairmanZone } = await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/quiet-hours-extension.js')).href);
+      chairmanZone = (await resolveChairmanZone(now)).zone;
+    }
+    const r = await sendFn(message, { now, chairmanZone });
+    console.log('[stuck-permission-wait] sendChairmanSMS result:', JSON.stringify(r));
+  }
 }
 
 // SD-LEO-INFRA-DURABLE-COORDINATOR-LOOPS-001 / FR-3: independent of checkWorkerFleetDown above —
@@ -1023,6 +1161,7 @@ async function main() {
   // suppressed the pager entirely and the run still looked clean.
   const { failed } = await runAlertArms([
     ['dead-coordinator-pager', () => checkDeadCoordinator(db, DRY)],
+    ['stuck-permission-wait-pager', () => checkStuckPermissionWaits(db, DRY)],
     ['fleet-dead-man-pager', async () => { deadManDelivered = (await checkFleetDeadMan(db, DRY))?.delivered ?? false; }],
     ['fleet-dead-man-per-host-pager', () => checkPerHostFreeze(db, DRY)],
     ['worker-fleet-email', () => checkWorkerFleetDown(db, DRY)],

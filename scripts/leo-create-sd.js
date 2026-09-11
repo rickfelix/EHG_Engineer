@@ -9,7 +9,7 @@
  * - --from-feedback <id>: Create from /inbox feedback item
  * - --from-roadmap-item <id>: Promote a roadmap_wave_items row to an SD (register-first two-way stamp)
  * - --from-qf <QF-ID>: Escalate open quick-fix to SD (Tier 3 routing)
- * - --child <parent-key> <index>: Create child SD
+ * - --child <parent-key> [index]: Create child SD (index is a letter A-Z or 0-based integer; omit to derive the next free letter)
  * - --vision-key <key>: Link to EVA vision document
  * - --arch-key <key>: Link to EVA architecture plan
  *
@@ -29,6 +29,7 @@
 import {
   SD_SOURCES,
   SD_TYPES,
+  parseChildIndexArg,
 } from './modules/sd-key-generator.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import {
@@ -118,7 +119,7 @@ Usage:
   node scripts/leo-create-sd.js --proposal-b64 <base64> [--dry-run]      # file-free DB-direct sourcing
   cat PROPOSAL.json | node scripts/leo-create-sd.js --proposal-stdin [--dry-run]
   node scripts/leo-create-sd.js --from-plan [path] [--type <type>] [--title "<title>"]
-  node scripts/leo-create-sd.js --child <parent-key> [index] [--type <type>] [--title "<title>"]
+  node scripts/leo-create-sd.js --child <parent-key> [A-Z|0-based-integer] [--type <type>] [--title "<title>"]
   node scripts/leo-create-sd.js <source> <type> "<title>"
 
 Sources: ${Object.keys(SD_SOURCES).join(', ')}
@@ -165,7 +166,8 @@ Flags:
                         claiming until every referenced SD completes -- no post-hoc
                         coordinator fencing window between birth and dependency-gating.
                         Example: --depends-on SD-LEO-ORCH-FOO-001-A,SD-LEO-ORCH-FOO-001-B
-  --roadmap-link-reason "<text>"  (--from-plan) Operator reason recorded on
+  --roadmap-link-reason "<text>"  (--from-plan / --from-proposal / --proposal-b64 /
+                        --proposal-stdin / --child) Operator reason recorded on
                         metadata.roadmap_link_exception when the creation is unlinked from the
                         roadmap (register-first exception). Without it the exception stamps
                         no-reason-supplied — the counted gap the sourcing health probe drives
@@ -345,37 +347,55 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // SD-LEO-INFRA-FROM-PROPOSAL-INGEST-001: materialize PROPOSAL-*.json into DRAFT SDs.
       // path/glob = first non-flag positional after --from-proposal; --dry-run = no writes.
       const dryRun = args.includes('--dry-run');
+      // QF-20260904-610: --roadmap-link-reason (mirrors --from-plan's parsing at :434-435) was
+      // never read on this lane, so passing it here had no effect -- every --from-proposal mint
+      // recorded a reasonless roadmap-link exception regardless. Its VALUE position must also be
+      // excluded from the path-positional scan (mirrors --from-roadmap-item's
+      // riFlagValuePositions), or the reason text itself could be mistaken for the proposal path.
+      const linkReasonIdx = args.indexOf('--roadmap-link-reason');
+      const roadmapLinkReason = linkReasonIdx !== -1 ? args[linkReasonIdx + 1] : null;
       // FR-2: --migration-reviewed/--security-reviewed are known flags (not the path positional).
-      const fpKnownFlags = new Set(['--from-proposal', '--dry-run', '--migration-reviewed', '--security-reviewed']);
-      const proposalArg = args.find((a, i) => i > 0 && !a.startsWith('-') && !fpKnownFlags.has(a)) || args[1];
+      const fpKnownFlags = new Set(['--from-proposal', '--dry-run', '--migration-reviewed', '--security-reviewed', '--roadmap-link-reason']);
+      const fpFlagValuePositions = new Set(linkReasonIdx !== -1 ? [linkReasonIdx + 1] : []);
+      const proposalArg = args.find((a, i) => i > 0 && !a.startsWith('-') && !fpKnownFlags.has(a) && !fpFlagValuePositions.has(i)) || args[1];
       await createFromProposal(proposalArg, {
         dryRun,
         migrationReviewed: args.includes('--migration-reviewed'),
         securityReviewed: args.includes('--security-reviewed'),
+        roadmapLinkReason,
       });
     } else if (args[0] === '--proposal-b64') {
       // SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001: file-free DB-direct sourcing.
       // The base64 string is the first non-flag positional (base64 never starts with '-').
       const dryRun = args.includes('--dry-run');
+      // QF-20260904-610: same --roadmap-link-reason gap and VALUE-position exclusion as --from-proposal.
+      const b64LinkReasonIdx = args.indexOf('--roadmap-link-reason');
+      const b64RoadmapLinkReason = b64LinkReasonIdx !== -1 ? args[b64LinkReasonIdx + 1] : null;
       // FR-2: --migration-reviewed/--security-reviewed are known flags (not the base64 positional).
-      const b64KnownFlags = new Set(['--proposal-b64', '--dry-run', '--migration-reviewed', '--security-reviewed']);
+      const b64KnownFlags = new Set(['--proposal-b64', '--dry-run', '--migration-reviewed', '--security-reviewed', '--roadmap-link-reason']);
+      const b64FlagValuePositions = new Set(b64LinkReasonIdx !== -1 ? [b64LinkReasonIdx + 1] : []);
       // No `|| args[1]` fallback: if no non-flag positional is present (e.g.
       // `--proposal-b64 --dry-run`), b64Arg stays undefined so createFromProposalB64's
       // guard reports the clear "requires a base64-encoded proposal JSON string" error
       // instead of base64-decoding the literal '--dry-run' flag into junk.
-      const b64Arg = args.find((a, i) => i > 0 && !a.startsWith('-') && !b64KnownFlags.has(a));
+      const b64Arg = args.find((a, i) => i > 0 && !a.startsWith('-') && !b64KnownFlags.has(a) && !b64FlagValuePositions.has(i));
       await createFromProposalB64(b64Arg, {
         dryRun,
         migrationReviewed: args.includes('--migration-reviewed'),
         securityReviewed: args.includes('--security-reviewed'),
+        roadmapLinkReason: b64RoadmapLinkReason,
       });
     } else if (args[0] === '--proposal-stdin') {
       // SD-LEO-INFRA-OPERATOR-SOURCING-DBDIRECT-001: file-free DB-direct sourcing via a pipe.
       const dryRun = args.includes('--dry-run');
+      // QF-20260904-610: same --roadmap-link-reason gap; no positional path to collide with here.
+      const stdinLinkReasonIdx = args.indexOf('--roadmap-link-reason');
+      const stdinRoadmapLinkReason = stdinLinkReasonIdx !== -1 ? args[stdinLinkReasonIdx + 1] : null;
       await createFromProposalStdin({
         dryRun,
         migrationReviewed: args.includes('--migration-reviewed'),
         securityReviewed: args.includes('--security-reviewed'),
+        roadmapLinkReason: stdinRoadmapLinkReason,
       });
     } else if (args[0] === '--from-plan') {
       // Check for --yes flag (skip confirmation for auto-detect)
@@ -514,6 +534,13 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       if (childDependsOnIdx !== -1 && args[childDependsOnIdx + 1]) {
         childOverrides.dependsOn = args[childDependsOnIdx + 1].split(',').map((k) => k.trim()).filter(Boolean);
       }
+      // QF-20260904-610: --roadmap-link-reason had NO path at all on --child (unlike --from-plan,
+      // which parses it at :434-435) -- every child mint recorded a reasonless roadmap-link
+      // exception unconditionally. Mirrors the --depends-on pattern immediately above.
+      const childLinkReasonIdx = args.indexOf('--roadmap-link-reason');
+      if (childLinkReasonIdx !== -1 && args[childLinkReasonIdx + 1]) {
+        childOverrides.roadmapLinkReason = args[childLinkReasonIdx + 1];
+      }
       // Parse --scope-slice for child creation (SD-LEO-PROTOCOL-INFRASTRUCTURE-RELATIONSHIPAWARE-ORCH-001-A, US-001)
       // Accepts both `--scope-slice=<json>` and `--scope-slice <json>` forms.
       let childScopeSliceIdx = -1;
@@ -553,7 +580,7 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // args[1] = parent key, args[2] = index (skip flag positions)
       const childParentKey = args[1];
       const flagValuePositionsChild = new Set(
-        [childTypeIdx, childTitleIdx, childVisionKeyIdx, childArchKeyIdx, childTargetReposIdx, childDependsOnIdx]
+        [childTypeIdx, childTitleIdx, childVisionKeyIdx, childArchKeyIdx, childTargetReposIdx, childDependsOnIdx, childLinkReasonIdx]
           .filter(i => i !== -1).map(i => i + 1)
       );
       // --scope-slice value (next arg) is also a flag value to skip when finding the index arg
@@ -565,7 +592,19 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       );
       // QF-20260610-473: pass null when no explicit index (so an EXPLICIT 0 is honored
       // and the absent case derives from max existing suffix instead of count).
-      const childRes = await createChild(childParentKey, childIndexArg != null ? parseInt(childIndexArg, 10) : null, childOverrides);
+      // QF-20260905-562: a letter (A-Z) or invalid index used to parseInt() to NaN and
+      // silently derive the next free letter — fail loud instead, mirroring
+      // sd-key-generator.js's own --child CLI convention.
+      let parsedChildIndex = null;
+      if (childIndexArg != null) {
+        const parsed = parseChildIndexArg(childIndexArg);
+        if (!parsed.ok) {
+          console.error(`\n❌ ${parsed.error}`);
+          process.exit(1);
+        }
+        parsedChildIndex = parsed.index;
+      }
+      const childRes = await createChild(childParentKey, parsedChildIndex, childOverrides);
       exitFromResult(childRes);
     } else {
       // Direct creation lane: <source> <type> "<title>" — moved verbatim to

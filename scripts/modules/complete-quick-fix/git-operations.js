@@ -560,7 +560,10 @@ export function autoDetectGitInfo(testDir, options = {}) {
 
     if (result.actualLoc == null) { // preserve an explicit 0 (QF-20260719-163)
       try {
-        const diffStats = execSync('git diff origin/main --shortstat', { encoding: 'utf-8', cwd: testDir, timeout: EXTERNAL_STEP_TIMEOUT_MS }).trim();
+        // QF-20260907-416: 3-dot, matching the split's own 3-dot fix (QF-20260511-205)
+        // just below. 2-dot inflated this figure with every unrelated commit that
+        // landed on origin/main after this branch's own PR merged.
+        const diffStats = execSync('git diff origin/main...HEAD --shortstat', { encoding: 'utf-8', cwd: testDir, timeout: EXTERNAL_STEP_TIMEOUT_MS }).trim();
         const match = diffStats.match(/(\d+) insertion/);
         if (match) {
           result.actualLoc = parseInt(match[1]);
@@ -880,22 +883,40 @@ export function candidateTestPaths(file) {
   ];
 }
 
-// Resolve the unit-test files that the gate should run for this QF's diff,
-// WITHOUT building vitest's project-wide import graph (which throws ERR_LOAD_URL
-// on a pre-existing baseline file — the reason `vitest related`/`--changed` are
-// non-viable here). Two precise, baseline-poisoning-safe sources:
-//   1. changed files that ARE unit tests (`*.test.js`) — the common "fix + its
-//      regression test" QF;
-//   2. conventional co-located / __tests__ siblings of changed source files.
-// Returns existing repo-relative paths (deduped). Empty ⇒ caller treats as a
-// coverage gap (pass-with-warning), NOT a failure (FR-3).
+// Every *.test.js file under tests/ (repo-relative), walked once and reused for both
+// basename-matching and import-grep below (QF-20260905-797: most tests live under tests/unit/**).
+function walkTestFiles(root) {
+  const out = [];
+  const stack = [path.join(root, 'tests')];
+  while (stack.length) {
+    const dir = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) stack.push(full);
+      else if (e.isFile() && /\.test\.js$/i.test(e.name)) out.push(full.replace(/\\/g, '/').slice(root.replace(/\\/g, '/').length + 1));
+    }
+  }
+  return out;
+}
+
+// Resolve the unit-test files for this diff without building vitest's project-wide import graph
+// (throws ERR_LOAD_URL on a pre-existing baseline file). Sources: (1) changed *.test.js files,
+// (2) co-located/__tests__ siblings, (3) tests/**/<base>*.test.js by basename, (4) any
+// tests/**/*.test.js importing the changed file by basename (QF-20260905-797 a/b). Returns
+// existing repo-relative paths (deduped) with `.mappedCandidates` attached — the total candidates
+// considered across (2)-(4), so a partial map is visible in gate evidence rather than silent (c).
+// Empty ⇒ caller treats as a coverage gap (pass-with-warning), NOT a failure (FR-3).
 export function getScopedUnitTestFiles(filesChanged, testDir) {
-  if (!Array.isArray(filesChanged) || filesChanged.length === 0) return [];
+  if (!Array.isArray(filesChanged) || filesChanged.length === 0) return Object.assign([], { mappedCandidates: 0 });
   const root = testDir || process.cwd();
   const exists = (rel) => {
     try { return fs.existsSync(path.join(root, rel)); } catch { return false; }
   };
   const found = new Set();
+  let mappedCandidates = 0;
+  const relatedSources = getRelatedSourceFiles(filesChanged);
 
   // 1. changed unit-test files
   for (const f of filesChanged) {
@@ -905,13 +926,33 @@ export function getScopedUnitTestFiles(filesChanged, testDir) {
   }
 
   // 2. conventional siblings of changed source files
-  for (const src of getRelatedSourceFiles(filesChanged)) {
+  for (const src of relatedSources) {
     for (const cand of candidateTestPaths(src)) {
+      mappedCandidates++;
       if (exists(cand)) found.add(cand);
     }
   }
 
-  return [...found];
+  if (relatedSources.length > 0) {
+    const allTestFiles = walkTestFiles(root);
+    for (const src of relatedSources) {
+      const base = sourceBasename(src);
+      if (!base) continue;
+      const esc = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const baseNameRe = new RegExp(`^${esc}.*\\.test\\.js$`, 'i');
+      const importRe = new RegExp(`(?:from|require\\()\\s*['"][^'"]*/${esc}(?:\\.[jt]sx?)?['"]`, 'i');
+      for (const testFile of allTestFiles) { // 3. basename match; 4. import-graph
+        const testBase = testFile.slice(testFile.lastIndexOf('/') + 1);
+        if (baseNameRe.test(testBase)) { mappedCandidates++; found.add(testFile); continue; }
+        let content;
+        try { content = fs.readFileSync(path.join(root, testFile), 'utf8'); } catch { continue; }
+        mappedCandidates++;
+        if (importRe.test(content)) found.add(testFile);
+      }
+    }
+  }
+
+  return Object.assign([...found], { mappedCandidates });
 }
 
 /**

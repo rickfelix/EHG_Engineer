@@ -128,7 +128,7 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
   // accepted, unclaimed) is a DIFFERENT supply class from dispatchable_backlog_size by construction
   // (it's pending_approval, not draft) -- surfaced beside it so the belt/gauges read it as supply
   // too. Fail-soft: this is an advisory KPI, never allowed to break the health probe.
-  let completionReadyParents = { count: 0, oldestAgeMs: null, parents: [] };
+  let completionReadyParents = { count: 0, oldestAgeMs: null, parents: [], held: [] };
   try {
     completionReadyParents = await countCompletionReadyParents(supabase, { nowMs });
   } catch { /* advisory only -- a query fault here must never break the health probe */ }
@@ -155,6 +155,13 @@ export async function computeUtilization(supabase, { nowMs = Date.now(), onRawRo
     raw_unclaimed_drafts: rawUnclaimedDrafts,
     completion_ready_parents: completionReadyParents.count,
     completion_ready_parents_oldest_age_ms: completionReadyParents.oldestAgeMs,
+    // QF-20260908-764: countCompletionReadyParents already separates a genuinely-completable
+    // parent that's deliberately held (needs_coordinator_review / blocked_by_sd_key) from `ready`
+    // -- this reader previously discarded that `held` bucket entirely, so a held-but-completable
+    // parent read as zero, indistinguishable from no such parent existing at all (176h-unseen live
+    // specimen). Surfaced alongside ready: count for the gauge, reasons for the report body.
+    completion_ready_parents_held: completionReadyParents.held.length,
+    completion_ready_parents_held_reasons: completionReadyParents.held,
   };
 }
 
@@ -513,10 +520,21 @@ export async function persistReading(supabase, reading) {
  * either way; this reduces noise, not risk).
  */
 export function gitGrepMainForSd(sdKey, repoPath, exec = execSync) {
-  const run = () => exec(`git log origin/main --grep="${String(sdKey).replace(/["\\$`]/g, '')}" -1 --format=%h`, {
+  const opts = {
     encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'],
     ...(repoPath ? { cwd: repoPath } : {}),
-  });
+  };
+  // QF-20260905-464: this already named origin/main, but a stale LOCAL remote-tracking ref
+  // (nothing here ever fetched) let a probe seat read origin/main as it stood at its OWN last
+  // fetch, minutes or hours behind the real remote -- a DB-completed SD merged since then read
+  // FALSE_COMPLETION. Fetch first; a fetch failure is 'unverifiable' (never a silent grep against
+  // a known-stale ref, and never treated as FALSE_COMPLETION).
+  try {
+    exec('git fetch origin main', opts);
+  } catch {
+    return 'unverifiable';
+  }
+  const run = () => exec(`git log origin/main --grep="${String(sdKey).replace(/["\\$`]/g, '')}" -1 --format=%h`, opts);
   try {
     return run().trim().length > 0;
   } catch {
@@ -529,12 +547,31 @@ export function gitGrepMainForSd(sdKey, repoPath, exec = execSync) {
 }
 
 /**
+ * QF-20260905-464: the origin/main commit sha a gitGrepMainForSd read was pinned to, for
+ * stamping onto the FALSE_COMPLETION finding row (an audit reader on a lagging tree reports code
+ * main already changed -- the pin makes the read's basis auditable after the fact). Called AFTER
+ * gitGrepMainForSd's own fetch, so this reads the freshly-fetched ref, not a stale one. Returns
+ * null (never throws) when the read fails -- the finding still carries whatever gitGrepMainForSd
+ * itself returned; a missing sha is a weaker pin, not a reason to discard the reading.
+ */
+export function gitOriginMainSha(repoPath, exec = execSync) {
+  try {
+    return exec('git rev-parse origin/main', {
+      encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'ignore'],
+      ...(repoPath ? { cwd: repoPath } : {}),
+    }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * SD-LEO-INFRA-COORDINATOR-HEALTH-KPI-001 (S1-S3, S5 wire-through): the
  * sharpened signals computed alongside — never instead of — the base 3 KPIs.
  * Fail-soft per signal: a sharpening fault degrades that signal to an error
  * marker, it never takes down the base probe.
  */
-export async function computeSharpenings(supabase, { utilization, integrity, nowMs = Date.now(), gitGrep = gitGrepMainForSd } = {}) {
+export async function computeSharpenings(supabase, { utilization, integrity, nowMs = Date.now(), gitGrep = gitGrepMainForSd, getOriginMainSha = gitOriginMainSha } = {}) {
   let outcomeFlow = null; let dispatchReasons = null; let bandVerdict = null;
   let stuckRows = []; let staleHoldRows = []; let staleHoldError = null; let falseCompletionSample = null;
   try { outcomeFlow = await computeOutcomeFlow(supabase, { nowMs }); } catch (e) { outcomeFlow = { status: 'error', error: e.message }; }
@@ -594,6 +631,11 @@ export async function computeSharpenings(supabase, { utilization, integrity, now
       })
     );
     falseCompletionSample = sampleFalseCompletions(rowsWithResolution, gitGrep);
+    // QF-20260905-464: pin the finding to the origin/main sha this cycle's reads used -- captured
+    // AFTER the sample loop's own fetches (gitGrepMainForSd fetches per-call), so it reflects what
+    // was actually read, not a pre-fetch guess. Platform repo only (no repoPath): the measured
+    // specimen and this QF's own scope are the EHG_Engineer platform, not cross-repo ventures.
+    falseCompletionSample.origin_main_sha = getOriginMainSha();
   } catch (e) { falseCompletionSample = { samples: [], false_completions: [], error: e.message }; }
   const failureClasses = classifyFailureClasses({ outcomeFlow, utilization, integrity, stuckRows, staleHoldRows, falseCompletionSample });
   return {

@@ -54,12 +54,18 @@ function makeSupabase({ phaseStart, sdCreatedAt, evidenceRows = [], auditInsertS
         return q;
       }
       if (table === 'strategic_directives_v2') {
+        // QF-20260905-822: validateSubagentEvidence now calls isParentOrchestrator(ctx.sd, db)
+        // at PLAN-TO-EXEC, which queries .eq('parent_sd_id', sd.id).limit(1) on this SAME table
+        // (a DIFFERENT shape from the phase-start-at fallback's .eq('id', sdUuid).single() below).
+        // Default: no children found, so every pre-existing fixture here (none set
+        // metadata.is_parent) resolves isParentOrchestrator=false, preserving prior behavior.
         const q = {
           select: () => q,
           eq: () => q,
           single: () => Promise.resolve({
             data: sdCreatedAt ? { created_at: sdCreatedAt } : null
-          })
+          }),
+          limit: () => Promise.resolve({ data: [], error: null })
         };
         return q;
       }

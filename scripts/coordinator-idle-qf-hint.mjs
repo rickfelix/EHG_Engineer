@@ -45,7 +45,7 @@ import { resolveIdleCtx } from '../lib/fleet/idle-ctx-population.mjs';
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { logCoordinationEvent } = require('../lib/coordinator/coordination-events.cjs');
-const { isAutoStartableQF, isClaimableWithVerify, sortQfCandidatesBySeverity } = require('./worker-checkin.cjs');
+const { isAutoStartableQF, isClaimableWithVerify, sortQfCandidatesBySeverity, isSelfClaimDisabled } = require('./worker-checkin.cjs');
 const { resolveWorkerTierRank } = require('../lib/fleet/tier-ladder.cjs');
 const { workClassIneligibilityReason } = require('../lib/fleet/work-class.cjs');
 
@@ -223,16 +223,28 @@ export async function emitDeliveryAlarm(supabase, {
 // RECENTLY_RELEASED_WINDOW_MS and the coordinator-idle-qf-hint cron cadence (backlog-rank-cron.yml,
 // every 15min) -- the same "check interval" this fleet already uses elsewhere for seat liveness.
 export const SD_HOLDER_FRESHNESS_WINDOW_MS = 15 * 60 * 1000; // 15 min
-export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null) {
+// QF-20260905-755: opt-in, default-no-op (matches every other axis's convention) — a caller that
+// omits this parameter is byte-identical to before this QF.
+//
+// QF-20260906-196: seatIdleVerdict answers "is this seat doing nothing", not "may this seat
+// self-claim" — a seat with metadata.self_claim=false / availability=idle_only /
+// coordinator_stand_down=true is still genuinely idle (it still accepts roll_call, resume,
+// directed WORK_ASSIGNMENT and recovery per lib/checkin/steps/self-claim-gates.cjs), so that
+// axis deliberately does not belong on the shared idle predicate. It DOES belong here: hinting
+// a QF is exactly the self-initiated-claim path the check-in gate blocks. Import the check-in
+// gate's own predicate (isSelfClaimDisabled, exported from ./worker-checkin.cjs) rather than
+// re-copying its flag list — one function, two callers, per the Solomon-shaped fix.
+export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null, tailInFlightSessionIds = new Set()) {
   return (liveWorkers || []).filter((w) => seatIdleVerdict(w, {
     nowMs,
     sdHolderSessionIds,
     qfHolderSessionIds,
     seatBusySessionIds,
+    tailInFlightSessionIds,
     recentlyReleasedWindowMs: RECENTLY_RELEASED_WINDOW_MS,
     spinUpGraceMs: SPIN_UP_GRACE_MS,
     sdHolderFreshnessWindowMs: SD_HOLDER_FRESHNESS_WINDOW_MS,
-  }).idle);
+  }).idle && !isSelfClaimDisabled(w.metadata));
 }
 
 /** Pure: the ranked, eligible-for-hint QF candidate list (belt-and-suspenders governance applied). */
@@ -293,10 +305,10 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // (qfHolderSessionIds/seatBusySessionIds/sdHolderSessionIds) are now the shared
   // lib/fleet/idle-ctx-population.mjs resolver -- lifted verbatim, so this remains the reference
   // ctx-population the other three consumers import, not a fourth independent copy.
-  const { qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds, undeliveredReasons } =
+  const { qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds, tailInFlightSessionIds, undeliveredReasons } =
     await resolveIdleCtx(supabase, { nowMs });
   summary.undeliveredReasons.push(...undeliveredReasons);
-  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds);
+  const idle = eligibleIdleWorkers(live, nowMs, qfHolderSessionIds, seatBusySessionIds, sdHolderSessionIds, tailInFlightSessionIds);
   summary.idleWorkers = idle.length;
   if (idle.length === 0) return summary;
 
@@ -406,13 +418,45 @@ async function countPriorHintsDefault(supabase, { qfId, targetSession }) {
  */
 export const HINT_SEND_CAP = 3;
 
-export async function deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun = false, insertRow = insertCoordinationRow, countPriorHints = countPriorHintsDefault } = {}) {
+// QF-20260905-498: HINT_SEND_CAP stops an ADDRESSEE after 3 sends EVER, but the reported
+// incident (3 verbatim hints in 15 minutes to a seat on coordinator-standdown) hit the cap
+// exactly AT the 3rd send -- the lifetime cap never engaged in time to prevent the rapid-fire
+// repeat itself. This is a complementary, faster-acting guard: the SAME body to the SAME
+// target within this window is a duplicate, independent of how many lifetime sends remain.
+export const DUPLICATE_HINT_WINDOW_MS = 30 * 60 * 1000; // 30 min
+
+/**
+ * QF-20260905-498: is there already an identical hint (same target_session, same body) sent to
+ * this seat within DUPLICATE_HINT_WINDOW_MS? UNKNOWN IS NOT ZERO, same reasoning as
+ * countPriorHintsDefault above -- a read failure must not silently re-open the sender.
+ */
+async function findRecentDuplicateHintDefault(supabase, { targetSession, body, nowMs = Date.now() }) {
+  try {
+    const sinceIso = new Date(nowMs - DUPLICATE_HINT_WINDOW_MS).toISOString();
+    const { data, error } = await supabase
+      .from('session_coordination')
+      .select('id')
+      .eq('target_session', targetSession)
+      .eq('body', body)
+      .gte('created_at', sinceIso)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) return { unknown: true };
+    return { duplicateOf: data && data.length ? data[0].id : null };
+  } catch {
+    return { unknown: true };
+  }
+}
+
+export async function deliverHints(idle, ranked, { summary, supabase, coordinatorId, dryRun = false, insertRow = insertCoordinationRow, countPriorHints = countPriorHintsDefault, findRecentDuplicate = findRecentDuplicateHintDefault, nowMs = Date.now() } = {}) {
   // QF-20260903-789: this section is genuinely REACHED now -- promote its owned counters from
   // UNDETERMINED (null) to a real measurement (0) even if the loop below never increments them.
   // `??` (not `||`) so an already-real 0/number from a prior call in the same object is preserved.
   if (summary) {
     summary.skippedCapped = summary.skippedCapped ?? 0;
     summary.capUnknown = summary.capUnknown ?? 0;
+    summary.skippedDuplicate = summary.skippedDuplicate ?? 0;
+    summary.duplicateUnknown = summary.duplicateUnknown ?? 0;
   }
   // One-hint-per-worker, one-QF-per-hint this tick: consume the ranked list as we go so no QF
   // is double-hinted and no worker gets more than one suggestion.
@@ -424,6 +468,25 @@ export async function deliverHints(idle, ranked, { summary, supabase, coordinato
     );
     if (idx === -1) continue;
     const [qf] = remaining.splice(idx, 1);
+
+    const hintRow = buildHintRow({ qf, coordinatorId, targetSession: worker.session_id });
+
+    // QF-20260905-498: dedupe on (target_session, body) within DUPLICATE_HINT_WINDOW_MS, checked
+    // BEFORE the lifetime cap below -- a rapid-fire repeat inside the window is a duplicate
+    // regardless of how many lifetime sends the (qf, target) pair has left. Same "goes back on
+    // the list" reasoning as the cap: this worker has already gotten this exact message, but the
+    // work is still unhinted for another worker.
+    if (!dryRun) {
+      const dup = await findRecentDuplicate(supabase, { targetSession: worker.session_id, body: hintRow.body, nowMs });
+      if (dup.unknown) {
+        summary.duplicateUnknown = (summary.duplicateUnknown || 0) + 1;
+      } else if (dup.duplicateOf) {
+        summary.skippedDuplicate = (summary.skippedDuplicate || 0) + 1;
+        console.log(`[coordinator-idle-qf-hint] skipped duplicate hint for ${qf.id} -> ${worker.session_id}, prior row ${dup.duplicateOf}`);
+        remaining.splice(idx, 0, qf);
+        continue;
+      }
+    }
 
     // QF-20260808-782: CAP AND STOP. Checked BEFORE `attempted` because a capped pair was never
     // attempted — counting it would inflate the denominator of the delivery ratio and make a
@@ -460,7 +523,7 @@ export async function deliverHints(idle, ranked, { summary, supabase, coordinato
       // silent starvation for that seat, and aborting would have been the safer choice.
       let res;
       try {
-        res = await insertRow(supabase, buildHintRow({ qf, coordinatorId, targetSession: worker.session_id }));
+        res = await insertRow(supabase, hintRow);
       } catch (e) {
         recordUndelivered(summary, worker, e && e.code ? e.code : (e && e.message) || 'unknown');
         // Put the QF back: this worker could not be reached, but the work is still unhinted and

@@ -14,6 +14,7 @@
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -56,16 +57,15 @@ test.describe('Theme Variant Application', () => {
 
     // Create venture with this brand variant
     if (testBrandVariantId) {
-      const { data: venture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: venture } = await insertGuarded(supabase, 'ventures', {
           name: `Theme Variant Venture ${timestamp}`,
           brand_variant_id: testBrandVariantId,
           problem_statement: 'Test problem for theme variants',
           solution: 'Test solution',
           target_market: 'Test market',
-          stage: 1
-        })
+          stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/brand-variants/theme-variants.spec.ts' })
         .select()
         .single();
 

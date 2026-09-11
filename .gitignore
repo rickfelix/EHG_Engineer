@@ -33,6 +33,13 @@ verification-packages/
 .worktree.json
 .worktree-nm-mode
 
+# QF-20260908-981: SECURITY finding (SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 EXEC-TO-PLAN
+# evidence 53bfa26f) -- written by adam-quiet-tick.mjs's saveLastAccountIdentity() and was
+# NEVER gitignored, so it was committed and pushed live on 3 public wip/reclaim/* branches,
+# exposing a real account email + org name + OS username. Same class as .ehg-session.json
+# above: per-host state that must never be tracked.
+.account-identity-last.json
+
 # QF-20260808-951: regenerable pattern-cache written by lib/workflow-review/pattern-cache.js.
 # Same class as above -- tracking it means a `git merge --ff-only origin/main` aborts with
 # "local changes would be overwritten" whenever the local process and an upstream commit
@@ -100,6 +107,11 @@ test-cicd/
 # and a `-*` suffix around "session-state", so it never matched the bare session-state.md this
 # repo's own hooks write, and a worker's chore commit re-tracked it 2026-09-02.
 .claude/session-state.md
+# QF-20260907-467: the third permutation -- a hash/callsign SUFFIX but no role-name PREFIX (e.g.
+# .claude/session-state-43f9985a.md, .claude/session-state-alpha3-9de94ace.md). Neither the
+# role-prefixed pattern above nor the bare session-state.md one matches this shape; census on
+# origin/main found 2 such files, untracked-but-unignored, 0 tracked collisions.
+.claude/session-state-*.md
 # SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A TR-4: Michael's seat file uses "-seat-state-", not
 # "-session-state-" (alpha-michael-seat-state-*.md) -- found untracked-but-UNIGNORED during
 # PLAN-phase re-verification, the same exposure class QF-20260902-429 closed for the other 3 seats.
@@ -395,6 +407,10 @@ docs/michael/generated/
 .claude/pids/
 .claude/active-coordinator.json
 .claude/active-michael.json
+# QF-20260907-467: the Adam sibling of the two active-*.json markers above -- written by
+# writeAdamMarker() at Adam startup (scripts/adam-startup-check.mjs), same per-role live-marker
+# shape, just missing from this list. 0 tracked collisions.
+.claude/active-adam.json
 .claude/fleet-dashboard-state.json
 .claude/worktree-reaper-state.json
 .claude/capped-pool-broadcast-state.json
@@ -410,6 +426,10 @@ docs/michael/generated/
 # NOTE: scripts/one-off/_* and .rca/_* are deliberately NOT ignored — 175 and 6 such files are already
 # tracked, so committing _-prefixed scripts there is established practice; ignoring would silently block it.
 .claude/last-outcome-*.json
+# QF-20260907-467: the tmp-write leftover of the pattern above (atomic write-then-rename that
+# never completed its rename) -- doesn't end in .json so the plain pattern above never matched
+# it, mirroring .leo-status.json.tmp-* below. Census: 13 such files, 0 tracked collisions.
+.claude/last-outcome-*.json.tmp-*
 # .claude/wake-arm-*.json: QF-20260902-685 (Solomon sharpening) — ScheduleWakeup arm-silence
 # markers, per-session harness state, never committed (0 tracked). Left unprotected before this,
 # so the SAME class of file both complete-quick-fix.js incidents swept in was also leakable.

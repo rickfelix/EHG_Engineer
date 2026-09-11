@@ -52,12 +52,73 @@ describe('QF-514: account capture writes only what it could read', () => {
     expect(calls.updates).toHaveLength(0);
   });
 
-  test('an ALREADY-CAPTURED session is a no-op — no repeat CLI spawn per resume', async () => {
+  test('an ALREADY-CAPTURED session whose account is UNCHANGED skips the write (no DB churn), but still resolves — QF-20260906-219', async () => {
+    // QF-20260906-219: captureAccountIdentity no longer treats an already-captured session as an
+    // early-exit before resolving -- it must re-resolve on every call so a LATER account rotation
+    // is seen (see the sibling rotation test below), and only skip the WRITE when nothing changed.
+    // Seeds ALL fields the stricter (SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001) 6-field predicate
+    // compares -- a partial seed would (correctly) read as changed on the unseeded fields.
+    const identity = { account_email: 'someone@example.com', account_org_name: 'Org', account_org_id: 'org-1', account_subscription_type: 'pro', account_auth_method: 'claude.ai', account_uuid8: 'abcd1234' };
+    const resolveFn = () => ({ ...identity });
     const { api, calls } = makeDb({
-      selectData: { metadata: { ...EXISTING, account_email: 'someone@example.com' } },
+      selectData: { metadata: { ...EXISTING, ...identity } },
     });
-    await captureAccountIdentity(api, SID);
+    await captureAccountIdentity(api, SID, { resolveFn });
     expect(calls.updates).toHaveLength(0);
+  });
+
+  test('QF-20260906-219: an org-only change (email+uuid8 unchanged) still writes -- the fleet\'s own detectAccountSwitch() predicate compares org too', async () => {
+    const resolveFn = () => ({ account_email: 'seat@example.com', account_org_name: 'New Org', account_uuid8: 'sameuuid' });
+    const { api, calls } = makeDb({
+      selectData: { metadata: { ...EXISTING, account_email: 'seat@example.com', account_org_name: 'Old Org', account_uuid8: 'sameuuid' } },
+    });
+    await captureAccountIdentity(api, SID, { resolveFn });
+    expect(calls.updates).toHaveLength(1);
+    expect(calls.updates[0].metadata.account_org_name).toBe('New Org');
+  });
+
+  test('QF-20260906-219: an auth_method-only change (host_default -> measured, same email/uuid8) still writes -- prevents handoff-account-attribution.cjs from pinning a seat to host_default provenance forever', async () => {
+    const resolveFn = () => ({ account_email: 'seat@example.com', account_uuid8: 'sameuuid', account_auth_method: 'claude.ai' });
+    const { api, calls } = makeDb({
+      selectData: { metadata: { ...EXISTING, account_email: 'seat@example.com', account_uuid8: 'sameuuid', account_auth_method: 'host_default' } },
+    });
+    await captureAccountIdentity(api, SID, { resolveFn });
+    expect(calls.updates).toHaveLength(1);
+    expect(calls.updates[0].metadata.account_auth_method).toBe('claude.ai');
+  });
+
+  test('QF-20260906-219: a ROTATED account (resolved identity differs from stored) DOES write, updating the row', async () => {
+    const resolveFn = () => ({ account_email: 'new-account@example.com', account_org_name: 'New Org', account_uuid8: 'ffff9999' });
+    const { api, calls } = makeDb({
+      selectData: { metadata: { ...EXISTING, account_email: 'old-account@example.com', account_uuid8: 'aaaa1111' } },
+    });
+    await captureAccountIdentity(api, SID, { resolveFn });
+    expect(calls.updates).toHaveLength(1);
+    const written = calls.updates[0].metadata;
+    expect(written.account_email).toBe('new-account@example.com');
+    expect(written.account_uuid8).toBe('ffff9999');
+    // siblings survive the merge
+    expect(written.model).toBe('opus');
+    expect(written.effort).toBe('xhigh');
+    expect(written.tier_rank).toBe(4);
+  });
+
+  test('QF-20260906-219: a transient resolve failure on a LATER call never clobbers an already-good account_email', async () => {
+    const resolveFn = () => null; // simulates `claude auth status` failing on this call
+    const { api, calls } = makeDb({
+      selectData: { metadata: { ...EXISTING, account_email: 'someone@example.com', account_uuid8: 'abcd1234' } },
+    });
+    await captureAccountIdentity(api, SID, { resolveFn });
+    expect(calls.updates).toHaveLength(0);
+  });
+
+  test('SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 (LEAD-phase prospective TESTING finding): opts=null never throws -- the exported function must honor its own "telemetry, never abort" contract for any input, not just the one production 2-arg call site', async () => {
+    const { api, calls } = makeDb({ selectData: { metadata: { ...EXISTING } } });
+    await expect(captureAccountIdentity(api, SID, null)).resolves.toBeUndefined();
+    // Whatever this host's real resolveAccountIdentity() returns, the call must not throw --
+    // asserting a specific write shape here would make the test environment-dependent, so this
+    // case only pins "did not throw" (the actual contract this finding is about).
+    expect(Array.isArray(calls.updates)).toBe(true);
   });
 
   test('CONTROL: when it does write, it MERGES and preserves model/effort/tier_rank', async () => {

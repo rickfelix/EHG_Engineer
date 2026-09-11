@@ -34,6 +34,7 @@ import { buildWaitResult, buildFailResult, isWithinRaceWindow } from '../../../.
 import { REQUIRED_SUBAGENTS } from '../required-subagents.js';
 import { gradeProvenance, HANDOFF_TYPE_TO_PHASE } from '../../../../lib/sub-agent-executor/evidence-provenance.js';
 import { safeQuery } from '../../../../lib/db/safe-query.mjs';
+import { isParentOrchestrator } from '../../../../lib/handoff/parent-detection.js';
 
 /**
  * SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: shared kill-switch for the provenance-grading warnings
@@ -402,11 +403,20 @@ export async function validateSubagentEvidence(ctx, supabase) {
   console.log(`   Handoff: ${handoffType || 'unknown'} | SD: ${sdKey || 'unknown'}`);
   console.log('-'.repeat(50));
 
-  const required = REQUIRED_SUBAGENTS[handoffType] || [];
+  // QF-20260905-822: leo_protocol_sections 439 (Orchestrator Parent Lifecycle) documents a
+  // REDUCED set at PLAN-TO-EXEC for a parent orchestrator — PARENT_PRD_EXISTS +
+  // CHILDREN_STRUCTURE_VALID, checked by other gates, no DESIGN/DATABASE/TESTING sub-agent
+  // demand (delegated to children). This gate previously had no parent branch and demanded
+  // the standard set unconditionally, hard-failing a parent's PLAN-TO-EXEC until a TESTING
+  // row was manufactured for a phase whose implementation lives entirely in child branches.
+  const isParentAtPlanToExec = handoffType === 'PLAN-TO-EXEC' && await isParentOrchestrator(ctx.sd, db);
+  const required = isParentAtPlanToExec ? [] : (REQUIRED_SUBAGENTS[handoffType] || []);
 
   // Empty required set → pass
   if (required.length === 0) {
-    console.log(`   ℹ️  No required sub-agents for ${handoffType} — gate passes`);
+    console.log(isParentAtPlanToExec
+      ? '   ℹ️  Parent orchestrator at PLAN-TO-EXEC — reduced set per leo_protocol_sections 439, gate passes'
+      : `   ℹ️  No required sub-agents for ${handoffType} — gate passes`);
     return {
       passed: true,
       score: 100,

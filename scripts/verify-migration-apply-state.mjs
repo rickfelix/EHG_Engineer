@@ -10,7 +10,9 @@
  * (check-migration-readiness.mjs) is PR-scoped and FUNCTION+TRIGGER-only; this is the
  * complementary REPO-WIDE RETROSPECTIVE sweep with TABLE/VIEW/INDEX/CONSTRAINT coverage.
  *
- * READ-ONLY and ADVISORY: reports per-file APPLIED / PARTIAL / NOT_APPLIED / NO_DDL, exits 0
+ * READ-ONLY and ADVISORY: reports per-file APPLIED / PARTIAL / NOT_APPLIED / NO_DDL /
+ * BODY_MISMATCH (a live function whose body has drifted from what the migration declares —
+ * SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001), exits 0
  * by default ([MIGRATION_APPLY_STATE_PASS|GAPS_FOUND]); --strict exits 1 on gaps; DB
  * unreachable always exits 1 ([MIGRATION_APPLY_STATE_INFRA_ERROR]). Never applies anything —
  * some committed files are intentionally retired; backfill is a human decision.
@@ -305,6 +307,84 @@ const CREATE_RES = [
 ];
 
 /**
+ * SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 (FR-2): capture each function's dollar-quoted body.
+ *
+ * Must run on the RAW (un-stripped) migration text, never on stripNonDdl()'s output — that
+ * preprocessor deliberately REPLACES every dollar-quoted block with a single space (line ~280)
+ * before extractDdlFacts() pulls object names off of it, specifically so the body's own contents
+ * can never be mistaken for DDL. That makes stripped text structurally unable to carry a body:
+ * by the time an object-name regex sees it, the body is already gone.
+ *
+ * The non-greedy `[\s\S]*?` between the function name and its `AS <tag>` clause is deliberately
+ * bounded to the SHORTEST span that reaches an AS+dollar-tag — this keeps a malformed/bodyless
+ * CREATE FUNCTION from accidentally capturing a LATER function's body instead of contributing
+ * nothing. The closing delimiter is found by a literal indexOf() of the SAME tag text (not a
+ * regex backreference), which is exactly standard SQL dollar-quote semantics: a tag can never
+ * nest with itself, so the first occurrence of the same tag after the body start IS the closer,
+ * whether the tag is bare `$$` or named (`$function$`, `$body$`, etc).
+ */
+const FUNCTION_DEF_RE = new RegExp(
+  String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(${ID})[\s\S]*?\bAS\s*(\$[A-Za-z_]\w*\$|\$\$)`,
+  'gi'
+);
+
+/**
+ * SHIP adversarial review: strip `--`/`/* *\/` comments while leaving every dollar-quoted region
+ * byte-identical -- the inverse of stripNonDdl() (which destroys dollar-quoted bodies on purpose).
+ * Without this, a historical `-- CREATE OR REPLACE FUNCTION foo() ... AS $$ ... $$;` comment block
+ * documenting an OLD implementation (common in this migration corpus) would still satisfy
+ * FUNCTION_DEF_RE and, if it appears AFTER the real CREATE in raw scan order, silently overwrite
+ * the real declared body in the Map below with the commented-out one -- producing a false
+ * BODY_MISMATCH (or masking a real one) for a function that was actually applied correctly.
+ * The dollar-quote alternative is listed first so it wins at any '$' position, consuming through
+ * to ITS OWN closing tag (same backreference trick as stripNonDdl()) before a comment pattern
+ * elsewhere ever gets a chance to split it -- a comment embedded INSIDE a real body (e.g. a
+ * PL/pgSQL `-- note` the function's own author wrote) is protected the same way.
+ */
+function stripCommentsPreservingDollarQuotes(sql) {
+  return sql.replace(
+    /(\$[A-Za-z_]\w*\$|\$\$)[\s\S]*?\1|--[^\n]*|\/\*[\s\S]*?\*\//g,
+    (match) => (match.startsWith('$') ? match : ' ')
+  );
+}
+
+/** Map<normalized function name, raw body text> — last CREATE wins, per file. */
+export function extractFunctionBodies(sql) {
+  const s = stripCommentsPreservingDollarQuotes(sql.replace(/\r\n/g, '\n'));
+  const bodies = new Map();
+  FUNCTION_DEF_RE.lastIndex = 0;
+  let m;
+  while ((m = FUNCTION_DEF_RE.exec(s)) !== null) {
+    const name = normalizeName(m[1]);
+    const tag = m[2];
+    if (!name || !tag) continue;
+    const bodyStart = FUNCTION_DEF_RE.lastIndex;
+    const closeIdx = s.indexOf(tag, bodyStart);
+    if (closeIdx === -1) continue; // unbalanced/truncated -- contribute no body, same fail-safe as splitTableBodyItems()
+    bodies.set(name, s.slice(bodyStart, closeIdx));
+    FUNCTION_DEF_RE.lastIndex = closeIdx + tag.length;
+  }
+  return bodies;
+}
+
+/**
+ * Collapse whitespace runs and strip SQL comments before comparing a live pg_proc.prosrc against
+ * a migration file's own declared body. Pure (TR-2) -- no I/O, no live clock.
+ *
+ * KNOWN LIMITATION: this is whitespace/comment normalization, not a SQL parser -- two bodies that
+ * are semantically identical but differ in ways this does not collapse (e.g. reordered but
+ * equivalent clauses, `$1` vs a renamed parameter with the same position) can still register as a
+ * false BODY_MISMATCH. Treat BODY_MISMATCH as "needs a human look," not a proven-wrong body.
+ */
+export function normalizeSqlBody(body) {
+  return body
+    .replace(/--[^\n]*/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * QF-20260725-470: ADD/DROP COLUMN class. The other classes are single-name statements, but one
  * ALTER TABLE carries the table once and any number of comma-separated ADD/DROP COLUMN items (the
  * SMS spend-envelope migration does exactly this), so columns cannot be pulled by a one-capture
@@ -435,8 +515,14 @@ export function extractDdlFacts(sql) {
   };
   // QF-20260725-470: merge the column facts (extracted from the SAME stripped SQL) into both sides.
   const cols = extractColumnFacts(s);
+  // FR-2: bodies come from the RAW sql (see extractFunctionBodies docstring for why), keyed onto
+  // the function creates pulled from the stripped text above by the same normalized name.
+  const funcBodies = extractFunctionBodies(sql);
+  const creates = [...pull(CREATE_RES), ...cols.creates].map((c) => (
+    c.cls === 'function' && funcBodies.has(c.name) ? { ...c, body: funcBodies.get(c.name) } : c
+  ));
   return {
-    creates: [...pull(CREATE_RES), ...cols.creates],
+    creates,
     drops: [...pull(DROP_RES), ...cols.drops],
   };
 }
@@ -505,14 +591,31 @@ async function resolveLive(client, expected) {
     );
     mark(cls, rows, 'name');
   }
+  const liveFunctionBodies = new Map();
   if (byClass.get('function')?.size) {
+    // FR-1: prosrc is the raw function source text (no CREATE-statement wrapper, unlike
+    // pg_get_functiondef()) -- the same shape extractFunctionBodies() captures from the
+    // migration file side, so both sides feed normalizeSqlBody() without any reformatting.
+    // DISTINCT ON keeps this a name-keyed map even under overloads (pre-existing limitation:
+    // this whole module resolves functions by bare name, not name+signature). SHIP adversarial
+    // review: `ORDER BY p.proname` alone has NO tiebreak among same-named overloads, so Postgres
+    // makes no guarantee which physical row DISTINCT ON returns -- it is unspecified, not "last
+    // row wins" as an earlier version of this comment claimed. That was harmless when DISTINCT
+    // only deduped a name-existence check, but now the returned row's BODY feeds a real content
+    // comparison, so an unpinned tiebreak could flap BODY_MISMATCH true/false across runs for a
+    // function that never changed. `p.oid` is an arbitrary but STABLE tiebreak (unlike wall-clock
+    // or query-plan-dependent ordering, oid never changes for a given row), so the same overload
+    // is picked every run -- doesn't resolve which overload is "correct" (unresolvable without a
+    // signature-aware redesign, out of this SD's scope) but makes the pick deterministic.
     const { rows } = await client.query(
-      `SELECT DISTINCT p.proname AS name FROM pg_proc p
+      `SELECT DISTINCT ON (p.proname) p.proname AS name, p.prosrc AS body FROM pg_proc p
          JOIN pg_namespace ns ON ns.oid = p.pronamespace
-        WHERE ns.nspname = 'public' AND p.proname = ANY($1::text[])`,
+        WHERE ns.nspname = 'public' AND p.proname = ANY($1::text[])
+        ORDER BY p.proname, p.oid`,
       [[...byClass.get('function')]]
     );
     mark('function', rows, 'name');
+    for (const r of rows) liveFunctionBodies.set(r.name, r.body);
   }
   if (byClass.get('trigger')?.size) {
     const { rows } = await client.query(
@@ -545,7 +648,7 @@ async function resolveLive(client, expected) {
     );
     mark('constraint', rows, 'name');
   }
-  return live;
+  return { live, liveFunctionBodies };
 }
 
 /**
@@ -569,7 +672,7 @@ function daysSinceToken(token, now) {
  * (TR-2) so age_days is deterministic under test — classifyFiles itself never calls
  * Date.now()/new Date() unconditionally.
  */
-export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date()) {
+export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date(), liveFunctionBodies = new Map()) {
   const survivingByFile = new Map();
   for (const { cls, name, file } of expected.values()) {
     if (!survivingByFile.has(file)) survivingByFile.set(file, []);
@@ -592,14 +695,41 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
       ? surviving.filter((o) => !(o.cls === 'column' && absentTables.has(o.name.slice(0, o.name.indexOf('.')))))
       : surviving;
     const missing = relevant.filter((o) => !live.has(`${o.cls}:${o.name}`));
-    const status = missing.length === 0 ? 'APPLIED' : missing.length === relevant.length ? 'NOT_APPLIED' : 'PARTIAL';
+    let status = missing.length === 0 ? 'APPLIED' : missing.length === relevant.length ? 'NOT_APPLIED' : 'PARTIAL';
+    // FR-3: a function that resolves live but whose body has drifted from what THIS file
+    // declares is a DIFFERENT failure mode than "does not exist" (missing, above) -- a stale
+    // prior version (or an aborted REPLACE) can otherwise read as fully APPLIED. Scoped to
+    // objects already excluded from `missing` (name-exists) so this never double-counts.
+    //
+    // SECURITY review (EXEC evidence): body text must never enter `relevant`/`missing`/`result`
+    // (they feed --json output and downstream consumers) -- looked up here, ad hoc, from this
+    // file's OWN raw creates instead, so only the (harmless) function NAME ever escapes below.
+    const fileFuncBodies = new Map(
+      (facts.creates || [])
+        .filter((c) => c.cls === 'function' && c.body != null)
+        .map((c) => [c.name, c.body])
+    );
+    const bodyMismatches = relevant.filter((o) => (
+      o.cls === 'function' &&
+      fileFuncBodies.has(o.name) &&
+      live.has(`function:${o.name}`) &&
+      liveFunctionBodies.has(o.name) &&
+      normalizeSqlBody(fileFuncBodies.get(o.name)) !== normalizeSqlBody(liveFunctionBodies.get(o.name))
+    ));
+    if (bodyMismatches.length && status === 'APPLIED') status = 'BODY_MISMATCH';
     const result = { file, status, missing, objects: relevant.length };
+    if (bodyMismatches.length) result.body_mismatches = bodyMismatches.map((o) => o.name);
     // FR-2: a chairman-gated file that would otherwise read NOT_APPLIED/PARTIAL is an
     // EXPECTED wait state (merged, awaiting the chairman apply ceremony), not an ordinary
     // gap — CEREMONY_PENDING says so explicitly and carries age_days so staleness is still
     // visible. APPLIED/NO_DDL chairman-gated files are unaffected; every non-chairman-gated
     // file keeps the four-value vocabulary above completely unchanged.
-    if (status !== 'APPLIED' && file.startsWith(CHAIRMAN_GATED_PREFIX)) {
+    //
+    // SECURITY review (EXEC evidence, MEDIUM): a BODY_MISMATCH-only file's objects ARE live --
+    // relabeling it CEREMONY_PENDING would falsely claim a chairman apply ceremony is still
+    // outstanding for something already applied. Excluded so a body-drifted chairman-gated
+    // function stays BODY_MISMATCH (the true state), never masquerading as a pending apply.
+    if (status !== 'APPLIED' && status !== 'BODY_MISMATCH' && file.startsWith(CHAIRMAN_GATED_PREFIX)) {
       result.status = 'CEREMONY_PENDING';
       const token = migrationDateToken(file);
       if (token) result.age_days = daysSinceToken(token, now);
@@ -623,12 +753,21 @@ export function summarizeResults(results, { scanned, excludedDown = 0, droppedLa
     not_applied: results.filter((r) => r.status === 'NOT_APPLIED').length,
     no_ddl: results.filter((r) => r.status === 'NO_DDL').length,
     ceremony_pending: results.filter((r) => r.status === 'CEREMONY_PENDING').length,
+    body_mismatch: results.filter((r) => r.status === 'BODY_MISMATCH').length,
     dropped_later: droppedLater,
   };
   const gaps = results
     .filter((r) => r.status === 'PARTIAL' || r.status === 'NOT_APPLIED' || r.status === 'CEREMONY_PENDING')
     .reverse(); // newest first
-  return { summary, gaps };
+  // SECURITY review (EXEC evidence, HIGH): BODY_MISMATCH is deliberately NOT part of `gaps`.
+  // Every existing `gaps` consumer (partitionBlockingFailSet, seed-migration-dispositions.mjs's
+  // Rule A) is built around "object not yet live" -- a body-drifted function violates that (it
+  // EXISTS live, just diverged), and mixing it in was measured seeding a PERMANENT "blocked on
+  // chairman sign-off" disposition for functions that are, in fact, already applied. Kept in its
+  // own array; advisory-only, surfaced by its own report line and --json key, touches no
+  // existing gap/disposition/ledger machinery.
+  const bodyMismatches = results.filter((r) => r.status === 'BODY_MISMATCH').reverse();
+  return { summary, gaps, bodyMismatches };
 }
 
 /**
@@ -639,6 +778,12 @@ export function summarizeResults(results, { scanned, excludedDown = 0, droppedLa
  * committed-but-unapplied migration -- unaffected). `gaps`/the printed report/summary counts
  * are untouched by this split; only the --strict exit + GAPS/PASS marker + breakage alert
  * consume blockingFailSet.
+ *
+ * SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001: BODY_MISMATCH never reaches this function at all --
+ * it is deliberately excluded from `gaps` at the source (summarizeResults()), not filtered out
+ * here, because `failSet` (recentGaps/activeGaps) already omits it. See that function's own
+ * comment for why (a body-drifted function IS live, so it must never enter the same
+ * "not-yet-applied" pipeline this split and its downstream disposition-ledger consumer assume).
  */
 export function partitionBlockingFailSet(failSet) {
   return {
@@ -756,6 +901,7 @@ async function main() {
   else if (ledgerStatus !== 'ok' && ledgerStatus !== 'absent') console.error(`Disposition ledger is ${ledgerStatus} (suppressing nothing) — fix ${ledgerApi.DEFAULT_LEDGER_PATH}`);
 
   let live;
+  let liveFunctionBodies;
   let client;
   try {
     // Import FIRST: supabase-connection.js loads .env (dotenv) at module init, which
@@ -776,7 +922,7 @@ async function main() {
     // password. Passing it here closes the dead-wiring gap the review flagged.
     const connectionString = process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL || undefined;
     client = await createDatabaseClient('ehg', connectionString ? { connectionString } : {});
-    live = await resolveLive(client, expected);
+    ({ live, liveFunctionBodies } = await resolveLive(client, expected));
   } catch (e) {
     console.error(`DB unreachable: ${e.message}`);
     console.log(`[${OUTCOME.INFRA}]`);
@@ -785,8 +931,8 @@ async function main() {
     try { await client?.end(); } catch { /* already closed */ }
   }
 
-  const results = classifyFiles(forward, expected, perFile, live);
-  const { summary, gaps } = summarizeResults(results, {
+  const results = classifyFiles(forward, expected, perFile, live, undefined, liveFunctionBodies);
+  const { summary, gaps, bodyMismatches } = summarizeResults(results, {
     scanned: forward.length, excludedDown: down.length, droppedLater: droppedLater.length,
   });
 
@@ -838,12 +984,12 @@ async function main() {
     // first-class array, reusing the SAME {id, twin, verdict} shape the stderr print already
     // uses -- no new classification logic. See scripts/migration-gap-summary.mjs for the
     // genuine downstream consumer (not merely a cosmetic payload addition).
-    console.log(JSON.stringify({ summary, gaps, recentGaps, legacyGaps, dispositions, excluded, cutoff, recentOnly, droppedLater, files: results }, null, 2));
+    console.log(JSON.stringify({ summary, gaps, bodyMismatches, recentGaps, legacyGaps, dispositions, excluded, cutoff, recentOnly, droppedLater, files: results }, null, 2));
   } else {
     console.log('MIGRATION APPLY-STATE REPORT (advisory, read-only)');
     console.log(`  ordering: legacy non-dated files first (lexical), then date-prefixed (chronological)`);
     console.log(`  scanned ${summary.scanned} forward migrations (${summary.excluded_down} *_DOWN.sql excluded)`);
-    console.log(`  APPLIED=${summary.applied}  PARTIAL=${summary.partial}  NOT_APPLIED=${summary.not_applied}  NO_DDL=${summary.no_ddl}  dropped-later pairs=${summary.dropped_later}`);
+    console.log(`  APPLIED=${summary.applied}  PARTIAL=${summary.partial}  NOT_APPLIED=${summary.not_applied}  NO_DDL=${summary.no_ddl}  BODY_MISMATCH=${summary.body_mismatch}  dropped-later pairs=${summary.dropped_later}`);
     if (gaps.length) {
       if (recentOnly) {
         console.log(`\n  RECENT gaps (date >= ${cutoff}, BLOCKING under --strict): ${recentGaps.length}; LEGACY gaps (advisory only): ${legacyGaps.length}`);
@@ -852,6 +998,7 @@ async function main() {
           for (const g of recentGaps) {
             console.log(`   ${g.status.padEnd(12)} ${printableFile(g.file)}  [RECENT]`);
             for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
+            for (const n of g.body_mismatches || []) console.log(`     body mismatch function: ${n}`);
           }
         }
         if (legacyGaps.length) {
@@ -862,6 +1009,7 @@ async function main() {
         for (const g of activeGaps) {
           console.log(`   ${g.status.padEnd(12)} ${printableFile(g.file)}`);
           for (const m of g.missing) console.log(`     missing ${m.cls}: ${m.name}`);
+          for (const n of g.body_mismatches || []) console.log(`     body mismatch function: ${n}`);
         }
       }
       // FR-6: suppressed files are dropped from BOTH recentGaps and legacyGaps, so without
@@ -925,6 +1073,14 @@ async function main() {
     const ceremonyWarning = `::warning::${ceremonyPendingFailSet.length} chairman-gated migration(s) awaiting ceremony (non-blocking): ${ceremonyPendingFailSet.map((g) => printableFile(g.file)).join(', ')}`;
     if (asJson) console.error(ceremonyWarning);
     else console.log(ceremonyWarning);
+  }
+  if (bodyMismatches.length) {
+    // Never gated by --recent-only/ledger suppression (unlike ceremonyWarning above): BODY_MISMATCH
+    // touches neither the disposition ledger nor the recent/legacy split (see summarizeResults()) --
+    // it is a wholly separate, advisory-only concern with no suppression mechanism of its own yet.
+    const bodyMismatchWarning = `::warning::${bodyMismatches.length} migration(s) have a live function whose body diverges from the file (non-blocking, needs a human look): ${bodyMismatches.map((g) => printableFile(g.file)).join(', ')}`;
+    if (asJson) console.error(bodyMismatchWarning);
+    else console.log(bodyMismatchWarning);
   }
   const marker = blockingFailSet.length ? OUTCOME.GAPS : OUTCOME.PASS;
   // --json keeps stdout pure JSON for piping; the marker goes to stderr there.

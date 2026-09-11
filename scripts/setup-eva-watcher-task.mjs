@@ -42,7 +42,7 @@ import { getRepoRoot } from '../lib/repo-paths.js';
 // THIS script would regress the live task back to a bare, console-leaking /TR (the same defect
 // this QF exists to fix in the other five/six registrars). Not one of the originally-named "six"
 // — found while fixing them, via the same pattern. Reuse the SECURITY-reviewed action builder.
-import { buildHiddenTrAction, HIDDEN_LAUNCHER_REL_PATH } from './setup-alarm-cron-tasks.mjs';
+import { buildHiddenTrAction, HIDDEN_LAUNCHER_REL_PATH, applyBatteryTolerantSettings } from './setup-alarm-cron-tasks.mjs';
 
 export const TASK_NAME = 'EHG EVA Scheduler Watcher';
 export const NPM_COMMAND = 'eva:scheduler:watch:cron';
@@ -214,6 +214,8 @@ export async function main(argv = process.argv, deps = {}) {
   }
   logger.log(`${tag} registered '${TASK_NAME}' — every ${DEFAULT_INTERVAL_MINUTES} min, /RU ${effectiveRunAs || '(none — Interactive logon, will leak a console; pass --ru)'} → ${WRAPPER_REL_PATH}`);
   logger.log(`${tag} env: EVA_SCHEDULER_OBSERVE_ONLY=true OKR_REQUIRE_ACCEPTANCE=true (observe-only bring-up; full-dispatch needs chairman GO)`);
+  const powerFix = applyBatteryTolerantSettings(TASK_NAME);
+  if (!powerFix.ok) logger.warn(`${tag} WARNING: could not clear battery restrictions: ${powerFix.error}`);
   return { exitCode: 0, action: 'registered', wrapperPath, runAs: effectiveRunAs };
 }
 

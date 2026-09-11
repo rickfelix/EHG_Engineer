@@ -17,6 +17,7 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
@@ -40,13 +41,12 @@ test.describe('Budget Kill-Switch E2E Tests', () => {
     if (company) testCompanyId = company.id;
 
     // Create test venture
-    const { data: venture } = await supabase
-      .from('ventures')
-      .insert({
+    const { data: venture } = await insertGuarded(supabase, 'ventures', {
         name: `Budget Kill-Switch Test Venture ${Date.now()}`,
         company_id: testCompanyId,
-        current_lifecycle_stage: 1
-      })
+        current_lifecycle_stage: 1,
+        is_demo: true
+      }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/budget-kill-switch.spec.ts' })
       .select('id')
       .single();
 
@@ -267,13 +267,12 @@ test.describe('Budget Kill-Switch E2E Tests', () => {
   test.describe('Fail-Closed Behavior', () => {
     test('BKS-007: should HALT when no budget record exists', async () => {
       // Given: Venture WITHOUT any budget record
-      const { data: noBudgetVenture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: noBudgetVenture } = await insertGuarded(supabase, 'ventures', {
           name: `No Budget Venture ${Date.now()}`,
           company_id: testCompanyId,
-          current_lifecycle_stage: 1
-        })
+          current_lifecycle_stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/budget-kill-switch.spec.ts' })
         .select('id')
         .single();
 
@@ -379,13 +378,12 @@ test.describe('Budget Kill-Switch E2E Tests', () => {
 
     test('BKS-010: should fallback to venture_phase_budgets when token budget missing', async () => {
       // Given: Venture with only phase budget
-      const { data: phaseBudgetVenture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: phaseBudgetVenture } = await insertGuarded(supabase, 'ventures', {
           name: `Phase Budget Only Venture ${Date.now()}`,
           company_id: testCompanyId,
-          current_lifecycle_stage: 1
-        })
+          current_lifecycle_stage: 1,
+          is_demo: true
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/agents/budget-kill-switch.spec.ts' })
         .select('id')
         .single();
 

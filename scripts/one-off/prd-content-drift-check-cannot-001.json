@@ -1,0 +1,97 @@
+{
+  "executive_summary": "The 'Check for Filesystem Drift' CI job's own drift-detection step carried both an exit-zero fallback and continue-on-error:true, so the job could never actually fail on real drift -- only earlier checkout/setup/install/compile steps could fail it. A real recent red run was a CDN connection reset during an unrelated puppeteer postinstall, not drift, teaching readers that a red run of this check means noise rather than drift. Fixed by removing both suppressions so the underlying tools/gates/drift-check.ts script's real exit code now propagates as the job's own status, verified currently a no-op (zero real violations across all three severity:'critical' patterns) so this promotion cannot newly block any merge.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Promote the drift-detection step's real exit code to the job's own status",
+      "description": ".github/workflows/leo-drift-check.yml's 'Run drift detection' step wrapped `node dist/tools/gates/drift-check.js` in `|| { echo ...; exit 0; }` and also carried `continue-on-error: true` -- two independent suppressions stacked on the same step. Remove both so a real drift-check.js exit(1) genuinely fails the job.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The 'Run drift detection' step no longer contains an `|| { ... exit 0; }` fallback.",
+        "The step no longer has `continue-on-error: true`.",
+        "The step's `run:` is the bare `node dist/tools/gates/drift-check.js` invocation."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Verify the promotion is currently a no-op before shipping (never guess)",
+      "description": "drift-check.ts has three severity:'critical' checks that can trigger exit(1): prd_files, handoff_files, and boundary_violations (a regex-based cross-repo import scan). Each must be independently verified as currently zero-violation on this repo before promoting, since a mistaken promotion would newly break CI for everyone.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "git ls-files shows zero tracked matches for prd_files' patterns (prds/**/*.md, prds/**/*.txt).",
+        "handoff_files' raw glob (docs/**/handoff-*.md, handoffs/**/*.md) is checked directly, and any real matches are cross-checked against drift-check.ts's own ALLOWLIST_PATTERNS ('docs/**/*.md' etc.) to confirm none actually violate -- not merely assumed absent.",
+        "boundary_violations' two import-direction regex scans (LEO files importing /venture|/portfolio|/src, and App files importing /leo|/validation|scripts/leo) are replayed directly (grep or equivalent) and confirmed zero matches."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Confirm the promotion cannot newly block any PR merge",
+      "description": "Before shipping, confirm 'Check for Filesystem Drift' is not itself a required branch-protection status check, so promoting its own status to be honest carries no risk of newly blocking a merge that previously succeeded.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "`gh api repos/<owner>/<repo>/branches/main/protection/required_status_checks` is queried directly and its `contexts` array does not include 'Check for Filesystem Drift'."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Regression-proof the fix with a source-pinned, mutation-verified test",
+      "description": "Add a test that reads the workflow YAML source directly and asserts the drift-detection step no longer contains the fallback/continue-on-error pattern, so a future edit cannot silently reintroduce it.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "A new test file asserts the step's text does not match `|| {`, `exit 0`, or `continue-on-error: true` within the drift-detection step specifically.",
+        "Mutation-verified: reverting the fix (stash/checkout the old text) makes the new test fail; restoring the fix makes it pass again."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "description": "No schema changes. This is a CI workflow YAML edit plus one new unit test file; no production application code touched." },
+    { "id": "TR-2", "description": "Scoped strictly to the drift-check job's one step. The sibling boundary-check job carries an identical exit-zero + continue-on-error pattern and is deliberately left untouched -- a separate concern not named by this fix." },
+    { "id": "TR-3", "description": "The workflow's own inline comment documenting the promotion's rationale must itself be evidence-accurate -- an independent VALIDATION sub-agent review found and required correction of two factual errors in the first draft (a false 'zero tracked matches' claim for handoff_files, and an incomplete severity-pattern list omitting boundary_violations)." }
+  ],
+  "test_scenarios": [
+    {
+      "scenario": "The drift-detection step's source text is inspected directly",
+      "expected": "No exit-zero fallback, no continue-on-error:true, and the run command is the bare drift-check.js invocation."
+    },
+    {
+      "scenario": "The fix is reverted (mutation test) and the new regression test is re-run",
+      "expected": "The test fails, proving it genuinely discriminates the fixed state from the original broken state."
+    },
+    {
+      "scenario": "Branch protection required_status_checks is queried for the live repo",
+      "expected": "'Check for Filesystem Drift' does not appear in the required contexts list, confirming this promotion cannot newly block any PR."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "A future PR could introduce a real prd_files/handoff_files/boundary_violations match, and the newly-honest job status would (correctly) turn red for the first time in a long while, surprising a reader unfamiliar with this change.",
+      "mitigation": "That is the intended, correct behavior this fix restores -- a red 'Check for Filesystem Drift' finally means drift again. Documented in the workflow's own inline comment and this PRD for future readers."
+    },
+    {
+      "risk": "handoff_files' critical pattern is unreachable by construction today (every real match also matches the broad docs/**/*.md allowlist), so this promotion provides zero real protection for that specific pattern.",
+      "mitigation": "Out of scope for this fix -- flagged as a completion-flag finding for future follow-up, not silently left undocumented."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Any GitHub Actions run of leo-drift-check.yml's drift-check job, on push to main/develop or on a pull_request touching tools/gates/**, scripts/**, lib/**, .eslintrc*, package.json, or the workflow file itself"],
+    "dependencies": ["tools/gates/drift-check.ts (unchanged), its ALLOWLIST_PATTERNS and FORBIDDEN_PATTERNS (unchanged)"],
+    "data_contracts": ["No data contract changes"],
+    "runtime_config": ["No new env vars or config flags"],
+    "observability_rollout": ["No feature flag needed -- ships in one deploy; the job's own status becomes honest immediately post-merge, currently green given zero real violations"]
+  },
+  "system_architecture": {
+    "components": [
+      { "name": ".github/workflows/leo-drift-check.yml", "role": "drift-check job's 'Run drift detection' step loses its two exit-suppressing mechanisms" },
+      { "name": "tests/unit/workflows/leo-drift-check-honest-status.test.js", "role": "New source-pinned regression test locking the fix in place" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Originally shipped as a Quick-Fix (QF-20260903-055); escalated to this SD because the diff touches .github/workflows/**, a sensitive path lib/quick-fix/sensitive-path-registry.js correctly refuses to let a QF close autonomously. Implementation and test were already complete at escalation time; a follow-up commit corrected two evidence errors an independent VALIDATION sub-agent review found in the original rationale comment.",
+    "sequencing": ["FR-1", "FR-4", "FR-2 and FR-3 as pre-ship verification (already performed, cited in TR-3)"]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Read .github/workflows/leo-drift-check.yml's drift-check job's 'Run drift detection' step.", "expected_outcome": "The step is exactly `run: node dist/tools/gates/drift-check.js` with no fallback and no continue-on-error." },
+    { "step_number": 2, "instruction": "Run `npx vitest run tests/unit/workflows/leo-drift-check-honest-status.test.js`.", "expected_outcome": "1 test passes." },
+    { "step_number": 3, "instruction": "Run `gh api repos/rickfelix/EHG_Engineer/branches/main/protection/required_status_checks --jq .contexts`.", "expected_outcome": "The array does not contain 'Check for Filesystem Drift'." }
+  ]
+}

@@ -108,12 +108,17 @@ describe('findExistingCorrelationRow (unit)', () => {
 });
 
 describe('wired into insertCoordinationRow (choke-guard fixture — capability-not-use)', () => {
-  it('a same-correlation retry is refused as DISPATCH_ALREADY_DELIVERED, landed:true, and inserts nothing', async () => {
+  // SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1: a same-correlation retry is a
+  // genuine delivery (landed:true, unconditionally) — signalled by an ADDITIVE RETURN, not a
+  // throw, since a caller that treated any thrown error as "nothing landed" resent content
+  // that was never lost.
+  it('a same-correlation retry RESOLVES as DISPATCH_ALREADY_DELIVERED, landed:true, and inserts nothing', async () => {
     const { sb, inserted } = stubSupabase({ dedupeRows: [{ id: 'existing-1', payload: { correlation_id: 'corr-1' } }] });
-    await expect(insertCoordinationRow(sb, {
+    const result = await insertCoordinationRow(sb, {
       sender_session: 'coord-1', target_session: TARGET, message_type: 'INFO',
       subject: 'retry', payload: { correlation_id: 'corr-1' },
-    }, { logger: silentLog })).rejects.toMatchObject({ code: 'DISPATCH_ALREADY_DELIVERED', landed: true, parkedRowId: 'existing-1' });
+    }, { logger: silentLog });
+    expect(result).toMatchObject({ code: 'DISPATCH_ALREADY_DELIVERED', landed: true, parkedRowId: 'existing-1', data: null, error: null });
     expect(inserted).toHaveLength(0);
   });
 

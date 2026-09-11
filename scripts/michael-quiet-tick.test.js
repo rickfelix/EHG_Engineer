@@ -71,6 +71,25 @@ describe('TS-10: inert before child B', () => {
   });
 });
 
+describe('SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001 FR-2: inbox counter is keyed on read_at', () => {
+  it('the session_coordination inbox query filters is(read_at, null), never acknowledged_at', async () => {
+    const isCalls = [];
+    const sb = {
+      from: (table) => {
+        const q = {
+          select: () => q, eq: () => q, in: () => q,
+          is: (col, val) => { if (table === 'session_coordination') isCalls.push([col, val]); return q; },
+          then: (res) => Promise.resolve(table === 'session_coordination' ? { count: 0, error: null } : MISSING).then(res),
+        };
+        return q;
+      },
+    };
+    await runQuietTick({ sb, now: FIVE_AM_ET, env: { CLAUDE_SESSION_ID: 'sess-m' } });
+    expect(isCalls).toContainEqual(['read_at', null]);
+    expect(isCalls.every(([col]) => col !== 'acknowledged_at')).toBe(true);
+  });
+});
+
 describe('line contract', () => {
   it('emits one action line per non-zero queue and the brief state, each with a token the startup check consumes', async () => {
     const counts = { michael_gmail_triage_items: 3, michael_todoist_snapshot: 2, michael_brief_runs: 1, michael_feeder_runs: 1, michael_staged_items: 1, session_coordination: 4 };

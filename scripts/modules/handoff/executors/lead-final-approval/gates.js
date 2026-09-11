@@ -99,6 +99,8 @@ export { createSuccessCriteriaUnpopulatedGate };
 // default (SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B)
 import { createAcceptanceArtifactGate } from './gates/acceptance-artifact-gate.js';
 export { createAcceptanceArtifactGate };
+import { createOriginCriterionGate } from './gates/origin-criterion-gate.js';
+export { createOriginCriterionGate };
 import { createLearningOrBypassResolvedGate } from './gates/learning-or-bypass-resolved-gate.js';
 export { createLearningOrBypassResolvedGate };
 // SD-LEO-INFRA-ADKAR-CHANGE-ADOPTION-FRAMEWORK-001-B: block completion of a
@@ -962,14 +964,42 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
                   // dual failure mode in SD-MAN-ORCH-S18-S26-PIPELINE-001-A: branch
                   // existed on origin but rev-list/gh-pr-list either errored or was
                   // skipped on the LEAD host, leaving the branch unverified yet allowed.
-                  console.log(`   ⚠️  Could not verify ${cleanBranch}: ${e?.message || e}`);
-                  unmergedBranches.push({
-                    branch: cleanBranch,
-                    repo: repo,
-                    commits: null,
-                    unverified: true,
-                    reason: e?.message || String(e)
-                  });
+                  //
+                  // QF-20260904-533: the failure above (typically `git rev-list`, timeout=10000)
+                  // is a LOCAL git call in the shared root — a concurrent session's index lock or
+                  // a slow fetch produces ETIMEDOUT with zero relation to whether the PR actually
+                  // merged. Before concluding unverified/blocking, ask the GitHub API directly (no
+                  // local git dependency) the SAME question the happy path already asks a few
+                  // lines up: is there a merged PR for this branch? UNMEASURABLE locally + API-
+                  // confirmed-merged is a PASS (mergeEvidence, same skip path as the happy case);
+                  // UNMEASURABLE locally + no API confirmation stays a FAIL, reason preserved.
+                  let apiConfirmedMerged = false;
+                  let apiCheckError = null;
+                  try {
+                    const prStatus = execFileSync(
+                      'gh',
+                      ['pr', 'list', '--head', cleanBranch, '--state', 'merged', '--json', 'number', '--limit', '1'],
+                      { encoding: 'utf8', cwd: repoPath, timeout: 15000 }
+                    ).trim();
+                    const mergedPrs = JSON.parse(prStatus || '[]');
+                    if (mergedPrs.length > 0) {
+                      apiConfirmedMerged = true;
+                      mergeEvidence.push({ branch: cleanBranch, repo, prNumber: mergedPrs[0].number });
+                      console.log(`   ✅ ${cleanBranch} UNMEASURABLE locally (${e?.message || e}) but GitHub API confirms merged PR #${mergedPrs[0].number} — treating as verified`);
+                    }
+                  } catch (apiErr) {
+                    apiCheckError = apiErr?.message || String(apiErr);
+                  }
+                  if (!apiConfirmedMerged) {
+                    console.log(`   ⚠️  Could not verify ${cleanBranch}: ${e?.message || e}${apiCheckError ? ` (API confirmation also failed: ${apiCheckError})` : ''}`);
+                    unmergedBranches.push({
+                      branch: cleanBranch,
+                      repo: repo,
+                      commits: null,
+                      unverified: true,
+                      reason: e?.message || String(e)
+                    });
+                  }
                 }
               }
             }
@@ -1153,6 +1183,42 @@ export function createPRMergeVerificationGate(supabase, deps = {}) {
             }
             if (mergedPRs.length > 0) {
               console.log(`   ✅ Scan C2 found merge evidence by branch that Scan C's text search missed (${probes} probe(s))`);
+            }
+          }
+
+          // SD-LEO-INFRA-MERGE-VERIFICATION-CANNOT-001: Scan D — a QF-escalated SD's real code
+          // lands on a PRE-EXISTING qf/<QF-ID> branch, created before the SD's own key existed.
+          // branchBelongsToSd (the resolver every scan above ultimately gates on) can never
+          // attribute that branch to the SD: its "rest" after the <type>/ prefix is a QF-ID
+          // string, never the SD key or a hyphenated extension of it, regardless of which prefix
+          // tokens BRANCH_TYPE_TOKENS allows. Scan C's --search text match gets discarded by the
+          // same filter; Scan C2's --head probes only construct <type>/<sdId> candidates, never
+          // the QF's own branch name. lib/sd-creation/source-adapters/qf.js's createFromQF
+          // already records the exact originating branch at escalation time
+          // (metadata.escalated_from_branch), so read it directly here — deliberately WITHOUT the
+          // branchBelongsToSd filter, since ownership is established by that first-class metadata
+          // field (written only by the canonical escalation path), not by branch-name pattern
+          // matching. A no-op for every non-escalated SD (metadata.escalated_from_branch absent).
+          if (mergedPRs.length === 0 && ctx.sd?.metadata?.escalated_from_branch) {
+            const escalatedBranch = ctx.sd.metadata.escalated_from_branch;
+            for (const { githubRepo: repo } of reposWithPaths) {
+              try {
+                const headResult = execFileSync(
+                  'gh',
+                  ['pr', 'list', '--repo', repo, '--state', 'merged', '--head', escalatedBranch, '--json', 'number,headRefName,url,mergedAt', '--limit', '10'],
+                  { encoding: 'utf8', timeout: 30000 }
+                );
+                const headPrs = JSON.parse(headResult || '[]');
+                if (headPrs.length > 0) {
+                  mergedPRs.push(...headPrs.map(pr => ({ ...pr, repo })));
+                  console.log(`   ✅ Scan D found merge evidence on this SD's recorded escalated_from_branch (${escalatedBranch})`);
+                  break;
+                }
+              } catch (_scanDErr) {
+                // DELIBERATELY does NOT set scanCFailed — same posture as Scan C2's per-probe catch:
+                // Scan D is purely additive positive evidence; a gh hiccup here must leave the
+                // verdict AND its reason code exactly as Scan A/B/C/C2 already determined.
+              }
             }
           }
 
@@ -1917,8 +1983,15 @@ export function createChairmanApplyVerificationGate(supabase) {
         // a known, re-checkable lifecycle state, no retry-budget burn, no RCA trigger. A genuine
         // classifier ERROR (handled above via failClosed) remains the only hard-FAIL path.
         const CEREMONY_STATUS = 'CEREMONY_PENDING';
+        // SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 (SECURITY review, NEW-MED-1): BODY_MISMATCH is
+        // a function that resolves LIVE but whose body diverges from the committed file -- it is
+        // NOT "not applied" (that object exists), so without this exclusion it fell into
+        // ordinaryUnapplied by default and reported the misleading "not applied" WAIT message for
+        // an object that is, in fact, live. Given its own WAIT branch below instead.
+        const BODY_MISMATCH_STATUS = 'BODY_MISMATCH';
         const ceremonyPending = owned.filter(f => f.status === CEREMONY_STATUS);
-        const ordinaryUnapplied = owned.filter(f => f.status !== 'APPLIED' && f.status !== 'NO_DDL' && f.status !== CEREMONY_STATUS);
+        const bodyMismatched = owned.filter(f => f.status === BODY_MISMATCH_STATUS);
+        const ordinaryUnapplied = owned.filter(f => f.status !== 'APPLIED' && f.status !== 'NO_DDL' && f.status !== CEREMONY_STATUS && f.status !== BODY_MISMATCH_STATUS);
 
         if (ceremonyPending.length) {
           console.log(`   ⏳ WAIT: ${ceremonyPending.length} chairman-gated migration(s) awaiting ceremony apply`);
@@ -1960,6 +2033,18 @@ export function createChairmanApplyVerificationGate(supabase) {
             issues: [],
             details: { applicable: true, gated: true, ceremony_pending: names },
             remediation: 'Chairman approval queued (decisionType=migration_apply, visible via scripts/chairman-decisions.mjs list) -- once approved, the coordinator applies via the apply-migration.js token ceremony, then re-run this handoff.'
+          });
+        }
+
+        if (bodyMismatched.length) {
+          console.log(`   ⏳ WAIT: ${bodyMismatched.length} migration(s) have a live function whose body diverges from the file`);
+          const names = bodyMismatched.map(f => f.file);
+          return buildWaitResult({
+            score: 0, max_score: 100,
+            wait_reason: `${sdKey}: ${bodyMismatched.length} owned migration(s) resolve live but their function body diverges from the committed file (needs a human look, not necessarily a re-apply): ${names.join(', ')}`,
+            issues: [],
+            details: { applicable: true, gated, body_mismatched: names },
+            remediation: 'Compare the live function body (pg_proc.prosrc) against the migration file. If the live body is intentional drift (a later hotfix never backported), commit a corrective migration; if it is a genuinely stale apply, re-run the CREATE OR REPLACE. Then re-run this handoff.'
           });
         }
 
@@ -2116,6 +2201,11 @@ export function getRequiredGates(supabase, prdRepo, sd = null) {
   // by default (SD-LEO-INFRA-LEAD-FINAL-APPROVAL-001-B)
   gates.push(createAcceptanceArtifactGate(supabase));
 
+  // Origin-Criterion Gate — for a QF-escalated carrier SD, refuses completion when the
+  // escalation-time origin criterion (stamped from the QF's own expected_behavior) was
+  // silently deleted or reworded, observe-only by default (SD-LEO-FIX-ESCALATION-COPIES-EXPECTED-001)
+  gates.push(createOriginCriterionGate());
+
   // SD-FDBK-FIX-GATE-PIPELINE-GATE1-001: GATE4_WORKFLOW_ROI is intentionally NOT pushed here —
   // it already runs at LEAD-FINAL via the validator-registry DB rules (see header note). The (A)
   // fix is the PLAN-TO-LEAD removal + the (B) gate1 key-drift fix so the LFA computation scores
@@ -2146,5 +2236,6 @@ export default {
   createActivationInvariantGate,
   createSuccessCriteriaUnpopulatedGate,
   createAcceptanceArtifactGate,
+  createOriginCriterionGate,
   getRequiredGates
 };

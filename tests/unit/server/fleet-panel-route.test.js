@@ -106,6 +106,24 @@ const GHOST = {
   metadata: {},
 };
 
+// QF-20260906-553: released_at set, but computed_status stays 'stale' (measured: v_active_sessions
+// never flips it to 'released') and the orphan session-tick daemon keeps the heartbeat advancing —
+// the exact shape that rendered status=stale badge=WORKING for up to an hour after release.
+const RELEASED_WORKER = {
+  session_id: 'released-1',
+  sd_key: 'SD-TEST-002',
+  computed_status: 'stale',
+  heartbeat_age_human: '12m ago',
+  heartbeat_age_seconds: 720,
+  released_at: '2026-09-06T11:20:00Z',
+  released_reason: 'sweep_stale_pid',
+  metadata: {
+    fleet_identity: { callsign: 'Foxtrot-2', color: 'green', role: 'worker' },
+    loop_state: 'active',
+    p_alive: 0.95,
+  },
+};
+
 describe('GET /api/fleet-panel', () => {
   it('returns structured sessions/accountChips/attentionStrip for populated sessions', async () => {
     const supabase = mockSupabase([LIVE_WORKER]);
@@ -184,6 +202,34 @@ describe('GET /api/fleet-panel', () => {
     const payload = res.json.mock.calls[0][0];
     expect(payload.sessions.map((s) => s.session_id)).toEqual(['abc-123']);
     expect(payload.filter.ghostsHidden).toBe(1);
+  });
+
+  it('QF-20260906-553: hides a released seat by default, even with a HEARTBEATING orphan daemon', async () => {
+    const supabase = mockSupabase([LIVE_WORKER, RELEASED_WORKER]);
+    const res = mockRes();
+    await getFleetPanel(mockReq(supabase), res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.sessions.map((s) => s.session_id)).toEqual(['abc-123']);
+    expect(payload.filter.ghostsHidden).toBe(1); // counts released seats too, name unchanged for back-compat
+  });
+
+  it('QF-20260906-553: ?all=1 keeps the released seat, but its badge is OFF, never WORKING', async () => {
+    const supabase = mockSupabase([RELEASED_WORKER]);
+    const res = mockRes();
+    await getFleetPanel(mockReq(supabase, { all: '1' }), res);
+
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.sessions).toHaveLength(1);
+    expect(payload.sessions[0].badge).toBe('OFF');
+    expect(payload.sessions[0].released_at).toBe('2026-09-06T11:20:00Z');
+  });
+
+  it('QF-20260906-553: selects released_at and released_reason from v_active_sessions', async () => {
+    const calls = {};
+    await getFleetPanel(mockReq(mockSupabase([LIVE_WORKER], calls)), mockRes());
+    expect(calls.select).toContain('released_at');
+    expect(calls.select).toContain('released_reason');
   });
 
   it('keeps role sessions and not-yet-stamped workers, which are NOT ghosts', async () => {

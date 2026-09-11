@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Register the three credentialed Michael feeders as host-local Windows Task Scheduler tasks.
+ * Register the five credentialed Michael feeders as host-local Windows Task Scheduler tasks.
  * SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D (FR-8, TR-8). Spec docs/michael/02-SPEC.md §5 host venue;
  * ratification 0daf3bd8 (GitHub Actions holds no Google credential) and ff4ef5b4 (credential venue).
  *
@@ -62,12 +62,15 @@ import {
 export const INTERVAL_MINUTES = 15;
 export const START_TIME = '00:00';
 
-/** The three host feeders (spec §5 windows are enforced inside each script, not by the scheduler). */
+/** The five host feeders (spec §5 windows are enforced inside each script, not by the scheduler). */
 export const MICHAEL_TASKS = Object.freeze([
   { feeder: 'tasks-classifier', taskName: 'EHG Michael tasks-classifier', script: 'scripts/michael/tasks-classifier.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-tasks-classifier-task.cmd'), windowEt: '03:45-04:30' },
   { feeder: 'calendar-read', taskName: 'EHG Michael calendar-read', script: 'scripts/michael/calendar-read.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-calendar-read-task.cmd'), windowEt: '04:00-05:00' },
   // Shadow phase: --apply records intents; --modify is added only by an explicit --with-modify register.
   { feeder: 'gmail-triage', taskName: 'EHG Michael gmail-triage', script: 'scripts/michael/gmail-triage.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-gmail-triage-task.cmd'), windowEt: '04:30-05:30', promotable: true },
+  // Child J (v1.1): enrichment feeders, windowed after BRIEF_DEADLINE_ET like their FEEDERS registry entries.
+  { feeder: 'oracle-extract', taskName: 'EHG Michael oracle-extract', script: 'scripts/michael/oracle-extract.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-oracle-extract-task.cmd'), windowEt: '06:00-06:30' },
+  { feeder: 'health-sync', taskName: 'EHG Michael health-sync', script: 'scripts/michael/health-sync.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-health-sync-task.cmd'), windowEt: '06:00-06:30' },
 ]);
 
 /** Pure: a task name is refused before any schtasks call when it carries an illegal filename character (QF-20260906-961). */

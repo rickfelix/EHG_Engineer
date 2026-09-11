@@ -396,34 +396,42 @@ describe('QF-20260710-593: ackRows — the action-time stamp', () => {
   });
 });
 
-// QF-20260906-523: a parked/deduped send (insertCoordinationRow throws with e.landed=true) means
-// the content already reached the target -- exiting 1 here trained callers to resend and
-// duplicate an ask that already landed. Ported verbatim from adam-advisory.cjs:1401-1404
-// (QF-20260902-160). main() is not exported (documented limitation, see the
-// argv-testability note in module.exports above), and reaching this branch for real requires a
-// live insertCoordinationRow throw -- not reachable via a hermetic subprocess spawn without a DB.
-// A static source-shape assertion is the same technique already used for other in-main() logic
-// in this file (see solomon-advisory-capture-miss-seam.test.js) and is what the fix's own EXIT
-// PREDICATE names: a parked send exits ZERO and its printed line contains neither 'ERROR' nor
-// 'not sent'.
-describe('QF-20260906-523: a landed:true insert error is DELIVERED (exit 0), not ERROR (exit 1)', () => {
+// QF-20260906-523 (superseded by SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1): a
+// parked/deduped send means the content already reached the target -- exiting 1 here trained
+// callers to resend and duplicate an ask that already landed. DISPATCH_BACKPRESSURE (successful
+// park) and DISPATCH_ALREADY_DELIVERED no longer THROW at all -- insertCoordinationRow now
+// returns an additive {data,error,landed,parkedRowId,code} object for both, checked via
+// isDeliveredDispatchError() BEFORE the ordinary {data,error} handling, not inside a catch
+// block. main() is not exported (documented limitation, see the argv-testability note in
+// module.exports above), and reaching this branch for real requires a live insertCoordinationRow
+// call -- not reachable via a hermetic subprocess spawn without a DB. A static source-shape
+// assertion is the same technique already used for other in-main() logic in this file (see
+// solomon-advisory-capture-miss-seam.test.js) and is what the fix's own EXIT PREDICATE names: a
+// delivered send exits ZERO and its printed line contains neither 'ERROR' nor 'not sent'.
+describe('SD-LEO-INFRA-INSERTCOORDINATIONROW-NOT-SIGNAL-001 FR-1: a delivered result is DELIVERED (exit 0), not ERROR (exit 1)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const source = fs.readFileSync(path.join(__dirname, '../../scripts/solomon-advisory.cjs'), 'utf8');
 
-  it('the landed branch sits inside the insertCoordinationRow catch, before the generic ERROR fallback, and exits 0', () => {
-    const catchIdx = source.indexOf('inserted = data;\n  } catch (e) {');
-    expect(catchIdx).toBeGreaterThan(0);
-    const landedIdx = source.indexOf('if (e && e.landed) {', catchIdx);
-    const errorFallbackIdx = source.indexOf("console.error(`ERROR: advisory not sent", catchIdx);
-    expect(landedIdx).toBeGreaterThan(catchIdx);
-    expect(errorFallbackIdx).toBeGreaterThan(landedIdx); // landed check runs FIRST, falls through to ERROR only when absent
+  it('the isDeliveredDispatchError check runs on the RESOLVED result before the ordinary {data,error} handling, and exits 0', () => {
+    const tryIdx = source.indexOf('const result = await insertCoordinationRow(');
+    expect(tryIdx).toBeGreaterThan(0);
+    const deliveredIdx = source.indexOf('if (isDeliveredDispatchError(result)) {', tryIdx);
+    const errorHandlingIdx = source.indexOf('if (error) { console.error(\'ERROR: failed to insert advisory:\'', tryIdx);
+    expect(deliveredIdx).toBeGreaterThan(tryIdx);
+    expect(errorHandlingIdx).toBeGreaterThan(deliveredIdx); // delivered check runs FIRST, falls through to ordinary handling only when absent
 
-    const landedBranch = source.slice(landedIdx, errorFallbackIdx);
-    expect(landedBranch).toMatch(/DELIVERED \(not a failure\)/);
-    expect(landedBranch).toMatch(/process\.exit\(0\)/);
-    // Never prints ERROR or "not sent" on the landed path -- the exact predicate the QF names.
-    expect(landedBranch).not.toMatch(/ERROR/);
-    expect(landedBranch).not.toMatch(/not sent/);
+    const deliveredBranch = source.slice(deliveredIdx, errorHandlingIdx);
+    expect(deliveredBranch).toMatch(/DELIVERED \(not a failure\)/);
+    expect(deliveredBranch).toMatch(/process\.exit\(0\)/);
+    // Never prints ERROR or "not sent" on the delivered path -- the exact predicate the fix names.
+    expect(deliveredBranch).not.toMatch(/ERROR/);
+    expect(deliveredBranch).not.toMatch(/not sent/);
+  });
+
+  it('imports isDeliveredDispatchError from the canonical dispatch module', () => {
+    expect(source).toMatch(/require\(['"]\.\.\/lib\/coordinator\/dispatch\.cjs['"]\)/);
+    const importLine = source.match(/const \{[^}]*\} = require\(['"]\.\.\/lib\/coordinator\/dispatch\.cjs['"]\);/)[0];
+    expect(importLine).toContain('isDeliveredDispatchError');
   });
 });

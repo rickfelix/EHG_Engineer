@@ -1,0 +1,190 @@
+{
+  "executive_summary": "The existing post-compaction contract-re-read enforcement (core-protocol-gate.js reading protocolGate.fileReads) fires only at the next handoff, so role seats (Solomon, Adam, coordinator) -- which never run handoffs -- are uncovered by construction; drift flag ce3de628 (2026-09-02) is a witnessed miss. LEAD investigation (VALIDATION row dee7ea04/21ff50fc, Explore row e95179c6) corrected the original premise: the cited recordCompaction() is dead code on the dominant automatic-compaction path, and role registers actually read a DIFFERENT tracker (protocolFileReadStatus/contract_last_read_at) than the one core-protocol-gate.js clears. This PRD delivers a narrow, no-new-machinery fix: a pure comparison function wired into the already-wired PostToolUse hook (scripts/hooks/protocol-file-tracker.cjs) that flags a role seat whose contract_last_read_at is older than its own genuine last-compaction marker, at the next tool call rather than the next handoff -- leaving the existing worker-at-handoff path (protocolGate.fileReads, QF-20260524-337's preservation behavior) completely unchanged.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Read a session's genuine last-compaction timestamp",
+      "description": "A new pure helper reads ~/.claude/flags/last-compaction.json (the ONE marker the real wired PreCompact hook, scripts/hooks/precompact-snapshot.ps1, writes on every firing -- auto and manual) and returns the timestamp for the CURRENT session only, filtering strictly on the marker's embedded sessionId field, because the file is shared per-machine across concurrent sessions and file identity alone is not a valid session filter.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "readLastCompactionForSession(sessionId) returns null when no marker exists or the marker's sessionId does not match",
+        "readLastCompactionForSession(sessionId) returns the marker's timestamp when the sessionId matches",
+        "A concurrent session's compaction marker for a DIFFERENT sessionId is never returned for this session"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Compare against the role seat's own contract-read tracker",
+      "description": "A new pure helper reads the SAME contract_last_read_at value the register scripts (scripts/adam-register.cjs:345 checkContractRead, scripts/coordinator-startup-check.mjs:642 mirror, scripts/solomon-register.cjs equivalent) already compute -- NOT protocolGate.fileReads, which role registers never consult (VALIDATION F5 / mechanism_verifications entries 4-5). needsRecheck(compactionAt, contractReadAt) is pure: true iff compactionAt is set AND (contractReadAt is unset OR contractReadAt is older than compactionAt).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "needsRecheck returns true when a genuine compaction postdates the last recorded contract read",
+        "needsRecheck returns false when the last recorded contract read postdates (or equals) the compaction marker",
+        "needsRecheck returns false when there is no genuine compaction marker for this session (nothing to react to)"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Enforce at the next tool call, for role seats only, without a new process",
+      "description": "Wire FR-1+FR-2 into scripts/hooks/protocol-file-tracker.cjs's existing PostToolUse firing (already fires for every tool call, every session, including Solomon which has no quiet-tick script -- solving the seat-roster gap without inventing a Solomon tick). On a flagged seat, print a diagnostic line (mirroring role-capture-gate.mjs's `ROLE_CAPTURE_GATE=... state=REQUIRED` idiom: `POST_COMPACTION_REREAD_REQUIRED role=<role> since=<compactionAt>`) rather than hard-blocking the call, gated behind a staged-rollout flag ROLE_COMPACTION_REREAD_ENFORCE_V1 (unset/false = warn-only diagnostic; true = the tool call is refused until a fresh contract read lands), matching this repo's established staged-enforcement convention (e.g. COORD_CONTEXT_CEILING_ENFORCE_V1).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A role seat (adam, solomon, or coordinator) whose compaction marker postdates its contract_last_read_at is flagged on its next tool call, not deferred to a handoff",
+        "The flag clears automatically once contract_last_read_at advances past the compaction marker (a genuine re-read), never via a manual per-tick reset",
+        "With ROLE_COMPACTION_REREAD_ENFORCE_V1 unset, the flag is diagnostic-only (printed, not blocking) -- the default rollout posture",
+        "Solomon (no quiet-tick script) is checked correctly via the PostToolUse hook alone, with no Solomon-specific tick invented"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Preserve the existing worker-at-handoff path unchanged",
+      "description": "core-protocol-gate.js's protocolGate.fileReads clearing/blocking behavior at handoffs is NOT modified. QF-20260524-337's deliberate preservation of protocolGate across the real PreCompact hook (precompact-snapshot.ps1) is NOT reversed -- this SD's new check reads a separate tracker (FR-2) and never requires protocolGate.fileReads to clear on auto-compaction.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A regression test asserts the worker-at-handoff path (protocolGate.fileReads / core-protocol-gate.js) is byte-for-byte unchanged in behavior",
+        "QF-20260524-337's own regression test (post-compaction /sd-create no longer false-blocks) still passes unmodified"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No new machinery",
+      "description": "No new DB table/column, no new cron/scheduled process, no new per-seat script. Single new file (a pure comparison module) plus one call-site addition inside the already-wired protocol-file-tracker.cjs PostToolUse hook. Per ratification 76a3c081."
+    },
+    {
+      "id": "TR-2",
+      "title": "Session-scoped compaction marker read",
+      "description": "~/.claude/flags/last-compaction.json is a single shared file per machine home directory, not partitioned by session. Every read MUST filter on the marker's embedded sessionId field; never trust file mtime or existence alone as a signal for THIS session."
+    },
+    {
+      "id": "TR-3",
+      "title": "Staged rollout via existing env-flag convention",
+      "description": "ROLE_COMPACTION_REREAD_ENFORCE_V1 gates blocking behavior; unset/false is diagnostic-only. Mirrors COORD_CONTEXT_CEILING_ENFORCE_V1's staged-rollout shape already used in this codebase (lib/fleet/context-ceiling-checker.cjs)."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "A role seat with a genuine (session-matching) compaction marker newer than its contract_last_read_at is flagged on its next tool call",
+      "type": "unit",
+      "expected": "needsRecheck returns true; the PostToolUse call site prints POST_COMPACTION_REREAD_REQUIRED for that role"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "The SAME seat's subsequent ordinary action, taken AFTER a fresh contract re-read is recorded, is NOT flagged again",
+      "type": "unit",
+      "expected": "needsRecheck returns false once contract_last_read_at advances past the compaction marker -- proves the check clears rather than sticking, addressing the SD's own named routed-around risk"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "The existing worker-at-handoff path is unchanged",
+      "type": "regression",
+      "expected": "core-protocol-gate.js's protocolGate.fileReads clearing/blocking behavior at a handoff is identical to pre-SD behavior"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "QF-20260524-337's regression test still passes",
+      "type": "regression",
+      "expected": "A post-compaction /sd-create attempt does not false-block, exactly as QF-20260524-337 fixed"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Solomon (no quiet-tick script) is still checked",
+      "type": "integration",
+      "expected": "A synthetic Solomon session with a stale contract read after compaction is flagged via the PostToolUse hook alone, with no Solomon-specific tick script involved"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "A concurrent session's compaction marker on the same machine does not leak into this session's check",
+      "type": "unit",
+      "expected": "readLastCompactionForSession filters strictly by sessionId; a marker written for a different session is ignored"
+    }
+  ],
+  "acceptance_criteria": [
+    "A role seat (Solomon, Adam, or coordinator) that has compacted (auto OR manual) and then attempts ordinary work without re-reading its contract is refused or flagged, checked via protocolFileReadStatus/contract_last_read_at compared against the session-filtered last-compaction marker -- not via protocolGate.fileReads",
+    "The window between a compaction and the next handoff is no longer unguarded for workers either",
+    "Enforcement does not depend on self-authored prompt text surviving a seat rotation, and does not depend on a seat having its own quiet-tick script",
+    "The existing worker-at-handoff countermeasure is preserved unchanged and narrowly -- QF-20260524-337's protocolGate preservation is not reversed"
+  ],
+  "risks": [
+    {
+      "risk": "A per-tick refusal gets routed around, the way the worktree reaper cadence was previously switched off",
+      "mitigation": "Refusal is once per compaction (not once per tick), clears automatically on a genuine re-read (TS-2), and ships as diagnostic-only by default (ROLE_COMPACTION_REREAD_ENFORCE_V1 unset) with an explicit later flip to blocking, so the rollout itself cannot be silently disabled the same way",
+      "severity": "medium"
+    },
+    {
+      "risk": "The shared ~/.claude/flags/last-compaction.json marker races across concurrent sessions on the same machine",
+      "mitigation": "Every read filters strictly on the marker's embedded sessionId field (TS-6); the marker's existence or mtime alone is never treated as this session's signal",
+      "severity": "low"
+    },
+    {
+      "risk": "A third representation of protocol-file-read state is created, duplicating protocol-file-tracker.cjs's own 'must stay in sync with core-protocol-gate.js' warning (line 29)",
+      "mitigation": "This SD deliberately does NOT touch protocolGate.fileReads or core-protocol-gate.js (FR-4) -- it adds one new comparison over two already-existing signals, not a new state store",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Solomon, Adam, and coordinator role sessions (via their existing tool-call flow, no new tick script)"
+    ],
+    "dependencies": [
+      "scripts/hooks/protocol-file-tracker.cjs (existing wired PostToolUse hook, call-site addition)",
+      "~/.claude/flags/last-compaction.json (written by scripts/hooks/precompact-snapshot.ps1 on every real PreCompact firing)",
+      "scripts/adam-register.cjs / scripts/solomon-register.cjs / scripts/coordinator-startup-check.mjs (existing contract_last_read_at readers, unmodified)"
+    ],
+    "data_contracts": [
+      "none -- reads existing file-based state only, no schema change"
+    ],
+    "runtime_config": [
+      "ROLE_COMPACTION_REREAD_ENFORCE_V1 (unset/false = diagnostic-only; true = blocking)"
+    ],
+    "observability_rollout": [
+      "Diagnostic-only rollout first (prints POST_COMPACTION_REREAD_REQUIRED, never blocks), matching this repo's established non-blocking-first convention (see scripts/lint/root-dirt-lint.mjs); flip to blocking is a documented follow-up, not part of this SD's acceptance bar"
+    ]
+  },
+  "system_architecture": {
+    "summary": "One new pure comparison module plus one call-site addition inside the already-wired protocol-file-tracker.cjs PostToolUse hook -- no new process, table, or per-seat script.",
+    "components": [
+      {
+        "name": "lib/governance/post-compaction-role-recheck.cjs",
+        "change": "NEW -- pure readLastCompactionForSession(sessionId), readContractLastReadAt(role), needsRecheck(compactionAt, contractReadAt)"
+      },
+      {
+        "name": "scripts/hooks/protocol-file-tracker.cjs",
+        "change": "MODIFIED -- calls the new module for role sessions after its existing per-tool-call work; gated by ROLE_COMPACTION_REREAD_ENFORCE_V1"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Read-compare-flag: two already-existing signals, one new pure comparison, one call site. No new storage.",
+    "steps": [
+      "Add lib/governance/post-compaction-role-recheck.cjs with the three pure functions (FR-1/FR-2)",
+      "Wire the check into scripts/hooks/protocol-file-tracker.cjs's PostToolUse handler for role sessions, gated by ROLE_COMPACTION_REREAD_ENFORCE_V1 defaulting to diagnostic-only (FR-3)",
+      "On flag: print POST_COMPACTION_REREAD_REQUIRED (mirrors role-capture-gate.mjs's ROLE_CAPTURE_GATE=...state=REQUIRED idiom) rather than hard-blocking by default",
+      "Leave core-protocol-gate.js / protocolGate.fileReads completely untouched (FR-4)",
+      "Ship regression tests preserving the worker-at-handoff path and QF-20260524-337's own test (TS-3, TS-4) alongside new unit/integration tests (TS-1, TS-2, TS-5, TS-6)",
+      "Michael is explicitly out of scope (formalized after this SD was authored); the host is seat-name-agnostic, so adding a 4th role later is a metadata-only change, not new machinery"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Write a synthetic last-compaction.json marker for a test sessionId, with a contract_last_read_at recorded BEFORE that marker's timestamp for a synthetic role seat",
+      "expected_outcome": "needsRecheck() returns true and the tool-call diagnostic line POST_COMPACTION_REREAD_REQUIRED is printed for that role"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Advance the synthetic contract_last_read_at to AFTER the compaction marker's timestamp, then repeat the same tool call",
+      "expected_outcome": "needsRecheck() returns false and no diagnostic is printed -- the flag cleared on a genuine re-read"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Run the existing core-protocol-gate.js handoff-path test suite and QF-20260524-337's regression test",
+      "expected_outcome": "Both pass unmodified, proving the worker-at-handoff path and the auto-compaction preservation behavior are untouched"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G"
+  }
+}

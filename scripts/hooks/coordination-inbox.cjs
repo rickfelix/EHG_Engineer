@@ -143,8 +143,11 @@ const ADVISORY_IDLE_TYPES = ['CLAIM_RELEASED', 'CLAIM_REMINDER'];
 // drain (fail-toward-current), never a hook crash.
 let DIRECTIVE_KINDS = [];
 let PRIORITY_EXEMPT_DIRECTIVE_KINDS = [];
+// QF-20260904-748: fail-open default mirrors the pre-fix hardcoded single-kind behavior
+// if the require below fails for any reason.
+let REPLY_CORRELATED_KINDS = ['coordinator_reply'];
 try {
-  ({ DIRECTIVE_KINDS, PRIORITY_EXEMPT_DIRECTIVE_KINDS } = require(path.resolve(__dirname, '../../lib/fleet/worker-status.cjs')));
+  ({ DIRECTIVE_KINDS, PRIORITY_EXEMPT_DIRECTIVE_KINDS, REPLY_CORRELATED_KINDS } = require(path.resolve(__dirname, '../../lib/fleet/worker-status.cjs')));
 } catch { /* fail-open: ack-withholding disabled, hook still runs */ }
 
 // SD-LEO-FIX-FIX-COORDINATION-INBOX-001: pure, per-message inbox decision.
@@ -182,6 +185,17 @@ function classifyInboxMessage(msg, opts = {}) {
   // context (it carries signal_resolved:true) — that is genuine push delivered via /checkin, not a
   // friction signal (SD-LEO-INFRA-WORKER-INBOX-PUSH-DELIVERY-001 adversarial-review finding).
   if (isInfo && p.signal_type && !p.signal_resolved) return { skip: true };
+  // QF-20260904-748: an adam_advisory-kind row carrying payload.reply_to is a GENUINE
+  // ANSWER to a correlation THIS session itself opened — solomon-advisory.cjs
+  // force-coerces every Solomon reply's kind to adam_advisory (buildAdvisoryPayload),
+  // so a worker's own solomon_consult answer (worker-signal.cjs solomonConsultMain)
+  // travels under this exact kind. The unconditional skip just below predates that
+  // consult lane and only ever anticipated Adam's OWN fresh outbound advisory
+  // (target_session=coordinator) — a genuine reply must not be silently dropped by it.
+  // amAdam excluded: Adam's own visibility semantics for this kind are untouched here.
+  if (isInfo && p.kind === 'adam_advisory' && p.reply_to && !amAdam) {
+    return { skip: false, markRead: true, markAck: true };
+  }
   if (isInfo && p.kind === 'adam_advisory') return { skip: true };    // Adam advisory -> coordinator inbox
   // A worker's awaitCoordinatorReply consumes its own coordinator_reply, so workers skip it.
   // SD-LEO-INFRA-RESILIENT-SYMMETRIC-ADAM-001 FR-4: an ADAM session must NOT skip — it falls
@@ -301,8 +315,18 @@ function mergePriorityExempt(priorityRows, oldestBatch) {
 // after the :190 check and is never reached for that row). Excluding it from the fetch
 // faithfully mirrors CURRENT behavior; whether Solomon should see its own coordinator_reply
 // rows is a separate, unverified question out of scope for this QF.
+//
+// QF-20260904-748: generalized from a hardcoded ['coordinator_reply'] to the full
+// REPLY_CORRELATED_KINDS list (lib/fleet/worker-status.cjs, declared beside
+// PRIORITY_EXEMPT_DIRECTIVE_KINDS) so PAYLOAD_KINDS.ADAM_ADVISORY — every Solomon
+// reply's kind, including a worker's own solomon_consult answer — gets the same
+// exclude-from-the-capped-fetch treatment coordinator_reply already had. Every kind in
+// the list is skip:true here when it is NOT a reply (see classifyInboxMessage), so
+// excluding the whole kind from the oldest-N fetch never hides a genuinely NEW row of
+// that kind; replyToSignalRows below is the separate, uncapped fetch that recovers the
+// reply_to-set subset.
 function oldestBatchExcludedKinds({ twoWayOn, amAdam }) {
-  return (twoWayOn && !amAdam) ? ['coordinator_reply'] : [];
+  return (twoWayOn && !amAdam) ? REPLY_CORRELATED_KINDS : [];
 }
 
 function shouldCheck(sessionId) {
@@ -546,6 +570,19 @@ async function insertDeliveredRowIfRequested(supabase, sessionId, msg) {
       .eq('target_session', msg.sender_session)
       .limit(1);
     if (existing && existing.length > 0) return 'duplicate';
+    // transport-ack DELIVERED marker for msg.sender_session. QF-20260907-402 investigated
+    // routing this through insertCoordinationRow() and DECIDED AGAINST IT: a transport_ack is
+    // a best-effort, idempotent (deduped above via the existing-row check), fire-and-forget
+    // receipt that must never itself be blocked or parked — exactly the profile
+    // BACKPRESSURE_EXEMPT_KINDS' existing members (signal_receipt, capped_pool_broadcast) were
+    // added for. Routing through the choke point without also adding 'transport_ack' to that
+    // exempt set (+ its enforced worker-status.cjs DRAIN_SETS mirror,
+    // tests/unit/fleet/drain-sets-adam-reconciliation.test.js) would risk a delivery ack
+    // silently never landing under load — worse than today's raw insert, whose only downside
+    // is this lint suppression. This call site is also already best-effort itself (wrapped in
+    // the surrounding try/catch, logs and returns 'error' on any failure), so the raw insert's
+    // failure mode is no different from what routing through the choke point would produce.
+    // eslint-disable-next-line no-raw-session-coordination-insert -- see comment above
     await supabase
       .from('session_coordination')
       .insert({
@@ -710,6 +747,11 @@ async function main() {
   // on read_at, and /checkin's own coordinator_messages[] drain (worker-checkin.cjs:544)
   // already tolerates read_at being pre-set by another consumer (branches straight to
   // stamping acknowledged_at instead of erroring or re-blocking).
+  //
+  // QF-20260904-748: kind filter generalized from a hardcoded 'coordinator_reply' eq to an
+  // `in` over REPLY_CORRELATED_KINDS, so a Solomon reply (kind=adam_advisory, reply_to set —
+  // see the classifyInboxMessage carve-out this fetch feeds) gets the identical uncapped
+  // recovery instead of waiting behind five older unrelated rows.
   let replyToSignalRows = [];
   if (!tableErr && twoWayOn && !amAdam) {
     try {
@@ -718,7 +760,7 @@ async function main() {
         .select(SELECT_COLS)
         .eq('target_session', sessionId)
         .is('read_at', null)
-        .eq('payload->>kind', 'coordinator_reply')
+        .in('payload->>kind', REPLY_CORRELATED_KINDS)
         .not('payload->>reply_to', 'is', null)
         .order('created_at', { ascending: true })
         .limit(5);

@@ -9,6 +9,13 @@ import { parseDependencies } from '../dependency-resolver.js';
 import { formatVisionBadge } from './vision-scorecard.js';
 import { analyzeClaimRelationship, autoReleaseStaleDeadClaim, checkEnrichmentSignal } from '../claim-analysis.js';
 import { renderQFRow } from './quick-fixes.js';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+// QF-20260907-152: parseMandatoryChildOrder lives in claim-eligibility.cjs (CommonJS) alongside
+// the reader this same field feeds (mandatoryChildOrderPending) -- imported here rather than
+// re-implemented, so the display can never parse a shape the enforcement gate disagrees with.
+const { parseMandatoryChildOrder } = require('../../../../lib/fleet/claim-eligibility.cjs');
 
 /**
  * Display a track section with hierarchical SD items
@@ -321,9 +328,30 @@ async function displaySDItem(item, indent, childItems, allItems, sessionContext)
     console.log(`${colors.dim}${indent}        └─ Child deps: ${item.childDepStatus.summary}${colors.reset}`);
   }
 
+  // QF-20260904-708: parent's mandatory_child_order names an intended dispatch sequence;
+  // a non-terminal predecessor holds this child regardless of any other ranking signal.
+  if (item.childOrderHold && item.childOrderHold.held) {
+    console.log(`${colors.yellow}${indent}        └─ held: after ${item.childOrderHold.afterKey}${colors.reset}`);
+  }
+
   // Display children recursively
   const children = childItems.get(sdId) || childItems.get(item.id) || [];
   const childrenInTrack = children.filter(c => allItems.includes(c));
+
+  // QF-20260907-152 (QF-20260904-708 remainder): the PARENT'S OWN declared mandatory_child_order
+  // was invisible in sd:next -- only a held CHILD's row showed 'held: after <KEY>'. An operator
+  // reading the parent row alone had no way to see the dispatch order the gate is enforcing.
+  // Free-text (the fallback form the reader still accepts) is flagged as deprecated here, at the
+  // one place an operator actually sees the parsed order -- amend-sd.js writes the structured
+  // form going forward (QF-20260907-152), so any free-text row still displaying is a migration
+  // candidate, not a new one.
+  if (children.length > 0 && item.metadata?.mandatory_child_order) {
+    const { order, structured } = parseMandatoryChildOrder(item.metadata);
+    if (order) {
+      const deprecated = structured ? '' : ` ${colors.dim}(free-text form — deprecated, use amend-sd.js --mandatory-child-order)${colors.reset}`;
+      console.log(`${colors.dim}${indent}        └─ mandatory order: ${order.join(' → ')}${deprecated}${colors.reset}`);
+    }
+  }
 
   for (let i = 0; i < childrenInTrack.length; i++) {
     const child = childrenInTrack[i];

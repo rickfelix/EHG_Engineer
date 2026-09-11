@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { execSync } from 'child_process';
 import path from 'path';
+import fs from 'fs';
 
 // This suite may run from EITHER the main repo or an SD/QF worktree checkout (both carry an
 // identical copy of the hook). `path.resolve('.')` would silently pick whichever one the
@@ -99,5 +100,48 @@ describe('pre-tool-enforce — ENFORCEMENT 12e (worktree-add sibling guard)', ()
     const worktreeCwd = path.join(repoRoot, '.worktrees', 'SD-FDBK-INFRA-WORKTREE-PLACEMENT-GUARD-001');
     const result = runHook('Bash', { command: 'git worktree add .worktrees/qf/QF-FA-REGRESSION -b qf/QF-FA-REGRESSION', cwd: worktreeCwd });
     expect(result.stderr).not.toMatch(/ENF-12e/);
+  });
+
+  // QF-20260904-283: quota enforcement at the registration event itself, not only in the three
+  // canonical creator scripts. A live-count-40 fixture would require actually registering 40 real
+  // worktrees against this repo, which is both slow and would corrupt a real developer/CI
+  // checkout -- the same "top-level CLI script, real side effects" constraint that
+  // tests/unit/worktree-reaper/qf-quota-relocation.test.js documents for qf-start.js/
+  // create-quick-fix.js. Mirrors that file's established convention: source-order / static-content
+  // assertions instead of full behavioural execution, PLUS the live "does not falsely block a
+  // normal in-tree add under today's real (well-under-cap) count" regression check above.
+  describe('quota enforcement (source-order assertions, mirrors qf-quota-relocation.test.js convention)', () => {
+    const src = fs.readFileSync(hookPath, 'utf8');
+
+    it('calls enforceWorktreeQuota inside the ENF-12e block', () => {
+      const blockIdx = src.indexOf('ENFORCEMENT 12e');
+      const quotaIdx = src.indexOf('enforceWorktreeQuota(', blockIdx);
+      expect(blockIdx, 'ENFORCEMENT 12e block not found').toBeGreaterThan(-1);
+      expect(quotaIdx, 'enforceWorktreeQuota( call not found inside ENF-12e').toBeGreaterThan(blockIdx);
+    });
+
+    it('on WORKTREE_QUOTA_EXCEEDED, blocks via auditAndExit(_, 2, _) with the quota error text', () => {
+      const quotaIdx = src.indexOf('enforceWorktreeQuota(');
+      const exceededIdx = src.indexOf("quotaErr.errorCode === 'WORKTREE_QUOTA_EXCEEDED'", quotaIdx);
+      expect(exceededIdx, 'WORKTREE_QUOTA_EXCEEDED branch not found after the quota call').toBeGreaterThan(quotaIdx);
+      const exitIdx = src.indexOf('auditAndExit(auditPromise, 2, 1000)', exceededIdx);
+      expect(exitIdx, 'no exit(2) found in the quota-exceeded branch').toBeGreaterThan(exceededIdx);
+      // "same error text so every path meets the same count" (QF FIX text) — reuses
+      // quotaErr.message verbatim (createQuotaExceededError's text), never a re-authored string.
+      const branch = src.slice(exceededIdx, exitIdx);
+      expect(branch).toContain('quotaErr.message');
+    });
+
+    it('a non-quota error from enforceWorktreeQuota is fail-open (never blocks)', () => {
+      const quotaIdx = src.indexOf('enforceWorktreeQuota(');
+      const exceededIdx = src.indexOf("quotaErr.errorCode === 'WORKTREE_QUOTA_EXCEEDED'", quotaIdx);
+      const catchEnd = src.indexOf('}\n      }\n    } catch { /* fail-open on any internal error */ }', exceededIdx);
+      expect(catchEnd, 'expected the quota try/catch to close before the outer ENF-12e catch').toBeGreaterThan(exceededIdx);
+      const afterBranch = src.slice(exceededIdx, catchEnd);
+      // Only ONE auditAndExit call in this whole span (the quota-exceeded branch) — any other
+      // thrown error falls through with no second exit call, i.e. fail-open.
+      const exitCount = (afterBranch.match(/auditAndExit\(/g) || []).length;
+      expect(exitCount).toBe(1);
+    });
   });
 });

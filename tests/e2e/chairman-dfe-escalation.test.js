@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { insertGuarded, CLASSIFICATION } from '../../lib/governance/fixture-producer-guard.mjs';
 
 dotenv.config();
 
@@ -37,13 +38,12 @@ describe.skipIf(!canRun)('Chairman DFE Escalation API (E2E)', () => {
 
     if (!testVentureId) {
       // Create a test venture if none exist
-      const { data: newVenture } = await supabase
-        .from('ventures')
-        .insert({
+      const { data: newVenture } = await insertGuarded(supabase, 'ventures', {
           name: 'E2E Test Venture - DFE',
           description: 'Test venture for DFE escalation E2E',
           status: 'active',
-        })
+          is_demo: true,
+        }, { classification: CLASSIFICATION.FIXTURE, source: 'tests/e2e/chairman-dfe-escalation.test.js' })
         .select('id')
         .single();
       testVentureId = newVenture?.id;

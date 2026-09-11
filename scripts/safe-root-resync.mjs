@@ -282,7 +282,7 @@ async function restoreAfterResync(opts = {}) {
  *
  * @returns {Promise<{ok: boolean, synced?: boolean, cleaned?: boolean,
  *                    cleanPreviewOnly?: boolean, skipped?: string, conflict?: boolean,
- *                    aborted?: string, restore?: object}>}
+ *                    message?: string, aborted?: string, restore?: object}>}
  */
 export async function safeRootResync(opts = {}) {
   const {
@@ -371,23 +371,14 @@ export async function safeRootResync(opts = {}) {
     process.stderr.write(`[safe-root-resync] fetch warn: ${e && e.message || e}\n`);
   }
 
-  // ── STEP 3: Dirty-tree check (mirroring leo-stack.sh sync_repo guards) ────
-  // Skip if the tree has uncommitted tracked changes (beyond .protocol-sync auto-churn).
-  let dirtyFiles = '';
-  try {
-    const { stdout } = await exec(['status', '--porcelain', '--untracked-files=no']);
-    dirtyFiles = (stdout || '').split('\n')
-      .filter(l => l.trim() && !l.includes('.claude/.protocol-sync'))
-      .join('\n');
-  } catch { /* ignore — fail open */ }
-
-  if (dirtyFiles.trim()) {
-    // Cap the dirty file list so an unbounded working-tree mess never bloats a durable verdict.
-    const dirtyFileList = dirtyFiles.split('\n').filter((l) => l.trim());
-    return { ok: true, skipped: 'dirty', dirtyFiles: dirtyFileList.slice(0, 10) };
-  }
-
-  // ── STEP 4: Check if already current ─────────────────────────────────────
+  // ── STEP 3: Check if already current ─────────────────────────────────────
+  // QF-20260903-428: there is deliberately NO dirty-tree gate here. A tracked
+  // modification elsewhere in the tree cannot be clobbered by a fast-forward-only
+  // merge — git itself refuses the merge (caught below) if the incoming changes
+  // would touch a locally-modified file. Gating on ANY dirty file, unconditionally,
+  // disabled this resync precisely when the shared root was in active use (a
+  // six-seat fleet is rarely clean), which is exactly when drift is most likely to
+  // accumulate. The ff-only merge is the safety mechanism; let it do its job.
   let behind = 0;
   try {
     const { stdout } = await exec(['rev-list', '--count', 'HEAD..origin/main']);
@@ -404,19 +395,21 @@ export async function safeRootResync(opts = {}) {
     return { ok: true, synced: false, cleaned: false, skipped: 'already_current', restore };
   }
 
-  // ── STEP 5: ff-only merge ─────────────────────────────────────────────────
+  // ── STEP 4: ff-only merge ─────────────────────────────────────────────────
   let synced = false;
   if (behind > 0) {
     try {
       await exec(['merge', '--ff-only', 'origin/main', '--quiet']);
       synced = true;
     } catch (e) {
-      // Non-ff conflict
-      return { ok: false, conflict: true, behind };
+      // Non-ff conflict — report git's own message verbatim (it names the
+      // conflicting files) rather than discarding it, per QF-20260903-428.
+      const message = (e && (e.stderr || e.message)) || '';
+      return { ok: false, conflict: true, behind, message };
     }
   }
 
-  // ── STEP 6: Optional clean-untracked (DOUBLE opt-in, explicit, never -x) ──
+  // ── STEP 5: Optional clean-untracked (DOUBLE opt-in, explicit, never -x) ──
   // `git clean -fd` permanently deletes ALL untracked, non-gitignored files —
   // including uncommitted work-in-progress (.prd-payloads/*.json, new scratch).
   // Because that is genuinely destructive, the ACTUAL clean requires BOTH flags:
@@ -454,7 +447,7 @@ export async function safeRootResync(opts = {}) {
     }
   }
 
-  // ── STEP 7: Restore tail (coordinator pointer + node_modules) ─────────────
+  // ── STEP 6: Restore tail (coordinator pointer + node_modules) ─────────────
   const restore = await restoreAfterResync({
     supabase, cwd, fs: fsMod, npmInstall,
     checkNodeModulesFn, acquireLockFn, waitForLockFn, releaseLockFn, sessionId,
