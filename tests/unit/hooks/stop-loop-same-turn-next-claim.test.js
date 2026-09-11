@@ -411,7 +411,7 @@ describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" 
     // The park call must appear textually AFTER the same-turn-claim block, still inside the same
     // `if (workerShaped)` body — i.e. the fix is additive, not a replacement of the existing path.
     const sameTurnIdx = src.indexOf('SAME-TURN NEXT-CLAIM: claimed');
-    const parkIdx = src.indexOf('await parkSessionRecoverable(sessionId, { armVerdict });');
+    const parkIdx = src.indexOf('await parkSessionRecoverable(sessionId, { armVerdict, pendingWakeMs: priorArmCarries ? priorArm.dueInMs : undefined });');
     expect(sameTurnIdx).toBeGreaterThan(-1);
     expect(parkIdx).toBeGreaterThan(sameTurnIdx);
   });
@@ -421,7 +421,7 @@ describe('main() wiring (source-pin — SC-4, "chose to exit" vs "never looked" 
   it('surfaces consumed coordinator messages before falling through to a silent park', () => {
     const messagesIdx = src.indexOf('decideMessageBlock({ pendingMessages, armVerdict })');
     const noneClaimableBlockIdx = src.indexOf('SAME-TURN CHECKIN (${messageDecision.reason}): nothing claimable');
-    const parkIdx = src.indexOf('await parkSessionRecoverable(sessionId, { armVerdict });');
+    const parkIdx = src.indexOf('await parkSessionRecoverable(sessionId, { armVerdict, pendingWakeMs: priorArmCarries ? priorArm.dueInMs : undefined });');
     expect(messagesIdx).toBeGreaterThan(-1);
     expect(noneClaimableBlockIdx).toBeGreaterThan(messagesIdx);
     expect(parkIdx).toBeGreaterThan(noneClaimableBlockIdx);
