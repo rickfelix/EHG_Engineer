@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- requires-chairman-apply (chairman verbal 2026-09-11 ~20:12Z, ratification da175789: "I agree with your recommendations on decision 2." -- item (b))
 -- SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-5 — widen drive_reports.cadence to admit 'hourly'.
 --
 -- Chairman-directed (SMS 2026-08-12 19:16Z): "I think hourly makes sense, especially if it
