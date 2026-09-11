@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
- * Register the five credentialed Michael feeders as host-local Windows Task Scheduler tasks.
+ * Register the seven host-venue Michael feeders as host-local Windows Task Scheduler tasks.
  * SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D (FR-8, TR-8). Spec docs/michael/02-SPEC.md §5 host venue;
- * ratification 0daf3bd8 (GitHub Actions holds no Google credential) and ff4ef5b4 (credential venue).
+ * ratification 0daf3bd8 (GitHub Actions holds no Google credential) and ff4ef5b4 (credential venue), amended by
+ * 00f696f1 (2026-09-08, "Move them"): todoist-brief and brief-assemble moved from GitHub Actions to this host too,
+ * because the GHA crons fired ~4h late and every run was inert outside its ET window (QF-20260911-145).
  *
  * WHY host-local: calendar-read, gmail-triage and tasks-classifier decrypt the chairman's Google grant,
  * which exists only on this host (MICHAEL_ENCRYPTION_KEY in the host .env). Each task fires every 15
@@ -23,9 +25,11 @@
  * Interactive and relies on run-hidden.vbs (QF-20260902-191) for console suppression, and so does this.
  *
  * HOST PRECONDITIONS, stated plainly: the laptop must be AWAKE (no host task has wake-from-sleep
- * configured) and ON MAINS POWER (the sibling tasks carry DisallowStartIfOnBatteries; Task Scheduler's
- * default does too). A missed window shows as a missing/failed run row, one line in Adam's 6 AM text
- * and a degraded brief — never a silent gap.
+ * configured). It need NOT be on mains power: after each /Create this registrar runs the same unelevated
+ * Set-ScheduledTask -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries post-step as QF-20260908-848
+ * (schtasks /Create has no flag for either; the default DisallowStartIfOnBatteries refused every 15-min
+ * fire with 0x800710E0 on battery overnight, QF-20260911-145), and --verify reads both flags back. A missed
+ * window shows as a missing/failed run row, one line in Adam's 6 AM text and a degraded brief — never a silent gap.
  *
  * SHADOW PHASE (SECURITY F-3 / RISK S2): gmail-triage is registered with --apply (rows and intents
  * recorded) and WITHOUT --modify. Promotion to executing intents is an explicit chairman action:
@@ -56,18 +60,21 @@ import { execFileSync } from 'child_process';
 import { getRepoRoot } from '../lib/repo-paths.js';
 import {
   buildWrapperScript, buildHiddenTrAction, buildCreateArgs, buildRemoveArgs, buildQueryArgs, buildQueryXmlArgs,
-  verifyHiddenLaunch, TASK_NAME_ILLEGAL_CHARS, HIDDEN_LAUNCHER_REL_PATH,
+  verifyHiddenLaunch, applyBatteryTolerantSettings, TASK_NAME_ILLEGAL_CHARS, HIDDEN_LAUNCHER_REL_PATH,
 } from './setup-alarm-cron-tasks.mjs';
 
 export const INTERVAL_MINUTES = 15;
 export const START_TIME = '00:00';
 
-/** The five host feeders (spec §5 windows are enforced inside each script, not by the scheduler). */
+/** The seven host feeders (spec §5 windows are enforced inside each script, not by the scheduler); windowEt mirrors lib/michael/feeder.mjs FEEDERS. */
 export const MICHAEL_TASKS = Object.freeze([
   { feeder: 'tasks-classifier', taskName: 'EHG Michael tasks-classifier', script: 'scripts/michael/tasks-classifier.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-tasks-classifier-task.cmd'), windowEt: '03:45-04:30' },
   { feeder: 'calendar-read', taskName: 'EHG Michael calendar-read', script: 'scripts/michael/calendar-read.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-calendar-read-task.cmd'), windowEt: '04:00-05:00' },
   // Shadow phase: --apply records intents; --modify is added only by an explicit --with-modify register.
   { feeder: 'gmail-triage', taskName: 'EHG Michael gmail-triage', script: 'scripts/michael/gmail-triage.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-gmail-triage-task.cmd'), windowEt: '04:30-05:30', promotable: true },
+  // Ratification 00f696f1: moved from GitHub Actions to the host (the GHA crons fired ~4h late and always inert).
+  { feeder: 'todoist-brief', taskName: 'EHG Michael todoist-brief', script: 'scripts/michael/todoist-brief.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-todoist-brief-task.cmd'), windowEt: '04:45-05:30' },
+  { feeder: 'brief-assemble', taskName: 'EHG Michael brief-assemble', script: 'scripts/michael/brief-assemble.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-brief-assemble-task.cmd'), windowEt: '05:15-06:00' },
   // Child J (v1.1): enrichment feeders, windowed after BRIEF_DEADLINE_ET like their FEEDERS registry entries.
   { feeder: 'oracle-extract', taskName: 'EHG Michael oracle-extract', script: 'scripts/michael/oracle-extract.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-oracle-extract-task.cmd'), windowEt: '06:00-06:30' },
   { feeder: 'health-sync', taskName: 'EHG Michael health-sync', script: 'scripts/michael/health-sync.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-health-sync-task.cmd'), windowEt: '06:00-06:30' },
@@ -138,6 +145,12 @@ export function wrapperPathFromXml(xml) {
   return quoted.length >= 2 ? quoted[1] : null;
 }
 
+/** Pure: the two battery settings the registrar clears after /Create, read back from the task XML; each one still true (or absent) is a problem (QF-20260911-145). */
+export function verifyBatteryTolerant(xml) {
+  return ['DisallowStartIfOnBatteries', 'StopIfGoingOnBatteries'].filter((f) => !new RegExp(`<${f}>false</${f}>`).test(String(xml || '')))
+    .map((f) => `<${f}> is not false — the task would refuse or stop on battery (0x800710E0); re-run the register to apply Set-ScheduledTask`);
+}
+
 /** Pure: the script file each plan entry launches (first token of its command line). */
 export function scriptFileOf(plan, repoRoot) {
   return path.join(repoRoot, String(plan.script).split(/\s+/)[0]);
@@ -151,6 +164,7 @@ export async function main(argv = process.argv, deps = {}) {
   const logger = deps.logger || console;
   const fsx = deps.fs || fs;
   const runSchtasks = deps.runSchtasks || defaultRunSchtasks;
+  const applyBattery = deps.applyBatterySettings || applyBatteryTolerantSettings;
   const tag = '[setup-michael-host-tasks]';
   if (args.help) { logger.log(USAGE); return { exitCode: 0, action: 'help' }; }
   if (args.unknown.length) { logger.error(`${tag} unknown argument(s) ${args.unknown.join(' ')} — refusing (a typo must not become a live register). ${USAGE}`); return { exitCode: 2, action: 'unknown_flag', unknown: args.unknown }; }
@@ -182,7 +196,7 @@ export async function main(argv = process.argv, deps = {}) {
         allOk = false; results.push({ taskName: t.taskName, ok: false }); continue;
       }
       const verdict = verifyHiddenLaunch(q.stdout);
-      const problems = [...verdict.problems];
+      const problems = [...verdict.problems, ...verifyBatteryTolerant(q.stdout)];
       // the XML carries only the launcher and the wrapper path; the promotion is read from THE WRAPPER THE OS LAUNCHES,
       // which must be this repo's wrapper (another worktree's is a different registration) and must exist on disk
       const expected = path.join(repoRoot, t.wrapperRelPath);
@@ -193,7 +207,7 @@ export async function main(argv = process.argv, deps = {}) {
       const ok = problems.length === 0;
       const modify = ok && t.promotable ? wrapperPromoted(launched, fsx) : false;
       if (!ok) { for (const p of problems) logger.error(`${tag} VERIFY FAILED (${t.taskName}) — ${p}`); allOk = false; }
-      else logger.log(`${tag} '${t.taskName}' VERIFIED — hidden-window launch, repeating, enabled${t.promotable ? (modify ? ', --modify PROMOTED' : ', shadow phase (no --modify)') : ''}`);
+      else logger.log(`${tag} '${t.taskName}' VERIFIED — hidden-window launch, repeating, enabled, battery-tolerant${t.promotable ? (modify ? ', --modify PROMOTED' : ', shadow phase (no --modify)') : ''}`);
       results.push({ taskName: t.taskName, ok, modify, wrapper: launched });
     }
     return { exitCode: allOk ? 0 : 1, action: 'verified', results };
@@ -219,11 +233,12 @@ export async function main(argv = process.argv, deps = {}) {
     const dryMissing = plan.map((p) => scriptFileOf(p, repoRoot)).filter((f) => !fsx.existsSync(f));
     if (dryMissing.length) logger.error(`${tag} DRY RUN — would REFUSE: feeder script(s) missing: ${dryMissing.join(', ')}`);
     for (const p of plan) if (p.promotable && !args.withModify && wrapperPromoted(p.wrapperPath, fsx)) logger.warn(`${tag} DRY RUN — '${p.taskName}' is currently PROMOTED; this register without --with-modify would DEMOTE it to the shadow phase.`);
-    logger.log(`${tag} DRY RUN — preconditions: host awake (no wake-from-sleep is configured) and on mains power (DisallowStartIfOnBatteries); no /RU /NP (denied unelevated on this host).`);
+    logger.log(`${tag} DRY RUN — preconditions: host awake (no wake-from-sleep is configured); battery-tolerant (Set-ScheduledTask -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries after each /Create, QF-20260908-848); no /RU /NP (denied unelevated on this host).`);
     for (const p of plan) {
       logger.log(`${tag} DRY RUN — wrapper ${p.wrapperPath}:`);
       logger.log(p.wrapperContent.replace(/\r\n/g, '\n'));
       logger.log(`${tag} would run: schtasks ${p.createArgs.join(' ')}`);
+      logger.log(`${tag} would run: Set-ScheduledTask -TaskName '${p.taskName}' -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`);
     }
     return { exitCode: 0, action: 'dry_run_register', plan: plan.map((p) => ({ taskName: p.taskName, wrapperPath: p.wrapperPath, script: p.script })) };
   }
@@ -260,6 +275,9 @@ export async function main(argv = process.argv, deps = {}) {
       logger.error(`${tag} schtasks /Create failed for '${p.taskName}' (code ${res.code}): ${(res.stderr || '').trim()} — wrapper ${p.wrapperRelPath} left unchanged`);
       allOk = false; continue;
     }
+    // the task now exists with Task Scheduler's default battery restrictions: clear them (non-fatal, like QF-20260908-848; --verify reads the result)
+    const power = applyBattery(p.taskName);
+    if (!power.ok) logger.warn(`${tag} WARNING: could not clear battery restrictions for '${p.taskName}': ${power.error} — it will NOT fire while the host is on battery (0x800710E0) until a re-run succeeds`);
     try { fsx.renameSync(staged, p.wrapperPath); } catch (err) {
       try { fsx.unlinkSync(staged); } catch { /* best effort */ }
       logger.error(`${tag} task '${p.taskName}' registered but the wrapper swap failed (${err.message}); the task runs the PREVIOUS wrapper until a re-run succeeds`);
