@@ -6,7 +6,14 @@
 --   marker the README reads. TIER-2 by measurement, not assumption: scripts/lib/
 --   migration-tier-classifier.mjs FORBIDDEN_TOPLEVEL = /(DROP|TRUNCATE|DELETE|UPDATE|RENAME|
 --   GRANT|REVOKE|CLUSTER|REINDEX|REFRESH|VACUUM|ANALYZE|COPY|CALL|LISTEN|NOTIFY|IMPORT|MERGE|
---   LOCK|DO)/i -- this file hits DROP (DROP TRIGGER IF EXISTS), GRANT, REVOKE and DO ($verify$).
+--   LOCK|DO)/i -- this file hits DROP (DROP TRIGGER IF EXISTS), GRANT and REVOKE. TIER-2 on
+--   those alone; there is deliberately NO inline DO $verify$ block in this file (SECURITY finding
+--   S1, EXEC-TO-PLAN evidence f4ae9adf, corrected here) -- migration-shape tests assert the SQL
+--   text only (existential, not behavioural). A behavioural proof of the four guards (INSERT
+--   accepted, UPDATE/DELETE/TRUNCATE rejected, the backfill idempotency index enforced, a second
+--   live_encode row for the same target accepted) has NOT been run against a live database as of
+--   this commit and should be done once, by hand or via a short throwaway script, immediately
+--   after the chairman's apply ceremony and before the FR-4 backfill is run --apply.
 -- SD-LEO-INFRA-RATIFICATION-ENCODE-VERIFICATION-001 (FR-3)
 --
 -- MODELLED ON: database/chairman-gated/20260821_solomon_ledger_attestations.sql (the pure

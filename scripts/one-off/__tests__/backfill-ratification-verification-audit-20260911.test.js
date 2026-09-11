@@ -151,5 +151,23 @@ describe('runBackfill', () => {
     expect(sb._calls.inserts[0].attempt_kind).toBe('legacy_backfill_audit');
     expect(sb._calls.inserts[0].encoded_at_persisted).toBe(true);
     expect(sb._calls.inserts[0].outcome).toBe('verified');
+    // SECURITY (EXEC-TO-PLAN, evidence f4ae9adf) S4: the raw rendered file must never reach the
+    // INSERT-only `detail` jsonb — file_sha256 (computed by the store) exists precisely so it
+    // doesn't have to be.
+    expect(sb._calls.inserts[0].detail).not.toHaveProperty('content');
+  });
+
+  it('SECURITY S3: a marker_absent verdict (marker genuinely not at the pin) never sends a negative marker_offset — .indexOf returning -1 must clamp to null, not violate crv_marker_offset_nonneg', async () => {
+    const manifestDeps = { readFileSync: fakeReadFileSync({ 'claude-generation-manifest.json': JSON.stringify({ section_digests: { meta: { 94: { target_file: 'CLAUDE_ADAM.md' } } } }) }) };
+    const resolveEncodeCommit = async () => ({ tier: 'exact_commit_pin', commit: 'deadbeef' });
+    const readContractAtCommit = async () => 'nothing relevant here';
+    const sb = makeSupabase({
+      encodedRows: [{ id: 'r1', encoded_at: '2026-08-01T00:00:00Z', encoded_ref: { type: 'section_id', section_id: '94', manifest_hash: 'x' }, marker_text: 'the ratified clause' }],
+    });
+    const logger = { log: vi.fn(), error: vi.fn() };
+    const result = await runBackfill(sb, { repoRoot: REPO_ROOT, apply: true, deps: { ...manifestDeps, resolveEncodeCommit, readContractAtCommit }, logger });
+    expect(result.inserted).toBe(1);
+    expect(sb._calls.inserts[0].outcome).toBe('marker_absent');
+    expect(sb._calls.inserts[0].marker_offset).toBeNull();
   });
 });

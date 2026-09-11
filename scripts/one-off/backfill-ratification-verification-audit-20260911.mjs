@@ -119,13 +119,20 @@ export async function runBackfill(supabase, { repoRoot = getRepoRoot(), apply = 
     const verdict = await classifyLegacyRow(row, { repoRoot, deps });
     logger.log(`${apply ? '[APPLY]' : '[DRY-RUN]'} ${row.id}: outcome=${verdict.outcome} pin_tier=${verdict.pinTier || 'null'} commit=${verdict.commitSha || 'null'}`);
     if (!apply) { results.push({ id: row.id, ...verdict }); continue; }
+    // SECURITY (EXEC-TO-PLAN, evidence f4ae9adf) S3: .indexOf can return -1 (marker genuinely
+    // absent at the pin) — crv_marker_offset_nonneg rejects a negative offset outright, which
+    // silently dropped exactly the marker_absent audit rows this backfill exists to surface.
+    // S4: `detail` must never carry the raw rendered file — strip `content`, matching the same
+    // rule the live encode path enforces on itself (ratification-writer.mjs).
+    const rawOffset = verdict.content && typeof row.marker_text === 'string' ? verdict.content.indexOf(row.marker_text) : -1;
+    const { content: _rawContentOmittedFromDetail, ...detailForRecord } = verdict;
     const rec = await recordVerificationAttempt(supabase, {
       targetRatificationId: row.id, attemptKind: 'legacy_backfill_audit', outcome: verdict.outcome,
       encodedAtPersisted: true, pinTier: verdict.pinTier, commitSha: verdict.commitSha,
       targetFile: verdict.targetFile, contentRead: verdict.content || null,
-      markerOffset: verdict.content && typeof row.marker_text === 'string' ? verdict.content.indexOf(row.marker_text) : null,
+      markerOffset: rawOffset >= 0 ? rawOffset : null,
       attemptedEncodedRef: row.encoded_ref || {}, attemptedMarkerText: row.marker_text || '(none)',
-      reason: verdict.reason || null, producer: PRODUCER, detail: verdict,
+      reason: verdict.reason || null, producer: PRODUCER, detail: detailForRecord,
     });
     if (rec.recorded) inserted += 1;
     results.push({ id: row.id, ...verdict, recorded: rec.recorded, recordReason: rec.reason });
