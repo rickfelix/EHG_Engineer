@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-08T13:02:28.929Z",
-  "git_commit": "357cb489",
+  "generated_at": "2026-09-11T10:03:54.973Z",
+  "git_commit": "50b076a4",
   "db_snapshot_hash": "e8156a0352cac564",
   "files": {
     "CLAUDE.md": {
@@ -69,11 +69,11 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 131747,
-      "bytes": 132652,
-      "estimated_tokens": 32937,
-      "content_hash": "e796b15341b465c0",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001\\CLAUDE_ADAM.md"
+      "chars": 144049,
+      "bytes": 145010,
+      "estimated_tokens": 36013,
+      "content_hash": "ca9a6cdf7a335f46",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260911\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
@@ -229,7 +229,7 @@
     }
   },
   "section_digests": {
-    "global": "0eb457a1546ea898",
+    "global": "408aa091deec917a",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -483,7 +483,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "61e3948cc0623b08",
+      "601": "9f2e47998f45c636",
       "602": "52425599b58d0a12",
       "603": "98d7b093d064f76a",
       "605": "f5d0c5029c6a3524",
