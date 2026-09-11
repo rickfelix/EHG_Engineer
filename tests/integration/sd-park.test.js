@@ -72,7 +72,7 @@ async function seedSd(suffix, { status = 'in_progress', current_phase = 'EXEC', 
       id, sdKey, `Throwaway park test ${suffix}`, status, 'infrastructure', 'low',
       `Throwaway row for ${RUN_ID} ${suffix}. Safe to roll back.`,
       `Regression fixture for SD-LEO-INFRA-PARKED-STATUS-REPLACE-001 (${suffix}).`,
-      `Seeded inside a rolled-back transaction; never committed.`,
+      'Seeded inside a rolled-back transaction; never committed.',
       current_phase, progress, JSON.stringify(metadata), 'TEST', 'TEST',
     ],
   );
@@ -103,7 +103,7 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
       await rawClient.query('ROLLBACK');
       // Sanity: confirm none of our throwaway SDs survived the rollback.
       const { rows } = await rawClient.query(
-        `SELECT count(*)::int AS n FROM strategic_directives_v2 WHERE sd_key LIKE $1`,
+        'SELECT count(*)::int AS n FROM strategic_directives_v2 WHERE sd_key LIKE $1',
         [`SD-${RUN_ID}-%`],
       );
       expect(rows[0].n).toBe(0);
@@ -151,7 +151,7 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
     const sessionId = `sess-${RUN_ID}-claim`;
     // Mark the SD as claimed by this session.
     await rawClient.query(
-      `UPDATE strategic_directives_v2 SET is_working_on=true, claiming_session_id=$2, active_session_id=$2 WHERE sd_key=$1`,
+      'UPDATE strategic_directives_v2 SET is_working_on=true, claiming_session_id=$2, active_session_id=$2 WHERE sd_key=$1',
       [sdKey, sessionId],
     );
     // Seed a claude_sessions row holding the claim WITH worktree fields set.
@@ -171,7 +171,7 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
     expect(sd.is_working_on).toBe(false);
 
     const { rows: sess } = await rawClient.query(
-      `SELECT sd_key, worktree_path, worktree_branch, status FROM claude_sessions WHERE session_id=$1`,
+      'SELECT sd_key, worktree_path, worktree_branch, status FROM claude_sessions WHERE session_id=$1',
       [sessionId],
     );
     expect(sess.length).toBe(1);
@@ -200,7 +200,7 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
 
     // Before park: both appear in the candidate view.
     const beforeRows = await rawClient.query(
-      `SELECT sd_id FROM v_sd_next_candidates WHERE sd_id IN ($1,$2)`,
+      'SELECT sd_id FROM v_sd_next_candidates WHERE sd_id IN ($1,$2)',
       [parkedKey, controlKey],
     );
     const beforeSet = beforeRows.rows.map((r) => r.sd_id).sort();
@@ -211,13 +211,13 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
 
     // After park: parked SD returns ZERO rows; control still present.
     const parkedRows = await rawClient.query(
-      `SELECT sd_id FROM v_sd_next_candidates WHERE sd_id=$1`,
+      'SELECT sd_id FROM v_sd_next_candidates WHERE sd_id=$1',
       [parkedKey],
     );
     expect(parkedRows.rows.length).toBe(0);
 
     const controlRows = await rawClient.query(
-      `SELECT sd_id FROM v_sd_next_candidates WHERE sd_id=$1`,
+      'SELECT sd_id FROM v_sd_next_candidates WHERE sd_id=$1',
       [controlKey],
     );
     expect(controlRows.rows.length).toBe(1);
@@ -240,7 +240,7 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
     );
     // Snapshot retro_notifications count for this SD (by sd_id = the SD id/key).
     const retroBefore = await rawClient.query(
-      `SELECT count(*)::int AS n FROM retro_notifications WHERE sd_id=$1`,
+      'SELECT count(*)::int AS n FROM retro_notifications WHERE sd_id=$1',
       [sdKey],
     );
 
@@ -248,7 +248,7 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
 
     // issue_patterns assignment unchanged — the cancel trigger (status->cancelled) did NOT fire.
     const { rows: pat } = await rawClient.query(
-      `SELECT status, assigned_sd_id FROM issue_patterns WHERE pattern_id=$1`,
+      'SELECT status, assigned_sd_id FROM issue_patterns WHERE pattern_id=$1',
       [patternId],
     );
     expect(pat[0].assigned_sd_id).toBe(sdKey);
@@ -256,7 +256,7 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
 
     // retro_notifications count unchanged — the completion trigger did NOT fire.
     const retroAfter = await rawClient.query(
-      `SELECT count(*)::int AS n FROM retro_notifications WHERE sd_id=$1`,
+      'SELECT count(*)::int AS n FROM retro_notifications WHERE sd_id=$1',
       [sdKey],
     );
     expect(retroAfter.rows[0].n).toBe(retroBefore.rows[0].n);
@@ -286,7 +286,7 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
     expect(parked.status).toBe('deferred');
     expect(parked.metadata.park_reason).toBe('temporary');
 
-    const res = await unpark(savepointClient, sdKey, { actor: 'PLAN' });
+    const res = await unpark(savepointClient, sdKey, { reason: 'no longer needed', actor: 'PLAN' });
     expect(res.status).toBe('active'); // restored to the pre-park workable status
 
     const after = await readSd(sdKey);
@@ -311,11 +311,106 @@ describeDb('lib/sd-park.js park()/unpark() — live DB, savepoint-isolated', () 
 
     // unpark restores progress->100 in EXEC, so auto_transition_status flips
     // status to 'pending_approval'. unpark must RETURN the actual persisted status.
-    const res = await unpark(savepointClient, sdKey, { actor: 'PLAN' });
+    const res = await unpark(savepointClient, sdKey, { reason: 'resuming', actor: 'PLAN' });
     const after = await readSd(sdKey);
     expect(after.progress).toBe(100);
     expect(after.status).toBe('pending_approval');
     expect(res.status).toBe('pending_approval'); // truthful contract: returns the persisted status, not the request
+  });
+
+  it('TS-11 (SD-LEO-INFRA-DEFERRED-STATE-ENTRANCE-001, FR-2): unpark() without --reason throws before any DB write', async () => {
+    const sdKey = await seedSd('reasonless', { status: 'active', current_phase: 'LEAD', progress: 0 });
+    await park(savepointClient, sdKey, { reason: 'temporary', actor: 'PLAN' });
+
+    await expect(
+      unpark(savepointClient, sdKey, { actor: 'PLAN' }),
+    ).rejects.toThrow(/reason/i);
+
+    const after = await readSd(sdKey);
+    expect(after.status).toBe('deferred'); // unchanged — guard fired before persistence
+  });
+
+  it('FR-3: unpark() stamps unparked_by/unparked_at/unparked_reason/stamped_by_session', async () => {
+    const sdKey = await seedSd('audit-stamp', { status: 'active', current_phase: 'LEAD', progress: 0 });
+    await park(savepointClient, sdKey, { reason: 'temporary', actor: 'PLAN' });
+
+    await unpark(savepointClient, sdKey, { reason: 'audit test', actor: 'PLAN', writingSessionId: 'sess-integration-test' });
+
+    const after = await readSd(sdKey);
+    expect(after.metadata.unparked_by).toBe('PLAN');
+    expect(after.metadata.unparked_reason).toBe('audit test');
+    expect(after.metadata.unparked_at).toBeTruthy();
+    expect(after.metadata.stamped_by_session).toBe('sess-integration-test');
+  });
+
+  it('FR-4: unpark() refuses (does not write status=draft) when parked_from_status is missing and no --restore given', async () => {
+    const sdKey = await seedSd('no-parked-from', { status: 'active', current_phase: 'LEAD', progress: 0 });
+    await park(savepointClient, sdKey, { reason: 'temporary', actor: 'PLAN' });
+    // Simulate a pre-existing row missing parked_from_status (e.g. pre-fix data).
+    await rawClient.query(
+      'UPDATE strategic_directives_v2 SET metadata = metadata - \'parked_from_status\' WHERE sd_key=$1',
+      [sdKey],
+    );
+
+    await expect(
+      unpark(savepointClient, sdKey, { reason: 'restoring', actor: 'PLAN' }),
+    ).rejects.toThrow(/--restore/);
+
+    const after = await readSd(sdKey);
+    expect(after.status).toBe('deferred'); // unchanged, and specifically NOT 'draft'
+  });
+
+  it('FR-4: unpark() with an explicit --restore succeeds even when parked_from_status is missing', async () => {
+    const sdKey = await seedSd('explicit-restore', { status: 'active', current_phase: 'LEAD', progress: 0 });
+    await park(savepointClient, sdKey, { reason: 'temporary', actor: 'PLAN' });
+    await rawClient.query(
+      'UPDATE strategic_directives_v2 SET metadata = metadata - \'parked_from_status\' WHERE sd_key=$1',
+      [sdKey],
+    );
+
+    const res = await unpark(savepointClient, sdKey, { reason: 'restoring', actor: 'PLAN', restoreStatus: 'planning' });
+    expect(res.status).toBe('planning');
+  });
+
+  it('TS-12 (FR-9): a park -> unpark -> park cycle leaves no stale unpark audit fields', async () => {
+    const sdKey = await seedSd('reparked', { status: 'active', current_phase: 'LEAD', progress: 0 });
+
+    await park(savepointClient, sdKey, { reason: 'first park', actor: 'PLAN' });
+    await unpark(savepointClient, sdKey, { reason: 'first unpark', actor: 'PLAN', writingSessionId: 'sess-a' });
+    const midway = await readSd(sdKey);
+    expect(midway.metadata.unparked_by).toBe('PLAN');
+    expect(midway.metadata.stamped_by_session).toBe('sess-a');
+
+    await park(savepointClient, sdKey, { reason: 'second park', actor: 'LEAD' });
+
+    const after = await readSd(sdKey);
+    expect(after.metadata.unparked_by).toBeUndefined();
+    expect(after.metadata.unparked_at).toBeUndefined();
+    expect(after.metadata.unparked_reason).toBeUndefined();
+    // stamped_by_session is shared with the park stamp; no writingSessionId was
+    // passed to this second park() call, so it must not carry the stale 'sess-a'.
+    expect(after.metadata.stamped_by_session).toBeUndefined();
+    expect(after.metadata.park_reason).toBe('second park');
+  });
+
+  it('adversarial-review fix: park() strips a stale parked_from_status_source on re-park (never mislabels a fresh park as backfill-inferred)', async () => {
+    const sdKey = await seedSd('reparked-inferred-marker', { status: 'active', current_phase: 'LEAD', progress: 0 });
+    await park(savepointClient, sdKey, { reason: 'first park', actor: 'PLAN' });
+    // Simulate a row whose parked_from_status was backfill-inferred (as the live
+    // scripts/one-off/backfill-parked-from-status.mjs run does for 25 real rows).
+    await rawClient.query(
+      'UPDATE strategic_directives_v2 SET metadata = metadata || \'{"parked_from_status_source":"backfill_inferred"}\'::jsonb WHERE sd_key=$1',
+      [sdKey],
+    );
+    await unpark(savepointClient, sdKey, { reason: 'unpark for retest', actor: 'PLAN', restoreStatus: 'active' });
+
+    // Re-park directly (not through the backfill script) -- this park's own
+    // parked_from_status is a directly-observed fact (sd.status='active'), not inferred.
+    await park(savepointClient, sdKey, { reason: 'second park (direct, not backfill)', actor: 'PLAN' });
+
+    const after = await readSd(sdKey);
+    expect(after.metadata.parked_from_status).toBe('active');
+    expect(after.metadata.parked_from_status_source).toBeUndefined();
   });
 
   it('TS-6: park rejects actor=EXEC (throws) and leaves the SD status UNCHANGED (no DB write)', async () => {

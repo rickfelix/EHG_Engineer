@@ -12,6 +12,7 @@ import {
   preserveTimestamp,
   buildPreserveRefName,
   scanStagedDiffForSecrets,
+  isDenylistedUntrackedPath,
   runPreserveStage,
   appendReaperPreservedPointer,
 } from '../../../lib/worktree-reaper/preserve-stage.js';
@@ -180,6 +181,29 @@ describe('scanStagedDiffForSecrets()', () => {
     expect(scanStagedDiffForSecrets('').held).toBe(false);
     expect(scanStagedDiffForSecrets(undefined).held).toBe(false);
   });
+
+  // QF-20260911-379 (b): the CRIT-001 key scanner let an identity file through.
+  it('QF-20260911-379: holds on an ADDED email address and on an identity-shaped JSON field', () => {
+    const r = scanStagedDiffForSecrets('+  "account_email": "chairman@example.com",\n+  "os_username": "rick"');
+    expect(r.held).toBe(true);
+    expect(r.findings.map((f) => f.id).sort()).toEqual(['PII-EMAIL', 'PII-HOST-IDENTITY']);
+    expect(JSON.stringify(r.findings)).not.toContain('example.com'); // category only, never the excerpt
+  });
+
+  it('QF-20260911-379: a REMOVED email line (redaction to a placeholder) does not hold', () => {
+    expect(scanStagedDiffForSecrets('-  "account_email": "chairman@example.com"\n+  "account_email": "<redacted>"').held).toBe(false);
+  });
+});
+
+describe('isDenylistedUntrackedPath() (QF-20260911-379)', () => {
+  it('refuses per-host identity/state files at any depth, including Windows separators', () => {
+    for (const p of ['.account-identity-last.json', 'sub/dir/.account-identity-last.json', '.env.local', 'certs/server.pem',
+      '.ehg-session.json', 'state\\my-host-state.json']) expect(isDenylistedUntrackedPath(p), p).toBe(true);
+  });
+  it('passes ordinary untracked files', () => {
+    for (const p of ['untracked.txt', 'src/env-helper.js', 'docs/keys-overview.md', '.env.example', '.env.project-template'])
+      expect(isDenylistedUntrackedPath(p), p).toBe(false);
+  });
 });
 
 function makeGitRunner(script) {
@@ -243,6 +267,18 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
       .slice(pushIndex + 1)
       .some((c) => c[0][0] === 'ls-remote');
     expect(lsRemoteAfterPush).toBe(false);
+  });
+
+  it('QF-20260911-379: a denylisted untracked identity file is never passed to git add', async () => {
+    const gitRunner = makeGitRunner([
+      { match: /^ls-files --others/, result: { code: 0, stdout: 'untracked.txt\n.account-identity-last.json\n' } },
+      { match: /^diff --cached --quiet/, result: { code: 0, stdout: '' } },
+    ]);
+    const logger = vi.fn();
+    await runPreserveStage({ wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' }, { gitRunner, nowMs: NOW, logger });
+    const addCall = gitRunner.mock.calls.find((c) => c[0][0] === 'add' && c[0][1] === '--');
+    expect(addCall[0]).toEqual(['add', '--', 'untracked.txt']);
+    expect(logger.mock.calls.some((c) => /refusing to stage denylisted.*account-identity-last/.test(c[0]))).toBe(true);
   });
 
   it('TS-5 (secret hit holds and never pushes): zero push invocations, verdict preserve_held_secret', async () => {
