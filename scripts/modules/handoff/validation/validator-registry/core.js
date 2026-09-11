@@ -125,13 +125,20 @@ export class ValidatorRegistry {
     // Handle both 'passed' and 'pass' field names
     const passed = result.passed ?? result.pass ?? (result.score >= (result.max_score || result.maxScore || 100));
 
+    // QF-20260903-379: an OPTIONAL, additive pass-through. A validator may attach
+    // `measured: { subject, producer }` naming what it actually inspected and which function
+    // computed the verdict, so a reader of the verdict alone (not its write site) can tell a
+    // measurement of the work from a measurement of something adjacent to it. Absent for every
+    // validator that doesn't set it -- unchanged, fail-open behavior. See
+    // lib/governance/verdict-measured-provenance.js for the full rationale.
     return {
       passed,
       score: result.score ?? 0,
       max_score: result.max_score ?? result.maxScore ?? 100,
       issues: result.issues || [],
       warnings: result.warnings || [],
-      details: result.details || result
+      details: result.details || result,
+      ...(result.measured ? { measured: result.measured } : {}),
     };
   }
 

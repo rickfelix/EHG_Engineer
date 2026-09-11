@@ -77,7 +77,17 @@ export function registerGate1Validators(registry) {
       issues = [];
     }
 
-    return registry.normalizeResult({ passed, score: result.score, max_score: 100, issues, warnings, details: result.details });
+    // QF-20260903-379: name what this verdict actually measured (exemplar for the new
+    // lib/governance/verdict-measured-provenance.js contract). This gate's own defect history
+    // (QF-20260903-722: a prior version substring-matched a SERIALISED requirement object
+    // instead of prose) is exactly the class this exists to make auditable from the verdict
+    // alone -- a reader can now see the subject was the PRD content validatePRDQuality scored,
+    // not some other field.
+    const measured = {
+      subject: `PRD functional_requirements/acceptance_criteria/executive_summary (${isHeuristic ? 'heuristic' : 'AI-rubric'} scoring)`,
+      producer: 'validatePRDQuality (scripts/modules/prd-quality-validation.js)',
+    };
+    return registry.normalizeResult({ passed, score: result.score, max_score: 100, issues, warnings, details: result.details, measured });
   }, 'PRD quality validation using AI-powered Russian Judge rubric');
 
   registry.register('userStoryQualityValidation', async (context) => {

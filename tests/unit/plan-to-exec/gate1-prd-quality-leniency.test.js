@@ -272,4 +272,19 @@ describe('gate-1 prdQualityValidation: score-based leniency fix', () => {
     // criteria.min_score=5 passed in options -- score 55 >= 55 passes for the RIGHT reason.
     expect(result.passed).toBe(true);
   });
+
+  // QF-20260903-379: this gate's own defect history (QF-20260903-722: a prior version
+  // substring-matched a SERIALISED requirement object instead of prose) is exactly the
+  // "confident and wrong in a way the operator could not see from its own output" class that
+  // QF-20260903-379 names -- it is the exemplar for lib/governance/verdict-measured-provenance.js.
+  it('QF-20260903-379: the returned verdict names what it measured, auditable without reading the write site', async () => {
+    const registry = makeRegistry();
+    const validator = registry.get('prdQualityValidation');
+
+    const result = await validator({ prd: baseHeuristicPrd(), sd: { category: 'Fix', sd_type: 'bugfix' } });
+
+    expect(result.measured).toBeTruthy();
+    expect(result.measured.subject).toMatch(/PRD/);
+    expect(result.measured.producer).toMatch(/validatePRDQuality/);
+  });
 });
