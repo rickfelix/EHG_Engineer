@@ -224,6 +224,9 @@
 
 ### Bugfix
 
+- **The governance_audit_log immutability trigger's own verify block probed with a value the table's operation check does not admit** - SD-LEO-FIX-GOVERNANCE-AUDIT-LOG-001 (PR #8636)
+  - `database/chairman-gated/20260907_governance_audit_log_immutability_trigger.sql`'s verify-block probe INSERT used `operation='probe'`, which `governance_audit_log_operation_check` does not admit (only `INSERT`, `UPDATE`, `DELETE`, `STATE_CHANGE`) — the migration's own self-check failed on the happy path every time it ran. Changed to `operation='STATE_CHANGE'`, an admitted value; no other line, trigger, or guard logic touched.
+  - Same class of defect QF-20260907-688 (PR #8627) fixed on the same column: that one was a WIDTH violation (53 chars into `varchar(20)`), this one a MEMBERSHIP violation the width fix exposed. Verified as a successor fix, not a duplicate, via git history and quick-fix records.
 - **`--scope-accepted` attested to scope satisfaction in its docs but read as "merge = done" in practice** - SD-LEO-FIX-SCOPE-ACCEPTED-ATTESTS-001 (escalated from QF-20260727-737, PR #8639)
   - The `complete-quick-fix.js` reconcile-after-merge path documented `--scope-accepted` as attesting that "the QF's stated scope is satisfied," but nothing at the point of use said so — an operator could read a merged PR alone as proof scope was met. QF-20260726-423 was once force-completed under exactly this ambiguity, letting a security carve-out ship silently.
   - `scripts/modules/complete-quick-fix/orchestrator.js` now exports `scopeAcceptedReminderLines()`, printed at the reconcile call site whenever `--scope-accepted` is used, restating the merge-vs-scope distinction inline; `cli.js`'s `--help` text carries the same wording. No change to what's written to the `quick_fixes` row (`force_completed`, `verified_by`, `verification_notes` unchanged) — the fix is purely informational, by design.
