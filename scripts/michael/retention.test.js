@@ -124,10 +124,13 @@ describe('runRetention', () => {
     expect(r.attempt).toBe(4);
     expect(sb.writes[0].ops[0].args[0].attempt).toBe(4);
   });
-  it('absent tables: inert (ok, tables_absent=true), no writes, no stamp attempted', async () => {
+  it('QF-20260907-930: michael_feeder_runs ITSELF absent (bootstrap/pre-first-migration): inert, ok=false (nowhere to stamp), no writes land', async () => {
     const sb = stub({ missing: true });
     const r = await runRetention({ sb, argv: ['--apply'], now: NOW });
-    expect(r).toMatchObject({ ok: true, tables_absent: true, stamped: false });
+    // Every RETENTION_TARGETS table is absent here, including michael_feeder_runs itself -- the
+    // stamp write also fails (no relation to write into), which is why ok is now false, not true:
+    // an all-absent run can no longer silently report success.
+    expect(r).toMatchObject({ ok: false, tables_absent: true, stamped: false });
     expect(sb.writes).toHaveLength(0);
     expect(renderRetention(r).join('\n')).toMatch(/not applied yet/);
   });

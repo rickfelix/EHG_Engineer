@@ -23,6 +23,9 @@ import { routeOrchestratorToLeadFinal } from './lib/orchestrator-terminal-guard.
 import { buildRetrospectiveContent } from '../../../lib/quality/build-retrospective-content.js';
 import { resolvePatternSuccessUpdate } from '../../../lib/quality/resolve-pattern-success-update.js';
 import { safeQuery } from '../../../lib/db/safe-query.mjs';
+// SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-3: PUBLISHED-guard same-statement token, fail-soft
+// until the retro_write_token column ships.
+import { updateRetrospectiveWithToken } from '../../../lib/retro/write-with-token.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -658,6 +661,10 @@ export class OrchestratorCompletionGuardian {
       }
     }
 
+    // SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-2 per-site determination: no retro_write_token
+    // needed on this INSERT. enforce_retrospectives_published_guard() only evaluates its
+    // TG_OP='UPDATE' branch -- an INSERT has no OLD row and always falls through to the
+    // NULL-at-rest cleanup, so a token on an INSERT payload is inert by construction.
     const { error } = await supabase
       .from('retrospectives')
       .insert({
@@ -702,17 +709,20 @@ export class OrchestratorCompletionGuardian {
       return;
     }
 
-    const { error } = await supabase
-      .from('retrospectives')
-      .update({
+    // SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-3: same-statement override for the
+    // PUBLISHED-guard trigger. Registered as 'orchestrator_completion_guardian'.
+    const { error } = await updateRetrospectiveWithToken(
+      (payload) => supabase.from('retrospectives').update(payload).eq('id', current.id),
+      {
         quality_score: Math.max(current.quality_score, 75),
         key_learnings: [
           ...(current.key_learnings || []),
           'Orchestrator pattern requires upfront artifact planning',
           'Child SD aggregation provides valuable cross-cutting insights'
         ].slice(0, 5)
-      })
-      .eq('id', current.id);
+      },
+      'orchestrator_completion_guardian'
+    );
 
     if (error) {
       console.log(`   ❌ Failed to enhance retrospective: ${error.message}`);

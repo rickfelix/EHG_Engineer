@@ -148,6 +148,25 @@ describe('rule-encode: the Opus verifier gate', () => {
     expect(sb.writes).toHaveLength(0);
   });
 
+  it('QF-20260908-688: verb=label with no rule_json.action.label_id refuses at WRITE time, before the contradiction can persist', async () => {
+    const sb = recorder();
+    // No --rule-json at all -- ruleUsable() would still skip this rule the moment it is armed.
+    const r1 = await runRuleEncode({ sb, argv: [...BASE, '--verb', 'label'], now: NOW, render: noRender });
+    expect(r1.ok).toBe(false);
+    expect(r1.refusal).toBe(REFUSALS.LABEL_VERB_NEEDS_LABEL_ID);
+    // rule_json.action present but label_id missing -- same contradiction, still refused.
+    const r2 = await runRuleEncode({ sb, argv: [...BASE, '--verb', 'label', '--rule-json', '{"action":{}}'], now: NOW, render: noRender });
+    expect(r2.refusal).toBe(REFUSALS.LABEL_VERB_NEEDS_LABEL_ID);
+    expect(sb.writes).toHaveLength(0); // neither refusal wrote anything
+
+    // With a real label_id present, the write proceeds (still gated by the Opus verifier since --auto-apply flips).
+    const ruleJson = { action: { label_id: 'Label_15' } };
+    const hash = subjectHash({ domain: 'gmail', rule_key: 'newsletters-archive', rule_text: 'Archive newsletters', rule_json: ruleJson, auto_apply: true, auto_apply_verb: 'label', supersedes: null });
+    const r3 = await runRuleEncode({ sb, argv: [...BASE, '--auto-apply', '--verb', 'label', '--rule-json', JSON.stringify(ruleJson), '--verifier-verdict', 'v.json'], now: NOW, readVerdict: () => goodVerdict(hash), render: noRender });
+    expect(r3.ok).toBe(true);
+    expect(sb.writes).toHaveLength(1);
+  });
+
   it('absent tables: refuses TABLES_ABSENT before any write', async () => {
     const sb = recorder({ readError: MISSING });
     const r = await runRuleEncode({ sb, argv: BASE, now: NOW });

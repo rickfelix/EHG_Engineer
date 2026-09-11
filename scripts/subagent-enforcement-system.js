@@ -513,26 +513,37 @@ class SubAgentEnforcementSystem {
 
   /**
    * Record sub-agent activation
+   *
+   * QF-20260905-374: subagent_activations has no agent_type/activation_time/result columns
+   * (verified live: activating_agent, phase, subagent_code, subagent_name, activation_trigger,
+   * status, execution_results, activated_at are the real ones) -- every insert this function
+   * ever made failed silently, so getUsedSubAgents() below has read empty for its whole history.
+   * activating_agent/subagent_name/activation_trigger have no prior parameter to source from
+   * (this method has zero live callers today per the QF's own dead-recorder framing), so they
+   * take defaults a future caller can override via the options object.
    */
-  async recordSubAgentActivation(agentType, sdId, phase, result) {
+  async recordSubAgentActivation(agentType, sdId, phase, result, { activatingAgent = 'EXEC', activationTrigger = 'manual' } = {}) {
     const activation = {
       sd_id: sdId,
+      activating_agent: activatingAgent,
       phase,
-      agent_type: agentType,
-      activation_time: new Date().toISOString(),
-      result: result || {},
-      status: 'completed'
+      subagent_code: agentType,
+      subagent_name: agentType,
+      activation_trigger: activationTrigger,
+      status: 'completed',
+      execution_results: result || {},
+      activated_at: new Date().toISOString()
     };
-    
+
     // Store in database
     const { error } = await this.supabase
       .from('subagent_activations')
       .insert(activation);
-    
+
     if (!error) {
       console.log(`✅ ${agentType} sub-agent activation recorded`);
     }
-    
+
     return activation;
   }
 
@@ -542,12 +553,13 @@ class SubAgentEnforcementSystem {
   async getUsedSubAgents(sdId) {
     const { data } = await this.supabase
       .from('subagent_activations')
-      .select('agent_type')
-      .eq('sd_id', sdId);
+      .select('subagent_code')
+      .eq('sd_id', sdId)
+      .limit(500);
 
     if (!data) return [];
 
-    return [...new Set(data.map(d => d.agent_type))];
+    return [...new Set(data.map(d => d.subagent_code))];
   }
 
   /**

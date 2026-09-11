@@ -728,15 +728,19 @@ export const MUST_FIT_SINGLE_READ = ['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE
 export const SINGLE_READ_CONFIRMED_FIT_TOKENS =
   SINGLE_READ_TOKEN_CAP - (SINGLE_READ_TOKEN_CAP * harnessTokenScale.HARNESS_TOKEN_MAX_ERROR_FRACTION);
 
-// DELIBERATELY EMPTY ON LANDING. Same discipline as MUST_FIT_SINGLE_READ above: a file joins this list
-// when the SD that makes it fit has landed, never before. CLAUDE_ADAM.md (36,692) and CLAUDE_SOLOMON.md
-// (24,918) are the intended members, and adding them in THIS commit -- before the carve that shrinks
-// them -- would throw on the very next regeneration. That is the wedge, not the fix for it.
-// CLAUDE_LEAD.md and CLAUDE_PLAN.md are deliberately NOT candidates here: LEAD is marginal (24,247) and
-// PLAN is 505 tokens from the same edge, and neither has an SD that has trimmed it. They stay warn-only
-// under this tier, which is the point -- the gate now SAYS it is not enforcing them instead of silently
-// passing them.
-export const MUST_CONFIRM_SINGLE_READ_FIT = [];
+// Same discipline as MUST_FIT_SINGLE_READ above: a file joins this list when the SD that makes it fit
+// has landed, never before. CLAUDE_ADAM.md (36,692) and CLAUDE_SOLOMON.md (24,918) are still NOT
+// members -- neither has been trimmed, and adding them here before that carve would throw on the very
+// next regeneration. That is the wedge, not the fix for it.
+// CLAUDE_LEAD.md ADDED by SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-1): the marginal 24,247-token state this
+// comment used to describe was fixed by moving sd_creation_errors to CLAUDE_LEAD_MANUAL.md, measuring
+// ~20,457 tokens afterward (bytes/HARNESS_BYTES_PER_TOKEN on the committed file) -- comfortably under
+// the confirmed-fit threshold, so the SD that makes it fit has landed and this is the moment this list's
+// own stated rule says to add it.
+// CLAUDE_PLAN.md is still deliberately NOT a candidate: it is 505 tokens from the same edge and has no
+// SD that has trimmed it. It stays warn-only under this tier, which is the point -- the gate now SAYS it
+// is not enforcing it instead of silently passing it.
+export const MUST_CONFIRM_SINGLE_READ_FIT = ['CLAUDE_LEAD.md'];
 
 /**
  * Fail generation when a file that is REQUIRED to fit no longer does.

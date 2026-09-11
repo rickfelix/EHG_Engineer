@@ -41,10 +41,14 @@ describe('FR-4: single-read cap enforcement', () => {
 
   it('CONTROL: does NOT throw when must-fit files are under the cap', () => {
     // Without this the throw-tests would also pass against a function that threw unconditionally.
+    // mustConfirmFit: [] scopes this to the hard-cap (tier 1) behavior this test exists to pin --
+    // CLAUDE_LEAD.md is a real tier-2 (confirmed-fit) member as of SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001,
+    // and 24000 tokens is inside that stricter tier's marginal band, which is a separate concern
+    // covered by tests/unit/claude-md-confirmed-fit-tier.test.js.
     const over = assertSingleReadFit([
       { name: 'CLAUDE_LEAD.md', bytes: bytesFor(24000) },
       { name: 'CLAUDE_PLAN.md', bytes: bytesFor(22800) },
-    ]);
+    ], { mustConfirmFit: [] });
     expect(over).toEqual([]);
   });
 
@@ -182,6 +186,9 @@ describe('FR-4: the guard is fed BYTES, not UTF-16 code units', () => {
     expect(() => assertSingleReadFit([{ name: 'CLAUDE_LEAD.md', bytes: overByBytes }]))
       .toThrow(/SINGLE_READ_CAP_EXCEEDED/);
     // CONTROL: the same file measured the WRONG way slips through — which is what shipped before.
-    expect(() => assertSingleReadFit([{ name: 'CLAUDE_LEAD.md', bytes: underByChars }])).not.toThrow();
+    // mustConfirmFit: [] isolates the hard-cap (tier 1) concern this test pins; CLAUDE_LEAD.md is a
+    // real tier-2 member as of SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 and 24900 tokens sits inside that
+    // stricter tier's marginal band, which is a separate, already-covered concern.
+    expect(() => assertSingleReadFit([{ name: 'CLAUDE_LEAD.md', bytes: underByChars }], { mustConfirmFit: [] })).not.toThrow();
   });
 });

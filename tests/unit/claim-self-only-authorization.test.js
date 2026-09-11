@@ -34,6 +34,14 @@ describe('isBuildForbiddenSession (FR-1 predicate)', () => {
     expect(isBuildForbiddenSession({ is_coordinator: true })).toBe(true);
     expect(isBuildForbiddenSession({ is_coordinator: true, role: 'coordinator', callsign: 'Coord' })).toBe(true);
   });
+  // QF-20260904-968: is_coordinator is stored as the JSON string 'true' in claude_sessions.metadata
+  // by several writers; the coordinator-election filter (resolve.cjs), role-comms-guard.cjs, and
+  // seat-idle-predicate.mjs's coordinator-flag axis already treat that shape as coordinator. This
+  // predicate must agree, or a string-shaped coordinator row is elected/comms-recognized as
+  // coordinator yet remains an acceptable worker-claim/WORK_ASSIGNMENT target.
+  it('rejects an is_coordinator session stored as the string "true"', () => {
+    expect(isBuildForbiddenSession({ is_coordinator: 'true' })).toBe(true);
+  });
   it('allows a normal fleet session', () => {
     expect(isBuildForbiddenSession({ role: 'worker', callsign: 'Bravo' })).toBe(false);
   });
@@ -41,8 +49,7 @@ describe('isBuildForbiddenSession (FR-1 predicate)', () => {
     expect(isBuildForbiddenSession(null)).toBe(false);
     expect(isBuildForbiddenSession(undefined)).toBe(false);
     expect(isBuildForbiddenSession({})).toBe(false);
-    expect(isBuildForbiddenSession({ non_fleet: 'true' })).toBe(false); // string, not boolean true
-    expect(isBuildForbiddenSession({ is_coordinator: 'true' })).toBe(false); // string, not boolean true
+    expect(isBuildForbiddenSession({ non_fleet: 'true' })).toBe(false); // string, not boolean true -- non_fleet is unchanged by this QF
     expect(isBuildForbiddenSession({ is_coordinator: false })).toBe(false);
   });
 });

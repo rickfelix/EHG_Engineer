@@ -6,6 +6,7 @@
 - [2026-09-08](#2026-09-08)
   - [Bugfix](#bugfix-4)
   - [Bugfix](#bugfix)
+  - [Infrastructure](#infrastructure-6)
   - [Security](#security)
 - [2026-09-07](#2026-09-07)
   - [Bugfix](#bugfix)
@@ -204,6 +205,13 @@
   - `captureAccountIdentity()` (`scripts/hooks/session-register.cjs`) previously stamped `claude_sessions.metadata.account_email` once, at registration, then never again — a later `/login` swap on the shared credentials file left the row permanently naming whoever registered first. It now re-resolves on every SessionStart and writes only when the resolved identity genuinely changed, compared across all 6 fields the resolver stamps (email, org name, org id, subscription type, auth method, uuid8) rather than just 2 — closing a gap where an auth-method upgrade (e.g. unauthenticated fallback → CLI-measured) with the same email/uuid8 silently skipped the write.
   - `adam-quiet-tick.mjs`'s account-switch sampler called the identity resolver bare, always reading the machine-global config; it now honors a seat's own `CLAUDE_CONFIG_DIR` profile when one is set, and its on-disk baseline file records the path actually read from rather than always the machine-global one. Both ship dormant today — no live seat has a profile yet — pending a separate, chairman-gated profile-per-account decision.
   - Escalated from Quick-Fix QF-20260906-219 because the diff touched `scripts/hooks/**`, a charter-designated sensitive path with no autonomous-completion bypass.
+
+### Infrastructure
+
+- **Michael v1.1 data model landed: four new tables for the oracle-extract, health-sync, and youtube-digest feeders** - SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-J
+  - `database/migrations/20260907_michael_v1_1_tables.sql` (chairman-gated, now applied) adds `michael_oracle_history`, `michael_oracle_alignment`, `michael_health_daily`, and `michael_check_in_journal`, following child B's established shape convention: a surrogate `id UUID` primary key plus a separate natural-key unique index, never a natural key as the primary key, so a re-running feeder has a stable conflict target instead of duplicating rows on retry.
+  - Reuses the existing `public.michael_set_updated_at()` trigger function (never redefined) that the eleven v1 tables already depend on. Rollback via the companion `20260907_michael_v1_1_tables_DOWN.sql`, which drops only the four new tables.
+  - See `docs/michael/02-SPEC.md` for the full v1.1 feeder design (oracle-extract, health-sync, youtube-digest).
 
 ### Security
 

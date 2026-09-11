@@ -148,7 +148,7 @@ describe('FR-3 headline fix, surfaced by EXEC-phase TESTING review: stale is_coo
     expect(row.post).toBe(false);
   });
 
-  it('adam-quiet-tick flips ONLY on the string shape (isBuildForbiddenSession is boolean-only, per TS-2)', () => {
+  it('adam-quiet-tick flips ONLY on the string shape (pre-migration isBuildForbiddenSession was boolean-only, per TS-2; frozen for this harness since QF-20260904-968 fixed the live function)', () => {
     expect(findRow(results, 'stale-is-coordinator-bool', 'adam-quiet-tick').changed).toBe(false);
     const stringRow = findRow(results, 'stale-is-coordinator-string', 'adam-quiet-tick');
     expect(stringRow.pre).toBe(true);

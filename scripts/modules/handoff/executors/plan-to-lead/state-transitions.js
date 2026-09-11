@@ -382,6 +382,12 @@ export async function satisfyOrchestratorTemplateRequirements(supabase, sdId, sd
         return { satisfied: true, created };
       }
       const targetApplication = await resolveOrchestratorRetroTargetApplication(supabase, sdId);
+      // SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-2 per-site determination: no
+      // retro_write_token needed on this INSERT (this site never UPDATEs -- the guard above
+      // returns early whenever a retrospective already exists). See the identical note in
+      // orchestrator-completion-guardian.js's INSERT site for why an INSERT never needs the
+      // token: enforce_retrospectives_published_guard() only evaluates its TG_OP='UPDATE'
+      // branch.
       const { error: rErr } = await supabase
         .from('retrospectives')
         .insert({

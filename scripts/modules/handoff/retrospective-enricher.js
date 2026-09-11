@@ -22,6 +22,9 @@ import { execSync } from 'child_process';
 // SD-LEO-REFAC-ELIMINATE-HARD-CODED-001: Registry-driven venture paths
 import { getVenturePath } from '../../../lib/venture-resolver.js';
 import { RetrospectiveQualityRubric } from '../rubrics/retrospective-quality-rubric.js';
+// SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-3: PUBLISHED-guard same-statement token, fail-soft
+// until the retro_write_token column ships.
+import { updateRetrospectiveWithToken } from '../../../lib/retro/write-with-token.js';
 
 /**
  * Extract file references from key_changes array.
@@ -609,10 +612,13 @@ export async function enrichRetrospectivePreGate(supabase, sdId, sd) {
 
   updates.updated_at = new Date().toISOString();
 
-  const { error } = await supabase
-    .from('retrospectives')
-    .update(updates)
-    .eq('id', retro.id);
+  // SD-LEO-FIX-WIRE-SEVEN-RETROSPECTIVE-001 FR-3: same-statement override for the PUBLISHED-guard
+  // trigger. Registered in retro_canonical_writer_policy() as 'handoff_retrospective_enricher'.
+  const { error } = await updateRetrospectiveWithToken(
+    (payload) => supabase.from('retrospectives').update(payload).eq('id', retro.id),
+    updates,
+    'handoff_retrospective_enricher'
+  );
 
   if (error) {
     console.warn(`   ⚠️  Pre-gate enrichment failed: ${error.message}`);

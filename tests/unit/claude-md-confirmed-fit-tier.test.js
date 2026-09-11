@@ -92,15 +92,23 @@ describe('the hard cap behaves EXACTLY as before — the anti-wedge property', (
   it('a flat tighten of the HARD cap to the confirmed-fit threshold would wedge — documented, not shipped', () => {
     // This is the change a future maintainer will reach for. Pinned as a NEGATIVE so the reason it was
     // rejected survives in executable form rather than only in a comment.
-    const files = realFiles(['CLAUDE_LEAD.md', 'CLAUDE_PLAN.md', 'CLAUDE_SOLOMON.md']);
+    // Synthetic, not realFiles(): CLAUDE_LEAD.md (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001) no longer sits in
+    // this marginal band on disk, so a real-file fixture would silently stop pinning the historical
+    // scenario this test documents. bytesFor(24247)/(24918) reproduce the exact pre-fix LEAD/SOLOMON
+    // shapes this comment and the module's own header comment describe.
+    const files = [
+      { name: 'CLAUDE_LEAD.md', bytes: bytesFor(24247) },
+      { name: 'CLAUDE_PLAN.md', bytes: bytesFor(22795) },
+      { name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(24918) },
+    ];
     expect(() => assertSingleReadFit(files, { cap: SINGLE_READ_CONFIRMED_FIT_TOKENS, onWarn: () => {} }))
       .toThrow(/SINGLE_READ_CAP_EXCEEDED/);
   });
 
   it('and that wedge is NOT self-healing: trimming Adam and Solomon still throws on LEAD', () => {
-    // The tempting rebuttal is "it clears once we trim". Measured: it does not.
-    const lead = realFiles(['CLAUDE_LEAD.md']);
-    const trimmed = [...lead, { name: 'CLAUDE_ADAM.md', bytes: bytesFor(20000) }, { name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(20000) }];
+    // The tempting rebuttal is "it clears once we trim". Measured (at the time): it did not.
+    // Synthetic, not realFiles(): see the note above -- LEAD's real committed size has since moved.
+    const trimmed = [{ name: 'CLAUDE_LEAD.md', bytes: bytesFor(24247) }, { name: 'CLAUDE_ADAM.md', bytes: bytesFor(20000) }, { name: 'CLAUDE_SOLOMON.md', bytes: bytesFor(20000) }];
     expect(() => assertSingleReadFit(trimmed, { cap: SINGLE_READ_CONFIRMED_FIT_TOKENS, onWarn: () => {} }))
       .toThrow(/CLAUDE_LEAD\.md/);
   });
@@ -119,20 +127,26 @@ describe('the hard cap behaves EXACTLY as before — the anti-wedge property', (
 });
 
 describe('the confirmed-fit tier is opt-in and empty on landing', () => {
-  it('MUST_CONFIRM_SINGLE_READ_FIT is empty until an SD has actually trimmed a file', () => {
+  it('MUST_CONFIRM_SINGLE_READ_FIT contains only files whose SDs have actually trimmed them', () => {
     // Same discipline as MUST_FIT_SINGLE_READ: adding CLAUDE_ADAM.md here BEFORE the carve that shrinks
     // it would throw on the next regeneration. Membership is earned by a landed trim, not by intent.
-    expect(MUST_CONFIRM_SINGLE_READ_FIT).toEqual([]);
+    // CLAUDE_LEAD.md joined under SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (FR-1) -- that SD landed. ADAM and
+    // SOLOMON have not yet been trimmed, so they stay absent.
+    expect(MUST_CONFIRM_SINGLE_READ_FIT).toEqual(['CLAUDE_LEAD.md']);
+    expect(MUST_CONFIRM_SINGLE_READ_FIT).not.toContain('CLAUDE_ADAM.md');
+    expect(MUST_CONFIRM_SINGLE_READ_FIT).not.toContain('CLAUDE_SOLOMON.md');
   });
 
-  it('LEAD and PLAN are NOT in the confirmed-fit list — they are warn-only by design', () => {
-    expect(MUST_CONFIRM_SINGLE_READ_FIT).not.toContain('CLAUDE_LEAD.md');
+  it('LEAD IS in the confirmed-fit list (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001); PLAN remains warn-only by design', () => {
+    expect(MUST_CONFIRM_SINGLE_READ_FIT).toContain('CLAUDE_LEAD.md');
     expect(MUST_CONFIRM_SINGLE_READ_FIT).not.toContain('CLAUDE_PLAN.md');
   });
 
   it('warns (never throws) for a marginal file nobody has opted in', () => {
+    // CLAUDE_PLAN.md, not LEAD: LEAD is now a confirmed-fit member (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001),
+    // so it is no longer an example of an un-opted-in file. PLAN still is.
     const warns = [];
-    const marginal = [{ name: 'CLAUDE_LEAD.md', bytes: bytesFor(24247) }];
+    const marginal = [{ name: 'CLAUDE_PLAN.md', bytes: bytesFor(24247) }];
     expect(() => assertSingleReadFit(marginal, { onWarn: (m) => warns.push(m) })).not.toThrow();
     expect(warns.join('\n')).toMatch(/NOT CONFIRMED TO FIT/);
   });
