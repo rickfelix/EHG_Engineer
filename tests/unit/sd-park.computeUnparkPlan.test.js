@@ -10,7 +10,7 @@
  * currently executes zero tests in this environment.
  */
 import { describe, it, expect } from 'vitest';
-import { computeUnparkPlan, PARK_STATUS } from '../../lib/sd-park.js';
+import { computeUnparkPlan, PARK_STATUS, isWorkableForUnpark } from '../../lib/sd-park.js';
 
 const NOW = '2026-09-07T00:00:00.000Z';
 
@@ -266,5 +266,117 @@ describe('computeUnparkPlan — audit stamp (TS-1/TS-10) and stale-key stripping
       'restoring', 'PLAN', NOW,
     );
     expect(plan.origProg).toBeNull();
+  });
+});
+
+/**
+ * QF-20260911-466: an SD parked from pending_approval at LEAD_FINAL/PLAN_VERIFICATION (one
+ * handoff from shipped — e.g. SD-LEO-FIX-GOVERNANCE-AUDIT-LOG-001 sits here live) previously had
+ * NO audited unpark path: the auto-resolve path refused (pending_approval not in WORKABLE) and
+ * an explicit --restore pending_approval was ALSO refused by the same check, for every phase.
+ * Fix scopes the allowance to exactly these two phases so the 8d7007a2 SECURITY boundary
+ * (--restore must itself be workable, closing an unvalidated escalation-to-completed path)
+ * is unchanged for every other phase.
+ */
+describe('computeUnparkPlan — QF-20260911-466: pending_approval at a pre-final phase', () => {
+  it('auto-resolves pending_approval when current_phase=LEAD_FINAL (no --restore needed)', () => {
+    const plan = computeUnparkPlan(
+      { sd_key: 'SD-X', status: PARK_STATUS, current_phase: 'LEAD_FINAL', metadata: { parked_from_status: 'pending_approval' } },
+      'chairman apply unblocked the resume', 'coordinator', NOW,
+    );
+    expect(plan.target).toBe('pending_approval');
+  });
+
+  it('auto-resolves pending_approval when current_phase=PLAN_VERIFICATION (no --restore needed)', () => {
+    const plan = computeUnparkPlan(
+      { sd_key: 'SD-X', status: PARK_STATUS, current_phase: 'PLAN_VERIFICATION', metadata: { parked_from_status: 'pending_approval' } },
+      'chairman apply unblocked the resume', 'coordinator', NOW,
+    );
+    expect(plan.target).toBe('pending_approval');
+  });
+
+  it('REGRESSION GUARD: still refuses to auto-resolve pending_approval at any other phase (e.g. EXEC)', () => {
+    let caught;
+    try {
+      computeUnparkPlan(
+        { sd_key: 'SD-X', status: PARK_STATUS, current_phase: 'EXEC', metadata: { parked_from_status: 'pending_approval' } },
+        'restoring', 'PLAN', NOW,
+      );
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.code).toBe('UNPARK_RESTORE_STATUS_REQUIRED');
+  });
+
+  it('REGRESSION GUARD: still refuses when current_phase is missing entirely (undefined)', () => {
+    expect(() => computeUnparkPlan(
+      { sd_key: 'SD-X', status: PARK_STATUS, metadata: { parked_from_status: 'pending_approval' } },
+      'restoring', 'PLAN', NOW,
+    )).toThrow(/--restore/);
+  });
+
+  it('an explicit --restore pending_approval is ACCEPTED when current_phase=LEAD_FINAL', () => {
+    const plan = computeUnparkPlan(
+      { sd_key: 'SD-X', status: PARK_STATUS, current_phase: 'LEAD_FINAL', metadata: {} },
+      'restoring', 'PLAN', NOW,
+      { restoreStatus: 'pending_approval' },
+    );
+    expect(plan.target).toBe('pending_approval');
+  });
+
+  it('SECURITY REGRESSION GUARD: an explicit --restore pending_approval is still REJECTED at every other phase', () => {
+    let caught;
+    try {
+      computeUnparkPlan(
+        { sd_key: 'SD-X', status: PARK_STATUS, current_phase: 'EXEC', metadata: {} },
+        'restoring', 'PLAN', NOW,
+        { restoreStatus: 'pending_approval' },
+      );
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.code).toBe('UNPARK_RESTORE_STATUS_INVALID');
+  });
+
+  it('SECURITY REGRESSION GUARD: --restore completed is still rejected even at LEAD_FINAL (the 8d7007a2 boundary is untouched)', () => {
+    let caught;
+    try {
+      computeUnparkPlan(
+        { sd_key: 'SD-X', status: PARK_STATUS, current_phase: 'LEAD_FINAL', metadata: {} },
+        'restoring', 'PLAN', NOW,
+        { restoreStatus: 'completed' },
+      );
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.code).toBe('UNPARK_RESTORE_STATUS_INVALID');
+  });
+
+  it('an INFERRED pending_approval at LEAD_FINAL still requires explicit --restore (C2 boundary untouched)', () => {
+    let caught;
+    try {
+      computeUnparkPlan(
+        { sd_key: 'SD-X', status: PARK_STATUS, current_phase: 'LEAD_FINAL', metadata: { parked_from_status: 'pending_approval', parked_from_status_source: 'backfill_inferred' } },
+        'restoring', 'PLAN', NOW,
+      );
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught.code).toBe('UNPARK_RESTORE_STATUS_REQUIRED');
+  });
+
+  describe('isWorkableForUnpark (pure helper)', () => {
+    it('returns true for every unconditionally-WORKABLE status regardless of phase', () => {
+      for (const s of ['draft', 'active', 'planning', 'in_progress']) {
+        expect(isWorkableForUnpark(s, undefined)).toBe(true);
+        expect(isWorkableForUnpark(s, 'EXEC')).toBe(true);
+      }
+    });
+    it('returns true for pending_approval only at LEAD_FINAL or PLAN_VERIFICATION', () => {
+      expect(isWorkableForUnpark('pending_approval', 'LEAD_FINAL')).toBe(true);
+      expect(isWorkableForUnpark('pending_approval', 'PLAN_VERIFICATION')).toBe(true);
+      expect(isWorkableForUnpark('pending_approval', 'EXEC')).toBe(false);
+      expect(isWorkableForUnpark('pending_approval', undefined)).toBe(false);
+    });
+    it('returns false for completed/cancelled at every phase, including LEAD_FINAL', () => {
+      expect(isWorkableForUnpark('completed', 'LEAD_FINAL')).toBe(false);
+      expect(isWorkableForUnpark('cancelled', 'LEAD_FINAL')).toBe(false);
+    });
   });
 });

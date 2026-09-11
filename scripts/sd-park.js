@@ -10,6 +10,9 @@
  * --reason is REQUIRED on unpark (mirrors park()) as of SD-LEO-INFRA-DEFERRED-STATE-ENTRANCE-001.
  * --restore is REQUIRED whenever metadata.parked_from_status is missing or not a workable
  * status (e.g. an 'unknown' backfill sentinel) — unpark never silently defaults to 'draft'.
+ * Workable = draft/active/planning/in_progress, PLUS pending_approval when the SD's
+ * current_phase is LEAD_FINAL or PLAN_VERIFICATION (QF-20260911-466) — the normal state for
+ * an SD parked one handoff short of shipped; every other phase still refuses pending_approval.
  *
  * Park excludes the SD from sd:next recommendations + the stale-session sweep while
  * keeping it fully queryable; unpark restores a workable status (re-claim via sd-start).
