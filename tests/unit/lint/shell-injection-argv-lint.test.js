@@ -142,7 +142,13 @@ describe('TS-6: allowlist reasons are enforced (ledger, not bypass)', () => {
 
 describe('TS-7/TS-10: advisory flip contract on PARSED YAML, self-enforcing deadline', () => {
   const WF = path.join(ROOT, '.github', 'workflows', 'shell-injection-argv-lint.yml');
-  const FLIP_DEADLINE = Date.parse('2026-09-09T23:59:59Z');
+  // EXTENSION RECORDED 2026-09-11 (QF-20260911-228): the original 2026-09-09 deadline passed with
+  // no actor. The flip is NOT safe yet — the B-3 reflow precondition (violationKey identity in the
+  // lint) is still unaddressed, so blocking would hand the backlog to every toucher. The flip is
+  // owned by SD-MAN-INFRA-FLIP-SHELL-INJECTION-001, which lands B-3, removes continue-on-error and
+  // rewrites the workflow's dated note (a QF may not touch .github/workflows — sensitive path), so
+  // the workflow header still carries the original 2026-09-09 date until that SD ships.
+  const FLIP_DEADLINE = Date.parse('2026-10-09T23:59:59Z');
   it('workflow is advisory (continue-on-error: true as a parsed property) with the dated note', () => {
     const doc = parseYaml(fs.readFileSync(WF, 'utf8'));
     const steps = doc.jobs['shell-injection-argv'].steps;
@@ -156,7 +162,7 @@ describe('TS-7/TS-10: advisory flip contract on PARSED YAML, self-enforcing dead
     const lintStep = steps.find((s) => s.run && s.run.includes('shell-injection-argv-lint.mjs'));
     const stillAdvisory = lintStep['continue-on-error'] === true;
     if (Date.now() > FLIP_DEADLINE) {
-      expect(stillAdvisory, 'the 2026-09-09 soak has ended: flip the workflow to blocking (remove continue-on-error) or extend the dated note WITH a recorded reason').toBe(false);
+      expect(stillAdvisory, 'the 2026-10-09 soak has ended: flip the workflow to blocking (remove continue-on-error) or extend the dated note WITH a recorded reason').toBe(false);
     } else {
       expect(stillAdvisory).toBe(true);
     }

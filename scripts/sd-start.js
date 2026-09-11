@@ -33,7 +33,7 @@ import { hasRecentClaimReleased, formatClaimReleasedAbort, detectSdKeyDrift } fr
 import sessionIdentitySot from '../lib/session-identity-sot.js';
 import { findClaudeCodePid } from '../lib/terminal-identity.js';
 import { resolveClaimIdentity, checkIdentityMismatch } from '../lib/claim/claim-identity.js';
-import { claimGuard, formatClaimFailure } from '../lib/claim-guard.mjs';
+import { claimGuard, formatClaimFailure, buildUnparkExitCommand } from '../lib/claim-guard.mjs';
 import { checkClaimGateFreshness } from '../lib/claim/gate-freshness-check.mjs';
 // SD-LEO-FIX-CROSS-SIGNAL-CLAIM-001 — pre-claim multi-signal evidence-of-life gate.
 // Wraps claimGuard's heartbeat/inactive auto-release to prevent hostile reclaim
@@ -1077,8 +1077,14 @@ async function main() {
   // conflict (no owner to wait on or evict); exit loud regardless of fallbackEnabled.
   if (!claimResult.success && claimResult.error === 'sd_terminal_status') {
     console.log(`\n${colors.red}${colors.bold}🚫 TARGET_ALREADY_TERMINAL${colors.reset}`);
-    console.log(`   ${effectiveId} has status=${claimResult.status} — already finished, cannot be (re)claimed.`);
-    console.log(`   Completed: ${sd.completion_date || sd.updated_at || 'unknown'}${sd.updated_by ? ` (updated_by: ${sd.updated_by})` : ''}`);
+    if (claimResult.status === 'deferred') {
+      // SD-LEO-INFRA-DEFERRED-STATE-ENTRANCE-001 (FR-1): deferred is PARKED, not finished.
+      console.log(`   ${effectiveId} has status=${claimResult.status} — parked, not finished. Restore it with:`);
+      console.log(`\n   ${colors.cyan}${buildUnparkExitCommand(claimResult.sdKey || effectiveId)}${colors.reset}`);
+    } else {
+      console.log(`   ${effectiveId} has status=${claimResult.status} — already finished, cannot be (re)claimed.`);
+      console.log(`   Completed: ${sd.completion_date || sd.updated_at || 'unknown'}${sd.updated_by ? ` (updated_by: ${sd.updated_by})` : ''}`);
+    }
     console.log(`\n   ${colors.bold}Action:${colors.reset} This was NOT a claim conflict — no fallback SD will be selected.`);
     console.log(`   Run ${colors.cyan}npm run sd:next${colors.reset} to pick a different, workable SD.`);
     console.log('═'.repeat(50));
