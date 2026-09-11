@@ -5,6 +5,7 @@
 
 - [2026-09-11](#2026-09-11)
   - [Bugfix](#bugfix)
+  - [Infrastructure](#infrastructure)
 - [2026-09-08](#2026-09-08)
   - [Bugfix](#bugfix-4)
   - [Bugfix](#bugfix)
@@ -199,11 +200,25 @@
 
 ### Bugfix
 
+- **Three generated contract files overran the 25k-token single-read cap, so a role loading its own contract read a silently truncated file** - SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 (PR #8661)
+  - CLAUDE_ADAM.md (132,652 B), CLAUDE_EXEC.md (104,128 B) and CLAUDE_CORE.md (75,454 B) each exceeded what one `Read` call returns. The split is done at the source rows in `leo_protocol_sections`, never by hand-editing the rendered files: 65 chairman-ruling clauses in section 601 keep their marker header plus a terse binding half and a `(provenance: PROVENANCE § <id>)` pointer, with the full verbatim text carved to the provenance row; rationale and procedure prose move to the manual rows; EXEC/CORE rows 375/524/590/612 are re-typed into companion section types.
+  - Four companions carry the carved text: new `CLAUDE_EXEC_MANUAL.md` (schema constraints + process scripts, previously rendered inline in EXEC), new `CLAUDE_EXEC_PROVENANCE.md`, new `CLAUDE_CORE_PROVENANCE.md`, and the existing `CLAUDE_ADAM_PROVENANCE.md`. Registered at every placement site (`scripts/section-file-mapping.json`, generator specs, `KNOWN_GENERATED_FILES` 28→31, `protocol-file-tracker.cjs`, `contract-target-resolver.mjs` protocol residual 8→11, `.docmon/rules.json` root allow-list).
+  - Measured after regeneration: CLAUDE_EXEC.md 47,241 B / 19,540 tok (fits; now in `MUST_FIT_SINGLE_READ` and `MUST_CONFIRM_SINGLE_READ_FIT`); CLAUDE_CORE.md 57,664 B / 23,851 tok; CLAUDE_ADAM.md 81,773 B / 33,823 tok with all 74 ratification markers still literal (0 regressions). ADAM still reads `fits:false`: the 23,300-token target is unreachable while the marker headers (8,784 B) and rule prose stay pinned in the file, recorded as a measured constraint per the coordinator ruling on signal 61023b11; a binding companion awaits Adam's contract-shape ruling.
+  - Carving is a shared, tested helper (`lib/protocol/contract-carve.mjs`, 7 unit tests): cuts start after the marker header by construction, the companion heading is the applied-marker so re-runs are no-ops (`applied=0 skipped=84`), and both split scripts refuse to write when any marker would be lost.
+
 - **The Stop hook demanded a fresh wakeup arm on every notification-opened turn, so seats parked on CI waits burned consecutive re-poll turns** - SD-LEO-FIX-STOP-HOOK-OVERRIDES-001 (escalated from QF-20260903-916, PR #8664, supersedes #8658)
   - `scripts/hooks/stop-loop-wakeup-reminder.cjs` admitted only a `ScheduleWakeup` after the current turn's promptId boundary, which is correct for a fresh turn but wrong when a Monitor task-notification re-invokes a seat a minute into a multi-minute armed wake: the hook blocked, the seat re-armed and re-polled, and the cycle repeated (measured 66s re-fire on a 459s arm; 3 identical reminders; 25-30s re-fires during CI waits).
   - `scripts/hooks/lib/wakeup-arm-evidence.cjs` gains `findPendingPriorArm()`: it reads the prior turn's `toolUseResult.scheduledFor` (harness-written, not forgeable by message content), bounded to the immediately prior turn and ended by a `scheduledFireId` (consumed) or a `stop:true` arm. `shouldRemind` stays silent only when the opener is `origin.kind=task-notification` and that arm is not yet due, printing one stderr line instead of the reminder. Every non-match and every error path fails toward the old block, never toward silence.
   - Hardening from TESTING/RISK/SECURITY conditions: the predicate is total and isolated from the current-turn verdict; the carried allow is countable (`classifyWindDownReason` → `turn_end_carried_by_prior_arm`); `expected_silence_until` is sized from the pending wake (capped as before); the suppression has its own kill id `stop_loop_prior_arm_carry`. The premise that a pending wake survives an unarmed early re-invocation was confirmed by a live test on the implementing seat (wake armed for 15:26:00Z survived three early turns and fired at 15:26:01Z).
   - Escalated from Quick-Fix QF-20260903-916 because the diff touched `scripts/hooks/**`, a charter-designated sensitive path with no autonomous-completion bypass. Deferred: peer-opened turns (`origin.kind=peer`) are not admitted; the early re-invoker itself is out of scope.
+
+### Infrastructure
+
+- **shell-injection-argv-lint is now a BLOCKING PR check, made safe by reflow-safe violation identity (B-3)** - SD-MAN-INFRA-FLIP-SHELL-INJECTION-001 (PR #8665)
+  - The advisory lint identified a violation as `file:line`, so a pre-existing site that merely moved when a line was inserted above it resurfaced as new; blocking on that would have handed the 237-site / 130-file backlog to every toucher. `scripts/lint/shell-injection-argv-lint.mjs` now keys every violation as `file | selector | normalized full line` (no line number) and, in diff mode, partitions HEAD violations against the keys found in the same file at the merge base (`git show <mergeBase>:<oldPath>`, renames mapped via `--name-status -M`, read lazily through one hardened argv runner). Only NEW keys set the exit code; pre-existing sites are reported, never blocking. `--json` gains `merge_base`, `newViolations`, `preExisting`.
+  - Fail-open closed on the way: the `SHELL_INJECTION_ARGV_BASE` guard is hoisted out of the degrade path, so a hostile/option-shaped base exits 2 loudly while an unresolvable merge base stays degraded-advisory (exit 0). The archive fence (`scripts/one-off`, `archive`, `_deprecated`) now applies in diff mode as it always did in `--all`; `--all` itself is unchanged (no baseline, backlog exits 1 — the registered control-seed trial keys its BLOCKS verdict on exactly that). Full-mode census before and after: 237 violations / 130 files.
+  - `.github/workflows/shell-injection-argv-lint.yml` carries an explicit `continue-on-error: false`, a concurrency group, and a flip-record header naming both escape hatches (inline pragma `shell-injection-argv-disable-line`; a reasoned allowlist entry). Pinned by `tests/unit/shell-injection-argv-lint-workflow-blocking.test.js` and the flipped TS-7/TS-11 blocks; a negative CI probe (one appended `execSync(cmd)` site) turned the check red in 23s and was reverted.
+  - Not in this SD: remediating the backlog, migrating the 4 `file:line` allowlist entries, changing selectors, or touching `schema-lint-scope` / `schema-reference-lint`. Precedent reused from the schema-lint-scope partition; the shared `partitionViolations` was mirrored, not imported, because its key is schema-shaped and hard-coded.
 
 ## 2026-09-08
 

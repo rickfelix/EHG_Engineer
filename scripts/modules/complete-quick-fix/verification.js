@@ -162,18 +162,28 @@ export async function validateLOC(sourceLoc, testLoc, qfId, supabase, prompt, fl
  * @param {object} flags - { forceComplete?: bool, reason?: string }
  * @returns {boolean} True if tests pass
  */
+/**
+ * QF-20260911-755: a truthful three-state label for the e2e column. A guard refusal that ran
+ * zero tests is neither PASS nor FAIL — printing it as FAIL was how an EHG frontend QF read
+ * "tests not passing" with no test ever executed.
+ */
+export function e2eResultLabel(e2eResult) {
+  if (e2eResult?.notRunnable) return `⏭️ NOT RUNNABLE HERE (${e2eResult.reason || 'e2e_not_runnable_here'})`;
+  return e2eResult?.passed ? '✅ PASS' : '❌ FAIL';
+}
+
 export function validateTests(unitResult, e2eResult, testsPass, flags = {}) {
   if (!testsPass) {
     if (flags.forceComplete) {
       console.log(`\n⚠️  --force-complete: failing-tests gate bypassed (reason="${flags.reason}")`);
-      console.log(`   Unit: ${unitResult?.passed ? '✅ PASS' : '❌ FAIL'}, E2E: ${e2eResult?.passed ? '✅ PASS' : '❌ FAIL'}\n`);
+      console.log(`   Unit: ${unitResult?.passed ? '✅ PASS' : '❌ FAIL'}, E2E: ${e2eResultLabel(e2eResult)}\n`);
       return true;
     }
     console.log('\n❌ CANNOT COMPLETE - TESTS NOT PASSING\n');
     console.log('   Quick-fixes REQUIRE both test suites to pass (programmatically verified).\n');
     console.log('📊 Test Results:');
     console.log(`   Unit Tests:  ${unitResult?.passed ? '✅ PASS' : '❌ FAIL'}`);
-    console.log(`   E2E Tests:   ${e2eResult?.passed ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`   E2E Tests:   ${e2eResultLabel(e2eResult)}`);
     console.log('\n📋 Next steps:');
     console.log('   1. Review test output above');
     console.log('   2. Fix failing tests');
@@ -181,6 +191,10 @@ export function validateTests(unitResult, e2eResult, testsPass, flags = {}) {
     return false;
   }
 
+  if (e2eResult?.notRunnable) {
+    console.log(`✅ Unit tests passed (programmatically verified); E2E ${e2eResultLabel(e2eResult)} — unit run + PR CI are the test evidence\n`);
+    return true;
+  }
   console.log('✅ All tests passed (programmatically verified)\n');
   return true;
 }

@@ -26,7 +26,79 @@ import {
   buildUnitTestCommand,
   WHOLE_SUITE_UNIT_COMMAND,
   runTests,
+  classifyE2eNotRunnable,
+  computeTestsPass,
+  E2E_NOT_RUNNABLE_REASON,
 } from '../../../scripts/modules/complete-quick-fix/test-runner.js';
+import { validateTests, e2eResultLabel } from '../../../scripts/modules/complete-quick-fix/verification.js';
+
+// QF-20260911-755: the e2e-db-target prod-ref guard throws at playwright.config load, BEFORE
+// any test runs. That is not a failing test suite — it is "e2e not runnable on this host".
+const GUARD_REFUSAL_OUTPUT = [
+  '> ehg@1.0.0 test:e2e',
+  '> playwright test --grep=smoke --reporter=list',
+  'Error: [e2e-db-target-guard] Refused: target ref "dedlbzhpgkmetvhbkyzq" is not designated safe (no_designated_target). Set VITEST_DB_ALLOW_REF to an explicitly authorized non-production ref, or point SUPABASE_URL at a designated non-production project.',
+  '    at assertPlaywrightTargetSafe (tests/helpers/e2e-db-target-guard.ts:60:11)',
+].join('\n');
+
+describe('QF-20260911-755: e2e guard refusal is e2e_not_runnable_here, not a test failure', () => {
+  beforeEach(() => { execSyncMock = vi.fn(); });
+
+  it('runTests("e2e") classifies a guard refusal that ran zero tests as notRunnable (passed:false)', () => {
+    execSyncMock.mockImplementation(() => {
+      const err = new Error('Command failed');
+      err.status = 1;
+      err.stdout = GUARD_REFUSAL_OUTPUT;
+      throw err;
+    });
+    const r = runTests('e2e', { testDir: '/repo/ehg' });
+    expect(r.notRunnable).toBe(true);
+    expect(r.passed).toBe(false);
+    expect(r.reason).toBe(E2E_NOT_RUNNABLE_REASON);
+    expect(r.summary.total).toBe(0);
+  });
+
+  it('a genuine e2e failure (tests executed) is NOT reclassified, even if the guard marker appears in output', () => {
+    execSyncMock.mockImplementation(() => {
+      const err = new Error('Command failed');
+      err.status = 1;
+      err.stdout = GUARD_REFUSAL_OUTPUT + '\n  1 failed\n  2 passed\n';
+      throw err;
+    });
+    const r = runTests('e2e', { testDir: '/repo/ehg' });
+    expect(r.notRunnable).toBeUndefined();
+    expect(r.passed).toBe(false);
+    expect(classifyE2eNotRunnable(GUARD_REFUSAL_OUTPUT, { total: 3 })).toBe(false);
+    expect(classifyE2eNotRunnable(GUARD_REFUSAL_OUTPUT, { total: 0 })).toBe(true);
+    expect(classifyE2eNotRunnable('  3 failed\n', { total: 0 })).toBe(false);
+  });
+
+  it('computeTestsPass: not-runnable e2e falls through to the unit verdict; an executed e2e failure still blocks', () => {
+    const unitOk = { passed: true };
+    const unitBad = { passed: false };
+    expect(computeTestsPass(unitOk, { passed: false, notRunnable: true })).toBe(true);
+    expect(computeTestsPass(unitBad, { passed: false, notRunnable: true })).toBe(false);
+    expect(computeTestsPass(unitOk, { passed: false })).toBe(false);
+    expect(computeTestsPass(unitOk, { passed: true })).toBe(true);
+    expect(computeTestsPass(unitOk, null)).toBe(true); // backend-only diff: e2e skipped
+  });
+
+  it('validateTests never prints a not-runnable e2e as FAIL, and does not claim "All tests passed"', () => {
+    const lines = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((...a) => lines.push(a.join(' ')));
+    try {
+      const e2e = { passed: false, notRunnable: true, reason: E2E_NOT_RUNNABLE_REASON };
+      expect(e2eResultLabel(e2e)).toMatch(/NOT RUNNABLE HERE/);
+      expect(validateTests({ passed: true }, e2e, computeTestsPass({ passed: true }, e2e))).toBe(true);
+      const out = lines.join('\n');
+      expect(out).toMatch(/E2E .*NOT RUNNABLE HERE/);
+      expect(out).not.toMatch(/All tests passed/);
+      expect(out).not.toMatch(/E2E: ❌ FAIL/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
 import {
   isFrontendPath,
   touchesFrontend,

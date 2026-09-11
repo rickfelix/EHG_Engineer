@@ -4,7 +4,7 @@
  * batch-mint detector to the hold writer.
  */
 import { describe, it, expect } from 'vitest';
-import { runBatchMintSweep, checkVerdictsAndRelease } from '../../../scripts/cron/batch-mint-sweep.mjs';
+import { runBatchMintSweep, checkVerdictsAndRelease, openConsultRow } from '../../../scripts/cron/batch-mint-sweep.mjs';
 
 function fakeSupabase({ mints, existingHolds = [], updateResults = {} }) {
   return {
@@ -94,6 +94,76 @@ describe('runBatchMintSweep', () => {
     const result = await runBatchMintSweep(supabase, { nowMs: Date.parse('2026-08-01T00:01:00Z') });
     expect(result).toEqual({ scanned: true, groups: 0, held: 0, alreadyHeld: 0, failed: [] });
   });
+
+  // QF-20260911-382 (facet 2): a failed consult insert must produce NO stamp -- a hold citing
+  // consult=none is unreleasable by the specified path by construction.
+  it('QF-382: a failed consult insert stamps nothing and surfaces every member in failed', async () => {
+    const t0 = Date.parse('2026-08-01T00:00:00Z');
+    const mints = [
+      { id: 'QF-1', created_by: 'sess-A', created_at: new Date(t0).toISOString() },
+      { id: 'QF-2', created_by: 'sess-A', created_at: new Date(t0 + 3 * 60000).toISOString() },
+      { id: 'QF-3', created_by: 'sess-A', created_at: new Date(t0 + 8 * 60000).toISOString() },
+    ];
+    const supabase = fakeSupabase({ mints });
+    const updates = [];
+    const supabaseSpy = {
+      from: (table) => {
+        const real = supabase.from(table);
+        if (table !== 'quick_fixes') return real;
+        return { ...real, update: (payload) => { updates.push(payload); return real.update(payload); } };
+      },
+    };
+    const result = await runBatchMintSweep(supabaseSpy, { nowMs: t0 + 9 * 60000, openConsult: async () => null });
+    expect(updates).toHaveLength(0);
+    expect(result.held).toBe(0);
+    expect(result.failed).toEqual([
+      { id: 'QF-1', cause: 'consult_row_missing' },
+      { id: 'QF-2', cause: 'consult_row_missing' },
+      { id: 'QF-3', cause: 'consult_row_missing' },
+    ]);
+  });
+});
+
+/**
+ * QF-20260911-382: openConsultRow's own contract -- the row it cites is the row that landed.
+ */
+describe('openConsultRow (QF-20260911-382)', () => {
+  const group = { creator: 'adam-1', memberIds: ['QF-1', 'QF-2'], anchorAt: '2026-08-01T00:00:00Z' };
+  const quietLogger = { error: () => {} };
+  const fakeSb = (parkedRow) => ({
+    from: (table) => {
+      if (table !== 'session_coordination') return {};
+      return { select: () => ({ eq: (col, id) => ({ maybeSingle: async () => ({ data: id === parkedRow?.id ? parkedRow : null, error: null }) }) }) };
+    },
+  });
+
+  it('targets the live Solomon with the registered solomon_consult kind (never a private kind the orphan sweep reroutes)', async () => {
+    const sent = [];
+    const insertRow = async (sb, row, opts) => { sent.push({ row, opts }); return { data: { id: 'row-1', created_at: '2026-08-01T00:00:01Z' }, error: null }; };
+    const out = await openConsultRow(fakeSb(), group, { insertRow, resolveSolomon: async () => 'solomon-live', logger: quietLogger });
+    expect(out).toEqual({ id: 'row-1', created_at: '2026-08-01T00:00:01Z' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].row.target_session).toBe('solomon-live');
+    expect(sent[0].row.payload.kind).toBe('solomon_consult');
+    expect(sent[0].row.payload.consult_purpose).toBe('batch_mint_hold');
+    expect(sent[0].opts.targetRoleHint).toBe('solomon');
+  });
+
+  it('cites the parked/deduped row when the choke point reports landed:true with parkedRowId', async () => {
+    const parked = { id: 'parked-9', created_at: '2026-08-01T00:00:05Z' };
+    const insertRow = async () => ({ data: null, error: null, landed: true, parkedRowId: 'parked-9', code: 'DISPATCH_BACKPRESSURE' });
+    const out = await openConsultRow(fakeSb(parked), group, { insertRow, resolveSolomon: async () => null, logger: quietLogger });
+    expect(out).toEqual(parked);
+  });
+
+  it('returns null (loudly) when the insert errored and no row landed', async () => {
+    const errors = [];
+    const insertRow = async () => ({ data: null, error: { message: 'boom' } });
+    const out = await openConsultRow(fakeSb(), group, { insertRow, resolveSolomon: async () => null, logger: { error: (m) => errors.push(m) } });
+    expect(out).toBeNull();
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('boom');
+  });
 });
 
 /**
@@ -101,7 +171,7 @@ describe('runBatchMintSweep', () => {
  * PRIMARY release path. Fake models three tables: quick_fixes (held QFs), session_coordination
  * (consult rows + live replies), retention_archive (unused in these fixtures).
  */
-function fakeVerdictSupabase({ heldQfs = [], consultRows = {}, replies = [] }) {
+function fakeVerdictSupabase({ heldQfs = [], consultRows = {}, replies = [], onUpdate = null }) {
   return {
     from: (table) => {
       if (table === 'quick_fixes') {
@@ -114,7 +184,7 @@ function fakeVerdictSupabase({ heldQfs = [], consultRows = {}, replies = [] }) {
               maybeSingle: async () => ({ data: { verification_notes: null }, error: null }),
             }),
           }),
-          update: (_payload) => ({
+          update: (_payload) => (onUpdate?.(_payload), {
             eq: (col, id) => ({
               eq: () => ({
                 like: () => ({
@@ -168,16 +238,37 @@ describe('checkVerdictsAndRelease (FR-3, the specified primary release path)', (
     expect(result.failed).toEqual([]);
   });
 
-  // TS-4: no reply exists -- the caller (main()) leaves the hold for the existing timer path.
-  it('TS-4: releases nothing when no reply exists (falls through to the existing timer path)', async () => {
+  // TS-4: no reply exists and the bounded wait has NOT elapsed -- the hold stays.
+  it('TS-4: releases nothing when no reply exists and the bounded wait has not elapsed', async () => {
     const supabase = fakeVerdictSupabase({
       heldQfs: [{ id: 'QF-1', release_condition: '[oracle_read_pending] review_at=x consult=11111111-1111-1111-1111-111111111111 :: batch mint detected' }],
       consultRows: { '11111111-1111-1111-1111-111111111111': { created_at: '2026-08-01T00:00:00Z', payload: { correlation_id: 'corr-1' } } },
       replies: [],
     });
-    const result = await checkVerdictsAndRelease(supabase);
+    const result = await checkVerdictsAndRelease(supabase, { nowMs: Date.parse('2026-08-01T00:29:00Z') });
     expect(result.checked).toBe(1);
     expect(result.released).toBe(0);
+  });
+
+  // QF-20260911-382 (facet 1): the bounded wait finally has a producer. A consult row 31 minutes
+  // old with no reply releases, stamped releasedBy=bounded-wait (previously: 0 released, forever).
+  it('QF-382: releases after the bounded wait elapses with no reply, tagged bounded-wait', async () => {
+    const updates = [];
+    const supabase = fakeVerdictSupabase({
+      heldQfs: [{ id: 'QF-1', release_condition: '[oracle_read_pending] review_at=x consult=11111111-1111-1111-1111-111111111111 :: batch mint detected' }],
+      consultRows: { '11111111-1111-1111-1111-111111111111': { created_at: '2026-08-01T00:00:00Z', payload: { correlation_id: 'corr-1' } } },
+      replies: [],
+      onUpdate: (p) => updates.push(p),
+    });
+    const result = await checkVerdictsAndRelease(supabase, { nowMs: Date.parse('2026-08-01T00:31:00Z') });
+    expect(result.checked).toBe(1);
+    expect(result.released).toBe(1);
+    expect(result.failed).toEqual([]);
+    expect(updates).toHaveLength(1);
+    expect(updates[0].owner).toBeNull();
+    expect(updates[0].release_condition).toBeNull();
+    expect(updates[0].verification_notes).toContain('by bounded-wait');
+    expect(updates[0].verification_notes).toContain('consult_row=11111111-1111-1111-1111-111111111111');
   });
 
   it('returns zeroed result when nothing is currently oracle-held', async () => {

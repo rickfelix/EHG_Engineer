@@ -15,12 +15,13 @@ import { createRequire } from 'node:module';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { scanRecentQfMintsForBatches } from '../../lib/fleet/batch-mint-detector.js';
 import {
-  writeQfOracleHold, isOracleHeldQF, BOUNDED_WAIT_MS, QF_ORACLE_HOLD_PREFIX,
+  writeQfOracleHold, isOracleHeldQF, BOUNDED_WAIT_MS, QF_ORACLE_HOLD_PREFIX, isBoundedWaitElapsed,
   extractConsultRowIdFromQfCondition, lookupConsultRowRecord, findConsultReply, releaseQfOracleHold,
 } from '../../lib/fleet/hold-writer.js';
 
 const require = createRequire(import.meta.url);
 const { getActiveSolomonId } = require('../../lib/coordinator/solomon-identity.cjs');
+const { PAYLOAD_KINDS } = require('../../lib/fleet/worker-status.cjs');
 // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001: route the consult-row send through the canonical
 // choke point (session-coordination-insert-classguard-lint) rather than a raw .insert() -- the
 // exact same [SOLOMON_CONSULT] pattern lib/adam/presend-consult-lane.cjs already uses.
@@ -31,19 +32,36 @@ const { insertCoordinationRow } = require('../../lib/coordinator/dispatch.cjs');
  * opened a consult row and cited it, so every real hold was releasable only via --force. Opens
  * ONE consult row per batch group (not per QF — the group is one conversation), targeting the
  * active Solomon (or a broadcast sentinel if none is currently resolvable, matching
- * presend-consult-lane.cjs's own fail-open pattern). Best-effort: a failed insert returns null
- * and the caller falls back to consultRowId=null (writeQfOracleHold embeds 'none'), which is
- * honest — release-oracle-hold.js already refuses a release with no cited row, fail-closed.
+ * presend-consult-lane.cjs's own fail-open pattern).
+ *
+ * QF-20260911-382: a failed insert returns null and the CALLER now refuses to stamp the group
+ * (a hold citing consult=none is unreleasable by the specified path by construction, which is
+ * worse than an unheld batch). Two things that previously read as "no row" are not: the choke
+ * point returns `{data:null, landed:true, parkedRowId}` when the row DID land (already-delivered
+ * dedupe, or backpressure-parked) -- resolve that id so the stamp cites the row that exists.
+ * Kind is PAYLOAD_KINDS.SOLOMON_CONSULT (+ consult_purpose as the shape discriminator, the FW3
+ * §6c convention presend-consult-lane already follows): the former private kind
+ * 'oracle_read_pending_consult' was never registered in Solomon's drain set (the 09-05 registry
+ * migration is still chairman-gated), so lib/fleet/orphan-reroute-sweep.js rerouted every consult
+ * row to the coordinator as coordinator_reminder 16 minutes after send (measured: row 885ad953,
+ * payload.reroute from_target=<solomon> to_target=<coordinator>) -- the "wrong addressee" facet.
  */
-async function openConsultRow(supabase, group) {
+// Thin wrapper so the default-injected value is a literal insertCoordinationRow( call site that
+// the committed caller census (lib/coordinator/insert-coordination-row-callers.cjs) can verify by
+// source text; tests inject a stub via opts.insertRow instead of hitting this wrapper at all.
+async function defaultInsertConsultRow(...args) {
+  return insertCoordinationRow(...args);
+}
+
+export async function openConsultRow(supabase, group, { insertRow = defaultInsertConsultRow, resolveSolomon = getActiveSolomonId, logger = console } = {}) {
   try {
-    const solomonId = await getActiveSolomonId(supabase, {}).catch(() => null);
+    const solomonId = await resolveSolomon(supabase, {}).catch(() => null);
     // SD-LEO-FIX-SPECIFIED-PRIMARY-RELEASE-001 (FR-2): correlation_id lets a reply route back to
     // this row (matches scripts/worker-signal.cjs's existing payload.correlation_id/reply_to
     // convention) -- without it the review this row solicits could never be matched to a release,
     // even after FR-3 added a reader.
     const correlationId = crypto.randomUUID();
-    const { data, error } = await insertCoordinationRow(supabase, {
+    const result = await insertRow(supabase, {
       sender_type: 'system',
       sender_session: 'batch-mint-sweep',
       target_session: solomonId || 'broadcast-solomon',
@@ -56,13 +74,22 @@ async function openConsultRow(supabase, group) {
       // (queryable on the row itself) as the sole timing anchor.
       body: `Batch-mint detector held ${group.memberIds.length} QF(s) (${group.memberIds.join(', ')}) minted by ${group.creator}, grouped within a 10-minute window anchored at ${group.anchorAt} (grouping detail only -- NOT the release timer). Review and reply (cite correlation_id ${correlationId}) to release early, or the bounded wait auto-permits release ${BOUNDED_WAIT_MS / 60000} minutes after THIS row's own created_at (query this row directly for the exact timestamp the timer counts from).`,
       payload: {
-        kind: 'oracle_read_pending_consult', qf_ids: group.memberIds, creator: group.creator,
+        kind: PAYLOAD_KINDS.SOLOMON_CONSULT, qf_ids: group.memberIds, creator: group.creator,
         consult_purpose: 'batch_mint_hold', correlation_id: correlationId,
       },
     }, { targetRoleHint: 'solomon', select: 'id, created_at', single: true });
-    if (error || !data) return null;
-    return data;
-  } catch {
+    const { data, error } = result || {};
+    if (data?.id) return data;
+    if (!error && result?.landed && result?.parkedRowId) {
+      // The row exists (dedupe / backpressure-parked); cite THAT row, never 'none'.
+      const { data: parked } = await supabase
+        .from('session_coordination').select('id, created_at').eq('id', result.parkedRowId).maybeSingle();
+      if (parked?.id) return parked;
+    }
+    logger.error(`[batch-mint-sweep] consult row NOT opened for ${group.creator} (${group.memberIds.join(', ')}): ${error?.message || result?.code || 'no row id returned'} -- group left unheld`);
+    return null;
+  } catch (e) {
+    logger.error(`[batch-mint-sweep] consult row NOT opened for ${group.creator}: ${e?.message || e} -- group left unheld`);
     return null;
   }
 }
@@ -74,10 +101,17 @@ async function openConsultRow(supabase, group) {
  * ones), since a reply can arrive on a hold opened by an earlier tick. The review HAVING
  * HAPPENED is what releases the hold, not any particular verdict content -- any matching
  * coordinator_reply counts (see findConsultReply's own docstring).
+ *
+ * QF-20260911-382 (facet 1): the bounded wait had NO producer -- BOUNDED_WAIT_MS elapsed and
+ * nothing ever called releaseQfOracleHold, so every hold outlived its own timer until a human ran
+ * release-oracle-hold.js (measured: 12 holds, 3.5h past review_at, released 0 by the 14:52Z run).
+ * When no reply exists and isBoundedWaitElapsed(consult row created_at) is true, release with
+ * releasedBy='bounded-wait' -- the same clock seam FR-9 built for exactly this.
  * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {{nowMs?:number}} [opts]
  * @returns {Promise<{checked:number, released:number, failed:Array}>}
  */
-export async function checkVerdictsAndRelease(supabase) {
+export async function checkVerdictsAndRelease(supabase, { nowMs = Date.now() } = {}) {
   // count-truncation-diff-lint: 999 (just under the PostgREST 1000-row cap) mirrors
   // runBatchMintSweep's own existing bound above -- the currently oracle-held QF population is
   // operationally small, but the lint requires an explicit, visible bound on every new read.
@@ -104,10 +138,11 @@ export async function checkVerdictsAndRelease(supabase) {
     const record = await lookupConsultRowRecord(supabase, consultRowId);
     if (!record?.correlation_id) continue;
     const reply = await findConsultReply(supabase, record.correlation_id);
-    if (!reply) continue;
+    if (!reply && !isBoundedWaitElapsed(record.created_at, nowMs)) continue;
+    const releasedBy = reply ? 'solomon-verdict' : 'bounded-wait';
     for (const qfId of qfIds) {
       const result = await releaseQfOracleHold(supabase, qfId, {
-        consultRowId, consultRowCreatedAt: record.created_at, releasedBy: 'solomon-verdict',
+        consultRowId, consultRowCreatedAt: record.created_at, releasedBy,
       });
       if (result.merged) released += 1;
       else failed.push({ id: qfId, cause: result.cause });
@@ -151,11 +186,17 @@ export async function runBatchMintSweep(supabase, { nowMs = Date.now(), openCons
     // One consult row per GROUP (a shared conversation), not per QF — every member cites the
     // same consult, matching the batch's real provenance rather than N independent requests.
     const consultRow = await openConsult(supabase, group);
+    if (!consultRow?.id) {
+      // QF-20260911-382 (facet 2): never stamp consult=none -- such a hold cannot be released by
+      // the specified path. Surface it in `failed` (main() exits 1 on a non-empty list) instead.
+      for (const id of groupToHold) failed.push({ id, cause: 'consult_row_missing' });
+      continue;
+    }
     for (const id of groupToHold) {
       const result = await writeQfOracleHold(supabase, id, {
         reviewAt,
         releaseCondition: `batch mint detected (group size ${group.memberIds.length})`,
-        consultRowId: consultRow?.id || null,
+        consultRowId: consultRow.id,
       });
       if (!result.merged) failed.push({ id, cause: result.cause });
       else held += 1;
