@@ -23,7 +23,7 @@ import fs from 'fs';
 import os from 'os';
 
 import { REPO_PATHS, EHG_ROOT } from './constants.js';
-import { runTests, runTypeScriptCheck, displayTestResults } from './test-runner.js';
+import { runTests, runTypeScriptCheck, displayTestResults, computeTestsPass } from './test-runner.js';
 import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff, buildRateLimitHint, refuseIfSharedRoot } from './git-operations.js';
 // SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001: merge-verification witness so a
 // quick_fixes row cannot reach status=completed while its change is absent from origin/main.
@@ -732,8 +732,13 @@ export async function completeQuickFix(qfId, options = {}) {
     displayTestResults(unitTestResult, e2eTestResult);
 
     // Overall pass/fail. E2E only gates when it actually ran (FR-2); a skipped
-    // e2e (backend-only diff) does not pull testsPass down.
-    testsPass = unitTestResult.passed && (e2eTestResult ? e2eTestResult.passed : true);
+    // e2e (backend-only diff) does not pull testsPass down, and neither does one the
+    // prod-ref guard refused before any test executed (QF-20260911-755: recorded as
+    // e2e_not_runnable_here on the row; unit run + PR CI are the evidence).
+    testsPass = computeTestsPass(unitTestResult, e2eTestResult);
+    if (e2eTestResult?.notRunnable) {
+      console.log(`   ℹ️  E2E recorded as ${e2eTestResult.reason}: verdict falls through to the unit run + CI evidence (unit ${unitTestResult.passed ? 'passed' : 'FAILED'}).`);
+    }
     console.log();
   }
 
@@ -856,6 +861,9 @@ export async function completeQuickFix(qfId, options = {}) {
     testsPass,
     uatVerified,
     testsVerifiedRecently: true,
+    // QF-20260911-755: the self-verifier's Check 3 must not report an e2e run that never
+    // executed as "verified".
+    e2eNotRunnable: Boolean(e2eTestResult?.notRunnable),
     diffAnalysis,
     testCoverage,
     // SD-FDBK-ENH-SOURCE-LOC-CAP-001: thread the LOC-only bypass to verifyLOCConstraint
@@ -1009,6 +1017,13 @@ export async function completeQuickFix(qfId, options = {}) {
   //   - Write force_completed flag (FR-6 ALTERed CHECK accepts this without test/UAT)
   //   - --force-complete writes structured JSON audit trail to verification_notes (FR-2 / TR-3)
   let finalVerificationNotes = verificationNotes || null;
+  // QF-20260911-755: an e2e run the prod-ref guard refused before any test executed is recorded
+  // on the row as e2e_not_runnable_here (never as "verified"), so a later reader can tell
+  // "ran and passed" from "could not run here; unit + CI were the evidence".
+  if (e2eTestResult?.notRunnable) {
+    const e2eNote = `[${e2eTestResult.reason.toUpperCase()} ${new Date().toISOString()}] e2e-db-target guard refused the Playwright run before any test executed (no non-production ref on this host); unit run + PR CI are the test evidence.`;
+    finalVerificationNotes = [finalVerificationNotes, e2eNote].filter(Boolean).join(' | ');
+  }
   if (options.forceComplete) {
     finalVerificationNotes = JSON.stringify({
       force_completed: true,
