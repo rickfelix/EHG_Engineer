@@ -1,0 +1,126 @@
+{
+  "verdict": "PASS",
+  "confidence": 82,
+  "critical_issues": [],
+  "warnings": [
+    {
+      "issue": "No render surface for a per-venture 'status line' exists today. venture_build_status.mjs's only current consumer (lib/chairman/decision-layman.mjs ventureStatusContradictionNote) is a narrow prose-vs-measured-state contradiction check, not a general one-line-per-venture renderer -- FR-5's 'AltifyAI status line Adam carries' phrase implies a surface that does not exist yet.",
+      "severity": "MEDIUM",
+      "recommendation": "PRD must specify a NEW pure render function (name below) and its call sites explicitly, not assume an existing line it can append to."
+    },
+    {
+      "issue": "The exact Cloudflare permission-group label for Workers AI /ai/run access cannot be confirmed from this repo (one-shot-ai-probe.yml only proved a 401, it did not enumerate the token's permission groups). A wrong label in the fail-loud message sends the chairman hunting a toggle that doesn't exist by that name.",
+      "severity": "MEDIUM",
+      "recommendation": "EXEC must verify the live Cloudflare dashboard's current permission-group name for Workers AI read access at build time (e.g. via the token-edit UI or Cloudflare API token-policy docs) before hardcoding it into the CI step's message -- never guess."
+    }
+  ],
+  "recommendations": [
+    {
+      "title": "Per-step captured_cause shape (uat_test_results.metadata.captured_cause)",
+      "priority": "HIGH",
+      "detail": "Keep the proposed shape ({window, worker_logs, venture_errors, d1_failures, summary}) as ONE nested JSONB object -- this is a DELIBERATE, justified departure from the flat-key convention authForensics/providerResponseClass use (result-recorder.js ~192-259 spreads those directly as individual snake_case metadata keys, never nested). Flattening this shape would need ~20 individual keys (window.from/to x1, plus producer/run_id/content_hash/item_count/items/items_truncated/absent/absent_reason x3 legs) and would be strictly worse to read and query. State this rationale explicitly in the PRD so a reviewer doesn't flag it as an inconsistency with the cited precedent -- the precedent's own justification (simple absent-unless-observed scalars) does not extend to a 3-leg nested structure.\n\nLEG = { producer: <one of 'cloudflare-worker-tail'|'venture-errors-rpc'|'d1-generated-alt-texts'>, run_id: <string|null>, content_hash: <string|null>, item_count: <integer>=0>, items: [...], items_truncated: <boolean>, absent: <boolean>, absent_reason: <string|null> }. run_id and content_hash are REQUIRED (non-null) whenever absent===false -- this is what satisfies ratification 6c263823 (producer must be the CI/RPC run, never the walker's own re-summarization)."
+    },
+    {
+      "title": "Redaction + size bounds",
+      "priority": "HIGH",
+      "detail": "Per RISK R2 (already on record for this SD): redact BEFORE truncating, not after (matches capture.js:41's own ordering, cited by composeFailureDetail's doc comment) -- a cap-then-redact order can leave a secret's tail fragment exposed. worker_logs/venture_errors items: MAX_ITEMS_PER_LEG=10, MAX_ITEM_CHARS=200 per item post-redaction, allowlisted-prefix style (never a raw JSON blob -- mirrors providerResponseClass.errorBodyPrefix's own convention). d1_failures items: reuse generated_alt_texts.failure_detail verbatim (already an allowlisted, redacted, 256-char-capped composeFailureDetail output per FR-4's locked-at-LEAD cut -- no further truncation needed, it is already safe). summary: <=280 chars. Target total captured_cause JSON under ~8KB (3 legs x 10 items x ~230 bytes/item-with-overhead ~= 6.9KB + header fields ~= 7.5KB) -- EXEC must add a hard JSON.stringify(...).length assertion as a defensive backstop, since uat_test_results.metadata has no app-level size cap today (confirmed against database/migrations/uat-tracking-schema.sql)."
+    },
+    {
+      "title": "The absent / empty / captured three-state rendering contract (fixes RISK R3)",
+      "priority": "CRITICAL",
+      "detail": "This is the concrete fix for R3 ('an empty capture must never read as no cause'). Three states, each with a fixed, greppable render string:\nState A -- NOT ATTEMPTED/NOT READY (absent=true): per-leg render '<leg>: capture unavailable (<absent_reason>)', e.g. 'worker_logs: capture unavailable (capture_not_ready)'. If ALL THREE legs are State A, captured_cause.summary = 'cause capture did not complete for this step (<comma-joined-reasons>)' -- a fixed prefix ('cause capture did not complete') that is the ONLY summary text allowed to start that way.\nState B -- CAPTURED, EMPTY (absent=false, item_count=0): per-leg render '<leg>: no matching entries in window'. If ALL THREE legs are State B, summary = 'no error signal found in captured logs/events/D1 for this window (capture succeeded)' -- the parenthetical '(capture succeeded)' is load-bearing, it is what distinguishes this from State A.\nState C -- CAPTURED, POPULATED (absent=false, item_count>0): summary is a real synthesized sentence (prefer d1_failures.failure_detail first, else first venture_errors item, else first worker_logs item), capped at 280 chars.\nabsent_reason enum (required non-null whenever absent=true): 'not_attempted' | 'capture_not_ready' | 'dispatch_failed' | 'fetch_failed'. This directly satisfies RISK M3's requirement to distinguish 'capture ran, found nothing' from 'capture never reached ready' as two different, never-collapsed outcomes."
+    },
+    {
+      "title": "SD-level rollup: strategic_directives_v2.metadata.journey_walk_result.captured_cause",
+      "priority": "HIGH",
+      "detail": "Stamped by the EXISTING stampJourneyWalkResult() merge point in lib/apa/journey-walk-orchestrator.js (additive key only, same read-merge-write JSONB '||' merge already used) -- ONLY when walkResult.status==='fail' AND brokenAtStep is set. A 'pass', 'skipped', or 'blocked' walk has no failing step to summarize and must NOT stamp this key (absent-unless-observed, same convention as every other field in this result object). Shape: { summary: <string,<=280>, producer: <string>, run_id: <string|null>, absent: <boolean> } -- copied verbatim from the FIRST failing step's captured_cause.summary/producer/run_id/absent (journey walks are sequential; brokenAtStep already identifies which step this is, so no new step-selection logic is needed)."
+    },
+    {
+      "title": "venture-build-status.mjs additive 'cause' field + the venture-to-orchestrator-SD lookup",
+      "priority": "HIGH",
+      "detail": "Per RISK R12/M9 (already on record, locked at LEAD): deriveVentureBuildStatus() stays PURE and its BUILD_STATUS enum is UNTOUCHED. Add 'cause' as a new, independently-optional sibling key on the RETURNED object ({status, evidence, measured_at, cause?}), populated only in the IO wrappers (fetchVentureBuildStatus / fetchVentureBuildStatusBatch), never in the pure derive function.\nThe venture-id -> orchestrator-SD lookup this needs ALREADY HAS an established pattern -- reuse it verbatim, do not invent a new join. lib/eva/quality-findings/db-sourced-findings.js produceJourneyWalkFindings() (lines ~251-274) and lifecycle-sd-bridge.js's findExistingOrchestrator both query strategic_directives_v2 WHERE sd_type='orchestrator' AND metadata->>venture_id=<ventureId> (NOT the top-level venture_id FK column added by 20260221_multi_venture_isolation.sql -- that column is a different, incompletely-backfilled linkage), most-recent-first, taking the first row carrying the relevant metadata key. fetchVentureBuildStatusBatch should add a SECOND batched query of the same shape (.eq('sd_type','orchestrator').in('metadata->>venture_id', ventureIds)) to pull metadata.journey_walk_result.captured_cause for the whole batch in one round trip, mirroring its own existing 'one query for the whole set' pattern for venture_deployments.\ncause = { summary, producer, run_id, absent, measured_at: journeyWalkResult.ranAt } | undefined -- undefined (key absent entirely) when no orchestrator with journey_walk_result.captured_cause is found for the venture, so a venture with no journey walk history renders byte-identical to pre-SD behavior."
+    },
+    {
+      "title": "The status line itself: formatCauseLine() -- new pure function, exact rendering strings",
+      "priority": "HIGH",
+      "detail": "New export in lib/governance/venture-build-status.mjs (or a sibling module, PURE, mirrors decision-layman.mjs's own IO-shell-fetches/pure-fn-renders split): formatCauseLine(vbs) -> string.\n- vbs.cause undefined -> '' (nothing rendered; byte-identical to pre-SD behavior for every venture with no journey-walk history yet).\n- vbs.cause.absent===true -> 'cause: capture unavailable (<cause.summary's own greppable reason, or the fixed State-A phrase>)'.\n- vbs.cause.absent===false -> 'cause: <summary, truncated to 100 chars with a trailing ellipsis marker if cut> (<producer>, <run_id_short>)' where run_id_short is the first 7 chars for a git-style sha (matches resolveCommitSha's own convention already used elsewhere in this codebase) or the last 6 digits for a numeric GH Actions run id.\nTotal line budget: 'cause: ' (7) + summary (<=100) + ' (' + producer (<=30, from the closed 3-value allowlist above) + ', ' + run_id_short (<=12) + ')' ~= under 160 chars -- fits as ONE line with no wrapping ambiguity in the plain-text contexts this must render in (see accessibility note below).\nCall sites: append as its own line wherever adam-exec-summary.mjs / adam-decision-email.mjs already render a per-venture line today -- lib/fleet/exec-email-ops-actuals.mjs's 'per-venture actuals line (cost+health)' is the closest existing precedent for a one-line-per-venture render and the natural sibling location; PLAN should confirm the exact insertion point when it writes the PRD's FR-5 acceptance criteria."
+    },
+    {
+      "title": "Plain-text accessibility (adam-exec-summary.mjs / adam-decision-email.mjs)",
+      "priority": "MEDIUM",
+      "detail": "Verified: adam-exec-summary.mjs renders lines into an esc()-escaped <div> inside an HTML email (not raw plain text), while decision-layman.mjs's copy-paste block is placed inside a <pre style=\"white-space:pre-wrap;-webkit-user-select:all\"> block specifically so the chairman can select-all and paste it into Claude Code as plain text (both scripts also pass a separate 'text' arg to sendEmail() as a plain-text fallback). The cause line therefore MUST be pure ASCII, single-line, no markdown syntax, no emoji (existing chairman directive, already enforced elsewhere in this file), and no characters that would break a copy-paste round-trip through a plain-text mail client. The exact rendering strings specified above already satisfy this (no unicode arrows, no markdown, ASCII parens/colons only)."
+    },
+    {
+      "title": "lib/fleet/parent-completion.mjs re-read timing",
+      "priority": "HIGH",
+      "detail": "Confirmed by direct read: this file currently has ZERO references to metadata.journey_walk_result anywhere. The proposed re-read is new work, not a modification of existing logic. Concretely: in runSteps(), immediately after either runHandoff('PLAN-TO-LEAD', ...) call (the first-attempt branch or the WAIT-retrigger branch), re-fetch parent.metadata fresh via a single best-effort supabase.from('strategic_directives_v2').select('metadata').eq('id', parent.id).maybeSingle() call -- NOT reusing the `parent` object captured at the top of runParentCompletion(), because prerequisite-check.js's own WAIT path (scripts/.../prerequisite-check.js ~289-314) runs INSIDE that same runHandoff() call and is the thing that would have just read/left journey_walk_result in place; the caller's stale in-memory `parent.metadata` cannot be assumed current relative to what the handoff execution itself observed. When the resulting status is STAGED_OTHER_GATE with blockedGate naming the journey-walk WAIT (or when a fresh journey_walk_result.captured_cause exists on the re-read), append formatCauseLine()'s output to the returned `message` string. This must be fail-soft (a re-read error never blocks the existing pass/fail/wait determination, only the message enrichment) -- same convention parent-completion.mjs already uses for its own release-failure augmentation (STRANDED_CLAIM handling)."
+    },
+    {
+      "title": "FR-3 token-scope check: one-line keystroke text (format, not the exact permission label)",
+      "priority": "MEDIUM",
+      "detail": "Format contract (reuses this repo's own established GH Actions annotation style, e.g. deploy.yml's existing '::error::...' fail-loud steps -- consistent, not a new convention): '::error::Cloudflare API token is missing the '<permission-group>' permission (required for <capability>) -- add it at https://dash.cloudflare.com/profile/api-tokens under this token's permissions, then re-run Deploy.' ONE line, states the exact missing capability and the exact URL, contains no instruction to read a log or open a dashboard tab beyond the one named action. Do NOT invent a token 'name' placeholder -- CLOUDFLARE_API_TOKEN's dashboard-configured display label is not reliably retrievable from CI (the /user/tokens/verify endpoint returns an id, not the label), so the message should refer to 'the Cloudflare API token configured in this repo's secrets', never a fabricated <name>. <permission-group> and <capability> must be filled in by EXEC from the LIVE Cloudflare dashboard's current permission-group taxonomy for Workers AI read access at build time (see warnings above) -- this design verdict specifies the FORMAT and constraints, not the literal label, since that cannot be verified from this repo alone."
+    },
+    {
+      "title": "FR-2 Deploy fail-loud message: byte-identical reuse, not a new string",
+      "priority": "MEDIUM",
+      "detail": "one-shot-secret-provision.yml's existing fail-loud text is already exact and already matches every stated constraint (fails first/before any network call, never echoes the value): '::error::GitHub secret $name is not set -- refusing to write an empty Worker secret.' Since FR-2 (locked at LEAD) folds this SAME loop into deploy.yml rather than building a new mechanism, EXEC should keep this string BYTE-IDENTICAL in both workflows (only the step's display NAME may differ, e.g. 'Provision error-forwarding secrets' inside deploy.yml vs 'Put the forwarding secrets on the altifyai Worker' in the one-shot) -- a shared literal error string keeps future log-grepping/search working across both surfaces without knowing which workflow produced a given failure. Placement: immediately after the existing 'Deploy to Cloudflare' step (secrets apply to an already-deployed Worker immediately, no redeploy required) and before 'post-deploy-signed-in-uat', so forwarding is live before that step could trigger error-capture."
+    }
+  ],
+  "detailed_analysis": "Read (EHG_Engineer): lib/uat/result-recorder.js recordResult() (~150-260, the authForensics/providerResponseClass absent-unless-observed spread convention); lib/governance/venture-build-status.mjs in full (deriveVentureBuildStatus is PURE, closed BUILD_STATUS enum, fetchVentureBuildStatus/fetchVentureBuildStatusBatch are the only IO); scripts/adam-exec-summary.mjs and scripts/adam-decision-email.mjs (confirmed venture_build_status's ONLY current consumer is lib/chairman/decision-layman.mjs's ventureStatusContradictionNote -- a narrow prose-contradiction check, not a general status-line renderer; confirmed both scripts render HTML with esc()-escaped per-venture <div> lines plus a separate plain-text sendEmail() fallback, and decision-layman's copy-paste block renders inside a <pre> the chairman selects-all); lib/fleet/parent-completion.mjs in full (confirmed zero existing references to journey_walk_result -- FR-5's re-read is new work); lib/apa/journey-walk-orchestrator.js in full (confirmed stampJourneyWalkResult()'s existing read-merge-write JSONB merge convention, and the exact walk-result shape: status/testRunId/passRate/brokenAtStep/preflightResults/ranAt); scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js ~260-315 (confirmed the journey_steps/journey_walk_result WAIT gate this SD's captured_cause will flow through); lib/eva/quality-findings/db-sourced-findings.js produceJourneyWalkFindings() ~251-300 (found and reused the EXISTING venture-id -> orchestrator-SD lookup pattern via metadata->>venture_id, resolving what would otherwise be an open design question about how fetchVentureBuildStatusBatch would locate a venture's journey_walk_result). Read (altifyai, fetched fresh from origin/main via git show, MSYS_NO_PATHCONV=1 to avoid the known git-bash colon-mangling trap): .github/workflows/deploy.yml, ci.yml, one-shot-secret-provision.yml, one-shot-ai-probe.yml in full; lib/error-capture/capture.js and redact.js in full; lib/alt-text/generate.js's composeFailureDetail/classifyAiError/extractAltText and their length-cap constants (CLASSIFICATION_FIELD_MAX=64, FAILURE_DETAIL_MAX=256, ALT_TEXT_MAX=2000); confirmed via git grep that composeFailureDetail (FR-4's already-cut half, QF-20260906-986/commit 18a336d) is allowlist-assembled and never carries raw provider text, matching the SD's locked FR-4 decision. Cross-checked against sub_agent_execution_results: this SD's RISK sub-agent (LEAD phase) already produced R1-R12/M1-M9 grounded in the same two repos; this design pass treats R3/R12/M3/M9 as settled inputs to refine (concrete render-state contract for R3; additive-field-not-enum-change confirmed for R12/M9) rather than re-litigating them.",
+  "summary": "The proposed contract's shape is directionally sound and is now refined into concrete field names, bounds, and rendering strings PLAN can drop into PRD acceptance criteria. Two things needed grounding rather than assumption and are now resolved: (1) there is no existing 'status line' surface -- a new pure formatCauseLine() function and explicit call sites are required, not an append to something that already exists; (2) the venture-to-orchestrator-SD lookup fetchVentureBuildStatusBatch needs to attach 'cause' already exists in this codebase (metadata->>venture_id pattern in db-sourced-findings.js/lifecycle-sd-bridge.js) and should be reused verbatim. The R3 absent/empty/captured three-state contract is the load-bearing fix and is now fully specified with exact strings per state. One deliberate departure from an existing convention (nested captured_cause vs flat authForensics-style keys) is flagged for explicit PRD justification so it isn't mistaken for an inconsistency at review time. The Cloudflare permission-group label and the exact status-line insertion point are the two items this pass could not settle from repo evidence alone and are called out as EXEC-time verifications, not blocking PLAN.",
+  "conditions": [
+    {
+      "action": "PRD must name the exact insertion point for formatCauseLine()'s output (recommended: alongside lib/fleet/exec-email-ops-actuals.mjs's existing per-venture line) rather than leaving 'the status line Adam carries' undefined.",
+      "blocking": false,
+      "priority": "medium"
+    },
+    {
+      "action": "PRD must include an explicit one-sentence rationale for keeping captured_cause as a single nested JSONB object rather than flat keys, citing the ~20-key alternative this pass computed, so reviewers don't flag it against the authForensics/providerResponseClass precedent.",
+      "blocking": false,
+      "priority": "low"
+    },
+    {
+      "action": "EXEC must verify the live Cloudflare permission-group label for Workers AI before hardcoding FR-3's fail-loud message; this design pass specifies format only.",
+      "blocking": false,
+      "priority": "medium"
+    }
+  ],
+  "justification": "PASS: the design surfaces evaluated (captured_cause shape, the absent/empty/captured render contract, the additive venture-build-status field, the parent-completion re-read, the two CI-facing message strings) are now each backed by direct repo reads of both EHG_Engineer and a freshly-fetched altifyai origin/main, not restated from the SD/RISK text. No blocking design defect found; the open items (status-line insertion point, nested-vs-flat rationale, live Cloudflare label) are PRD-authoring and EXEC-time verifications, not design-contract errors.",
+  "metadata": {
+    "phase": "PLAN",
+    "handoff_type": "PLAN-TO-EXEC",
+    "repos_inspected": [
+      "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001",
+      "C:/Users/rickf/Projects/_EHG/altifyai (origin/main fetched fresh via git show, not the stale local checkout)"
+    ],
+    "files_read": [
+      "lib/uat/result-recorder.js",
+      "lib/governance/venture-build-status.mjs",
+      "scripts/adam-exec-summary.mjs",
+      "scripts/adam-decision-email.mjs",
+      "lib/chairman/decision-layman.mjs",
+      "lib/fleet/parent-completion.mjs",
+      "lib/apa/journey-walk-orchestrator.js",
+      "scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js",
+      "lib/eva/quality-findings/db-sourced-findings.js",
+      "lib/eva/bridge/orchestrator-journey-steps.js",
+      "altifyai:.github/workflows/deploy.yml",
+      "altifyai:.github/workflows/ci.yml",
+      "altifyai:.github/workflows/one-shot-secret-provision.yml",
+      "altifyai:.github/workflows/one-shot-ai-probe.yml",
+      "altifyai:lib/error-capture/capture.js",
+      "altifyai:lib/error-capture/redact.js",
+      "altifyai:lib/alt-text/generate.js"
+    ],
+    "prior_evidence_consulted": [
+      "RISK sub_agent_execution_results row (LEAD phase, id 0ec29338, R1-R12/M1-M9)",
+      "RISK sub_agent_execution_results row (PLAN_PRD phase, id 3f524052)",
+      "DESIGN sub_agent_execution_results row (PLAN_PRD phase, id 4c306a0b -- generic infra skip, superseded by this targeted pass)"
+    ],
+    "locked_lead_decisions_respected": [
+      "FR-4 composeFailureDetail half already cut (altifyai TS-10/TS-12) -- not reopened",
+      "FR-2 reuses the existing one-shot-secret-provision.yml loop inside deploy.yml -- not reopened, only the exact reused message text specified",
+      "one PR per repo -- not addressed by design (process concern, out of scope for this sub-agent)"
+    ]
+  }
+}

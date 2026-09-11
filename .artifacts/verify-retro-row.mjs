@@ -1,0 +1,23 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY);
+const { data, error } = await supabase.from('sub_agent_execution_results').select('*').eq('id', '835115d7-89ae-4aa3-83bc-62be98d0f73f').single();
+if (error) { console.error(error); process.exit(1); }
+console.log('sub_agent_code:', data.sub_agent_code);
+console.log('verdict:', data.verdict);
+console.log('confidence:', data.confidence);
+console.log('phase:', data.phase);
+console.log('metadata.repo_path:', data.metadata.repo_path);
+console.log('metadata.executed_from_cwd:', data.metadata.executed_from_cwd);
+console.log('metadata.handoff_type:', data.metadata.handoff_type);
+console.log('metadata.phase:', data.metadata.phase);
+console.log('metadata.retrospective.quality_score:', data.metadata.retrospective?.quality_score);
+console.log('metadata.retrospective.success_patterns.length:', data.metadata.retrospective?.success_patterns?.length);
+console.log('metadata.retrospective.failure_patterns.length:', data.metadata.retrospective?.failure_patterns?.length);
+console.log('metadata.retrospective.key_learnings.length:', data.metadata.retrospective?.key_learnings?.length);
+console.log('metadata.retrospective.action_items.length:', data.metadata.retrospective?.action_items?.length);
+console.log('metadata._raw_payload_extra present:', !!data.metadata._raw_payload_extra);
+console.log('summary present:', !!data.summary, (data.summary||'').length);
+console.log('detailed_analysis length:', (data.detailed_analysis||'').length);
+console.log('recommendations.length:', (data.recommendations||[]).length);
+console.log('sd_id:', data.sd_id);

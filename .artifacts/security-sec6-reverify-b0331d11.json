@@ -1,0 +1,33 @@
+{
+  "verdict": "PASS",
+  "phase": "EXEC-TO-PLAN",
+  "summary": "SEC-6 (HTTP Basic auth header values not redacted) re-verified as fixed. Prior FAIL verdict (evidence 6d46d0ee-1018-4bff-8c46-8d9758a027f3) is superseded.",
+  "findings": [
+    {
+      "id": "SEC-6",
+      "status": "RESOLVED",
+      "severity": "blocking (prior pass) -> resolved",
+      "description": "lib/apa/venture-cause-capture.js redactText() now strips HTTP Basic auth header values via .replace(/\\bbasic\\s+\\S+/gi, 'basic=[REDACTED]') inserted immediately after the existing Bearer-handling replace (line 80), before all generic fallbacks (credential-keyword pattern, JWT pattern, base64/base64URL length-threshold fallback, hex fallback). Ordering confirmed correct: the fix does not rely on any downstream fallback catching what it misses.",
+      "verification": [
+        "Read live implementation at lib/apa/venture-cause-capture.js:70-100 and confirmed the basic-auth replace is present and positioned before the generic fallbacks.",
+        "Ran npx vitest run tests/unit/apa/venture-cause-capture.test.js: 32/32 passed, including new SEC-6 test (line 67-70) asserting redactText('Authorization: Basic dXNlcjpwYXNzd29yZA==') no longer contains the base64 credential 'dXNlcjpwYXNzd29yZA=='.",
+        "Independent repro run against the live redactText() export (own case + 5 adversarial variants) -- ALL PASS: (1) own repro, uppercase 'Basic'; (2) fully lowercase 'authorization: basic'; (3) mixed-case 'BaSiC' with single-= (non-standard) base64 padding; (4) Basic value immediately followed by another header ('Content-Type: application/json') on the same log line -- confirmed \\S+ correctly stops at the next whitespace boundary and doesn't over- or under-consume; (5) unpadded base64 (no trailing '='); (6) short Basic value (12 chars, well under the 32-char base64 fallback threshold, proving the fix does not depend on that fallback)."
+      ]
+    }
+  ],
+  "not_relitigated": [
+    "SEC-1 (env-var-name word-boundary gap) -- previously confirmed fixed, no new diff touched this code path.",
+    "SEC-2 (JWT base64URL fragmentation) -- previously confirmed fixed, no new diff touched this code path.",
+    "SEC-5 -- previously confirmed fixed, no new diff touched this code path.",
+    "SEC-7/8/9 -- advisory-only, accepted design-ceiling items, out of scope for this re-verification."
+  ],
+  "test_evidence": {
+    "command": "npx vitest run tests/unit/apa/venture-cause-capture.test.js",
+    "result": "32/32 passed",
+    "test_file": "tests/unit/apa/venture-cause-capture.test.js"
+  },
+  "conditions": [],
+  "justification": "SEC-6 was the sole blocking finding in the prior FAIL verdict (evidence 6d46d0ee-1018-4bff-8c46-8d9758a027f3). The fix is present, correctly ordered ahead of all generic redaction fallbacks, covered by a new passing unit test, and independently confirmed against 5 fresh adversarial variants beyond the shipped test case. No remaining gap found in this finding class. Verdict: PASS for EXEC-TO-PLAN gate.",
+  "superseded_evidence_id": "6d46d0ee-1018-4bff-8c46-8d9758a027f3",
+  "confidence_score": 95
+}
