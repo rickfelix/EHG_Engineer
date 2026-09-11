@@ -87,11 +87,11 @@ describe('captureCloudflareLogs', () => {
     expect(leg.absent_reason).toBe(ABSENT_REASONS.NOT_ATTEMPTED);
   });
 
-  it('parses a successful telemetry response into a populated leg with the ray id as run_id', async () => {
+  it('parses a successful telemetry response (result.events.events shape, live-verified by altifyai QF-20260819-687) into a populated leg with the ray id as run_id', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       headers: { get: (k) => (k === 'cf-ray' ? 'ray-abc-123' : null) },
-      json: async () => ({ success: true, result: { events: [{ timestamp: '2026-09-11T10:02:00Z', message: 'GENERATION_FAILED' }] } }),
+      json: async () => ({ success: true, result: { events: { events: [{ '$metadata': { level: 'error', message: 'GENERATION_FAILED' } }] } } }),
     });
     const leg = await captureCloudflareLogs({
       workerName: 'altifyai',
@@ -107,6 +107,38 @@ describe('captureCloudflareLogs', () => {
     const [url, opts] = fetchImpl.mock.calls[0];
     expect(url).toContain('/accounts/acct/workers/observability/telemetry/query');
     expect(opts.headers.authorization).toBe('Bearer tok');
+    const body = JSON.parse(opts.body);
+    // Epoch MILLISECONDS, not an ISO string -- an ISO/seconds timeframe silently returns an
+    // empty result set rather than an error (altifyai's own measured incident).
+    expect(typeof body.timeframe.from).toBe('number');
+    expect(typeof body.timeframe.to).toBe('number');
+    expect(body.parameters.datasets).toEqual(['cloudflare-workers']);
+    expect(body.parameters.filters[0]).toMatchObject({ key: '$metadata.service', operation: 'eq', value: 'altifyai' });
+  });
+
+  it('falls back to a same-shaped array walk when result.events.events is absent (older/alternate response shape)', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => ({ success: true, result: { someOtherKey: [{ '$metadata': { message: 'fallback path' } }] } }),
+    });
+    const leg = await captureCloudflareLogs({ workerName: 'altifyai', window: WINDOW, env: { CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'a' }, fetchImpl });
+    expect(leg.absent).toBe(false);
+    expect(leg.item_count).toBe(1);
+    expect(leg.items[0]).toContain('fallback path');
+  });
+
+  it('an empty result.events.events (real zero-match query) is absent:false, item_count:0 -- never falls through to the walk fallback', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => null },
+      // Regression guard for the exact bug QF-20260819-687 measured: result.events.series is
+      // a same-shaped decoy array present alongside a genuinely empty events.events.
+      json: async () => ({ success: true, result: { events: { events: [], series: [{ time: 't', data: [1, 2, 3] }] } } }),
+    });
+    const leg = await captureCloudflareLogs({ workerName: 'altifyai', window: WINDOW, env: { CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'a' }, fetchImpl });
+    expect(leg.absent).toBe(false);
+    expect(leg.item_count).toBe(0);
   });
 
   it('TS-3: degrades to absent(fetch_failed) on a non-2xx response, never throws', async () => {
