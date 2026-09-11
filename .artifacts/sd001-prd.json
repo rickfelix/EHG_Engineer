@@ -1,0 +1,165 @@
+{
+  "executive_summary": "scripts/adam-startup-check.mjs's contract-parity guard stacked three independent failures: its own parseDurableDutyMarkers regex only recognized a bare \"(durable)\" marker while solomon-startup-check.mjs's parser (already broadened under SD-LEO-INFRA-SOLOMON-STARTUP-PARITY-RECALIBRATE-001) accepts the qualifier form \"(durable; <note>)\"; its test file (tests/unit/adam-startup-check.test.mjs) uses node:test/node:assert directly, so vitest's --project unit never collected it and none of its 23 assertions were ever load-bearing in CI; and neither the qualifier-form case nor the existing zero-marker CONTRACT DRIFT guard in renderContractParity had any test coverage. The fix, delivered as Quick-Fix QF-20260903-433 and merged via PR #8674 (commit ab483f2889b) BEFORE this SD existed, reconciles Adam's parser onto Solomon's shared implementation (the same precedent michael-startup-check.mjs already follows), wires the test file into CI via a dedicated `node --test` step (mirroring the existing test:session-tick / test:adam-github-assessment pattern), and adds the two missing regression tests. This SD exists only because the diff touched a sensitive CI-workflow path (.github/workflows/unit-tier.yml) that complete-quick-fix.js's QF_ELIGIBILITY_PREFLIGHT refuses to self-close without a full SD, by design, with no bypass flag -- it is a retroactive verification record of an already-shipped, already-tested, already-merged fix, re-derived fresh from the repo at HEAD rather than accepted from the commit message.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Reconcile Adam's durable-duty-marker parser onto Solomon's shared implementation",
+      "description": "scripts/adam-startup-check.mjs must no longer define its own parseDurableDutyMarkers regex. It imports parseDurableDutyMarkers and slugifyDuty from ./solomon-startup-check.mjs (the same pattern scripts/michael-startup-check.mjs already follows) and re-exports them so its own importers (including its test file) see no path change. Solomon's regex (/\\*\\*\\s*([^*]+?)\\s+DUTY\\s*\\(\\s*durable\\b[^)]*\\)\\s*[.:;,]?\\s*\\*\\*/gi) accepts both the bare \"(durable)\" form and the qualifier form \"(durable; <note>)\".",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "scripts/adam-startup-check.mjs:37 imports parseDurableDutyMarkers/slugifyDuty from ./solomon-startup-check.mjs; no local regex definition remains.",
+        "parseDurableDutyMarkers('**PLAN-ALIGNMENT REVIEW DUTY (durable; chairman-ratified 2026-07-20, heavy-now / light-later)**') returns ['plan-alignment-review'].",
+        "All 7 other vitest suites that import from adam-startup-check.mjs or solomon-startup-check.mjs (152 tests) pass unchanged -- the shared-import refactor introduces no regression."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Wire the dead node:test verifier into CI",
+      "description": "tests/unit/adam-startup-check.test.mjs uses node:test/node:assert directly; npx vitest run tests/unit/adam-startup-check.test.mjs reports 'No test files found, exiting with code 1' and was never collected by any CI step. Add a test:adam-startup-check npm script (node --test tests/unit/adam-startup-check.test.mjs) and a dedicated step in .github/workflows/unit-tier.yml, mirroring the existing test:session-tick and test:adam-github-assessment precedent in the same workflow file.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "package.json has a test:adam-startup-check script running `node --test tests/unit/adam-startup-check.test.mjs`.",
+        ".github/workflows/unit-tier.yml has a step that runs `npm run test:adam-startup-check`, placed alongside the existing session-tick / adam-github-assessment node:test steps.",
+        "`npm run test:adam-startup-check` exits 0 with 25/25 tests passing."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Add regression coverage for the qualifier-form parse and the zero-marker CONTRACT DRIFT guard",
+      "description": "Add a test asserting a qualifier-form duty (e.g. '**PLAN-ALIGNMENT REVIEW DUTY (durable; ...)**') parses via parseDurableDutyMarkers AND resolves correctly through the consumer-side missingDurableDuties(md, ADAM_LOOPS). Add a negative test asserting a >1000-character fixture contract with zero durable markers causes renderContractParity to report CONTRACT DRIFT, never a silent CLEAN (the existing QF-20260828-890 guard inside renderContractParity had no test at all before this SD, despite the guard itself predating it).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A test named for QF-20260903-433 asserts the qualifier-form duty parses to the expected slug and is resolved (present, not missing) against an ADAM_LOOPS entry with that key.",
+        "A test named for QF-20260903-433 builds a >1000-char zero-marker fixture, calls renderContractParity(dir), and asserts the output matches /CONTRACT DRIFT/ and does NOT match /all durable .* duties present/."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No schema change, no migration",
+      "description": "Pure code + test + CI-workflow-wiring change across 4 files (scripts/adam-startup-check.mjs, tests/unit/adam-startup-check.test.mjs, package.json, .github/workflows/unit-tier.yml). No database/chairman-gated or database/migrations touched."
+    },
+    {
+      "id": "TR-2",
+      "title": "Retroactive SD -- code already shipped and merged",
+      "description": "The implementation shipped via Quick-Fix QF-20260903-433, PR #8674, merged as commit ab483f2889b, BEFORE this SD was created. This SD's PLAN/EXEC phases verify the already-merged state at HEAD rather than author new code; EXEC-TO-PLAN and PLAN-TO-LEAD evidence is produced by re-running the shipped tests and re-deriving the diff from the repo, not by re-implementing anything."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Qualifier-form durable duty marker parses and resolves",
+      "type": "unit",
+      "expected": "parseDurableDutyMarkers recognizes '(durable; <note>)' and missingDurableDuties resolves it against a matching ADAM_LOOPS key."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Zero-marker contract triggers CONTRACT DRIFT, never a vacuous CLEAN",
+      "type": "unit",
+      "expected": "renderContractParity on a >1000-char fixture with zero durable markers reports CONTRACT DRIFT."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "The previously-dead test file is now collected and green under CI's actual runner",
+      "type": "unit",
+      "expected": "`npm run test:adam-startup-check` (node --test) exits 0 with 25/25 passing; this is the exact command unit-tier.yml's new step runs."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "No regression in the 7 other suites touching the shared parser",
+      "type": "unit",
+      "expected": "`npx vitest run` across adam-sourcing-state-probe, coord-adam-comms-resilient, quiet-tick-loop-parity, demand-gate-emit, solomon-startup-check, solomon-category-parity, solomon-self-assessment (152 tests total) passes with 0 failures."
+    }
+  ],
+  "acceptance_criteria": [
+    "All three functional requirements (FR-1/FR-2/FR-3) are verifiably true at HEAD on main (commit ab483f2889b or later), independently re-derived, not copied from the PR description.",
+    "No regressions in any of the 7 other vitest suites that import from adam-startup-check.mjs or solomon-startup-check.mjs.",
+    "`npm run test:adam-startup-check` exits 0 with 25/25 tests passing, and the same command runs as a step inside .github/workflows/unit-tier.yml."
+  ],
+  "risks": [
+    {
+      "risk": "The shared-parser import could silently change behavior for a caller that relied on Adam's old, stricter bare-marker regex",
+      "mitigation": "Grepped the repo for every importer of parseDurableDutyMarkers/missingDurableDuties from adam-startup-check.mjs; confirmed only the test file itself imports them (via the re-export), and scripts/adam-quiet-tick.mjs imports unrelated names (ADAM_LOOPS, parseArmedSet, loopStatus) from the same file, untouched by this change.",
+      "severity": "low"
+    },
+    {
+      "risk": "A QF-level fix merging ahead of its own SD's existence could drift from what the SD documents",
+      "mitigation": "This SD's Explore/VALIDATION evidence was produced by independently re-running every test and re-reading every file at the post-merge HEAD commit, not by trusting the QF's or PR's own claims.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/adam-quiet-tick.mjs (imports unrelated names from adam-startup-check.mjs, unaffected)",
+      "/adam startup (runs adam-startup-check.mjs, whose renderContractParity output now has real test coverage)",
+      "CI's unit-tier.yml workflow (gains one new node --test step)"
+    ],
+    "dependencies": [
+      "scripts/solomon-startup-check.mjs (now the single source of truth for parseDurableDutyMarkers/slugifyDuty, already depended on by scripts/michael-startup-check.mjs)"
+    ],
+    "data_contracts": [
+      "none"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Verified by direct command execution: `npx vitest run tests/unit/adam-startup-check.test.mjs` (confirms still uncollected by vitest, as expected), `node --test tests/unit/adam-startup-check.test.mjs` (25/25 pass), and the new unit-tier.yml step running the same command in CI."
+    ]
+  },
+  "system_architecture": {
+    "summary": "Adam's contract-parity checker now shares its marker parser with Solomon's (and Michael's) instead of maintaining an independently-drifting copy; its test file is wired into CI via the same node:test precedent already used twice in the same workflow.",
+    "components": [
+      {
+        "name": "scripts/adam-startup-check.mjs",
+        "change": "Removed local parseDurableDutyMarkers regex; imports + re-exports parseDurableDutyMarkers/slugifyDuty from solomon-startup-check.mjs"
+      },
+      {
+        "name": "tests/unit/adam-startup-check.test.mjs",
+        "change": "Added 2 regression tests (qualifier-form parse, zero-marker CONTRACT DRIFT)"
+      },
+      {
+        "name": "package.json",
+        "change": "Added test:adam-startup-check script"
+      },
+      {
+        "name": ".github/workflows/unit-tier.yml",
+        "change": "Added a node --test step running test:adam-startup-check"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Already shipped via QF-20260903-433 / PR #8674 (merged, commit ab483f2889b) before this SD existed; this SD is a retroactive verification record required because the diff touched a sensitive CI-workflow path.",
+    "steps": [
+      "Re-derive each of the 3 original defects against the repo at HEAD (not the commit message) via an Explore sub-agent.",
+      "Confirm `npm run test:adam-startup-check` passes 25/25 and the unit-tier.yml step is wired correctly.",
+      "Confirm no regression across the 7 other vitest suites touching the shared parser.",
+      "Drive this SD through PLAN-TO-EXEC / EXEC-TO-PLAN / PLAN-TO-LEAD / LEAD-FINAL-APPROVAL citing the already-shipped evidence, then link QF-20260903-433's escalated_to_sd_id record to completion."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run `npx vitest run tests/unit/adam-startup-check.test.mjs`",
+      "expected_outcome": "Reports 'No test files found, exiting with code 1' (vitest still cannot collect this node:test file by design -- CI coverage comes from the dedicated node --test step instead)."
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run `npm run test:adam-startup-check`",
+      "expected_outcome": "node --test reports 25 tests, 25 pass, 0 fail, including the two new QF-20260903-433-named regression tests."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Read .github/workflows/unit-tier.yml and scripts/adam-startup-check.mjs at HEAD",
+      "expected_outcome": "unit-tier.yml contains a step running `npm run test:adam-startup-check`; adam-startup-check.mjs imports parseDurableDutyMarkers/slugifyDuty from ./solomon-startup-check.mjs rather than defining its own regex."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-ADAM-DURABLE-DUTY-001",
+    "source_qf_id": "QF-20260903-433",
+    "shipped_pr": "https://github.com/rickfelix/EHG_Engineer/pull/8674",
+    "shipped_commit": "ab483f2889b",
+    "retroactive_verification": true
+  }
+}

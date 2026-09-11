@@ -1,0 +1,4 @@
+[
+  {"type":"harness","item":"reconcile-escalated-completed-sd-quick-fixes.mjs shows a 24-row (now 25, incl. QF-20260903-433) backlog of escalated QFs whose target SD already completed but never auto-closed -- the --live path has a known disposition-NULL defect (per session memory) blocking the 002e migration, so it cannot be safely run yet to clear the backlog."},
+  {"type":"friction","item":"The generic TESTING sub-agent's E2E-mandatory path (--code TESTING) blocks unconditionally on a zero-UI-surface SD (pure Node script + CI-workflow diff), demanding --full-e2e with nothing for it to exercise. Independently observed a second time on this SD after SD-LEO-FIX-SESSION-COORDINATION-INSERT-001 -- a real recurring pattern now measured twice, not a one-off."}
+]

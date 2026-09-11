@@ -1,0 +1,33 @@
+[32m✔ ADAM_LOOPS has the 18 expected tick loops with the expected keys [90m(1.08ms)[39m[39m
+[32m✔ QF-20260818-063: heartbeat-sms prompt makes the measured-cadence query (sms_outbound_obligations) the REQUIRED FIRST STEP, not session recall [90m(0.2372ms)[39m[39m
+[32m✔ QF-20260905-680: heartbeat-sms prompt names the fixed ET slots and ratification 7010e20f, not the superseded gap rule [90m(0.1218ms)[39m[39m
+[32m✔ FR2: every CLAUDE_ADAM.md durable duty marker is present in ADAM_LOOPS (contract↔tooling parity) [90m(1.0378ms)[39m[39m
+[32m✔ FR2: parseDurableDutyMarkers slugs the marker name and EXCLUDES non-durable/temporary duties [90m(0.1647ms)[39m[39m
+[32m✔ FR2: parseDurableDutyMarkers is forgiving (hyphens, mixed case, UPPER DURABLE) — no silent false negatives [90m(0.0935ms)[39m[39m
+[32m✔ FR2: renderContractParity reports CLEAN for the real contract and is fail-open [90m(1.0869ms)[39m[39m
+[32m✔ FR2: buildReport includes the contract-parity section [90m(214.2971ms)[39m[39m
+[32m✔ FR2: belt-countdown is an agent-prompt 15-min tick (durable, survives session restart) [90m(0.2101ms)[39m[39m
+[32m✔ self-adherence loop runs the recurring self-adherence review (propose-only) [90m(0.1729ms)[39m[39m
+[32m✔ QF-20260830-939: triangulation-audit is a weekly Monday agent-judgment tick carrying the full contract shape [90m(0.4726ms)[39m[39m
+[32m✔ QF-20260905-121: bandwidth-forecast is a durable 21:30 ET tick that ALWAYS records a durable trace, sent or silent [90m(0.1371ms)[39m[39m
+[32m✔ QF-20260830-939: loopStatus is TWO-SIDED for triangulation-audit — MISSING without the key, armed with it [90m(0.0902ms)[39m[39m
+[32m✔ governance-scan loop runs the flag-gated opportunity-scan [90m(0.0595ms)[39m[39m
+[32m✔ parseArmedSet reads --armed arg, --armed= form, and ADAM_ARMED_CRONS env [90m(0.0867ms)[39m[39m
+[32m✔ loopStatus: armed on key, prompt or script match, MISSING when provided-but-absent, unverified otherwise [90m(0.0752ms)[39m[39m
+[32m✔ end-to-end CSV verdict: --armed with all loop KEYS → nothing to arm (no duplicate re-arm) [90m(0.1167ms)[39m[39m
+[32m✔ renderLoops emits CronCreate specs for the not-yet-armed loops (idempotent note) [90m(0.1713ms)[39m[39m
+[32m✔ renderLoops reports "Nothing to arm" when all loops are in the armed set [90m(0.0838ms)[39m[39m
+[32m✔ renderResponsibilities is fail-open (bad repoRoot → fallback, never throws) [90m(0.2392ms)[39m[39m
+[32m✔ buildReport composes responsibilities + the tick loops [90m(193.3809ms)[39m[39m
+[32m✔ ADAM_CRITICAL_PATHS extends the base protocol files with the Adam contract + tick script [90m(0.1492ms)[39m[39m
+[32m✔ renderFreshness is fail-open and reports a CHECKOUT FRESHNESS section [90m(195.2399ms)[39m[39m
+[32m✔ QF-20260903-433: parseDurableDutyMarkers recognizes the qualifier form "(durable; <note>)", matching Solomon's idiomatic contract style [90m(0.1806ms)[39m[39m
+[32m✔ QF-20260903-433: renderContractParity reports CONTRACT DRIFT (never a vacuous CLEAN) when a large contract has zero durable markers [90m(1.8871ms)[39m[39m
+[34mℹ tests 25[39m
+[34mℹ suites 0[39m
+[34mℹ pass 25[39m
+[34mℹ fail 0[39m
+[34mℹ cancelled 0[39m
+[34mℹ skipped 0[39m
+[34mℹ todo 0[39m
+[34mℹ duration_ms 822.1982[39m
