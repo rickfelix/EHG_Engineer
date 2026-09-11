@@ -7988,5 +7988,15 @@
   "classification": "bounded-by-design",
   "match": "id, sd_key, status",
   "note": ".or('sd_key.in.(list),id.in.(list)') where list=allRefs, derived from dependency refs of a .limit(50)-bounded upstream SD set — small"
+ },
+ "lib/apa/venture-cause-capture.js:308": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, error_hash, error_message, occurrence_count, last_seen')",
+  "note": "SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001 FR-1: bounded by an explicit .limit(MAX_ITEMS_PER_LEG) on the same awaited statement three lines below (MAX_ITEMS_PER_LEG=10, a module-level const, always <1000) -- the classifier's limit() regex only recognizes a literal digit, not a named binding, same class as session-liveness-ssot-exit-predicate-check.mjs:47 above."
+ },
+ "lib/governance/venture-build-status.mjs:232": {
+  "classification": "bounded-by-design",
+  "match": ".select('metadata')",
+  "note": "SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001 FR-5: bounded by an explicit .limit(ids.length * 5) two lines below -- ids is the caller's own bounded venture-id batch (fetchVentureBuildStatusBatch), so the cap scales with (and is always proportional to) the request size, never unbounded; the classifier's limit() regex only recognizes a literal digit, not a computed expression."
  }
 }

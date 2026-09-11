@@ -10,9 +10,22 @@ import {
   deriveVentureBuildStatus,
   fetchVentureBuildStatus,
   fetchVentureBuildStatusBatch,
+  fetchCauseLineForVenture,
   BUILD_STATUS,
   ASSERTS_BUILT,
 } from '../../../lib/governance/venture-build-status.mjs';
+
+// SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001 FR-5 fixtures.
+const CAUSE_LEG = { producer: 'p', run_id: 'run-id-1', content_hash: 'h', item_count: 1, items: ['x'], items_truncated: false, absent: false, absent_reason: null };
+const FAILED_ORCHESTRATOR_WITH_CAUSE = (ventureId) => ({
+  metadata: {
+    venture_id: ventureId,
+    journey_walk_result: {
+      status: 'fail',
+      captured_cause: { window: { from: 'a', to: 'b' }, worker_logs: CAUSE_LEG, venture_errors: CAUSE_LEG, d1_failures: CAUSE_LEG, summary: 'captured cause: worker_logs=1' },
+    },
+  },
+});
 
 // The exact measured shape of the witnessed venture (ventures row), captured live
 // 2026-08-11 for SD-LEO-INFRA-VENTURE-STATUS-LANGUAGE-001's LEAD strategic review.
@@ -143,5 +156,70 @@ describe('fetchVentureBuildStatusBatch — batched IO shell', () => {
   it('empty ventureIds returns an empty map without querying', async () => {
     const result = await fetchVentureBuildStatusBatch(fakeSupabase({}), []);
     expect(result.size).toBe(0);
+  });
+});
+
+describe('fetchCauseLineForVenture — FR-5 (SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001)', () => {
+  it('returns null when no orchestrator row exists for the venture', async () => {
+    const empty = fakeSupabase({ strategic_directives_v2: { list: async () => ({ data: [], error: null }) } });
+    expect(await fetchCauseLineForVenture(empty, 'v-1')).toBeNull();
+  });
+
+  it('returns null (fail-soft) on a read error, never throws', async () => {
+    const failing = fakeSupabase({ strategic_directives_v2: { list: async () => ({ data: null, error: new Error('boom') }) } });
+    await expect(fetchCauseLineForVenture(failing, 'v-1')).resolves.toBeNull();
+  });
+
+  it('returns null when the most recent orchestrator has no failed walk (a clean walk is not a cause)', async () => {
+    const clean = fakeSupabase({ strategic_directives_v2: { list: async () => ({ data: [{ metadata: { venture_id: 'v-1', journey_walk_result: { status: 'pass' } } }], error: null }) } });
+    expect(await fetchCauseLineForVenture(clean, 'v-1')).toBeNull();
+  });
+
+  it('renders the formatted cause line for a failed walk carrying captured_cause', async () => {
+    const withCause = fakeSupabase({ strategic_directives_v2: { list: async () => ({ data: [FAILED_ORCHESTRATOR_WITH_CAUSE('v-1')], error: null }) } });
+    const line = await fetchCauseLineForVenture(withCause, 'v-1');
+    expect(line).toContain('cause: captured cause: worker_logs=1');
+  });
+
+  it('missing ventureId or supabase returns null without querying', async () => {
+    expect(await fetchCauseLineForVenture(null, 'v-1')).toBeNull();
+    expect(await fetchCauseLineForVenture(fakeSupabase({}), null)).toBeNull();
+  });
+});
+
+describe('FR-5 additive cause field — never alters the BUILD_STATUS enum (TS-10 regression guard)', () => {
+  it('fetchVentureBuildStatus: a venture with a captured cause gets an additive `cause` key, status unchanged', async () => {
+    const withCause = fakeSupabase({
+      ventures: { maybeSingle: async () => ({ data: { ...WITNESSED_VENTURE_ROW }, error: null }) },
+      venture_deployments: { maybeSingle: async () => ({ data: null, error: null }) },
+      strategic_directives_v2: { list: async () => ({ data: [FAILED_ORCHESTRATOR_WITH_CAUSE('v-1')], error: null }) },
+    });
+    const result = await fetchVentureBuildStatus(withCause, 'v-1');
+    expect(result.status).toBe(BUILD_STATUS.NOT_STARTED); // byte-identical to the no-cause fixture above
+    expect(result.cause).toContain('cause: captured cause: worker_logs=1');
+  });
+
+  it('fetchVentureBuildStatus: no `cause` key at all when there is nothing to show (additive-only, never a placeholder)', async () => {
+    const noCause = fakeSupabase({
+      ventures: { maybeSingle: async () => ({ data: { ...WITNESSED_VENTURE_ROW }, error: null }) },
+      venture_deployments: { maybeSingle: async () => ({ data: null, error: null }) },
+      strategic_directives_v2: { list: async () => ({ data: [], error: null }) },
+    });
+    const result = await fetchVentureBuildStatus(noCause, 'v-1');
+    expect(result.status).toBe(BUILD_STATUS.NOT_STARTED);
+    expect('cause' in result).toBe(false);
+  });
+
+  it('fetchVentureBuildStatusBatch: additive cause per-venture, every other fixture byte-identical', async () => {
+    const batch = fakeSupabase({
+      ventures: { list: async () => ({ data: [{ id: 'v-1', ...WITNESSED_VENTURE_ROW }, { id: 'v-2', ...WITNESSED_VENTURE_ROW }], error: null }) },
+      venture_deployments: { list: async () => ({ data: [], error: null }) },
+      strategic_directives_v2: { list: async () => ({ data: [FAILED_ORCHESTRATOR_WITH_CAUSE('v-1')], error: null }) },
+    });
+    const result = await fetchVentureBuildStatusBatch(batch, ['v-1', 'v-2']);
+    expect(result.get('v-1').status).toBe(BUILD_STATUS.NOT_STARTED);
+    expect(result.get('v-1').cause).toContain('captured cause: worker_logs=1');
+    expect(result.get('v-2').status).toBe(BUILD_STATUS.NOT_STARTED);
+    expect('cause' in result.get('v-2')).toBe(false);
   });
 });
