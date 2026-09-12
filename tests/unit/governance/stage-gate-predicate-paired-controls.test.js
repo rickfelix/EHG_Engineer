@@ -32,7 +32,7 @@ function assertFixtureValid(venture, stage) {
   }
 }
 
-function makeSupabase(stage) {
+function makeSupabase(stage, launchMode = 'live') {
   const insert = vi.fn().mockResolvedValue({ error: null });
   // SECURITY finding SG-M9-V (round 3): this flag proves the override query reached its
   // terminal .maybeSingle() rather than throwing partway through and being swallowed by
@@ -44,7 +44,7 @@ function makeSupabase(stage) {
   return {
     from: (table) => {
       if (table === 'ventures') {
-        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: stage }, error: null }) }) }) };
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: stage, launch_mode: launchMode }, error: null }) }) }) };
       }
       if (table === 'chairman_decisions') {
         // SECURITY finding M9 (EXEC-TO-PLAN review), UPDATED post ship-gate-review atomic-claim
@@ -100,6 +100,21 @@ describe('FR-6: paired non-quarantinable CI controls (stage-gate predicate)', ()
     });
     expect(r.blocked).toBe(false);
     expect(r.verdict).toBe('PASS');
+  });
+
+  it("SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-2 control: fenced venture at stage 24 but launch_mode!='live' — the guard must still FIRE", async () => {
+    assertFixtureValid(FENCED_TEST_VENTURE, 24);
+    const supabase = makeSupabase(24, 'simulated');
+    const r = await checkStageGate({
+      supabase,
+      ventureId: FENCED_TEST_VENTURE.id,
+      requiredStage: 24,
+      actorType: 'sd',
+      actorId: 'CI-LAUNCH-MODE-CONTROL-SD',
+      armed: true,
+    });
+    expect(r.blocked).toBe(true);
+    expect(r.verdict).toBe('BLOCK');
   });
 
   it('FR-6 AC-4: the fixture-presence assertion itself fails loudly on a malformed fixture (not a dead mutation)', () => {

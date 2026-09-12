@@ -257,7 +257,7 @@ describe('processStep — SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 stage-gate call-
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
-  it('an armed but PASSING stage gate (venture already at S24) falls through and sends', async () => {
+  it('an armed but PASSING stage gate (venture already at S24, launch_mode=live) falls through and sends', async () => {
     isEnabled.mockResolvedValueOnce(true); // armed
     const sendSpy = vi.fn(async () => ({ id: 'msg-1' }));
     const { updateMock } = (() => {
@@ -269,7 +269,7 @@ describe('processStep — SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 stage-gate call-
       campaign_enrollments: { update: updateMock },
       venture_consent_events: consentLog(OPT_IN_ON_RECORD),
       ventures: {
-        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 24 }, error: null }) }) })
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 24, launch_mode: 'live' }, error: null }) }) })
       }
     });
     const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: sendSpy } } });
@@ -282,6 +282,28 @@ describe('processStep — SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 stage-gate call-
     const res = await ec.processStep(enrollment, steps);
     expect(res.action).toBe('sent');
     expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-2: an armed stage gate at S24 but launch_mode!='live' still suppresses the send", async () => {
+    isEnabled.mockResolvedValueOnce(true); // armed
+    const sendSpy = vi.fn(async () => ({ id: 'msg-1' }));
+    const supabase = makeSupabaseStub({
+      venture_consent_events: consentLog(OPT_IN_ON_RECORD),
+      ventures: {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 24, launch_mode: 'simulated' }, error: null }) }) })
+      }
+    });
+    const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: sendSpy } } });
+    const enrollment = {
+      id: 'e-1', status: ENROLLMENT_STATUS.ACTIVE, current_step: 0, opened_previous: true,
+      lead_email: 'a@b.co', campaign_id: 'c-1', venture_id: 'v-1'
+    };
+    const steps = [{ subject: 's', htmlA: 'A', htmlB: 'B', delayHours: 1 }];
+
+    const res = await ec.processStep(enrollment, steps);
+    expect(res.action).toBe('suppressed');
+    expect(res.reason).toBe('stage_gate');
+    expect(sendSpy).not.toHaveBeenCalled();
   });
 });
 

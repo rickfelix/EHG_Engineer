@@ -196,10 +196,23 @@ describe('checkStageGate — TS-1/TS-2: normal comparison', () => {
     warnSpy.mockRestore();
   });
 
-  it('TS-2: venture at stage 24, requiredStage 24, armed -> allowed', async () => {
-    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 24 } });
+  it('TS-2: venture at stage 24, requiredStage 24, launch_mode=live, armed -> allowed', async () => {
+    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 24, launch_mode: 'live' } });
     const r = await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: true });
     expect(r).toMatchObject({ inScope: true, blocked: false, verdict: VERDICT.PASS, armed: true });
+  });
+
+  it("FR-2: venture at stage 24 (stage requirement met) but launch_mode!='live' is still blocked", async () => {
+    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 24, launch_mode: 'simulated' } });
+    const r = await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: true });
+    expect(r).toMatchObject({ inScope: true, blocked: true, verdict: VERDICT.BLOCK, armed: true });
+  });
+
+  it('FR-2 regression: rule (c) is_demo=true stays OUT_OF_SCOPE regardless of launch_mode', async () => {
+    const supabase = makeSupabase({ venture: { is_demo: true, current_lifecycle_stage: 24, launch_mode: 'simulated' } });
+    const r = await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: true });
+    expect(r.inScope).toBe(false);
+    expect(r.verdict).toBe(VERDICT.OUT_OF_SCOPE);
   });
 });
 
@@ -327,8 +340,8 @@ describe('checkStageGate — TS-7/TS-8: chairman override', () => {
     expect(r.reason).toBe(null);
   });
 
-  it('the override lookup is never queried on a PASS case (stage already sufficient)', async () => {
-    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 24 } });
+  it('the override lookup is never queried on a PASS case (stage and launch_mode both sufficient)', async () => {
+    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 24, launch_mode: 'live' } });
     await checkStageGate({ supabase, ventureId: 'v1', requiredStage: 24, actorType: 'sd', actorId: 'SD-X', armed: true });
     expect(supabase.from).not.toHaveBeenCalledWith('chairman_decisions');
   });
