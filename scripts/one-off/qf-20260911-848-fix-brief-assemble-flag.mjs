@@ -6,6 +6,7 @@
 // requires a live write, so the real invocation is --apply. One-off, run once with --apply.
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -49,4 +50,6 @@ async function main() {
   console.log(`[qf-848] michael_role_contract (id=${data.id}) updated: "${WRONG}" -> "${RIGHT}"`);
 }
 
-main();
+if (isMainModule(import.meta.url)) {
+  main();
+}
