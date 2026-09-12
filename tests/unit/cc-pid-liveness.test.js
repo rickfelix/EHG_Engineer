@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
-const { isProcessRunning, getAliveCcPids, getMarkerSessionIds, MARKER_DIR } = require('../../lib/fleet/cc-pid-liveness.cjs');
+const { isProcessRunning, getAliveCcPids, getMarkerSessionIds, getMarkerReadState, MARKER_DIR } = require('../../lib/fleet/cc-pid-liveness.cjs');
 
 describe('SD-REFILL-00IO6NQJ: cc-pid-liveness', () => {
   it('isProcessRunning is true for the current process', () => {
@@ -35,6 +35,45 @@ describe('SD-REFILL-00IO6NQJ: cc-pid-liveness', () => {
   it('exposes the canonical marker dir', () => {
     expect(typeof MARKER_DIR).toBe('string');
     expect(MARKER_DIR.replace(/\\/g, '/')).toMatch(/\.claude\/session-identity$/);
+  });
+});
+
+// QF-20260911-907: a guard may decline to run but must never report a number it did not
+// take. readMarkerDir used to return {} for "directory absent", "directory exists but
+// genuinely empty" and (via an uncaught throw) "directory unreadable" alike -- a caller
+// could not tell a trustworthy zero from a failure to measure. getMarkerReadState exposes
+// that discrimination for callers (fleet-quiescence.cjs) that must treat them differently.
+describe('QF-20260911-907: getMarkerReadState discriminates absent/unreadable/ok', () => {
+  it('a single absent directory reports absent', () => {
+    expect(getMarkerReadState('/no/such/marker/dir/xyz')).toBe('absent');
+  });
+
+  it('a directory that exists but is not readable as a directory (ENOTDIR) reports unreadable', () => {
+    // A FILE (not a directory) at the given path portably triggers ENOTDIR from
+    // fs.readdirSync, without needing OS-specific permission manipulation.
+    const filePath = path.join(mkdtempSync(path.join(tmpdir(), 'marker-notdir-')), 'not-a-dir');
+    writeFileSync(filePath, 'x');
+    expect(getMarkerReadState(filePath)).toBe('unreadable');
+    rmSync(path.dirname(filePath), { recursive: true, force: true });
+  });
+
+  it('a genuinely empty (but existing) directory is "ok", not unreadable or absent', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'marker-empty-'));
+    expect(getMarkerReadState(dir)).toBe('ok');
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('across multiple directories: unreadable wins even if another is absent', () => {
+    const filePath = path.join(mkdtempSync(path.join(tmpdir(), 'marker-notdir2-')), 'not-a-dir');
+    writeFileSync(filePath, 'x');
+    expect(getMarkerReadState(undefined, () => ['/no/such/dir', filePath])).toBe('unreadable');
+    rmSync(path.dirname(filePath), { recursive: true, force: true });
+  });
+
+  it('across multiple directories: absent only if EVERY directory is absent', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'marker-mixed-'));
+    expect(getMarkerReadState(undefined, () => ['/no/such/dir', dir])).toBe('ok');
+    rmSync(dir, { recursive: true, force: true });
   });
 });
 
