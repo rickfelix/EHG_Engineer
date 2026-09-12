@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 async function main() {
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -45,4 +46,6 @@ async function main() {
   console.log('Stored:', JSON.stringify(merged));
 }
 
-main().catch((e) => { console.error('FAILED', e); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch((e) => { console.error('FAILED', e); process.exit(1); });
+}
