@@ -24,6 +24,7 @@ import {
   classifyRowCoverage,
   combineHourVerdict,
   buildBackstopBody,
+  buildLiveSlotDedupeKeyCandidates,
   mostRecentDueSlotHour,
   STALENESS_GRACE_MS,
   LIVE_NULL_ROW_GRACE_MS,
@@ -70,6 +71,10 @@ function makeFilterAwareSupabase(rows) {
     const api = {
       eq: (col, val) => chain({ ...filters, [`${col}__eq`]: val }),
       gte: (col, val) => chain({ ...filters, [`${col}__gte`]: val }),
+      // QF-20260911-252: the dedupe-key-based live read chains .in('dedupe_key', [...]) instead
+      // of .gte('created_at', ...) -- recorded/matched the same way as the other filters so
+      // existing fixture rows (none of which set dedupe_key) correctly fall through to no match.
+      in: (col, vals) => chain({ ...filters, [`${col}__in`]: vals }),
       order: () => api,
       limit: () => api,
       select: () => api,
@@ -78,6 +83,7 @@ function makeFilterAwareSupabase(rows) {
         const matched = rows.filter((r) => {
           if (filters['kind__eq'] !== undefined && r.kind !== filters['kind__eq']) return false;
           if (filters['created_at__gte'] !== undefined && !(r.created_at >= filters['created_at__gte'])) return false;
+          if (filters['dedupe_key__in'] !== undefined && !filters['dedupe_key__in'].includes(r.dedupe_key)) return false;
           return true;
         }).sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
         return Promise.resolve({ data: matched.slice(0, 1), error: null }).then(resolve);
@@ -90,7 +96,7 @@ function makeFilterAwareSupabase(rows) {
 
 function makeErrorSupabase() {
   const api = {
-    eq: () => api, gte: () => api, order: () => api, limit: () => api, select: () => api,
+    eq: () => api, gte: () => api, in: () => api, order: () => api, limit: () => api, select: () => api,
     then: (resolve) => Promise.resolve({ data: null, error: { message: 'connection refused' } }).then(resolve),
   };
   return { from: () => api };
@@ -242,6 +248,22 @@ describe('combineHourVerdict', () => {
   });
   it('both unfilled -> unfilled', () => {
     expect(combineHourVerdict('unfilled', 'unfilled')).toBe('unfilled');
+  });
+});
+
+describe('buildLiveSlotDedupeKeyCandidates (QF-20260911-252)', () => {
+  it('returns both known historical dedupe_key formats for a slot', () => {
+    expect(buildLiveSlotDedupeKeyCandidates(21, '2026-09-11')).toEqual([
+      'slot-2100-20260911',
+      'adam-slot-2026-09-11-2100et',
+    ]);
+  });
+
+  it('pads a single-digit slot hour to two digits in both formats', () => {
+    expect(buildLiveSlotDedupeKeyCandidates(6, '2026-09-11')).toEqual([
+      'slot-0600-20260911',
+      'adam-slot-2026-09-11-0600et',
+    ]);
   });
 });
 
@@ -536,6 +558,63 @@ describe('TS-H — due-slot boundary: a send from the PRIOR slot does not count 
 
     expect(r.action).toBe('no_send');
     expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe('QF-20260911-252 — dedupe-key-based live coverage catches a send outside LIVE_EARLY_LOOKBACK_MS', () => {
+  // Reproduces the measured incident: a live send landed 43 minutes BEFORE its due slot's own
+  // instant (well outside the existing 20-minute LIVE_EARLY_LOOKBACK_MS window), so the
+  // time-window read alone missed it. `now` here is itself 43 minutes PAST the due slot (21:00
+  // ET, slot instant 2026-09-12T01:00:00Z) -- past LIVE_NULL_ROW_GRACE_MS too, so the
+  // window-only read classifies this as 'unfilled' on its own (the false-positive this QF fixes).
+  const NOW_43_MIN_PAST_SLOT = new Date('2026-09-12T01:43:00Z'); // 21:43 EDT, due slot 21
+  const EARLY_SEND_CREATED_AT = '2026-09-12T00:17:00.000Z'; // 43 min BEFORE the slot instant
+
+  it('a matching slot-HHMM-YYYYMMDD dedupe_key (current format) counts as coverage though the row is outside the time window', async () => {
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: EARLY_SEND_CREATED_AT, dedupe_key: 'slot-2100-20260911' }];
+    const enqueue = vi.fn();
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, now: NOW_43_MIN_PAST_SLOT, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('no_send');
+    expect(r.summary.reason).toBe('filled');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('a matching adam-slot-YYYY-MM-DD-HHMMet dedupe_key (superseded format) is still recognized', async () => {
+    const rows = [{ kind: LIVE_KIND, status: 'sent', created_at: EARLY_SEND_CREATED_AT, dedupe_key: 'adam-slot-2026-09-11-2100et' }];
+    const enqueue = vi.fn();
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, now: NOW_43_MIN_PAST_SLOT, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('no_send');
+    expect(r.summary.reason).toBe('filled');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("a dedupe_key for a DIFFERENT slot does not count as this slot's coverage -- still enqueues", async () => {
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: EARLY_SEND_CREATED_AT, dedupe_key: 'slot-1800-20260911' }];
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, now: NOW_43_MIN_PAST_SLOT, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('enqueued');
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('an unrecognized dedupe_key format falls through unchanged to the pre-existing behavior -- still enqueues (no regression)', async () => {
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: EARLY_SEND_CREATED_AT, dedupe_key: 'some-future-format-nobody-recognizes-yet' }];
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, now: NOW_43_MIN_PAST_SLOT, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('enqueued');
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('a null dedupe_key (older rows / a dispatcher not yet emitting one) falls through unchanged -- still enqueues', async () => {
+    const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: EARLY_SEND_CREATED_AT, dedupe_key: null }];
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, now: NOW_43_MIN_PAST_SLOT, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('enqueued');
+    expect(enqueue).toHaveBeenCalledTimes(1);
   });
 });
 

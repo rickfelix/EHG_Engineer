@@ -73,7 +73,7 @@ import { pathToFileURL } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import { enqueueChairmanSms } from '../../lib/chairman/sms-bridge.js';
 import { resolveQuietHoursContext } from '../../lib/comms/adam-outbound/quiet-hours-extension.js';
-import { etHourWindowUtc, isSmsQuietHour } from '../../lib/time/chairman-et-wall-clock.js';
+import { etHourWindowUtc, isSmsQuietHour, buildLiveSlotDedupeKeyCandidates } from '../../lib/time/chairman-et-wall-clock.js';
 
 export const SD_KEY = 'SD-LEO-INFRA-DURABLE-HOURLY-HEARTBEAT-001';
 export const ACTIVATION_TRIGGER = '.github/workflows/chairman-hourly-heartbeat-backstop-cron.yml';
@@ -245,6 +245,30 @@ export function combineHourVerdict(liveVerdict, backstopVerdict) {
   return 'unfilled';
 }
 
+// QF-20260911-252: buildLiveSlotDedupeKeyCandidates now lives in lib/time/chairman-et-wall-clock.js
+// (imported above) so this sweep and the drain-time re-verify in lib/chairman/sms-outbound-worker.js
+// share one definition instead of two copies that could silently drift apart. Re-exported here
+// unchanged so existing importers of this module (e.g. this file's own test) are unaffected.
+export { buildLiveSlotDedupeKeyCandidates };
+
+/**
+ * Reads the most recent LIVE_KIND row whose dedupe_key matches ANY of this slot's known formats
+ * (see buildLiveSlotDedupeKeyCandidates), independent of created_at -- catches a live send far
+ * outside the time-window read below, any early or late amount, as long as its dedupe_key is a
+ * recognized slot stamp for this exact slot.
+ */
+async function fetchLatestRowByDedupeKeys(supabase, kind, dedupeKeys) {
+  const { data, error } = await supabase
+    .from('sms_outbound_obligations')
+    .select('id,status,created_at')
+    .eq('kind', kind)
+    .in('dedupe_key', dedupeKeys)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (error) return { row: null, error };
+  return { row: data && data[0] ? data[0] : null, error: null };
+}
+
 /**
  * Reads the most recent obligation row for `kind` created since `sinceIso` — the current DUE
  * SLOT's instant (see mostRecentDueSlotHour/main() above), not a fixed lookback duration.
@@ -346,20 +370,28 @@ export async function main(argv = process.argv, deps = {}) {
   // exactly at the slot instant; look-back is only ever about the live path's own early sends).
   const liveSinceIso = new Date(dueSlotInstantMs - LIVE_EARLY_LOOKBACK_MS).toISOString();
   const fetchRow = deps.fetchLatestRowForKind || fetchLatestRowForKind;
-  const [{ row: liveRow, error: liveErr }, { row: backstopRow, error: backstopErr }] = await Promise.all([
+  const fetchRowByKey = deps.fetchLatestRowByDedupeKeys || fetchLatestRowByDedupeKeys;
+  // QF-20260911-252: an independent, dedupe_key-based read for this exact slot, alongside the
+  // existing time-window read -- catches a live send far outside LIVE_EARLY_LOOKBACK_MS (see
+  // buildLiveSlotDedupeKeyCandidates's doc comment).
+  const liveKeyCandidates = buildLiveSlotDedupeKeyCandidates(dueSlotHour, nowHourKey.slice(0, 10));
+  const [{ row: liveRow, error: liveErr }, { row: backstopRow, error: backstopErr }, { row: liveKeyRow, error: liveKeyErr }] = await Promise.all([
     fetchRow(supabase, LIVE_KIND, liveSinceIso),
     fetchRow(supabase, BACKSTOP_KIND, sinceIso),
+    fetchRowByKey(supabase, LIVE_KIND, liveKeyCandidates),
   ]);
 
   // Read-error branch (PLAN-phase TESTING sub-agent finding G3): fail CLOSED (no send) — an
   // unreadable ledger must never be treated as license to send, since the ledger read is the
   // only signal preventing a double-send.
-  if (liveErr || backstopErr) {
-    log({ action: 'inert', reason: 'read_error', live_error: liveErr?.message || null, backstop_error: backstopErr?.message || null });
+  if (liveErr || backstopErr || liveKeyErr) {
+    log({ action: 'inert', reason: 'read_error', live_error: liveErr?.message || null, backstop_error: backstopErr?.message || null, live_key_error: liveKeyErr?.message || null });
     return { exitCode: 0, action: 'inert', reason: 'read_error' };
   }
 
-  const liveVerdict = classifyRowCoverage(liveRow, now, { sinceMs: dueSlotInstantMs });
+  const liveWindowVerdict = classifyRowCoverage(liveRow, now, { sinceMs: dueSlotInstantMs });
+  const liveKeyVerdict = classifyRowCoverage(liveKeyRow, now, { sinceMs: dueSlotInstantMs });
+  const liveVerdict = combineHourVerdict(liveWindowVerdict, liveKeyVerdict);
   const backstopVerdict = classifyRowCoverage(backstopRow, now, { ownKind: true }); // F6 fix
   const hourVerdict = combineHourVerdict(liveVerdict, backstopVerdict);
 
