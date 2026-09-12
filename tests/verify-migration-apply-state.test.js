@@ -12,6 +12,7 @@ import {
   isRecent, partitionRecentGaps, migrationDateToken, RETIRED_BEFORE,
   hasAnyDbCredential, OUTCOME, summarizeResults, DEFAULT_EXTRA_ROOTS,
   partitionBlockingFailSet, extractFunctionBodies, normalizeSqlBody,
+  extractTriggerDefs, extractTriggerWhenClause,
 } from '../scripts/verify-migration-apply-state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -407,6 +408,78 @@ describe('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 — function body-aware classi
     const [row] = classifyFiles(['m.sql'], expected, perFile, new Set(), undefined, new Map());
     expect(JSON.stringify(row)).not.toContain('SECRET_LOOKING_TEXT_MARKER');
     expect(row.missing).toEqual([{ cls: 'function', name: 'fn_stale' }]);
+  });
+});
+
+describe('QF-20260912-708 — trigger WHEN-clause-aware classification', () => {
+  it('extractTriggerDefs captures the full CREATE TRIGGER statement, keyed by name', () => {
+    const defs = extractTriggerDefs(
+      'CREATE TRIGGER trg_x AFTER UPDATE ON t FOR EACH ROW WHEN (OLD.a IS DISTINCT FROM NEW.a) EXECUTE FUNCTION f();'
+    );
+    expect(defs.get('trg_x')).toContain('WHEN (OLD.a IS DISTINCT FROM NEW.a)');
+  });
+
+  it('extractTriggerWhenClause captures a nested-paren WHEN clause whole, not truncated at the first `)`', () => {
+    const stmt = 'CREATE TRIGGER trg_y AFTER UPDATE ON t FOR EACH ROW WHEN (OLD.a IS DISTINCT FROM NEW.a OR (OLD.b IS DISTINCT FROM NEW.b)) EXECUTE FUNCTION f();';
+    expect(extractTriggerWhenClause(stmt)).toBe('(OLD.a IS DISTINCT FROM NEW.a OR (OLD.b IS DISTINCT FROM NEW.b))');
+  });
+
+  it('extractTriggerWhenClause returns null for an unconditional trigger', () => {
+    expect(extractTriggerWhenClause('CREATE TRIGGER trg_z AFTER UPDATE ON t FOR EACH ROW EXECUTE FUNCTION f();')).toBeNull();
+  });
+
+  it('REPRO (QF-20260912-708): a migration adding a WHEN clause to an already-live unconditional trigger is BODY_MISMATCH, not APPLIED -- the exact defect this QF was filed against', () => {
+    const sql = 'CREATE TRIGGER feedback_no_update BEFORE UPDATE ON feedback FOR EACH ROW WHEN (NEW.status IS DISTINCT FROM OLD.status) EXECUTE FUNCTION feedback_freeze();';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['trigger:feedback_no_update']); // name resolves live...
+    // ...but pg_get_triggerdef() on the OLD, still-live trigger shows NO WHEN clause at all.
+    const liveTriggerDefs = new Map([
+      ['feedback_no_update', 'CREATE TRIGGER feedback_no_update BEFORE UPDATE ON public.feedback FOR EACH ROW EXECUTE FUNCTION feedback_freeze()'],
+    ]);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, new Map(), liveTriggerDefs);
+    expect(row.status).toBe('BODY_MISMATCH');
+    expect(row.body_mismatches).toEqual(['feedback_no_update']);
+  });
+
+  it('a live trigger whose WHEN clause matches (post pg_get_triggerdef reformatting: schema-qualified table, no trailing `;`) stays APPLIED, not a false BODY_MISMATCH', () => {
+    const sql = 'CREATE TRIGGER trg_match AFTER UPDATE ON t FOR EACH ROW WHEN (OLD.a IS DISTINCT FROM NEW.a) EXECUTE FUNCTION f();';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['trigger:trg_match']);
+    const liveTriggerDefs = new Map([
+      ['trg_match', 'CREATE TRIGGER trg_match AFTER UPDATE ON public.t FOR EACH ROW WHEN (OLD.a IS DISTINCT FROM NEW.a) EXECUTE FUNCTION f()'],
+    ]);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, new Map(), liveTriggerDefs);
+    expect(row.status).toBe('APPLIED');
+    expect(row.body_mismatches).toBeUndefined();
+  });
+
+  it('a trigger that genuinely does not exist live stays NOT_APPLIED, not BODY_MISMATCH', () => {
+    const sql = 'CREATE TRIGGER trg_absent AFTER UPDATE ON t FOR EACH ROW WHEN (OLD.a IS DISTINCT FROM NEW.a) EXECUTE FUNCTION f();';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, new Set(), undefined, new Map(), new Map());
+    expect(row.status).toBe('NOT_APPLIED');
+    expect(row.body_mismatches).toBeUndefined();
+  });
+
+  it('two triggers with no WHEN clause on either side compare equal (no false drift on unconditional triggers)', () => {
+    const sql = 'CREATE TRIGGER trg_plain AFTER UPDATE ON t FOR EACH ROW EXECUTE FUNCTION f();';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['trigger:trg_plain']);
+    const liveTriggerDefs = new Map([['trg_plain', 'CREATE TRIGGER trg_plain AFTER UPDATE ON public.t FOR EACH ROW EXECUTE FUNCTION f()']]);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, new Map(), liveTriggerDefs);
+    expect(row.status).toBe('APPLIED');
+  });
+
+  it('a non-trigger object class is completely unaffected by liveTriggerDefs (TR-1 parity)', () => {
+    const ff = [{ file: 'm.sql', ...extractDdlFacts('CREATE VIEW v AS SELECT 1;') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['view:v']);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, new Map(), new Map([['v', 'garbage']]));
+    expect(row.status).toBe('APPLIED');
   });
 });
 
