@@ -1,0 +1,201 @@
+{
+  "executive_summary": "QF-20260911-878 shipped lib/fleet/model-policy.cjs (worker seats pinned to claude-opus-5, role seats to claude-fable-5-1 at spawn) but deliberately deferred wiring a mismatch signal into the live SessionStart hook and a fleet-dashboard off-policy count, since both touch critical-path/shared infrastructure. LEAD-phase validation-agent, risk-agent, and prospective testing-agent evidence all independently measured that the naive wiring (feeding scripts/hooks/capture-session-id.cjs's observed role directly through model-policy.cjs's seatClassFor) produces reproducible false positives -- including on the live coordinator seat and on every role seat's first-ever SessionStart, since role/is_coordinator metadata is written by separate registration steps AFTER the generic SessionStart hook runs. This PRD delivers a corrected, fail-open signal built on lib/fleet/role-status-identity.cjs's existing three-state (role/worker/unknown) classifier, using the hook's own pre-write metadata snapshot rather than a fresh classification, plus an independent fleet-dashboard off-policy count, plus CI-visible test coverage (the naive plan would have added tests to *.test.cjs files vitest's CI config never collects).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "SessionStart model-policy mismatch signal",
+      "description": "In scripts/hooks/capture-session-id.cjs, export a new function signalModelPolicyMismatch({ existingMetadata, model, supabase, emit, now }) with injected deps (emit defaults to lib/governance/emit-feedback.js's emitFeedback; supabase/now injectable for tests). Classification MUST use the hook's own PRE-write existingMetadata object (already fetched before its upsert -- the exact object buildSessionMetadata(existingMetadata, ...) already receives) run through lib/fleet/role-status-identity.cjs's verdictFromMetadata -- NEVER lib/fleet/model-policy.cjs's seatClassFor directly, which collapses an absent/unknown role to 'worker' and false-positives both on the live coordinator seat (is_coordinator:true, no role string) and on every role seat's first-ever SessionStart (role gets stamped by a separate registration step that runs AFTER this hook). Skip entirely (no signal, no DB call) when existingMetadata is null/undefined or the verdict is 'unknown'. On a definitive 'role' or 'worker' verdict: compute the expected model via model-policy.cjs's policyModelFor(verdict); compare the observed model via model-policy.cjs's OWN coarseModelAlias (not the hook-local coarseModelAlias, which passes an unrecognized id through unchanged and would false-positive -- model-policy's returns null for an unrecognized id). On a mismatch, call emit() (real emitFeedback in production) which performs its own day-salted dedup_hash insert-or-noop -- never an UPDATE-based dedup, since public.feedback's append-only trigger (confirmed live) rejects every UPDATE outright. Call signalModelPolicyMismatch as the LAST statement inside main(), strictly after upsertSessionRow() and the tick-daemon spawn block, wrapped in its own try/catch so a throw anywhere inside it can never block, delay, or fail the existing env-file write, identity markers, /current pointer, claude_sessions upsert, or tick-daemon spawn. Honor a new LEO_MODEL_POLICY_SIGNAL=0 kill switch (checked first, before any other work in the function); the hook's existing LEO_HOOK_DRY_RUN=1 early-return already occurs before this insertion point, so dry-run mode requires no additional guarding.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A session with no pre-existing claude_sessions row (existingMetadata null/undefined) never signals, regardless of the observed model -- fixes the measured false-positive on every role seat's first-ever SessionStart.",
+        "existingMetadata with no role key, no is_coordinator, and no non_fleet flag classifies as 'worker'; existingMetadata with is_coordinator:true, non_fleet:true, or a recognized role string classifies as 'role' -- classification is delegated entirely to role-status-identity.cjs's verdictFromMetadata, never re-implemented.",
+        "A worker-classified session observed running any Fable-family model id signals exactly once per day; an identical second SessionStart the same day inserts zero additional feedback rows (emitFeedback's built-in dedup, verified via injected emit spy or a real DB round-trip in an integration test).",
+        "A role-classified session observed running its policy model (claude-fable-5-1 alias) never signals.",
+        "Forcing the injected emit (or supabase call) to throw does not prevent main() from completing and calling resolve() -- proves session registration is unaffected by a bug in the new code.",
+        "LEO_MODEL_POLICY_SIGNAL=0 suppresses the entire check (asserted via an injected emit spy never being invoked, and no supabase call being made)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Fleet-dashboard \"seats off policy\" count",
+      "description": "In scripts/fleet-dashboard.cjs, at the existing per-session metadata projection (already selects the full metadata JSONB blob -- no new query, no new column), classify each session using the SAME two modules as FR-1 (role-status-identity.cjs's verdictFromMetadata, already-in-hand metadata, purely synchronous; model-policy.cjs's policyModelFor/coarseModelAlias) and add one summary line reporting the count of sessions currently off their seat-class policy. This item has no dependency on FR-1 and may ship in its own commit, before or after FR-1. On any degraded input (a malformed metadata row, or the classification modules failing to load), the line MUST abstain (e.g. render 'N/A' or omit the line) rather than silently render a false '0 seats off policy' -- an abstained count must never be mistaken for a clean bill of health.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Given a fixture set of session rows including a coordinator-shaped row (is_coordinator:true, no role string), a genuine worker-on-Fable row, and a role-seat-on-its-policy-model row, the computed off-policy count matches the hand-computed expected count exactly (1, from the worker-on-Fable row only -- the coordinator-shaped row must NOT be miscounted as off-policy).",
+        "The dashboard issues no additional Supabase query beyond what it already runs to build the session list.",
+        "A simulated classification failure (e.g. an unparseable/non-object metadata value on one row) causes the summary line to abstain, never to render 0."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fail-open safety, and CI-visible test coverage",
+      "description": "The FR-1 mismatch-signal path must be provably incapable of degrading existing SessionStart behavior, and the new tests for FR-1/FR-2 must be genuinely exercised by CI, not merely present on disk. Prospective testing-agent evidence measured that vitest's CI config (hooks-harness-tests.yml) only collects *.test.js files in tests/unit/hooks/ -- the three existing *.test.cjs suites in that directory are dark (never collected, confirmed via `npx vitest list`) -- so new tests MUST be authored as new *.test.js files, following the tests/unit/hooks/session-role-orient-adam-branch.test.js placement precedent, never appended to an existing *.test.cjs file. Because emitFeedback (ESM, lib/governance/emit-feedback.js) is invoked from a CommonJS hook, the require() call itself must live inside the SAME fail-open try/catch as the rest of signalModelPolicyMismatch, so an ESM/CJS interop failure on any given Node runtime degrades silently to \"no signal\" rather than a hook crash -- this was measured to work on the authoring machine's node v24.12.0, but CI's runner Node version must be independently confirmed, not assumed identical.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "New FR-1 and FR-2 test files are named *.test.js (never *.test.cjs) and are confirmed collected by `npx vitest list` before being relied upon as CI-enforced coverage.",
+        "The exact vitest invocation hooks-harness-tests.yml runs in CI is reproduced locally and confirmed to include the new test file(s) in its collected set.",
+        "A CI-runtime check (not merely a local one) confirms require()-ing lib/governance/emit-feedback.js from the CJS hook context does not throw ERR_REQUIRE_ESM on the CI runner's actual Node version."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No schema change",
+      "description": "All new signals persist through the existing feedback table (INSERT only, compatible with its live append-only trigger) and the existing claude_sessions.metadata JSONB column; fleet-dashboard.cjs consumes only already-selected columns. No migration, no new table, no new column."
+    },
+    {
+      "id": "TR-2",
+      "title": "Zero behavior change to existing SessionStart registration",
+      "description": "The env-file write, identity markers, /current pointer, claude_sessions upsert, and tick-daemon spawn in scripts/hooks/capture-session-id.cjs are untouched. The new code is strictly additive, appended after all of it, and isolated in its own try/catch so it cannot affect any of the above even if it throws."
+    },
+    {
+      "id": "TR-3",
+      "title": "Single source of truth for classification and policy",
+      "description": "lib/fleet/role-status-identity.cjs's verdictFromMetadata/roleVerdictFor is the ONLY role classifier used by FR-1 and FR-2; lib/fleet/model-policy.cjs's policyModelFor/coarseModelAlias is the ONLY policy/alias logic used. No duplicate or parallel classification logic is introduced in the hook or the dashboard."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Fresh session, no pre-existing DB row, observed running Fable",
+      "type": "unit",
+      "expected": "No signal (existingMetadata is null/undefined, skipped before classification)"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Coordinator-shaped existingMetadata (is_coordinator:true, no role string), observed running claude-fable-5-1",
+      "type": "unit",
+      "expected": "Classified 'role' via verdictFromMetadata, no mismatch (Fable IS the role policy model) -- proves the coordinator false-positive from the naive approach is fixed"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Worker existingMetadata (no role/is_coordinator/non_fleet), observed running claude-fable-5-1",
+      "type": "unit",
+      "expected": "Signals exactly once via injected emit spy; a second identical call the same day does not double-insert"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Injected emit throws inside signalModelPolicyMismatch",
+      "type": "unit",
+      "expected": "main() still completes and calls resolve(); no unhandled rejection"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "LEO_MODEL_POLICY_SIGNAL=0 set",
+      "type": "unit",
+      "expected": "emit spy never called, no supabase call made"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "fleet-dashboard.cjs fixture: coordinator-shaped row + worker-on-Fable row + role-on-policy row",
+      "type": "unit",
+      "expected": "Off-policy count line reads exactly 1"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "fleet-dashboard.cjs fixture with one malformed metadata row",
+      "type": "unit",
+      "expected": "Off-policy line abstains (e.g. 'N/A'), never renders 0"
+    },
+    {
+      "id": "TS-8",
+      "scenario": "New test file collection check",
+      "type": "integration",
+      "expected": "`npx vitest list` includes the new *.test.js file(s); running hooks-harness-tests.yml's exact vitest invocation locally reproduces the same collected set"
+    }
+  ],
+  "acceptance_criteria": [
+    "FR-1's signal fires only on a definitive role/worker classification derived from the hook's pre-write metadata snapshot, never on an unknown/absent-row case -- the measured false positive on the coordinator seat and on every role seat's first SessionStart is eliminated.",
+    "FR-1 is fail-open: no code path inside signalModelPolicyMismatch can block, delay, or fail existing SessionStart registration.",
+    "FR-2 ships independently of FR-1, needs no new DB query, and abstains rather than falsely reporting a clean bill of health on a degraded read.",
+    "All new tests are in *.test.js files confirmed collected by the CI vitest invocation -- not silently dark *.test.cjs files."
+  ],
+  "risks": [
+    {
+      "risk": "A role seat's very first SessionStart (before any role-registration step has run) still classifies as 'worker' and could false-positive once per chairman restart cycle.",
+      "mitigation": "Accepted as a one-time, self-healing edge case: the NEXT SessionStart for that same seat reads existingMetadata AFTER the role-registration write completed, and classifies correctly. Documented explicitly rather than engineered away, since eliminating it entirely would require a second DB round-trip inside the hook's tight timeout budget.",
+      "severity": "low"
+    },
+    {
+      "risk": "The feedback table (append-only, no cleanup) accumulates one row per genuine daily mismatch indefinitely.",
+      "mitigation": "emitFeedback's built-in day-salted dedup already bounds this to at most one row per seat per day per mismatch; a genuinely off-policy seat is expected to be fixed promptly (restart under the correct --model), not left running for weeks.",
+      "severity": "low"
+    },
+    {
+      "risk": "require()-ing an ESM module (lib/governance/emit-feedback.js) from a CJS hook may throw ERR_REQUIRE_ESM on a Node version other than the one manually verified.",
+      "mitigation": "The require() call is wrapped in the same fail-open try/catch as the rest of the signal logic, degrading to 'no signal' rather than a hook crash; FR-3's acceptance criteria require an explicit CI-runtime confirmation, not an assumption carried over from local testing.",
+      "severity": "medium"
+    },
+    {
+      "risk": "New tests silently never run in CI if placed in a *.test.cjs file, exactly as measured for the three pre-existing dark suites in tests/unit/hooks/.",
+      "mitigation": "FR-3 requires new tests be *.test.js files and requires an explicit `npx vitest list` collection check before relying on them.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Chairman-facing feedback inbox (reads new mismatch-signal rows)",
+      "Fleet-dashboard viewers (read the new off-policy count line via npm run fleet:dashboard)"
+    ],
+    "dependencies": [
+      "lib/fleet/model-policy.cjs (QF-20260911-878, merged)",
+      "lib/fleet/role-status-identity.cjs (SD-LEO-INFRA-ROLE-BLIND-SESSION-001, pre-existing)",
+      "lib/governance/emit-feedback.js (pre-existing)",
+      "public.feedback's append-only trigger (SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, confirmed live)"
+    ],
+    "data_contracts": [
+      "none -- no schema change; feedback and claude_sessions column shapes are unchanged"
+    ],
+    "runtime_config": [
+      "LEO_MODEL_POLICY_SIGNAL (new kill switch, default enabled; set to 0 to disable FR-1 entirely)",
+      "LEO_HOOK_DRY_RUN (pre-existing, already short-circuits before the new insertion point)"
+    ],
+    "observability_rollout": [
+      "New feedback rows are visible immediately in the existing chairman feedback inbox/query surfaces",
+      "The new fleet-dashboard summary line is visible on every dashboard run with no rollout gating needed"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two independent, additive signals built entirely on two pre-existing pure classifier modules (role-status-identity.cjs, model-policy.cjs) -- no new module, no schema change, no new table.",
+    "components": [
+      { "name": "scripts/hooks/capture-session-id.cjs", "change": "adds exported signalModelPolicyMismatch(), called fail-open as the last statement of main()" },
+      { "name": "scripts/fleet-dashboard.cjs", "change": "extends the existing metadata projection with role/is_coordinator/non_fleet fields already present in the JSONB blob; adds one summary line" },
+      { "name": "tests/unit/hooks/*.test.js", "change": "NEW test file(s) for FR-1 and FR-2, confirmed CI-collected" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Ship FR-1 and FR-2 as two separate, independently revertible commits; FR-2 has no dependency on FR-1 and may land first or separately.",
+    "steps": [
+      "Re-verify against current main (not this PRD's authoring-time snapshot) that capture-session-id.cjs's main() still fetches existingMetadata before its upsert, at the exact point buildSessionMetadata(existingMetadata, ...) is called.",
+      "Implement signalModelPolicyMismatch() with injected deps (supabase, emit, now), exported for testing; wire the single fail-open call at the tail of main().",
+      "Add a new tests/unit/hooks/*.test.js file covering all FR-1 acceptance criteria; confirm via `npx vitest list` it is collected.",
+      "Implement the fleet-dashboard.cjs off-policy line; add its own new *.test.js file covering FR-2 acceptance criteria.",
+      "Reproduce hooks-harness-tests.yml's exact vitest invocation locally to confirm CI parity for both new test files.",
+      "Commit FR-1 and FR-2 separately; open PR(s) accordingly."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Call signalModelPolicyMismatch with existingMetadata=undefined and model='claude-fable-5-1', using a spy emit.",
+      "expected_outcome": "Spy emit is never called."
+    },
+    {
+      "step_number": 2,
+      "instruction": "Call signalModelPolicyMismatch with existingMetadata={} (no role/is_coordinator/non_fleet) and model='claude-fable-5-1', using a spy emit, twice in a row.",
+      "expected_outcome": "Spy emit is called exactly once (or, against a real emitFeedback, exactly one feedback row is inserted for the day)."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Run `npm run fleet:dashboard` (or its equivalent CLI) against a fixture including a coordinator-shaped row, a worker-on-Fable row, and a role-on-policy row.",
+      "expected_outcome": "The off-policy count line reads exactly 1."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-WIRE-MODEL-POLICY-001",
+    "validation_agent_lead_evidence_id": "bbe5505d-8970-42f1-9924-eed669607b9c",
+    "risk_agent_lead_evidence_id": "1c58d649-f511-4563-a548-10cfd387f650",
+    "testing_agent_lead_evidence_id": "09a71628-23be-4e3e-9883-168b080448fa"
+  }
+}
