@@ -1,0 +1,11 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.env' });
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const sdId = '170637e5-c8e1-4d44-ab4e-206bf39c8c50';
+const { data: st, error } = await sb.from('user_stories').select('story_key,title,status,acceptance_criteria,e2e_test_path,validation_status').eq('sd_id', sdId).order('story_key');
+console.log('STORIES err=', error?.message);
+for (const s of st || []) console.log(JSON.stringify(s, null, 1));
+const { data: prd } = await sb.from('product_requirements_v2').select('id,status,functional_requirements,test_scenarios,acceptance_criteria').eq('sd_id', sdId).single();
+console.log('PRD status', prd?.status);
+console.log('FRs:', JSON.stringify(prd?.functional_requirements, null, 1).slice(0, 6000));

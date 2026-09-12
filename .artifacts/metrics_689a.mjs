@@ -1,0 +1,12 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.env' });
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const id = '170637e5-c8e1-4d44-ab4e-206bf39c8c50';
+const { data: sd } = await sb.from('strategic_directives_v2').select('success_metrics,success_criteria,metadata').eq('id', id).single();
+console.log('SUCCESS_METRICS:', JSON.stringify(sd.success_metrics, null, 1));
+console.log('SUCCESS_CRITERIA:', JSON.stringify(sd.success_criteria, null, 1).slice(0, 3000));
+console.log('META keys:', Object.keys(sd.metadata || {}));
+console.log('META.success_metrics_evidence:', JSON.stringify(sd.metadata?.success_metrics_evidence || sd.metadata?.metrics_evidence || null, null, 1));
+const { data: h } = await sb.from('sd_phase_handoffs').select('handoff_type,status,validation_score,created_at,metadata').eq('sd_id', id).eq('handoff_type','EXEC-TO-PLAN').order('created_at',{ascending:false}).limit(1);
+console.log('E2P:', h?.[0]?.status, h?.[0]?.validation_score, JSON.stringify(h?.[0]?.metadata||{}).slice(0,600));

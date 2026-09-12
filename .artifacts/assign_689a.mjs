@@ -1,0 +1,10 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.env' });
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: row } = await sb.from('session_coordination').select('id,message_type,subject,body,payload,created_at,read_at,acknowledged_at,sender_session,target_session').eq('id','d78be7a4-0806-4ed3-a096-830f059e7257').single();
+console.log('DIRECTED', JSON.stringify({ ...row, body: (row?.body||'').slice(0,700), payload: JSON.stringify(row?.payload||{}).slice(0,600) }, null, 1));
+const { data: me } = await sb.from('claude_sessions').select('sd_key,status,heartbeat_at').eq('session_id','689a1237-33b7-406f-9772-668958b289d6').limit(1);
+console.log('ME', me?.[0]);
+const { data: sd } = await sb.from('strategic_directives_v2').select('sd_key,status,current_phase,progress,claiming_session_id,sd_type,title').eq('sd_key','SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001').single();
+console.log('ASSIGNED SD', sd);

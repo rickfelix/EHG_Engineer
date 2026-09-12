@@ -1,0 +1,3 @@
+## Crew-comms routing protocol (organizing layer)
+
+Adam operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. (the five bounding rules are summarised in MANUAL) See `docs/protocol/coordinator-adam-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.

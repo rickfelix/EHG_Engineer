@@ -1,0 +1,10 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.env' });
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: sd } = await sb.from('strategic_directives_v2').select('status,current_phase,progress,claiming_session_id,is_working_on,updated_at').eq('sd_key','SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001').single();
+console.log('SD', sd);
+const { data: h } = await sb.from('sd_phase_handoffs').select('handoff_type,status,created_at').eq('sd_id','170637e5-c8e1-4d44-ab4e-206bf39c8c50').order('created_at',{ascending:false}).limit(3);
+console.log('HANDOFFS', h);
+const { data: s } = await sb.from('claude_sessions').select('session_id,sd_key,status,heartbeat_at,released_at,metadata,created_at').eq('session_id','961a30d3-1a94-4f10-8b06-b48fa2306361').limit(1);
+const r = s?.[0]; console.log('OWNER', r ? { sd_key: r.sd_key, status: r.status, heartbeat_at: r.heartbeat_at, released_at: r.released_at, created_at: r.created_at, role: r.metadata?.role, callsign: r.metadata?.callsign, model: r.metadata?.model } : null);
