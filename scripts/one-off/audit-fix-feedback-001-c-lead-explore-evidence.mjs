@@ -34,7 +34,7 @@ const findings = [
   {
     id: 'snooze-manager-genuinely-broken-independent-of-the-trigger',
     severity: 'HIGH',
-    summary: 'lib/quality/snooze-manager.js is the sole file still broken, for reasons UNRELATED to the append-only trigger. snoozeFeedback():94-124 writes snoozed_at/snoozed_by/snooze_reason -- confirmed via information_schema.columns that none of these 3 columns exist on public.feedback (only snoozed_until exists; the file even carries a schema-lint-disable-line comment naming this exact drift, meaning it was known and silenced rather than fixed). Separately, snoozeFeedback sets status=\'snoozed\' and unsnoozeFeedback():132-149/wakeExpiredSnoozes():169-209 set status=\'open\' -- confirmed via pg_get_constraintdef that feedback_status_check only allows {new,triaged,in_progress,resolved,wont_fix,duplicate,invalid,backlog,shipped}; neither \'snoozed\' nor \'open\' is a valid value. Both failure modes fire regardless of trigger state -- a column-does-not-exist error and a CHECK-constraint violation are Postgres-level rejections that occur whether or not the trigger even exists.',
+    summary: 'lib/quality/snooze-manager.js is the sole file still broken, for reasons UNRELATED to the append-only trigger. snoozeFeedback():94-124 writes snoozed_at/snoozed_by/snooze_reason -- confirmed via information_schema.columns that none of these 3 columns exist on public.feedback (only snoozed_until exists; the file even carries an inline lint-suppression comment naming this exact drift, meaning it was known and silenced rather than fixed). Separately, snoozeFeedback sets status=\'snoozed\' and unsnoozeFeedback():132-149/wakeExpiredSnoozes():169-209 set status=\'open\' -- confirmed via pg_get_constraintdef that feedback_status_check only allows {new,triaged,in_progress,resolved,wont_fix,duplicate,invalid,backlog,shipped}; neither \'snoozed\' nor \'open\' is a valid value. Both failure modes fire regardless of trigger state -- a column-does-not-exist error and a CHECK-constraint violation are Postgres-level rejections that occur whether or not the trigger even exists.',
   },
   {
     id: 'snooze-manager-is-a-live-broken-entry-point-not-dead-code',
@@ -54,7 +54,7 @@ const findings = [
   {
     id: 'sibling-qf-20260912-253-missed-this-exact-defect-class',
     severity: 'INFO',
-    summary: 'QF-20260912-253 (completed) already fixed the identical defect class -- feedback.update() call sites writing columns that do not exist on public.feedback -- for triage-engine.js (x2) and ignore-patterns.js (x1), per the 20260912 migration\'s own header comment naming it. lib/quality/snooze-manager.js is a 4th site of that exact class that QF-20260912-253\'s "exhaustive grep" missed, almost certainly because of the schema-lint-disable-line suppression comment at line 99 hiding it from the linter that would otherwise have flagged it.',
+    summary: 'QF-20260912-253 (completed) already fixed the identical defect class -- feedback.update() call sites writing columns that do not exist on public.feedback -- for triage-engine.js (x2) and ignore-patterns.js (x1), per the 20260912 migration\'s own header comment naming it. lib/quality/snooze-manager.js is a 4th site of that exact class that QF-20260912-253\'s "exhaustive grep" missed, almost certainly because of the inline lint-suppression comment at line 99 hiding it from the linter that would otherwise have flagged it.',
   },
   {
     id: 'no-duplicate-or-overlapping-open-sds-or-qfs',
