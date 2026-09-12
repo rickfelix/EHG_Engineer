@@ -79,6 +79,11 @@ import { inQuietHours } from '../lib/comms/adam-outbound/rubric-engine/lint.js';
 // item is running past its type's historical duration baseline (chairman-specified 2026-09-01).
 import { detectOutputFlowStall } from '../lib/adam/output-flow-gauge.js';
 import { buildBaselines, classifyDurationBreach, nextEscalationTier } from '../lib/adam/duration-baseline-gauge.js';
+// QF-20260912-924: no instrument watched a venture's own deploy workflow (adam-github-
+// assessment.mjs is hard-scoped to one repo and flag-gated off; synthetic-actor-guard.js reads
+// the named UAT step only at stage-advance time) -- a credential-class red step went unseen for
+// six days. Generic across every applications.repo_url; fail-soft, never blocks the rest of the tick.
+import { runVentureDeployWatcher } from '../lib/adam/venture-deploy-watcher.mjs';
 
 const require = createRequire(import.meta.url);
 const crypto = require('crypto');
@@ -1403,6 +1408,16 @@ async function main() {
     outboundSilence = { probed: [], escalated: [], laneHealth: { unactionedCount: 0, maxAgeMs: 0 }, error: e && e.message };
   }
 
+  // QF-20260912-924: venture-deploy watcher — every applications.repo_url's latest completed
+  // deploy-workflow run; a credential-class red step becomes a durable chairman keystroke
+  // (deduped), any other red step surfaces below as QUIET_TICK_VENTURE_DEPLOY_RED.
+  let ventureDeploy = { recorded: [], skippedDuplicate: [], codeClassRed: [], errors: [] };
+  try {
+    ventureDeploy = await runVentureDeployWatcher(sb, {});
+  } catch (e) {
+    ventureDeploy = { recorded: [], skippedDuplicate: [], codeClassRed: [], errors: [e && e.message] };
+  }
+
   // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-3): surface unacked directed rows
   // as first-class tick output (the child drain above ran --background and consumed nothing).
   const inboxSurface = await surfaceInboxItems(sb);
@@ -1600,6 +1615,7 @@ async function main() {
     smsInbound: smsInbound.count,
     smsParked: smsParked.count,
     outboundSilence,
+    ventureDeploy,
     crossPartyPing: delta.changed,
     pingFields: delta.fields,
     accountSwitch: acctSwitch.changed,
@@ -1635,6 +1651,7 @@ async function main() {
       `sms=${smsInbound.count} ` +
       `smsParked=${smsParked.count} ` +
       `probes=${outboundSilence.probed.length} esc=${outboundSilence.escalated.length} ` +
+      `ventureDeployRed=${ventureDeploy.codeClassRed.length} ventureDeployKeystrokes=${ventureDeploy.recorded.length} ` +
       `ping=${delta.changed ? delta.fields.join(',') : 'suppressed'} ` +
       `nextWakeSeconds=${delaySeconds} :: ${modeReason}`
     );
@@ -1649,6 +1666,17 @@ async function main() {
     }
     for (const a of stall.alerted) {
       console.log(`QUIET_TICK_STALL_ALERT=adam node=${a.id} title="${a.title}" escalated=${a.escalated}`);
+    }
+    // QF-20260912-924 fix-shape (3): a red venture-deploy step naming no secret/permission is
+    // NOT auto-recorded as a chairman keystroke -- surfaced here so the seat sources a venture QF.
+    for (const c of ventureDeploy.codeClassRed) {
+      console.log(`QUIET_TICK_VENTURE_DEPLOY_RED=adam repo=${c.repo} run=${c.runId} step="${c.step}" venture="${c.ventureName}" — code-class failure (no secret/permission named); source a venture QF.`);
+    }
+    for (const k of ventureDeploy.recorded) {
+      console.log(`QUIET_TICK_VENTURE_DEPLOY_KEYSTROKE=adam repo=${k.repo} run=${k.runId} step="${k.step}" venture="${k.ventureName}" decisionId=${k.decisionId} — credential-class red step recorded as a durable chairman keystroke.`);
+    }
+    for (const err of ventureDeploy.errors) {
+      console.error(`QUIET_TICK_VENTURE_DEPLOY_ERROR=adam ${err}`);
     }
     // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-C / RCA 9a02a76d: the output-flow blind spot —
     // no existing axis measured whether origin/main is actually advancing.
