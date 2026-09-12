@@ -91,7 +91,7 @@ describe('retrospectives table writer census (source-scan, not literal-match-onl
     expect(staleInAllowlist, 'KNOWN_WRITERS entries no longer performing a write (remove or re-verify)').toEqual([]);
   });
 
-  it('the 7 isSafeToWriteRetro wire-in FILES (8 call sites -- orchestrator-completion-guardian.js wires both INSERT and UPDATE) are a subset of KNOWN_WRITERS (drift alarm, not the guard test itself)', () => {
+  it('the 9 retro_write_token wire-in FILES (10 call sites -- orchestrator-completion-guardian.js wires both INSERT and UPDATE) are a subset of KNOWN_WRITERS (drift alarm, not the guard test itself)', () => {
     const guardSites = [
       'scripts/modules/handoff/retrospective-enricher.js',
       'scripts/modules/handoff/executors/exec-to-plan/retrospective.js',
@@ -100,6 +100,9 @@ describe('retrospectives table writer census (source-scan, not literal-match-onl
       'scripts/modules/handoff/executors/plan-to-lead/state-transitions.js',
       'scripts/modules/handoff/orchestrator-completion-guardian.js',
       'lib/sub-agents/retro/db-operations.js',
+      // QF-20260911-275: two real writers found outside the original wired seven.
+      'lib/sub-agents/retro/lesson-capture.js',
+      'scripts/programmatic/retrospective-generator.js',
     ];
     for (const site of guardSites) {
       expect(KNOWN_WRITERS, `${site} should appear in KNOWN_WRITERS`).toContain(site);
