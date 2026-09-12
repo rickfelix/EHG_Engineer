@@ -8003,5 +8003,10 @@
   "classification": "bounded-by-design",
   "match": "select('id, deliverable_name, deliverable_type, metadata')",
   "note": "QF-20260911-793 / SD-LEO-FIX-CHILD-SCOPE-COVERAGE-001: pre-existing query bounded by .eq('sd_id', sdId) -- reads one specific SD's own sd_scope_deliverables rows (a single orchestrator's deliverable count, never near 1000). This diff only widened the select() column list (added metadata, the field the new coordination_only exclusion reads) to fix a defect where the exclusion silently no-op'd because metadata was never projected -- re-triggering diff-lint classification of an already-bounded query, same class as the adam-quiet-tick.mjs:736 entry above."
+ },
+ "scripts/enumerate-periodic-processes.mjs:29": {
+  "classification": "bounded-by-design",
+  "match": ".select('process_key, owner, process_type, currently_expected_active')",
+  "note": "QF-20260911-080: periodic_process_registry is a fixed-cardinality fleet process registry (one row per recurring process, bounded by the number of cron loops the repo has -- tens, not growth-unbounded); this site had an unbounded read pre-existing (only the column list grew, adding process_type/currently_expected_active for the new findOrphanedActiveCrons reverse-direction check). No pagination needed."
  }
 }

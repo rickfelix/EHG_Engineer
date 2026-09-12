@@ -206,6 +206,12 @@ export const STANDARD_LOOPS = [
   { key: 'flag-review', label: 'Feature-flag governance review', script: 'flag-governance-review.mjs', cron: '0 9 * * *',
     gha_backed: true,
     prompt: 'node scripts/flag-governance-review.mjs' },
+  // QF-20260911-080: periodic_process_registry row standard_loop:drain-inventory (SD-LEO-INFRA-
+  // DETECTOR-OUTPUT-DRAIN-001) had no invoker anywhere (not here, no workflow, no scheduled task) —
+  // every fire was a hand run. GHA-backed daily, same pattern as flag-review above.
+  { key: 'drain-inventory', label: 'Detector-output drain inventory (consumer + staleness gauge)', script: 'drain-inventory.mjs', cron: '0 10 * * *',
+    gha_backed: true,
+    prompt: 'node scripts/drain-inventory.mjs' },
   // Work-triggered tri-party self-review: cheap poller (no-op below COORD_REVIEW_EVERY completed-SD delta),
   // fires the coordinator<->workers<->Adam review only when due. SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001.
   { key: 'self-review', label: 'Coordinator self-review (work-triggered tri-party)', script: 'coordinator-self-review.mjs', cron: '*/5 * * * *',
