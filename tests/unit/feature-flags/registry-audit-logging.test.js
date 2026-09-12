@@ -139,3 +139,107 @@ describe('transitionLifecycleState audit citation', () => {
     expect(insertCalls).toHaveLength(0); // no audit row for a rejected transition
   });
 });
+
+// TESTING sub-agent (EXEC phase) finding: 5 of 7 logAudit call sites (createFlag, updateFlag,
+// deleteFlag, activateKillSwitch, deactivateKillSwitch) plus setPolicy had zero unit coverage --
+// only live-DB round-trips proved they work. These close that gap.
+describe('createFlag/updateFlag/deleteFlag/setPolicy audit citations', () => {
+  function auditBuilder() {
+    const b = makeBuilder(() => ({ data: null, error: null }));
+    b.insert = vi.fn((payload) => { insertCalls.push(payload); return b; });
+    return b;
+  }
+
+  it('createFlag logs action=create with a real citation', async () => {
+    const createdRow = { flag_key: 'F2', is_enabled: false, lifecycle_state: 'draft' };
+    fromImpl = (table) => {
+      if (table === 'leo_feature_flags') return makeBuilder(() => ({ data: createdRow, error: null }));
+      if (table === 'leo_feature_flag_audit_log') return auditBuilder();
+      throw new Error(`unexpected table ${table}`);
+    };
+    await registry.createFlag({ flagKey: 'F2', displayName: 'F2', ownerType: 'user', ownerId: 'u1', changedBy: 'qa-create' });
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0].action).toBe('create');
+    expect(insertCalls[0].changed_by).toBe('qa-create');
+  });
+
+  it('updateFlag logs action=update with a real citation', async () => {
+    const currentFlag = { flag_key: 'F3', is_enabled: false, lifecycle_state: 'disabled' };
+    const updatedFlag = { ...currentFlag, description: 'new' };
+    let readCount = 0;
+    fromImpl = (table) => {
+      if (table === 'leo_feature_flags') return makeBuilder(() => ({ data: readCount++ === 0 ? currentFlag : updatedFlag, error: null }));
+      if (table === 'leo_feature_flag_audit_log') return auditBuilder();
+      throw new Error(`unexpected table ${table}`);
+    };
+    await registry.updateFlag('F3', { description: 'new' }, 'qa-update');
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0].action).toBe('update');
+    expect(insertCalls[0].changed_by).toBe('qa-update');
+  });
+
+  it('deleteFlag logs action=delete with a real citation', async () => {
+    const currentFlag = { flag_key: 'F4', is_enabled: false, lifecycle_state: 'disabled' };
+    fromImpl = (table) => {
+      if (table === 'leo_feature_flags') return makeBuilder(() => ({ data: currentFlag, error: null }));
+      if (table === 'leo_feature_flag_audit_log') return auditBuilder();
+      throw new Error(`unexpected table ${table}`);
+    };
+    await registry.deleteFlag('F4', 'qa-delete');
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0].action).toBe('delete');
+    expect(insertCalls[0].changed_by).toBe('qa-delete');
+  });
+
+  it('setPolicy logs action=create (new policy) without an environment key, even though environment is always supplied', async () => {
+    const flag = { id: 'flag-id-1', flag_key: 'F5', leo_feature_flag_policies: [] };
+    const policyRow = { flag_id: 'flag-id-1', environment: 'staging', rollout_percentage: 50 };
+    fromImpl = (table) => {
+      if (table === 'leo_feature_flags') return makeBuilder(() => ({ data: flag, error: null }));
+      if (table === 'leo_feature_flag_policies') return makeBuilder(() => ({ data: policyRow, error: null }));
+      if (table === 'leo_feature_flag_audit_log') return auditBuilder();
+      throw new Error(`unexpected table ${table}`);
+    };
+    await registry.setPolicy({ flagKey: 'F5', environment: 'staging', rolloutPercentage: 50, changedBy: 'qa-policy' });
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0].action).toBe('create');
+    expect(insertCalls[0]).not.toHaveProperty('environment');
+    expect(insertCalls[0].changed_by).toBe('qa-policy');
+  });
+});
+
+describe('kill switch audit citations', () => {
+  function auditBuilder() {
+    const b = makeBuilder(() => ({ data: null, error: null }));
+    b.insert = vi.fn((payload) => { insertCalls.push(payload); return b; });
+    return b;
+  }
+
+  it('activateKillSwitch logs action=rollback with a real citation', async () => {
+    const killSwitch = { switch_key: 'KS1', is_active: false };
+    const activated = { ...killSwitch, is_active: true };
+    fromImpl = (table) => {
+      if (table === 'leo_kill_switches') return makeBuilder(() => ({ data: activated, error: null }));
+      if (table === 'leo_feature_flag_audit_log') return auditBuilder();
+      throw new Error(`unexpected table ${table}`);
+    };
+    await registry.activateKillSwitch('KS1', 'qa-activate');
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0].action).toBe('rollback');
+    expect(insertCalls[0].changed_by).toBe('qa-activate');
+  });
+
+  it('deactivateKillSwitch logs action=update with a real citation', async () => {
+    const killSwitch = { switch_key: 'KS2', is_active: true };
+    const deactivated = { ...killSwitch, is_active: false };
+    fromImpl = (table) => {
+      if (table === 'leo_kill_switches') return makeBuilder(() => ({ data: deactivated, error: null }));
+      if (table === 'leo_feature_flag_audit_log') return auditBuilder();
+      throw new Error(`unexpected table ${table}`);
+    };
+    await registry.deactivateKillSwitch('KS2', 'qa-deactivate');
+    expect(insertCalls).toHaveLength(1);
+    expect(insertCalls[0].action).toBe('update');
+    expect(insertCalls[0].changed_by).toBe('qa-deactivate');
+  });
+});
