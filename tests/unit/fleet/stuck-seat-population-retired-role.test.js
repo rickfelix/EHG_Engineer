@@ -9,20 +9,23 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { fetchPopulation } = require('../../../lib/fleet/stuck-seat-population.cjs');
 
-/** A minimal but GENUINELY status-filtering mock -- proves the real `.in('status', [...])`
- *  server-side filter this module relies on actually excludes a released row, not merely that
- *  the fixture happened to omit one. */
+/** A minimal but GENUINELY status/released_at-filtering mock -- proves the real
+ *  `.in('status', [...])` and `.is('released_at', null)` server-side filters this module relies on
+ *  actually exclude a released row, not merely that the fixture happened to omit one. */
 function makeSupabase(rows) {
   return {
     from(table) {
       if (table !== 'claude_sessions') throw new Error(`unexpected table: ${table}`);
       let statusFilter = null;
+      let releasedAtIsNull = false;
       const chain = {
         select: () => chain,
         in: (col, values) => { if (col === 'status') statusFilter = values; return chain; },
+        is: (col, value) => { if (col === 'released_at' && value === null) releasedAtIsNull = true; return chain; },
         order: () => chain,
         limit: () => {
-          const filtered = statusFilter ? rows.filter((r) => statusFilter.includes(r.status)) : rows;
+          let filtered = statusFilter ? rows.filter((r) => statusFilter.includes(r.status)) : rows;
+          if (releasedAtIsNull) filtered = filtered.filter((r) => r.released_at == null);
           return Promise.resolve({ data: filtered, error: null });
         },
       };
@@ -49,5 +52,19 @@ describe('fetchPopulation excludes role-retired seats once released (QF-20260830
     ]);
     const { seats } = await fetchPopulation(supabase);
     expect(seats.map((s) => s.session_id)).toContain('unfixed-retired-seat');
+  });
+});
+
+describe('fetchPopulation excludes released seats left at status=idle (QF-20260912-784 fixture)', () => {
+  it('a released seat stamped status=idle (not status=released) never reaches the population, unlike a live idle seat', async () => {
+    const supabase = makeSupabase([
+      { session_id: 'released-idle-seat', status: 'idle', released_at: '2026-09-06T11:13:26.453Z', loop_state: 'idle', last_tool_at: '2026-09-06T11:05:08.555Z', heartbeat_at: '2026-09-06T11:05:08.555Z', metadata: {} },
+      { session_id: 'live-idle-seat', status: 'idle', released_at: null, loop_state: 'idle', last_tool_at: new Date().toISOString(), heartbeat_at: new Date().toISOString(), metadata: {} },
+    ]);
+    const { seats } = await fetchPopulation(supabase);
+    const ids = seats.map((s) => s.session_id);
+    expect(ids).not.toContain('released-idle-seat');
+    expect(ids).toContain('live-idle-seat');
+    expect(seats).toHaveLength(1);
   });
 });
