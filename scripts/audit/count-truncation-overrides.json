@@ -8008,5 +8008,10 @@
   "classification": "bounded-by-design",
   "match": ".select('process_key, owner, process_type, currently_expected_active')",
   "note": "QF-20260911-080: periodic_process_registry is a fixed-cardinality fleet process registry (one row per recurring process, bounded by the number of cron loops the repo has -- tens, not growth-unbounded); this site had an unbounded read pre-existing (only the column list grew, adding process_type/currently_expected_active for the new findOrphanedActiveCrons reverse-direction check). No pagination needed."
+ },
+ "lib/roadmap/orphaned-sd-link-backfill.mjs:50": {
+  "classification": "bounded-by-design",
+  "match": ".from('strategic_directives_v2').select('sd_key, status').in('sd_key', keys);",
+  "note": "QF-20260911-229: the response row count is mathematically bounded by keys.length (a deduped Set built from fetchAllPaginated's already-paginated read of pending, unlinked roadmap_wave_items) -- .in() can never return more rows than distinct keys supplied, and the live pending-candidate population is a small fraction of the PostgREST 1000-row cap. No pagination needed."
  }
 }
