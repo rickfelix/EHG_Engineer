@@ -12,7 +12,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import {
   parseArgs, routeDecision, sortPending, effectivePriority, formatAge, renderPendingLine, USAGE,
-  partitionQueue, deferralActorLabel,
+  partitionQueue, deferralActorLabel, diffVentureSnapshot, VENTURE_SNAPSHOT_FIELDS,
 } from '../lib/chairman/decision-queue.mjs';
 import { indexDispositions, ageClockFor, DEFERRAL_CATEGORY, DISPOSITION_SELECT } from '../lib/chairman/decision-disposition.mjs';
 import { parseDuration as parseSnoozeDuration } from '../lib/quality/snooze-manager.js';
@@ -142,17 +142,49 @@ const writers = {
     // passed, so the only way past a STALE_CONTEXT refusal was a hand-rolled RPC call bypassing
     // the CLI. Prefixing the rationale (rather than a new DB column) records the force without
     // needing a chairman-gated schema/RPC change.
-    const effectiveRationale = forceStale ? `[force-stale] ${rationale || '(no rationale provided)'}` : rationale;
-    const { data, error } = await db.rpc('fn_chairman_decide', {
+    let effectiveRationale = forceStale ? `[force-stale] ${rationale || '(no rationale provided)'}` : rationale;
+    let { data, error } = await db.rpc('fn_chairman_decide', {
       p_decision_id: id, p_action: action, p_decided_by: DECIDED_BY, p_rationale: effectiveRationale,
       p_force_stale: forceStale,
     });
     if (error) throw new Error('fn_chairman_decide: ' + error.message);
+
+    // QF-20260912-427: on STALE_CONTEXT, diff the live venture row against the snapshot taken
+    // at decision-creation time (brief_data.venture_snapshot) instead of blindly re-checking
+    // "did anything at all move." When no purchase-relevant field changed (the common case --
+    // an unrelated background writer bumped updated_at), auto-retry with p_force_stale so the
+    // chairman's in-room approve is not refused for a reason the CLI cannot show him; when a
+    // field genuinely changed, surface exactly which one and stop.
     if (data && data.code === 'STALE_CONTEXT' && !forceStale) {
-      throw new Error(
-        `fn_chairman_decide refused: ${data.error} Re-run with --force-stale to decide anyway ` +
-        `(venture "${data.venture_name}" updated_at ${data.venture_updated_at} is newer than this decision's created_at ${data.decision_created_at}).`
-      );
+      const { data: decisionRow } = await db.from('chairman_decisions')
+        .select('venture_id, brief_data').eq('id', id).maybeSingle();
+      const snapshot = decisionRow?.brief_data?.venture_snapshot || null;
+      let liveVenture = null;
+      if (decisionRow?.venture_id) {
+        const { data: v } = await db.from('ventures')
+          .select(VENTURE_SNAPSHOT_FIELDS.join(', ')).eq('id', decisionRow.venture_id).maybeSingle();
+        liveVenture = v || null;
+      }
+      const diff = diffVentureSnapshot(snapshot, liveVenture);
+      if (diff.comparable && !diff.changed) {
+        effectiveRationale = `[stale-context reviewed: only updated_at moved] ${rationale || '(no rationale provided)'}`;
+        ({ data, error } = await db.rpc('fn_chairman_decide', {
+          p_decision_id: id, p_action: action, p_decided_by: DECIDED_BY, p_rationale: effectiveRationale,
+          p_force_stale: true,
+        }));
+        if (error) throw new Error('fn_chairman_decide: ' + error.message);
+      } else if (diff.comparable && diff.changed) {
+        throw new Error(
+          `fn_chairman_decide refused: ${data.error} Purchase-relevant field(s) changed since this decision was created: ` +
+          `${diff.changedFields.join(', ')}. Review before deciding, or re-run with --force-stale to proceed anyway.`
+        );
+      } else {
+        throw new Error(
+          `fn_chairman_decide refused: ${data.error} Re-run with --force-stale to decide anyway ` +
+          `(venture "${data.venture_name}" updated_at ${data.venture_updated_at} is newer than this decision's created_at ${data.decision_created_at}; ` +
+          `no venture_snapshot on this decision to diff against — it predates QF-20260912-427).`
+        );
+      }
     }
     if (data && data.success === false) throw new Error('fn_chairman_decide refused: ' + (data.error || data.code));
     const result = { table: 'chairman_decisions', via: 'fn_chairman_decide RPC', id, action, data };
