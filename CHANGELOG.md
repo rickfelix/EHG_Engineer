@@ -6,6 +6,7 @@
 - [2026-09-12](#2026-09-12)
   - [Infrastructure](#infrastructure-12)
   - [Security](#security-2)
+  - [Documentation](#documentation)
 - [2026-09-11](#2026-09-11)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -237,6 +238,13 @@
   - Every worktree of this repo shares one `.git` object store and one shallow boundary. Measured 2026-09-12 05:06-05:28Z: a worker's audit script ran `git fetch --depth=1 --no-tags origin <ref>` ~250 times from its own worktree; `.git/shallow` grew fleet-wide in ~20s and every other seat's `git merge --ff-only origin/main` failed until the coordinator ran `--unshallow` and repaired it. `scripts/hooks/pre-tool-enforce.cjs` (the one choke point every Bash tool call passes) had zero rules mentioning fetch/depth/shallow/unshallow.
   - New ENF-20 rule refuses `git fetch`/`pull`/`clone` carrying `--depth`, `--shallow-since`, `--shallow-exclude`, or `--unshallow` whenever the command's effective target (cwd, or an explicit `-C`/`--git-dir` override, resolved via git's own CLI) shares the fleet's `git-common-dir`. A `--git-dir`/`-C` redirect to a separate repository (a scratch clone) is never operative. `--unshallow` (the repair) remains allowed from the active coordinator session only. Decision logic lives in `scripts/hooks/lib/shallow-fetch-guard.cjs` (14 unit assertions), mirroring the established pure-lib/hook split already used by ENF-17/18/19 in the same file.
   - Escalated from `QF-20260912-292` to a full SD: the QF eligibility preflight hard-refuses autonomous completion for any `scripts/hooks/**` change (no bypass flag exists), and net source LOC (146) exceeded the 75-line QF cap. The fix code itself is unchanged from the QF's own commit.
+
+### Documentation
+
+- **Documented the undocumented `filter.chairman_review_score` preference and corrected a false stated default along the way** - SD-LEARN-FIX-ADDRESS-PAT-LES-009
+  - Three EVA decision-filter reference docs (`filter-triggers.md`, `gate-thresholds.md`, and `03-decision-filter-engine.md` -- the third found only by spawning an Explore sub-agent, outside the SD's original 2-file scope) described the `low_score` trigger as a single threshold keyed on the stale `filter.min_score_threshold` name, omitting the real two-tier HIGH/MEDIUM split that `lib/eva/decision-filter-engine.js` actually implements via `filter.min_score` + `filter.chairman_review_score`.
+  - The SD's own stated defect premise -- that `chairman_review_score` defaults to 9 -- was independently verified false against `lib/eva/decision-filter-engine.js:75` (actual default: 3.0) before any doc was written; the correction, not the SD's original number, is what shipped, and is recorded in the SD's `metadata.mechanism_verifications`.
+  - No production code changed. Two adjacent doc-accuracy gaps noticed but deliberately left unfixed (gate-thresholds.md's unrelated stale key references elsewhere in the file; chairman-dfe-feedback-loop.js's read/write of the same preference key going undocumented) were routed to the durable feedback channel via `capture-completion-flags.js` rather than silently expanded into scope.
 
 ## 2026-09-11
 
