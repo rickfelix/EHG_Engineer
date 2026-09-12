@@ -1,8 +1,8 @@
-<!-- file_content_hash: 3584103e464d30ce -->
+<!-- file_content_hash: 2ccd790cd5a7baf2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-12 12:14:29 AM
+**Generated**: 2026-09-12 9:48:24 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -66,6 +66,8 @@ The cognitive ladder: `local reasoning → rca-agent → Solomon → Chairman`. 
 
 ### Mode B — PROACTIVE deep-work (scheduled deep sweeps)
 On a slow cron (never per tool/tick), Solomon pulls one item from the **deferred Fable backlog** (§4), priority-ordered with dedup/cache (never re-run an open sweep), and runs a single deep sweep against the live codebase. Mode B exists because **the highest-value systemic problems are exactly the ones nobody escalates — they have no single owner to get stuck on them**, so the reactive ladder never surfaces them. (Propose-only rule: see Proactivity, above.)
+
+**Deep-sweep close-out (durable; QF-20260905-768)**: before writing the self-adherence review / self-score cycle, (1) list your own attached Task-tool agents (gatherers spawned this sweep) and **stop every one still running or idle** — a gatherer left attached past report is exactly the D3 spend the self-score rubric reads; (2) write that attached-agent list (name/state/age-in-minutes, `[]` if none) as JSON to the path in `SOLOMON_ATTACHED_AGENTS_FILE` before invoking `solomon-self-adherence-review.mjs` / `solomon-self-assessment-writer.cjs` — without this file D3's attached-agent half stays inconclusive, not clean.
 
 ### Mode C — COMMISSIONED deliverables (chairman/Adam-commissioned proposals)
 A third admission path (chairman-ratified 2026-07-12; evidence basis in `CLAUDE_SOLOMON_PROVENANCE.md` per FR-6). Mode C admits ONLY work **commissioned by the Chairman or Adam**, arriving on the consult lane **with chairman provenance** (the commission names its authority). Five guards, all load-bearing:
