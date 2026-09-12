@@ -24,7 +24,7 @@ import dotenv from 'dotenv';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { terminalSessionUpdate } = require('../lib/fleet/terminal-session-update.cjs');
+const { sessionStatusUpdate } = require('../lib/fleet/terminal-session-update.cjs');
 
 dotenv.config();
 
@@ -37,7 +37,7 @@ const supabase = createSupabaseServiceClient();
 export function parseArgs(argv = process.argv.slice(2)) {
   const args = argv;
   if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
-    console.log(`Usage: node scripts/cancel-sd.js <SD-KEY-or-UUID> --reason "<reason>" [--pr <number>] [--evidence-file <path>]
+    console.log(`Usage: node scripts/cancel-sd.js <SD-KEY-or-UUID> --reason "<reason>" [--pr <number>] [--evidence-file <path>] [--exiting]
 
 Atomically cancels an SD:
   - status='cancelled', current_phase='CANCELLED'
@@ -45,7 +45,8 @@ Atomically cancels an SD:
   - claiming_session_id cleared
   - is_working_on=false
   - updated_at=NOW (trigger-managed cancellation timestamp)
-  - claude_sessions row for the holder released
+  - claude_sessions row for the holder: CLAIM cleared (sd_key/worktree pointer), status left
+    untouched UNLESS --exiting is passed (then the row is retired: status='released')
 
 Required:
   --reason "<text>"   Cancellation reason (cannot be empty)
@@ -55,6 +56,12 @@ Optional (REQUIRED when --reason indicates already-shipped/superseded/duplicate-
   --evidence-file <path>   File claimed present on origin/main (repeatable) — verified via origin/main, never a local branch HEAD
   (SD-LEO-INFRA-CANCEL-SD-VERIFY-ORIGIN-MAIN-NOT-LOCAL-HEAD-001: an already-shipped-style cancel with
    neither flag, or whose evidence fails verification, is REFUSED and the SD is left unchanged.)
+
+  --exiting   The calling session is retiring itself (not just moving to other work) as part of
+              this cancel. Only pass this when the process is actually about to exit — a live
+              worker that cancels one item and keeps working must NEVER pass this, or the roster/
+              capacity/idle gauges will read its seat as vacant while it is still active
+              (QF-20260912-175).
 
 Examples:
   node scripts/cancel-sd.js SD-LEO-FIX-FOO-001 --reason "deprioritized, no longer needed"
@@ -71,6 +78,11 @@ Examples:
   const pr = prIdx !== -1 ? args[prIdx + 1] : null;
   const evidenceFiles = [];
   args.forEach((a, i) => { if (a === '--evidence-file' && args[i + 1]) evidenceFiles.push(args[i + 1]); });
+  // QF-20260912-175: the caller names whether it is retiring its OWN session as part of this
+  // cancel (about to exit) vs. just moving on to other work. Absent this, every cancel retired
+  // the holder's claude_sessions row unconditionally, so a live worker that cancelled one item
+  // and kept working read as a vacant seat to the roster/capacity/idle gauges.
+  const exiting = args.includes('--exiting');
 
   // REGRESSION FIX (PLAN_VERIFICATION, independently caught by VALIDATION + REGRESSION
   // sub-agents): an ABSENT flag's indexOf() is -1, so its "+1" companion is index 0 —
@@ -93,7 +105,7 @@ Examples:
     process.exit(1);
   }
 
-  return { sdInput, reason: reason.trim(), pr: pr ? pr.trim() : null, evidenceFiles };
+  return { sdInput, reason: reason.trim(), pr: pr ? pr.trim() : null, evidenceFiles, exiting };
 }
 
 /**
@@ -285,7 +297,7 @@ async function resolveSD(input) {
   return data;
 }
 
-async function cancelSD(sd, reason) {
+async function cancelSD(sd, reason, { exiting = false } = {}) {
   if (sd.status === 'cancelled') {
     console.log(`ℹ️  SD ${sd.sd_key} already cancelled (status='cancelled'). No-op.`);
     return false;
@@ -450,7 +462,11 @@ async function cancelSD(sd, reason) {
     }
   }
 
-  // Release the holder's claude_sessions row, if any.
+  // Clear the holder's CLAIM on claude_sessions, if any. QF-20260912-175: this cancel is a
+  // CLAIM release, not necessarily a SESSION exit — a live worker that cancels one item and
+  // keeps working must not have its seat read as vacant (roster/capacity/idle gauges all read
+  // status). Only stamp the terminal 'released' status (is_alive:false) when the caller names
+  // itself as exiting; otherwise leave status/is_alive exactly as they were.
   // QF-20260525-211 (A2): VERIFIED release. A fire-and-forget warn-and-swallow could silently
   // fail (e.g. a CHECK violation returning 204) and leave the dangling claim that feeds the
   // stale-session-sweep CLAIM_FIX churn. A genuine error is now fatal so the caller knows the
@@ -458,11 +474,11 @@ async function cancelSD(sd, reason) {
   if (claimedSessionId) {
     const { data: releasedRows, error: csErr } = await supabase
       .from('claude_sessions')
-      .update(terminalSessionUpdate('released', {
+      .update(sessionStatusUpdate(exiting ? 'released' : 'idle', {
         sd_key: null,
         worktree_path: null,
         worktree_branch: null,
-        released_at: new Date().toISOString(),
+        ...(exiting ? { released_at: new Date().toISOString() } : {}),
       }))
       .eq('session_id', claimedSessionId)
       .eq('sd_key', sd.sd_key)  // only release if THIS SD was the active claim
@@ -472,7 +488,9 @@ async function cancelSD(sd, reason) {
       console.error('   SD is cancelled but its claim was NOT released — the dangling claim will feed sweep churn. Resolve manually.');
       process.exit(1);
     } else if (releasedRows && releasedRows.length > 0) {
-      console.log(`✓ Released claude_sessions row for holder ${claimedSessionId.slice(0, 8)}`);
+      console.log(exiting
+        ? `✓ Released claude_sessions row for holder ${claimedSessionId.slice(0, 8)}`
+        : `✓ Cleared claim on claude_sessions row for holder ${claimedSessionId.slice(0, 8)} (status untouched — still an active seat)`);
     } else {
       console.log(`ℹ️  Holder ${claimedSessionId.slice(0, 8)} no longer claimed ${sd.sd_key} (already released) — nothing to do.`);
     }
@@ -482,7 +500,7 @@ async function cancelSD(sd, reason) {
 }
 
 async function main() {
-  const { sdInput, reason, pr, evidenceFiles } = parseArgs();
+  const { sdInput, reason, pr, evidenceFiles, exiting } = parseArgs();
   const sd = await resolveSD(sdInput);
 
   console.log(`SD: ${sd.sd_key} — ${sd.title?.slice(0, 80)}`);
@@ -509,7 +527,7 @@ async function main() {
     console.log('✓ Ship verification passed against origin/main (not a local/branch HEAD)');
   }
 
-  const changed = await cancelSD(sd, reason);
+  const changed = await cancelSD(sd, reason, { exiting });
   if (changed) {
     console.log('\n✅ Cancellation complete.');
   }

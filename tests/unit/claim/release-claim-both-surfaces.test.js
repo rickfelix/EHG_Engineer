@@ -91,7 +91,7 @@ const seed = (over = {}) => ({
 describe('releaseClaimBothSurfaces', () => {
   it('clears BOTH surfaces on the happy path (direct, retire)', async () => {
     const db = makeDb(seed());
-    const r = await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1' });
+    const r = await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1', sessionStatus: 'released' });
     expect(r.ok).toBe(true);
     expect(r.method).toBe('direct');
     expect(r.oldHolderGone).toBe(true);
@@ -135,7 +135,7 @@ describe('releaseClaimBothSurfaces', () => {
   // statement as status:'released'.
   it('FR-1: the retire path writes is_alive:false alongside status:released', async () => {
     const db = makeDb(seed());
-    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1' });
+    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1', sessionStatus: 'released' });
     const sessUpdate = db.calls.updates.find((u) => u.table === 'claude_sessions');
     expect(sessUpdate.payload).toMatchObject({ status: 'released', is_alive: false });
     expect(db.tables.claude_sessions[0].is_alive).toBe(false);
@@ -146,6 +146,17 @@ describe('releaseClaimBothSurfaces', () => {
     await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1', sessionStatus: 'idle' });
     const sessUpdate = db.calls.updates.find((u) => u.table === 'claude_sessions');
     expect(sessUpdate.payload).not.toHaveProperty('is_alive');
+  });
+
+  // QF-20260912-175: the default retires the CLAIM only, never the session. A caller that
+  // forgets to pass sessionStatus must not silently evict a still-working holder's seat.
+  it('defaults sessionStatus to "idle" — omitting it never retires a live seat', async () => {
+    const db = makeDb(seed());
+    await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1' });
+    const sessUpdate = db.calls.updates.find((u) => u.table === 'claude_sessions');
+    expect(sessUpdate.payload.status).toBe('idle');
+    expect(sessUpdate.payload).not.toHaveProperty('is_alive');
+    expect(db.tables.claude_sessions[0].status).toBe('idle');
   });
 
   it('sessionStatus: "idle" keeps the session alive (unclaim, not retire)', async () => {
@@ -175,7 +186,7 @@ describe('releaseClaimBothSurfaces', () => {
 
   it('tryRpc: uses the release_session RPC when the holder is still on the SD (retire)', async () => {
     const db = makeDb(seed());
-    const r = await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1', tryRpc: true });
+    const r = await releaseClaimBothSurfaces(db.client, { sdKey: 'SD-X', holderSessionId: 'H1', tryRpc: true, sessionStatus: 'released' });
     expect(r.method).toBe('rpc');
     expect(db.calls.rpc.map((c) => c.name)).toContain('release_session');
     expect(db.tables.claude_sessions[0].sd_key).toBeNull();
