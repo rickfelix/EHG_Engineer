@@ -1757,6 +1757,30 @@ async function main() {
         process.stderr.write(`[pre-tool-enforce] ENF-18 errored (fail-open): ${oneOffImportErr.message}\n`);
       }
     }
+
+    // --- ENFORCEMENT 19: Unquoted-Heredoc-With-Command-Substitution Guard (QF-20260912-632) ---
+    // An UNQUOTED heredoc delimiter (`<<EOF`, not `<<'EOF'`) lets the shell expand backticks and
+    // `$(...)` inside the body before it is written. Role seats append their .claude/*-session-
+    // state-*.md records via exactly this pattern; a pasted command line inside record TEXT
+    // becomes an EXECUTED one. Measured 2026-09-12 on the Adam seat: three expansions in one
+    // night, one issuing a live single-use apply token with no chairman verbal. Decision logic
+    // lives in lib/heredoc-substitution-guard.cjs (unit-tested); this owns audit + exit. No
+    // bypass flag: quote the delimiter (`<<'EOF'`), or compose the value with printf first.
+    try {
+      const { decideHeredocSubstitution } = require('./lib/heredoc-substitution-guard.cjs');
+      const d = decideHeredocSubstitution(cmd);
+      if (d.matched) {
+        const meta = { tag: d.tag, reason: d.reason };
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-19', 'Unquoted-heredoc-with-command-substitution guard: refuses a backtick or $( ) inside an unquoted heredoc body', d.outcome, meta);
+        process.stderr.write(`[ENF-19] BLOCKED — unquoted heredoc <<${d.tag} contains a ${d.reason.includes('backtick') ? 'backtick' : ''}${d.reason === 'backtick_and_cmd_sub' ? ' and ' : ''}${d.reason.includes('cmd_sub') ? '$( )' : ''}, which the shell would expand before the body is written. Quote the delimiter instead: ${d.quotedForm} ... ${d.tag} (quoted heredocs never expand). $VAR alone is unaffected and never blocked.\n`);
+        await auditAndExit(auditPromise, 2);
+      }
+    } catch (heredocErr) {
+      // Fail-open: any internal error in ENF-19 must NOT block tool execution.
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        process.stderr.write(`[pre-tool-enforce] ENF-19 errored (fail-open): ${heredocErr.message}\n`);
+      }
+    }
   }
 
   // --- ENFORCEMENT 10: Source-Side Telemetry Writer (SD-LEO-INFRA-WORKER-SOURCE-SIDE-001) ---
