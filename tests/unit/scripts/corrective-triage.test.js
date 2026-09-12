@@ -151,6 +151,15 @@ describe('promoteFinding', () => {
     const sb = mockSupabase({ single: { ...baseRow, metadata: { source_sd_id: 'X' } } });
     await expect(promoteFinding(sb, 'fb-1')).rejects.toThrow(/no metadata.promote_payload/);
   });
+
+  it('SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-G: surfaces a rejected feedback status update instead of silently succeeding', async () => {
+    // Regression guard: supabase-js resolves with {error} rather than throwing on a PostgREST
+    // rejection (e.g. the append-only trigger). Before this fix, promoteFinding never checked
+    // the result of this UPDATE at all, so a rejected write was completely silent.
+    createSD.mockClear();
+    const sb = mockSupabase({ single: baseRow, updateOk: false });
+    await expect(promoteFinding(sb, 'fb-1', { promotedBy: 'tester' })).rejects.toThrow(/promote: feedback status update failed/);
+  });
 });
 
 describe('dismissFinding', () => {

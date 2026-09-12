@@ -29,12 +29,19 @@ describe('GAUGE_REGISTRY shape', () => {
     expect(GAUGE_REGISTRY).toHaveLength(41);
   });
 
-  it('27 entries are activated; the 3 self-score-age entries plus the 11 Michael gauges ship as stubs (writers/detectors default-OFF)', () => {
+  it('29 entries are activated; the coordinator self-score-age entry plus the 11 Michael gauges ship as stubs (writers/detectors default-OFF)', () => {
+    // QF-20260911-404: adam_self_score_age and solomon_self_score_age flipped enabled:true --
+    // both writers verified live (174 and 84 rows respectively, most recent within hours, well
+    // under the 48h staleness threshold). coordinator_self_score_age stays a stub: its writer's
+    // insert sits behind a single-writer mutation guard only a live coordinator SESSION can
+    // satisfy, so this QF ships the --force wiring fix but defers enabling the gauge itself
+    // until the coordinator actually re-arms its cron and produces a first row (verifiable via
+    // scripts/lint/self-score-gauge-writer-lint.mjs).
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(27);
+    expect(live).toHaveLength(29);
     expect(stubs.map((e) => e.id).sort()).toEqual([
-      'adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age',
+      'coordinator_self_score_age',
       'michael-account-independence', 'michael-brief-landed', 'michael-classifier-drift',
       'michael-feeder-health', 'michael-gmail-modify-ceiling', 'michael-ledger-gap',
       'michael-overdue-cleared', 'michael-oauth-health', 'michael-reopen-rate',
@@ -116,11 +123,15 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     expect(selectEnabledEntries(undefined)).toEqual([]);
   });
 
-  it('the real GAUGE_REGISTRY selects all 27 enabled entries', () => {
+  it('the real GAUGE_REGISTRY selects all 29 enabled entries', () => {
+    // QF-20260911-404: adam_self_score_age and solomon_self_score_age flipped enabled:true
+    // (writers verified live). coordinator_self_score_age stays a stub -- see that entry's own
+    // comment in gauge-registry.js.
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(27);
+    expect(selected).toHaveLength(29);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
+      'adam_self_score_age',
       'agent-tool-hook-liveness',
       'coordinator-sourced-sd',
       'expired-premise-tags',
@@ -142,6 +153,7 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
       'relay-drop',
       'ship-witness-unwitnessed-merge',
       'solomon-dispatched-sd',
+      'solomon_self_score_age',
       'stale-tree',
       'unranked-claimable-leaves',
       'unreceipted-signals-overdue',
@@ -387,13 +399,17 @@ describe('the 3 self-score-age registry entries (FR-4)', () => {
   it('each has a detectorFn key resolvable in gauge-runner.mjs\'s buildDetectorResolvers map', () => {
     const ids = ['adam_self_score_age', 'coordinator_self_score_age', 'solomon_self_score_age'];
     const detectorFns = ['adam-self-score-age', 'coordinator-self-score-age', 'solomon-self-score-age'];
+    // QF-20260911-404: adam/solomon flipped enabled:true (writers verified live); coordinator
+    // stays enabled:false (writer fix shipped, but its insert requires a live coordinator
+    // SESSION to pass guardMutation -- see the registry entry's own comment).
+    const expectedEnabled = { adam_self_score_age: true, coordinator_self_score_age: false, solomon_self_score_age: true };
     ids.forEach((id, i) => {
       const entry = GAUGE_REGISTRY.find((e) => e.id === id);
       expect(entry).toBeTruthy();
       expect(entry.detectorFn).toBe(detectorFns[i]);
       expect(entry.thresholdConfig.tripWhen({ count: 1 })).toBe(true);
       expect(entry.thresholdConfig.tripWhen({ count: 0 })).toBe(false);
-      expect(entry.enabled).toBe(false); // ships alongside the writers' default-OFF cadence flags
+      expect(entry.enabled).toBe(expectedEnabled[id]);
     });
   });
 });

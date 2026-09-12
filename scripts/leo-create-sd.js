@@ -167,11 +167,16 @@ Flags:
                         coordinator fencing window between birth and dependency-gating.
                         Example: --depends-on SD-LEO-ORCH-FOO-001-A,SD-LEO-ORCH-FOO-001-B
   --roadmap-link-reason "<text>"  (--from-plan / --from-proposal / --proposal-b64 /
-                        --proposal-stdin / --child) Operator reason recorded on
+                        --proposal-stdin / --child / --from-qf) Operator reason recorded on
                         metadata.roadmap_link_exception when the creation is unlinked from the
                         roadmap (register-first exception). Without it the exception stamps
                         no-reason-supplied — the counted gap the sourcing health probe drives
                         to zero. Recorded only when actually unlinked; never a refusal path.
+                        On --from-qf ONLY, an omitted flag is never no-reason-supplied: it
+                        defaults to "escalated from <QF-id>: <qf.escalation_reason>" (or a
+                        no-reason-recorded-on-the-quick-fix fallback text when the QF itself
+                        carries none), since the escalating QF's own tier-3 routing rationale
+                        is always available and the exception should never go unreasoned.
   --target-repos <list> Set metadata.target_repos[] for cross-repo SDs (comma-separated).
                         Valid values: EHG, EHG_Engineer (case-insensitive; normalized).
                         When set, PR_MERGE_VERIFICATION at LEAD-FINAL scopes its scan
@@ -338,9 +343,16 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // QF-20260705-395: --migration-reviewed had the identical gap -- a Tier-3 QF whose
       // description names a real schema migration was unescapably blocked by
       // GR-MIGRATION-REVIEW, since the flag was silently dropped before reaching createFromQF.
+      // QF-20260911-484: --roadmap-link-reason had NO path at all on --from-qf (unlike
+      // --from-plan/--from-proposal/--proposal-b64/--proposal-stdin/--child), so every
+      // sensitive-path escalation through this lane recorded the register-first exception
+      // reason-less. args[1] is always the QF id positional here (no .find() scan to
+      // protect, unlike --from-feedback), so no value-position exclusion is needed.
+      const qfLinkReasonIdx = args.indexOf('--roadmap-link-reason');
       const qfRes = await createFromQF(args[1], {
         securityReviewed: args.includes('--security-reviewed'),
         migrationReviewed: args.includes('--migration-reviewed'),
+        roadmapLinkReason: qfLinkReasonIdx !== -1 ? args[qfLinkReasonIdx + 1] : null,
       });
       exitFromResult(qfRes);
     } else if (args[0] === '--from-proposal') {

@@ -79,10 +79,13 @@ describe('applyWaveDisposition', () => {
     expect(stamped).toEqual(['r1', 'r2']);
   });
 
-  it('wave choice inserts the item and stamps the parent roadmap', async () => {
+  it('wave choice inserts the item and stamps the parent roadmap (sourceKey does not match an existing SD)', async () => {
     const inserted = [];
     const stamped = [];
     const supabase = mockSupabase({
+      strategic_directives_v2: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
+      }),
       roadmap_wave_items: () => ({
         insert: (row) => { inserted.push(row); return { select: () => ({ single: () => Promise.resolve({ data: { id: 'item-1' }, error: null }) }) }; },
       }),
@@ -95,9 +98,9 @@ describe('applyWaveDisposition', () => {
     });
     const res = await applyWaveDisposition(supabase, {
       waveDisposition: { waveId: WAVE_ID },
-      sourceKey: 'SD-ORCH-001',
-      title: 'Orch parent',
-      dispositionSource: 'orchestrator_sd_creation',
+      sourceKey: 'spine-core',
+      title: 'Ratified workstream',
+      dispositionSource: 'plan_ratification',
     });
     expect(res.itemId).toBe('item-1');
     expect(inserted[0]).toMatchObject({
@@ -105,12 +108,47 @@ describe('applyWaveDisposition', () => {
       source_type: 'adam_direct',
       item_disposition: 'pending',
     });
-    expect(inserted[0].source_id).toBe(deterministicSourceId('SD-ORCH-001'));
+    expect(inserted[0]).not.toHaveProperty('promoted_to_sd_key');
+    expect(inserted[0].source_id).toBe(deterministicSourceId('spine-core'));
     expect(stamped).toEqual(['r1']);
+  });
+
+  // QF-20260911-229: six live roadmap_wave_items rows proved this gap -- metadata.source_key
+  // named an existing (several already-completed) SD while promoted_to_sd_key sat NULL
+  // indefinitely, because this insert never checked whether sourceKey already resolved to a
+  // real SD. create-orchestrator-from-plan.js / sd-creation/pipeline.js both call this with
+  // sourceKey = the SD's own, just-created sd_key.
+  it('wave choice stamps promoted_to_sd_key in the SAME insert when sourceKey names an existing SD', async () => {
+    const inserted = [];
+    const supabase = mockSupabase({
+      strategic_directives_v2: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { sd_key: 'SD-ORCH-001' }, error: null }) }) }),
+      }),
+      roadmap_wave_items: () => ({
+        insert: (row) => { inserted.push(row); return { select: () => ({ single: () => Promise.resolve({ data: { id: 'item-1' }, error: null }) }) }; },
+      }),
+      roadmap_waves: () => ({
+        select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { roadmap_id: 'r1' }, error: null }) }) }),
+      }),
+      strategic_roadmaps: () => ({
+        update: () => ({ in: () => Promise.resolve({ error: null }) }),
+      }),
+    });
+    const res = await applyWaveDisposition(supabase, {
+      waveDisposition: { waveId: WAVE_ID },
+      sourceKey: 'SD-ORCH-001',
+      title: 'Orch parent',
+      dispositionSource: 'orchestrator_sd_creation',
+    });
+    expect(res.itemId).toBe('item-1');
+    expect(inserted[0].promoted_to_sd_key).toBe('SD-ORCH-001');
   });
 
   it('duplicate insert (23505) resolves to the existing item — idempotent', async () => {
     const supabase = mockSupabase({
+      strategic_directives_v2: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { sd_key: 'SD-ORCH-001' }, error: null }) }) }),
+      }),
       roadmap_wave_items: () => ({
         insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: null, error: { code: '23505', message: 'dup' } }) }) }),
         select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'existing-1' }, error: null }) }) }) }) }),
@@ -154,6 +192,9 @@ describe('recordDisposition plan_ratification gate (TS-1 / TS-6)', () => {
       from: (table) => ({
         system_events: {
           select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: existingRow, error: null }) }) }) }),
+        },
+        strategic_directives_v2: {
+          select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: null, error: null }) }) }),
         },
         roadmap_wave_items: {
           insert: (row) => { inserted.push(row); return { select: () => ({ single: () => Promise.resolve({ data: { id: 'item-2' }, error: null }) }) }; },

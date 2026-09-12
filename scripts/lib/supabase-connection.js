@@ -18,6 +18,7 @@ import dotenv from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { resolveActorIdentity, withActorHeader } from '../../lib/db-actor-identity.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -263,6 +264,16 @@ export async function createDatabaseClient(projectKey = 'ehg', options = {}) {
   // Connect
   await client.connect();
 
+  // SD-LEO-INFRA-AUDIT-ACTOR-THREADING-001: thread the acting identity into the
+  // session so the sd_mutation_audit trigger attributes governed writes to the
+  // real actor instead of the shared DB role. Session-level set_config (is_local=
+  // false) is safe here: the FR-6 pooler-mode spike proved this client's backend
+  // connection (pg_backend_pid) is stable for the life of this pg.Client instance.
+  const { actorId } = resolveActorIdentity();
+  if (actorId) {
+    await client.query("SELECT set_config('app.actor', $1, false)", [actorId]);
+  }
+
   // Verify connection
   if (options.verify !== false) {
     const result = await client.query('SELECT current_database(), current_user, version();');
@@ -399,13 +410,21 @@ export async function createSupabaseServiceClient(projectKey = 'engineer', optio
     console.info('   Role: service_role (bypasses RLS)');
   }
 
+  // SD-LEO-INFRA-AUDIT-ACTOR-THREADING-001: thread the acting identity into a
+  // global x-actor-session header so the sd_mutation_audit trigger can attribute
+  // PostgREST-originated governed writes (proven readable end-to-end by the FR-5
+  // request.headers spike) instead of falling back to the shared authenticator role.
+  const { actorId } = resolveActorIdentity();
+  const clientOptions = options.clientOptions || {};
+
   return createClient(url, key, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
       detectSessionInUrl: false
     },
-    ...options.clientOptions
+    ...clientOptions,
+    global: withActorHeader(clientOptions.global, actorId)
   });
 }
 

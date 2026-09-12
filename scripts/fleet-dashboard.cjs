@@ -361,6 +361,12 @@ async function loadData() {
       // SD-LEO-INFRA-LEO-COMPLETION-001-E (FR-2): model/effort chip source.
       model: t.metadata && t.metadata.model,
       effort: t.metadata && t.metadata.effort,
+      // SD-LEO-INFRA-WIRE-MODEL-POLICY-001 FR-2: role-classification fields for the
+      // "seats off policy" count below -- already inside the same selected metadata blob,
+      // no new query.
+      role: t.metadata && t.metadata.role,
+      is_coordinator: t.metadata && t.metadata.is_coordinator,
+      non_fleet: t.metadata && t.metadata.non_fleet,
     });
   }
   const hasTickAlive = (s) => {
@@ -585,6 +591,35 @@ function formatSilentUntil(s) {
 }
 
 // ── Section: Workers ──
+/**
+ * SD-LEO-INFRA-WIRE-MODEL-POLICY-001 FR-2: pure classify-and-count helper, unit-testable
+ * without invoking the dashboard CLI. Takes session-like objects already carrying
+ * .model/.role/.is_coordinator/.non_fleet (already selected/projected above -- no new query).
+ * NEVER use model-policy.cjs's checkModelMismatch/seatClassFor here (see capture-session-id.cjs's
+ * signalModelPolicyMismatch docblock for why -- same false-positive class).
+ * @returns {{count: number|null, abstained: boolean}} abstained=true means the count could NOT
+ *   be computed and MUST NOT be rendered as 0 -- a caller must render 'N/A', never a false clean
+ *   bill of health.
+ */
+function countSeatsOffPolicy(sessionsLike) {
+  try {
+    const { verdictFromMetadata } = require('../lib/fleet/role-status-identity.cjs');
+    const { policyModelFor, coarseModelAlias } = require('../lib/fleet/model-policy.cjs');
+    let count = 0;
+    for (const s of sessionsLike || []) {
+      const metadata = { role: s.role, is_coordinator: s.is_coordinator, non_fleet: s.non_fleet };
+      const verdict = verdictFromMetadata(metadata);
+      if (verdict !== 'role' && verdict !== 'worker') continue; // unknown -- cannot classify, skip
+      const observedAlias = coarseModelAlias(s.model);
+      if (observedAlias === null) continue; // no usable model info -- cannot classify
+      if (observedAlias !== coarseModelAlias(policyModelFor(verdict))) count += 1;
+    }
+    return { count, abstained: false };
+  } catch {
+    return { count: null, abstained: true };
+  }
+}
+
 function printWorkers(d) {
   const now = new Date();
   // Could-not-determine (empty map) just means the csid column below reads blank and the
@@ -623,6 +658,11 @@ function printWorkers(d) {
   console.log('');
   console.log('WORKERS [' + now.toLocaleTimeString() + ']' + headerSuffix + '  acct=' + acctLabel + '  ' + capChip);
   console.log('─'.repeat(hasCollision ? 100 : 88));
+
+  // SD-LEO-INFRA-WIRE-MODEL-POLICY-001 FR-2: one summary line, no new query -- abstain (never
+  // render 0) if classification could not be computed.
+  const offPolicy = countSeatsOffPolicy(d.activeSessions);
+  console.log('  Seats off model policy: ' + (offPolicy.abstained ? 'N/A' : offPolicy.count));
 
   if (d.activeSessions.length === 0) {
     console.log('  (no active workers)');
@@ -3445,7 +3485,7 @@ async function main() {
 }
 
 // Export read-only renderers for unit testing (SD-LEO-INFRA-COORDINATOR-DASHBOARD-SURFACES-001).
-module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate, writeSignalReceipts, stampInboxReadAt };
+module.exports = { printFeedback, printPeriodicLiveness, reconcilePAliveWithLiveness, computeSolomonLedgerRollup, computeSolomonLedgerByLegAndKind, printWorkers, printChairmanEmailChannelHealth, printAvailable, printWorkerInbox, resolveInboxAudience, printAttentionStrip, printQA, printStuckSeatStrip, selectAgingWorkers, printBrowserKillSwitchAction, isDashboardIdleCandidate, writeSignalReceipts, stampInboxReadAt, countSeatsOffPolicy };
 
 // Only run the CLI when invoked directly, so requiring this module in a test does
 // not execute main() against the live database.

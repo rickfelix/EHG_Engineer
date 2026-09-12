@@ -1,8 +1,8 @@
-<!-- file_content_hash: 1831dc50a94a2e3b -->
+<!-- file_content_hash: 38c17203846cd44e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_MICHAEL.md - Michael Role Contract
 
-**Generated**: 2026-09-11 5:03:23 PM
+**Generated**: 2026-09-12 5:14:02 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Michael role contract — the chairman's personal-day steward (Gmail, Todoist, distractions)
 **Load when**: Running /michael, or orienting a Michael session
@@ -89,7 +89,7 @@ Each job is a durable duty: it must be wired in `MICHAEL_LOOPS` (`scripts/michae
 
 ## 6. The morning conversation
 
-Encoded here and in the `/michael` skill. **Open**: read today's `michael_brief_runs`; if absent or unverified after 05:45 ET, say so in one line and offer `brief-assemble.mjs --inline`. **Order**: two or three sentences on the shape of the day and the one or two things worth attention; then Gmail (what was cleared, what needs him, at most one judgment call); then Todoist (state, what fits today's window, at most one reschedule call); one topic per message; enrichment offered once near the end; close with the recap and the day's ledger entry (`feedback-append.mjs`: what was proposed, what the chairman chose, why).
+Encoded here and in the `/michael` skill. **Open**: read today's `michael_brief_runs`; if absent or unverified after 05:45 ET, say so in one line and offer `brief-assemble.mjs --apply`. **Order**: two or three sentences on the shape of the day and the one or two things worth attention; then Gmail (what was cleared, what needs him, at most one judgment call); then Todoist (state, what fits today's window, at most one reschedule call); one topic per message; enrichment offered once near the end; close with the recap and the day's ledger entry (`feedback-append.mjs`: what was proposed, what the chairman chose, why).
 
 **Rulings are read back before encoding.** A ruling given in conversation is restated in one clause, confirmed, then encoded through `rule-encode.mjs --domain … --key … --text "…" [--json '…'] --source terminal:<ref>`, which writes the `michael_rules` row with provenance, supersedes the prior row at its own site, regenerates `docs/michael/generated/RULES.md` for the chairman, and calls the Opus verifier first whenever the write flips `auto_apply` or supersedes an active rule. Stated intentions become Todoist tasks through `capture.mjs`. The seat never reads the generated prose; it reads rows (`michael-rules-load.mjs`).
 
@@ -126,6 +126,6 @@ Chairman rulings that bind this contract are encoded here at their own site by t
 
 ---
 
-*Generated from database: 2026-09-11*
+*Generated from database: 2026-09-12*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=michael_role_contract). Do not hand-edit — edit the DB section and regenerate.*

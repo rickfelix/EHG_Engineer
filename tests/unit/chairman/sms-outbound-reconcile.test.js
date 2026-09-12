@@ -1562,6 +1562,61 @@ describe("guard (3') — cancel a backstop at drain once its slot's live send la
     expect(summary.sent).toBe(1);
   });
 
+  // QF-20260911-252: the created_at-ordering check above misses a live send that landed BEFORE
+  // the backstop enqueued (an early send, well outside the sweep's own LIVE_EARLY_LOOKBACK_MS) --
+  // this is exactly the drain-time counterpart to the sweep-side fix. The live row's own
+  // dedupe_key ('slot-1800-20260904', matching this backstop's 18h slot) is now an independent
+  // signal that still counts as coverage even though it's "older" by the ordering check.
+  describe('QF-20260911-252 — dedupe_key-based coverage independent of created_at ordering', () => {
+    it('an early live send (created BEFORE the backstop, so invisible to created_at ordering) with a MATCHING dedupe_key still cancels the backstop', async () => {
+      const sb = makeFakeSupabase({ sms_outbound_obligations: [
+        backstopRow(), // dedupe_key: 'heartbeat_status_backstop:2026-09-04T18', created_at: ago(10*MIN)
+        owedRow({ id: 'ob-live-early', kind: 'heartbeat_status', dedupe_key: 'slot-1800-20260904', status: 'delivered', created_at: ago(3 * 60 * MIN) }),
+      ] });
+      const provider = okProvider();
+      const summary = await reconcileOutboundSms(sb, { provider });
+      expect(provider.send).not.toHaveBeenCalled();
+      expect(summary.canceledLiveCovered).toBe(1);
+      expect(sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-backstop-18h').status).toBe('canceled');
+    });
+
+    it('the superseded adam-slot-YYYY-MM-DD-HHMMet dedupe_key format is also recognized', async () => {
+      const sb = makeFakeSupabase({ sms_outbound_obligations: [
+        backstopRow(),
+        owedRow({ id: 'ob-live-early-legacy', kind: 'heartbeat_status', dedupe_key: 'adam-slot-2026-09-04-1800et', status: 'sent', created_at: ago(3 * 60 * MIN) }),
+      ] });
+      const provider = okProvider();
+      const summary = await reconcileOutboundSms(sb, { provider });
+      expect(summary.canceledLiveCovered).toBe(1);
+    });
+
+    it('a dedupe_key for a DIFFERENT slot does not cancel this backstop -- still sends', async () => {
+      const sb = makeFakeSupabase({ sms_outbound_obligations: [
+        backstopRow(),
+        owedRow({ id: 'ob-live-other-slot', kind: 'heartbeat_status', dedupe_key: 'slot-0900-20260904', status: 'delivered', created_at: ago(3 * 60 * MIN) }),
+      ] });
+      const provider = okProvider();
+      const summary = await reconcileOutboundSms(sb, { provider });
+      expect(summary.canceledLiveCovered).toBe(0);
+      expect(summary.sent).toBe(1);
+    });
+
+    it('a STALE non-terminal (sending) live row with a MATCHING dedupe_key still does NOT count as coverage -- the staleness grace still applies, key match never bypasses it', async () => {
+      // status='sending' (not 'owed'): an 'owed' row is independently claimable by this same
+      // worker's Pass 2 and would be sent in its own right, contaminating the sent-count
+      // assertion below (matches the established pattern in the STALE live sending row test
+      // above -- 'sending' isolates guard-3' behavior without a second real send).
+      const sb = makeFakeSupabase({ sms_outbound_obligations: [
+        backstopRow(),
+        owedRow({ id: 'ob-live-stuck-old', kind: 'heartbeat_status', dedupe_key: 'slot-1800-20260904', status: 'sending', created_at: ago(3 * 60 * MIN) }),
+      ] });
+      const provider = okProvider();
+      const summary = await reconcileOutboundSms(sb, { provider });
+      expect(summary.canceledLiveCovered).toBe(0);
+      expect(summary.sent).toBe(1);
+    });
+  });
+
   it('a non-backstop kind is completely unaffected by guard (3\')', async () => {
     const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ kind: 'morning_review' })] });
     const provider = okProvider();

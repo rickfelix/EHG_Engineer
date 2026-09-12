@@ -253,7 +253,11 @@ async function markBridgeNeedsEscalation(db, bridgeId) {
     if (!row) return;
     const md = row.metadata || {};
     md.sourcing_status = 'needs_human_escalation';
-    await db.from('feedback').update({ metadata: md }).eq('id', row.id);
+    // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-G: supabase-js resolves with {error} rather than
+    // throwing on a PostgREST rejection, so this try/catch never fired on a rejected UPDATE --
+    // fail-soft was actually fail-SILENT. Still fail-soft (no throw), but now visible.
+    const { error } = await db.from('feedback').update({ metadata: md }).eq('id', row.id);
+    if (error) console.warn(`[prod-error-sweep] markBridgeNeedsEscalation update failed for ${row.id}: ${error.message}`);
   } catch { /* fail-soft: the row already sits in the inbox as the surfaced record */ }
 }
 

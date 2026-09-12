@@ -11,7 +11,7 @@
  * itself (the DB write IS the thing under test here).
  */
 import { describe, it, expect } from 'vitest';
-import { unpark, PARK_STATUS } from '../../lib/sd-park.js';
+import { unpark, checkUnparkHold, PARK_STATUS } from '../../lib/sd-park.js';
 
 function makeMockClient({ selectResult, updateResult }) {
   const queries = [];
@@ -88,5 +88,58 @@ describe('unpark() — mock-client DB-interaction behavior (TOCTOU guard)', () =
     const res = await unpark(client, 'SD-X', { reason: 'r', actor: 'PLAN' });
     expect(res.status).toBe('pending_approval');
     expect(res.requested).toBe('in_progress');
+  });
+});
+
+describe('checkUnparkHold (QF-20260912-346) — is this hold someone else\'s to release?', () => {
+  it('a park with no recorded session and no role-seat parked_by is nobody\'s in particular — not refused', () => {
+    expect(checkUnparkHold({ metadata: { parked_from_status: 'active' } }, { writingSessionId: 'sess-a' }))
+      .toEqual({ refused: false, reason: null });
+  });
+
+  it('a role-seat parked_by with no session recorded is refused', () => {
+    const { refused, reason } = checkUnparkHold({ metadata: { parked_by: 'coordinator' } }, { writingSessionId: 'sess-a' });
+    expect(refused).toBe(true);
+    expect(reason).toMatch(/coordinator/);
+  });
+
+  it('the SAME session that parked it may unpark it, even with a role-seat parked_by string', () => {
+    expect(checkUnparkHold(
+      { metadata: { parked_by: 'coordinator', stamped_by_session: 'sess-a' } },
+      { writingSessionId: 'sess-a' },
+    )).toEqual({ refused: false, reason: null });
+  });
+
+  it('a DIFFERENT session\'s park is refused, regardless of parked_by', () => {
+    const { refused, reason } = checkUnparkHold(
+      { metadata: { parked_by: 'cli', stamped_by_session: 'sess-b' } },
+      { writingSessionId: 'sess-a' },
+    );
+    expect(refused).toBe(true);
+    expect(reason).toMatch(/sess-b/);
+  });
+});
+
+describe('unpark() — hold refusal (QF-20260912-346)', () => {
+  it('refuses a coordinator park without --force, issuing no UPDATE', async () => {
+    const client = makeMockClient({
+      selectResult: [{ sd_key: 'SD-X', status: PARK_STATUS, metadata: { parked_by: 'coordinator', parked_from_status: 'active' } }],
+      updateResult: [{ status: 'active' }],
+    });
+
+    await expect(
+      unpark(client, 'SD-X', { reason: 'r', actor: 'worker', writingSessionId: 'sess-a' }),
+    ).rejects.toThrow(/UNPARK_HOLD_NOT_YOURS|not this caller/);
+    expect(client.queries.some((q) => q.sql.trim().toUpperCase().startsWith('UPDATE'))).toBe(false);
+  });
+
+  it('--force overrides the refusal', async () => {
+    const client = makeMockClient({
+      selectResult: [{ sd_key: 'SD-X', status: PARK_STATUS, metadata: { parked_by: 'coordinator', parked_from_status: 'active' } }],
+      updateResult: [{ status: 'active' }],
+    });
+
+    const res = await unpark(client, 'SD-X', { reason: 'r', actor: 'worker', writingSessionId: 'sess-a', force: true });
+    expect(res.status).toBe('active');
   });
 });

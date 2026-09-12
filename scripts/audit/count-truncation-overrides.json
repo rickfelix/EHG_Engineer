@@ -1,4 +1,9 @@
 {
+ "scripts/extract-pending-retro-patterns.mjs:25": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, created_at')",
+  "note": "QF-20260911-299: bounded by .limit(limit) on the same chain (3 lines below), where `limit` defaults to the module-level BATCH_LIMIT = 100 constant -- the classifier's \\.limit\\(\\s*(\\d+)\\s*\\) regex requires a literal digit and cannot see through the named-constant default, but the effective bound is a literal 100, well under the 1000 cap."
+ },
  "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:477": {
   "classification": "bounded-by-design",
   "match": ".eq('id', existing.id).select()",
@@ -2323,11 +2328,6 @@
   "classification": "bounded-by-design",
   "match": ".select('session_id, metadata')",
   "note": "claude_sessions filtered to metadata->>attention=true — currently-flagged-for-attention sessions, a small live alert subset by definition."
- },
- "lib/fleet/best-effort-release.mjs:297": {
-  "classification": "bounded-by-design",
-  "match": "select('id').eq('id', qfId)",
-  "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: bounded twice over -- filtered by id (a primary key) AND an explicit .limit(1) on the awaited statement 4 lines below (`await lookup.limit(1)`). select() must be first on THIS line (real postgrest-js staged-type requirement -- testing-agent finding 688ca3f5), which puts .limit() on a separate statement after a `lookup = applyClaimPredicate(lookup)` reassignment the classifier's single-statement chainWindow cannot trace across."
  },
  "lib/fleet/claim-eligibility.cjs:451": {
   "classification": "bounded-by-design",
@@ -5279,11 +5279,6 @@
   "match": ".select('session_id, heartbeat_at')",
   "note": ".in('session_id', sessionIds) — sessionIds is the deduped claiming_session_id set from the active-claims read above, operationally small"
  },
- "scripts/hooks/coordination-inbox.cjs:929": {
-  "classification": "bounded-by-design",
-  "match": "sd_key, heartbeat_at, expected_silence_until, is_alive, status, terminal_id, process_alive_at",
-  "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: filters .not('sd_key','is',null) -- claude_sessions rows currently holding an SD claim, an operationally small, actively-bounded fleet population (dozens, not thousands), not a raw growing table."
- },
  "scripts/hooks/handoff-enforcement.js:185": {
   "classification": "bounded-by-design",
   "match": ".select('handoff_type, status')",
@@ -7544,11 +7539,6 @@
   "match": ".select('*')",
   "note": "codebase_semantic_stats .eq('application', application) — per-application aggregate stats rows (entity_type x language), operationally small"
  },
- "scripts/session-liveness-ssot-exit-predicate-check.mjs:47": {
-  "classification": "bounded-by-design",
-  "match": "session_id, status, is_alive, released_at, stale_at, released_reason",
-  "note": "SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: .limit(sampleLimit) follows on the next line -- sampleLimit defaults to SAMPLE_LIMIT=10, always <1000, but the classifier's limit() regex only recognizes a literal digit, not a named binding."
- },
  "scripts/solomon-advisory.cjs:385": {
   "classification": "bounded-by-design",
   "match": ".select('id, read_at')",
@@ -8013,5 +8003,20 @@
   "classification": "bounded-by-design",
   "match": ".select('id, occurrence_count, first_seen')",
   "note": "QF-20260911-515: pre-existing single-row lookup bounded by .order('created_at', {ascending:false}).limit(1) 35 lines below -- this diff only added first_seen to the column list (so a re-emission can carry the original first_seen forward instead of resetting it), which re-triggers diff-lint classification of an already-bounded query. chainWindow's 12-line forward window cannot reach .limit(1) because ~18 of those lines are a single extensively-documented predicate-rationale comment block (category/source_type/feedback_type/archived_at security rationale) sitting between the predicates and .order()/.limit() -- same class as wave-clusterer.js:129 above (heuristic window too short for a long inline chain), not an unbounded read."
+ },
+ "scripts/modules/handoff/executors/plan-to-lead/gates/child-scope-coverage.js:68": {
+  "classification": "bounded-by-design",
+  "match": "select('id, deliverable_name, deliverable_type, metadata')",
+  "note": "QF-20260911-793 / SD-LEO-FIX-CHILD-SCOPE-COVERAGE-001: pre-existing query bounded by .eq('sd_id', sdId) -- reads one specific SD's own sd_scope_deliverables rows (a single orchestrator's deliverable count, never near 1000). This diff only widened the select() column list (added metadata, the field the new coordination_only exclusion reads) to fix a defect where the exclusion silently no-op'd because metadata was never projected -- re-triggering diff-lint classification of an already-bounded query, same class as the adam-quiet-tick.mjs:736 entry above."
+ },
+ "scripts/enumerate-periodic-processes.mjs:29": {
+  "classification": "bounded-by-design",
+  "match": ".select('process_key, owner, process_type, currently_expected_active')",
+  "note": "QF-20260911-080: periodic_process_registry is a fixed-cardinality fleet process registry (one row per recurring process, bounded by the number of cron loops the repo has -- tens, not growth-unbounded); this site had an unbounded read pre-existing (only the column list grew, adding process_type/currently_expected_active for the new findOrphanedActiveCrons reverse-direction check). No pagination needed."
+ },
+ "lib/roadmap/orphaned-sd-link-backfill.mjs:50": {
+  "classification": "bounded-by-design",
+  "match": ".from('strategic_directives_v2').select('sd_key, status').in('sd_key', keys);",
+  "note": "QF-20260911-229: the response row count is mathematically bounded by keys.length (a deduped Set built from fetchAllPaginated's already-paginated read of pending, unlinked roadmap_wave_items) -- .in() can never return more rows than distinct keys supplied, and the live pending-candidate population is a small fraction of the PostgREST 1000-row cap. No pagination needed."
  }
 }

@@ -168,6 +168,17 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
             ? rawName.length > 120 ? rawName.substring(0, 117) + '...' : rawName
             : `Requirement ${index + 1}`;
 
+          // QF-20260911-793 (PR #8703 adversarial review): coordination_only is a real,
+          // author-writable JSONB flag -- prd.functional_requirements has no field the gate
+          // itself protects. Trusting req.coordination_only alone would let ANY PRD author
+          // (human, add-prd-to-database.js, or an LLM-authored PRD) exempt a genuine
+          // requirement from CHILD_SCOPE_COVERAGE by naming it one of the 3 reserved titles
+          // and setting the flag. Require ALSO that the WHOLE PRD's own generation_method
+          // matches the one auto-generator that ever legitimately emits these FRs
+          // (ParentOrchestratorHandler.generateParentPRD, parent-orchestrator-handler.js:231)
+          // -- a per-FR flag is cheap to spoof; the PRD's own recorded generator identity is
+          // not something a manually- or LLM-authored PRD organically carries.
+          const isFromCoordinationOnlyGenerator = prd.metadata?.generation_method === 'ParentOrchestratorHandler.generateParentPRD';
           deliverables.push({
             sd_id: sdId,
             deliverable_type: inferDeliverableType(rawName || deliverableName),
@@ -175,7 +186,8 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
             description: req.description || req.details || undefined,
             extracted_from: 'prd',
             priority: 'required',
-            completion_status: 'pending'
+            completion_status: 'pending',
+            metadata: (req.coordination_only && isFromCoordinationOnlyGenerator) ? { coordination_only: true } : {}
           });
         });
 

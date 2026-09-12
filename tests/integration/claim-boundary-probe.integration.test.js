@@ -33,9 +33,11 @@ const SID_MISS = `${RUN_ID}-miss`;
 const SID_PASS = `${RUN_ID}-pass`;
 const SID_UNKNOWN = `${RUN_ID}-unknown`;
 const SID_SD_MISS = `${RUN_ID}-sdmiss`;
+const SID_FRESH_HB = `${RUN_ID}-freshhb`;
 const QF_MISS = `QF-TEST-CBP-${Date.now()}${process.pid}A`;
 const QF_PASS = `QF-TEST-CBP-${Date.now()}${process.pid}B`;
 const QF_UNKNOWN = `QF-TEST-CBP-${Date.now()}${process.pid}C`;
+const QF_FRESH_HB = `QF-TEST-CBP-${Date.now()}${process.pid}D`;
 // SD-TEST- namespace: the sweep's QA mutation paths are hard-fenced from it
 // (TEST_FIXTURE_SD_KEY_LIKE), and a FRESH updated_at keeps adoptOrphanInProgress
 // (15-min minimum age) away during the seconds this fixture lives.
@@ -52,13 +54,16 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
   const claimedAtIso = new Date(nowMs - 20 * MIN).toISOString();
   const lastToolBoundaryIso = new Date(nowMs - 20 * MIN + 5_000).toISOString();
 
-  function fixtureSession(sessionId, sdKey, lastToolAt) {
+  function fixtureSession(sessionId, sdKey, lastToolAt, heartbeatAt = new Date(nowMs - 20 * MIN).toISOString()) {
     return {
       session_id: sessionId,
       status: 'active',
       sd_key: sdKey,
       claimed_at: claimedAtIso,
-      heartbeat_at: new Date(nowMs).toISOString(), // fresh — the freeze signature
+      // QF-20260911-750: stale by default (genuinely dead, past the sweep's own 300s freshness
+      // window) — a MISS that actually releases must be BOTH tool-silent AND heartbeat-stale.
+      // heartbeatAt is overridable per-fixture for the "fresh heartbeat survives" specimen below.
+      heartbeat_at: heartbeatAt,
       last_tool_at: lastToolAt,
       terminal_id: `win-cc-9999-${sessionId.slice(-6)}`,
       tty: 'win-99999',
@@ -107,6 +112,7 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
       { ...fixtureQf(QF_MISS), claiming_session_id: SID_MISS },
       { ...fixtureQf(QF_PASS), claiming_session_id: SID_PASS },
       { ...fixtureQf(QF_UNKNOWN), claiming_session_id: SID_UNKNOWN },
+      { ...fixtureQf(QF_FRESH_HB), claiming_session_id: SID_FRESH_HB },
     ]);
     expect(qfErr, `quick_fixes fixture insert: ${qfErr?.message}`).toBeNull();
 
@@ -137,6 +143,9 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
       fixtureSession(SID_PASS, QF_PASS, new Date(nowMs - 2 * MIN).toISOString()), // active worker
       fixtureSession(SID_UNKNOWN, QF_UNKNOWN, null),                   // pre-rollout hook
       fixtureSession(SID_SD_MISS, SD_MISS, lastToolBoundaryIso),       // SD-claim freeze (TS-7)
+      // QF-20260911-750: tool-silent at the boundary (MISS-eligible by the predicate) but
+      // heartbeat still fresh — the exact incident specimen. Must survive, never release.
+      fixtureSession(SID_FRESH_HB, QF_FRESH_HB, lastToolBoundaryIso, new Date(nowMs).toISOString()),
     ]);
     expect(sessErr, `claude_sessions fixture insert: ${sessErr?.message}`).toBeNull();
   }, 30_000);
@@ -144,15 +153,17 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
   afterAll(async () => {
     if (!sb) return;
     await sb.from('session_coordination').delete().eq('payload->>kind', 'claim_boundary_released')
-      .in('payload->>session_id', [SID_MISS, SID_PASS, SID_UNKNOWN, SID_SD_MISS]);
-    await sb.from('quick_fixes').delete().in('id', [QF_MISS, QF_PASS, QF_UNKNOWN]);
+      .in('payload->>session_id', [SID_MISS, SID_PASS, SID_UNKNOWN, SID_SD_MISS, SID_FRESH_HB]);
+    await sb.from('session_coordination').delete().eq('payload->>kind', 'coordinator_request')
+      .in('target_session', [SID_MISS, SID_FRESH_HB]);
+    await sb.from('quick_fixes').delete().in('id', [QF_MISS, QF_PASS, QF_UNKNOWN, QF_FRESH_HB]);
     await sb.from('strategic_directives_v2').delete().eq('sd_key', SD_MISS);
     await sb.from('claude_sessions').delete().like('session_id', `${RUN_ID}%`);
     // Zero-survivors: nothing this run seeded may outlive it.
     const { count: sessLeft } = await sb.from('claude_sessions')
       .select('session_id', { count: 'exact', head: true }).like('session_id', `${RUN_ID}%`);
     const { count: qfLeft } = await sb.from('quick_fixes')
-      .select('id', { count: 'exact', head: true }).in('id', [QF_MISS, QF_PASS, QF_UNKNOWN]);
+      .select('id', { count: 'exact', head: true }).in('id', [QF_MISS, QF_PASS, QF_UNKNOWN, QF_FRESH_HB]);
     const { count: sdLeft } = await sb.from('strategic_directives_v2')
       .select('sd_key', { count: 'exact', head: true }).eq('sd_key', SD_MISS);
     expect(sessLeft ?? 0).toBe(0);
@@ -208,6 +219,16 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
     expect(alerts[0].subject).toContain(rows.find(r => r.session_id === SID_MISS).terminal_id);
     expect(alerts[0].payload.evidence).toBeTruthy();
 
+    // QF-20260911-750 facet (b): the released HOLDER itself gets exactly one notice on its
+    // OWN lane (target_session = the released session, not broadcast-*), so its next
+    // check-in surfaces this in pending_directives instead of silently missing the release.
+    const { data: selfNotices } = await sb.from('session_coordination')
+      .select('target_session, subject, payload').eq('payload->>kind', 'coordinator_request')
+      .eq('target_session', SID_MISS);
+    expect(selfNotices).toHaveLength(1);
+    expect(selfNotices[0].subject).toContain(QF_MISS);
+    expect(selfNotices[0].payload.released_sd).toBe(QF_MISS);
+
     // TS-2 PASS fixture untouched: claim intact, no quarantine, no alert.
     const { data: passSession } = await sb.from('claude_sessions')
       .select('sd_key, metadata').eq('session_id', SID_PASS).maybeSingle();
@@ -223,6 +244,39 @@ describe.skipIf(!HAS_DB)('claim-boundary probe (LIVE tables, ephemeral fixtures)
     expect(unknownSession.metadata?.quarantine).toBeUndefined();
 
     expect(actions.some(a => a.includes('CLAIM_BOUNDARY_PROBE') && a.includes(QF_MISS))).toBe(true);
+  }, 60_000);
+
+  // QF-20260911-750 facet (a) — the incident specimen: MEASURED live, a seat holding
+  // SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 with heartbeat still fresh was released by this exact
+  // probe, then committed 38min later with no knowledge of the release. Tool-silence alone
+  // must never be sufficient to release a claim while the heartbeat proves the process alive.
+  it('QF-20260911-750: a fixture holder with a fresh heartbeat survives the boundary probe (no release)', async () => {
+    const { data: rows } = await sb.from('claude_sessions')
+      .select('session_id, sd_key, claimed_at, last_tool_at, terminal_id, tty, metadata')
+      .eq('session_id', SID_FRESH_HB);
+    expect(rows).toHaveLength(1);
+
+    const { classified, telemetryMap } = probeInputs(rows);
+    const actions = [];
+    const outcomes = await runClaimBoundaryProbe(sb, classified, telemetryMap, new Date(), actions, []);
+    // The PREDICATE still says MISS (tool-silent past the boundary) -- unchanged, this is not
+    // a predicate regression. The pre-release re-verification is what must now abort it.
+    expect(outcomes[0]).toMatchObject({ verdict: 'MISS' });
+
+    const { data: sess } = await sb.from('claude_sessions')
+      .select('sd_key, metadata').eq('session_id', SID_FRESH_HB).maybeSingle();
+    expect(sess.sd_key).toBe(QF_FRESH_HB); // claim untouched -- never released
+    expect(sess.metadata?.quarantine).toBeUndefined(); // never quarantined either
+
+    expect(actions.some(a => a.includes('release aborted') && a.includes('heartbeat still fresh'))).toBe(true);
+
+    // No alert of either kind for a survived (non-released) seat.
+    const { data: alerts } = await sb.from('session_coordination')
+      .select('id').eq('payload->>kind', 'claim_boundary_released').eq('payload->>session_id', SID_FRESH_HB);
+    expect(alerts).toHaveLength(0);
+    const { data: selfNotices } = await sb.from('session_coordination')
+      .select('id').eq('payload->>kind', 'coordinator_request').eq('target_session', SID_FRESH_HB);
+    expect(selfNotices).toHaveLength(0);
   }, 60_000);
 
   it('TS-7 SD-claim MISS: release_sd three-column clear + re-adoptability shape + phase reset attempt', async () => {

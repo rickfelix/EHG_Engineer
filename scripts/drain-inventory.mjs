@@ -13,6 +13,7 @@
  *
  * Usage: node scripts/drain-inventory.mjs [--json]
  */
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
 import { DRAIN_DESCRIPTORS } from '../lib/governance/gauge-registry.js';

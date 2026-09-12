@@ -27,7 +27,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
-import { MIGRATION_ROOTS } from '../lib/migration-audit-reader.js';
+import { MIGRATION_ROOTS, normalizeMigrationPath, listApplied } from '../lib/migration-audit-reader.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(__dirname, '..', 'database', 'migrations');
@@ -368,6 +368,56 @@ export function extractFunctionBodies(sql) {
 }
 
 /**
+ * QF-20260912-708: Map<normalized trigger name, raw CREATE TRIGGER statement text> — last CREATE
+ * wins, per file. Unlike a function, a trigger declaration has no dollar-quoted body of its own
+ * (the referenced function's body is a SEPARATE object), so this captures from the CREATE keyword
+ * through the terminating top-level `;` -- no closing-tag search needed. The WHEN clause is pulled
+ * back out of this text by extractTriggerWhenClause() below rather than comparing the whole
+ * statement: a migration's raw CREATE TRIGGER text and Postgres's own pg_get_triggerdef()
+ * reconstruction of the live trigger differ in schema-qualification, keyword casing, and trailing
+ * punctuation even when semantically identical, so a whole-statement compare (unlike the function
+ * branch's prosrc-vs-file-body compare, where both sides are the SAME literal text shape) would
+ * false-positive on every correctly-applied trigger. The WHEN clause is the part that actually
+ * changes when a trigger is redefined to fire conditionally (this QF's exact scenario) and is
+ * comparable in isolation.
+ */
+const CREATE_TRIGGER_STMT_RE = new RegExp(String.raw`\bCREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+(${ID})[\s\S]*?;`, 'gi');
+export function extractTriggerDefs(sql) {
+  const s = stripCommentsPreservingDollarQuotes(sql.replace(/\r\n/g, '\n'));
+  const defs = new Map();
+  CREATE_TRIGGER_STMT_RE.lastIndex = 0;
+  let m;
+  while ((m = CREATE_TRIGGER_STMT_RE.exec(s)) !== null) {
+    const name = normalizeName(m[1]);
+    if (!name) continue;
+    defs.set(name, m[0]);
+  }
+  return defs;
+}
+
+/**
+ * Pull the WHEN (...) clause out of a CREATE TRIGGER statement (migration text or a
+ * pg_get_triggerdef() reconstruction -- both use the literal keyword WHEN). Balanced-paren scan
+ * (same technique the dollar-quote matching elsewhere in this file uses) so a WHEN clause
+ * containing its own nested parens (e.g. `WHEN (a IS DISTINCT FROM b OR (c AND d))`, the exact
+ * shape of every trigger this QF was filed against) is captured whole, not truncated at the
+ * first `)`. Returns null for an unconditional trigger (no WHEN clause) OR an unbalanced/truncated
+ * match (same fail-safe convention as extractFunctionBodies) -- two nulls compare equal below, so
+ * "neither side has a WHEN clause" is correctly treated as no drift.
+ */
+export function extractTriggerWhenClause(stmtText) {
+  const m = /\bWHEN\s*\(/i.exec(stmtText || '');
+  if (!m) return null;
+  let depth = 0;
+  const start = m.index + m[0].length - 1; // index of the opening '('
+  for (let i = start; i < stmtText.length; i++) {
+    if (stmtText[i] === '(') depth++;
+    else if (stmtText[i] === ')' && --depth === 0) return stmtText.slice(start, i + 1);
+  }
+  return null;
+}
+
+/**
  * Collapse whitespace runs and strip SQL comments before comparing a live pg_proc.prosrc against
  * a migration file's own declared body. Pure (TR-2) -- no I/O, no live clock.
  *
@@ -518,9 +568,14 @@ export function extractDdlFacts(sql) {
   // FR-2: bodies come from the RAW sql (see extractFunctionBodies docstring for why), keyed onto
   // the function creates pulled from the stripped text above by the same normalized name.
   const funcBodies = extractFunctionBodies(sql);
-  const creates = [...pull(CREATE_RES), ...cols.creates].map((c) => (
-    c.cls === 'function' && funcBodies.has(c.name) ? { ...c, body: funcBodies.get(c.name) } : c
-  ));
+  // QF-20260912-708: same idea for triggers, so a redefined WHEN clause/behavior is comparable
+  // against the live definition instead of only ever checked by name.
+  const triggerDefs = extractTriggerDefs(sql);
+  const creates = [...pull(CREATE_RES), ...cols.creates].map((c) => {
+    if (c.cls === 'function' && funcBodies.has(c.name)) return { ...c, body: funcBodies.get(c.name) };
+    if (c.cls === 'trigger' && triggerDefs.has(c.name)) return { ...c, body: triggerDefs.get(c.name) };
+    return c;
+  });
   return {
     creates,
     drops: [...pull(DROP_RES), ...cols.drops],
@@ -617,13 +672,26 @@ async function resolveLive(client, expected) {
     mark('function', rows, 'name');
     for (const r of rows) liveFunctionBodies.set(r.name, r.body);
   }
+  const liveTriggerDefs = new Map();
   if (byClass.get('trigger')?.size) {
+    // QF-20260912-708: a name-existence-only check reads a DROP+CREATE redefinition of an
+    // EXISTING trigger (same name, different WHEN clause/behavior) as APPLIED even when never
+    // run -- the exact gap that let 20260912_feedback_no_update_lifecycle_allowlist.sql (adding a
+    // WHEN clause to the already-live feedback_no_update trigger) read fully applied with zero
+    // missing objects while genuinely unapplied. pg_get_triggerdef(t.oid, true) reconstructs the
+    // full CREATE TRIGGER statement (including its WHEN clause) so it can be compared the same
+    // way a function's prosrc already is. DISTINCT ON + `t.oid` tiebreak: same-named triggers on
+    // different tables are possible, and an unpinned tiebreak could flap BODY_MISMATCH across
+    // runs for a trigger that never changed (identical reasoning to the function branch above).
     const { rows } = await client.query(
-      `SELECT DISTINCT t.tgname AS name FROM pg_trigger t
-        WHERE NOT t.tgisinternal AND t.tgname = ANY($1::text[])`,
+      `SELECT DISTINCT ON (t.tgname) t.tgname AS name, pg_get_triggerdef(t.oid, true) AS def
+         FROM pg_trigger t
+        WHERE NOT t.tgisinternal AND t.tgname = ANY($1::text[])
+        ORDER BY t.tgname, t.oid`,
       [[...byClass.get('trigger')]]
     );
     mark('trigger', rows, 'name');
+    for (const r of rows) liveTriggerDefs.set(r.name, r.def);
   }
   // QF-20260725-470: resolve 'table.column' pairs against information_schema.columns. Without this
   // branch a declared column is structurally invisible and its migration can still contribute to a
@@ -648,7 +716,7 @@ async function resolveLive(client, expected) {
     );
     mark('constraint', rows, 'name');
   }
-  return { live, liveFunctionBodies };
+  return { live, liveFunctionBodies, liveTriggerDefs };
 }
 
 /**
@@ -672,7 +740,7 @@ function daysSinceToken(token, now) {
  * (TR-2) so age_days is deterministic under test — classifyFiles itself never calls
  * Date.now()/new Date() unconditionally.
  */
-export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date(), liveFunctionBodies = new Map()) {
+export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date(), liveFunctionBodies = new Map(), liveTriggerDefs = new Map(), appliedLedgerPaths = null) {
   const survivingByFile = new Map();
   for (const { cls, name, file } of expected.values()) {
     if (!survivingByFile.has(file)) survivingByFile.set(file, []);
@@ -709,12 +777,25 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
         .filter((c) => c.cls === 'function' && c.body != null)
         .map((c) => [c.name, c.body])
     );
+    // QF-20260912-708: same drift check for triggers, via pg_get_triggerdef() vs. the migration
+    // file's own CREATE TRIGGER statement text (see extractTriggerDefs docstring).
+    const fileTriggerDefs = new Map(
+      (facts.creates || [])
+        .filter((c) => c.cls === 'trigger' && c.body != null)
+        .map((c) => [c.name, c.body])
+    );
     const bodyMismatches = relevant.filter((o) => (
-      o.cls === 'function' &&
-      fileFuncBodies.has(o.name) &&
-      live.has(`function:${o.name}`) &&
-      liveFunctionBodies.has(o.name) &&
-      normalizeSqlBody(fileFuncBodies.get(o.name)) !== normalizeSqlBody(liveFunctionBodies.get(o.name))
+      (o.cls === 'function' &&
+        fileFuncBodies.has(o.name) &&
+        live.has(`function:${o.name}`) &&
+        liveFunctionBodies.has(o.name) &&
+        normalizeSqlBody(fileFuncBodies.get(o.name)) !== normalizeSqlBody(liveFunctionBodies.get(o.name))) ||
+      (o.cls === 'trigger' &&
+        fileTriggerDefs.has(o.name) &&
+        live.has(`trigger:${o.name}`) &&
+        liveTriggerDefs.has(o.name) &&
+        normalizeSqlBody(extractTriggerWhenClause(fileTriggerDefs.get(o.name)) ?? '') !==
+          normalizeSqlBody(extractTriggerWhenClause(liveTriggerDefs.get(o.name)) ?? ''))
     ));
     if (bodyMismatches.length && status === 'APPLIED') status = 'BODY_MISMATCH';
     const result = { file, status, missing, objects: relevant.length };
@@ -729,7 +810,22 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
     // relabeling it CEREMONY_PENDING would falsely claim a chairman apply ceremony is still
     // outstanding for something already applied. Excluded so a body-drifted chairman-gated
     // function stays BODY_MISMATCH (the true state), never masquerading as a pending apply.
-    if (status !== 'APPLIED' && status !== 'BODY_MISMATCH' && file.startsWith(CHAIRMAN_GATED_PREFIX)) {
+    // QF-20260912-533: for database/chairman-gated/, object existence alone is not proof of
+    // apply -- the chairman apply ceremony is the only legitimate applier and every ceremony
+    // writes a schema_migrations_applied success row, so a chairman-gated file that classifies
+    // APPLIED on object existence but carries NO ledger row is a REPLACE-shaped false pass
+    // (same-name object recreated by something other than the ceremony, or never actually
+    // applied at all -- SD-LEO-INFRA-FEEDBACK-LIFECYCLE-UPDATE-ALLOWLIST-001's live specimen).
+    // `appliedLedgerPaths` is `null` when the ledger query itself was unavailable/failed
+    // (fail-open, mirrors the disposition-ledger's own convention below in main()) -- ONLY a
+    // successfully-queried Set (even an empty one) demotes an unledgered APPLIED file.
+    // BODY_MISMATCH is deliberately excluded here too, same reasoning as the branch above it:
+    // its objects ARE live, so relabeling it CEREMONY_PENDING would falsely claim a ceremony is
+    // still outstanding for something already (if incorrectly) applied.
+    const isChairmanGated = file.startsWith(CHAIRMAN_GATED_PREFIX);
+    const unledgeredApply = status === 'APPLIED' && isChairmanGated
+      && appliedLedgerPaths != null && !appliedLedgerPaths.has(normalizeMigrationPath(file));
+    if ((status !== 'APPLIED' && status !== 'BODY_MISMATCH' && isChairmanGated) || unledgeredApply) {
       result.status = 'CEREMONY_PENDING';
       const token = migrationDateToken(file);
       if (token) result.age_days = daysSinceToken(token, now);
@@ -900,8 +996,23 @@ async function main() {
   if (ledgerLoadError) console.error(`Disposition ledger module unavailable (suppressing nothing): ${ledgerLoadError}`);
   else if (ledgerStatus !== 'ok' && ledgerStatus !== 'absent') console.error(`Disposition ledger is ${ledgerStatus} (suppressing nothing) — fix ${ledgerApi.DEFAULT_LEDGER_PATH}`);
 
+  // QF-20260912-533: chairman-gated apply ledger — a SEPARATE Set from the disposition ledger
+  // above (that one SUPPRESSES known gaps; this one PROVES a chairman-gated APPLIED file was
+  // actually applied by the ceremony, per schema_migrations_applied, the canonical read API's
+  // migration-audit-reader.js). `null` (not an empty Set) on a lookup failure, so classifyFiles
+  // can tell "queried, zero rows" (demote unledgered APPLIED files) apart from "could not query"
+  // (fail-open — never demote on infrastructure the ceremony's own writer does not depend on).
+  let appliedLedgerPaths = null;
+  try {
+    const rows = await listApplied({ success: true, limit: 1000 });
+    appliedLedgerPaths = new Set(rows.map((r) => normalizeMigrationPath(r.migration_path)));
+  } catch (e) {
+    console.error(`Chairman-gated apply ledger unavailable (no chairman-gated APPLIED file will be demoted this run): ${e.message}`);
+  }
+
   let live;
   let liveFunctionBodies;
+  let liveTriggerDefs;
   let client;
   try {
     // Import FIRST: supabase-connection.js loads .env (dotenv) at module init, which
@@ -922,7 +1033,7 @@ async function main() {
     // password. Passing it here closes the dead-wiring gap the review flagged.
     const connectionString = process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL || undefined;
     client = await createDatabaseClient('ehg', connectionString ? { connectionString } : {});
-    ({ live, liveFunctionBodies } = await resolveLive(client, expected));
+    ({ live, liveFunctionBodies, liveTriggerDefs } = await resolveLive(client, expected));
   } catch (e) {
     console.error(`DB unreachable: ${e.message}`);
     console.log(`[${OUTCOME.INFRA}]`);
@@ -931,7 +1042,7 @@ async function main() {
     try { await client?.end(); } catch { /* already closed */ }
   }
 
-  const results = classifyFiles(forward, expected, perFile, live, undefined, liveFunctionBodies);
+  const results = classifyFiles(forward, expected, perFile, live, undefined, liveFunctionBodies, liveTriggerDefs, appliedLedgerPaths);
   const { summary, gaps, bodyMismatches } = summarizeResults(results, {
     scanned: forward.length, excludedDown: down.length, droppedLater: droppedLater.length,
   });

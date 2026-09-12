@@ -212,12 +212,15 @@ export async function processLearningUpdate(event) {
       continue;
     }
 
-    // Update urgency data
+    // Update urgency data. QF-20260911-669: urgency_band is intentionally NOT persisted here.
+    // This function has zero callers (dead code), yet its urgency_band write was the sole
+    // "writer" a reader elsewhere (rank-items.js) treated as a real, populated SD field --
+    // reading a never-written field masqueraded as a working per-SD urgency-band mechanism.
+    // newBand is still computed/returned below for this dead function's own reporting shape.
     const newBand = scoreToBand(newScore);
     const updatedMetadata = {
       ...(current.metadata || {}),
       urgency_score: newScore,
-      urgency_band: newBand,
       urgency_model_version: model_version,
       urgency_reason_codes: reason_codes,
       urgency_updated_at: new Date().toISOString()

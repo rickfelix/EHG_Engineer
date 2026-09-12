@@ -120,7 +120,12 @@ async function releaseClaim(supabase, sd) {
 /** Broadcast a RESUME re-dispatch (no live worker to target on a cold start → sentinel). */
 async function redispatchResume(supabase, sd, { coordinatorId, dispatch }) {
   const row = {
-    target_session: 'broadcast',
+    // QF-20260911-753: bare 'broadcast' retired (0/91 rows ever acknowledged, all-time). This
+    // insert's success is load-bearing for alreadyRedispatched() below (queries by target_sd +
+    // payload.kind='resume', never target_session) -- a throw here would silently break that
+    // idempotency check on every cold-recovery tick, re-attempting releaseClaim+redispatch for
+    // the same orphan repeatedly. broadcast-coordinator keeps the insert succeeding.
+    target_session: 'broadcast-coordinator',
     target_sd: sd.sd_key,
     sender_session: coordinatorId || 'cold-recovery',
     sender_type: 'orchestrator',
