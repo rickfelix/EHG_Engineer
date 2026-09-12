@@ -1,16 +1,29 @@
 #!/usr/bin/env node
 /**
- * Reconcile quick_fixes rows stuck status='escalated' after their target SD completed.
- * SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-C (FR-1).
+ * Reconcile quick_fixes rows whose escalated_to_sd_id target SD has completed but whose
+ * escalation promise was never fulfilled. SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-C (FR-1).
  *
  * THE GAP THIS CLOSES: escalated_to_sd_id records a promise ("this QF's work is tracked
  * as SD X"). Nothing ever fulfils that promise once X reaches status='completed' — the
- * row sits status='escalated' forever, disposition_reason_code stuck at the MINT-TIME
+ * row sits unreconciled forever, disposition_reason_code stuck at the MINT-TIME
  * classification ('escalated_to_sd', written by leo-create-sd.js --from-qf), and
  * resolution_sd_id NULL. This was a DELIBERATE prior exclusion
  * (database/migrations/20260821_stamp_plan_of_record_remainder_v2.sql:63: "deliberately
  * NOT chased via escalated_to_sd_id, out of scope, per plan"), reversed here per the
  * parent CAPA's finding that leaving it untracked is itself a work-state-truth defect.
+ *
+ * QF-20260911-059: the original selector required status='escalated', so a row re-opened
+ * to 'in_progress' (e.g. after its claiming session died) fell out of this script's view
+ * entirely even though its escalation promise was identical — the specimen, QF-20260906-881,
+ * sat in_progress for days after its target SD (and PR) shipped. Selector widened to drop the
+ * status filter: escalated_to_sd_id set + resolution_sd_id still NULL + target SD completed,
+ * independent of current status. A row already disposed for an unrelated reason (disposition
+ * set to something other than what this script writes) is at theoretical risk of being
+ * re-disposed if its escalated_to_sd_id also happens to point at a completed SD — checked
+ * against live data at fix time and no such row exists today (the one close candidate,
+ * QF-20260808-010 / disposition='premise_unverified_stale', targets a CANCELLED SD, so the
+ * completedIds filter below excludes it regardless of this widening). Not yet a structural
+ * guard — see the unit test below for the selector's documented actual behavior.
  *
  * MECHANISM: the single canonical writer, lib/quick-fix/status-writer.cjs
  * setQuickFixStatus() — never a hand-rolled .update(). Target status is 'closed', not
@@ -42,22 +55,24 @@ const DISPOSITION_REASON_CODE = 'escalated_sd_completed';
 const DISPOSED_BY = 'scripts/reconcile-escalated-completed-sd-quick-fixes.mjs';
 
 /**
- * Fetch the target population: quick_fixes rows status='escalated' whose escalated_to_sd_id
- * points at a strategic_directives_v2 row with status='completed'.
+ * Fetch the target population: quick_fixes rows with an unfulfilled escalated_to_sd_id
+ * promise (resolution_sd_id still NULL) whose target strategic_directives_v2 row has
+ * status='completed'. QF-20260911-059: matched on escalated_to_sd_id/resolution_sd_id
+ * alone, regardless of the row's current status -- a row re-opened away from 'escalated'
+ * (e.g. to 'in_progress') carries the exact same unfulfilled promise.
  * @param {object} supabase
  * @returns {Promise<Array<{id:string, escalated_to_sd_id:string, sd_key:string}>>}
  */
 export async function findTargetRows(supabase) {
   // Full reads, not capped samples -- PostgREST silently clamps an un-.range()'d select to
   // POSTGREST_MAX_ROWS (1000), which count-truncation-diff-lint correctly flags as a NEW
-  // unbounded read. Both queries here must see the WHOLE population (escalated rows /
+  // unbounded read. Both queries here must see the WHOLE population (candidate rows /
   // matching SD ids), so fetchAllPaginated is the right tool, not a declared sampling cap.
   let escalated;
   try {
     escalated = await fetchAllPaginated(() => supabase
       .from('quick_fixes')
       .select('id, escalated_to_sd_id, disposition_reason_code, resolution_sd_id')
-      .eq('status', 'escalated')
       .not('escalated_to_sd_id', 'is', null));
   } catch (err) {
     const e = new Error(`[reconcile-escalated] fetch escalated rows failed: ${err.message}`);

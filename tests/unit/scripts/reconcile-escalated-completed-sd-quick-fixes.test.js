@@ -137,6 +137,21 @@ describe('findTargetRows — selects only escalated rows pointing at a completed
     const targets = await findTargetRows(supabaseInstance);
     expect(targets).toEqual([]);
   });
+
+  it('QF-20260911-059: a row re-opened AWAY from escalated (e.g. in_progress) with the same unfulfilled promise is still included', async () => {
+    // The specimen: QF-20260906-881 was re-routed to in_progress after its claiming session
+    // died, but escalated_to_sd_id/resolution_sd_id never changed -- the promise was identical
+    // to a row that stayed status='escalated'. The selector must not key off status at all.
+    const quickFixes = [
+      { id: 'QF-G', status: 'in_progress', escalated_to_sd_id: 'sd-7', resolution_sd_id: null },
+    ];
+    const sds = [{ id: 'sd-7', sd_key: 'SD-DONE-006', status: 'completed' }];
+    supabaseInstance = makeSupabaseMock({ quickFixes, sds });
+
+    const { findTargetRows } = await importScript();
+    const targets = await findTargetRows(supabaseInstance);
+    expect(targets).toEqual([{ id: 'QF-G', escalated_to_sd_id: 'sd-7', sd_key: 'SD-DONE-006' }]);
+  });
 });
 
 describe('TS-1: dry-run performs zero writes', () => {
