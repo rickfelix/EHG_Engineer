@@ -258,8 +258,6 @@ describe('Feedback Routes', () => {
     });
 
     it('returns 503 when database not connected', async () => {
-      // Temporarily make supabase null
-      const origSupabase = mockSupabase.from;
       // The route checks dbLoader.supabase truthiness — we need the whole mock object to be falsy
       // Since we mock at module level, we need to re-import. Instead, test it differently.
       // The supabase mock is always truthy in our setup, so this branch is hard to trigger.

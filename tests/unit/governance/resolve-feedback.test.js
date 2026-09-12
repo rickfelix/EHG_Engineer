@@ -1,6 +1,6 @@
 // SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-1 unit tests for lib/governance/resolve-feedback.js
 // QF-20260511-556: parseAndExpandFeedbackFooters short-UUID acceptance.
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
