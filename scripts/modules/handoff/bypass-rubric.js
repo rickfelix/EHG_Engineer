@@ -197,16 +197,22 @@ export async function validateBypassShape({ patternId, followupSdKey, supabase, 
     }
   }
 
-  // Followup-sd-key supplied — verify it exists
+  // Followup-sd-key supplied — verify it exists. QF-20260903-744: a QF key is an
+  // equally queryable fix reference to an SD key, and refusing it pushed bypass
+  // authors toward minting an inappropriate SD (or a pattern that misdescribes the
+  // fix) just to satisfy this guard when the actual fix was a quick-fix.
   if (followupSdKey) {
-    const { data, error } = await supabase
-      .from('strategic_directives_v2')
-      .select('sd_key, status')
-      .eq('sd_key', followupSdKey)
-      .maybeSingle();
+    const isQfKey = /^QF-/i.test(followupSdKey);
+    const { data, error } = isQfKey
+      ? await supabase.from('quick_fixes').select('id, status').eq('id', followupSdKey).maybeSingle()
+      : await supabase.from('strategic_directives_v2').select('sd_key, status').eq('sd_key', followupSdKey).maybeSingle();
 
     if (error || !data) {
-      const message = `ERR_BYPASS_SHAPE: --followup-sd-key "${followupSdKey}" not found in strategic_directives_v2. Create the draft SD first via \`node scripts/leo-create-sd.js\`, then retry. (ENFORCE_BYPASS_SHAPE=${enforceFlag ? 'true' : 'false'})`;
+      const table = isQfKey ? 'quick_fixes' : 'strategic_directives_v2';
+      const createHint = isQfKey
+        ? 'Create the quick-fix first via `node scripts/create-quick-fix.js`'
+        : 'Create the draft SD first via `node scripts/leo-create-sd.js`';
+      const message = `ERR_BYPASS_SHAPE: --followup-sd-key "${followupSdKey}" not found in ${table}. ${createHint}, then retry. (ENFORCE_BYPASS_SHAPE=${enforceFlag ? 'true' : 'false'})`;
       return { allowed: warnOnly, code: 'ERR_BYPASS_SHAPE', message, warnOnly };
     }
   }

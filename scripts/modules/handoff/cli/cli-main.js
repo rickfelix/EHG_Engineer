@@ -759,6 +759,42 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
       return { success: false };
     }
 
+    // SD-LEARN-FIX-ADDRESS-PAT-AGENT-001: Bypass shape enforcement
+    // Require --pattern-id or --followup-sd-key (enforcement-table evidence)
+    //
+    // QF-20260903-744: moved AHEAD of the bypass_ledger write below (was previously
+    // after it). A shape-refused attempt (ERR_BYPASS_SHAPE) never produces a handoff,
+    // so it must never write a bypass_ledger row or a validation_audit_log row with
+    // failure_category='bypass' either -- both feed checkBypassRateLimits' per-SD/
+    // global counters above, so a refused attempt was silently consuming quota meant
+    // for bypasses that actually took effect (measured: 4 refused attempts on one SD
+    // in 12 minutes exhausted a 3-per-SD counter with zero real bypasses). Validating
+    // shape FIRST means a refusal returns before any ledger/audit write happens.
+    const { validateBypassShape } = await import('../bypass-rubric.js');
+    const supabaseForShape = createSupabaseServiceClient();
+    const shapeResult = await validateBypassShape({
+      patternId,
+      followupSdKey,
+      supabase: supabaseForShape,
+      bypassReason,
+      sdId,
+      handoffType
+    });
+    if (!shapeResult.allowed) {
+      console.error('');
+      console.error('❌ BYPASS SHAPE VIOLATION');
+      console.error('═'.repeat(50));
+      console.error(shapeResult.message);
+      console.error('');
+      return { success: false };
+    }
+    if (shapeResult.warnOnly) {
+      console.warn('');
+      console.warn('⚠️  BYPASS SHAPE WARNING (warn-only mode, set ENFORCE_BYPASS_SHAPE=true to block)');
+      console.warn(shapeResult.message);
+      console.warn('');
+    }
+
     // SD-WRITERCONSUMER-ASYMMETRY-...-001-A FR-A-5: bypass_ledger row + paired validation_audit_log emission.
     // FAIL-CLOSED-WITH-RETRY: 3-retry exponential 100/300/900ms; throw on exhaustion (caller MUST FAIL handoff).
     // emitValidationAuditLog helper provides writer-consumer symmetry with bypass_ledger.audit_log_id.
@@ -840,33 +876,6 @@ export async function handleExecuteCommand(handoffType, sdId, args) {
         console.error('');
         return { success: false };
       }
-    }
-
-    // SD-LEARN-FIX-ADDRESS-PAT-AGENT-001: Bypass shape enforcement
-    // Require --pattern-id or --followup-sd-key (enforcement-table evidence)
-    const { validateBypassShape } = await import('../bypass-rubric.js');
-    const supabaseForShape = createSupabaseServiceClient();
-    const shapeResult = await validateBypassShape({
-      patternId,
-      followupSdKey,
-      supabase: supabaseForShape,
-      bypassReason,
-      sdId,
-      handoffType
-    });
-    if (!shapeResult.allowed) {
-      console.error('');
-      console.error('❌ BYPASS SHAPE VIOLATION');
-      console.error('═'.repeat(50));
-      console.error(shapeResult.message);
-      console.error('');
-      return { success: false };
-    }
-    if (shapeResult.warnOnly) {
-      console.warn('');
-      console.warn('⚠️  BYPASS SHAPE WARNING (warn-only mode, set ENFORCE_BYPASS_SHAPE=true to block)');
-      console.warn(shapeResult.message);
-      console.warn('');
     }
   }
 
