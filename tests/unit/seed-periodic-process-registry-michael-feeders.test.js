@@ -29,8 +29,25 @@ describe('seedMichaelFeederCrons (QF-20260907-830)', () => {
     const rows = await seedMichaelFeederCrons();
     for (const row of rows) {
       const feederId = row.process_key.replace('host_cron:michael-', '');
-      expect(row.expected_window_et).toEqual(FEEDERS[feederId].window);
+      const regWindow = FEEDERS[feederId].window;
+      // QF-20260911-282: a multi-window feeder's expected_window_et stays the EARLIEST window only
+      // (the DB CHECK constraint requires a single {start,end} object, not an array) -- the feeder's
+      // own gate is what actually enforces every window, this row is a coarser liveness signal.
+      expect(row.expected_window_et).toEqual(Array.isArray(regWindow) ? regWindow[0] : regWindow);
       expect(row.expected_interval_seconds).toBe(FEEDERS[feederId].intervalMinutes * 60);
+    }
+  });
+
+  it('QF-20260911-282: a multi-window feeder\'s display_name lists every window, and expected_window_et is never an array', async () => {
+    const rows = await seedMichaelFeederCrons();
+    for (const multiWindowFeeder of ['calendar-read', 'gmail-triage', 'todoist-brief']) {
+      const row = rows.find((r) => r.process_key === `host_cron:michael-${multiWindowFeeder}`);
+      expect(Array.isArray(FEEDERS[multiWindowFeeder].window)).toBe(true);
+      for (const w of FEEDERS[multiWindowFeeder].window) {
+        expect(row.display_name).toContain(`${w.start}-${w.end}`);
+      }
+      expect(Array.isArray(row.expected_window_et)).toBe(false);
+      expect(row.expected_window_et).toEqual(FEEDERS[multiWindowFeeder].window[0]);
     }
   });
 

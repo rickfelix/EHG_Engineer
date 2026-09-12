@@ -60,24 +60,42 @@ import { execFileSync } from 'child_process';
 import { getRepoRoot } from '../lib/repo-paths.js';
 import {
   buildWrapperScript, buildHiddenTrAction, buildCreateArgs, buildRemoveArgs, buildQueryArgs, buildQueryXmlArgs,
-  verifyHiddenLaunch, applyBatteryTolerantSettings, TASK_NAME_ILLEGAL_CHARS, HIDDEN_LAUNCHER_REL_PATH,
+  buildDisableArgs, verifyHiddenLaunch, applyBatteryTolerantSettings, TASK_NAME_ILLEGAL_CHARS, HIDDEN_LAUNCHER_REL_PATH,
 } from './setup-alarm-cron-tasks.mjs';
+import { FEEDERS } from '../lib/michael/feeder.mjs';
 
 export const INTERVAL_MINUTES = 15;
 export const START_TIME = '00:00';
 
+/** Pure: the informational windowEt label for a feeder, DERIVED from lib/michael/feeder.mjs's own
+ * FEEDERS registry (never hand-copied, QF-20260911-282 — a window change there can never drift
+ * this label out of sync, the same discipline scripts/seed-periodic-process-registry.mjs already
+ * follows). `window` may be a single {start,end} object or an array of them. */
+function windowEtLabel(feederId) {
+  const w = FEEDERS[feederId] && FEEDERS[feederId].window;
+  if (!w) return '(no window)';
+  const windows = Array.isArray(w) ? w : [w];
+  return windows.map((x) => `${x.start}-${x.end}`).join(', ');
+}
+
 /** The seven host feeders (spec §5 windows are enforced inside each script, not by the scheduler); windowEt mirrors lib/michael/feeder.mjs FEEDERS. */
 export const MICHAEL_TASKS = Object.freeze([
-  { feeder: 'tasks-classifier', taskName: 'EHG Michael tasks-classifier', script: 'scripts/michael/tasks-classifier.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-tasks-classifier-task.cmd'), windowEt: '03:45-04:30' },
-  { feeder: 'calendar-read', taskName: 'EHG Michael calendar-read', script: 'scripts/michael/calendar-read.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-calendar-read-task.cmd'), windowEt: '04:00-05:00' },
+  // QF-20260911-282 / ratification 04c9dd29 point 2 ("dead by construction" -- its parser and
+  // producer disagree): registered DISABLED at the OS level until a measurement shows they agree.
+  // `disabled: true` is read by buildPlan/main below; --verify asserts it stays disabled.
+  { feeder: 'tasks-classifier', taskName: 'EHG Michael tasks-classifier', script: 'scripts/michael/tasks-classifier.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-tasks-classifier-task.cmd'), windowEt: windowEtLabel('tasks-classifier'), disabled: true },
+  // QF-20260911-282 / chairman ratification 2026-09-11: added midday (12:00-12:30) and evening
+  // (18:00-18:30) ET read windows alongside the pre-dawn one, so Michael's picture of Calendar/
+  // Gmail/Todoist is never more than ~6h stale rather than up to 18h stale.
+  { feeder: 'calendar-read', taskName: 'EHG Michael calendar-read', script: 'scripts/michael/calendar-read.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-calendar-read-task.cmd'), windowEt: windowEtLabel('calendar-read') },
   // Shadow phase: --apply records intents; --modify is added only by an explicit --with-modify register.
-  { feeder: 'gmail-triage', taskName: 'EHG Michael gmail-triage', script: 'scripts/michael/gmail-triage.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-gmail-triage-task.cmd'), windowEt: '04:30-05:30', promotable: true },
+  { feeder: 'gmail-triage', taskName: 'EHG Michael gmail-triage', script: 'scripts/michael/gmail-triage.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-gmail-triage-task.cmd'), windowEt: windowEtLabel('gmail-triage'), promotable: true },
   // Ratification 00f696f1: moved from GitHub Actions to the host (the GHA crons fired ~4h late and always inert).
-  { feeder: 'todoist-brief', taskName: 'EHG Michael todoist-brief', script: 'scripts/michael/todoist-brief.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-todoist-brief-task.cmd'), windowEt: '04:45-05:30' },
-  { feeder: 'brief-assemble', taskName: 'EHG Michael brief-assemble', script: 'scripts/michael/brief-assemble.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-brief-assemble-task.cmd'), windowEt: '05:15-06:00' },
+  { feeder: 'todoist-brief', taskName: 'EHG Michael todoist-brief', script: 'scripts/michael/todoist-brief.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-todoist-brief-task.cmd'), windowEt: windowEtLabel('todoist-brief') },
+  { feeder: 'brief-assemble', taskName: 'EHG Michael brief-assemble', script: 'scripts/michael/brief-assemble.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-brief-assemble-task.cmd'), windowEt: windowEtLabel('brief-assemble') },
   // Child J (v1.1): enrichment feeders, windowed after BRIEF_DEADLINE_ET like their FEEDERS registry entries.
-  { feeder: 'oracle-extract', taskName: 'EHG Michael oracle-extract', script: 'scripts/michael/oracle-extract.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-oracle-extract-task.cmd'), windowEt: '06:00-06:30' },
-  { feeder: 'health-sync', taskName: 'EHG Michael health-sync', script: 'scripts/michael/health-sync.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-health-sync-task.cmd'), windowEt: '06:00-06:30' },
+  { feeder: 'oracle-extract', taskName: 'EHG Michael oracle-extract', script: 'scripts/michael/oracle-extract.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-oracle-extract-task.cmd'), windowEt: windowEtLabel('oracle-extract') },
+  { feeder: 'health-sync', taskName: 'EHG Michael health-sync', script: 'scripts/michael/health-sync.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-health-sync-task.cmd'), windowEt: windowEtLabel('health-sync') },
 ]);
 
 /** Pure: a task name is refused before any schtasks call when it carries an illegal filename character (QF-20260906-961). */
@@ -196,7 +214,16 @@ export async function main(argv = process.argv, deps = {}) {
         allOk = false; results.push({ taskName: t.taskName, ok: false }); continue;
       }
       const verdict = verifyHiddenLaunch(q.stdout);
-      const problems = [...verdict.problems, ...verifyBatteryTolerant(q.stdout)];
+      let problems = [...verdict.problems, ...verifyBatteryTolerant(q.stdout)];
+      // QF-20260911-282: tasks-classifier is registered DISABLED on purpose (ratification 04c9dd29
+      // point 2). verifyHiddenLaunch's generic "task is explicitly disabled" problem exists to
+      // CATCH an accidentally-disabled task for every other sibling script, so it must not fire
+      // here; instead this asserts the OPPOSITE — the OS must still report it disabled.
+      const disabledInXml = /<Enabled>false<\/Enabled>/.test(q.stdout);
+      if (t.disabled) {
+        problems = problems.filter((p) => p !== 'task is explicitly disabled');
+        if (!disabledInXml) problems.push(`'${t.taskName}' must stay DISABLED (ratification 04c9dd29 point 2: dead by construction) but the OS reports it enabled`);
+      }
       // the XML carries only the launcher and the wrapper path; the promotion is read from THE WRAPPER THE OS LAUNCHES,
       // which must be this repo's wrapper (another worktree's is a different registration) and must exist on disk
       const expected = path.join(repoRoot, t.wrapperRelPath);
@@ -207,7 +234,7 @@ export async function main(argv = process.argv, deps = {}) {
       const ok = problems.length === 0;
       const modify = ok && t.promotable ? wrapperPromoted(launched, fsx) : false;
       if (!ok) { for (const p of problems) logger.error(`${tag} VERIFY FAILED (${t.taskName}) — ${p}`); allOk = false; }
-      else logger.log(`${tag} '${t.taskName}' VERIFIED — hidden-window launch, repeating, enabled, battery-tolerant${t.promotable ? (modify ? ', --modify PROMOTED' : ', shadow phase (no --modify)') : ''}`);
+      else logger.log(`${tag} '${t.taskName}' VERIFIED — hidden-window launch, repeating, ${t.disabled ? 'DISABLED (dead by construction, ratification 04c9dd29)' : 'enabled'}, battery-tolerant${t.promotable ? (modify ? ', --modify PROMOTED' : ', shadow phase (no --modify)') : ''}`);
       results.push({ taskName: t.taskName, ok, modify, wrapper: launched });
     }
     return { exitCode: allOk ? 0 : 1, action: 'verified', results };
@@ -239,6 +266,7 @@ export async function main(argv = process.argv, deps = {}) {
       logger.log(p.wrapperContent.replace(/\r\n/g, '\n'));
       logger.log(`${tag} would run: schtasks ${p.createArgs.join(' ')}`);
       logger.log(`${tag} would run: Set-ScheduledTask -TaskName '${p.taskName}' -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`);
+      if (p.disabled) logger.log(`${tag} would run: schtasks ${buildDisableArgs(p.taskName).join(' ')} (dead by construction, ratification 04c9dd29)`);
     }
     return { exitCode: 0, action: 'dry_run_register', plan: plan.map((p) => ({ taskName: p.taskName, wrapperPath: p.wrapperPath, script: p.script })) };
   }
@@ -278,14 +306,23 @@ export async function main(argv = process.argv, deps = {}) {
     // the task now exists with Task Scheduler's default battery restrictions: clear them (non-fatal, like QF-20260908-848; --verify reads the result)
     const power = applyBattery(p.taskName);
     if (!power.ok) logger.warn(`${tag} WARNING: could not clear battery restrictions for '${p.taskName}': ${power.error} — it will NOT fire while the host is on battery (0x800710E0) until a re-run succeeds`);
+    // QF-20260911-282 / ratification 04c9dd29 point 2: tasks-classifier stays registered but
+    // DISABLED at the OS level until a measurement shows its parser and producer agree. schtasks
+    // /Create /F above always recreates the task ENABLED by default, so this must re-apply on
+    // EVERY register pass (idempotent — disabling an already-disabled task is still a success).
+    if (p.disabled) {
+      const disableRes = runSchtasks(buildDisableArgs(p.taskName));
+      if (!disableRes.ok) logger.warn(`${tag} WARNING: could not disable '${p.taskName}' (${(disableRes.stderr || '').trim()}) — it is registered ENABLED until a re-run succeeds; --verify will catch this`);
+    }
     try { fsx.renameSync(staged, p.wrapperPath); } catch (err) {
       try { fsx.unlinkSync(staged); } catch { /* best effort */ }
       logger.error(`${tag} task '${p.taskName}' registered but the wrapper swap failed (${err.message}); the task runs the PREVIOUS wrapper until a re-run succeeds`);
       allOk = false; continue;
     }
-    logger.log(`${tag} registered '${p.taskName}' — every ${INTERVAL_MINUTES} min (window ${p.windowEt} ET enforced in-script) → ${p.wrapperRelPath} (hidden launch)${p.promotable ? (args.withModify ? ' [--modify PROMOTED]' : ' [shadow phase: no --modify]') : ''}`);
+    logger.log(`${tag} registered '${p.taskName}' — every ${INTERVAL_MINUTES} min (window ${p.windowEt} ET enforced in-script) → ${p.wrapperRelPath} (hidden launch)${p.disabled ? ' [DISABLED — dead by construction, ratification 04c9dd29]' : ''}${p.promotable ? (args.withModify ? ' [--modify PROMOTED]' : ' [shadow phase: no --modify]') : ''}`);
   }
   logger.log(`${tag} run --verify to read the definitions back out of the OS.`);
+  logger.log(`${tag} chairman re-registration keystroke (unelevated PowerShell, repo root): node scripts/setup-michael-host-tasks.mjs && node scripts/setup-michael-host-tasks.mjs --verify`);
   return { exitCode: allOk ? 0 : 1, action: 'registered', withModify: args.withModify };
 }
 
