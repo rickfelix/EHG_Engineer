@@ -25,7 +25,20 @@ import { analyzePatterns, createPatternRetrospective } from '../lib/utils/quickf
 import { claimQuickFix } from '../lib/quick-fix-claim.mjs';
 // QF-20260822-796: single-representation LOC cap — read from the governed
 // work_item_thresholds source (tier2_max_loc) instead of a hardcoded duplicate.
-import { getActiveThresholds } from '../lib/utils/work-item-router.js';
+// QF-20260912-358/QF-20260905-476: single-representation risk/schema keyword source. This
+// file previously carried its own, independently-drifted forbiddenKeywords list (missing
+// 'payments'/'credentials'/'create table'/'drop table', all explicitly named in CLAUDE.md's
+// own Work Item Routing table) and matched schema/migration nouns with a flat any-mention
+// check, over-escalating a QF whose DESCRIPTION merely discusses a table/file name (measured:
+// QF-20260904-844, ruled Tier 1 by the coordinator after 'migration'/'database' matched in
+// narrative text describing one createSupabaseServiceClient option). findRiskKeywordWithContext
+// stays deliberately blunt (any genuine auth/security mention escalates -- SD-LEO-INFRA-
+// CREATION-PATH-PRECISION-001's own explicit safety reasoning: a security SURFACE mention is
+// itself a signal); findSchemaKeywordWithVerbContext narrows schema/migration to only fire when
+// a change verb is nearby (QF-20260830-901), closing QF-844's exact false-positive without
+// weakening the auth/security default-escalate policy tests/unit/worker-checkin-qf-tier3-risk-
+// description.test.js already locks in.
+import { getActiveThresholds, RISK_KEYWORDS, SCHEMA_KEYWORDS, findRiskKeywordWithContext, findSchemaKeywordWithVerbContext } from '../lib/utils/work-item-router.js';
 // SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001: single canonical quick_fixes.status writer.
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -39,18 +52,11 @@ export { matchesKeyword, analyzeDescription, CLASSIFICATION_RULES };
 // Classification rules
 const CLASSIFICATION_RULES = {
   allowedTypes: ['bug', 'polish', 'typo', 'documentation'],
-  forbiddenKeywords: [
-    'migration',
-    'schema change',
-    'database',
-    'auth',
-    'authentication',
-    'authorization',
-    'security',
-    'RLS',
-    'new table',
-    'alter table'
-  ],
+  // QF-20260912-358: derived from the single governed source (lib/utils/work-item-router.js)
+  // instead of a separately-maintained list -- kept as a real array (not just the two context-
+  // aware functions) because lib/fleet/sd-tier-rank.mjs still consumes it directly via a flat
+  // matchesKeyword loop of its own.
+  forbiddenKeywords: [...RISK_KEYWORDS, ...SCHEMA_KEYWORDS],
   riskKeywords: [
     'multiple files',
     'refactor',
@@ -86,11 +92,23 @@ function analyzeDescription(description, title) {
   const combined = `${title} ${description}`.toLowerCase();
   const issues = [];
 
-  // Check for forbidden keywords (word-boundary, not naive substring — see matchesKeyword)
-  for (const keyword of CLASSIFICATION_RULES.forbiddenKeywords) {
-    if (matchesKeyword(combined, keyword)) {
-      issues.push(`Contains forbidden keyword: "${keyword}"`);
-    }
+  // QF-20260912-358/QF-20260905-476: delegate security and schema classification to the
+  // single governed source (lib/utils/work-item-router.js) rather than a flat any-mention
+  // loop over this file's own keyword list. Security (auth/authentication/authorization/rls/
+  // payments/credentials) stays default-escalate-on-any-mention (findRiskKeywordWithContext) --
+  // deliberately unchanged from the flat-match behavior, since a security SURFACE mention is
+  // itself a signal (SD-LEO-INFRA-CREATION-PATH-PRECISION-001). Schema/migration now requires a
+  // nearby change verb (findSchemaKeywordWithVerbContext, QF-20260830-901) -- so a QF whose
+  // DESCRIPTION merely names a table/file (e.g. "database-fidelity.js", "the schema_migrations
+  // table") no longer force-escalates on that narrative mention alone (QF-20260904-844's exact
+  // false-positive).
+  const riskHit = findRiskKeywordWithContext(combined);
+  if (riskHit) {
+    issues.push(`Contains forbidden keyword: "${riskHit}"`);
+  }
+  const schemaHit = findSchemaKeywordWithVerbContext(combined);
+  if (schemaHit) {
+    issues.push(`Contains forbidden keyword: "${schemaHit}"`);
   }
 
   // Check for risk keywords
