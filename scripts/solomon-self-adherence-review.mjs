@@ -14,6 +14,10 @@ import { fileURLToPath } from 'url';
 import { SOLOMON_LOOPS, ROLE_CONTEXT_DOC, missingDurableDuties } from './solomon-startup-check.mjs';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { createRequire } from 'module';
+// QF-20260905-768: ESM importing the shared CJS attached-agent signal reader (see that
+// module's header for why this script cannot introspect a live session's agents itself).
+const { classifyAttachedAgents, readAttachedAgentsSnapshot } = createRequire(import.meta.url)('../lib/solomon/attached-agent-signal.cjs');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
@@ -97,10 +101,27 @@ export function buildSelfAdherenceVerdict(repoRoot = REPO_ROOT) {
   };
 }
 
+/**
+ * QF-20260905-768 item (a): list attached in-process gatherer agents with age/state, flagging
+ * any idle >60min or running >2h past report. Pure -- takes the already-read snapshot (null when
+ * no live session wrote one this cycle) so it is testable without touching the filesystem.
+ */
+export function renderAttachedAgentsSection(snapshot) {
+  if (snapshot == null) return '  attached agents: no snapshot this cycle (inconclusive).';
+  if (snapshot.length === 0) return '  attached agents: none.';
+  const flagged = new Set(classifyAttachedAgents(snapshot));
+  const lines = snapshot.map((a) => {
+    const isFlagged = flagged.has(a);
+    return `  ${isFlagged ? '⚠️ ' : '  '}${a.name} — ${a.state}, ${a.ageMinutes}min${isFlagged ? ' (FLAGGED)' : ''}`;
+  });
+  return `  attached agents (${flagged.size} flagged of ${snapshot.length}):\n${lines.join('\n')}`;
+}
+
 export function renderReport(repoRoot = REPO_ROOT) {
   const v = buildSelfAdherenceVerdict(repoRoot);
   const head = '═══ SOLOMON SELF-ADHERENCE AUDIT ═══\n  ';
-  return head + (v.ok ? `✅ ${v.note}` : `⚠️ ${v.note}`);
+  const dutyLine = v.ok ? `✅ ${v.note}` : `⚠️ ${v.note}`;
+  return `${head}${dutyLine}\n${renderAttachedAgentsSection(readAttachedAgentsSnapshot())}`;
 }
 
 /**
