@@ -1,6 +1,6 @@
 // SD-LEO-INFRA-WIRE-FEEDBACK-TABLE-001 FR-1 unit tests for lib/governance/resolve-feedback.js
 // QF-20260511-556: parseAndExpandFeedbackFooters short-UUID acceptance.
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,7 +65,7 @@ describe('parseFeedbackFooters', () => {
   });
 
   it('rejects malformed UUID (too short)', () => {
-    const text = `Closes feedback abcd-1234\n`;
+    const text = 'Closes feedback abcd-1234\n';
     expect(parseFeedbackFooters(text)).toEqual([]);
   });
 
@@ -234,7 +234,7 @@ describe('parseAndExpandFeedbackFooters', () => {
 
   it('expands an 8-char short ID with a unique DB match', async () => {
     const sb = makeLookupSupabase({ rowsByRange: { 'acd4e5ab': [{ id: 'acd4e5ab-1111-2222-3333-444444444444' }] } });
-    const text = `body\n\nCloses feedback acd4e5ab\n`;
+    const text = 'body\n\nCloses feedback acd4e5ab\n';
     const result = await parseAndExpandFeedbackFooters({ text, supabase: sb });
     expect(result.uuids).toEqual(['acd4e5ab-1111-2222-3333-444444444444']);
     expect(result.warnings).toEqual([]);
@@ -247,7 +247,7 @@ describe('parseAndExpandFeedbackFooters', () => {
         { id: '12345678-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
       ] },
     });
-    const text = `Closes feedback 12345678\n`;
+    const text = 'Closes feedback 12345678\n';
     const result = await parseAndExpandFeedbackFooters({ text, supabase: sb });
     expect(result.uuids).toEqual([]);
     expect(result.warnings.length).toBe(1);
@@ -257,7 +257,7 @@ describe('parseAndExpandFeedbackFooters', () => {
 
   it('warn-skips short ID with no match', async () => {
     const sb = makeLookupSupabase({});
-    const text = `Closes feedback deadbeef\n`;
+    const text = 'Closes feedback deadbeef\n';
     const result = await parseAndExpandFeedbackFooters({ text, supabase: sb });
     expect(result.uuids).toEqual([]);
     expect(result.warnings.length).toBe(1);
@@ -276,14 +276,14 @@ describe('parseAndExpandFeedbackFooters', () => {
 
   it('silently drops non-hex / wrong-length tokens (e.g. 7-char, 12-char no-dashes)', async () => {
     const sb = makeLookupSupabase({});
-    const text = `Closes feedback abcdef0\nCloses feedback abcdef0123ab\nCloses feedback zzzzzzzz\n`;
+    const text = 'Closes feedback abcdef0\nCloses feedback abcdef0123ab\nCloses feedback zzzzzzzz\n';
     const result = await parseAndExpandFeedbackFooters({ text, supabase: sb });
     expect(result.uuids).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
 
   it('returns warning if short IDs are present but no supabase is supplied', async () => {
-    const text = `Closes feedback acd4e5ab\n`;
+    const text = 'Closes feedback acd4e5ab\n';
     const result = await parseAndExpandFeedbackFooters({ text });
     expect(result.uuids).toEqual([]);
     expect(result.warnings.length).toBe(1);
