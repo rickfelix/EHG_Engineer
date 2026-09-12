@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { validateBypassShape } from '../../../scripts/modules/handoff/bypass-rubric.js';
 
-function makeSupabaseStub({ patternExists = false, sdKeyExists = false } = {}) {
+function makeSupabaseStub({ patternExists = false, sdKeyExists = false, qfKeyExists = false } = {}) {
   return {
     from: (table) => ({
       select: () => ({
@@ -24,6 +24,9 @@ function makeSupabaseStub({ patternExists = false, sdKeyExists = false } = {}) {
             }
             if (table === 'strategic_directives_v2' && sdKeyExists) {
               return { data: { sd_key: 'SD-FAKE-001', status: 'draft' }, error: null };
+            }
+            if (table === 'quick_fixes' && qfKeyExists) {
+              return { data: { id: 'QF-20260903-744', status: 'open' }, error: null };
             }
             return { data: null, error: null };
           },
@@ -123,6 +126,30 @@ describe('validateBypassShape (SD-LEARN-FIX-ADDRESS-PAT-AGENT-001)', () => {
     });
     expect(result.allowed).toBe(false);
     expect(result.message).toContain('not found in strategic_directives_v2');
+  });
+
+  it('QF-20260903-744: ACCEPTS --followup-sd-key when it is a QF key that exists in quick_fixes', async () => {
+    process.env.ENFORCE_BYPASS_SHAPE = 'true';
+    const result = await validateBypassShape({
+      patternId: null,
+      followupSdKey: 'QF-20260903-744',
+      supabase: makeSupabaseStub({ qfKeyExists: true }),
+      sdId: 'test-sd',
+    });
+    expect(result.allowed).toBe(true);
+    expect(result.code).toBe('OK');
+  });
+
+  it('QF-20260903-744: REJECTS a QF-shaped --followup-sd-key when it is missing from quick_fixes (never checked against strategic_directives_v2)', async () => {
+    process.env.ENFORCE_BYPASS_SHAPE = 'true';
+    const result = await validateBypassShape({
+      patternId: null,
+      followupSdKey: 'QF-DOES-NOT-EXIST',
+      supabase: makeSupabaseStub({ qfKeyExists: false, sdKeyExists: true }),
+      sdId: 'test-sd',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.message).toContain('not found in quick_fixes');
   });
 
   it('In warn-only mode, missing pattern still returns allowed=true with warnOnly flag', async () => {
