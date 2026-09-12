@@ -1696,18 +1696,25 @@ export async function main(argv = process.argv) {
       if (eligibility.eligible && opts.execute) {
         const preserveResult = await runPreserveStage(
           { wtPath: wt.path, key: preserveKey, ownerSessionId: holder?.session_id || null },
-          { nowMs: now }
+          { nowMs: now, repoRoot: ctx.repoRoot }
         );
         evidence.preserve = preserveResult;
         if (preserveResult.verdict === PRESERVE_VERDICT.PUSHED) {
           verdict = PRESERVE_VERDICT.PUSHED;
-          reasonText = `preserve_pushed_${eligibility.reason}`;
+          // QF-20260912-495: a tree whose only dirty content was unsafe evidence (now
+          // withheld to the audit sink) reaches PUSHED via the same "nothing staged"
+          // path as an already-clean tree -- distinct reason so the reaper output
+          // names this case honestly rather than reading as a generic preserve push.
+          reasonText = preserveResult.withheld?.length
+            ? `dirty_only_unsafe_withheld_${eligibility.reason}`
+            : `preserve_pushed_${eligibility.reason}`;
           evidence.preserve_pointer = await appendReaperPreservedPointer(
             supabase,
             { key: preserveKey, isQf: isQfKey },
             {
               ref: preserveResult.ref, sha: preserveResult.sha, worktree_path: wt.path,
               owner_session: holder?.session_id || null, preserved_at: new Date(now).toISOString(),
+              ...(preserveResult.withheld?.length ? { withheld: preserveResult.withheld } : {}),
             }
           );
         } else if (preserveResult.verdict === PRESERVE_VERDICT.HELD_SECRET) {
