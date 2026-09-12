@@ -58,7 +58,10 @@ function selectColumns(argSrc) {
  * argument -- depth-tracked so a key nested inside a jsonb VALUE (e.g. .update({ metadata: {
  * proving_venture_id: ... } }), a legitimate write to the real `metadata` column) is never
  * mistaken for a column name of its own. Only keys at brace-depth 1 (directly inside the single
- * outer object passed to .update()) are collected.
+ * outer object passed to .update()) are collected. Stops the instant that outer object closes
+ * (depth back to 0) -- readBalancedArg() captures the FULL argument LIST for a multi-arg call
+ * like `.upsert({...row}, { onConflict: 'session_id' })`, and without this stop a second,
+ * sibling `{...}` argument's keys (e.g. `onConflict`) would be misread as more row data.
  */
 function updateColumns(argSrc) {
   const cols = [];
@@ -67,7 +70,11 @@ function updateColumns(argSrc) {
   let m;
   while ((m = re.exec(argSrc)) !== null) {
     if (m[0] === '{') { depth++; continue; }
-    if (m[0] === '}') { depth--; continue; }
+    if (m[0] === '}') {
+      depth--;
+      if (depth === 0) break;
+      continue;
+    }
     if (depth === 1) cols.push(m[1]);
   }
   return cols;
@@ -78,6 +85,38 @@ function eqColumn(argSrc) {
   const m = argSrc.match(/^['"]([A-Za-z_][A-Za-z0-9_]*)['"]/);
   return m ? [m[1]] : [];
 }
+
+/**
+ * Read a call argument starting right after its opening '(' (already consumed), balancing
+ * nested parens and skipping quoted-string contents, so a `)` inside `new Date().toISOString()`
+ * or a string literal never prematurely closes the outer call. Returns null (unbalanced) if the
+ * window ends before the matching close is found -- QF-20260912-810 found the prior non-greedy
+ * "stop at the first `)` followed by `.`/`;`/newline" regex truncated `.update({ released_at:
+ * new Date().toISOString(), sd_id: null })` right after `new Date(`, silently dropping every key
+ * that came after it.
+ * @returns {{arg: string, end: number} | {arg: null, end: number}}
+ */
+function readBalancedArg(str, start) {
+  let depth = 1;
+  let quote = null;
+  for (let i = start; i < str.length; i++) {
+    const c = str[i];
+    if (quote) {
+      if (c === '\\') { i++; continue; }
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
+    if (c === '(') { depth++; continue; }
+    if (c === ')') {
+      depth--;
+      if (depth === 0) return { arg: str.slice(start, i), end: i + 1 };
+    }
+  }
+  return { arg: null, end: str.length };
+}
+
+const CALL_METHODS = ['select', 'update', 'upsert', 'insert', 'eq'];
 
 /**
  * Find unknown-column references chained off .from('claude_sessions'|'v_active_sessions') inside
@@ -93,21 +132,24 @@ export function extractUnknownColumns(src) {
     const table = fm[1];
     const windowEnd = Math.min(src.length, fm.index + 600);
     const nextFrom = src.indexOf('.from(', fm.index + 6);
-    const end = nextFrom !== -1 && nextFrom < windowEnd ? nextFrom : windowEnd;
-    const chain = src.slice(fm.index, end);
-    const callRe = /\.(select|update|eq)\(\s*([\s\S]*?)\)(?=\s*[.;\n])/g;
+    const chainEnd = nextFrom !== -1 && nextFrom < windowEnd ? nextFrom : windowEnd;
+    const chain = src.slice(fm.index, chainEnd);
+    const callOpenRe = new RegExp(`\\.(${CALL_METHODS.join('|')})\\(`, 'g');
     let cm;
-    while ((cm = callRe.exec(chain)) !== null) {
+    while ((cm = callOpenRe.exec(chain)) !== null) {
       const method = cm[1];
-      const cols = method === 'select' ? selectColumns(cm[2])
-        : method === 'eq' ? eqColumn(cm[2])
-        : updateColumns(cm[2]);
+      const { arg, end } = readBalancedArg(chain, cm.index + cm[0].length);
+      if (arg === null) break; // unbalanced within the window -- stop, don't misparse past it
+      const cols = method === 'select' ? selectColumns(arg)
+        : method === 'eq' ? eqColumn(arg)
+        : updateColumns(arg); // update/upsert/insert are all object-literal shaped here
       for (const col of cols) {
         if (!LIVE_COLUMNS[table].includes(col)) {
           const line = src.slice(0, fm.index + cm.index).split('\n').length;
           findings.push({ table, method, column: col, line });
         }
       }
+      callOpenRe.lastIndex = end;
     }
   }
   return findings;

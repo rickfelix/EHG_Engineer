@@ -74,12 +74,22 @@ async function claimStatus() {
     return;
   }
 
-  // Get claim details from v_active_sessions
-  const { data: claim } = await supabase
+  // Get claim details from v_active_sessions. Check the error explicitly -- destructuring only
+  // data (as this line used to) is the exact shell-masks-vacancy shape QF-20260912-810 fixed
+  // above, so the same fix applies here even though this particular query was never observed to
+  // actually error (v_active_sessions' own columns are all live).
+  const { data: claim, error: claimError } = await supabase
     .from('v_active_sessions')
     .select('session_id, sd_id, sd_title, heartbeat_age_human, heartbeat_age_seconds, computed_status, track, hostname, tty, claimed_at, claim_duration_minutes')
     .eq('session_id', session.session_id)
-    .single();
+    .maybeSingle();
+
+  if (claimError) {
+    console.log('');
+    console.log('  Error querying v_active_sessions: ' + claimError.message);
+    console.log('');
+    return;
+  }
 
   if (!claim) {
     console.log('');
@@ -179,11 +189,15 @@ async function releaseClaim() {
     console.log('  Error releasing claim: ' + releaseError.message);
     console.log('');
 
-    // Fallback: try direct update on claude_sessions if RPC fails
+    // Fallback: try direct update on claude_sessions if RPC fails. worktree_path/worktree_branch
+    // MUST be cleared in the SAME statement as sd_key -- ck_claude_sessions_worktree_state_
+    // consistency requires (sd_key IS NOT NULL) OR (worktree_path IS NULL AND worktree_branch IS
+    // NULL), so a session that holds a worktree would otherwise fail this UPDATE outright
+    // (VALIDATION finding, QF-20260912-810 / SD-LEO-FIX-CLAUDE-COMMANDS-CLAIM-001).
     console.log('  Attempting direct release...');
     const { error: directError } = await supabase
       .from('claude_sessions')
-      .update({ sd_key: null, released_at: new Date().toISOString(), released_reason: 'manual' })
+      .update({ sd_key: null, worktree_path: null, worktree_branch: null, released_at: new Date().toISOString(), released_reason: 'manual' })
       .eq('session_id', sessionId);
 
     if (directError) {

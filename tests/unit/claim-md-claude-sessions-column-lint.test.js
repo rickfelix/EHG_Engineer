@@ -65,4 +65,26 @@ describe('extractUnknownColumns', () => {
     const hits = extractUnknownColumns(src);
     expect(hits).toContainEqual(expect.objectContaining({ table: 'claude_sessions', method: 'eq', column: 'sd_id' }));
   });
+
+  it('flags a phantom .update() key that comes AFTER a nested-paren call like new Date().toISOString() (regression: VALIDATION found this lint’s original non-greedy arg-capture truncated right after new Date(, silently dropping every key that followed)', () => {
+    const src = `
+      await supabase.from('claude_sessions')
+        .update({ released_at: new Date().toISOString(), sd_id: null })
+        .eq('session_id', sessionId);
+    `;
+    const hits = extractUnknownColumns(src);
+    expect(hits).toContainEqual(expect.objectContaining({ table: 'claude_sessions', method: 'update', column: 'sd_id' }));
+  });
+
+  it('does not misread a second sibling object argument (e.g. .upsert(row, { onConflict: ’col’ })) as more row-data keys (regression: found and fixed during this QF)', () => {
+    const src = `
+      supabase.from('claude_sessions')
+        .upsert({
+          session_id: 'x',
+          status: 'active',
+          metadata: { auto_proceed: true }
+        }, { onConflict: 'session_id' });
+    `;
+    expect(extractUnknownColumns(src)).toEqual([]);
+  });
 });

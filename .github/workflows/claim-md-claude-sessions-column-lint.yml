@@ -1,0 +1,35 @@
+name: Claim.md claude_sessions Column Lint
+
+# SD-LEO-FIX-CLAUDE-COMMANDS-CLAIM-001 (QF-20260912-810).
+# .claude/commands/*.md embed live node -e "..." scripts that query claude_sessions /
+# v_active_sessions directly -- markdown, so they never run through eslint/tsc, and a base-table
+# column rename (e.g. sd_id -> sd_key, 2026-02-18 consolidation) can silently break them: a
+# Postgrest select/update on an unknown column returns an error that a caller destructuring only
+# `data` reads as "no row" -- the shell-masks-vacancy shape .claude/commands/claim.md hit.
+#
+# ADVISORY-FIRST: continue-on-error: true so this cannot turn an in-flight PR red on day one.
+# Flip to blocking (drop continue-on-error, keep --enforce) once the baseline has settled.
+
+on:
+  pull_request:
+    paths:
+      - '.claude/commands/**/*.md'
+      - 'scripts/lint/claim-md-claude-sessions-column-lint.mjs'
+      - 'scripts/lint/claim-md-claude-sessions-column-allowlist.json'
+      - '.github/workflows/claim-md-claude-sessions-column-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  claim-md-column-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect phantom claude_sessions/v_active_sessions column references in .claude/commands/*.md (advisory)
+        continue-on-error: true
+        run: node scripts/lint/claim-md-claude-sessions-column-lint.mjs --enforce
