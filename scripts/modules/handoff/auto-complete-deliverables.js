@@ -49,6 +49,33 @@ dotenv.config();
 const supabase = createSupabaseServiceClient();
 
 /**
+ * QF-20260911-765: public.get_progress_breakdown has two live overloads (sd_id_param text,
+ * sd_id_param uuid) sharing the SAME parameter name, so PostgREST's RPC dispatch cannot
+ * disambiguate them from the request shape alone -- verified empirically that this is NOT
+ * caller-value-dependent (neither a text sd_key nor a valid uuid string resolves it; both
+ * arrive as PGRST203 "Could not choose the best candidate function"). There is no supabase-js
+ * `.rpc()` call shape that picks an overload when both candidates declare the identical
+ * parameter name -- the only real fix is schema-side (drop the dead overload or rename a
+ * parameter). The uuid overload has zero live callers: not from application code (this was
+ * the only argument-passing RPC call site outside scripts/archive) and not from any PL/pgSQL
+ * caller (calculate_sd_progress(text) is the sole internal caller and resolves to the text
+ * overload via its own text-typed parameter). Tolerated here rather than thrown -- this read
+ * is diagnostic-only (console display); the deliverable-completion WRITES in
+ * autoCompleteDeliverables already succeeded by the time this runs and do not depend on this
+ * readback. Follow-up: a chairman-gated `DROP FUNCTION get_progress_breakdown(uuid)` retires
+ * the dead overload and removes the ambiguity at its source; not DDL this QF can carry.
+ */
+export async function readProgressBreakdownForDisplay(supabaseClient, sdId) {
+  return safeQuery(
+    supabaseClient.rpc('get_progress_breakdown', { sd_id_param: sdId }),
+    {
+      site: 'auto-complete-deliverables:progress_breakdown',
+      tolerate: 'QF-20260911-765: get_progress_breakdown(text)/(uuid) overload ambiguity (PGRST203) is structural, not value-dependent; diagnostic-only readback, writes above are unaffected',
+    }
+  );
+}
+
+/**
  * Deliverable type to verification source mapping
  * Defines PRIMARY and SECONDARY evidence sources for cascading verification
  */
@@ -580,11 +607,8 @@ export async function autoCompleteDeliverables(sdId, options = {}) {
       console.log('     See: database/migrations/auto_complete_deliverables_on_handoff.sql');
     }
 
-    // Verify the progress breakdown was updated
-    const breakdown = await safeQuery(
-      supabase.rpc('get_progress_breakdown', { sd_id_param: sdId }),
-      { site: 'auto-complete-deliverables:progress_breakdown' }
-    );
+    // Verify the progress breakdown was updated (diagnostic-only display; see readProgressBreakdownForDisplay's doc comment for why this is tolerant, not a throw).
+    const breakdown = await readProgressBreakdownForDisplay(supabase, sdId);
 
     if (breakdown) {
       const execPhase = breakdown.phases?.EXEC_implementation;
