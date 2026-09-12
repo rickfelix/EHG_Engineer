@@ -42,7 +42,7 @@ describe('notification-permission-wait-core', () => {
 
     const { writeNotificationRow } = await freshCore();
     await writeNotificationRow(
-      { session_id: 'seat-abc', hook_event_name: 'Notification', message: 'Claude needs your permission to run a Bash command' },
+      { session_id: 'seat-abc', hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'Claude needs your permission to run a Bash command' },
       { readPointerFile: () => ({ session_id: 'coord-123' }), credentials: PRESENT_CREDS },
     );
 
@@ -105,6 +105,54 @@ describe('notification-permission-wait-core', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.body.length).toBe(2000);
     expect(body.payload.message.length).toBe(2000);
+  });
+});
+
+// QF-20260911-078: the hook previously hardcoded kind='notification_permission_wait' for EVERY
+// Notification event. These payload shapes are the REAL ones measured from retention_archive
+// (all 16+ prior rows were already archived by the time this QF was filed; the live table read
+// false-zero) -- not synthetic guesses. Fixes the over-count (13 of 16 observed rows were an
+// idle/resume notification, not a genuine permission wait).
+describe('classifyNotificationKind (QF-20260911-078)', () => {
+  it('the three real Claude Code notification_type bodies map to three distinct kinds', async () => {
+    const { classifyNotificationKind } = await freshCore();
+    expect(classifyNotificationKind('permission_prompt')).toBe('notification_permission_wait');
+    expect(classifyNotificationKind('idle_prompt')).toBe('notification_idle_prompt');
+    expect(classifyNotificationKind('quota_auto_resume_fired')).toBe('notification_usage_limit_reset');
+  });
+
+  it('falls back to notification_other for an unrecognized/absent type, never to notification_permission_wait', async () => {
+    const { classifyNotificationKind } = await freshCore();
+    expect(classifyNotificationKind('some_future_notification_type')).toBe('notification_other');
+    expect(classifyNotificationKind(undefined)).toBe('notification_other');
+    expect(classifyNotificationKind(null)).toBe('notification_other');
+  });
+});
+
+describe('writeNotificationRow kind classification — fixture per real observed payload (QF-20260911-078)', () => {
+  async function writtenKindFor(payload) {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const { writeNotificationRow } = await freshCore();
+    await writeNotificationRow(payload, { readPointerFile: () => null, credentials: PRESENT_CREDS });
+    return JSON.parse(fetchMock.mock.calls[0][1].body).payload.kind;
+  }
+
+  // The fixture: one real permission prompt, exactly as Claude Code's own hook stamps it
+  // (retention_archive row, 2026-09-05T23:07:18Z) -- asserts exactly one permission_wait kind.
+  it('a real permission-prompt notification writes kind=notification_permission_wait', async () => {
+    const kind = await writtenKindFor({ session_id: 'seat-1', notification_type: 'permission_prompt', message: 'Claude needs your permission' });
+    expect(kind).toBe('notification_permission_wait');
+  });
+
+  it('a real idle-prompt notification (a RESUMING seat, not blocked) writes kind=notification_idle_prompt, not permission_wait', async () => {
+    const kind = await writtenKindFor({ session_id: 'seat-2', notification_type: 'idle_prompt', message: 'Claude is waiting for your input' });
+    expect(kind).toBe('notification_idle_prompt');
+  });
+
+  it('a real usage-limit-reset resumption writes kind=notification_usage_limit_reset, not permission_wait', async () => {
+    const kind = await writtenKindFor({ session_id: 'seat-3', notification_type: 'quota_auto_resume_fired', message: 'Usage limit reset — Claude is continuing your task' });
+    expect(kind).toBe('notification_usage_limit_reset');
   });
 });
 
