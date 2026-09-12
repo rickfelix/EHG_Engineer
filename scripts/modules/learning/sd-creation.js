@@ -10,6 +10,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { runTriageGate } from '../triage-gate.js';
+import { runPostWriteStage, POST_WRITE_STAGE_TIMEOUT_EXIT_CODE } from '../../../lib/completion/post-write-stage.js';
 
 import {
   buildSDDescription,
@@ -404,21 +405,29 @@ export async function executeSDCreationWorkflow(reviewedContext, decisions, crea
   const sdUuid = sdResult.id;
 
   // 5. Tag source items with the SD
-  const tagResult = await tagSourceItems(approvedItems, sdUuid);
+  // QF-20260912-150: the SD row above already persisted -- a hang here must never block the
+  // caller past its external kill timeout. runPostWriteStage bounds it and marks a distinct
+  // exit code instead of hanging -- see lib/completion/post-write-stage.js.
+  const tagStage = await runPostWriteStage('tagSourceItems', () => tagSourceItems(approvedItems, sdUuid));
+  if (tagStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+  const tagResult = tagStage.ok ? tagStage.result : { success: false, tagged: 0, errors: [tagStage.error?.message || 'timed out'] };
   if (!tagResult.success) {
     console.warn('Warning: Some items could not be tagged:', tagResult.errors);
   }
 
   // 6. Create decision record
-  const decisionRecord = await createDecisionRecord(
-    reviewedContext,
-    decisions,
-    sdUuid
+  // QF-20260912-150: same unbounded-await gap as step 5.
+  const decisionStage = await runPostWriteStage(
+    'createDecisionRecord',
+    () => createDecisionRecord(reviewedContext, decisions, sdUuid)
   );
+  if (decisionStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+  const decisionRecord = decisionStage.ok ? decisionStage.result : { id: null };
 
   // 7. Update decision record with SD creation info
+  // QF-20260912-150: same unbounded-await gap as steps 5/6.
   if (decisionRecord.id && !decisionRecord.id.startsWith('LOCAL-')) {
-    await supabase
+    const updateStage = await runPostWriteStage('updateLearningDecision', () => supabase
       .from('learning_decisions')
       .update({
         sd_created_id: sdKey,
@@ -433,7 +442,9 @@ export async function executeSDCreationWorkflow(reviewedContext, decisions, crea
         }],
         updated_at: new Date().toISOString()
       })
-      .eq('id', decisionRecord.id);
+      .eq('id', decisionRecord.id));
+    if (updateStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+    else if (!updateStage.ok) console.warn(`Warning: learning_decisions update failed: ${updateStage.error?.message || updateStage.error}`);
   }
 
   // 8. Display summary
