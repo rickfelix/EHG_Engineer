@@ -123,4 +123,28 @@ describe('SD-LEO-FIX-HUMAN-ACTION-FENCES-001: setHold (write-side of the hold-pr
     expect(stampedPatch.premise_recheck_by).toBe('2026-09-03');
     expect(stampedPatch.premise_predicate).toBe('classifyDispatchIneligibility returns null');
   });
+
+  // QF-20260912-219 (b): optional reviewAt so a hold is born with the staleness stamp
+  // coordinator-health-sharpenings.mjs's hasStaleUnreviewedHold() reads.
+  it('stamps requires_human_action_review_at when reviewAt is supplied', async () => {
+    let stampedPatch;
+    mergeMetadataKeys.mockImplementationOnce(async (sdKey, patch) => {
+      stampedPatch = patch;
+      return { merged: true, sdKey };
+    });
+    const sb = fakeSb({}); // readback shape irrelevant here -- patch capture is the assertion
+    await setHold(sb, 'SD-FIXTURE-SET-007', { ...FULL_HOLD_FIELDS, reviewAt: '2026-09-19' });
+    expect(stampedPatch.requires_human_action_review_at).toBe('2026-09-19');
+  });
+
+  it('omits requires_human_action_review_at entirely when reviewAt is not supplied (no behavior change for existing callers)', async () => {
+    let stampedPatch;
+    mergeMetadataKeys.mockImplementationOnce(async (sdKey, patch) => {
+      stampedPatch = patch;
+      return { merged: true, sdKey };
+    });
+    const sb = fakeSb({});
+    await setHold(sb, 'SD-FIXTURE-SET-008', FULL_HOLD_FIELDS);
+    expect(stampedPatch).not.toHaveProperty('requires_human_action_review_at');
+  });
 });
