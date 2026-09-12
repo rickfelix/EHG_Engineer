@@ -29,8 +29,10 @@
  * accompanying import + call, does not count as instrumented.
  *
  * "Executable logic" (files with NEITHER pattern are exempt, per TR-4): a top-level
- * function/arrow-function/class declaration or expression. A file with only
- * `export const X = {...}` / type-shaped exports has nothing to log.
+ * function/arrow-function/class declaration or expression, OR object/class METHOD-SHORTHAND
+ * syntax (`executeFn(context) {`) -- the dominant idiom in lib/eva/services/** and
+ * lib/eva/stage-templates/**. A file with only `export const X = {...}` / type-shaped
+ * exports has nothing to log.
  *
  * ESCAPE HATCH: a `// eva-logger-lint-ignore: <reason>` pragma anywhere in the file exempts
  * it, but ONLY with a non-blank reason -- a blank reason is rejected and the file is still
@@ -44,7 +46,10 @@
  * followed by a call as `foo(` instead of `cl(`) -- such a file would be incorrectly flagged
  * as uninstrumented. It also cannot detect a logger instance threaded in via a function
  * parameter from a DIFFERENT file (dependency injection across module boundaries) --  only
- * same-file import + call is recognized.
+ * same-file import + call is recognized. --root pointed at a directory that is itself INSIDE a
+ * (different) git repo resolves that ENCLOSING repo's merge-base rather than failing loud --
+ * off the CI path (CI never passes --root; the control-seed harness always uses --all), so
+ * documented here rather than fixed.
  *
  * KILL-SWITCH: LEO_DISABLE_EVA_LOGGER_LINT=1 bypasses the rule entirely (mirrors
  * LEO_DISABLE_MECHANISM_VERIFIER_GATE's established convention) -- printed explicitly as
@@ -76,28 +81,87 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
-const EVA_FILE_RE = /^lib\/eva\/.+\.(?:js|mjs)$/;
+// Exported so TS-11's test can tie the workflow's `paths:` filter to THIS regex directly
+// (rather than to hardcoded string literals that could silently drift from it).
+export const EVA_FILE_RE = /^lib\/eva\/.+\.(?:js|mjs)$/;
 const TEST_FILE_RE = /\.(test|spec)\.(js|mjs)$/;
 
+// Includes object/class METHOD-SHORTHAND syntax (`executeFn(context) {`, `async run() {`) --
+// EXEC-phase TESTING sub-agent evidence (row 3d991407) measured 14 real lib/eva/** files
+// (lib/eva/services/market-sizing.js, financial-modeling.js, 11x stage-templates/stage-NN.js,
+// workers/index.js) whose only logic is a method-shorthand body passed into createService({...})
+// or similar, invisible to a function/arrow/class-keyword-only check -- exactly the dominant EVA
+// idiom this SD most needs to catch, since stage-NN.js is a copy-paste template.
+// Excludes common control-flow keywords so `if (x) {` alone isn't miscounted as a "method" named
+// "if" (still correctly counted as executable logic by matching a REAL function/arrow/class
+// elsewhere, or, if truly the only construct in the file, catching it here is not wrong either --
+// excluded purely to keep the heuristic's intent legible, not because matching would be unsafe).
+const METHOD_SHORTHAND_RE = /\b(?!if\b|for\b|while\b|switch\b|catch\b|function\b|class\b)(?:async\s+)?(?:\*\s*)?[A-Za-z_$][\w$]*\s*\([^()]*\)\s*\{/;
 const EXECUTABLE_LOGIC_RE = /\bfunction\s*[\w$]*\s*\(|=>\s*[{(]|=>\s*[^\s;]|\bclass\s+[\w$]+|\bclass\s*\{/;
-const LOGGER_IMPORT_RE = /from\s+['"][^'"]*\blogger\.js['"]/;
+// TOP-LEVEL IMPERATIVE SCRIPT code: a module with no function/class/method wrapper at all, just
+// statements run directly at load time (e.g. lib/eva/workers/index.js -- registers and starts
+// workers, with `if (...)` guards and `new WorkerScheduler()` at the top level, EXEC-phase
+// TESTING sub-agent evidence, row 3d991407). `new X(` and control-flow keywords are strong,
+// low-noise signals of real logic that neither pattern above catches.
+const TOP_LEVEL_IMPERATIVE_RE = /\bnew\s+[A-Za-z_$][\w$]*\s*\(|\b(?:if|for|while|try)\s*[({]/;
+
+// Anchored to the START of a (post-comment-strip) line -- a commented-out import
+// ("// import ... from '../logger.js'") or one embedded in a string/template literal never
+// starts a line with a bare `import` keyword, so it can never satisfy this on its own. Closes
+// the TS-8 adversarial gap (EXEC-phase TESTING sub-agent evidence, row 3d991407): the standard
+// doc's own two-line example snippet, pasted into a comment or a doc string, must not silently
+// count as instrumentation.
+const LOGGER_IMPORT_RE = /^\s*import\b[^;\n]*from\s+['"][^'"]*\blogger\.js['"]/m;
 const LOGGER_CALL_RE = /\bcreateLogger\s*\(/;
-const TRACER_IMPORT_RE = /from\s+['"][^'"]*\bobservability\.js['"]/;
+const TRACER_IMPORT_RE = /^\s*import\b[^;\n]*from\s+['"][^'"]*\bobservability\.js['"]/m;
 const TRACER_CALL_RE = /\b(createOrchestratorTracer|OrchestratorTracer)\s*[\(\.]|\bnew\s+OrchestratorTracer\b/;
 // [ \t]* (not \s*) between the colon and the captured reason: \s* would greedily consume the
 // trailing newline on a blank-reason line and bleed into the NEXT line's text, misreporting a
 // blank reason as a genuine one (caught by the TS-7 negative test).
 const IGNORE_PRAGMA_RE = /\/\/\s*eva-logger-lint-ignore:[ \t]*(.*)$/m;
 
-/** PURE: does this source text contain top-level executable logic? */
-export function hasExecutableLogic(source) {
-  return EXECUTABLE_LOGIC_RE.test(source);
+/**
+ * PURE: strip `//` and `/* *\/` comments (string/template literal CONTENTS are left untouched --
+ * only the comment syntax itself is removed). Used before the instrumentation-detection regexes
+ * so a call-site or import mentioned only inside a comment never counts.
+ * KNOWN LIMITATION: a regex/char-scan comment stripper, not a real parser -- a `//` or `/*`
+ * sequence inside a TEMPLATE LITERAL expression `${...}` is not specially handled and could, in
+ * unusual code, be mis-stripped. Matches this repo's established narrow-heuristic-not-full-parser
+ * philosophy (see rls-anon-tenant-predicate-lint.mjs's own header).
+ */
+export function stripComments(source) {
+  let out = '';
+  let str = null;
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    const n = source[i + 1];
+    if (str) {
+      out += c;
+      if (c === '\\') { out += (n ?? ''); i++; continue; }
+      if (c === str) str = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') { str = c; out += c; continue; }
+    if (c === '/' && n === '/') { while (i < source.length && source[i] !== '\n') i++; out += '\n'; continue; }
+    if (c === '/' && n === '*') { i += 2; while (i < source.length && !(source[i] === '*' && source[i + 1] === '/')) i++; i++; continue; }
+    out += c;
+  }
+  return out;
 }
 
-/** PURE: is this source instrumented via createLogger or OrchestratorTracer? */
+/** PURE: does this source text contain top-level executable logic? */
+export function hasExecutableLogic(source) {
+  const stripped = stripComments(source); // a keyword mentioned only in a comment/doc-example is not real logic
+  return EXECUTABLE_LOGIC_RE.test(stripped) || METHOD_SHORTHAND_RE.test(stripped) || TOP_LEVEL_IMPERATIVE_RE.test(stripped);
+}
+
+/** PURE: is this source instrumented via createLogger or OrchestratorTracer? Evaluated against
+ * comment-stripped text so a mention inside a comment (or, for the anchored import check, inside
+ * a string literal) never counts -- see stripComments()'s doc and TS-8. */
 export function isInstrumented(source) {
-  const hasLogger = LOGGER_IMPORT_RE.test(source) && LOGGER_CALL_RE.test(source);
-  const hasTracer = TRACER_IMPORT_RE.test(source) && TRACER_CALL_RE.test(source);
+  const stripped = stripComments(source);
+  const hasLogger = LOGGER_IMPORT_RE.test(stripped) && LOGGER_CALL_RE.test(stripped);
+  const hasTracer = TRACER_IMPORT_RE.test(stripped) && TRACER_CALL_RE.test(stripped);
   return hasLogger || hasTracer;
 }
 

@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,7 @@ import {
   findIgnorePragma,
   classifyFile,
   candidateFilesDiff,
+  EVA_FILE_RE,
 } from '../../../scripts/lint/eva-logger-required-lint.mjs';
 
 const LOGGER_IMPORT = "import { createLogger } from '../logger.js';\n";
@@ -37,6 +38,28 @@ describe('hasExecutableLogic', () => {
   it('returns false for type/constants-only exports (TS-4 precondition)', () => {
     expect(hasExecutableLogic("export const X = { a: 1, b: 2 };\nexport const Y = 'literal';")).toBe(false);
   });
+
+  // EXEC-phase TESTING sub-agent evidence (row 3d991407): FR-3 over-exempted 14 real files
+  // whose only logic is object/class method-shorthand syntax -- the dominant idiom in
+  // lib/eva/services/** and lib/eva/stage-templates/**.
+  it('detects object method-shorthand syntax (real shape: createService({ ... executeFn(context) {...} }))', () => {
+    expect(hasExecutableLogic("export const svc = createService({\n  name: 'x',\n  executeFn(context) {\n    return context.data;\n  },\n});")).toBe(true);
+  });
+  it('detects async method-shorthand syntax', () => {
+    expect(hasExecutableLogic('const TEMPLATE = {\n  async computeDerived(data) {\n    return data;\n  },\n};')).toBe(true);
+  });
+
+  // EXEC-phase TESTING sub-agent evidence: lib/eva/workers/index.js has no function/class/
+  // arrow/method-shorthand anywhere -- it is a top-level imperative script (if-guards, `new
+  // WorkerScheduler()`, direct calls) that still has real, worth-instrumenting logic.
+  it('detects top-level imperative script code via a constructor call (real shape: workers/index.js)', () => {
+    const src = "import { createClient } from '@supabase/supabase-js';\nconst supabase = createClient(url, key);\nconst scheduler = new WorkerScheduler();\nif (!url) { process.exit(1); }\nscheduler.startAll();";
+    expect(hasExecutableLogic(src)).toBe(true);
+  });
+  it('a keyword mentioned only inside a comment does not count as executable logic', () => {
+    const src = '// example: if (x) { new Foo(); }\nexport const X = { a: 1 };';
+    expect(hasExecutableLogic(src)).toBe(false);
+  });
 });
 
 describe('isInstrumented', () => {
@@ -54,6 +77,18 @@ describe('isInstrumented', () => {
   });
   it('TS-8 adversarial twin: "logger" appearing only in a comment/string does not count', () => {
     const src = "// this file uses a logger somewhere, I promise\nexport function foo() { return 'logger'; }";
+    expect(isInstrumented(src)).toBe(false);
+  });
+  it('TS-8 adversarial: the standard doc\'s own example snippet pasted into a BLOCK COMMENT does not count (EXEC-phase TESTING finding)', () => {
+    const src = "/**\n * Example: import { createLogger } from '../logger.js';\n * const logger = createLogger('X');\n */\nexport function foo() { console.log('x'); }";
+    expect(isInstrumented(src)).toBe(false);
+  });
+  it('TS-8 adversarial: the same snippet embedded in a STRING LITERAL does not count', () => {
+    const src = "const example = \"import { createLogger } from '../logger.js'\";\nexport function foo() { createLogger('X'); }";
+    expect(isInstrumented(src)).toBe(false);
+  });
+  it('TS-8 adversarial: a COMMENTED-OUT import + call does not count', () => {
+    const src = "// import { createLogger } from '../logger.js';\n// const logger = createLogger('X');\nexport function foo() { console.log('hi'); }";
     expect(isInstrumented(src)).toBe(false);
   });
   it('a createLogger call with no matching import does not count (no accompanying import)', () => {
@@ -126,17 +161,91 @@ describe('classifyFile — end-to-end scenarios', () => {
 });
 
 describe('TS-9: LEO_DISABLE_EVA_LOGGER_LINT kill-switch (mirrors mechanism-claim-verifier.test.js:130-146)', () => {
-  afterEach(() => {
-    delete process.env.LEO_DISABLE_EVA_LOGGER_LINT;
+  const SCRIPT = path.join(__dirname, '../../../scripts/lint/eva-logger-required-lint.mjs');
+
+  it('classifyFile itself has no kill-switch awareness (the bypass is a CLI-level concern only)', () => {
+    process.env.LEO_DISABLE_EVA_LOGGER_LINT = '1';
+    try {
+      const v = classifyFile('export function foo() { return 1; }', 'lib/eva/foo.js');
+      expect(v).not.toBeNull();
+    } finally {
+      delete process.env.LEO_DISABLE_EVA_LOGGER_LINT;
+    }
   });
 
-  it('is read as a literal env value, not derived from classifyFile (classifyFile itself has no kill-switch awareness)', () => {
-    // classifyFile is pure and always evaluates -- the kill-switch lives in main()'s CLI driver,
-    // never inside the pure classification logic, so a bypass can never accidentally suppress a
-    // unit-tested assertion. This test documents that boundary explicitly.
-    process.env.LEO_DISABLE_EVA_LOGGER_LINT = '1';
-    const v = classifyFile('export function foo() { return 1; }', 'lib/eva/foo.js');
-    expect(v).not.toBeNull(); // still flags -- the bypass is a CLI-level concern, not a classifier concern
+  it('main() exits 0 and prints an explicit BYPASSED message -- never a bare "0 violations" (real CLI invocation)', () => {
+    const r = spawnSync('node', [SCRIPT, '--all'], {
+      encoding: 'utf8',
+      env: { ...process.env, LEO_DISABLE_EVA_LOGGER_LINT: '1' },
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('BYPASSED');
+    expect(r.stdout).not.toContain('0 violation(s) -- clean');
+  });
+
+  it('is not sticky -- clearing the env var restores real enforcement on the next invocation', () => {
+    const r = spawnSync('node', [SCRIPT, '--all'], {
+      encoding: 'utf8',
+      env: { ...process.env, LEO_DISABLE_EVA_LOGGER_LINT: '' },
+    });
+    // Real repo tree -- expect it to actually scan (not bypassed), regardless of pass/fail count.
+    expect(r.stdout).not.toContain('BYPASSED');
+  });
+});
+
+describe('TS-3: diff-scope excludes an untouched legacy file and includes a newly-added one (real git repo)', () => {
+  it('candidateFilesDiff picks up only the file changed vs the merge-base', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eva-logger-lint-ts3-'));
+    try {
+      const evaDir = path.join(dir, 'lib', 'eva');
+      fs.mkdirSync(evaDir, { recursive: true });
+      fs.writeFileSync(path.join(evaDir, 'legacy-zero-logging.js'), 'export function legacy() { return 1; }\n');
+
+      execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+      execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+      execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+      execFileSync('git', ['add', '-A'], { cwd: dir });
+      execFileSync('git', ['commit', '-q', '-m', 'base'], { cwd: dir });
+
+      // Diverge onto a feature branch -- staying ON main would make merge-base(main, HEAD)
+      // equal to HEAD itself, diffing a branch against its own tip (always empty).
+      execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: dir });
+      fs.writeFileSync(path.join(evaDir, 'new-file.js'), 'export function fresh() { return 2; }\n');
+      execFileSync('git', ['add', '-A'], { cwd: dir });
+      execFileSync('git', ['commit', '-q', '-m', 'add new-file'], { cwd: dir });
+
+      // No origin/main in this scratch repo -- resolveMergeBase falls back to 'main', which
+      // DOES exist here (created via -b main above), so this exercises the real fallback path.
+      const files = candidateFilesDiff(dir).map((f) => path.relative(dir, f).split(path.sep).join('/'));
+      expect(files).toContain('lib/eva/new-file.js');
+      expect(files).not.toContain('lib/eva/legacy-zero-logging.js');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('.test.js files are excluded even when changed', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eva-logger-lint-ts3b-'));
+    try {
+      const evaDir = path.join(dir, 'lib', 'eva');
+      fs.mkdirSync(evaDir, { recursive: true });
+      execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+      execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+      execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+      fs.writeFileSync(path.join(evaDir, 'seed.js'), '// seed\n');
+      execFileSync('git', ['add', '-A'], { cwd: dir });
+      execFileSync('git', ['commit', '-q', '-m', 'base'], { cwd: dir });
+
+      execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: dir });
+      fs.writeFileSync(path.join(evaDir, 'foo.test.js'), 'export function shouldNotBeScanned() { return 1; }\n');
+      execFileSync('git', ['add', '-A'], { cwd: dir });
+      execFileSync('git', ['commit', '-q', '-m', 'add test file'], { cwd: dir });
+
+      const files = candidateFilesDiff(dir).map((f) => path.relative(dir, f).split(path.sep).join('/'));
+      expect(files).not.toContain('lib/eva/foo.test.js');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -170,5 +279,16 @@ describe('TS-11: CI workflow paths stay consistent with the rule\'s own scan sco
     expect(workflow).toContain("'lib/eva/**/*.js'");
     expect(workflow).toContain("'lib/eva/**/*.mjs'");
     expect(workflow).toContain('fetch-depth: 0'); // required for merge-base resolution (TS-10)
+  });
+
+  // Tied to the regex ITSELF, not bare string containment -- if EVA_FILE_RE is ever widened
+  // (e.g. to include .ts), this test fails until the workflow's paths: filter is updated too,
+  // which is the drift this scenario exists to catch (EXEC-phase TESTING finding: the
+  // string-containment version above cannot detect that drift on its own).
+  it('EVA_FILE_RE accepts exactly the extensions the workflow triggers on, and nothing wider', () => {
+    expect(EVA_FILE_RE.test('lib/eva/foo.js')).toBe(true);
+    expect(EVA_FILE_RE.test('lib/eva/foo.mjs')).toBe(true);
+    expect(EVA_FILE_RE.test('lib/eva/foo.ts')).toBe(false);
+    expect(EVA_FILE_RE.source).toBe('^lib\\/eva\\/.+\\.(?:js|mjs)$');
   });
 });
