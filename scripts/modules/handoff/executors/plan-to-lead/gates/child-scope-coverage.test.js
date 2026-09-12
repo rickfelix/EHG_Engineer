@@ -6,6 +6,31 @@ import { describe, it, expect } from 'vitest';
 import { createChildScopeCoverageGate } from './child-scope-coverage.js';
 import { createQueuedSupabaseMock } from '../../../../../../tests/factories/queued-supabase-mock.js';
 
+/**
+ * QF-20260911-793 regression guard: createQueuedSupabaseMock's .select() ignores the
+ * projection argument entirely and returns whatever the test queued regardless of what
+ * columns were actually requested — so a test built on it alone cannot detect "the code
+ * filters on a column it never selected" (exactly the defect this asserts against: the
+ * parent-deliverables query must project 'metadata', since the coordination_only exclusion
+ * reads pd.metadata and PostgREST returns undefined for an unrequested column).
+ */
+function spyOnParentDeliverablesSelect(resultsQueue) {
+  const base = createQueuedSupabaseMock(resultsQueue);
+  const selectCalls = [];
+  return {
+    selectCalls,
+    from: (table) => {
+      const chain = base.from(table);
+      const originalSelect = chain.select;
+      chain.select = (...args) => {
+        selectCalls.push({ table, args });
+        return originalSelect(...args);
+      };
+      return chain;
+    },
+  };
+}
+
 const ctx = () => ({ sd: { id: 'sd-parent', sd_type: 'orchestrator' } });
 
 describe('CHILD_SCOPE_COVERAGE queries', () => {
@@ -21,6 +46,20 @@ describe('CHILD_SCOPE_COVERAGE queries', () => {
 
     expect(result.details.isOrchestrator).toBe(true);
     expect(result.details.covered).toBe(1);
+  });
+
+  it('QF-20260911-793: the parent-deliverables query projects metadata (the coordination_only exclusion silently no-ops without it)', async () => {
+    const supabase = spyOnParentDeliverablesSelect([
+      { data: [{ id: 'd1', deliverable_name: 'ship auth', deliverable_type: 'feature', metadata: {} }], error: null }, // parentDeliverables
+      { data: [{ id: 'c1', title: 'child A', status: 'completed' }], error: null }, // children
+      { data: [{ sd_id: 'c1', deliverable_name: 'ship auth flow', deliverable_type: 'feature', completion_status: 'completed' }], error: null }, // childDeliverables
+    ]);
+    const gate = createChildScopeCoverageGate(supabase);
+
+    await gate.validator(ctx());
+
+    const parentDeliverablesCall = supabase.selectCalls.find((c) => c.table === 'sd_scope_deliverables');
+    expect(parentDeliverablesCall.args[0]).toMatch(/\bmetadata\b/);
   });
 
   it('QF-20260911-793: auto-passes when the ONLY parent deliverables are the coordination-only template (no substantive work to check)', async () => {
@@ -66,6 +105,27 @@ describe('CHILD_SCOPE_COVERAGE queries', () => {
     expect(result.score).toBe(100);
     expect(result.details.parentDeliverables).toBe(1);
     expect(result.details.templateExcluded).toBe(1);
+  });
+
+  it('QF-20260911-793: a deliverable claiming coordination_only:true is NOT exempted unless its name also matches the known template set (flag alone is not trusted)', async () => {
+    const supabase = createQueuedSupabaseMock([
+      {
+        data: [
+          { id: 'd1', deliverable_name: 'Ship the real auth feature', deliverable_type: 'feature', metadata: { coordination_only: true } },
+        ],
+        error: null,
+      }, // parentDeliverables — flag set, but NOT one of the 3 known template titles
+      { data: [{ id: 'c1', title: 'child A', status: 'completed' }], error: null }, // children
+      { data: [{ sd_id: 'c1', deliverable_name: 'unrelated child work', deliverable_type: 'feature', completion_status: 'completed' }], error: null }, // childDeliverables
+    ]);
+    const gate = createChildScopeCoverageGate(supabase);
+
+    const result = await gate.validator(ctx());
+
+    // The spoofed deliverable is still scored (not exempted) and fails to match any child work.
+    expect(result.details.parentDeliverables).toBe(1);
+    expect(result.details.templateExcluded).toBe(0);
+    expect(result.passed).toBe(false);
   });
 
   it('FR-2: fails closed (passed:false) when the children query is broken', async () => {

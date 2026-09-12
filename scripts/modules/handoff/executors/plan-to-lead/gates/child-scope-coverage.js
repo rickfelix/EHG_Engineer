@@ -18,6 +18,22 @@ import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'CHILD_SCOPE_COVERAGE';
 
+// QF-20260911-793: the exact set of coordination-template FR titles parent-orchestrator-handler.js
+// emits for every auto-generated orchestrator PRD. metadata.coordination_only alone is NOT trusted
+// as sufficient — prd.functional_requirements is free-form JSONB writable by any PRD author (human,
+// add-prd-to-database.js, or an LLM-authored PRD), so an unnamespaced flag could silently exempt a
+// real deliverable from coverage scoring. Requiring BOTH the flag AND an exact name match against
+// this known, narrow set keeps the exclusion pinned to what this file itself generates.
+const COORDINATION_TEMPLATE_NAMES = new Set([
+  'Child SD Orchestration',
+  'Work Decomposition Structure',
+  'Progress Tracking'
+]);
+
+function isCoordinationTemplate(deliverable) {
+  return Boolean(deliverable?.metadata?.coordination_only) && COORDINATION_TEMPLATE_NAMES.has(deliverable?.deliverable_name);
+}
+
 export function createChildScopeCoverageGate(supabase) {
   return {
     name: GATE_NAME,
@@ -43,10 +59,13 @@ export function createChildScopeCoverageGate(supabase) {
 
       try {
         // Get parent SD deliverables
+        // QF-20260911-793: metadata IS requested — the coordination_only exclusion below
+        // depends on it. PostgREST returns only projected columns; omitting this silently
+        // makes the exclusion a no-op (pd.metadata reads undefined for every row).
         const parentDeliverables = await safeQuery(
           supabase
             .from('sd_scope_deliverables')
-            .select('id, deliverable_name, deliverable_type')
+            .select('id, deliverable_name, deliverable_type, metadata')
             .eq('sd_id', sdId),
           { site: 'child-scope-coverage:parent_deliverables' }
         );
@@ -88,7 +107,7 @@ export function createChildScopeCoverageGate(supabase) {
         // never counted as uncovered) — marked via metadata.coordination_only, threaded
         // through by extract-deliverables-from-prd.js. Checked BEFORE the child-deliverables
         // query below so the all-template case short-circuits without needing it.
-        const substantiveDeliverables = parentDeliverables.filter(pd => !pd?.metadata?.coordination_only);
+        const substantiveDeliverables = parentDeliverables.filter(pd => !isCoordinationTemplate(pd));
         const templateOnlyCount = parentDeliverables.length - substantiveDeliverables.length;
 
         if (substantiveDeliverables.length === 0) {
