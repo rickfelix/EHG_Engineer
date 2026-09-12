@@ -44,8 +44,12 @@ if (showHelp) {
 // before the promise resolved.
 completeQuickFix(qfId, options)
   .then(() => {
-    process.exitCode = 0;
-    setTimeout(() => process.exit(0), 1500).unref();
+    // QF-20260912-697: a post-write stage (lib/completion/post-write-stage.js) may already
+    // have set a non-zero exitCode (POST_WRITE_STAGE_TIMEOUT_EXIT_CODE) to report a hung
+    // post-write step whose own timeout let this promise resolve anyway -- never stomp that
+    // back to 0. Absent a stage signal, 0 is still the success default.
+    process.exitCode = process.exitCode || 0;
+    setTimeout(() => process.exit(process.exitCode ?? 0), 1500).unref();
   })
   .catch((err) => {
     console.error('❌ Error:', err.message);

@@ -21,6 +21,7 @@ import {
 } from '../../../lib/utils/quickfix-evidence-capture.js';
 import fs from 'fs';
 import os from 'os';
+import { runPostWriteStage, POST_WRITE_STAGE_TIMEOUT_EXIT_CODE } from '../../../lib/completion/post-write-stage.js';
 
 import { EHG_ROOT } from './constants.js';
 import { resolveRepoPath } from '../../../lib/repo-paths.js';
@@ -1166,24 +1167,32 @@ export async function completeQuickFix(qfId, options = {}) {
   // Parse "Closes (feedback|harness backlog) <uuid>" footers from PR body and
   // commit messages. Idempotent + fail-soft — DB errors warn but never fail QF
   // completion. Env opt-out: RESOLVE_FEEDBACK_ON_QF_COMPLETE=0.
+  //
+  // QF-20260912-697 (Golf signal 5666c0cd): this `await` had no timeout, so a hung DB
+  // call here could block the caller past its external kill limit with the core write
+  // already persisted and nothing printed to explain why. runPostWriteStage bounds it
+  // and marks the caller's exit code instead of hanging — see lib/completion/post-write-stage.js.
   if (process.env.RESOLVE_FEEDBACK_ON_QF_COMPLETE !== '0') {
-    try {
-      await resolveLinkedFeedbackRows(supabase, qf, qfId, finalPrUrl, commitSha, testDir);
-    } catch (err) {
-      console.log(`   ⚠️  Feedback auto-resolve skipped: ${err?.message || err}\n`);
-    }
+    const stage = await runPostWriteStage(
+      'resolveLinkedFeedbackRows',
+      () => resolveLinkedFeedbackRows(supabase, qf, qfId, finalPrUrl, commitSha, testDir)
+    );
+    if (stage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+    else if (!stage.ok) console.log(`   ⚠️  Feedback auto-resolve skipped: ${stage.error?.message || stage.error}\n`);
   }
 
   // SD-LEO-INFRA-FIX-RECURRENCE-REWIRING-001 FR-4: outcome-tracker completion hook.
   // ADDITIVE to the feedback auto-resolve block above -- a second, independent
   // resolution-writer; never replaces resolve-feedback.js's own writes.
   // Fail-soft + gated. Env opt-out: OUTCOME_TRACKER_ON_QF_COMPLETE=0.
+  // QF-20260912-697: same unbounded-await gap as above.
   if (process.env.OUTCOME_TRACKER_ON_QF_COMPLETE !== '0') {
-    try {
-      await recordQfOutcomeOnComplete(supabase, qf, qfId);
-    } catch (err) {
-      console.log(`   ⚠️  Outcome-tracker record skipped: ${err?.message || err}\n`);
-    }
+    const stage = await runPostWriteStage(
+      'recordQfOutcomeOnComplete',
+      () => recordQfOutcomeOnComplete(supabase, qf, qfId)
+    );
+    if (stage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+    else if (!stage.ok) console.log(`   ⚠️  Outcome-tracker record skipped: ${stage.error?.message || stage.error}\n`);
   }
 
   console.log('📍 Quick-Fix Complete!\n');
