@@ -98,4 +98,33 @@ describe('checkBoardStale (QF-20260830-690)', () => {
     expect(result).toMatchObject({ count: 0, items: [] });
     expect(result.error).toBeTruthy();
   });
+
+  // QF-20260911-888: checkBoardStale is the first unguarded probe after the PM-board stall-alert
+  // pass in adam-quiet-tick.mjs's main() tick order -- five consecutive quiet-tick runs hung past
+  // a 150s external timeout right after this pass on 2026-09-11. A fixture probe whose query
+  // never resolves (simulating a hung select / lock wait) must still produce a result within the
+  // 20s budget, printing the [QUIET_TICK_PROBE_TIMEOUT=checkBoardStale] marker, so the tick can
+  // reach its later probes and summary line instead of hanging forever.
+  it('a query that never resolves times out within budget, prints the PROBE_TIMEOUT marker, and returns the same fail-soft shape', async () => {
+    vi.useFakeTimers();
+    const neverResolvingBuilder = {
+      select: () => neverResolvingBuilder,
+      eq: () => neverResolvingBuilder,
+      in: () => neverResolvingBuilder,
+      order: () => neverResolvingBuilder,
+      range: () => new Promise(() => {}), // hung query fixture -- never settles
+    };
+    const sb = { from: () => neverResolvingBuilder };
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const resultPromise = checkBoardStale(sb);
+    await vi.advanceTimersByTimeAsync(20_000);
+    const result = await resultPromise;
+
+    expect(result).toMatchObject({ count: 0, items: [] });
+    expect(result.error).toMatch(/^PROBE_TIMEOUT:checkBoardStale/);
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[QUIET_TICK_PROBE_TIMEOUT=checkBoardStale]'));
+
+    logSpy.mockRestore();
+  });
 });
