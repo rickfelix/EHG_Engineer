@@ -1,0 +1,29 @@
+{
+  "at": "2026-09-06T14:58:38.115Z",
+  "by": "Bravo 85c82b18 PLAN",
+  "sources": {
+    "RISK": "e1639df4",
+    "DESIGN": "76c40967",
+    "Explore": "804c38ec",
+    "STORIES": "d1d0b2f8",
+    "TESTING": "ec4eafbb",
+    "DATABASE": "8b2ee61d",
+    "SECURITY": "a3587993",
+    "VALIDATION": "c26274e9"
+  },
+  "summary": "Per-date gmail ceiling; auto_apply gate on gmail intents; --modify split with registrar shadow phase; classify-apply allow-list + provenance parity + whole-envelope hash; guarded write shapes; INSERT-based attempt with 23505 code passthrough; inclusive window; skipped start row; 20-min staleness; FEEDERS registry; --et-date; 0/1/2 exit codes; stderr logger; Drive folder check; staged dedupe + retention null-out; calendar cross-calendar dedupe; registrar without /RU /NP reusing alarm builders; eleven PRs; PowerShell-safe smoke",
+  "decisions": {
+    "window": "inclusive everywhere (DESIGN F1 + TESTING D-2)",
+    "ceiling": "per-ET-date budget with ceiling_hit inert (SECURITY F-1 / RISK S1)",
+    "pr_count": 11,
+    "registrar": "no /RU /NP; reuse alarm builders; run-hidden.vbs suppression (RISK measurement supersedes TESTING 4.4 mirror mandate, whose only reason was the /RU assertion)",
+    "gmail_flags": "--apply writes rows; --modify executes intents; registrar omits --modify (SECURITY F-3 / RISK S2 / DESIGN F5)",
+    "staged_prose": "bounded 200-char title + hashes AND retention null-out of dispositioned rows (RISK cond 3 + SECURITY F-7)",
+    "start_status": "skipped + counts.phase started (TESTING 4.5) over degraded (DATABASE) because failed-gauge pollution is chairman-facing"
+  },
+  "routed_out": [
+    "DB-D8 child B verify-block v_columns hardening",
+    "bulk/by-run unarchive verb (RISK S3)",
+    "constants-with-env-override note: MICHAEL_* ids stay env constants with defaults; not hard-coded in feeders"
+  ]
+}

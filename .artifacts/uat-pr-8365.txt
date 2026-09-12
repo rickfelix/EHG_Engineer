@@ -1,0 +1,14 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): pure rule matchers (PR 1b)
+## Summary
+- `lib/michael/rules-match.mjs` (FR-1): `matchGmailRule(rule, thread)` (from / subject / list_id substring and label membership, all-of, case-insensitive), `matchKeywordBuckets(rule, text)` (first declared bucket whose keyword matches as a whole word), `roleTagFor(rules, task)` (first todoist rule whose predicates hold), plus the `matchKeyword` helper. A null `rule_json`, a missing `match`, or an empty predicate set never matches (DATABASE 8b2ee61d §6). The `rule_json` vocabulary the matchers read is documented in the module header.
+- `lib/michael/feeder.mjs`: `upstream` also accepts the FR-1(f) object form `{ feeder, accept: [...] }` (string ids keep the ok/degraded default).
+
+No DDL; pure functions with no client.
+
+## Test plan
+- `npx vitest run --project unit lib/michael/ scripts/michael-quiet-tick.test.js` → 6 files, 96 tests green
+- eslint clean
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

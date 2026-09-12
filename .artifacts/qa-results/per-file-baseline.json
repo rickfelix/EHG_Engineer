@@ -1,0 +1,98 @@
+[
+  {
+    "file": "scripts/michael-quiet-tick.test.js",
+    "total": 11,
+    "passed": 11,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "lib/michael/db.test.js",
+    "total": 13,
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "lib/michael/gmail-client.test.js",
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "lib/michael/rules.test.js",
+    "total": 23,
+    "passed": 23,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "scripts/michael/act.test.js",
+    "total": 14,
+    "passed": 14,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "scripts/michael/autonomy-read.test.js",
+    "total": 18,
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "scripts/michael/google-consent.test.js",
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "scripts/michael/retention.test.js",
+    "total": 8,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "scripts/michael/verbs.test.js",
+    "total": 18,
+    "passed": 18,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "scripts/__tests__/eva-host-and-arm.test.js",
+    "total": 23,
+    "passed": 23,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "tests/unit/cron/michael-retention-wiring.test.js",
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  },
+  {
+    "file": "tests/unit/fleet/setup-alarm-cron-tasks.test.js",
+    "total": 24,
+    "passed": 24,
+    "failed": 0,
+    "skipped": 0,
+    "status": "passed"
+  }
+]

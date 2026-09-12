@@ -1,0 +1,22 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): host Task Scheduler registrar for the credentialed feeders (PR 7)
+## Summary
+- `scripts/setup-michael-host-tasks.mjs` (FR-8, TR-8): registers `EHG Michael tasks-classifier`, `EHG Michael calendar-read` and `EHG Michael gmail-triage` as host-local Task Scheduler tasks (`/SC MINUTE /MO 15 /ST 00:00 /F`) through the hidden launcher, reusing `buildWrapperScript`, `buildHiddenTrAction`, `buildCreateArgs`, `buildRemoveArgs`, `buildQueryArgs`, `buildQueryXmlArgs` and `verifyHiddenLaunch` from `scripts/setup-alarm-cron-tasks.mjs` by name (DESIGN F13). Task names are validated against `TASK_NAME_ILLEGAL_CHARS` inside the build path (QF-20260906-961). Wrappers `scripts/cron/michael-<feeder>-task.cmd` are generated at register time and gitignored. `--dry-run`, `--status`, `--verify`, `--remove`; `main(argv, deps)` exported like every `setup-*` sibling.
+- **No `/RU` and no `/NP`** (VALIDATION condition 6 resolved by measurement, see below). **Shadow phase**: gmail-triage is registered with `--apply` and WITHOUT `--modify`; promotion is `--remove` then `--with-modify` after one dry-run morning (SECURITY F-3 / RISK S2). Header states the host preconditions: awake (no wake-from-sleep configured) and on mains power (`DisallowStartIfOnBatteries`).
+- Merge order: after PR 4b (#8378) so the registered `--apply` command is the landed read-only mode.
+
+## Measurement (PowerShell, unelevated, this host, 2026-09-06)
+```
+schtasks /Create /TN "EHG Michael Probe (delete me)" /TR "cmd /c exit" /SC MINUTE /MO 15 /ST 00:00 /F
+SUCCESS: The scheduled task "EHG Michael Probe (delete me)" has successfully been created.   (exit 0)
+schtasks /Query /TN ... /XML  ->  <LogonType>InteractiveToken</LogonType> | <Interval>PT15M</Interval>
+schtasks /Delete /TN "EHG Michael Probe (delete me)" /F  ->  SUCCESS ... was successfully deleted.   (exit 0)
+```
+RISK e1639df4 measured the `/RU <user> /NP` form on the same host: password prompt, then `ERROR: Access is denied` (exit 1). All ten existing EHG host tasks are LogonType Interactive.
+
+## Test plan
+- `npx vitest run --project unit tests/unit/fleet/setup-michael-host-tasks.test.js tests/unit/fleet/setup-alarm-cron-tasks.test.js` → 34 tests green (create args without /RU /NP, quoted hidden TR action, shadow-phase table without --modify and `--with-modify` promoting only gmail-triage, colon-name throw, non-win32 exit 2, dry-run mutates nothing, register writes and creates, launcher-missing refusal, failed /Create exit 1, --status/--remove/--verify branches incl. split `<Command>`/`<Arguments>` XML and a bare .cmd rejected)
+- eslint clean
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

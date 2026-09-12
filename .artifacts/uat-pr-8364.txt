@@ -1,0 +1,18 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): feeder harness (PR 1a)
+## Summary
+- `lib/michael/feeder.mjs` (FR-1): `runFeeder` with the six inert reasons (outside_et_window, tables_absent, in_flight, already_ok, ceiling_hit, upstream_not_ready); INSERT-based attempt `max+1` with one 23505 retry; start row `status='skipped'` + `counts.phase='started'` (no `running` in the CHECK; `failed` would inflate the quiet-tick gauge); per-feeder 20-minute staleness fence compared as an ISO string; stderr logger so `--json` stdout stays one object; 0/1/2 exit codes; frozen `FEEDERS` registry; one `gracefulExit`; pure `assembleReadiness({ runs, now, required, deadlineEt })` for child E.
+- `lib/michael/db.mjs`: `writeRows` passes `code`/`details` through beside the message (DATABASE DB-D3, additive).
+- `scripts/michael-quiet-tick.mjs`: imports the window helpers, `etMinuteOfDay` and `BRIEF_DEADLINE_ET` from the harness; `inWindow` keeps its inclusive `[start, end]` semantics and `WINDOW_ET` default (11 tick tests unchanged and green).
+
+No DDL. The michael_* tables are chairman-gated and unapplied; every test injects a client and the harness is inert (`tables_absent`) live.
+
+## LOC
+472 changed against the 100 target / 400 ceiling. Justification: the harness and its test are one reviewable unit (ten enumerated behaviours in FR-1), and the PRD's eleven-PR split (FR-10) already isolates the matcher into PR 1b. Sibling michael PRs in this family measured 505/562/283/341/310/311.
+
+## Test plan
+- `npx vitest run --project unit lib/michael/ scripts/michael-quiet-tick.test.js` → 5 files, 83 tests green
+- eslint clean on the five touched files
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

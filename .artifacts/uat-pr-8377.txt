@@ -1,0 +1,14 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): todoist-brief GHA workflow and wiring test (PR 6b)
+## Summary
+- `.github/workflows/michael-todoist-brief-cron.yml` (FR-7, TR-7): the both-DST cron pair (`*/15 8-9 * * *` EDT, `*/15 9-10 * * *` EST) with the 04:45-05:30 ET window in trailing comments (chairman-morning-brief-cron.yml shape), `workflow_dispatch`, `permissions: contents: read`, `concurrency` on the workflow name with cancel-in-progress, `timeout-minutes: 10`, node 22 with npm cache, `npm ci --ignore-scripts`, env `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TODOIST_API_TOKEN` (last), and `node scripts/michael/todoist-brief.mjs --apply` with no `cd`. The feeder itself (PR 6a, #8375) is inert outside the window and before the chairman applies the migration.
+- `tests/unit/cron/michael-todoist-brief-wiring.test.js`: forked from the retention wiring test; pins the exact secret set {SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TODOIST_API_TOKEN}, the negative regex with TODOIST dropped, the env key order ending in TODOIST_API_TOKEN, both cron lines, dispatch, read-only contents, single-flight, timeout, install and run lines, and the AC-3 grep that no workflow references `MICHAEL_ENCRYPTION_KEY`, `GOOGLE_CLIENT_ID` or `GOOGLE_CLIENT_SECRET`.
+
+No credential is added to GitHub Actions beyond the already-provisioned Todoist token (ratification 0daf3bd8). No DDL.
+
+## Test plan
+- `npx vitest run --project unit tests/unit/cron/michael-todoist-brief-wiring.test.js tests/unit/cron/michael-retention-wiring.test.js` → green
+- eslint clean
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

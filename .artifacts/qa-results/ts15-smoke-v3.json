@@ -1,0 +1,149 @@
+{
+  "scenario": "TS-15",
+  "producer": "qa-smoke-ts15.cjs",
+  "ranAt": "2026-09-07T00:24:05.548Z",
+  "cwd": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+  "node": "v24.12.0",
+  "results": [
+    {
+      "script": "scripts/michael/calendar-read.mjs",
+      "exitCode": 2,
+      "signal": null,
+      "stdoutBytes": 170,
+      "stdoutIsSingleJsonObject": true,
+      "parseError": null,
+      "parsed": {
+        "ok": false,
+        "refusal": "CONSTANT_MISSING",
+        "message": "MICHAEL_EXELON_CALENDAR_ID is not set on this host (add it to the host .env)",
+        "variable": "MICHAEL_EXELON_CALENDAR_ID"
+      },
+      "stderrTail": ""
+    },
+    {
+      "script": "scripts/michael/gmail-triage.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 145,
+      "stdoutIsSingleJsonObject": true,
+      "parseError": null,
+      "parsed": {
+        "ok": true,
+        "action": "inert",
+        "reason": "outside_et_window",
+        "feeder": "gmail-triage",
+        "et_date": "2026-09-06",
+        "window": {
+          "start": "04:30",
+          "end": "05:30"
+        }
+      },
+      "stderrTail": ""
+    },
+    {
+      "script": "scripts/michael/tasks-classifier.mjs",
+      "exitCode": 2,
+      "signal": null,
+      "stdoutBytes": 176,
+      "stdoutIsSingleJsonObject": true,
+      "parseError": null,
+      "parsed": {
+        "ok": false,
+        "refusal": "CONSTANT_MISSING",
+        "message": "MICHAEL_TASKS_DRIVE_FOLDER_ID is not set on this host (add it to the host .env)",
+        "variable": "MICHAEL_TASKS_DRIVE_FOLDER_ID"
+      },
+      "stderrTail": ""
+    },
+    {
+      "script": "scripts/michael/todoist-brief.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 146,
+      "stdoutIsSingleJsonObject": true,
+      "parseError": null,
+      "parsed": {
+        "ok": true,
+        "action": "inert",
+        "reason": "outside_et_window",
+        "feeder": "todoist-brief",
+        "et_date": "2026-09-06",
+        "window": {
+          "start": "04:45",
+          "end": "05:30"
+        }
+      },
+      "stderrTail": ""
+    },
+    {
+      "script": "scripts/michael/queue-read.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 120,
+      "stdoutIsSingleJsonObject": true,
+      "parseError": null,
+      "parsed": {
+        "ok": true,
+        "tables_absent": true,
+        "et_date": "2026-09-06",
+        "items": [],
+        "tasks": [],
+        "counts": {
+          "items": 0,
+          "tasks": 0
+        },
+        "errors": []
+      },
+      "stderrTail": ""
+    },
+    {
+      "script": "scripts/michael/retention.mjs",
+      "exitCode": 0,
+      "signal": null,
+      "stdoutBytes": 555,
+      "stdoutIsSingleJsonObject": true,
+      "parseError": null,
+      "parsed": {
+        "ok": true,
+        "tables_absent": true,
+        "mode": "dry_run",
+        "days": 30,
+        "cutoff": "2026-08-07",
+        "per_table": [
+          {
+            "table": "michael_brief_runs",
+            "action": "null",
+            "eligible": null,
+            "tables_absent": true
+          },
+          {
+            "table": "michael_gmail_triage_items",
+            "action": "null",
+            "eligible": null,
+            "tables_absent": true
+          },
+          {
+            "table": "michael_calendar_day",
+            "action": "delete",
+            "eligible": null,
+            "tables_absent": true
+          },
+          {
+            "table": "michael_feeder_runs",
+            "action": "null",
+            "eligible": null,
+            "tables_absent": true
+          },
+          {
+            "table": "michael_staged_items",
+            "action": "empty_payload",
+            "eligible": null,
+            "tables_absent": true
+          }
+        ],
+        "stamped": false
+      },
+      "stderrTail": ""
+    }
+  ]
+}

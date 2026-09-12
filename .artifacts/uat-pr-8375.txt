@@ -1,0 +1,14 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): todoist-brief feeder (PR 6a)
+## Summary
+- `scripts/michael/todoist-brief.mjs` (FR-7, feeder half): runs under `runFeeder` (feeder `todoist-brief`, venue gha, window 04:45-05:30 ET). Pages every project and task through the injected Todoist client (lazy `createTodoistClient` inside `run()`; `TODOIST_API_TOKEN` is the only secret, no Google credential). Keeps tasks due today or overdue on the ET calendar; excludes projects named EVA and For Processing by name and the EHG chairman project by id (counted into `counts.ehg_pointer`); tags roles through `roleTagFor` over active domain-todoist rules; grades deterministically from an `Est:` line (S under 30 min, M under 90, L otherwise) with `est_minutes`, the rest queued with `effort_grade` null. Snapshot writes are guarded: upsert with `ignoreDuplicates` then an update of only `effort_grade`, `est_minutes`, `role_tag`, `rule_key` filtered by `chosen_action IS NULL AND moved_back_at IS NULL`; base rows never carry `chosen_action`, `mutations_applied` or `moved_back_at`. Overnight mutations only for active rules with `auto_apply=true` and verb label (adds the rule's label) or reschedule (keeps `MICHAEL_DAILY_CHECKIN_TASK_ID` due today), each deduped on the action key inside `mutations_applied` and recorded redacted (`content_sha256` + length). Rows with a chairman decision are never mutated. Dry-run by default; `--apply` writes and mutates. Counts and logs carry ids and numbers only.
+- The workflow and wiring test land in PR 6b.
+
+No DDL.
+
+## Test plan
+- `npx vitest run --project unit scripts/michael/todoist-brief.test.js` → 23 tests green (Est parsing and grading, ET due-date conversion, exclusions by name and id, role tags, guarded write shapes, mutation apply/dedupe/skip-on-chosen, check-in reschedule, failure degrade, paging, credential-free source assertion)
+- eslint clean
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

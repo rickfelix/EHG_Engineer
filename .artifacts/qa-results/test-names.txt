@@ -1,0 +1,264 @@
+### lib/michael/constants.test.js
+  [passed] resolveConstant a missing required constant is refusal CONSTANT_MISSING naming the variable (never a throw)
+  [passed] resolveConstant defaults: the ceiling is 60 and the EHG chairman project id matches chairman-notify.js
+  [passed] resolveConstant the ceiling parses an env override and refuses a non-positive-integer value
+  [passed] resolveConstant an unknown name is CONSTANT_UNKNOWN and the registry is frozen
+  [passed] resolveConstants returns all values or the first refusal
+### lib/michael/feeder.test.js
+  [passed] isMissingRelation recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message
+  [passed] readRows returns rows with a bounded select
+  [passed] readRows missing relation => empty rows, tables_absent=true, NO error field
+  [passed] readRows a thrown COUNT_UNMEASURABLE is a missing relation too
+  [passed] readRows a genuine error is surfaced distinctly
+  [passed] writeRows missing relation => ok:false with the TABLES_ABSENT refusal, never a throw
+  [passed] writeRows success returns the data
+  [passed] writeRows another failure is WRITE_FAILED with the message
+  [passed] canonicalJson / sha256Hex is key-order independent at every level (the hash subject must be canonical)
+  [passed] parseArgs / refusal parses --flag, --key value and --key=value, positionals in _
+  [passed] parseArgs / refusal refusal envelopes carry ok:false and the code
+  [passed] writeRows code passthrough (child D, DB-D3) surfaces error.code and details beside the message so a caller can branch on 23505
+  [passed] writeRows code passthrough (child D, DB-D3) a thrown error without a code yields code null
+  [passed] pure helpers registry lists the six feeder ids with venues and inclusive windows
+  [passed] pure helpers inWindow is inclusive at both ends and requires a window
+  [passed] pure helpers etMinuteOfDay, isUniqueViolation, staleThresholdMinutes and exitCodeFor
+  [passed] runFeeder inert paths (TS-1) refuses an unregistered feeder id before any read
+  [passed] runFeeder inert paths (TS-1) is inert outside the ET window with no read and no run
+  [passed] runFeeder inert paths (TS-1) treats the window end minute as in-window (calendar-read at exactly 05:00)
+  [passed] runFeeder inert paths (TS-1) is inert with tables_absent when the relation is missing
+  [passed] runFeeder inert paths (TS-1) is inert already_ok, ceiling_hit and upstream_not_ready
+  [passed] runFeeder inert paths (TS-1) the object form { feeder, accept } narrows what counts as ready
+  [passed] runFeeder inert paths (TS-1) a malformed upstream entry is refusal UPSTREAM_INVALID before any read (never a throw)
+  [passed] runFeeder inert paths (TS-1) a degraded upstream counts as ready
+  [passed] single-flight and attempt (TS-2) a row started 12 minutes ago on a */15 feeder is still in_flight; 21 minutes ago is not
+  [passed] single-flight and attempt (TS-2) writes the start row as status skipped / phase started with ISO started_at, then finishes with the real status
+  [passed] single-flight and attempt (TS-2) a 23505 whose re-read shows the winner still running yields in_flight (never a second concurrent attempt)
+  [passed] single-flight and attempt (TS-2) retries exactly once on a 23505 when the re-read shows the winner already finished degraded, minting attempt max+1
+  [passed] single-flight and attempt (TS-2) a re-read after a 23505 that shows an ok, imported or ceiling_hit row is inert with that reason
+  [passed] single-flight and attempt (TS-2) a finish write the ledger did not hold returns finish_write_ok false and exit code 1
+  [passed] single-flight and attempt (TS-2) losing the race twice is inert in_flight, never failed
+  [passed] single-flight and attempt (TS-2) a coded throw from run() lands as status failed with counts.refusal and exit code 1
+  [passed] single-flight and attempt (TS-2) hands run() the prior rows, the ET date, the attempt and an etDateOverride
+  [passed] single-flight and attempt (TS-2) logs single-line JSON to the injected logger and never to stdout
+  [passed] dry run runs the gates, calls run() with dryRun and writes nothing (no claim, no run row)
+  [passed] dry run a dry run still honours the inert gates and maps a failed status to exit 1
+  [passed] assembleReadiness (TS-3) assembles when every required feeder is ok, taking the best attempt per feeder
+  [passed] assembleReadiness (TS-3) assembles degraded when a required feeder is only degraded
+  [passed] assembleReadiness (TS-3) waits for a missing feeder before the deadline and assembles degraded after it
+  [passed] assembleReadiness (TS-3) honours injected required set and deadline (child E contract)
+### lib/michael/gmail-client.test.js
+  [passed] modifyThread contract (gmail-act.mjs:5-8, 66-68) maps to users.threads.modify with userId me and returns { ok:true, modified }
+  [passed] modifyThread contract (gmail-act.mjs:5-8, 66-68) an API or auth failure is { ok:false, error } and never throws
+  [passed] modifyThread contract (gmail-act.mjs:5-8, 66-68) TS-12: TRASH and SPAM are refused before any API call (RISK 2)
+  [passed] read legs (child D FR-2, TS-16) listThreads maps q and a bounded maxResults (never above 200) and flags truncation
+  [passed] read legs (child D FR-2, TS-16) getThreadMeta requests format metadata with exactly the four headers and never a body; reads the last message
+  [passed] read legs (child D FR-2, TS-16) listLabels maps labels.list; a rejecting factory is { ok:false, error } on every read leg
+### lib/michael/google-clients.test.js
+  [passed] listCalendarEvents maps calendarId/timeMin/timeMax with singleEvents, orderBy startTime and maxResults 250
+  [passed] listCalendarEvents refuses missing args and maps a rejecting factory to { ok:false, error }
+  [passed] listDriveFiles and readDriveFileText lists files in a folder by exact name with the bounded field set
+  [passed] listDriveFiles and readDriveFileText reads text only after the parents check passes (metadata get, then alt=media)
+  [passed] listDriveFiles and readDriveFileText FILE_OUTSIDE_CONFIGURED_FOLDER for a file whose parents omit the folder, and no content is fetched (SECURITY F-10)
+  [passed] listDriveFiles and readDriveFileText without injected auth and with an empty env the credential resolver refuses (no network, no throw)
+### lib/michael/rules-match.test.js
+  [passed] matchGmailRule matches all-of predicates case-insensitively as substrings, returning rule_key, class and action
+  [passed] matchGmailRule fails when any predicate misses (all-of), and honours list_id and label predicates
+  [passed] matchGmailRule never matches vacuously: null rule_json, no match object, empty predicate set, or a bad thread
+  [passed] matchGmailRule whitespace-only, empty-string and non-string predicates are not predicates (never vacuous)
+  [passed] matchGmailRule accepts a bare rule_json object (rule_key then null)
+  [passed] matchKeyword and matchKeywordBuckets matches whole words only, case-insensitively, and escapes regex metacharacters
+  [passed] matchKeyword and matchKeywordBuckets routes to the first declared bucket that matches and reports the keyword
+  [passed] matchKeyword and matchKeywordBuckets is null for a missing or malformed buckets object or non-string text
+  [passed] roleTagFor returns the first rule (row order) whose predicates all hold
+  [passed] roleTagFor skips null rule_json, rules without role_tag, partial matches, and returns null when nothing matches
+### scripts/michael/calendar-read.test.js
+  [passed] isMissingRelation recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message
+  [passed] readRows returns rows with a bounded select
+  [passed] readRows missing relation => empty rows, tables_absent=true, NO error field
+  [passed] readRows a thrown COUNT_UNMEASURABLE is a missing relation too
+  [passed] readRows a genuine error is surfaced distinctly
+  [passed] writeRows missing relation => ok:false with the TABLES_ABSENT refusal, never a throw
+  [passed] writeRows success returns the data
+  [passed] writeRows another failure is WRITE_FAILED with the message
+  [passed] canonicalJson / sha256Hex is key-order independent at every level (the hash subject must be canonical)
+  [passed] parseArgs / refusal parses --flag, --key value and --key=value, positionals in _
+  [passed] parseArgs / refusal refusal envelopes carry ok:false and the code
+  [passed] writeRows code passthrough (child D, DB-D3) surfaces error.code and details beside the message so a caller can branch on 23505
+  [passed] writeRows code passthrough (child D, DB-D3) a thrown error without a code yields code null
+  [passed] pure helpers coded markers, optional detection, date shifting and ET midnight
+  [passed] pure helpers eventRow carries the uniform key set; all-day rows have no times and take their own date
+  [passed] pure helpers dedupes the same event_id across calendars preferring primary, and groups intersecting intervals per date
+  [passed] classifyDay (TS-8) Recovery when no non-optional events (none, or only optional/tentative ones)
+  [passed] classifyDay (TS-8) Interpersonal with three or more accepted meetings; Deep with fewer than two; Shallow with exactly two
+  [passed] classifyDay (TS-8) a coded event overrides everything, including three meetings and the Tuesday rule
+  [passed] classifyDay (TS-8) Tuesday-office rule marks Tuesday Interpersonal when any accepted in-office event exists, but not on other days
+  [passed] classifyDay (TS-8) summarize reports counts by date, coded, optional and overlap groups
+  [passed] runCalendarRead (TS-11, TS-15) GITHUB_ACTIONS=true is refused HOST_VENUE_REQUIRED before any client or read, even with auth injected
+  [passed] runCalendarRead (TS-11, TS-15) a missing MICHAEL_EXELON_CALENDAR_ID is CONSTANT_MISSING; --date is refused; outside the window is inert with no API call
+  [passed] runCalendarRead (TS-11, TS-15) dry run (default) reads both calendars over today ±1 ET, previews the rows and writes nothing
+  [passed] runCalendarRead (TS-11, TS-15) --apply upserts the rows by (et_date, event_id) with a uniform key set and writes the run row
+  [passed] runCalendarRead (TS-11, TS-15) one calendar rejecting is degraded with counts.failed_calendar; both rejecting is failed with error_code
+  [passed] runCalendarRead (TS-11, TS-15) a long all-day block that began before the window reaches today through the run loop
+  [passed] runCalendarRead (TS-11, TS-15) a truncated calendar page degrades the run, and a malformed event is skipped and counted
+  [passed] runCalendarRead (TS-11, TS-15) --et-date pins the ET date and the Tuesday-office rule reaches the counts
+  [passed] runCalendarRead (TS-11, TS-15) does not import googleapis or read a credential at import time
+### scripts/michael/classify-apply.test.js
+  [passed] isMissingRelation recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message
+  [passed] readRows returns rows with a bounded select
+  [passed] readRows missing relation => empty rows, tables_absent=true, NO error field
+  [passed] readRows a thrown COUNT_UNMEASURABLE is a missing relation too
+  [passed] readRows a genuine error is surfaced distinctly
+  [passed] writeRows missing relation => ok:false with the TABLES_ABSENT refusal, never a throw
+  [passed] writeRows success returns the data
+  [passed] writeRows another failure is WRITE_FAILED with the message
+  [passed] canonicalJson / sha256Hex is key-order independent at every level (the hash subject must be canonical)
+  [passed] parseArgs / refusal parses --flag, --key value and --key=value, positionals in _
+  [passed] parseArgs / refusal refusal envelopes carry ok:false and the code
+  [passed] writeRows code passthrough (child D, DB-D3) surfaces error.code and details beside the message so a caller can branch on 23505
+  [passed] writeRows code passthrough (child D, DB-D3) a thrown error without a code yields code null
+  [passed] validation (pure) a file without producer or run_id is refused PROVENANCE_MISSING before any read; a wrong producer PRODUCER_UNKNOWN
+  [passed] validation (pure) a tampered file is refused HASH_MISMATCH (any field, including metering and a verdict); a missing hash too
+  [passed] validation (pure) model, metering, produced_at, et_date and unknown envelope keys are refused with their own codes
+  [passed] validation (pure) items and tasks: allow-lists, class shape, bounded reason, intent shape, grades
+  [passed] validation (pure) pathAllowed admits only .json files under .artifacts/michael-seat/; mergeRun sums counts and metering and lists models
+  [passed] runClassifyApply a valid file updates only the addressed rows by natural key, never those with action_taken_at / chosen_action / already classified or graded, and upserts one seat feeder_runs row with metering
+  [passed] runClassifyApply a second pass accumulates into the same seat row (counts and tokens summed, models listed, started_at kept); rows that moved on are skipped, not overwritten
+  [passed] runClassifyApply a replayed run_id is inert (no row or metering write); a prior degraded seat row stays degraded through a clean pass
+  [passed] runClassifyApply the window gates on produced_at: a file produced at 07:25 ET applied at 07:31 ET is applied; one produced outside the window is inert
+  [passed] runClassifyApply dry-run by default: validates, reads the seat row, writes nothing, previews the merged row
+  [passed] runClassifyApply refusals: PATH_NOT_ALLOWED, FILE_REQUIRED, FILE_INVALID, --date, and every envelope refusal happen before any DB call; outside the window and absent tables are inert
+  [passed] runClassifyApply a refused row write is reported, the pass continues, the seat row lands degraded, exit 1
+  [passed] runClassifyApply never writes summary, prose or a run row outside the allow-lists (source guard)
+### scripts/michael/gmail-triage.test.js
+  [passed] isMissingRelation recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message
+  [passed] readRows returns rows with a bounded select
+  [passed] readRows missing relation => empty rows, tables_absent=true, NO error field
+  [passed] readRows a thrown COUNT_UNMEASURABLE is a missing relation too
+  [passed] readRows a genuine error is surfaced distinctly
+  [passed] writeRows missing relation => ok:false with the TABLES_ABSENT refusal, never a throw
+  [passed] writeRows success returns the data
+  [passed] writeRows another failure is WRITE_FAILED with the message
+  [passed] canonicalJson / sha256Hex is key-order independent at every level (the hash subject must be canonical)
+  [passed] parseArgs / refusal parses --flag, --key value and --key=value, positionals in _
+  [passed] parseArgs / refusal refusal envelopes carry ok:false and the code
+  [passed] writeRows code passthrough (child D, DB-D3) surfaces error.code and details beside the message so a caller can branch on 23505
+  [passed] writeRows code passthrough (child D, DB-D3) a thrown error without a code yields code null
+  [passed] pure helpers inboxQueries excludes keep_in_inbox label names from the fresh query only
+  [passed] pure helpers intentFor yields an intent only for auto_apply=true with verb label or archive (SECURITY F-2)
+  [passed] pure helpers itemRow has the uniform owned key set; firstMatch takes the first rule in order and skips a missing class
+  [passed] runGmailTriage refuses GITHUB_ACTIONS=true before any call, --modify without --apply, --date, a bad --et-date, and an invalid ceiling
+  [passed] runGmailTriage is inert outside 04:30-05:30 ET and while the tables are absent, with no Gmail call
+  [passed] runGmailTriage dry run: metadata-only reads, rules-first matching, auto_apply gate, fleet class, unmatched queued; writes nothing
+  [passed] runGmailTriage --apply: label reconcile writes only the three owned columns; items use ignoreDuplicates then guarded updates of the owned keys (TS-17)
+  [passed] runGmailTriage --apply without --modify never calls threads.modify (the registrar's shadow mode)
+  [passed] runGmailTriage TS-7: a configured class whose label is missing from Gmail degrades, is listed, and its rule is skipped while others proceed
+  [passed] runGmailTriage keep_in_inbox threads are skipped by labelIds even when the sweep query returns them; an intent to a label absent from Gmail is never staged
+  [passed] runGmailTriage labels.list failing is failed; a thread metadata failure is counted and degrades; a full page marks truncated_query
+  [passed] runGmailTriage TS-5: 80 intents with ceiling 60 yield exactly 60 modify calls in creation order, degraded with ceiling_hit, 20 intents left
+  [passed] runGmailTriage TS-5 re-run: after an interrupted run only the intents without action_taken_at are acted on
+  [passed] runGmailTriage the ceiling bounds the ET date: prior runs' threads_modified shrink the budget and exhaust it (five fires, exactly 60 for the date)
+  [passed] runGmailTriage exact exhaustion sets ceiling_hit; a row stamped or re-intended between the pending read and the call is skipped; a zero-row stamp still spends the budget
+  [passed] runGmailTriage two live attempts cannot spend additively: the ledger is re-read every LEDGER_RECHECK_EVERY modifies and the run stops at the ceiling
+  [passed] runGmailTriage TS-6: a previously archived thread back with a newer last message is written borderline and not modified
+  [passed] runGmailTriage a modify rejecting for one thread leaves it unstamped, counts modify_failed, and continues; all failing is failed
+  [passed] runGmailTriage no credential is read directly and googleapis is not imported (source assertions)
+### scripts/michael/queue-read.test.js
+  [passed] isMissingRelation recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message
+  [passed] readRows returns rows with a bounded select
+  [passed] readRows missing relation => empty rows, tables_absent=true, NO error field
+  [passed] readRows a thrown COUNT_UNMEASURABLE is a missing relation too
+  [passed] readRows a genuine error is surfaced distinctly
+  [passed] writeRows missing relation => ok:false with the TABLES_ABSENT refusal, never a throw
+  [passed] writeRows success returns the data
+  [passed] writeRows another failure is WRITE_FAILED with the message
+  [passed] canonicalJson / sha256Hex is key-order independent at every level (the hash subject must be canonical)
+  [passed] parseArgs / refusal parses --flag, --key value and --key=value, positionals in _
+  [passed] parseArgs / refusal refusal envelopes carry ok:false and the code
+  [passed] writeRows code passthrough (child D, DB-D3) surfaces error.code and details beside the message so a caller can branch on 23505
+  [passed] writeRows code passthrough (child D, DB-D3) a thrown error without a code yields code null
+  [passed] runQueueRead reads the class-null items and effort_grade-null tasks for the ET date, bounded by the literal read bound, and prints only the published keys
+  [passed] runQueueRead --et-date overrides the date and is validated; --date is refused; a read failure is reported with exit 1
+  [passed] runQueueRead absent tables yield empty lists, ok, exit 0 and no count read
+  [passed] runQueueRead a full page is reported truncated and only then counted exactly (presence first, never a head-count on an absent table)
+  [passed] runQueueRead --headers re-fetches From/Subject/List-Id/Date per queued thread to stdout only (host venue), capped, failures counted; refused on GHA
+  [passed] runQueueRead is read-only: no writeRows import and no update/insert/upsert call in the source
+### scripts/michael/retention.test.js
+  [passed] cutoffEtDate is today-ET minus N days, on the ET calendar (05:00 ET on 09-06 -> 08-07 at 30 days)
+  [passed] runRetention dry run: counts eligible rows per target with a STRICT lt(cutoff), writes no table, and still stamps feeder_runs (venue gha)
+  [passed] runRetention apply: nulls exactly the prose columns and deletes calendar rows, both strictly older than the cutoff (boundary row at cutoff untouched)
+  [passed] runRetention never touches rules, closures, the ledger, snapshots, labels or credentials
+  [passed] runRetention child D: empties the payload of DISPOSITIONED staged rows strictly older than the cutoff instant and leaves undispositioned rows untouched (TS-19)
+  [passed] runRetention the stamp attempt increments from the newest retention row of the same ET day
+  [passed] runRetention absent tables: inert (ok, tables_absent=true), no writes, no stamp attempted
+  [passed] runRetention --days validates; a failed stamp makes the run not ok
+### scripts/michael/tasks-classifier.test.js
+  [passed] isMissingRelation recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message
+  [passed] readRows returns rows with a bounded select
+  [passed] readRows missing relation => empty rows, tables_absent=true, NO error field
+  [passed] readRows a thrown COUNT_UNMEASURABLE is a missing relation too
+  [passed] readRows a genuine error is surfaced distinctly
+  [passed] writeRows missing relation => ok:false with the TABLES_ABSENT refusal, never a throw
+  [passed] writeRows success returns the data
+  [passed] writeRows another failure is WRITE_FAILED with the message
+  [passed] canonicalJson / sha256Hex is key-order independent at every level (the hash subject must be canonical)
+  [passed] parseArgs / refusal parses --flag, --key value and --key=value, positionals in _
+  [passed] parseArgs / refusal refusal envelopes carry ok:false and the code
+  [passed] writeRows code passthrough (child D, DB-D3) surfaces error.code and details beside the message so a caller can branch on 23505
+  [passed] writeRows code passthrough (child D, DB-D3) a thrown error without a code yields code null
+  [passed] pure helpers normalizes content, parses both file shapes, ages a file, and routes by the first matching rule with a project
+  [passed] pure helpers staged payloads carry exactly the named keys and a 200-char title
+  [passed] pure helpers fetchLabeledTasks follows nextCursor across pages and reports an exceeded page bound
+  [passed] runTasksClassifier refuses GITHUB_ACTIONS=true before any Drive call even with auth injected; missing folder constant; --date
+  [passed] runTasksClassifier is inert outside 03:45-04:30 ET and while the tables are absent, with no Drive call
+  [passed] runTasksClassifier TS-9: a stale file (> 36 h) is skipped/stale with no Todoist call; a missing file is skipped/file_missing
+  [passed] runTasksClassifier TS-9: an unconsumed cleanup-pending.json (newer than the last ok run marker) is skipped/cleanup_pending; a consumed one proceeds
+  [passed] runTasksClassifier TS-9 dry run: routes by bucket, previews creations and stagings, calls no addTask and writes nothing
+  [passed] runTasksClassifier TS-9 apply: creates routed non-duplicate tasks with both labels, stages unrouted items and the consumed set, never writes Drive
+  [passed] runTasksClassifier TS-19: a second fire stages zero duplicates for dedupe_keys already open
+  [passed] runTasksClassifier an item this feeder already bridged (tasks_cleanup ledger) is never re-created, even after its Todoist twin was completed or aged past 7 days
+  [passed] runTasksClassifier the Todoist dedupe follows every page: a twin on page 2 is still a duplicate
+  [passed] runTasksClassifier a failing addTask is counted and degrades; an unreachable Todoist dedupe creates nothing and degrades; an unparseable file fails
+  [passed] runTasksClassifier imports no Todoist or Google SDK at module load and reads no credential directly
+### scripts/michael/todoist-brief.test.js
+  [passed] isMissingRelation recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message
+  [passed] readRows returns rows with a bounded select
+  [passed] readRows missing relation => empty rows, tables_absent=true, NO error field
+  [passed] readRows a thrown COUNT_UNMEASURABLE is a missing relation too
+  [passed] readRows a genuine error is surfaced distinctly
+  [passed] writeRows missing relation => ok:false with the TABLES_ABSENT refusal, never a throw
+  [passed] writeRows success returns the data
+  [passed] writeRows another failure is WRITE_FAILED with the message
+  [passed] canonicalJson / sha256Hex is key-order independent at every level (the hash subject must be canonical)
+  [passed] parseArgs / refusal parses --flag, --key value and --key=value, positionals in _
+  [passed] parseArgs / refusal refusal envelopes carry ok:false and the code
+  [passed] writeRows code passthrough (child D, DB-D3) surfaces error.code and details beside the message so a caller can branch on 23505
+  [passed] writeRows code passthrough (child D, DB-D3) a thrown error without a code yields code null
+  [passed] pure helpers parses Est lines in the common shapes and grades S/M/L
+  [passed] pure helpers due dates: a date is taken as-is, a datetime is converted to the ET calendar date; overdue and today qualify
+  [passed] pure helpers snapshotRow has the uniform owned key set and mutationRecord is redacted to a hash
+  [passed] runTodoistBrief refuses --date and a bad --et-date; is inert outside 04:45-05:30 ET and while the tables are absent, with no Todoist call
+  [passed] runTodoistBrief TS-10 dry run: exclusions by name and id, grading, role tags, ungraded null, planned mutations; writes nothing
+  [passed] runTodoistBrief TS-10 apply: guarded snapshot writes of the owned keys, label and reschedule mutations applied once and recorded redacted
+  [passed] runTodoistBrief TS-10 re-run: a mutation already in mutations_applied is deduped, a row with chosen_action set is untouched, an archive-verb rule never mutates
+  [passed] runTodoistBrief the check-in task already due today is not rescheduled; a failing updateTask is counted and degrades
+  [passed] runTodoistBrief a recurring check-in is re-anchored through its own due string (recurrence kept); one without "every" is skipped with a reason; unconfigured id is surfaced
+  [passed] runTodoistBrief a check-in outside the kept set gets a base row before its mutation is recorded; a 0-row record write is counted unrecorded and degrades
+  [passed] runTodoistBrief a label rule without role_tag or label is inert and counted, never applied
+  [passed] runTodoistBrief pages through projects and tasks; an exceeded page bound fails the run without writing
+  [passed] runTodoistBrief is credential-free: no Google import, no host key, TODOIST client created lazily inside run
+### tests/unit/cron/michael-todoist-brief-wiring.test.js
+  [passed] michael-todoist-brief-cron.yml wiring references EXACTLY the Supabase pair plus TODOIST_API_TOKEN — no Google credential, no encryption key
+  [passed] michael-todoist-brief-cron.yml wiring job env keys are the Supabase trio followed by TODOIST_API_TOKEN last (order-sensitive)
+  [passed] michael-todoist-brief-cron.yml wiring carries the EDT and EST cron pair with the ET window in a trailing comment, dispatch, read-only contents, single-flight, a 10-minute timeout
+  [passed] michael-todoist-brief-cron.yml wiring installs with npm ci --ignore-scripts on node 22 with the npm cache and invokes todoist-brief.mjs --apply by repo-relative path with no cd
+  [passed] michael-todoist-brief-cron.yml wiring no workflow in the repo references the Google client or the Michael encryption key (AC-3 grep)
+### tests/unit/fleet/setup-michael-host-tasks.test.js
+  [passed] MICHAEL_TASKS and the plan registers exactly the three credentialed feeders with distinct colon-free names and michael-<feeder>-task.cmd wrappers (gitignored pattern)
+  [passed] MICHAEL_TASKS and the plan the create args carry /SC MINUTE /MO 15 /ST 00:00 /F and NEITHER /RU NOR /NP (measured denied unelevated); the TR action is the quoted hidden launcher
+  [passed] MICHAEL_TASKS and the plan gmail-triage is registered with --apply and WITHOUT --modify by default; --with-modify adds it to that task only
+  [passed] MICHAEL_TASKS and the plan a task name with a Task-Scheduler-illegal character throws inside the build path, before any schtasks call (QF-20260906-961)
+  [passed] MICHAEL_TASKS and the plan parseArgs recognises every mode and flag and collects unknown tokens; main refuses them with exit 2 before anything else
+  [passed] main (injected deps, no host mutation) refuses on non-win32 with exit 2 before touching the OS
+  [passed] main (injected deps, no host mutation) --dry-run prints three wrappers and three /Create lines with no /RU /NP, states the preconditions, and mutates nothing
+  [passed] main (injected deps, no host mutation) register writes the three wrappers and runs three /Create calls; --with-modify promotes only gmail-triage
+  [passed] main (injected deps, no host mutation) refuses to register when run-hidden.vbs is missing; a failed /Create yields exit 1
+  [passed] main (injected deps, no host mutation) --status queries each task; --remove deletes each; --verify reads the split <Command>/<Arguments> XML and reports the shadow phase

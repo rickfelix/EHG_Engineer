@@ -1,0 +1,19 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): calendar-read feeder (PR 3)
+## Summary
+Replaces #8369, which GitHub closed when its stacked base branch (PR 2, #8366) was deleted on merge. Same branch, main merged in; the diff against main is PR 3 only.
+
+- `scripts/michael/calendar-read.mjs` (FR-3): runs under `runFeeder` (feeder `calendar-read`, window 04:00-05:00 ET). Reads today ±1 ET day from `primary` and `MICHAEL_EXELON_CALENDAR_ID`; builds `michael_calendar_day` rows by `(et_date, event_id)` with `coded_marker` (leading `[TAG]`), `optional` (needsAction / tentative / attendee optional / "optional" in title) and `overlap_group` (intersecting timed events per ET date); a multi-day all-day event yields one row per covered date; dedupes the same event across calendars preferring primary (`counts.cross_calendar_collisions`); classifies today (coded override from non-declined rows wins, Tuesday-office rule, Recovery / Interpersonal / Deep / Shallow, where a meeting needs another attendee) into the run row counts. One calendar failing → `degraded` with `counts.failed_calendar`; a truncated page → `degraded` with `counts.truncated_calendar`; both failing → `failed`; malformed events skipped and counted. `assertHostVenue(env)` runs first regardless of injected auth. Dry-run by default (previews rows); `--apply` upserts the persisted columns and writes the run row. `--et-date` pins the date; `--date` is refused.
+- `lib/michael/feeder.mjs`: `dryRun` config runs the same gates and `run()` with no claim and no run row, so a dry-run morning cannot make the registered `--apply` fire inert.
+
+No DDL. Counts and logs carry numbers and ids only.
+
+## Review
+Deep-tier adversarial review ran on this head as #8369: round 1 found four classification defects (declined coded override, multi-day all-day drop, attendee-less blocks as meetings, silent truncation), all fixed in d71aee1f657; round 2 re-verification is on the same commit.
+
+## Test plan
+- `npx vitest run --project unit lib/michael/feeder.test.js scripts/michael/calendar-read.test.js` → 67 tests green
+- eslint clean
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

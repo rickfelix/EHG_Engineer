@@ -1,0 +1,23 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): classify-apply recorder + overnight tick contract paragraph (PR 8b)
+## Summary
+SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D, FR-9 second half (PR 8b of the child's plan). The seat's provenance-checked recorder plus the contract's overnight tick paragraph.
+
+- `scripts/michael/classify-apply.mjs --file .artifacts/michael-seat/<run>.json [--apply]`: refuses before any read when producer/run_id are absent (PROVENANCE_MISSING, ratification 6c263823), the producer is not `michael-seat-classifier`, `content_hash` differs from sha256(canonicalJson(envelope minus content_hash)) (HASH_MISMATCH; the runner uses the exported `contentHashFor`), the model is outside claude-sonnet/claude-opus, metering is not non-negative integers, produced_at is missing/future/older than 3h, the file's et_date is not the run's, the path is outside `.artifacts/michael-seat/`, or any item/task key is outside its allow-list (FIELD_NOT_WRITABLE: items class/needs_you/needs_you_reason/borderline/verified_by/action_intent; tasks effort_grade/est_minutes/proposed_date/role_tag). Rows are updated by natural key only while still queued and untouched (`class IS NULL AND action_taken_at IS NULL`; `effort_grade IS NULL AND chosen_action IS NULL AND moved_back_at IS NULL`), every update selects, and a 0-row match is counted skipped, never overwritten. Metering accumulates into the one `seat`-venue `michael_feeder_runs` row per ET date (counts classified/needs_you/borderline/graded/opus_rejudged/sample, tokens summed, models listed). Window 04:30-07:30 ET and absent tables are inert. Dry-run by default; no summary, no prose beyond a bounded needs_you_reason, nothing logged.
+- `docs/protocol/michael/role-contract.md` §8 gains the overnight tick paragraph (queue-read with headers to stdout only, Sonnet classify / Opus re-judge of every needs_you + borderline + 10% sample, sub-agents stopped when read, runner-produced verdict file with provenance, classify-apply). The section is DB-seeded (leo_protocol_sections id 658 updated via `scripts/one-off/_michael-role-contract-section.mjs --apply`, readback OK) and `CLAUDE_MICHAEL.md` regenerated with `--only`; drift check clean.
+- `scripts/michael/classify-apply.test.js`: 24 assertions covering the three PRD acceptance criteria (PROVENANCE_MISSING, HASH_MISMATCH incl. a flipped verdict and a missing hash, valid file updates only the addressed rows and upserts one seat run row with model_used/tokens_in/tokens_out), accumulation across passes, dry-run, every refusal before any DB call, window/absent inert, refused-write degradation, and a source guard.
+
+## LOC
+Script 152, test 183, contract +2 paragraphs, regenerated CLAUDE_MICHAEL.md and manifest. Above the 100 LOC target: the recorder is the single gate between the seat's sub-agent output and the ledger, so the refusal ladder and its tests are not separable.
+
+## Not exercised
+The michael_* tables are unapplied live (chairman-gated migration, not this child's). Every test injects its clients and filesystem; the first real run is the chairman's post-migration host smoke. The runner that produces the verdict file is the seat tick's own orchestration (child E / the seat's startup), not this PR; it imports `contentHashFor` so both sides hash identically.
+
+## Test plan
+- `npx vitest run --project unit scripts/michael/classify-apply.test.js` (24/24)
+- `npx eslint scripts/michael/classify-apply.mjs scripts/michael/classify-apply.test.js`
+- `node scripts/check-claude-md-drift.cjs` (no drift)
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_017tufvu8snwVZCxkCmavMcV
+

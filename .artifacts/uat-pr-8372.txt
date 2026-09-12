@@ -1,0 +1,13 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): gmail-triage part 1, read-only (PR 4a)
+## Summary
+- `scripts/michael/gmail-triage.mjs` (FR-4): runs under `runFeeder` (feeder `gmail-triage`, window 04:30-05:30 ET). Reconciles `michael_gmail_labels` writing only `label_id`, `name`, `last_seen_in_gmail_at`; a configured class whose label is missing from Gmail degrades the run (`counts.missing_labels`) and its rule is skipped. Queries `in:inbox newer_than:1d` minus every `keep_in_inbox` label plus the `in:inbox older_than:1d` sweep (200 each; a full page degrades with `counts.truncated_query`). Reads thread metadata only (format=metadata, four headers, never a body). Rules-first matching through `matchGmailRule`; `action_intent` only when the rule has `auto_apply=true` and verb label/archive (SECURITY F-2); fleet-class threads written `class='fleet'` and left for the seat; unmatched threads written `class=null` (queued). Writes are guarded: upsert with `ignoreDuplicates` then an update of the owned columns only, filtered by `action_taken_at IS NULL` (DATABASE DB-D4/DB-D5). No `threads.modify` call exists in this PR: `--modify` is refused `MODIFY_NOT_LANDED` until PR 4b. Dry-run by default; `--apply` writes rows. `assertHostVenue(env)` runs first regardless of injected auth. Counts and logs carry ids and numbers only.
+
+No DDL.
+
+## Test plan
+- `npx vitest run --project unit scripts/michael/gmail-triage.test.js` → 23 tests green (venue refusal, MODIFY_NOT_LANDED, inert paths, dry-run matching and auto_apply gate, apply write shapes with owned key sets and `.is(action_taken_at, null)`, TS-7 missing label, failure/degrade paths, PII absence, source assertions)
+- eslint clean
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

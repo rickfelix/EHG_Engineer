@@ -1,0 +1,341 @@
+ ✓ |unit| tests/unit/cron/michael-todoist-brief-wiring.test.js > michael-todoist-brief-cron.yml wiring > references EXACTLY the Supabase pair plus TODOIST_API_TOKEN — no Google credential, no encryption key 3ms
+ ✓ |unit| tests/unit/cron/michael-todoist-brief-wiring.test.js > michael-todoist-brief-cron.yml wiring > job env keys are the Supabase trio followed by TODOIST_API_TOKEN last (order-sensitive) 1ms
+ ✓ |unit| tests/unit/cron/michael-todoist-brief-wiring.test.js > michael-todoist-brief-cron.yml wiring > carries the EDT and EST cron pair with the ET window in a trailing comment, dispatch, read-only contents, single-flight, a 10-minute timeout 1ms
+ ✓ |unit| tests/unit/cron/michael-todoist-brief-wiring.test.js > michael-todoist-brief-cron.yml wiring > installs with npm ci --ignore-scripts on node 22 with the npm cache and invokes todoist-brief.mjs --apply by repo-relative path with no cd 1ms
+ ✓ |unit| tests/unit/cron/michael-todoist-brief-wiring.test.js > michael-todoist-brief-cron.yml wiring > no workflow in the repo references the Google client or the Michael encryption key (AC-3 grep) 125ms
+ ✓ |unit| lib/michael/constants.test.js > resolveConstant > a missing required constant is refusal CONSTANT_MISSING naming the variable (never a throw) 4ms
+ ✓ |unit| lib/michael/constants.test.js > resolveConstant > defaults: the ceiling is 60 and the EHG chairman project id matches chairman-notify.js 1ms
+ ✓ |unit| lib/michael/constants.test.js > resolveConstant > the ceiling parses an env override and refuses a non-positive-integer value 2ms
+ ✓ |unit| lib/michael/constants.test.js > resolveConstant > an unknown name is CONSTANT_UNKNOWN and the registry is frozen 1ms
+ ✓ |unit| lib/michael/constants.test.js > resolveConstants > returns all values or the first refusal 1ms
+ ✓ |unit| lib/michael/rules-match.test.js > matchGmailRule > matches all-of predicates case-insensitively as substrings, returning rule_key, class and action 3ms
+ ✓ |unit| lib/michael/rules-match.test.js > matchGmailRule > fails when any predicate misses (all-of), and honours list_id and label predicates 2ms
+ ✓ |unit| lib/michael/rules-match.test.js > matchGmailRule > never matches vacuously: null rule_json, no match object, empty predicate set, or a bad thread 1ms
+ ✓ |unit| lib/michael/rules-match.test.js > matchGmailRule > whitespace-only, empty-string and non-string predicates are not predicates (never vacuous) 3ms
+ ✓ |unit| lib/michael/rules-match.test.js > matchGmailRule > accepts a bare rule_json object (rule_key then null) 1ms
+ ✓ |unit| lib/michael/rules-match.test.js > matchKeyword and matchKeywordBuckets > matches whole words only, case-insensitively, and escapes regex metacharacters 2ms
+ ✓ |unit| lib/michael/rules-match.test.js > matchKeyword and matchKeywordBuckets > routes to the first declared bucket that matches and reports the keyword 6ms
+ ✓ |unit| lib/michael/rules-match.test.js > matchKeyword and matchKeywordBuckets > is null for a missing or malformed buckets object or non-string text 1ms
+ ✓ |unit| lib/michael/rules-match.test.js > roleTagFor > returns the first rule (row order) whose predicates all hold 1ms
+ ✓ |unit| lib/michael/rules-match.test.js > roleTagFor > skips null rule_json, rules without role_tag, partial matches, and returns null when nothing matches 1ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > MICHAEL_TASKS and the plan > registers exactly the three credentialed feeders with distinct colon-free names and michael-<feeder>-task.cmd wrappers (gitignored pattern) 3ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > MICHAEL_TASKS and the plan > the create args carry /SC MINUTE /MO 15 /ST 00:00 /F and NEITHER /RU NOR /NP (measured denied unelevated); the TR action is the quoted hidden launcher 2ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > MICHAEL_TASKS and the plan > gmail-triage is registered with --apply and WITHOUT --modify by default; --with-modify adds it to that task only 1ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > MICHAEL_TASKS and the plan > a task name with a Task-Scheduler-illegal character throws inside the build path, before any schtasks call (QF-20260906-961) 1ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > MICHAEL_TASKS and the plan > parseArgs recognises every mode and flag and collects unknown tokens; main refuses them with exit 2 before anything else 2ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > main (injected deps, no host mutation) > refuses on non-win32 with exit 2 before touching the OS 2ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > main (injected deps, no host mutation) > --dry-run prints three wrappers and three /Create lines with no /RU /NP, states the preconditions, and mutates nothing 2ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > main (injected deps, no host mutation) > register writes the three wrappers and runs three /Create calls; --with-modify promotes only gmail-triage 2ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > main (injected deps, no host mutation) > refuses to register when run-hidden.vbs is missing; a failed /Create yields exit 1 3ms
+ ✓ |unit| tests/unit/fleet/setup-michael-host-tasks.test.js > main (injected deps, no host mutation) > --status queries each task; --remove deletes each; --verify reads the split <Command>/<Arguments> XML and reports the shadow phase 3ms
+ ✓ |unit| lib/michael/db.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 2ms
+ ✓ |unit| lib/michael/db.test.js > readRows > returns rows with a bounded select 1ms
+ ✓ |unit| lib/michael/db.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| lib/michael/db.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| lib/michael/db.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| lib/michael/db.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| lib/michael/db.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| lib/michael/db.test.js > writeRows > another failure is WRITE_FAILED with the message 1ms
+ ✓ |unit| lib/michael/db.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 1ms
+ ✓ |unit| lib/michael/db.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| lib/michael/db.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| lib/michael/db.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 1ms
+ ✓ |unit| lib/michael/db.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| scripts/michael/retention.test.js > cutoffEtDate > is today-ET minus N days, on the ET calendar (05:00 ET on 09-06 -> 08-07 at 30 days) 13ms
+ ✓ |unit| scripts/michael/retention.test.js > runRetention > dry run: counts eligible rows per target with a STRICT lt(cutoff), writes no table, and still stamps feeder_runs (venue gha) 2ms
+ ✓ |unit| scripts/michael/retention.test.js > runRetention > apply: nulls exactly the prose columns and deletes calendar rows, both strictly older than the cutoff (boundary row at cutoff untouched) 1ms
+ ✓ |unit| scripts/michael/retention.test.js > runRetention > never touches rules, closures, the ledger, snapshots, labels or credentials 1ms
+ ✓ |unit| scripts/michael/retention.test.js > runRetention > child D: empties the payload of DISPOSITIONED staged rows strictly older than the cutoff instant and leaves undispositioned rows untouched (TS-19) 1ms
+ ✓ |unit| scripts/michael/retention.test.js > runRetention > the stamp attempt increments from the newest retention row of the same ET day 1ms
+ ✓ |unit| scripts/michael/retention.test.js > runRetention > absent tables: inert (ok, tables_absent=true), no writes, no stamp attempted 1ms
+ ✓ |unit| scripts/michael/retention.test.js > runRetention > --days validates; a failed stamp makes the run not ok 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > computeStreaks > counts the trailing consecutive approves per rule, in et_date order regardless of row order 9ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > computeStreaks > override, skip and auto each reset the streak; gap days are ignored 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > computeStreaks > dispositions without a rule_key are ignored 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > resolveThreshold precedence (A6) > --threshold beats the brief rule beats the default 7 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > resolveThreshold precedence (A6) > a seeded threshold of 3 yields a proposal at streak 3 (kills a hard-coded 7) 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-5: proposals > seven consecutive approves on a label/archive/reschedule rule yields exactly one proposal 2ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-5: proposals > six approves then an override yields no proposal 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-5: proposals > complete and delete never propose, whatever the streak 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-5: proposals > A7 mixed-rule ledger: seven approves on A and seven overrides on B on the same days => one proposal, for A 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-5: proposals > an already auto-applied rule is not re-proposed 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-6: revocations fire first > a reopened_at on a thread the rule archived revokes immediately 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-6: revocations fire first > A11: a reopened_at EARLIER than action_taken_at is not a revoke; a moved_back_at on a rescheduled task is 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-6: revocations fire first > three consecutive overrides revoke; two do not 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-6: revocations fire first > A10 ordering: a rule at threshold that also has a reopened_at is in revocations and NOT in proposals 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > TS-6: revocations fire first > signals on another rule do not touch this one (rule_key equality, never substring) 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > runAutonomyRead against injected clients > absent tables => inert: ok, empty arrays, tables_absent=true, default threshold 1ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > runAutonomyRead against injected clients > --stage writes one rule_edit staged item per revocation and skips an existing open duplicate 2ms
+ ✓ |unit| scripts/michael/autonomy-read.test.js > runAutonomyRead against injected clients > --rule filters to one rule and --threshold overrides 1ms
+ ✓ |unit| scripts/michael/act.test.js > gmail-act (TS-9) > planModify: label adds, archive removes INBOX, unarchive adds INBOX 3ms
+ ✓ |unit| scripts/michael/act.test.js > gmail-act (TS-9) > A14: absent seam => exit-2 refusal GMAIL_CLIENT_ABSENT naming child C, ZERO from() calls, nothing written 12ms
+ ✓ |unit| scripts/michael/act.test.js > gmail-act (TS-9) > present seam: --unarchive calls modifyThread and stamps reopened_at on the triage row (upsert by et_date,thread_id) 2ms
+ ✓ |unit| scripts/michael/act.test.js > gmail-act (TS-9) > present seam: --archive does NOT stamp reopened_at; a failed modify writes nothing 2ms
+ ✓ |unit| scripts/michael/act.test.js > gmail-act (TS-9) > argument refusals and --dry-run (no API call, no write) 1ms
+ ✓ |unit| scripts/michael/act.test.js > gmail-act (TS-9) > SEC-L1: absent tables refuse BEFORE the Gmail call — modifyThread is never invoked 1ms
+ ✓ |unit| scripts/michael/act.test.js > gmail-act (TS-9) > SEC-L4: a throwing modifyThread is GMAIL_MODIFY_FAILED, not an uncaught throw 1ms
+ ✓ |unit| scripts/michael/act.test.js > todoist-act (TS-8) > reversesProposal: only when a proposed_date exists and differs 1ms
+ ✓ |unit| scripts/michael/act.test.js > todoist-act (TS-8) > reschedule to a DIFFERENT date than proposed stamps moved_back_at and appends the mutation 2ms
+ ✓ |unit| scripts/michael/act.test.js > todoist-act (TS-8) > A13: reschedule to the SAME date as proposed does NOT stamp moved_back_at 1ms
+ ✓ |unit| scripts/michael/act.test.js > todoist-act (TS-8) > complete, add and comment call the right client methods and record the row 2ms
+ ✓ |unit| scripts/michael/act.test.js > todoist-act (TS-8) > refusals: unknown verb, missing args, bad dates; --dry-run never loads the client 2ms
+ ✓ |unit| scripts/michael/act.test.js > todoist-act (TS-8) > SEC-L1: absent tables refuse BEFORE the Todoist call — the client is never loaded 1ms
+ ✓ |unit| scripts/michael/act.test.js > todoist-act (TS-8) > a client failure is TODOIST_CALL_FAILED with nothing written; a missing token is TODOIST_CLIENT_UNAVAILABLE 2ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > TS-2: a flip without --verifier-verdict refuses, names the verdict, and writes nothing 5ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > scoped gate: a plain new rule (no flip, no prior) needs NO verdict and writes one row 3ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > TS-3: a flip with an opus approve verdict writes the row with the verdict verbatim in provenance 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > TS-3/TR-4: superseding an active rule flips the prior FIRST (guarded on status) then inserts with supersedes 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > TR-4: when the guarded flip touches zero rows (another writer superseded it) the insert is refused 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > TS-4: every verdict refusal has a DISTINCT code (producer, model, hash, reject, stale, invalid) 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > TS-15: the subject hash is key-order independent (canonical JSON), and the seat cannot pass a hand-typed hash of a different subject 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > needsVerifier: flip, verb change, or active prior => true; plain new rule => false 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > argument refusals: domain, verb (complete never auto-applies), source shape, rule-json 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > absent tables: refuses TABLES_ABSENT before any write 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > rule-encode: the Opus verifier gate > --dry-run computes the hash and the gate but writes nothing 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > closure-add / capture > closure-add upserts by closure_key with keywords split and provenance 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > closure-add / capture > closure-add refuses a bad expiry and absent tables 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > closure-add / capture > capture stages a michael_staged_items row with kind and payload text 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > feedback-append: the disposition grain (TS-7) > normalizes a disposition and rejects an unknown chosen 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > feedback-append: the disposition grain (TS-7) > same-day append: existing dispositions are kept and the new one is appended; upsert by et_date 1ms
+ ✓ |unit| scripts/michael/verbs.test.js > feedback-append: the disposition grain (TS-7) > defaults the date to today (ET) and refuses with nothing to write or a bad date 14ms
+ ✓ |unit| scripts/michael/verbs.test.js > feedback-append: the disposition grain (TS-7) > absent tables: refuses TABLES_ABSENT before any write 2ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 3ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > readRows > returns rows with a bounded select 2ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > writeRows > another failure is WRITE_FAILED with the message 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > validation (pure) > a file without producer or run_id is refused PROVENANCE_MISSING before any read; a wrong producer PRODUCER_UNKNOWN 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > validation (pure) > a tampered file is refused HASH_MISMATCH (any field, including metering and a verdict); a missing hash too 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > validation (pure) > model, metering, produced_at, et_date and unknown envelope keys are refused with their own codes 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > validation (pure) > items and tasks: allow-lists, class shape, bounded reason, intent shape, grades 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > validation (pure) > pathAllowed admits only .json files under .artifacts/michael-seat/; mergeRun sums counts and metering and lists models 2ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > runClassifyApply > a valid file updates only the addressed rows by natural key, never those with action_taken_at / chosen_action / already classified or graded, and upserts one seat feeder_runs row with metering 16ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > runClassifyApply > a second pass accumulates into the same seat row (counts and tokens summed, models listed, started_at kept); rows that moved on are skipped, not overwritten 2ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > runClassifyApply > a replayed run_id is inert (no row or metering write); a prior degraded seat row stays degraded through a clean pass 2ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > runClassifyApply > the window gates on produced_at: a file produced at 07:25 ET applied at 07:31 ET is applied; one produced outside the window is inert 2ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > runClassifyApply > dry-run by default: validates, reads the seat row, writes nothing, previews the merged row 1ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > runClassifyApply > refusals: PATH_NOT_ALLOWED, FILE_REQUIRED, FILE_INVALID, --date, and every envelope refusal happen before any DB call; outside the window and absent tables are inert 4ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > runClassifyApply > a refused row write is reported, the pass continues, the seat row lands degraded, exit 1 2ms
+ ✓ |unit| scripts/michael/classify-apply.test.js > runClassifyApply > never writes summary, prose or a run row outside the allow-lists (source guard) 4ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 2ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > readRows > returns rows with a bounded select 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > writeRows > another failure is WRITE_FAILED with the message 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 2ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > pure helpers > parses Est lines in the common shapes and grades S/M/L 2ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > pure helpers > due dates: a date is taken as-is, a datetime is converted to the ET calendar date; overdue and today qualify 14ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > pure helpers > snapshotRow has the uniform owned key set and mutationRecord is redacted to a hash 3ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > refuses --date and a bad --et-date; is inert outside 04:45-05:30 ET and while the tables are absent, with no Todoist call 4ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > TS-10 dry run: exclusions by name and id, grading, role tags, ungraded null, planned mutations; writes nothing 4ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > TS-10 apply: guarded snapshot writes of the owned keys, label and reschedule mutations applied once and recorded redacted 5ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > TS-10 re-run: a mutation already in mutations_applied is deduped, a row with chosen_action set is untouched, an archive-verb rule never mutates 3ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > the check-in task already due today is not rescheduled; a failing updateTask is counted and degrades 4ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > a recurring check-in is re-anchored through its own due string (recurrence kept); one without "every" is skipped with a reason; unconfigured id is surfaced 5ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > a check-in outside the kept set gets a base row before its mutation is recorded; a 0-row record write is counted unrecorded and degrades 5ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > a label rule without role_tag or label is inert and counted, never applied 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > pages through projects and tasks; an exceeded page bound fails the run without writing 1ms
+ ✓ |unit| scripts/michael/todoist-brief.test.js > runTodoistBrief > is credential-free: no Google import, no host key, TODOIST client created lazily inside run 1ms
+ ✓ |unit| lib/michael/feeder.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 2ms
+ ✓ |unit| lib/michael/feeder.test.js > readRows > returns rows with a bounded select 1ms
+ ✓ |unit| lib/michael/feeder.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| lib/michael/feeder.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| lib/michael/feeder.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| lib/michael/feeder.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| lib/michael/feeder.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| lib/michael/feeder.test.js > writeRows > another failure is WRITE_FAILED with the message 1ms
+ ✓ |unit| lib/michael/feeder.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 1ms
+ ✓ |unit| lib/michael/feeder.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| lib/michael/feeder.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| lib/michael/feeder.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 1ms
+ ✓ |unit| lib/michael/feeder.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| lib/michael/feeder.test.js > pure helpers > registry lists the six feeder ids with venues and inclusive windows 1ms
+ ✓ |unit| lib/michael/feeder.test.js > pure helpers > inWindow is inclusive at both ends and requires a window 1ms
+ ✓ |unit| lib/michael/feeder.test.js > pure helpers > etMinuteOfDay, isUniqueViolation, staleThresholdMinutes and exitCodeFor 12ms
+ ✓ |unit| lib/michael/feeder.test.js > runFeeder inert paths (TS-1) > refuses an unregistered feeder id before any read 2ms
+ ✓ |unit| lib/michael/feeder.test.js > runFeeder inert paths (TS-1) > is inert outside the ET window with no read and no run 2ms
+ ✓ |unit| lib/michael/feeder.test.js > runFeeder inert paths (TS-1) > treats the window end minute as in-window (calendar-read at exactly 05:00) 2ms
+ ✓ |unit| lib/michael/feeder.test.js > runFeeder inert paths (TS-1) > is inert with tables_absent when the relation is missing 2ms
+ ✓ |unit| lib/michael/feeder.test.js > runFeeder inert paths (TS-1) > is inert already_ok, ceiling_hit and upstream_not_ready 2ms
+ ✓ |unit| lib/michael/feeder.test.js > runFeeder inert paths (TS-1) > the object form { feeder, accept } narrows what counts as ready 2ms
+ ✓ |unit| lib/michael/feeder.test.js > runFeeder inert paths (TS-1) > a malformed upstream entry is refusal UPSTREAM_INVALID before any read (never a throw) 2ms
+ ✓ |unit| lib/michael/feeder.test.js > runFeeder inert paths (TS-1) > a degraded upstream counts as ready 2ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > a row started 12 minutes ago on a */15 feeder is still in_flight; 21 minutes ago is not 3ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > writes the start row as status skipped / phase started with ISO started_at, then finishes with the real status 2ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > a 23505 whose re-read shows the winner still running yields in_flight (never a second concurrent attempt) 2ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > retries exactly once on a 23505 when the re-read shows the winner already finished degraded, minting attempt max+1 2ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > a re-read after a 23505 that shows an ok, imported or ceiling_hit row is inert with that reason 2ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > a finish write the ledger did not hold returns finish_write_ok false and exit code 1 2ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > losing the race twice is inert in_flight, never failed 2ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > a coded throw from run() lands as status failed with counts.refusal and exit code 1 3ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > hands run() the prior rows, the ET date, the attempt and an etDateOverride 3ms
+ ✓ |unit| lib/michael/feeder.test.js > single-flight and attempt (TS-2) > logs single-line JSON to the injected logger and never to stdout 4ms
+ ✓ |unit| lib/michael/feeder.test.js > dry run > runs the gates, calls run() with dryRun and writes nothing (no claim, no run row) 3ms
+ ✓ |unit| lib/michael/feeder.test.js > dry run > a dry run still honours the inert gates and maps a failed status to exit 1 2ms
+ ✓ |unit| lib/michael/feeder.test.js > assembleReadiness (TS-3) > assembles when every required feeder is ok, taking the best attempt per feeder 1ms
+ ✓ |unit| lib/michael/feeder.test.js > assembleReadiness (TS-3) > assembles degraded when a required feeder is only degraded 1ms
+ ✓ |unit| lib/michael/feeder.test.js > assembleReadiness (TS-3) > waits for a missing feeder before the deadline and assembles degraded after it 2ms
+ ✓ |unit| lib/michael/feeder.test.js > assembleReadiness (TS-3) > honours injected required set and deadline (child E contract) 1ms
+ ✓ |unit| lib/michael/google-clients.test.js > listCalendarEvents > maps calendarId/timeMin/timeMax with singleEvents, orderBy startTime and maxResults 250 3ms
+ ✓ |unit| lib/michael/google-clients.test.js > listCalendarEvents > refuses missing args and maps a rejecting factory to { ok:false, error } 1ms
+ ✓ |unit| lib/michael/google-clients.test.js > listDriveFiles and readDriveFileText > lists files in a folder by exact name with the bounded field set 2ms
+ ✓ |unit| lib/michael/google-clients.test.js > listDriveFiles and readDriveFileText > reads text only after the parents check passes (metadata get, then alt=media) 1ms
+ ✓ |unit| lib/michael/google-clients.test.js > listDriveFiles and readDriveFileText > FILE_OUTSIDE_CONFIGURED_FOLDER for a file whose parents omit the folder, and no content is fetched (SECURITY F-10) 2ms
+ ✓ |unit| lib/michael/google-clients.test.js > listDriveFiles and readDriveFileText > without injected auth and with an empty env the credential resolver refuses (no network, no throw) 1ms
+ ✓ |unit| lib/michael/gmail-client.test.js > modifyThread contract (gmail-act.mjs:5-8, 66-68) > maps to users.threads.modify with userId me and returns { ok:true, modified } 3ms
+ ✓ |unit| lib/michael/gmail-client.test.js > modifyThread contract (gmail-act.mjs:5-8, 66-68) > an API or auth failure is { ok:false, error } and never throws 1ms
+ ✓ |unit| lib/michael/gmail-client.test.js > modifyThread contract (gmail-act.mjs:5-8, 66-68) > TS-12: TRASH and SPAM are refused before any API call (RISK 2) 2ms
+ ✓ |unit| lib/michael/gmail-client.test.js > read legs (child D FR-2, TS-16) > listThreads maps q and a bounded maxResults (never above 200) and flags truncation 1ms
+ ✓ |unit| lib/michael/gmail-client.test.js > read legs (child D FR-2, TS-16) > getThreadMeta requests format metadata with exactly the four headers and never a body; reads the last message 1ms
+ ✓ |unit| lib/michael/gmail-client.test.js > read legs (child D FR-2, TS-16) > listLabels maps labels.list; a rejecting factory is { ok:false, error } on every read leg 1ms
+ ✓ |unit| scripts/michael/google-consent.test.js > refusal order: venue, key, client, table — all before consent > GHA venue and missing/empty key refuse with codes and exit-2 envelopes 4ms
+ ✓ |unit| scripts/michael/google-consent.test.js > refusal order: venue, key, client, table — all before consent > a coded consent failure (e.g. TABLES_ABSENT from the flow) becomes a refusal 2ms
+ ✓ |unit| scripts/michael/google-consent.test.js > refusal order: venue, key, client, table — all before consent > success passes the injected sb/env to the flow and returns consented:true 1ms
+ ✓ |unit| scripts/michael/google-consent.test.js > --status: non-secret rendering (D-2) > status object and rendering carry no blob or metadata, and flag a key mismatch 2ms
+ ✓ |unit| scripts/michael/google-consent.test.js > --status: non-secret rendering (D-2) > absent row and unapplied table 1ms
+ ✓ |unit| lib/michael/rules.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 3ms
+ ✓ |unit| lib/michael/rules.test.js > readRows > returns rows with a bounded select 2ms
+ ✓ |unit| lib/michael/rules.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| lib/michael/rules.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| lib/michael/rules.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| lib/michael/rules.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| lib/michael/rules.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| lib/michael/rules.test.js > writeRows > another failure is WRITE_FAILED with the message 1ms
+ ✓ |unit| lib/michael/rules.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 2ms
+ ✓ |unit| lib/michael/rules.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| lib/michael/rules.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| lib/michael/rules.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 2ms
+ ✓ |unit| lib/michael/rules.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| lib/michael/rules.test.js > loadRulesAndClosures > returns active rules and only unexpired closures, with the filters applied to the query 2ms
+ ✓ |unit| lib/michael/rules.test.js > loadRulesAndClosures > includeSuperseded drops the status filter 1ms
+ ✓ |unit| lib/michael/rules.test.js > loadRulesAndClosures > tables absent => empty rows, tables_absent=true, no errors 1ms
+ ✓ |unit| lib/michael/rules.test.js > renderers (pure) > RULES.md carries the six-field frontmatter, groups by domain, escapes pipes, shows provenance 1ms
+ ✓ |unit| lib/michael/rules.test.js > renderers (pure) > CLOSURES.md lists closures with keywords joined 1ms
+ ✓ |unit| lib/michael/rules.test.js > renderers (pure) > tables-absent stubs say so and render no table 1ms
+ ✓ |unit| lib/michael/rules.test.js > scripts: rules-load and rules-render runners > rules-load returns rows and renders one line per rule/closure 1ms
+ ✓ |unit| lib/michael/rules.test.js > scripts: rules-load and rules-render runners > rules-load is inert on absent tables (ok, empty, tables_absent=true) 1ms
+ ✓ |unit| lib/michael/rules.test.js > scripts: rules-load and rules-render runners > rules-render writes both files through the injected writer 1ms
+ ✓ |unit| lib/michael/rules.test.js > scripts: rules-load and rules-render runners > the generated folder is gitignored (the chairman's review copies never enter the tree) 81ms
+ ✓ |unit| scripts/michael/queue-read.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 3ms
+ ✓ |unit| scripts/michael/queue-read.test.js > readRows > returns rows with a bounded select 2ms
+ ✓ |unit| scripts/michael/queue-read.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > writeRows > another failure is WRITE_FAILED with the message 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 2ms
+ ✓ |unit| scripts/michael/queue-read.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > runQueueRead > reads the class-null items and effort_grade-null tasks for the ET date, bounded by the literal read bound, and prints only the published keys 12ms
+ ✓ |unit| scripts/michael/queue-read.test.js > runQueueRead > --et-date overrides the date and is validated; --date is refused; a read failure is reported with exit 1 3ms
+ ✓ |unit| scripts/michael/queue-read.test.js > runQueueRead > absent tables yield empty lists, ok, exit 0 and no count read 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > runQueueRead > a full page is reported truncated and only then counted exactly (presence first, never a head-count on an absent table) 1ms
+ ✓ |unit| scripts/michael/queue-read.test.js > runQueueRead > --headers re-fetches From/Subject/List-Id/Date per queued thread to stdout only (host venue), capped, failures counted; refused on GHA 4ms
+ ✓ |unit| scripts/michael/queue-read.test.js > runQueueRead > is read-only: no writeRows import and no update/insert/upsert call in the source 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 2ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > readRows > returns rows with a bounded select 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > writeRows > another failure is WRITE_FAILED with the message 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 2ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 2ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > pure helpers > coded markers, optional detection, date shifting and ET midnight 13ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > pure helpers > eventRow carries the uniform key set; all-day rows have no times and take their own date 2ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > pure helpers > dedupes the same event_id across calendars preferring primary, and groups intersecting intervals per date 3ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > classifyDay (TS-8) > Recovery when no non-optional events (none, or only optional/tentative ones) 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > classifyDay (TS-8) > Interpersonal with three or more accepted meetings; Deep with fewer than two; Shallow with exactly two 4ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > classifyDay (TS-8) > a coded event overrides everything, including three meetings and the Tuesday rule 2ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > classifyDay (TS-8) > Tuesday-office rule marks Tuesday Interpersonal when any accepted in-office event exists, but not on other days 2ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > classifyDay (TS-8) > summarize reports counts by date, coded, optional and overlap groups 2ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > GITHUB_ACTIONS=true is refused HOST_VENUE_REQUIRED before any client or read, even with auth injected 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > a missing MICHAEL_EXELON_CALENDAR_ID is CONSTANT_MISSING; --date is refused; outside the window is inert with no API call 4ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > dry run (default) reads both calendars over today ±1 ET, previews the rows and writes nothing 3ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > --apply upserts the rows by (et_date, event_id) with a uniform key set and writes the run row 4ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > one calendar rejecting is degraded with counts.failed_calendar; both rejecting is failed with error_code 3ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > a long all-day block that began before the window reaches today through the run loop 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > a truncated calendar page degrades the run, and a malformed event is skipped and counted 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > --et-date pins the ET date and the Tuesday-office rule reaches the counts 1ms
+ ✓ |unit| scripts/michael/calendar-read.test.js > runCalendarRead (TS-11, TS-15) > does not import googleapis or read a credential at import time 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 2ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > readRows > returns rows with a bounded select 2ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > writeRows > another failure is WRITE_FAILED with the message 2ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 2ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 2ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > pure helpers > normalizes content, parses both file shapes, ages a file, and routes by the first matching rule with a project 6ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > pure helpers > staged payloads carry exactly the named keys and a 200-char title 2ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > pure helpers > fetchLabeledTasks follows nextCursor across pages and reports an exceeded page bound 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > refuses GITHUB_ACTIONS=true before any Drive call even with auth injected; missing folder constant; --date 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > is inert outside 03:45-04:30 ET and while the tables are absent, with no Drive call 13ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > TS-9: a stale file (> 36 h) is skipped/stale with no Todoist call; a missing file is skipped/file_missing 3ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > TS-9: an unconsumed cleanup-pending.json (newer than the last ok run marker) is skipped/cleanup_pending; a consumed one proceeds 6ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > TS-9 dry run: routes by bucket, previews creations and stagings, calls no addTask and writes nothing 3ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > TS-9 apply: creates routed non-duplicate tasks with both labels, stages unrouted items and the consumed set, never writes Drive 3ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > TS-19: a second fire stages zero duplicates for dedupe_keys already open 2ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > an item this feeder already bridged (tasks_cleanup ledger) is never re-created, even after its Todoist twin was completed or aged past 7 days 1ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > the Todoist dedupe follows every page: a twin on page 2 is still a duplicate 2ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > a failing addTask is counted and degrades; an unreachable Todoist dedupe creates nothing and degrades; an unparseable file fails 4ms
+ ✓ |unit| scripts/michael/tasks-classifier.test.js > runTasksClassifier > imports no Todoist or Google SDK at module load and reads no credential directly 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > isMissingRelation > recognises 42P01, PGRST205 and the COUNT_UNMEASURABLE throw, and the PostgREST message 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > readRows > returns rows with a bounded select 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > readRows > missing relation => empty rows, tables_absent=true, NO error field 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > readRows > a thrown COUNT_UNMEASURABLE is a missing relation too 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > readRows > a genuine error is surfaced distinctly 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > writeRows > missing relation => ok:false with the TABLES_ABSENT refusal, never a throw 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > writeRows > success returns the data 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > writeRows > another failure is WRITE_FAILED with the message 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > canonicalJson / sha256Hex > is key-order independent at every level (the hash subject must be canonical) 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > parseArgs / refusal > parses --flag, --key value and --key=value, positionals in _ 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > parseArgs / refusal > refusal envelopes carry ok:false and the code 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > writeRows code passthrough (child D, DB-D3) > surfaces error.code and details beside the message so a caller can branch on 23505 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > writeRows code passthrough (child D, DB-D3) > a thrown error without a code yields code null 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > pure helpers > inboxQueries excludes keep_in_inbox label names from the fresh query only 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > pure helpers > intentFor yields an intent only for auto_apply=true with verb label or archive (SECURITY F-2) 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > pure helpers > itemRow has the uniform owned key set; firstMatch takes the first rule in order and skips a missing class 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > refuses GITHUB_ACTIONS=true before any call, --modify without --apply, --date, a bad --et-date, and an invalid ceiling 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > is inert outside 04:30-05:30 ET and while the tables are absent, with no Gmail call 12ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > dry run: metadata-only reads, rules-first matching, auto_apply gate, fleet class, unmatched queued; writes nothing 5ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > --apply: label reconcile writes only the three owned columns; items use ignoreDuplicates then guarded updates of the owned keys (TS-17) 5ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > --apply without --modify never calls threads.modify (the registrar's shadow mode) 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > TS-7: a configured class whose label is missing from Gmail degrades, is listed, and its rule is skipped while others proceed 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > keep_in_inbox threads are skipped by labelIds even when the sweep query returns them; an intent to a label absent from Gmail is never staged 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > labels.list failing is failed; a thread metadata failure is counted and degrades; a full page marks truncated_query 4ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > TS-5: 80 intents with ceiling 60 yield exactly 60 modify calls in creation order, degraded with ceiling_hit, 20 intents left 4ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > TS-5 re-run: after an interrupted run only the intents without action_taken_at are acted on 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > the ceiling bounds the ET date: prior runs' threads_modified shrink the budget and exhaust it (five fires, exactly 60 for the date) 9ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > exact exhaustion sets ceiling_hit; a row stamped or re-intended between the pending read and the call is skipped; a zero-row stamp still spends the budget 4ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > two live attempts cannot spend additively: the ledger is re-read every LEDGER_RECHECK_EVERY modifies and the run stops at the ceiling 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > TS-6: a previously archived thread back with a newer last message is written borderline and not modified 1ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > a modify rejecting for one thread leaves it unstamped, counts modify_failed, and continues; all failing is failed 2ms
+ ✓ |unit| scripts/michael/gmail-triage.test.js > runGmailTriage > no credential is read directly and googleapis is not imported (source assertions) 9ms

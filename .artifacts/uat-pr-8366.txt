@@ -1,0 +1,18 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): Google client legs and env constants (PR 2)
+## Summary
+- `lib/michael/google-clients.mjs` (FR-2): `listCalendarEvents` (events.list with singleEvents, orderBy startTime, maxResults 250), `listDriveFiles` (folder + optional exact name, bounded field set), `readDriveFileText` (metadata get first; refuses `FILE_OUTSIDE_CONFIGURED_FOLDER` unless the file's parents include the configured folder, then alt=media). SECURITY a3587993 F-10.
+- `lib/michael/gmail-client.mjs`: adds `listThreads` (maxResults capped at 200, truncation flag), `getThreadMeta` (format=metadata with exactly From, Subject, List-Id, Date; labelIds, message count, last message id; never a body), `listLabels`. `modifyThread` unchanged.
+- `lib/michael/constants.mjs`: the five `MICHAEL_*` chairman constants resolved from env at call time; `CONSTANT_MISSING` names the variable, `CONSTANT_INVALID` for a bad ceiling; defaults: ceiling 60, EHG project id per `lib/integrations/todoist/chairman-notify.js`.
+
+All modules are import-time pure (googleapis lazy-imported in default factories), take injected `auth` or resolve through `getAuthenticatedClient`, never throw, and never log a token. No DDL; the michael_* tables stay chairman-gated and unapplied.
+
+## LOC
+Over the 100 target: three client modules plus their argument-mapping tests are one FR (PRD FR-10 eleven-PR split, PR 2); sibling module/test ratio in this family is ~1:1.
+
+## Test plan
+- `npx vitest run --project unit lib/michael/` → new google-clients.test.js (8), constants.test.js (5), gmail-client.test.js extension (3); all michael suites green
+- eslint clean on the six files
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

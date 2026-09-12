@@ -1,0 +1,14 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): gmail-triage part 2, record-then-act with the per-date ceiling (PR 4b)
+## Summary
+- `scripts/michael/gmail-triage.mjs` (FR-5): `--apply --modify` executes the recorded intents of the ET date that carry no `action_taken_at`, in creation order, through `modifyThread` (TRASH/SPAM refused there), stamping `action_taken_at` after each successful call (record-then-act; a re-run acts only on unstamped intents). The ceiling bounds the ET DATE: budget = `MICHAEL_GMAIL_MODIFY_CEILING` minus `counts.threads_modified` summed over every prior run of the date; exhausting it writes `counts.ceiling_hit=true` so every later fire that day is inert (`feeder.mjs` reads it) until a human clears it. A modify failure is counted and the run continues; the run is `failed` only when every modify failed. A thread archived earlier that reappears with a newer `last_message_id` is written `borderline=true`, class kept, no automatic action (TS-6). `--modify` without `--apply` is refused `MODIFY_REQUIRES_APPLY`. The registrar (PR 7) registers `--apply` without `--modify` (shadow phase); promotion is an explicit chairman re-register.
+- Carries the PR 4a review fixes (owned-row update guard, keep_in_inbox by labelIds, validated label intents).
+
+No DDL.
+
+## Test plan
+- `npx vitest run --project unit scripts/michael/gmail-triage.test.js` → 30 tests green, including TS-5 (80 intents / ceiling 60 → exactly 60 modify calls, degraded, `ceiling_hit`, 20 left; interrupted re-run acts only on the unstamped 50; five fires on one ET date → exactly 60 for the date with fires 2-5 inert `ceiling_hit`; a prior run's 45 leaves a 15 budget), TS-6 borderline, modify-failure continue and all-failed → failed, `--apply` never calling modify.
+- eslint clean
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

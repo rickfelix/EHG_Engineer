@@ -1,0 +1,92 @@
+##### TECHNICAL REQUIREMENTS (11)
+=== TR-1 ===
+{"id":"TR-1","rationale":"VALIDATION c26274e9 condition 3 and finding 10: two conventions exist in tree; the michael-family shape carries 62 passing tests and composes with lib/michael/db.mjs, and the spec's main(argv, deps) wording is satisfied by the harness signature","requirement":"Feeder shape is the michael-family shape: export runX({ sb, argv, now, ...deps }) that never throws, a private main() choosing emit(r,{json}) or a pure renderer, isMainModule guard, process.exitCode 0 on inert/ok/degraded and 2 on refusal; the window gate lives only in the harness Exit codes are 0 inert/ok/degraded, 1 failed-run-row-written, 2 refusal; the private-main rule does not apply to the setup-* registrar, which exports main(argv, deps). The date override flag is --et-date on every feeder."}
+
+=== TR-2 ===
+{"id":"TR-2","rationale":"count-truncation-diff-lint reads the literal (db.mjs:47); the migration is chairman-gated and unapplied live, so every feeder ships inert by construction (VALIDATION finding 8)","requirement":"Every read is bounded with a literal limit and every write goes through writeRows; a missing relation is inert, never a failure"}
+
+=== TR-3 ===
+{"id":"TR-3","rationale":"Ratifications ff4ef5b4 and 0daf3bd8; child C's venue guard is the single enforcement point","requirement":"Credentialed feeders obtain auth only through getAuthenticatedClient; assertHostVenue fires inside it; no feeder reads GOOGLE_CLIENT_* or MICHAEL_ENCRYPTION_KEY itself Every host feeder additionally calls assertHostVenue(env) at the top of its runX before any client resolution, so the refusal is a property of the feeder even when auth is injected."}
+
+=== TR-4 ===
+{"id":"TR-4","rationale":"Spec section 2 data handling and SEC-M3 from child B: personal prose must be bounded","requirement":"No thread body, message body, task content or email address is ever logged or stored except summary and needs_you_reason on the item row (prose nulled at 30 days by retention); getThreadMeta uses format=metadata with four headers Staged payloads are bounded (200-char title, hashes, ids); retention nulls dispositioned staged payloads after 30 days; undispositioned rows persist until dispositioned (deliberate, stated). The single sanctioned PII egress is queue-read --json stdout (From/Subject re-fetched at call time), never a row, log_md or staged item."}
+
+=== TR-5 ===
+{"id":"TR-5","rationale":"Spec section 3 assigns metering to the tick's summary; VALIDATION finding 3 refuted per-item metering (no columns on the item table)","requirement":"Metering columns are written only by the seat recorder (venue seat); task_scheduler and gha rows carry null model_used/tokens"}
+
+=== TR-6 ===
+{"id":"TR-6","rationale":"Child G owns the seam and the dispatch exemption; writing rows now raises Adam's directed floor (Solomon condition, 05-SOLOMON-ADJUDICATION.md:103)","requirement":"The Adam handoff seam (chairman_handoff origin michael) is not written by any feeder; fleet-class threads are recorded class 'fleet' only"}
+
+=== TR-7 ===
+{"id":"TR-7","rationale":"Ratification 0daf3bd8 must stay falsifiable (tests/unit/cron/michael-retention-wiring.test.js pattern)","requirement":"GHA workflows use the michael-retention-cron.yml skeleton (secrets, env, steps) with the both-DST cron pair and trailing ET comment copied from chairman-morning-brief-cron.yml, and the wiring test forbids every credential token except TODOIST_API_TOKEN on todoist-brief"}
+
+=== TR-8 ===
+{"id":"TR-8","rationale":"Explore: /XML and ONLOGON are denied unelevated; QF-20260726-677 measured 148 orphan consoles without /RU; VALIDATION condition 6","requirement":"Task Scheduler registration uses /SC MINUTE /MO 15 /ST 00:00 /F through the reused alarm builders with the hidden launcher (run-hidden.vbs) and NO /RU or /NP (measured denied unelevated on this host, RISK e1639df4; all ten existing EHG tasks are LogonType Interactive); wake-from-sleep is not configured and DisallowStartIfOnBatteries is the sibling default, both stated in the registrar header."}
+
+=== TR-9 ===
+{"id":"TR-9","rationale":"vitest unit project collects **/*.test.js; the tables are absent live (VALIDATION condition 4)","requirement":"Tests are *.test.js under lib/michael/, scripts/michael/, tests/unit/fleet/ and tests/unit/cron/ with injected clients; none requires a live michael_* table"}
+
+=== TR-10 ===
+{"id":"TR-10","rationale":"DATABASE 8b2ee61d DB-D4, DB-D5, DB-D11: PostgREST cannot express a conditional DO UPDATE and a bulk upsert NULLs columns absent from some rows","requirement":"Writes never overwrite chairman-owned columns: feeders use create-if-absent (upsert ignoreDuplicates true) followed by an update whose guard (.is(action_taken_at, null) or .is(chosen_action, null).is(moved_back_at, null)) is a server-side filter; every bulk row carries an identical key set and never a column the writer does not own; michael_rules is never upserted (partial index, 42P10)."}
+
+=== TR-11 ===
+{"id":"TR-11","rationale":"TESTING ec4eafbb D-3: && is a parser error in Windows PowerShell 5.1 and | is literal in basic-regex grep","requirement":"Smoke steps are PowerShell-safe: no && chaining, grep with -E for alternations, one command per line."}
+
+##### TEST SCENARIOS (19)
+=== TS-1 ===
+{"id":"TS-1","then":"{ ok:true, action:'inert' } with reason outside_et_window or tables_absent, zero writes, exit 0","when":"runFeeder runs","given":"an injected client and a fixed now outside the window, or a client returning PGRST205","scenario":"Harness inert paths","test_type":"unit"}
+
+=== TS-2 ===
+{"id":"TS-2","then":"inert in_flight; inert already_ok; a retry with attempt max+1; a 23505 on insert is retried once then failed; the start row is status skipped with counts.phase started; a 23505 stub failing exactly once yields 2 insert calls; a run started 12 minutes ago on a */15 feeder is still in_flight","when":"runFeeder runs each case","given":"an existing row with started_at 3 minutes ago and no finished_at; then an ok row; then a degraded row","scenario":"Single-flight and attempt","test_type":"unit"}
+
+=== TS-3 ===
+{"id":"TS-3","then":"wait before 05:45 with a missing feeder; proceed degraded at 05:45 with headsUp naming it; proceed clean when all ok","when":"assembleReadiness runs","given":"feeder_runs fixtures for calendar/gmail/todoist and a now before and after 05:45 ET","scenario":"Upstream ordering and assembleReadiness","test_type":"unit"}
+
+=== TS-4 ===
+{"id":"TS-4","then":"no captured log line contains the address, the subject or the content; only counts and ids","when":"each feeder runs with a capturing logger","given":"fixtures containing an email address, a subject and a task content","scenario":"PII-safe logging","test_type":"security"}
+
+=== TS-5 ===
+{"id":"TS-5","then":"exactly 60 modify calls in total, degraded with ceiling_hit, no duplicate modify, remaining intents left without action_taken_at; across five fires on one ET date with ceiling 60 and 300 intents, modifyThread is invoked exactly 60 times and the later fires return reason ceiling_hit; getThreadMeta is called with format metadata and never a body","when":"gmail-triage --apply runs, is interrupted after 30, and re-runs","given":"80 matched threads and ceiling 60","scenario":"Gmail ceiling and record-then-act","test_type":"unit"}
+
+=== TS-6 ===
+{"id":"TS-6","then":"the row is borderline=true and no modify call is made","when":"gmail-triage runs","given":"a thread archived yesterday whose new inbox appearance carries a newer last_message_id","scenario":"Borderline resurfacing","test_type":"unit"}
+
+=== TS-7 ===
+{"id":"TS-7","then":"status degraded, counts.missing_labels lists it, that class is skipped, others proceed","when":"gmail-triage runs","given":"michael_gmail_labels configures a class whose label is absent from labels.list","scenario":"Missing label degrades","test_type":"unit"}
+
+=== TS-8 ===
+{"id":"TS-8","then":"Recovery/Interpersonal/Deep/Shallow and the Tuesday-office rule as specified, coded override wins","when":"calendar-read runs","given":"event fixtures per branch (none, three accepted, [DEEP] coded, Tuesday in-office)","scenario":"Calendar classification","test_type":"unit"}
+
+=== TS-9 ===
+{"id":"TS-9","then":"skipped/stale; skipped/cleanup_pending; routed creates with both labels, duplicate not created, unrouted staged, cleanup staged not written to Drive","when":"tasks-classifier runs","given":"a stale file, an unconsumed cleanup, and a fresh file with bucket rules and a duplicate","scenario":"Tasks-classifier guards and routing","test_type":"unit"}
+
+=== TS-10 ===
+{"id":"TS-10","then":"exclusions honoured, grades and est_minutes set, ungraded null, the label applied once and deduped in mutations_applied, chosen_action rows untouched","when":"todoist-brief runs twice","given":"tasks across projects with Est lines and an auto_apply label rule","scenario":"Todoist brief filtering and auto_apply","test_type":"unit"}
+
+=== TS-11 ===
+{"id":"TS-11","then":"failed run row with error_code HOST_VENUE_REQUIRED and no API factory invoked","when":"calendar-read, gmail-triage or tasks-classifier runs","given":"GITHUB_ACTIONS=true","scenario":"Venue refusal on GHA","test_type":"security"}
+
+=== TS-12 ===
+{"id":"TS-12","then":"two cron lines, exact secret set with TODOIST_API_TOKEN, no other token, concurrency, timeout 10, npm ci --ignore-scripts, no cd","when":"the wiring test reads it","given":"the todoist-brief workflow file","scenario":"Workflow wiring","test_type":"integration"}
+
+=== TS-13 ===
+{"id":"TS-13","then":"Create args contain /SC MINUTE /MO 15 /ST 00:00 /F and neither /RU nor /NP; the TR action is the split wscript.exe //B run-hidden.vbs form that verifyHiddenLaunch accepts; a colon in a task name throws; --status, --remove, --verify, missing run-hidden.vbs and non-win32 each take their branch","when":"builders and verifyHiddenLaunch run","given":"the task table and a split Command/Arguments XML fixture","scenario":"Host registrar builders","test_type":"unit"}
+
+=== TS-14 ===
+{"id":"TS-14","then":"PROVENANCE_MISSING, HASH_MISMATCH, and a valid apply that updates only addressed rows and writes the seat feeder_runs row with metering; action_intent or action_taken_at in an item is refused FIELD_NOT_WRITABLE; a wrong producer, model, stale produced_at, mismatched et_date or disallowed path is refused with its code; editing tokens_in after hashing yields HASH_MISMATCH","when":"classify-apply runs","given":"verdict files without producer, with a wrong content_hash, and valid","scenario":"Recorder provenance","test_type":"security"}
+
+=== TS-15 ===
+{"id":"TS-15","then":"exit 0, action inert, reason in { outside_et_window, tables_absent }, no API factory constructed, stdout exactly one JSON object","when":"each script is invoked with --json","given":"the real scripts run at a time outside every window with the migration unapplied","scenario":"Smoke outside windows","test_type":"smoke"}
+
+=== TS-16 ===
+{"id":"TS-16","then":"arguments map exactly (maxResults 250, singleEvents, orderBy startTime; format metadata with four headers; alt media); a rejecting factory yields { ok:false, error }; a file outside the configured folder yields FILE_OUTSIDE_CONFIGURED_FOLDER; CONSTANT_MISSING names the variable; the ceiling defaults to 60; importing each module with no env is side-effect free","when":"listCalendarEvents, listDriveFiles, readDriveFileText, getThreadMeta and the constants loader are called","given":"injected calendar, drive and gmail factories recording arguments, and an env without MICHAEL_ constants","scenario":"Client modules and constants","test_type":"unit"}
+
+=== TS-17 ===
+{"id":"TS-17","then":"upserts carry ignoreDuplicates true; updates carry the .is null guards; payload keys are exactly the owned set; an auto_apply false rule yields action_intent null","when":"gmail-triage, todoist-brief and classify-apply write","given":"a fake client recording upsert options and update filters, and rules with auto_apply true and false","scenario":"Guarded writes and gmail auto_apply gate","test_type":"unit"}
+
+=== TS-18 ===
+{"id":"TS-18","then":"readRows is called with the literal READ_LIMIT, counts.truncated is true at 500, totals come from a count exact query, tables_absent yields empty lists at exit 0, and no header string is written to any run row","when":"queue-read --json runs","given":"a fake client with 500 class-null rows and a tables_absent client","scenario":"queue-read shape and bounds","test_type":"unit"}
+
+=== TS-19 ===
+{"id":"TS-19","then":"only unseen dedupe_keys are inserted; payloads carry exactly the named keys with a 200-char title; retention nulls only the old dispositioned payloads","when":"tasks-classifier stages and retention runs","given":"open task_route rows with known dedupe_keys and dispositioned rows older and younger than 30 days","scenario":"Staged-item dedupe and retention null-out","test_type":"unit"}
+

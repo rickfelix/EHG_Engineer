@@ -1,0 +1,744 @@
+[
+  {
+    "id": "PRD-SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+    "directive_id": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+    "title": "Michael D: v1 feeders - shared harness, host calendar-read/gmail-triage/tasks-classifier, GHA todoist-brief, host task registrar, seat recorder and metering",
+    "version": "1.0",
+    "status": "approved",
+    "category": "technical",
+    "priority": "high",
+    "executive_summary": "Child D gives Michael the v1 model-free feeders: a shared harness (ET window, per-date dedupe, ordering), three host feeders on the chairman grant, todoist-brief on GHA, the host task registrar, and the seat-side recorder that closes the classify queue and writes metering.",
+    "business_context": null,
+    "technical_context": null,
+    "functional_requirements": [
+      {
+        "id": "FR-1",
+        "priority": "CRITICAL",
+        "description": "feeder.mjs exports runFeeder({ feeder, venue, window, upstream, run }, { sb, env, now, logger }) in the michael-family shape (VALIDATION c26274e9 condition 3: every feeder is `export async function runX({ sb, argv, now, ...deps })` plus a private main(); no exported main(argv, deps)). The harness: (a) moves hhmmToMinutes/inWindow out of scripts/michael-quiet-tick.mjs:35-46 into feeder.mjs and re-imports them in the tick (no third copy); (b) is inert outside [window.start, window.end) ET with { ok:true, action:'inert', reason:'outside_et_window' } and exit 0; (c) pre-flights michael_feeder_runs via readRows and returns { ok:true, action:'inert', reason:'tables_absent' } while the child B migration is unapplied (never a throw, never a write); (d) single-flight: a row for (feeder, et_date) with status running-equivalent (started_at set, finished_at null, started_at younger than 10 minutes) makes the fire inert with reason 'in_flight'; an existing ok row makes it inert with reason 'already_ok' (a degraded or failed row allows a retry); (e) attempt = max(attempt)+1 with one retry on the unique-index conflict (23505) before returning failed; (f) upstream: [{ feeder, accept:['ok','degraded'] }] checked against today's rows, unmet yields inert reason 'upstream_not_ready'; (g) writes the run row on start (started_at) and completion (finished_at, status ok|degraded|failed|skipped, counts, log_md of counts and ids only) with model_used/tokens_in/tokens_out null for task_scheduler and gha venues; (h) maps a coded throw from getAuthenticatedClient (HOST_VENUE_REQUIRED, MICHAEL_ENCRYPTION_KEY_MISSING, NO_STORED_TOKENS, invalid_grant) to status failed with counts.error_code; (i) PII-safe single-line JSON logs `[michael:<feeder>] {...}` with counts and ids only; (j) gracefulExit for the Task Scheduler venue. It also exports the pure assembleReadiness({ runs, now }) predicate of spec section 5 line 109 for child E: wait until calendar ok and gmail/todoist ok-or-degraded, proceed degraded at or after 05:45 ET with headsUp naming the missing feeders. rules-match.mjs exports matchGmailRule(rule_json, thread) (from/subject/list-id/label predicates, case-insensitive, all-of semantics), matchKeywordBuckets(rule_json, text) for the tasks four-bucket routing, and roleTagFor(rules, task) for todoist; each pure, each returning { matched, rule_key } or null.",
+        "requirement": "Shared feeder harness lib/michael/feeder.mjs and pure rules matcher lib/michael/rules-match.mjs (PR 1)",
+        "acceptance_criteria": [
+          "lib/michael/feeder.test.js pins: inert outside window; inert tables_absent with zero writes; in_flight and already_ok single-flight; attempt max+1 and the 23505 retry; upstream_not_ready; counts-only log corpus (a test asserts no '@' and no thread subject text appears in captured log lines); coded-throw to failed mapping; assembleReadiness wait/proceed-degraded/proceed cases",
+          "scripts/michael-quiet-tick.mjs imports hhmmToMinutes/inWindow from lib/michael/feeder.mjs and its 62 existing tests stay green",
+          "lib/michael/rules-match.test.js pins gmail predicates, keyword buckets and role tags on rule_json fixtures"
+        ]
+      },
+      {
+        "id": "FR-2",
+        "priority": "CRITICAL",
+        "description": "google-clients.mjs exports listCalendarEvents({ calendarId, timeMin, timeMax }, { auth, calendarFactory }) over calendar.events.list (singleEvents, orderBy startTime, maxResults 250), listDriveFiles({ folderId, name }, { auth, driveFactory }) and readDriveFileText({ fileId }, { auth, driveFactory }) over drive.files.list/get(alt=media) with drive.readonly, and extends lib/michael/gmail-client.mjs with listThreads({ q, maxResults }, deps), getThreadMeta({ threadId }, deps) (metadata format only: From, Subject, List-Id, labelIds, last message id; never a body) and listLabels(deps). Every function is import-time pure, lazy-imports googleapis in a default factory, takes an injected auth or resolves one through getAuthenticatedClient({ sb, enc, env }), never throws (returns { ok:false, error }), and never logs a token. lib/michael/constants.mjs resolves chairman constants from env with named refusals when absent: MICHAEL_EXELON_CALENDAR_ID, MICHAEL_TASKS_DRIVE_FOLDER_ID, MICHAEL_EHG_CHAIRMAN_PROJECT_ID (default 6grHWpvVM8QXrj5W per lib/integrations/todoist/chairman-notify.js:25), MICHAEL_DAILY_CHECKIN_TASK_ID, MICHAEL_GMAIL_MODIFY_CEILING (default 60). No chairman identifier is hard-coded in a feeder.",
+        "requirement": "Google API legs on the chairman grant: lib/michael/google-clients.mjs and env-resolved constants (PR 2)",
+        "acceptance_criteria": [
+          "lib/michael/google-clients.test.js: each client maps its call arguments exactly (calendarId/timeMin/timeMax/singleEvents; q/maxResults; fileId alt media), returns { ok:false, error } on a rejecting factory, and importing with no env does not throw",
+          "gmail-client.test.js extended: getThreadMeta requests format metadata with the four headers only and never a full body",
+          "constants.test.js: missing MICHAEL_EXELON_CALENDAR_ID yields refusal CONSTANT_MISSING naming the variable; the ceiling default is 60 and parses an env override"
+        ]
+      },
+      {
+        "id": "FR-3",
+        "priority": "HIGH",
+        "description": "runCalendarRead({ sb, argv, now, auth, calendar }) under runFeeder (feeder 'calendar-read', venue task_scheduler, window 04:00-05:00 ET, no upstream): events.list today plus or minus one ET day on 'primary' and MICHAEL_EXELON_CALENDAR_ID; upserts michael_calendar_day by (et_date, event_id) for the three dates with calendar_id, title, starts_at, ends_at, all_day, response_status, coded_marker (a leading bracket tag such as [DEEP] or [OFFICE] parsed from the title), optional (needsAction or tentative response, or 'optional' in the title), overlap_group (events on the same date whose intervals intersect share a group id); day classification for today (Recovery when no non-optional events, Interpersonal when three or more accepted meetings, Deep when a coded [DEEP] event exists or fewer than two meetings, Shallow otherwise; coded-event override wins; Tuesday-office rule marks Tuesday Interpersonal when any accepted in-office event exists) written into the run row counts as { classification, events_by_date, coded, optional, overlaps }. Any calendar API failure marks the run failed; a single calendar failing marks degraded and records which.",
+        "requirement": "scripts/michael/calendar-read.mjs on the host (PR 3)",
+        "acceptance_criteria": [
+          "calendar-read.test.js: fixture events across the three dates yield the expected upsert rows and natural key, coded_marker parsing, optional flags, overlap groups, and each classification branch including the Tuesday-office rule and the coded override",
+          "One calendar rejecting yields status degraded with counts.failed_calendar; both rejecting yields failed; GITHUB_ACTIONS=true yields failed with error_code HOST_VENUE_REQUIRED and no API call",
+          "Outside 04:00-05:00 ET the script exits 0 inert with no API call"
+        ]
+      },
+      {
+        "id": "FR-4",
+        "priority": "CRITICAL",
+        "description": "runGmailTriage({ sb, argv, now, auth, gmail }) under runFeeder (feeder 'gmail-triage', venue task_scheduler, window 04:30-05:30 ET, no upstream): labels.list reconciles michael_gmail_labels (upsert by label_id with name and last_seen_in_gmail_at; a configured label missing from Gmail marks the run degraded, records counts.missing_labels and skips that class); threads.list for `in:inbox newer_than:1d` minus every keep_in_inbox label plus the older-than-1d sweep `in:inbox older_than:1d`, bounded by maxResults 200 per query; getThreadMeta per thread (metadata only); rules-first matching against active michael_rules domain gmail through matchGmailRule; matched threads are written to michael_gmail_triage_items by (et_date, thread_id) with class, rule_key, last_message_id and action_intent derived from the rule (label id, archive) but NO threads.modify call in this PR (--dry-run is the only mode; --apply is refused with APPLY_NOT_LANDED until PR 4b); unmatched threads are written with class null (queued for the seat); fleet-class threads (rule class 'fleet') are written class 'fleet' and left for the seat and child G (no handoff written).",
+        "requirement": "scripts/michael/gmail-triage.mjs part 1: label reconcile and rules-first matching, read-only (PR 4a)",
+        "acceptance_criteria": [
+          "gmail-triage.test.js part 1: a missing configured label degrades and skips only that class; keep_in_inbox labels are excluded from the query; matched threads carry rule_key and action_intent; unmatched threads are class null; no modify call exists in the module (source assertion); bodies are never requested (format metadata asserted)",
+          "Idempotent: re-running with the same fixture writes no duplicate rows (upsert on the natural key) and does not overwrite a row whose action_taken_at is set"
+        ]
+      },
+      {
+        "id": "FR-5",
+        "priority": "CRITICAL",
+        "description": "Adds --apply: for each item row with action_intent and no action_taken_at, in creation order, call modifyThread (lib/michael/gmail-client.mjs, TRASH/SPAM already refused) then set action_taken_at; count counts.threads_modified; when the count would exceed MICHAEL_GMAIL_MODIFY_CEILING (default 60) stop applying, mark the run degraded with counts.ceiling_hit=true, and leave the remaining intents for the next run or the seat; a thread previously archived (an earlier row with action_intent archive and action_taken_at set) that reappears in the inbox with a newer last_message_id is written borderline=true with class kept and no automatic action; a modify failure records the item as failed in counts.modify_failed and continues; the run is failed only when every modify failed or the API is unreachable. The re-run rule: a killed run re-executed acts only on intents without action_taken_at (record-then-act, spec section 5 and 11 idempotency test).",
+        "requirement": "gmail-triage part 2: record-then-act with the modify ceiling and borderline resurfacing (PR 4b)",
+        "acceptance_criteria": [
+          "80 seeded matched threads with ceiling 60 yield exactly 60 modifyThread calls, status degraded and ceiling_hit=true; the remaining 20 rows keep action_intent with no action_taken_at",
+          "A run interrupted after 30 modifies and re-run makes exactly the remaining modify calls and none of the first 30 (idempotency)",
+          "A previously archived thread with a newer last_message_id is written borderline=true and not modified",
+          "A modify rejecting for one thread leaves that row without action_taken_at, counts.modify_failed=1, and the run continues"
+        ]
+      },
+      {
+        "id": "FR-6",
+        "priority": "HIGH",
+        "description": "runTasksClassifier({ sb, argv, now, auth, drive, todoist }) under runFeeder (feeder 'tasks-classifier', venue task_scheduler, window 03:45-04:30 ET, no upstream): reads current-tasks.json from MICHAEL_TASKS_DRIVE_FOLDER_ID through readDriveFileText; aborts skipped with counts.reason stale when the file's modifiedTime is older than 36 hours, and skipped with reason cleanup_pending when a cleanup-pending.json exists in the folder that is newer than the last consumed marker (recorded in counts of the last ok run); routes each item by matchKeywordBuckets against active michael_rules domain tasks into the four buckets (rule_json names the bucket and target Todoist project/label); items no rule routes are staged to michael_staged_items kind 'task_route' for the seat's grading; dedupes against Todoist by fetching tasks with labels captured and from-google-tasks created in the last 7 days and comparing normalized content; creates tasks through the injected Todoist client with both labels; writes the consumed set as cleanup-pending content back to Drive only when the grant carries drive.file write (it does not in v1: drive.readonly), so v1 STAGES the cleanup list to michael_staged_items kind 'tasks_cleanup' with the file ids and records counts.cleanup_staged; the Apps Script consumer is out of scope.",
+        "requirement": "scripts/michael/tasks-classifier.mjs on the host (PR 5)",
+        "acceptance_criteria": [
+          "tasks-classifier.test.js: stale file yields skipped/stale with no Todoist call; unconsumed cleanup yields skipped/cleanup_pending; four-bucket routing from rule fixtures; unrouted items staged; dedupe against a seeded recent task creates nothing; created tasks carry both labels; the cleanup list is staged, never written to Drive in v1",
+          "GITHUB_ACTIONS=true yields failed HOST_VENUE_REQUIRED with no Drive call"
+        ]
+      },
+      {
+        "id": "FR-7",
+        "priority": "HIGH",
+        "description": "runTodoistBrief({ sb, argv, now, todoist }) under runFeeder (feeder 'todoist-brief', venue gha, window 04:45-05:30 ET, no upstream): fetches all tasks through the injected client (createTodoistClient at the private main), filters due today or overdue in ET, excludes projects named EVA and For Processing (by name from getProjects) and the EHG chairman project id (read only to count the EHG pointer into counts.ehg_pointer); role_tag from a rules row domain todoist via roleTagFor; items with an `Est:` line in content or description get effort_grade deterministically (S under 30 minutes, M under 90, L otherwise) and est_minutes; the rest keep effort_grade null (queued for the seat); upserts michael_todoist_snapshot by (et_date, task_id) never overwriting a row whose chosen_action or moved_back_at is set; overnight mutations only for active michael_rules with auto_apply=true and auto_apply_verb in label/reschedule (label updates; keep MICHAEL_DAILY_CHECKIN_TASK_ID due today), each deduped on (et_date, task_id, action) inside mutations_applied and redacted to content_sha256 like todoist-act.mjs; every other date change waits for the conversation. Workflow .github/workflows/michael-todoist-brief-cron.yml: name, two cron lines ('*/15 8-9 * * *' EDT and '*/15 9-10 * * *' EST with the ET window in a trailing comment), workflow_dispatch, permissions contents read, concurrency group ${{ github.workflow }} cancel-in-progress true, timeout-minutes 10, node 22 with npm cache, npm ci --ignore-scripts, env SUPABASE_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TODOIST_API_TOKEN, run `node scripts/michael/todoist-brief.mjs --apply` with no cd. tests/unit/cron/michael-todoist-brief-wiring.test.js forks michael-retention-wiring.test.js allowing exactly TODOIST_API_TOKEN in addition.",
+        "requirement": "scripts/michael/todoist-brief.mjs and its GHA workflow (PR 6)",
+        "acceptance_criteria": [
+          "todoist-brief.test.js: exclusion by project name and id; Est parsing and grading; ungraded rows null; role tags; auto_apply label/reschedule applied once and deduped on re-run; a row with chosen_action set is not overwritten; the check-in task is kept due today",
+          "michael-todoist-brief-wiring.test.js asserts the two cron lines, secrets set exactly {SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TODOIST_API_TOKEN}, no other credential token, concurrency, timeout, npm ci --ignore-scripts, no cd in run",
+          "grep of .github/workflows for MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET returns nothing"
+        ]
+      },
+      {
+        "id": "FR-8",
+        "priority": "HIGH",
+        "description": "In the scripts/setup-alarm-cron-tasks.mjs shape: MICHAEL_HOST_TASKS = [tasks-classifier 03:45-04:30, calendar-read 04:00-05:00, gmail-triage 04:30-05:30] each { taskName 'EHG Michael <feeder>' (no colon, QF-20260906-961), script 'scripts/michael/<feeder>.mjs --apply', wrapperRelPath 'scripts/cron/michael-<feeder>-task.cmd', intervalMinutes 15, startTime '00:00' }; the in-script window makes off-window fires inert. Pure builders reused or mirrored: buildWrapperScript (CRLF, `cd /d <repo root>`, `call node <script>`), buildHiddenTrAction (quoted wscript.exe //B run-hidden.vbs wrapper), buildCreateArgs adding /RU <current user> and /NP as in setup-eva-watcher-task.mjs:97-108 so a fire never opens a console, buildRemoveArgs, buildQueryArgs, buildQueryXmlArgs, verifyHiddenLaunch on the OS-returned XML; CLI register (default) | --dry-run | --status | --verify | --remove; refuses to register when run-hidden.vbs is absent; win32 guard exits 2 elsewhere. Wake-from-sleep is not configured (the /XML import path is denied unelevated on this host) and the header states the laptop must be awake; a missed window is a failed run visible to the gauge. VALIDATION condition 6: before committing, measure from PowerShell that an unelevated `schtasks /Create /SC MINUTE /MO 15 /ST 00:00 /F` of a throwaway task succeeds on this host and record the transcript line in the PR body; if it is denied, the registrar documents the elevated one-time step instead of claiming unelevated works.",
+        "requirement": "scripts/setup-michael-host-tasks.mjs registering the three host feeders on Windows Task Scheduler (PR 7)",
+        "acceptance_criteria": [
+          "tests/unit/fleet/setup-michael-host-tasks.test.js pins the task table (three distinct names without colons, windows matching the feeders' constants), wrapper CRLF content, quoted hidden action, /SC MINUTE /MO 15 /RU /NP args, remove/query args, and verifyHiddenLaunch against a split Command/Arguments fixture",
+          "node scripts/setup-michael-host-tasks.mjs --dry-run prints three wrappers and three /Create lines and registers nothing",
+          "The PR body carries the measured unelevated schtasks result from PowerShell"
+        ]
+      },
+      {
+        "id": "FR-9",
+        "priority": "HIGH",
+        "description": "scripts/michael/queue-read.mjs --json prints, bounded, today's michael_gmail_triage_items with class null (thread_id, rule_key, last_message_id, borderline) and michael_todoist_snapshot rows with effort_grade null (task_id, proposed_date), plus counts. scripts/michael/classify-apply.mjs --file <runner-produced json> applies the seat's verdicts: the file carries { producer, run_id, model_used, tokens_in, tokens_out, items:[{ thread_id, class, needs_you, needs_you_reason, borderline, verified_by, action_intent }], tasks:[{ task_id, effort_grade, est_minutes, proposed_date, role_tag }] } and a content_hash the script recomputes over canonicalJson(items+tasks) and refuses on mismatch (HASH_MISMATCH) or when producer/run_id are absent (PROVENANCE_MISSING, ratification 6c263823); it never writes a summary or any prose beyond needs_you_reason; it updates item and task rows by natural key without touching rows whose action_taken_at or chosen_action is set; it upserts the venue 'seat' michael_feeder_runs row for (feeder 'seat-classify', et_date) with model_used, tokens_in, tokens_out and counts { classified, needs_you, borderline, graded, opus_rejudged, sample }; the michael-quiet-tick line already names classify-apply.mjs (scripts/michael-quiet-tick.mjs:148-151) so no tick change is needed beyond the harness import. docs/protocol/michael/role-contract.md gains the overnight tick paragraph: Sonnet classifies the queued remainder, Opus re-judges every needs_you and borderline plus a ten percent random sample (disagreement flips to borderline and sets verified_by), each sub-agent is stopped when its result is read, and the verdict file is produced by the runner with producer, run_id, content_hash.",
+        "requirement": "Seat-side recorder scripts/michael/classify-apply.mjs, queue reader, and the tick contract text (PR 8)",
+        "acceptance_criteria": [
+          "classify-apply.test.js: a file without producer/run_id is refused PROVENANCE_MISSING; a tampered file is refused HASH_MISMATCH; a valid file updates only the addressed rows, never those with action_taken_at or chosen_action, and upserts one seat feeder_runs row carrying model_used/tokens_in/tokens_out",
+          "queue-read.test.js: bounded reads (limit literal), class-null and effort_grade-null selection for the ET date, tables_absent yields empty lists exit 0",
+          "role-contract.md carries the tick paragraph; CLAUDE_MICHAEL_* generated files are regenerated only if the contract section is DB-seeded (check scripts/one-off/_michael-role-contract-section.mjs --dry-run and follow child A's seeding path; otherwise the markdown edit is the deliverable)"
+        ]
+      },
+      {
+        "id": "FR-10",
+        "priority": "CRITICAL",
+        "description": "Every column used is declared in database/migrations/20260906_michael_tables.sql (VALIDATION finding 8: no missing column); this child ships no migration and applies none. Eight PRs (1 harness+matcher, 2 google clients+constants, 3 calendar-read, 4a gmail read-only, 4b gmail apply, 5 tasks-classifier, 6 todoist-brief+workflow, 7 host registrar, 8 seat verbs), each under the 400 LOC ceiling with the 100 LOC target exceedance justified in the body, each carrying the not-exercised statement (tables unapplied live; every acceptance test injects its clients; the first real run is the chairman's post-migration host smoke). SECURITY sub-agent at EXEC reviews the credentialed legs with provenance on the row; TESTING at EXEC re-verifies with measured counts.",
+        "requirement": "No DDL, PR discipline, and evidence",
+        "acceptance_criteria": [
+          "git diff --stat against main shows no file under database/migrations/ or database/chairman-gated/",
+          "Each PR body names its FR, its LOC and the not-exercised statement",
+          "sub_agent_execution_results carries SECURITY and TESTING rows for phase EXEC with content_hash, session_id and evaluated_commit_sha before EXEC-TO-PLAN"
+        ]
+      }
+    ],
+    "non_functional_requirements": [],
+    "technical_requirements": [
+      {
+        "id": "TR-1",
+        "rationale": "VALIDATION c26274e9 condition 3 and finding 10: two conventions exist in tree; the michael-family shape carries 62 passing tests and composes with lib/michael/db.mjs, and the spec's main(argv, deps) wording is satisfied by the harness signature",
+        "requirement": "Feeder shape is the michael-family shape: export runX({ sb, argv, now, ...deps }) that never throws, a private main() choosing emit(r,{json}) or a pure renderer, isMainModule guard, process.exitCode 0 on inert/ok/degraded and 2 on refusal; the window gate lives only in the harness"
+      },
+      {
+        "id": "TR-2",
+        "rationale": "count-truncation-diff-lint reads the literal (db.mjs:47); the migration is chairman-gated and unapplied live, so every feeder ships inert by construction (VALIDATION finding 8)",
+        "requirement": "Every read is bounded with a literal limit and every write goes through writeRows; a missing relation is inert, never a failure"
+      },
+      {
+        "id": "TR-3",
+        "rationale": "Ratifications ff4ef5b4 and 0daf3bd8; child C's venue guard is the single enforcement point",
+        "requirement": "Credentialed feeders obtain auth only through getAuthenticatedClient; assertHostVenue fires inside it; no feeder reads GOOGLE_CLIENT_* or MICHAEL_ENCRYPTION_KEY itself"
+      },
+      {
+        "id": "TR-4",
+        "rationale": "Spec section 2 data handling and SEC-M3 from child B: personal prose must be bounded",
+        "requirement": "No thread body, message body, task content or email address is ever logged or stored except summary and needs_you_reason on the item row (prose nulled at 30 days by retention); getThreadMeta uses format=metadata with four headers"
+      },
+      {
+        "id": "TR-5",
+        "rationale": "Spec section 3 assigns metering to the tick's summary; VALIDATION finding 3 refuted per-item metering (no columns on the item table)",
+        "requirement": "Metering columns are written only by the seat recorder (venue seat); task_scheduler and gha rows carry null model_used/tokens"
+      },
+      {
+        "id": "TR-6",
+        "rationale": "Child G owns the seam and the dispatch exemption; writing rows now raises Adam's directed floor (Solomon condition, 05-SOLOMON-ADJUDICATION.md:103)",
+        "requirement": "The Adam handoff seam (chairman_handoff origin michael) is not written by any feeder; fleet-class threads are recorded class 'fleet' only"
+      },
+      {
+        "id": "TR-7",
+        "rationale": "Ratification 0daf3bd8 must stay falsifiable (tests/unit/cron/michael-retention-wiring.test.js pattern)",
+        "requirement": "GHA workflows use the michael-retention-cron.yml skeleton with both DST cron lines, and the wiring test forbids every credential token except TODOIST_API_TOKEN on todoist-brief"
+      },
+      {
+        "id": "TR-8",
+        "rationale": "Explore: /XML and ONLOGON are denied unelevated; QF-20260726-677 measured 148 orphan consoles without /RU; VALIDATION condition 6",
+        "requirement": "Task Scheduler registration uses /SC MINUTE /MO 15 with /RU and /NP and the hidden launcher; wake-from-sleep is not configured and is documented; the unelevated /Create result is measured from PowerShell before the registrar commits"
+      },
+      {
+        "id": "TR-9",
+        "rationale": "vitest unit project collects **/*.test.js; the tables are absent live (VALIDATION condition 4)",
+        "requirement": "Tests are *.test.js under lib/michael/, scripts/michael/, tests/unit/fleet/ and tests/unit/cron/ with injected clients; none requires a live michael_* table"
+      }
+    ],
+    "system_architecture": "{\"overview\":\"A shared harness (window gate, dedupe, single-flight, ordering, run-row writer) hosts seven small feeders in two venues. Host feeders authenticate once through child C's getAuthenticatedClient and talk to Calendar, Gmail (metadata reads, bounded modify) and Drive through import-time-pure clients. The GHA feeder talks only to Todoist with the existing token. The seat closes the queue the feeders leave (class null, effort_grade null) through a provenance-checked recorder that writes metering. Child E consumes the harness's ordering predicate for assembly; child G consumes the run rows for gauges.\",\"components\":[{\"name\":\"lib/michael/feeder.mjs\",\"responsibility\":\"runFeeder harness, window helpers, assembleReadiness predicate\",\"technology\":\"ESM, lib/michael/db.mjs, lib/time/chairman-et-wall-clock.js\"},{\"name\":\"lib/michael/rules-match.mjs\",\"responsibility\":\"Pure matching over michael_rules.rule_json for gmail, todoist role tags and tasks buckets\",\"technology\":\"ESM pure functions\"},{\"name\":\"lib/michael/google-clients.mjs + gmail-client.mjs extension + constants.mjs\",\"responsibility\":\"Calendar events.list, Drive files list/read, Gmail threads.list/getThreadMeta/labels.list on the chairman grant; env-resolved chairman constants\",\"technology\":\"googleapis (lazy), google-auth-library via chairman-oauth.js\"},{\"name\":\"scripts/michael/calendar-read.mjs, gmail-triage.mjs, tasks-classifier.mjs\",\"responsibility\":\"Host feeders (task_scheduler venue)\",\"technology\":\"ESM CLIs in the michael-family shape\"},{\"name\":\"scripts/michael/todoist-brief.mjs + .github/workflows/michael-todoist-brief-cron.yml\",\"responsibility\":\"GHA feeder and its both-DST cron workflow\",\"technology\":\"@doist/todoist-api-typescript via createTodoistClient; GitHub Actions\"},{\"name\":\"scripts/setup-michael-host-tasks.mjs + scripts/cron/michael-*-task.cmd\",\"responsibility\":\"Host registrar in the setup-alarm-cron-tasks shape with hidden launch\",\"technology\":\"schtasks, wscript run-hidden.vbs\"},{\"name\":\"scripts/michael/queue-read.mjs, classify-apply.mjs\",\"responsibility\":\"Seat verbs: queue reader and provenance-checked recorder writing metering\",\"technology\":\"ESM CLIs, canonicalJson/sha256Hex from db.mjs\"}],\"data_flow\":\"03:45 tasks-classifier (host): Drive current-tasks.json -> rules buckets -> Todoist create / staged items -> feeder_runs. 04:00 calendar-read (host): events.list x2 -> michael_calendar_day -> classification in counts. 04:30 gmail-triage (host): labels.list -> michael_gmail_labels; threads.list -> getThreadMeta -> rules -> michael_gmail_triage_items (intent) -> modifyThread -> action_taken_at, ceiling-bounded; unmatched class null. 04:45 todoist-brief (gha): getTasks -> filter -> grade Est -> michael_todoist_snapshot; auto_apply rules -> mutations_applied. Seat tick (04:30-07:30): queue-read -> Sonnet/Opus sub-agents at the seat -> runner-produced verdict file -> classify-apply -> item/task rows + seat feeder_runs with metering. 05:15+ child E assemble reads assembleReadiness over feeder_runs.\",\"integration_points\":[\"lib/integrations/google/chairman-oauth.js getAuthenticatedClient (child C)\",\"lib/michael/gmail-client.mjs modifyThread (child C) and its new read methods\",\"lib/michael/db.mjs readRows/writeRows/refusal/emit/canonicalJson/sha256Hex (child B)\",\"scripts/michael-quiet-tick.mjs window helpers and QUIET_TICK_CLASSIFY_QUEUE line (child A)\",\"database/migrations/20260906_michael_tables.sql natural keys and CHECKs (child B, chairman-applied)\",\"lib/integrations/todoist/todoist-sync.js createTodoistClient; chairman-notify.js DEFAULT_PROJECT_ID (never called)\",\"scripts/setup-alarm-cron-tasks.mjs and setup-eva-watcher-task.mjs builders; scripts/cron/run-hidden.vbs\",\"Child E imports assembleReadiness; child G reads feeder_runs and writes the handoff seam\"]}",
+    "data_model": {},
+    "api_specifications": [],
+    "ui_ux_requirements": [],
+    "implementation_approach": "{\"phases\":[{\"phase\":\"Phase 1\",\"description\":\"Harness, matcher, google clients and constants (PRs 1-2)\",\"deliverables\":[\"lib/michael/feeder.mjs + test\",\"lib/michael/rules-match.mjs + test\",\"lib/michael/google-clients.mjs + test\",\"gmail-client.mjs read methods\",\"lib/michael/constants.mjs + test\",\"quiet-tick imports the shared window helpers\"]},{\"phase\":\"Phase 2\",\"description\":\"Host feeders (PRs 3, 4a, 4b, 5)\",\"deliverables\":[\"calendar-read.mjs + test\",\"gmail-triage.mjs read-only + test\",\"gmail-triage --apply with ceiling + tests\",\"tasks-classifier.mjs + test\"]},{\"phase\":\"Phase 3\",\"description\":\"GHA feeder, host registrar, seat verbs (PRs 6-8)\",\"deliverables\":[\"todoist-brief.mjs + workflow + wiring test\",\"setup-michael-host-tasks.mjs + wrappers + test + measured schtasks result\",\"queue-read.mjs, classify-apply.mjs + tests, role-contract tick paragraph\"]}],\"technical_decisions\":[\"michael-family feeder shape with the window gate in the harness (VALIDATION condition 3)\",\"brief-assemble and its workflow belong to child E; -D exports only the pure ordering predicate (condition 2)\",\"retention is superseded by child B (condition 1)\",\"gmail-triage split at the read/write boundary so the read-only half merges while the ceiling is under review (condition 5)\",\"No per-item metering; the seat feeder_runs row carries model_used/tokens (finding 3)\",\"tasks-classifier stages the cleanup list instead of writing to Drive: the grant is drive.readonly in v1\",\"Task Scheduler /SC MINUTE all day with in-script windows; wake-from-sleep documented, not configured\",\"No DDL in this child\"]}",
+    "technology_stack": [
+      "Node ESM",
+      "google-auth-library ^10.5.0",
+      "googleapis ^171.4.0",
+      "lib/security/encryption.cjs AES-256-GCM",
+      "Express",
+      "vitest"
+    ],
+    "dependencies": [
+      "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-B (michael_* migration, chairman-applied); SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-C (chairman Google grant)"
+    ],
+    "test_scenarios": [
+      {
+        "id": "TS-1",
+        "then": "{ ok:true, action:'inert' } with reason outside_et_window or tables_absent, zero writes, exit 0",
+        "when": "runFeeder runs",
+        "given": "an injected client and a fixed now outside the window, or a client returning PGRST205",
+        "scenario": "Harness inert paths",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-2",
+        "then": "inert in_flight; inert already_ok; a retry with attempt max+1; a 23505 on insert is retried once then failed",
+        "when": "runFeeder runs each case",
+        "given": "an existing row with started_at 3 minutes ago and no finished_at; then an ok row; then a degraded row",
+        "scenario": "Single-flight and attempt",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-3",
+        "then": "wait before 05:45 with a missing feeder; proceed degraded at 05:45 with headsUp naming it; proceed clean when all ok",
+        "when": "assembleReadiness runs",
+        "given": "feeder_runs fixtures for calendar/gmail/todoist and a now before and after 05:45 ET",
+        "scenario": "Upstream ordering and assembleReadiness",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-4",
+        "then": "no captured log line contains the address, the subject or the content; only counts and ids",
+        "when": "each feeder runs with a capturing logger",
+        "given": "fixtures containing an email address, a subject and a task content",
+        "scenario": "PII-safe logging",
+        "test_type": "security"
+      },
+      {
+        "id": "TS-5",
+        "then": "exactly 60 modify calls in total, degraded with ceiling_hit, no duplicate modify, remaining intents left without action_taken_at",
+        "when": "gmail-triage --apply runs, is interrupted after 30, and re-runs",
+        "given": "80 matched threads and ceiling 60",
+        "scenario": "Gmail ceiling and record-then-act",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-6",
+        "then": "the row is borderline=true and no modify call is made",
+        "when": "gmail-triage runs",
+        "given": "a thread archived yesterday whose new inbox appearance carries a newer last_message_id",
+        "scenario": "Borderline resurfacing",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-7",
+        "then": "status degraded, counts.missing_labels lists it, that class is skipped, others proceed",
+        "when": "gmail-triage runs",
+        "given": "michael_gmail_labels configures a class whose label is absent from labels.list",
+        "scenario": "Missing label degrades",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-8",
+        "then": "Recovery/Interpersonal/Deep/Shallow and the Tuesday-office rule as specified, coded override wins",
+        "when": "calendar-read runs",
+        "given": "event fixtures per branch (none, three accepted, [DEEP] coded, Tuesday in-office)",
+        "scenario": "Calendar classification",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-9",
+        "then": "skipped/stale; skipped/cleanup_pending; routed creates with both labels, duplicate not created, unrouted staged, cleanup staged not written to Drive",
+        "when": "tasks-classifier runs",
+        "given": "a stale file, an unconsumed cleanup, and a fresh file with bucket rules and a duplicate",
+        "scenario": "Tasks-classifier guards and routing",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-10",
+        "then": "exclusions honoured, grades and est_minutes set, ungraded null, the label applied once and deduped in mutations_applied, chosen_action rows untouched",
+        "when": "todoist-brief runs twice",
+        "given": "tasks across projects with Est lines and an auto_apply label rule",
+        "scenario": "Todoist brief filtering and auto_apply",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-11",
+        "then": "failed run row with error_code HOST_VENUE_REQUIRED and no API factory invoked",
+        "when": "calendar-read, gmail-triage or tasks-classifier runs",
+        "given": "GITHUB_ACTIONS=true",
+        "scenario": "Venue refusal on GHA",
+        "test_type": "security"
+      },
+      {
+        "id": "TS-12",
+        "then": "two cron lines, exact secret set with TODOIST_API_TOKEN, no other token, concurrency, timeout 10, npm ci --ignore-scripts, no cd",
+        "when": "the wiring test reads it",
+        "given": "the todoist-brief workflow file",
+        "scenario": "Workflow wiring",
+        "test_type": "integration"
+      },
+      {
+        "id": "TS-13",
+        "then": "three colon-free names, CRLF wrappers, quoted wscript action, /SC MINUTE /MO 15 /RU /NP, verify passes on the split fixture and fails on a bare node action",
+        "when": "builders and verifyHiddenLaunch run",
+        "given": "the task table and a split Command/Arguments XML fixture",
+        "scenario": "Host registrar builders",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-14",
+        "then": "PROVENANCE_MISSING, HASH_MISMATCH, and a valid apply that updates only addressed rows and writes the seat feeder_runs row with metering",
+        "when": "classify-apply runs",
+        "given": "verdict files without producer, with a wrong content_hash, and valid",
+        "scenario": "Recorder provenance",
+        "test_type": "security"
+      },
+      {
+        "id": "TS-15",
+        "then": "exit 0, action inert, no network call (factories never reached)",
+        "when": "each script is invoked with --json",
+        "given": "the real scripts run at a time outside every window with the migration unapplied",
+        "scenario": "Smoke outside windows",
+        "test_type": "e2e"
+      }
+    ],
+    "acceptance_criteria": [
+      "Every feeder runs through lib/michael/feeder.mjs: inert outside its window, inert with zero writes while tables are absent, single-flight per (feeder, et_date), attempt max+1 with a 23505 retry, upstream ordering, counts-and-ids-only logs, exit 0 on inert",
+      "gmail-triage is record-then-act and bounded: 80 matched threads with ceiling 60 yield exactly 60 modifies and a degraded run; interrupted runs never duplicate a modify; resurfaced archived threads are borderline; a missing label degrades and skips only its class; bodies are never fetched",
+      "calendar-read, gmail-triage and tasks-classifier refuse under GITHUB_ACTIONS through getAuthenticatedClient and never read a Google credential themselves",
+      "todoist-brief applies only existing auto_apply label/reschedule rules, deduped in mutations_applied, and its workflow carries exactly SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and TODOIST_API_TOKEN with both DST cron lines",
+      "assembleReadiness is exported and pinned for child E (wait, proceed degraded at 05:45 with headsUp, proceed clean)",
+      "setup-michael-host-tasks.mjs registers three hidden, /RU-bound, colon-free tasks at /SC MINUTE /MO 15 and verifies against the OS XML; the unelevated /Create result is measured and stated",
+      "classify-apply refuses files without producer/run_id or with a mismatched content_hash, updates only addressed rows, and writes the seat feeder_runs row with model_used, tokens_in, tokens_out",
+      "No file under database/ changes; SECURITY and TESTING EXEC rows with provenance exist before EXEC-TO-PLAN"
+    ],
+    "performance_requirements": {},
+    "plan_checklist": [
+      {
+        "text": "PRD created and saved",
+        "checked": true
+      },
+      {
+        "text": "SD requirements mapped to technical specs",
+        "checked": true
+      },
+      {
+        "text": "Technical architecture defined",
+        "checked": true
+      },
+      {
+        "text": "Implementation approach documented",
+        "checked": true
+      },
+      {
+        "text": "Test scenarios defined",
+        "checked": true
+      },
+      {
+        "text": "Acceptance criteria established",
+        "checked": true
+      },
+      {
+        "text": "Integration & operationalization documented",
+        "checked": true
+      }
+    ],
+    "exec_checklist": [
+      {
+        "text": "Development environment setup",
+        "checked": false
+      },
+      {
+        "text": "Core functionality implemented",
+        "checked": false
+      },
+      {
+        "text": "Unit tests written",
+        "checked": false
+      },
+      {
+        "text": "Integration tests completed",
+        "checked": false
+      },
+      {
+        "text": "Code review completed",
+        "checked": false
+      },
+      {
+        "text": "Documentation updated",
+        "checked": false
+      }
+    ],
+    "validation_checklist": [
+      {
+        "text": "All acceptance criteria met",
+        "checked": false
+      },
+      {
+        "text": "Performance requirements validated",
+        "checked": false
+      },
+      {
+        "text": "Security review completed",
+        "checked": false
+      },
+      {
+        "text": "User acceptance testing passed",
+        "checked": false
+      },
+      {
+        "text": "Deployment readiness confirmed",
+        "checked": false
+      }
+    ],
+    "progress": 0,
+    "phase": "planning",
+    "phase_progress": {},
+    "risks": [
+      {
+        "risk": "Bulk mis-archive from a wrong rule",
+        "impact": "HIGH",
+        "mitigation": "Record-then-act, the 60-thread ceiling marking degraded, TRASH/SPAM refused at the client, --unarchive via gmail-act restores and stamps reopened_at (the revoke signal)",
+        "probability": "MEDIUM",
+        "rollback_plan": "Run gmail-act --unarchive per intent row; the item rows carry every intent so the set is enumerable"
+      },
+      {
+        "risk": "Overlapping host fires collide on the run-row unique index",
+        "impact": "MEDIUM",
+        "mitigation": "Single-flight on a running row younger than 10 minutes plus attempt max+1 with a 23505 retry",
+        "probability": "MEDIUM",
+        "rollback_plan": "A collided fire ends failed and the next */15 fire retries; no data is lost"
+      },
+      {
+        "risk": "A missed window on a sleeping laptop is silent",
+        "impact": "MEDIUM",
+        "mitigation": "No run row for the date is exactly what child G's feeder-health gauge and Adam's one SMS line surface; the registrar header states the awake precondition",
+        "probability": "HIGH",
+        "rollback_plan": "Chairman runs the feeder by hand on the host; the seat proceeds degraded at 05:45"
+      },
+      {
+        "risk": "Todoist exclusion by project name breaks on a rename",
+        "impact": "LOW",
+        "mitigation": "Exclusions by name for EVA/For Processing plus by id for the EHG project; a missing project logs counts.exclusion_miss",
+        "probability": "LOW",
+        "rollback_plan": "Set the names in env overrides added to constants.mjs"
+      },
+      {
+        "risk": "Unelevated schtasks /Create is denied on this host",
+        "impact": "MEDIUM",
+        "mitigation": "Measured from PowerShell before the registrar commits (VALIDATION condition 6); the PR body states the result",
+        "probability": "LOW",
+        "rollback_plan": "Document the elevated one-time registration in the runbook instead of claiming unelevated works"
+      },
+      {
+        "risk": "Eight PRs each waiting ~13 minutes on the unit tier",
+        "impact": "LOW",
+        "mitigation": "Stack independent PRs and merge in dependency order; keep each under 400 LOC",
+        "probability": "HIGH",
+        "rollback_plan": "Any single PR reverts cleanly; the harness is the only shared dependency"
+      }
+    ],
+    "constraints": [
+      "No DDL in this child",
+      "No credential in GHA beyond TODOIST_API_TOKEN",
+      "Host venue only for the Google grant",
+      "No model call from any feeder"
+    ],
+    "assumptions": [
+      "Chairman applies the -B migration and completes the -C consent before the first real run",
+      "Chairman constants provided via host .env"
+    ],
+    "stakeholders": [
+      {
+        "name": "Chairman (Solo Entrepreneur)",
+        "needs": [
+          "One-command re-consent",
+          "No plaintext token at rest"
+        ],
+        "persona_id": "chairman",
+        "pain_points": [
+          "Seven-day re-consent"
+        ],
+        "success_criteria": [
+          "Consent works on the host; gauge warns before lapse"
+        ]
+      }
+    ],
+    "approved_by": null,
+    "approval_date": null,
+    "planned_start": null,
+    "planned_end": null,
+    "actual_start": null,
+    "actual_end": null,
+    "created_at": "2026-09-06T14:40:36.143738",
+    "updated_at": "2026-09-06T14:40:36.143738",
+    "created_by": "PLAN",
+    "updated_by": null,
+    "metadata": {
+      "seat": "Bravo 85c82b18",
+      "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+      "created_via": "inline_prd_generation",
+      "explore_evidence": "804c38ec-0aab-4f02-873e-dca980ae2bb0",
+      "validation_evidence": "c26274e9",
+      "integration_operationalization": {
+        "consumers": [
+          {
+            "name": "Michael seat (overnight tick)",
+            "frequency": "Every 15 minutes 04:30-07:30 ET when alive",
+            "interaction": "Reads the classify/grade queues the feeders leave and records verdicts through classify-apply"
+          },
+          {
+            "name": "Child E brief-assemble",
+            "frequency": "Every 15 minutes 05:15-06:00 ET",
+            "interaction": "Imports assembleReadiness and reads the feeder rows and tables"
+          },
+          {
+            "name": "Child G gauges and Adam's 6 AM line",
+            "frequency": "Each gauge tick",
+            "interaction": "Read michael_feeder_runs status per date"
+          },
+          {
+            "name": "Chairman (host)",
+            "frequency": "Once, then rarely",
+            "interaction": "Runs setup-michael-host-tasks.mjs once; runs a feeder by hand on a missed window"
+          }
+        ],
+        "dependencies": [
+          {
+            "name": "michael_* tables (child B migration, chairman-applied)",
+            "type": "upstream",
+            "contract": "Natural keys and CHECKs per the migration",
+            "failure_handling": "readRows/writeRows surface TABLES_ABSENT; feeders are inert with exit 0"
+          },
+          {
+            "name": "Chairman Google grant (child C)",
+            "type": "upstream",
+            "contract": "getAuthenticatedClient with gmail.modify, calendar.readonly, drive.readonly",
+            "failure_handling": "Coded throws map to failed runs with error_code; invalid_grant is recorded by the module for the gauge"
+          },
+          {
+            "name": "Todoist API (TODOIST_API_TOKEN)",
+            "type": "upstream",
+            "contract": "SDK getTasks/getProjects/updateTask/addTask",
+            "failure_handling": "API failure yields a failed run; no partial mutation without a snapshot row"
+          },
+          {
+            "name": "Windows Task Scheduler on the host",
+            "type": "downstream",
+            "contract": "Three hidden tasks at */15 with in-script windows",
+            "failure_handling": "A missed fire is a missing run row the gauge sees"
+          }
+        ],
+        "data_contracts": [
+          {
+            "schema": "(feeder, et_date, attempt) unique; venue task_scheduler|gha|seat; status ok|degraded|failed|skipped; counts jsonb (ids and counts only, plus classification/error_code/ceiling_hit/missing_labels); metering columns seat-only",
+            "validation": "Harness unit tests and the migration CHECKs",
+            "versioning": "Additive keys inside counts only",
+            "contract_name": "michael_feeder_runs row"
+          },
+          {
+            "schema": "{ producer, run_id, model_used, tokens_in, tokens_out, content_hash, items[], tasks[] }",
+            "validation": "Hash recomputed over canonicalJson(items+tasks); producer and run_id required",
+            "versioning": "Version field reserved; v1 implicit",
+            "contract_name": "Seat verdict file for classify-apply"
+          }
+        ],
+        "runtime_config": {
+          "feature_flags": [
+            "--apply on gmail-triage (absent = dry-run; refused APPLY_NOT_LANDED until PR 4b)"
+          ],
+          "environment_variables": [
+            "MICHAEL_EXELON_CALENDAR_ID (host .env)",
+            "MICHAEL_TASKS_DRIVE_FOLDER_ID (host .env)",
+            "MICHAEL_EHG_CHAIRMAN_PROJECT_ID (default 6grHWpvVM8QXrj5W)",
+            "MICHAEL_DAILY_CHECKIN_TASK_ID",
+            "MICHAEL_GMAIL_MODIFY_CEILING (default 60)",
+            "TODOIST_API_TOKEN (host .env and existing GHA secret)",
+            "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (existing)"
+          ],
+          "deployment_considerations": "Host tasks register once from the host; the GHA workflow ships with the code; nothing runs against real tables until the chairman applies the child B migration, and no Google call happens until the child C consent is done on the host."
+        },
+        "observability_rollout": {
+          "alerts": [
+            "Child G michael-feeder-health: any failed today or three consecutive degraded",
+            "Adam's 6 AM SMS one line on a failed feeder (spec Q7)"
+          ],
+          "monitoring": [
+            "michael_feeder_runs status per feeder per date",
+            "counts.ceiling_hit, counts.missing_labels, counts.error_code",
+            "seat feeder_runs metering"
+          ],
+          "rollback_trigger": "Any bulk mis-archive or a modify count above the ceiling in one run",
+          "rollout_strategy": "Shadow phase: feeders write rows nightly; gmail-triage dry-run until the chairman confirms rules; then --apply with the ceiling",
+          "rollback_procedure": "Remove the host task with --remove; restore threads with gmail-act --unarchive per intent row; disable the GHA workflow"
+        }
+      }
+    },
+    "content": "# Product Requirements Document\n\n## Strategic Directive\nSD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D\n\n## Title\nMichael D: v1 feeders - shared harness, host calendar-read/gmail-triage/tasks-classifier, GHA todoist-brief, host task registrar, seat recorder and metering\n\n## Status\nPlanning\n\n## Executive Summary\nChild D gives Michael the v1 model-free feeders: a shared harness (ET window, per-date dedupe, ordering), three host feeders on the chairman grant, todoist-brief on GHA, the host task registrar, and the seat-side recorder that closes the classify queue and writes metering.\n\n## Functional Requirements\n### FR-1: Shared feeder harness lib/michael/feeder.mjs and pure rules matcher lib/michael/rules-match.mjs (PR 1)\nfeeder.mjs exports runFeeder({ feeder, venue, window, upstream, run }, { sb, env, now, logger }) in the michael-family shape (VALIDATION c26274e9 condition 3: every feeder is `export async function runX({ sb, argv, now, ...deps })` plus a private main(); no exported main(argv, deps)). The harness: (a) moves hhmmToMinutes/inWindow out of scripts/michael-quiet-tick.mjs:35-46 into feeder.mjs and re-imports them in the tick (no third copy); (b) is inert outside [window.start, window.end) ET with { ok:true, action:'inert', reason:'outside_et_window' } and exit 0; (c) pre-flights michael_feeder_runs via readRows and returns { ok:true, action:'inert', reason:'tables_absent' } while the child B migration is unapplied (never a throw, never a write); (d) single-flight: a row for (feeder, et_date) with status running-equivalent (started_at set, finished_at null, started_at younger than 10 minutes) makes the fire inert with reason 'in_flight'; an existing ok row makes it inert with reason 'already_ok' (a degraded or failed row allows a retry); (e) attempt = max(attempt)+1 with one retry on the unique-index conflict (23505) before returning failed; (f) upstream: [{ feeder, accept:['ok','degraded'] }] checked against today's rows, unmet yields inert reason 'upstream_not_ready'; (g) writes the run row on start (started_at) and completion (finished_at, status ok|degraded|failed|skipped, counts, log_md of counts and ids only) with model_used/tokens_in/tokens_out null for task_scheduler and gha venues; (h) maps a coded throw from getAuthenticatedClient (HOST_VENUE_REQUIRED, MICHAEL_ENCRYPTION_KEY_MISSING, NO_STORED_TOKENS, invalid_grant) to status failed with counts.error_code; (i) PII-safe single-line JSON logs `[michael:<feeder>] {...}` with counts and ids only; (j) gracefulExit for the Task Scheduler venue. It also exports the pure assembleReadiness({ runs, now }) predicate of spec section 5 line 109 for child E: wait until calendar ok and gmail/todoist ok-or-degraded, proceed degraded at or after 05:45 ET with headsUp naming the missing feeders. rules-match.mjs exports matchGmailRule(rule_json, thread) (from/subject/list-id/label predicates, case-insensitive, all-of semantics), matchKeywordBuckets(rule_json, text) for the tasks four-bucket routing, and roleTagFor(rules, task) for todoist; each pure, each returning { matched, rule_key } or null.\n\nAcceptance:\n- lib/michael/feeder.test.js pins: inert outside window; inert tables_absent with zero writes; in_flight and already_ok single-flight; attempt max+1 and the 23505 retry; upstream_not_ready; counts-only log corpus (a test asserts no '@' and no thread subject text appears in captured log lines); coded-throw to failed mapping; assembleReadiness wait/proceed-degraded/proceed cases\n- scripts/michael-quiet-tick.mjs imports hhmmToMinutes/inWindow from lib/michael/feeder.mjs and its 62 existing tests stay green\n- lib/michael/rules-match.test.js pins gmail predicates, keyword buckets and role tags on rule_json fixtures\n\n### FR-2: Google API legs on the chairman grant: lib/michael/google-clients.mjs and env-resolved constants (PR 2)\ngoogle-clients.mjs exports listCalendarEvents({ calendarId, timeMin, timeMax }, { auth, calendarFactory }) over calendar.events.list (singleEvents, orderBy startTime, maxResults 250), listDriveFiles({ folderId, name }, { auth, driveFactory }) and readDriveFileText({ fileId }, { auth, driveFactory }) over drive.files.list/get(alt=media) with drive.readonly, and extends lib/michael/gmail-client.mjs with listThreads({ q, maxResults }, deps), getThreadMeta({ threadId }, deps) (metadata format only: From, Subject, List-Id, labelIds, last message id; never a body) and listLabels(deps). Every function is import-time pure, lazy-imports googleapis in a default factory, takes an injected auth or resolves one through getAuthenticatedClient({ sb, enc, env }), never throws (returns { ok:false, error }), and never logs a token. lib/michael/constants.mjs resolves chairman constants from env with named refusals when absent: MICHAEL_EXELON_CALENDAR_ID, MICHAEL_TASKS_DRIVE_FOLDER_ID, MICHAEL_EHG_CHAIRMAN_PROJECT_ID (default 6grHWpvVM8QXrj5W per lib/integrations/todoist/chairman-notify.js:25), MICHAEL_DAILY_CHECKIN_TASK_ID, MICHAEL_GMAIL_MODIFY_CEILING (default 60). No chairman identifier is hard-coded in a feeder.\n\nAcceptance:\n- lib/michael/google-clients.test.js: each client maps its call arguments exactly (calendarId/timeMin/timeMax/singleEvents; q/maxResults; fileId alt media), returns { ok:false, error } on a rejecting factory, and importing with no env does not throw\n- gmail-client.test.js extended: getThreadMeta requests format metadata with the four headers only and never a full body\n- constants.test.js: missing MICHAEL_EXELON_CALENDAR_ID yields refusal CONSTANT_MISSING naming the variable; the ceiling default is 60 and parses an env override\n\n### FR-3: scripts/michael/calendar-read.mjs on the host (PR 3)\nrunCalendarRead({ sb, argv, now, auth, calendar }) under runFeeder (feeder 'calendar-read', venue task_scheduler, window 04:00-05:00 ET, no upstream): events.list today plus or minus one ET day on 'primary' and MICHAEL_EXELON_CALENDAR_ID; upserts michael_calendar_day by (et_date, event_id) for the three dates with calendar_id, title, starts_at, ends_at, all_day, response_status, coded_marker (a leading bracket tag such as [DEEP] or [OFFICE] parsed from the title), optional (needsAction or tentative response, or 'optional' in the title), overlap_group (events on the same date whose intervals intersect share a group id); day classification for today (Recovery when no non-optional events, Interpersonal when three or more accepted meetings, Deep when a coded [DEEP] event exists or fewer than two meetings, Shallow otherwise; coded-event override wins; Tuesday-office rule marks Tuesday Interpersonal when any accepted in-office event exists) written into the run row counts as { classification, events_by_date, coded, optional, overlaps }. Any calendar API failure marks the run failed; a single calendar failing marks degraded and records which.\n\nAcceptance:\n- calendar-read.test.js: fixture events across the three dates yield the expected upsert rows and natural key, coded_marker parsing, optional flags, overlap groups, and each classification branch including the Tuesday-office rule and the coded override\n- One calendar rejecting yields status degraded with counts.failed_calendar; both rejecting yields failed; GITHUB_ACTIONS=true yields failed with error_code HOST_VENUE_REQUIRED and no API call\n- Outside 04:00-05:00 ET the script exits 0 inert with no API call\n\n### FR-4: scripts/michael/gmail-triage.mjs part 1: label reconcile and rules-first matching, read-only (PR 4a)\nrunGmailTriage({ sb, argv, now, auth, gmail }) under runFeeder (feeder 'gmail-triage', venue task_scheduler, window 04:30-05:30 ET, no upstream): labels.list reconciles michael_gmail_labels (upsert by label_id with name and last_seen_in_gmail_at; a configured label missing from Gmail marks the run degraded, records counts.missing_labels and skips that class); threads.list for `in:inbox newer_than:1d` minus every keep_in_inbox label plus the older-than-1d sweep `in:inbox older_than:1d`, bounded by maxResults 200 per query; getThreadMeta per thread (metadata only); rules-first matching against active michael_rules domain gmail through matchGmailRule; matched threads are written to michael_gmail_triage_items by (et_date, thread_id) with class, rule_key, last_message_id and action_intent derived from the rule (label id, archive) but NO threads.modify call in this PR (--dry-run is the only mode; --apply is refused with APPLY_NOT_LANDED until PR 4b); unmatched threads are written with class null (queued for the seat); fleet-class threads (rule class 'fleet') are written class 'fleet' and left for the seat and child G (no handoff written).\n\nAcceptance:\n- gmail-triage.test.js part 1: a missing configured label degrades and skips only that class; keep_in_inbox labels are excluded from the query; matched threads carry rule_key and action_intent; unmatched threads are class null; no modify call exists in the module (source assertion); bodies are never requested (format metadata asserted)\n- Idempotent: re-running with the same fixture writes no duplicate rows (upsert on the natural key) and does not overwrite a row whose action_taken_at is set\n\n### FR-5: gmail-triage part 2: record-then-act with the modify ceiling and borderline resurfacing (PR 4b)\nAdds --apply: for each item row with action_intent and no action_taken_at, in creation order, call modifyThread (lib/michael/gmail-client.mjs, TRASH/SPAM already refused) then set action_taken_at; count counts.threads_modified; when the count would exceed MICHAEL_GMAIL_MODIFY_CEILING (default 60) stop applying, mark the run degraded with counts.ceiling_hit=true, and leave the remaining intents for the next run or the seat; a thread previously archived (an earlier row with action_intent archive and action_taken_at set) that reappears in the inbox with a newer last_message_id is written borderline=true with class kept and no automatic action; a modify failure records the item as failed in counts.modify_failed and continues; the run is failed only when every modify failed or the API is unreachable. The re-run rule: a killed run re-executed acts only on intents without action_taken_at (record-then-act, spec section 5 and 11 idempotency test).\n\nAcceptance:\n- 80 seeded matched threads with ceiling 60 yield exactly 60 modifyThread calls, status degraded and ceiling_hit=true; the remaining 20 rows keep action_intent with no action_taken_at\n- A run interrupted after 30 modifies and re-run makes exactly the remaining modify calls and none of the first 30 (idempotency)\n- A previously archived thread with a newer last_message_id is written borderline=true and not modified\n- A modify rejecting for one thread leaves that row without action_taken_at, counts.modify_failed=1, and the run continues\n\n### FR-6: scripts/michael/tasks-classifier.mjs on the host (PR 5)\nrunTasksClassifier({ sb, argv, now, auth, drive, todoist }) under runFeeder (feeder 'tasks-classifier', venue task_scheduler, window 03:45-04:30 ET, no upstream): reads current-tasks.json from MICHAEL_TASKS_DRIVE_FOLDER_ID through readDriveFileText; aborts skipped with counts.reason stale when the file's modifiedTime is older than 36 hours, and skipped with reason cleanup_pending when a cleanup-pending.json exists in the folder that is newer than the last consumed marker (recorded in counts of the last ok run); routes each item by matchKeywordBuckets against active michael_rules domain tasks into the four buckets (rule_json names the bucket and target Todoist project/label); items no rule routes are staged to michael_staged_items kind 'task_route' for the seat's grading; dedupes against Todoist by fetching tasks with labels captured and from-google-tasks created in the last 7 days and comparing normalized content; creates tasks through the injected Todoist client with both labels; writes the consumed set as cleanup-pending content back to Drive only when the grant carries drive.file write (it does not in v1: drive.readonly), so v1 STAGES the cleanup list to michael_staged_items kind 'tasks_cleanup' with the file ids and records counts.cleanup_staged; the Apps Script consumer is out of scope.\n\nAcceptance:\n- tasks-classifier.test.js: stale file yields skipped/stale with no Todoist call; unconsumed cleanup yields skipped/cleanup_pending; four-bucket routing from rule fixtures; unrouted items staged; dedupe against a seeded recent task creates nothing; created tasks carry both labels; the cleanup list is staged, never written to Drive in v1\n- GITHUB_ACTIONS=true yields failed HOST_VENUE_REQUIRED with no Drive call\n\n### FR-7: scripts/michael/todoist-brief.mjs and its GHA workflow (PR 6)\nrunTodoistBrief({ sb, argv, now, todoist }) under runFeeder (feeder 'todoist-brief', venue gha, window 04:45-05:30 ET, no upstream): fetches all tasks through the injected client (createTodoistClient at the private main), filters due today or overdue in ET, excludes projects named EVA and For Processing (by name from getProjects) and the EHG chairman project id (read only to count the EHG pointer into counts.ehg_pointer); role_tag from a rules row domain todoist via roleTagFor; items with an `Est:` line in content or description get effort_grade deterministically (S under 30 minutes, M under 90, L otherwise) and est_minutes; the rest keep effort_grade null (queued for the seat); upserts michael_todoist_snapshot by (et_date, task_id) never overwriting a row whose chosen_action or moved_back_at is set; overnight mutations only for active michael_rules with auto_apply=true and auto_apply_verb in label/reschedule (label updates; keep MICHAEL_DAILY_CHECKIN_TASK_ID due today), each deduped on (et_date, task_id, action) inside mutations_applied and redacted to content_sha256 like todoist-act.mjs; every other date change waits for the conversation. Workflow .github/workflows/michael-todoist-brief-cron.yml: name, two cron lines ('*/15 8-9 * * *' EDT and '*/15 9-10 * * *' EST with the ET window in a trailing comment), workflow_dispatch, permissions contents read, concurrency group ${{ github.workflow }} cancel-in-progress true, timeout-minutes 10, node 22 with npm cache, npm ci --ignore-scripts, env SUPABASE_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TODOIST_API_TOKEN, run `node scripts/michael/todoist-brief.mjs --apply` with no cd. tests/unit/cron/michael-todoist-brief-wiring.test.js forks michael-retention-wiring.test.js allowing exactly TODOIST_API_TOKEN in addition.\n\nAcceptance:\n- todoist-brief.test.js: exclusion by project name and id; Est parsing and grading; ungraded rows null; role tags; auto_apply label/reschedule applied once and deduped on re-run; a row with chosen_action set is not overwritten; the check-in task is kept due today\n- michael-todoist-brief-wiring.test.js asserts the two cron lines, secrets set exactly {SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TODOIST_API_TOKEN}, no other credential token, concurrency, timeout, npm ci --ignore-scripts, no cd in run\n- grep of .github/workflows for MICHAEL_ENCRYPTION_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET returns nothing\n\n### FR-8: scripts/setup-michael-host-tasks.mjs registering the three host feeders on Windows Task Scheduler (PR 7)\nIn the scripts/setup-alarm-cron-tasks.mjs shape: MICHAEL_HOST_TASKS = [tasks-classifier 03:45-04:30, calendar-read 04:00-05:00, gmail-triage 04:30-05:30] each { taskName 'EHG Michael <feeder>' (no colon, QF-20260906-961), script 'scripts/michael/<feeder>.mjs --apply', wrapperRelPath 'scripts/cron/michael-<feeder>-task.cmd', intervalMinutes 15, startTime '00:00' }; the in-script window makes off-window fires inert. Pure builders reused or mirrored: buildWrapperScript (CRLF, `cd /d <repo root>`, `call node <script>`), buildHiddenTrAction (quoted wscript.exe //B run-hidden.vbs wrapper), buildCreateArgs adding /RU <current user> and /NP as in setup-eva-watcher-task.mjs:97-108 so a fire never opens a console, buildRemoveArgs, buildQueryArgs, buildQueryXmlArgs, verifyHiddenLaunch on the OS-returned XML; CLI register (default) | --dry-run | --status | --verify | --remove; refuses to register when run-hidden.vbs is absent; win32 guard exits 2 elsewhere. Wake-from-sleep is not configured (the /XML import path is denied unelevated on this host) and the header states the laptop must be awake; a missed window is a failed run visible to the gauge. VALIDATION condition 6: before committing, measure from PowerShell that an unelevated `schtasks /Create /SC MINUTE /MO 15 /ST 00:00 /F` of a throwaway task succeeds on this host and record the transcript line in the PR body; if it is denied, the registrar documents the elevated one-time step instead of claiming unelevated works.\n\nAcceptance:\n- tests/unit/fleet/setup-michael-host-tasks.test.js pins the task table (three distinct names without colons, windows matching the feeders' constants), wrapper CRLF content, quoted hidden action, /SC MINUTE /MO 15 /RU /NP args, remove/query args, and verifyHiddenLaunch against a split Command/Arguments fixture\n- node scripts/setup-michael-host-tasks.mjs --dry-run prints three wrappers and three /Create lines and registers nothing\n- The PR body carries the measured unelevated schtasks result from PowerShell\n\n### FR-9: Seat-side recorder scripts/michael/classify-apply.mjs, queue reader, and the tick contract text (PR 8)\nscripts/michael/queue-read.mjs --json prints, bounded, today's michael_gmail_triage_items with class null (thread_id, rule_key, last_message_id, borderline) and michael_todoist_snapshot rows with effort_grade null (task_id, proposed_date), plus counts. scripts/michael/classify-apply.mjs --file <runner-produced json> applies the seat's verdicts: the file carries { producer, run_id, model_used, tokens_in, tokens_out, items:[{ thread_id, class, needs_you, needs_you_reason, borderline, verified_by, action_intent }], tasks:[{ task_id, effort_grade, est_minutes, proposed_date, role_tag }] } and a content_hash the script recomputes over canonicalJson(items+tasks) and refuses on mismatch (HASH_MISMATCH) or when producer/run_id are absent (PROVENANCE_MISSING, ratification 6c263823); it never writes a summary or any prose beyond needs_you_reason; it updates item and task rows by natural key without touching rows whose action_taken_at or chosen_action is set; it upserts the venue 'seat' michael_feeder_runs row for (feeder 'seat-classify', et_date) with model_used, tokens_in, tokens_out and counts { classified, needs_you, borderline, graded, opus_rejudged, sample }; the michael-quiet-tick line already names classify-apply.mjs (scripts/michael-quiet-tick.mjs:148-151) so no tick change is needed beyond the harness import. docs/protocol/michael/role-contract.md gains the overnight tick paragraph: Sonnet classifies the queued remainder, Opus re-judges every needs_you and borderline plus a ten percent random sample (disagreement flips to borderline and sets verified_by), each sub-agent is stopped when its result is read, and the verdict file is produced by the runner with producer, run_id, content_hash.\n\nAcceptance:\n- classify-apply.test.js: a file without producer/run_id is refused PROVENANCE_MISSING; a tampered file is refused HASH_MISMATCH; a valid file updates only the addressed rows, never those with action_taken_at or chosen_action, and upserts one seat feeder_runs row carrying model_used/tokens_in/tokens_out\n- queue-read.test.js: bounded reads (limit literal), class-null and effort_grade-null selection for the ET date, tables_absent yields empty lists exit 0\n- role-contract.md carries the tick paragraph; CLAUDE_MICHAEL_* generated files are regenerated only if the contract section is DB-seeded (check scripts/one-off/_michael-role-contract-section.mjs --dry-run and follow child A's seeding path; otherwise the markdown edit is the deliverable)\n\n### FR-10: No DDL, PR discipline, and evidence\nEvery column used is declared in database/migrations/20260906_michael_tables.sql (VALIDATION finding 8: no missing column); this child ships no migration and applies none. Eight PRs (1 harness+matcher, 2 google clients+constants, 3 calendar-read, 4a gmail read-only, 4b gmail apply, 5 tasks-classifier, 6 todoist-brief+workflow, 7 host registrar, 8 seat verbs), each under the 400 LOC ceiling with the 100 LOC target exceedance justified in the body, each carrying the not-exercised statement (tables unapplied live; every acceptance test injects its clients; the first real run is the chairman's post-migration host smoke). SECURITY sub-agent at EXEC reviews the credentialed legs with provenance on the row; TESTING at EXEC re-verifies with measured counts.\n\nAcceptance:\n- git diff --stat against main shows no file under database/migrations/ or database/chairman-gated/\n- Each PR body names its FR, its LOC and the not-exercised statement\n- sub_agent_execution_results carries SECURITY and TESTING rows for phase EXEC with content_hash, session_id and evaluated_commit_sha before EXEC-TO-PLAN\n\n## Technical Requirements\n- **TR-1** Feeder shape is the michael-family shape: export runX({ sb, argv, now, ...deps }) that never throws, a private main() choosing emit(r,{json}) or a pure renderer, isMainModule guard, process.exitCode 0 on inert/ok/degraded and 2 on refusal; the window gate lives only in the harness — VALIDATION c26274e9 condition 3 and finding 10: two conventions exist in tree; the michael-family shape carries 62 passing tests and composes with lib/michael/db.mjs, and the spec's main(argv, deps) wording is satisfied by the harness signature\n- **TR-2** Every read is bounded with a literal limit and every write goes through writeRows; a missing relation is inert, never a failure — count-truncation-diff-lint reads the literal (db.mjs:47); the migration is chairman-gated and unapplied live, so every feeder ships inert by construction (VALIDATION finding 8)\n- **TR-3** Credentialed feeders obtain auth only through getAuthenticatedClient; assertHostVenue fires inside it; no feeder reads GOOGLE_CLIENT_* or MICHAEL_ENCRYPTION_KEY itself — Ratifications ff4ef5b4 and 0daf3bd8; child C's venue guard is the single enforcement point\n- **TR-4** No thread body, message body, task content or email address is ever logged or stored except summary and needs_you_reason on the item row (prose nulled at 30 days by retention); getThreadMeta uses format=metadata with four headers — Spec section 2 data handling and SEC-M3 from child B: personal prose must be bounded\n- **TR-5** Metering columns are written only by the seat recorder (venue seat); task_scheduler and gha rows carry null model_used/tokens — Spec section 3 assigns metering to the tick's summary; VALIDATION finding 3 refuted per-item metering (no columns on the item table)\n- **TR-6** The Adam handoff seam (chairman_handoff origin michael) is not written by any feeder; fleet-class threads are recorded class 'fleet' only — Child G owns the seam and the dispatch exemption; writing rows now raises Adam's directed floor (Solomon condition, 05-SOLOMON-ADJUDICATION.md:103)\n- **TR-7** GHA workflows use the michael-retention-cron.yml skeleton with both DST cron lines, and the wiring test forbids every credential token except TODOIST_API_TOKEN on todoist-brief — Ratification 0daf3bd8 must stay falsifiable (tests/unit/cron/michael-retention-wiring.test.js pattern)\n- **TR-8** Task Scheduler registration uses /SC MINUTE /MO 15 with /RU and /NP and the hidden launcher; wake-from-sleep is not configured and is documented; the unelevated /Create result is measured from PowerShell before the registrar commits — Explore: /XML and ONLOGON are denied unelevated; QF-20260726-677 measured 148 orphan consoles without /RU; VALIDATION condition 6\n- **TR-9** Tests are *.test.js under lib/michael/, scripts/michael/, tests/unit/fleet/ and tests/unit/cron/ with injected clients; none requires a live michael_* table — vitest unit project collects **/*.test.js; the tables are absent live (VALIDATION condition 4)\n\n## Architecture\nA shared harness (window gate, dedupe, single-flight, ordering, run-row writer) hosts seven small feeders in two venues. Host feeders authenticate once through child C's getAuthenticatedClient and talk to Calendar, Gmail (metadata reads, bounded modify) and Drive through import-time-pure clients. The GHA feeder talks only to Todoist with the existing token. The seat closes the queue the feeders leave (class null, effort_grade null) through a provenance-checked recorder that writes metering. Child E consumes the harness's ordering predicate for assembly; child G consumes the run rows for gauges.\n\nData flow: 03:45 tasks-classifier (host): Drive current-tasks.json -> rules buckets -> Todoist create / staged items -> feeder_runs. 04:00 calendar-read (host): events.list x2 -> michael_calendar_day -> classification in counts. 04:30 gmail-triage (host): labels.list -> michael_gmail_labels; threads.list -> getThreadMeta -> rules -> michael_gmail_triage_items (intent) -> modifyThread -> action_taken_at, ceiling-bounded; unmatched class null. 04:45 todoist-brief (gha): getTasks -> filter -> grade Est -> michael_todoist_snapshot; auto_apply rules -> mutations_applied. Seat tick (04:30-07:30): queue-read -> Sonnet/Opus sub-agents at the seat -> runner-produced verdict file -> classify-apply -> item/task rows + seat feeder_runs with metering. 05:15+ child E assemble reads assembleReadiness over feeder_runs.\n\n## Test Scenarios\n- **TS-1** (unit) Harness inert paths: given an injected client and a fixed now outside the window, or a client returning PGRST205; when runFeeder runs; then { ok:true, action:'inert' } with reason outside_et_window or tables_absent, zero writes, exit 0\n- **TS-2** (unit) Single-flight and attempt: given an existing row with started_at 3 minutes ago and no finished_at; then an ok row; then a degraded row; when runFeeder runs each case; then inert in_flight; inert already_ok; a retry with attempt max+1; a 23505 on insert is retried once then failed\n- **TS-3** (unit) Upstream ordering and assembleReadiness: given feeder_runs fixtures for calendar/gmail/todoist and a now before and after 05:45 ET; when assembleReadiness runs; then wait before 05:45 with a missing feeder; proceed degraded at 05:45 with headsUp naming it; proceed clean when all ok\n- **TS-4** (security) PII-safe logging: given fixtures containing an email address, a subject and a task content; when each feeder runs with a capturing logger; then no captured log line contains the address, the subject or the content; only counts and ids\n- **TS-5** (unit) Gmail ceiling and record-then-act: given 80 matched threads and ceiling 60; when gmail-triage --apply runs, is interrupted after 30, and re-runs; then exactly 60 modify calls in total, degraded with ceiling_hit, no duplicate modify, remaining intents left without action_taken_at\n- **TS-6** (unit) Borderline resurfacing: given a thread archived yesterday whose new inbox appearance carries a newer last_message_id; when gmail-triage runs; then the row is borderline=true and no modify call is made\n- **TS-7** (unit) Missing label degrades: given michael_gmail_labels configures a class whose label is absent from labels.list; when gmail-triage runs; then status degraded, counts.missing_labels lists it, that class is skipped, others proceed\n- **TS-8** (unit) Calendar classification: given event fixtures per branch (none, three accepted, [DEEP] coded, Tuesday in-office); when calendar-read runs; then Recovery/Interpersonal/Deep/Shallow and the Tuesday-office rule as specified, coded override wins\n- **TS-9** (unit) Tasks-classifier guards and routing: given a stale file, an unconsumed cleanup, and a fresh file with bucket rules and a duplicate; when tasks-classifier runs; then skipped/stale; skipped/cleanup_pending; routed creates with both labels, duplicate not created, unrouted staged, cleanup staged not written to Drive\n- **TS-10** (unit) Todoist brief filtering and auto_apply: given tasks across projects with Est lines and an auto_apply label rule; when todoist-brief runs twice; then exclusions honoured, grades and est_minutes set, ungraded null, the label applied once and deduped in mutations_applied, chosen_action rows untouched\n- **TS-11** (security) Venue refusal on GHA: given GITHUB_ACTIONS=true; when calendar-read, gmail-triage or tasks-classifier runs; then failed run row with error_code HOST_VENUE_REQUIRED and no API factory invoked\n- **TS-12** (integration) Workflow wiring: given the todoist-brief workflow file; when the wiring test reads it; then two cron lines, exact secret set with TODOIST_API_TOKEN, no other token, concurrency, timeout 10, npm ci --ignore-scripts, no cd\n- **TS-13** (unit) Host registrar builders: given the task table and a split Command/Arguments XML fixture; when builders and verifyHiddenLaunch run; then three colon-free names, CRLF wrappers, quoted wscript action, /SC MINUTE /MO 15 /RU /NP, verify passes on the split fixture and fails on a bare node action\n- **TS-14** (security) Recorder provenance: given verdict files without producer, with a wrong content_hash, and valid; when classify-apply runs; then PROVENANCE_MISSING, HASH_MISMATCH, and a valid apply that updates only addressed rows and writes the seat feeder_runs row with metering\n- **TS-15** (e2e) Smoke outside windows: given the real scripts run at a time outside every window with the migration unapplied; when each script is invoked with --json; then exit 0, action inert, no network call (factories never reached)\n\n## Acceptance Criteria\n- Every feeder runs through lib/michael/feeder.mjs: inert outside its window, inert with zero writes while tables are absent, single-flight per (feeder, et_date), attempt max+1 with a 23505 retry, upstream ordering, counts-and-ids-only logs, exit 0 on inert\n- gmail-triage is record-then-act and bounded: 80 matched threads with ceiling 60 yield exactly 60 modifies and a degraded run; interrupted runs never duplicate a modify; resurfaced archived threads are borderline; a missing label degrades and skips only its class; bodies are never fetched\n- calendar-read, gmail-triage and tasks-classifier refuse under GITHUB_ACTIONS through getAuthenticatedClient and never read a Google credential themselves\n- todoist-brief applies only existing auto_apply label/reschedule rules, deduped in mutations_applied, and its workflow carries exactly SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and TODOIST_API_TOKEN with both DST cron lines\n- assembleReadiness is exported and pinned for child E (wait, proceed degraded at 05:45 with headsUp, proceed clean)\n- setup-michael-host-tasks.mjs registers three hidden, /RU-bound, colon-free tasks at /SC MINUTE /MO 15 and verifies against the OS XML; the unelevated /Create result is measured and stated\n- classify-apply refuses files without producer/run_id or with a mismatched content_hash, updates only addressed rows, and writes the seat feeder_runs row with model_used, tokens_in, tokens_out\n- No file under database/ changes; SECURITY and TESTING EXEC rows with provenance exist before EXEC-TO-PLAN\n\n## Risks\n- Bulk mis-archive from a wrong rule (MEDIUM/HIGH): Record-then-act, the 60-thread ceiling marking degraded, TRASH/SPAM refused at the client, --unarchive via gmail-act restores and stamps reopened_at (the revoke signal); rollback: Run gmail-act --unarchive per intent row; the item rows carry every intent so the set is enumerable\n- Overlapping host fires collide on the run-row unique index (MEDIUM/MEDIUM): Single-flight on a running row younger than 10 minutes plus attempt max+1 with a 23505 retry; rollback: A collided fire ends failed and the next */15 fire retries; no data is lost\n- A missed window on a sleeping laptop is silent (HIGH/MEDIUM): No run row for the date is exactly what child G's feeder-health gauge and Adam's one SMS line surface; the registrar header states the awake precondition; rollback: Chairman runs the feeder by hand on the host; the seat proceeds degraded at 05:45\n- Todoist exclusion by project name breaks on a rename (LOW/LOW): Exclusions by name for EVA/For Processing plus by id for the EHG project; a missing project logs counts.exclusion_miss; rollback: Set the names in env overrides added to constants.mjs\n- Unelevated schtasks /Create is denied on this host (LOW/MEDIUM): Measured from PowerShell before the registrar commits (VALIDATION condition 6); the PR body states the result; rollback: Document the elevated one-time registration in the runbook instead of claiming unelevated works\n- Eight PRs each waiting ~13 minutes on the unit tier (HIGH/LOW): Stack independent PRs and merge in dependency order; keep each under 400 LOC; rollback: Any single PR reverts cleanly; the harness is the only shared dependency\n",
+    "evidence_appendix": null,
+    "backlog_items": [],
+    "sd_id": "3f128d5c-8168-4415-86cc-ab5da4663d11",
+    "planning_section": {
+      "quality_gates": [],
+      "risk_analysis": {},
+      "success_metrics": [],
+      "timeline_breakdown": {},
+      "implementation_steps": [],
+      "reasoning_depth_used": "standard",
+      "resource_requirements": {}
+    },
+    "reasoning_analysis": {},
+    "complexity_analysis": {},
+    "reasoning_depth": "standard",
+    "confidence_score": null,
+    "research_confidence_score": null,
+    "exploration_summary": {
+      "files_read": [
+        "scripts/cron/chairman-morning-brief-sweep.mjs",
+        "lib/time/chairman-et-wall-clock.js",
+        "scripts/michael-quiet-tick.mjs",
+        "scripts/setup-alarm-cron-tasks.mjs",
+        "scripts/setup-eva-watcher-task.mjs",
+        "scripts/setup-liveness-watcher-task.mjs",
+        "scripts/cron/run-hidden.vbs",
+        "scripts/cron/account-usage-sample-task.cmd",
+        ".github/workflows/michael-retention-cron.yml",
+        ".github/workflows/chairman-morning-brief-cron.yml",
+        "tests/unit/cron/michael-retention-wiring.test.js",
+        "lib/michael/db.mjs",
+        "lib/michael/rules.mjs",
+        "scripts/michael/retention.mjs",
+        "scripts/michael/todoist-act.mjs",
+        "scripts/michael/gmail-act.mjs",
+        "lib/integrations/google/chairman-oauth.js",
+        "lib/michael/gmail-client.mjs",
+        "lib/daily-review/drive-doc-client.js",
+        "lib/integrations/todoist/todoist-sync.js",
+        "lib/integrations/todoist/chairman-notify.js",
+        "database/migrations/20260906_michael_tables.sql",
+        "docs/michael/02-SPEC.md",
+        "docs/protocol/michael/role-contract.md",
+        "vitest.config.js"
+      ],
+      "key_decisions": [
+        "Shared harness with single-flight",
+        "Assembly to child E; predicate stays here",
+        "Read-only gmail PR before the apply PR",
+        "Seat-only metering via a provenance-checked recorder",
+        "No DDL"
+      ],
+      "exploration_date": "2026-09-06T14:32:00.000Z",
+      "patterns_identified": [
+        "michael-family runX({sb,argv,now}) verbs with private main and TABLES_ABSENT refusals",
+        "retention.mjs read-then-insert attempt derivation (non-atomic)",
+        "hidden schtasks launch through run-hidden.vbs with pure builders and OS-XML verify",
+        "both-DST cron lines with an in-script ET gate",
+        "wiring tests that pin the exact secret set",
+        "class null / effort_grade null as the seat queue signal already read by the tick"
+      ]
+    },
+    "document_type": "prd",
+    "integration_operationalization": {
+      "consumers": [
+        {
+          "name": "Michael seat (overnight tick)",
+          "frequency": "Every 15 minutes 04:30-07:30 ET when alive",
+          "interaction": "Reads the classify/grade queues the feeders leave and records verdicts through classify-apply"
+        },
+        {
+          "name": "Child E brief-assemble",
+          "frequency": "Every 15 minutes 05:15-06:00 ET",
+          "interaction": "Imports assembleReadiness and reads the feeder rows and tables"
+        },
+        {
+          "name": "Child G gauges and Adam's 6 AM line",
+          "frequency": "Each gauge tick",
+          "interaction": "Read michael_feeder_runs status per date"
+        },
+        {
+          "name": "Chairman (host)",
+          "frequency": "Once, then rarely",
+          "interaction": "Runs setup-michael-host-tasks.mjs once; runs a feeder by hand on a missed window"
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "michael_* tables (child B migration, chairman-applied)",
+          "type": "upstream",
+          "contract": "Natural keys and CHECKs per the migration",
+          "failure_handling": "readRows/writeRows surface TABLES_ABSENT; feeders are inert with exit 0"
+        },
+        {
+          "name": "Chairman Google grant (child C)",
+          "type": "upstream",
+          "contract": "getAuthenticatedClient with gmail.modify, calendar.readonly, drive.readonly",
+          "failure_handling": "Coded throws map to failed runs with error_code; invalid_grant is recorded by the module for the gauge"
+        },
+        {
+          "name": "Todoist API (TODOIST_API_TOKEN)",
+          "type": "upstream",
+          "contract": "SDK getTasks/getProjects/updateTask/addTask",
+          "failure_handling": "API failure yields a failed run; no partial mutation without a snapshot row"
+        },
+        {
+          "name": "Windows Task Scheduler on the host",
+          "type": "downstream",
+          "contract": "Three hidden tasks at */15 with in-script windows",
+          "failure_handling": "A missed fire is a missing run row the gauge sees"
+        }
+      ],
+      "data_contracts": [
+        {
+          "schema": "(feeder, et_date, attempt) unique; venue task_scheduler|gha|seat; status ok|degraded|failed|skipped; counts jsonb (ids and counts only, plus classification/error_code/ceiling_hit/missing_labels); metering columns seat-only",
+          "validation": "Harness unit tests and the migration CHECKs",
+          "versioning": "Additive keys inside counts only",
+          "contract_name": "michael_feeder_runs row"
+        },
+        {
+          "schema": "{ producer, run_id, model_used, tokens_in, tokens_out, content_hash, items[], tasks[] }",
+          "validation": "Hash recomputed over canonicalJson(items+tasks); producer and run_id required",
+          "versioning": "Version field reserved; v1 implicit",
+          "contract_name": "Seat verdict file for classify-apply"
+        }
+      ],
+      "runtime_config": {
+        "feature_flags": [
+          "--apply on gmail-triage (absent = dry-run; refused APPLY_NOT_LANDED until PR 4b)"
+        ],
+        "environment_variables": [
+          "MICHAEL_EXELON_CALENDAR_ID (host .env)",
+          "MICHAEL_TASKS_DRIVE_FOLDER_ID (host .env)",
+          "MICHAEL_EHG_CHAIRMAN_PROJECT_ID (default 6grHWpvVM8QXrj5W)",
+          "MICHAEL_DAILY_CHECKIN_TASK_ID",
+          "MICHAEL_GMAIL_MODIFY_CEILING (default 60)",
+          "TODOIST_API_TOKEN (host .env and existing GHA secret)",
+          "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (existing)"
+        ],
+        "deployment_considerations": "Host tasks register once from the host; the GHA workflow ships with the code; nothing runs against real tables until the chairman applies the child B migration, and no Google call happens until the child C consent is done on the host."
+      },
+      "observability_rollout": {
+        "alerts": [
+          "Child G michael-feeder-health: any failed today or three consecutive degraded",
+          "Adam's 6 AM SMS one line on a failed feeder (spec Q7)"
+        ],
+        "monitoring": [
+          "michael_feeder_runs status per feeder per date",
+          "counts.ceiling_hit, counts.missing_labels, counts.error_code",
+          "seat feeder_runs metering"
+        ],
+        "rollback_trigger": "Any bulk mis-archive or a modify count above the ceiling in one run",
+        "rollout_strategy": "Shadow phase: feeders write rows nightly; gmail-triage dry-run until the chairman confirms rules; then --apply with the ceiling",
+        "rollback_procedure": "Remove the host task with --remove; restore threads with gmail-act --unarchive per intent row; disable the GHA workflow"
+      }
+    },
+    "goal_summary": null,
+    "venture_id": null,
+    "smoke_test_cmd": null,
+    "activation_test_id": null
+  }
+]

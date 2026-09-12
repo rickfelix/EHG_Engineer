@@ -1,0 +1,12 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): tasks-classifier feeder and staged-item retention (PR 5)
+## Summary
+- `scripts/michael/tasks-classifier.mjs` (FR-6): runs under `runFeeder` (feeder `tasks-classifier`, window 03:45-04:30 ET). Lists the configured Drive folder (`MICHAEL_TASKS_DRIVE_FOLDER_ID`), refuses a `current-tasks.json` older than 36 h (`skipped/stale`), a missing file (`skipped/file_missing`) or a `cleanup-pending.json` newer than the last ok run's marker (`skipped/cleanup_pending`); reads the file through the parents-checked `readDriveFileText`; routes each item by `matchKeywordBuckets` over active `michael_rules` domain tasks (`rule_json.buckets` + `rule_json.projects`, EHG bucket defaulting to `MICHAEL_EHG_CHAIRMAN_PROJECT_ID`); dedupes against Todoist tasks carrying both labels created in the last 7 days (normalized content); creates routed tasks with labels `captured` + `from-google-tasks` (`--apply` only); stages unrouted items as bounded `task_route` payloads and the consumed set as `tasks_cleanup` to `michael_staged_items`, skipping `dedupe_key`s already open (DB-D6). v1 never writes Drive (no `drive.file` scope). An unreachable Todoist dedupe creates nothing and degrades. `assertHostVenue(env)` first regardless of injected auth; Todoist client lazy-created inside `run()`.
+- `scripts/michael/retention.mjs`: `michael_staged_items` leaves `NEVER_TOUCHED`; a new target empties the payload (`{}`) of DISPOSITIONED rows whose `dispositioned_at` is older than the cutoff instant; undispositioned rows persist until dispositioned (TR-4). Code only, no DDL.
+
+## Test plan
+- `npx vitest run --project unit scripts/michael/tasks-classifier.test.js scripts/michael/retention.test.js` → 32 tests green (TS-9 guards and routing, TS-19 stage dedupe and retention null-out, venue refusal, inert paths, bounded payload keys / 200-char title, dry-run vs apply, degrade/fail paths, source assertions)
+- eslint clean
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR

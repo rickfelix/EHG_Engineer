@@ -1,0 +1,424 @@
+{
+  "id": "3f128d5c-8168-4415-86cc-ab5da4663d11",
+  "title": "Michael D: v1 feeders in two venue halves - D1 host (Task Scheduler setup, calendar-read, gmail-triage with modify ceiling, tasks-classifier) and D2 GHA (todoist-brief, assemble/render, retention); verification tiers; metering",
+  "version": "1.0",
+  "status": "in_progress",
+  "category": "Orchestrator",
+  "priority": "medium",
+  "description": "Child D (v1 feeders) of SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002, in two named venue halves. D1 host half on Windows Task Scheduler: scripts/setup-michael-host-tasks.mjs registering hidden .cmd tasks in the stale-session-sweep-task.cmd shape, scripts/michael/calendar-read.mjs (today plus or minus one on both calendars into michael_calendar_day with day classification), scripts/michael/gmail-triage.mjs (rules-first matching, record-then-act, the MICHAEL_GMAIL_MODIFY_CEILING default 60 marking the run degraded, borderline resurfacing on a newer last_message_id, unmatched threads queued for the seat), and scripts/michael/tasks-classifier.mjs (v1 by chairman decision 42111a33: Drive current-tasks.json through the chairman grant, four-bucket keyword routing, dedupe against Todoist, cleanup-pending.json written back). D2 GHA half, credential-free beyond TODOIST_API_TOKEN: the michael-todoist-brief workflow (retention shipped in child B; brief-assemble, render and finalize are child E per spec section 6), every fifteen minutes inside its ET window with both DST offsets, concurrency cancel-in-progress and timeout-minutes 10. Every feeder is a Node script with exported main(argv, deps), an ET window gate, a per-ET-date dedupe on michael_feeder_runs, PII-safe logging and exit 0 on inert; ordering is enforced by checking upstream run status. Includes the verification tiers (Sonnet remainder, Opus re-judge of needs_you, borderline and a ten percent sample) and metering of model_used, tokens_in and tokens_out. Source of record: docs/michael/02-SPEC.md v0.3 sections 3 and 5.",
+  "strategic_intent": null,
+  "rationale": "Child of SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002",
+  "scope": "Child SD of SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002: Michael D: v1 feeders in two venue halves - D1 host (Task Scheduler setup, calendar-read, gmail-triage with modify ceiling, tasks-classifier) and D2 GHA (todoist-brief, assemble/render, retention); verification tiers; metering",
+  "key_changes": [
+    {
+      "change": "lib/michael/feeder.mjs (shared harness): runFeeder({ feeder, venue, window:{start,end}, upstream:[{feeder, accept:[...]}], run(ctx) }, { sb, env, now, logger }) reusing hhmmToMinutes/inWindow from scripts/michael-quiet-tick.mjs and etDateStr; inert outside the window (exit 0); single-flight per (feeder, et_date): a running row younger than 10 minutes makes the fire inert, an existing ok row makes it deduped, attempt = max+1 with one retry on the unique-index conflict; upstream status check against michael_feeder_runs; writes started_at/finished_at/status/counts/log_md (counts and ids only, no prose) and metering columns null for model-free venues; gracefulExit for the Task Scheduler venue; plus lib/michael/rules-match.mjs, one pure matcher over michael_rules.rule_json (domain gmail: from/subject/label/list-id predicates; todoist: role tags; tasks: four-bucket keyword routing)",
+      "impact": "Every feeder shares one window gate, one dedupe, one ordering check and one matcher, so the spec's feeder contract is pinned by one test file, and a */15 host fire cannot collide on UNIQUE (et_date, feeder, attempt)"
+    },
+    {
+      "change": "Host half on the chairman grant (getAuthenticatedClient from child C, import-time pure, injectable API factories): lib/michael/calendar-client.mjs (events.list today plus or minus one on Primary and the Exelon calendar id from MICHAEL_EXELON_CALENDAR_ID) and scripts/michael/calendar-read.mjs writing michael_calendar_day with coded_marker, optional, overlap_group and the day classification (Recovery/Interpersonal/Shallow/Deep, coded-event override, Tuesday-office rule) in counts; lib/michael/gmail-client.mjs extended with listThreads/getThread/listLabels and scripts/michael/gmail-triage.mjs (labels.list reconciles michael_gmail_labels first, missing label degrades and skips that class; threads.list in:inbox newer_than:1d minus keep-in-inbox labels plus the older sweep; rules-first matching; record-then-act with action_intent then modifyThread then action_taken_at; re-run acts only on intents without action_taken_at; ceiling stop; borderline resurfacing; unmatched queued class null); lib/michael/drive-client.mjs (files.list/get in MICHAEL_TASKS_DRIVE_FOLDER_ID, drive.readonly) and scripts/michael/tasks-classifier.mjs (current-tasks.json, abort if stale over 36h or cleanup-pending.json unconsumed, four-bucket keyword routing via rules-match, dedupe against Todoist 7 days by labels captured plus from-google-tasks, create tasks, stage ambiguous items, write cleanup-pending.json back through the grant only if drive.file write is available else stage it)",
+      "impact": "The three credentialed feeders exist on the only venue allowed to decrypt; Gmail changes are recorded before they happen and bounded by the ceiling"
+    },
+    {
+      "change": "GHA half: scripts/michael/todoist-brief.mjs in the michael-family shape (export runTodoistBrief({ sb, argv, now, todoist }) plus a private main; createTodoistClient tasks today or overdue excluding EVA, For Processing and the EHG chairman project id from env; role tags from a rules row; Est: line graded deterministically, the rest left ungraded for the seat; michael_todoist_snapshot upsert by (et_date, task_id); overnight mutations only for rows already auto_apply=true with auto_apply_verb in label/reschedule, deduped on (et_date, task_id, action) in mutations_applied) and .github/workflows/michael-todoist-brief-cron.yml (04:45-05:30 ET as two cron lines for EDT and EST, */15, concurrency cancel-in-progress, timeout-minutes 10, npm ci --ignore-scripts, secrets SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TODOIST_API_TOKEN only) pinned by a wiring test in the michael-retention shape. The spec section 5 ordering rule for the assembler (needs calendar ok, gmail and todoist ok or degraded; proceeds degraded at 05:45 and says so in headsUp) ships as a PURE predicate assembleReadiness({ runs, now }) inside lib/michael/feeder.mjs for child E's brief-assemble.mjs to import; the assemble script and its workflow are child E (VALIDATION c26274e9 condition 2)",
+      "impact": "The GHA venue stays credential-free (0daf3bd8); the assembler's ordering rule is section 5 text pinned here while its only consumer lands in E, with no dangling workflow"
+    },
+    {
+      "change": "scripts/setup-michael-host-tasks.mjs in the setup-alarm-cron-tasks.mjs shape: MICHAEL_HOST_TASKS table (tasks-classifier, calendar-read, gmail-triage; /SC MINUTE /MO 15 /ST all day, the in-script window makes off-window fires inert), pure buildWrapperScript (CRLF, repo root cd, call node scripts/michael/<feeder>.mjs) writing scripts/cron/michael-<feeder>-task.cmd, hidden launch through scripts/cron/run-hidden.vbs, /RU current user + /NP as in setup-eva-watcher-task.mjs, --dry-run/--status/--verify/--remove; --verify reads the OS XML back; wake-from-sleep is NOT configured (the /XML import path is denied unelevated on this host) and the runbook states the laptop must be awake, a missed window showing as a failed run",
+      "impact": "One command registers the host half; nothing is registered that would open a visible console"
+    },
+    {
+      "change": "Seat-side verification verbs and metering: scripts/michael/queue-read.mjs (--json list of michael_gmail_triage_items with class null and michael_todoist_snapshot rows without effort_grade for the ET date, bounded) and scripts/michael/classify-record.mjs (writes class/needs_you/needs_you_reason/borderline/verified_by per item and effort_grade/est_minutes/proposed_date per task from a runner-produced JSON file, and upserts the venue=seat feeder_runs row with model_used, tokens_in, tokens_out) plus the tick contract paragraph in docs/protocol/michael/role-contract.md naming the Sonnet remainder, the Opus re-judge of needs_you, borderline and a ten percent sample, and stop-after-read",
+      "impact": "The verification tiers are executable contract text the /michael tick follows on the Max plan, and metering lands in the columns child B declared"
+    },
+    {
+      "change": "Deletions (LEAD Q8): the retention leg is SUPERSEDED (child B shipped scripts/michael/retention.mjs and michael-retention-cron.yml); brief-assemble.mjs, its workflow, rendering (rendered_html, brief_md), brief-finalize, the API route and the Drive-doc copy are child E (spec section 6 is E's source of record; -D keeps only the pure section 5 ordering predicate); the Adam handoff seam (chairman_handoff origin michael) stays unbuilt until child G; the standing Todoist rule import with its Opus verdict is child F (todoist-brief applies only auto_apply rows that already exist); the Haiku fleet-email summary is seat work named in the contract, not a feeder; no migration in this child (every column used exists in the child B migration; a missing one is routed to child B)",
+      "impact": "Scope is bounded to what the durable venues can do without a model and without a credential in GHA"
+    }
+  ],
+  "strategic_objectives": [
+    "Give Michael the v1 model-free feeders in two venue halves: on the chairman's host (Windows Task Scheduler, the only venue that may decrypt the Google grant) calendar-read, gmail-triage and tasks-classifier; on GitHub Actions (credential-free beyond TODOIST_API_TOKEN) todoist-brief and brief-assemble; every feeder a Node script with exported main(argv, deps), a minute-granular ET window gate, a per-ET-date dedupe on michael_feeder_runs, PII-safe logging and exit 0 on inert, with ordering enforced by reading upstream run status",
+    "Make bulk mis-archive impossible in practice: gmail-triage is rules-first and record-then-act, stops applying above MICHAEL_GMAIL_MODIFY_CEILING (default 60) marking the run degraded, resurfaces a previously archived thread with a newer last_message_id as borderline, and queues unmatched threads (class null) for the seat instead of guessing",
+    "Keep the model layer at the seat: no feeder calls a model; the verification tiers of spec section 3 land as seat-side verbs (a reader of queued items and a recorder of class, verified_by, model_used, tokens_in and tokens_out into the rows and the feeder_runs summary) so the Max-plan-only rule and the sub-agents-stopped-after-read rule are contract text the tick follows",
+    "Make a missed window visible, never silent: a host fire outside its window is inert, a failed API call is a failed run with last_error-style counts, the assembler proceeds degraded at 05:45 and says so in headsUp, and every run row is the gauge source child G reads",
+    "Register the host tasks with the sanctioned schtasks path (scripts/setup-alarm-cron-tasks.mjs shape, hidden launcher, verify against the OS-returned XML) and ship the two GHA workflows in the michael-retention-cron.yml shape with both DST offsets, concurrency cancel-in-progress and timeout-minutes 10"
+  ],
+  "success_criteria": [
+    {
+      "measure": "lib/michael/feeder.test.js pins each behaviour with an injected client and a fixed now; a grep of scripts/michael/*-read.mjs, gmail-triage.mjs, tasks-classifier.mjs, todoist-brief.mjs, brief-assemble.mjs shows each routed through runFeeder; no thread subject, body, task content or email address appears in any log line (test asserts the log corpus)",
+      "criterion": "Feeder contract: every feeder exports main(argv, deps), is inert outside its ET window, dedupes per (feeder, et_date), single-flights a still-running fire, checks upstream status, and logs counts and ids only"
+    },
+    {
+      "measure": "Unit tests: 80 seeded matched threads with ceiling 60 yield exactly 60 modifyThread calls and status degraded; a killed run re-executed makes no duplicate modify call and completes intents without action_taken_at; an archived thread with a newer last_message_id is written borderline; a thread matching no rule is written with class null and no modify call; a missing label marks degraded and skips that class",
+      "criterion": "gmail-triage is bounded and reversible: record-then-act, ceiling stop marks degraded, borderline resurfacing, unmatched queued"
+    },
+    {
+      "measure": "Both import getAuthenticatedClient; a GITHUB_ACTIONS=true env yields a failed run row with HOST_VENUE_REQUIRED and no API call (unit test); tasks-classifier with a current-tasks.json older than 36h or an unconsumed cleanup-pending.json returns inert/failed without creating tasks",
+      "criterion": "calendar-read and tasks-classifier run only on the host through the chairman grant and refuse elsewhere"
+    },
+    {
+      "measure": "tests/unit/workflows/michael-feeder-workflows.test.js asserts both workflows carry two cron lines (EDT and EST hours for the ET window), concurrency cancel-in-progress, timeout-minutes 10, npm ci --ignore-scripts, only SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY (plus TODOIST_API_TOKEN on todoist-brief), no cd in the run step; grep of .github/workflows for MICHAEL_ENCRYPTION_KEY/GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET returns nothing",
+      "criterion": "GHA half is credential-free beyond TODOIST_API_TOKEN and self-healing in its window"
+    },
+    {
+      "measure": "Unit tests on assembleReadiness({ runs, now }): calendar ok plus gmail failed before 05:45 ET yields wait; at or after 05:45 yields proceed with degraded=true and a headsUp naming the missing feeder; all upstream ok yields proceed with degraded=false",
+      "criterion": "The assembler ordering predicate is pure and pinned for child E"
+    },
+    {
+      "measure": "node scripts/setup-michael-host-tasks.mjs --dry-run prints three wrapper files and three schtasks /Create lines with /SC MINUTE /MO 15 and a quoted wscript.exe //B run-hidden.vbs action; tests/unit/fleet/setup-michael-host-tasks.test.js pins the builders and verifyHiddenLaunch; --verify reads XML back (not the submission)",
+      "criterion": "Host registration is one sanctioned command and verifiable from the OS"
+    },
+    {
+      "measure": "queue-read --json lists class-null items and ungraded tasks for the date (bounded, unit test); classify-record from a runner-produced file writes class, verified_by and the seat feeder_runs row with model_used, tokens_in, tokens_out (unit test with injected client; a file without run id and content hash is refused)",
+      "criterion": "Seat verbs close the queue and write metering"
+    }
+  ],
+  "key_principles": [
+    "Follow LEO Protocol for all changes",
+    "Ensure backward compatibility"
+  ],
+  "implementation_guidelines": [
+    "Implement changes for: Michael D: v1 feeders in two venue halves - D1 host (Task Scheduler setup, calendar-read, gmail-triage with modify ceiling, tasks-classifier) and D2 GHA (todoist-brief, assemble/render, retention); verification tiers; metering",
+    "Verify no regressions in existing functionality"
+  ],
+  "dependencies": [],
+  "risks": [
+    {
+      "risk": "Implementation may not fully address root cause",
+      "impact": "low",
+      "likelihood": "low",
+      "mitigation": "Verify against original evidence; re-queue via /learn if pattern recurs"
+    }
+  ],
+  "success_metrics": [
+    {
+      "metric": "Implementation completeness",
+      "target": "100% of scope items implemented"
+    },
+    {
+      "metric": "Test coverage",
+      "target": "≥80% code coverage for new code"
+    },
+    {
+      "metric": "Zero regressions",
+      "target": "0 existing tests broken"
+    }
+  ],
+  "stakeholders": [],
+  "approved_by": null,
+  "approval_date": null,
+  "effective_date": null,
+  "expiry_date": null,
+  "review_schedule": null,
+  "created_at": "2026-09-05T17:13:57.470081+00:00",
+  "updated_at": "2026-09-06T14:36:16.901695+00:00",
+  "created_by": "Claude",
+  "updated_by": null,
+  "metadata": {
+    "source": "leo",
+    "created_at": "2026-09-05T17:13:56.238Z",
+    "scope_lock": {
+      "at": "2026-09-06T14:34:35.774Z",
+      "by": "Bravo 85c82b18 LEAD",
+      "deletions": [
+        "retention leg SUPERSEDED by child B (retention.mjs + michael-retention-cron.yml)",
+        "rendering, API route and Drive-doc copy stay in child E; -D ships brief-assemble data_json only",
+        "Adam handoff seam (chairman_handoff origin michael) unbuilt until child G",
+        "standing Todoist rule import with Opus verdict is child F",
+        "Haiku fleet-email summaries are seat contract text, not a feeder",
+        "wake-from-sleep task settings descoped: /XML import denied unelevated on this host; missed window is a failed run",
+        "no migration in this child"
+      ],
+      "amended_at": "2026-09-06T14:36:15.756Z",
+      "validation_conditions": "c26274e9: retention struck from description; brief-assemble + workflow moved to child E, -D keeps the pure ordering predicate; michael-family feeder shape runX({sb,argv,now}) with harness window gate; tests assume tables absent; gmail-triage split read/write across two PRs; unelevated schtasks /SC MINUTE to be measured from PowerShell before the setup script commits"
+    },
+    "vision_key": "VISION-EHG-L1-001",
+    "child_index": 3,
+    "created_via": "leo-create-sd",
+    "unfenced_at": "2026-09-05T21:08:59.395Z",
+    "unfenced_by": "coordinator:9097ea31",
+    "plan_linkage": {
+      "linked_at": "2026-09-05T17:21:07.982Z",
+      "linked_by": "adam d1140357",
+      "unlinked_reason": "chairman-commissioned role formalization (Michael) 2026-09-05; not wave work; behind 767b288f"
+    },
+    "claim_history": [
+      {
+        "claimed_at": "2026-09-06T14:11:27.908Z",
+        "session_id": "85c82b18-0984-4948-bd86-1992cdf5170d",
+        "pick_reason": {
+          "score": "UNSCORED",
+          "components": {},
+          "comparatorVersion": null
+        },
+        "identity_source": "env"
+      }
+    ],
+    "min_tier_rank": 2,
+    "parent_sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002",
+    "work_selection": {
+      "displaces": 2,
+      "plan_linked": false,
+      "evaluated_at": "2026-09-06T14:09:05.409Z",
+      "injection_kind": null
+    },
+    "unfenced_reason": "chairman GO via Adam 56a920ea (18:05Z): review_hold_reason HELD FOR CHAIRMAN GO satisfied; unfenced per Alpha e429ed98, isHoldReleased :710 reads unfenced_at only",
+    "contract_governed": true,
+    "not_before_reason": "placeholder fence until the chairman says \"go\"; ISO string on purpose (QF-599: an object reads NaN). Coordinator removes it together with needs_coordinator_review at go.",
+    "security_reviewed": true,
+    "dedup_match_sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-001-O",
+    "dispatch_directive": {
+      "hold": "needs_coordinator_review=true + not_before fence on parent and every child until the chairman says \"go\"; the clear IS the dispatch authorization (CLAUDE_ADAM.md 4d HOLD MECHANIC)",
+      "kind": "chairman_dispatch_directive",
+      "predecessor": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-001 cancelled 17:1xZ (letter space exhausted by two mis-lettered child batches; no work done)",
+      "recorded_at": "2026-09-05T17:21:07.982Z",
+      "recorded_by": "adam d1140357",
+      "ratifications": [
+        "8e6ac764",
+        "ff4ef5b4",
+        "ced479e7",
+        "2b14e48d",
+        "6d04b3b9",
+        "42111a33"
+      ],
+      "dedicated_seat": "the chairman opened a dedicated Michael terminal session; on his \"go\" the coordinator directs EVERY child to that seat BY NAME via directed assignment (rung 5, lib/checkin/steps/index.cjs:45-55); never onto the belt; no child is self-claimable",
+      "spec_of_record": "docs/michael/02-SPEC.md v0.3 (main abd08a61451, PR 8258); Solomon adjudication docs/michael/05-SOLOMON-ADJUDICATION.md",
+      "parent_setup_first": "the seat claiming the first child runs the parent LEAD-TO-PLAN and PLAN-TO-EXEC (reduced set) before the child LEAD-TO-PLAN, then releases the parent (coordinator contract ORCHESTRATOR PARENT LIFECYCLE, PR 8255)",
+      "priority_of_record": "behind the eleven AltifyAI surfaces (767b288f); chairman mention is provenance not rank (29741684); one venture per month unchanged",
+      "chairman_provenance": "in-terminal at the Adam seat 2026-09-05 ~16:2xZ (two sends; second supersedes) and at the Solomon terminal ~16:1xZ (b4572210)",
+      "superseded_first_send": {
+        "094a9c4d": "ced479e7",
+        "6baf0546": "42111a33",
+        "e1cbb9a2": "2b14e48d",
+        "f313edc5": "ff4ef5b4"
+      }
+    },
+    "review_hold_reason": "HELD FOR CHAIRMAN GO: dedicated Michael seat by directed assignment, never belt (chairman 2026-09-05 16:2xZ). Coordinator clears on the chairman's \"go\" only.",
+    "review_hold_set_at": "2026-09-05T17:21:07.982Z",
+    "review_hold_set_by": "adam d1140357",
+    "directed_assignment": true,
+    "dispatch_reason_band": "unclassified",
+    "model_tier_decisions": [
+      {
+        "at": "2026-09-06T14:06:58.849Z",
+        "tier": "sonnet",
+        "reason": "default: no R1-R5 match — the litmus (would a wrong answer silently misdirect a week, or does it require noticing what is absent?) is not met",
+        "criterion": null,
+        "dispatch_row_id": null
+      }
+    ],
+    "contract_parent_chain": [
+      "47695217-d641-486a-959e-7acd0f07737a"
+    ],
+    "inherited_from_parent": [
+      "category",
+      "strategic_objectives",
+      "key_principles"
+    ],
+    "not_before_cleared_at": "2026-09-06T14:05:15.968Z",
+    "not_before_cleared_by": "coordinator:6acf5a48",
+    "roadmap_link_exception": {
+      "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+      "recorded_at": "2026-09-05T17:13:57.470081+00:00",
+      "operator_reason": "chairman order: Michael role formalization commissioned in-terminal 2026-09-05 (Cowork spec v0.3, docs/michael/00-README release line); ratifications 8e6ac764/ff4ef5b4/ced479e7/2b14e48d/6d04b3b9/42111a33; ranks behind 767b288f; not busy-work (889dcaa0)",
+      "reason_supplied": true
+    },
+    "mechanism_verifications": [
+      {
+        "verified_at": "scripts/cron/chairman-morning-brief-sweep.mjs:77",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/time/chairman-et-wall-clock.js:33",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/michael-quiet-tick.mjs:35",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/setup-alarm-cron-tasks.mjs:90",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/setup-alarm-cron-tasks.mjs:125",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/setup-eva-watcher-task.mjs:97",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/cron/run-hidden.vbs:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": ".github/workflows/michael-retention-cron.yml:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": ".github/workflows/chairman-morning-brief-cron.yml:29",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/integrations/google/chairman-oauth.js:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/michael/gmail-client.mjs:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/michael/db.mjs:43",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/michael/rules.mjs:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/michael/retention.mjs:83",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "lib/integrations/todoist/todoist-sync.js:36",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "database/migrations/20260906_michael_tables.sql:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "docs/michael/02-SPEC.md:101",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/michael/calendar-read.mjs:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/michael/gmail-triage.mjs:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/michael/tasks-classifier.mjs:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      },
+      {
+        "verified_at": "scripts/setup-michael-host-tasks.mjs:1",
+        "verified_by": "Explore evidence 804c38ec-0aab-4f02-873e-dca980ae2bb0 (Bravo 85c82b18, 2026-09-06)"
+      }
+    ],
+    "needs_coordinator_review": false,
+    "not_before_cleared_reason": "Michael -C COMPLETED 14:0xZ (Bravo 85c82b18, dedicated seat); -D is the next child under chairman GO (09-05 18:0xZ, contract :85); cleared needs_coordinator_review AND not_before together. Prior fence 2026-12-31T00:00:00.000Z",
+    "sd_authoring_validated_at": "2026-09-05T17:13:56.246Z",
+    "target_application_explicit": false,
+    "coordinator_review_cleared_at": "2026-09-06T14:05:15.968Z",
+    "coordinator_review_cleared_by": "coordinator:6acf5a48",
+    "roadmap_link_exception_repair": {
+      "prior": "chairman order: Michael role formalization commissioned in-terminal 2026-09-05 (Cowork spec v0.3, docs/michael/00-README release line); ratifications 8e6ac764/ff4ef5b4/ced479e7/2b14e48d/6d04b3b9/42111a33; ranks behind 767b288f; not busy-work (889dcaa0)",
+      "repaired_at": "2026-09-06T11:36:15.957Z",
+      "repaired_by": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-D:scripts/sourcing-engine/repair-reasonless-roadmap-links.mjs"
+    },
+    "sd_authoring_validation_summary": {
+      "warning_count": 6,
+      "violation_count": 0
+    }
+  },
+  "h_count": 0,
+  "m_count": 0,
+  "l_count": 0,
+  "future_count": 0,
+  "must_have_count": 0,
+  "wish_list_count": 0,
+  "must_have_pct": null,
+  "rolled_triage": null,
+  "readiness": null,
+  "must_have_density": null,
+  "new_module_pct": null,
+  "import_run_id": null,
+  "present_in_latest_import": false,
+  "sequence_rank": 1000836,
+  "sd_key": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+  "parent_sd_id": "47695217-d641-486a-959e-7acd0f07737a",
+  "is_active": true,
+  "archived_at": null,
+  "archived_by": null,
+  "governance_metadata": {},
+  "target_application": "EHG_Engineer",
+  "progress": 0,
+  "completion_date": null,
+  "current_phase": "PLAN_PRD",
+  "phase_progress": 0,
+  "is_working_on": true,
+  "uuid_id": "a8fa5179-ac89-488b-9b1f-7ef705fb01e8",
+  "progress_percentage": 30,
+  "confidence_score": null,
+  "checkpoint_plan": null,
+  "scope_embedding": null,
+  "embedding_generated_at": null,
+  "embedding_model": "text-embedding-3-small",
+  "sd_type": "infrastructure",
+  "relationship_type": "child",
+  "scope_reduction_percentage": 30,
+  "delivers_capabilities": [],
+  "modifies_capabilities": [],
+  "deprecates_capabilities": [],
+  "active_session_id": "85c82b18-0984-4948-bd86-1992cdf5170d",
+  "complexity_level": "moderate",
+  "dependency_chain": null,
+  "exploration_summary": null,
+  "intensity_level": null,
+  "smoke_test_steps": [
+    {
+      "instruction": "npx vitest run --project unit lib/michael/ scripts/michael/ tests/unit/fleet/setup-michael-host-tasks.test.js tests/unit/workflows/michael-feeder-workflows.test.js",
+      "step_number": 1,
+      "expected_outcome": "All green: feeder contract, rules matcher, gmail ceiling and record-then-act, calendar classification, tasks-classifier guards, todoist snapshot and auto_apply dedupe, assemble degraded rule, workflow shape, host task builders, seat verbs"
+    },
+    {
+      "instruction": "node scripts/setup-michael-host-tasks.mjs --dry-run",
+      "step_number": 2,
+      "expected_outcome": "Prints three .cmd wrapper contents and three schtasks /Create lines (/SC MINUTE /MO 15, quoted wscript.exe //B ... run-hidden.vbs ... michael-<feeder>-task.cmd) and registers nothing"
+    },
+    {
+      "instruction": "node scripts/michael/gmail-triage.mjs --json (outside the 04:30-05:30 ET window) and node scripts/michael/todoist-brief.mjs --json (outside 04:45-05:30 ET)",
+      "step_number": 3,
+      "expected_outcome": "Each exits 0 with action inert and reason outside_et_window (or tables_absent while the child B migration is unapplied); no API call, no row written"
+    },
+    {
+      "instruction": "grep -c \"cron:\" .github/workflows/michael-todoist-brief-cron.yml && grep -rn \"MICHAEL_ENCRYPTION_KEY|GOOGLE_CLIENT\" .github/workflows",
+      "step_number": 4,
+      "expected_outcome": "Two cron lines in the todoist-brief workflow; the secret-name grep prints nothing"
+    }
+  ],
+  "human_verification_status": "not_required",
+  "llm_ux_score": null,
+  "target_release_id": null,
+  "sd_code_user_facing": "SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+  "uuid_internal_pk": "a8fa5179-ac89-488b-9b1f-7ef705fb01e8",
+  "type_change_reason": null,
+  "claiming_session_id": "85c82b18-0984-4948-bd86-1992cdf5170d",
+  "vision_score": null,
+  "vision_score_action": null,
+  "vision_origin_score_id": null,
+  "vision_alignment_score": null,
+  "venture_id": null,
+  "scope_keywords": null,
+  "cancellation_reason": null,
+  "cancelled_by": null,
+  "scope_authority": null,
+  "quality_checked": true,
+  "quality_issues": [],
+  "quality_checked_at": "2026-09-06T14:36:16.901695+00:00",
+  "transition_version": 1,
+  "worktree_path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D",
+  "non_vertical": false,
+  "non_vertical_justification": null,
+  "wiring_validated": null,
+  "scope_slice": null,
+  "adrs_consulted": [],
+  "initiative_id": null,
+  "lineage_attribution_confidence": null,
+  "lineage_verdict": null,
+  "claim_gate_client_version": 1,
+  "lifecycle_write_token": null
+}

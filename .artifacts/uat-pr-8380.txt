@@ -1,0 +1,23 @@
+MERGED feat(SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D): queue-read, the seat's bounded read-only queue reader (PR 8a)
+## Summary
+SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-D, FR-9 first half (PR 8a of the child's plan). The seat's queue reader, read-only.
+
+- `scripts/michael/queue-read.mjs` prints the ET date's `michael_gmail_triage_items` with `class` NULL (thread_id, rule_key, last_message_id, borderline) and `michael_todoist_snapshot` rows with `effort_grade` NULL (task_id, proposed_date), plus counts. Reads go through `readRows` (literal 500 bound). A full page is reported `*_truncated` and only then counted exactly, so presence is established by the bounded read before any head-count (DB-D10).
+- `--headers` (host venue only, `assertHostVenue` first) re-fetches From / Subject / List-Id / Date of each queued thread's last message through `getThreadMeta` and prints them to stdout only, capped at 200 per run, failures counted. Nothing is written anywhere.
+- `--et-date YYYY-MM-DD` override; `--date` refused (FLAG_UNSUPPORTED). Absent tables yield empty lists and exit 0.
+- `scripts/michael/queue-read.test.js`: 19 assertions incl. the limit literal, class-null / effort_grade-null selection for the date, tables_absent inert, truncated-then-count ordering, header re-fetch to stdout with cap and failure counts, venue refusal on GHA, and a source-level read-only guard.
+
+## LOC
+211 (script 96, test 115). Above the 100 LOC target: the test carries the bounded-read, truncation and header-cap proofs the adversarial gate needs; the script itself is under 100.
+
+## Not exercised
+The michael_* tables are unapplied live (chairman-gated migration `20260906_michael_tables.sql`, not part of this child). Every test injects its clients; the first real run is the chairman's post-migration host smoke.
+
+## Test plan
+- `npx vitest run --project unit scripts/michael/queue-read.test.js` (19/19)
+- `npx eslint scripts/michael/queue-read.mjs scripts/michael/queue-read.test.js`
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+https://claude.ai/code/session_01CuQBaKnhgw2JWZmqFjaegR
+

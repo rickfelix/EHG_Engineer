@@ -1,0 +1,21 @@
+require('dotenv/config');
+const { createClient } = require('@supabase/supabase-js');
+(async () => {
+  const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const { data: r } = await sb.from('retrospectives').select('id,retro_type,status,quality_score,generated_by,created_at,updated_at,key_learnings,what_needs_improvement,what_went_well').eq('id','7988686d-1fff-4303-95c5-0cf54599e565').single();
+  console.log('RETRO', r.id, r.retro_type, r.status, 'q=' + r.quality_score, r.generated_by, r.created_at, r.updated_at);
+  console.log('  key_learnings=' + r.key_learnings.length, 'needs_improvement=' + r.what_needs_improvement.length, 'went_well=' + r.what_went_well.length);
+  console.log('  lesson titles:'); r.key_learnings.filter(k => k.title).forEach(k => console.log('   -', k.severity, '|', k.title.slice(0,110)));
+  const { data: e, error } = await sb.from('sub_agent_execution_results').select('*').eq('id','22739b35-1ea8-4dae-95f0-4f97c0ff191a').single();
+  if (error) return console.error(error);
+  const m = e.metadata || {};
+  console.log('EVIDENCE', e.id, e.sub_agent_code, e.verdict, e.confidence, 'created', e.created_at, 'updated', e.updated_at);
+  console.log('  top cols with session/sha:', Object.keys(e).filter(k => /session|sha|commit/i.test(k)).map(k => k + '=' + e[k]).join(' '));
+  console.log('  meta phase', m.phase, '| session', m.session_id, '| sha', m.evaluated_commit_sha, '| hash', m.content_hash);
+  console.log('  repo', m.repo_path, '| cwd', m.executed_from_cwd);
+  const f = e.findings || {}; const rr = f.retrospective || {};
+  console.log('  findings.retrospective id', rr.id, 'already_exists', rr.already_exists, 'q', rr.quality_score);
+  console.log('  recommendations', JSON.stringify(e.recommendations));
+  const { data: all } = await sb.from('sub_agent_execution_results').select('id,created_at,verdict,metadata->phase').eq('sd_id','3f128d5c-8168-4415-86cc-ab5da4663d11').eq('sub_agent_code','RETRO').order('created_at');
+  console.log('ALL RETRO ROWS', JSON.stringify(all));
+})();
