@@ -74,7 +74,7 @@ import { decideRemoval, UNRESOLVABLE_KEY_RESIDENCY_CLEARED } from '../lib/worktr
 // sd_key basename and a DB claim was auto-removed at stage 2 (live incident: the chairman's
 // in-flight CP3 drill tree, deleted mid-run). Honored at BOTH points that already honor the
 // cursor-protection convention — the main classification loop and selectStage0Reclaim.
-import { hasReapProtectedMarker, readReapProtectedMarker } from '../lib/worktree-reaper/reap-protected-marker.js';
+import { hasReapProtectedMarker, readReapProtectedMarker, isReapProtectedMarkerInherited } from '../lib/worktree-reaper/reap-protected-marker.js';
 // SD-LEO-INFRA-WORKTREE-CONTENTION-CLEANUP-001: single-source reapability helpers.
 // These three used to be defined locally below; the canonical home is now
 // lib/worktree-reapability.js so every removal path shares one implementation.
@@ -966,7 +966,9 @@ export function selectStage0Reclaim(worktrees, ctx = {}) {
   const out = [];
   for (const wt of worktrees || []) {
     if (isCursorWorktree(wt.path)) continue; // inherit cursor-protection convention
-    if (hasReapProtectedMarker(wt.path)) continue; // QF-20260725-821: opt-OUT marker (stage-0 reclaim also destroys)
+    // QF-20260912-235: a TRACKED marker was inherited from the branch, not authored in this
+    // tree — it is not a real opt-out, so stage-0 still evaluates the tree normally.
+    if (hasReapProtectedMarker(wt.path) && !isReapProtectedMarkerInherited(wt.path).inherited) continue; // QF-20260725-821: opt-OUT marker (stage-0 reclaim also destroys)
     const v = classifyStage0(wt, ctx);
     if (v.reclaim) out.push({ path: wt.path, branch: wt.branch, sd_key: v.sd_key, reason: v.reason });
   }
@@ -1570,24 +1572,34 @@ export async function main(argv = process.argv) {
     // QF-20260725-821: opt-OUT marker. Checked immediately after the cursor guard and BEFORE any
     // classification, so a protected tree can never reach stage1/stage2 removal regardless of
     // whether its basename resolves to an sd_key or it carries a DB claim.
+    // QF-20260912-235: a marker TRACKED in this tree's own branch was inherited from a checkout,
+    // not authored by an operator standing in this tree -- it is not a real opt-out. Fall through
+    // to normal classification instead, carrying markerInherited so any OTHER kept-for reason
+    // still reported below attaches honest evidence rather than silently dropping the marker.
+    let markerInherited = null;
     if (hasReapProtectedMarker(wt.path)) {
-      const evidence = { marker: readReapProtectedMarker(wt.path) || {} };
-      if (siblingGauge.matched) { evidence['sibling-outside-worktrees'] = siblingGauge; }
-      // QF-20260903-092: same as the cursor branch above -- this tree is kept unconditionally,
-      // so it was never actually scanned for dirt. A live specimen had two modified tracked
-      // files and reported 0, which is the exact shape that misleads a human weighing whether
-      // to override this marker. `null` marks the field as undetermined rather than measured.
-      const rec = buildRecord({
-        schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
-        reason: 'reap_protected_marker',
-        claim_status: 'n/a', dirtyCount: null, unpushedCount: null, ageDays: null,
-        preserveCount: 0, shipStatus: 'protected',
-        evidence,
-      });
-      records.push(rec);
-      emitJsonLine(rec);
-      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: null, unpushedCount: null, ageDays: null, verdict: 'keep:protected', preserveCount: 0 }));
-      continue;
+      const inheritance = isReapProtectedMarkerInherited(wt.path);
+      if (inheritance.inherited) {
+        markerInherited = inheritance;
+      } else {
+        const evidence = { marker: readReapProtectedMarker(wt.path) || {} };
+        if (siblingGauge.matched) { evidence['sibling-outside-worktrees'] = siblingGauge; }
+        // QF-20260903-092: same as the cursor branch above -- this tree is kept unconditionally,
+        // so it was never actually scanned for dirt. A live specimen had two modified tracked
+        // files and reported 0, which is the exact shape that misleads a human weighing whether
+        // to override this marker. `null` marks the field as undetermined rather than measured.
+        const rec = buildRecord({
+          schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
+          reason: 'reap_protected_marker',
+          claim_status: 'n/a', dirtyCount: null, unpushedCount: null, ageDays: null,
+          preserveCount: 0, shipStatus: 'protected',
+          evidence,
+        });
+        records.push(rec);
+        emitJsonLine(rec);
+        console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: null, unpushedCount: null, ageDays: null, verdict: 'keep:protected', preserveCount: 0 }));
+        continue;
+      }
     }
 
     const basename = path.basename(wt.path);
@@ -1632,6 +1644,7 @@ export async function main(argv = process.argv) {
       const sibling = isOutsideWorktreesDir(wtInput, { repoRoot: ctx.repoRoot });
       const evidence = { claim: activeClaim };
       if (sibling.matched) { evidence['sibling-outside-worktrees'] = sibling; }
+      if (markerInherited) { evidence.marker_inherited = { commit: markerInherited.commit }; }
       const rec = buildRecord({
         schema_version: SCHEMA_VERSION, wt: wtInput, categories: [], verdict: 'keep',
         reason: reasonText, claim_status: 'active', dirtyCount: dirty.dirtyCount,
@@ -1661,6 +1674,7 @@ export async function main(argv = process.argv) {
     if (hardKeep.matched) {
       const evidence = { hard_keep: hardKeep.evidence };
       if (residency.detail) evidence.hard_keep.live_session_detail = residency.detail;
+      if (markerInherited) { evidence.marker_inherited = { commit: markerInherited.commit }; }
 
       // SD-LEO-INFRA-WORKTREE-REAPER-PRESERVE-001 FR-1a: a hard_keep tree with a DEAD
       // owner is pushed to a recovery ref instead of being kept forever with no
@@ -1763,7 +1777,8 @@ export async function main(argv = process.argv) {
       schema_version: SCHEMA_VERSION, wt: wtInput, categories, verdict,
       reason: reasonText, claim_status: 'absent', dirtyCount: dirty.dirtyCount,
       unpushedCount, ageDays, preserveCount: 0,
-      shipStatus: shipStatus(reasons), evidence: reasons,
+      shipStatus: shipStatus(reasons),
+      evidence: markerInherited ? { ...reasons, marker_inherited: { commit: markerInherited.commit } } : reasons,
     });
     records.push({ ...rec, _stage: stage, _wtInput: wtInput, _dirty: dirty });
     emitJsonLine(rec);
