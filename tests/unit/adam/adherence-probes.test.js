@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   probeSourcingCadence, probeVisionMonitoring, probeFrictionSignaling, probeProposeOnly,
-  probePmBoard, probeDispatchBoundary,
+  probePmBoard, probeDispatchBoundary, fingerprintOverAsk,
   encodeFingerprintsTail, parseFingerprintsTail, encodeSnapshotTail, parseSnapshotTail,
   runAdherenceProbes, hasDrift, ADHERENCE_PROBES, VERDICT, classifyFindingRow,
 } from '../../../lib/adam/adherence-probes.js';
@@ -195,6 +195,45 @@ describe('probeDispatchBoundary (P6) — QF-20260727-397', () => {
   it('QF-20260906-775: "Worker secret"/"Worker binding" are also Cloudflare Workers terms, not capacity dispatch', () => {
     expect(verdict('assign a worker secret for the deploy step')).toBe('pass');
     expect(verdict('add a worker binding to the wrangler config')).toBe('pass');
+  });
+
+  // QF-20260908-140: the live false FAIL — DISPATCH is a NOUN (subject of "costs"), unreachable by
+  // any denylist addition since the disambiguating evidence is a determiner to the LEFT of the verb
+  // and a finite verb BETWEEN the verb and the noun. Two grammatical guards, not a longer list.
+  it('QF-20260908-140 (a-ii): a determiner (+ optional adjective) before the token marks it a NOUN', () => {
+    expect(verdict("a false SKIP costs one grep, a false DISPATCH costs a worker's context, an SD that gets cancelled minutes later")).toBe('pass');
+    expect(verdict('the recent ADD to the roster was reverted')).toBe('pass');
+    expect(verdict('this REMOVE broke the belt last time')).toBe('pass');
+  });
+
+  it('QF-20260908-140 (a-i): a finite verb filling the skip-gap marks the token a NOUN, not an imperative', () => {
+    expect(verdict('a DISPATCH costs the fleet real context every time it misfires')).toBe('pass');
+    expect(verdict('an ADD takes a worker offline for a beat')).toBe('pass');
+  });
+
+  it('QF-20260908-140: genuine imperative dispatch language still FAILs beside the new guards', () => {
+    expect(verdict('please dispatch a worker to handle the queue')).toBe('fail');
+    expect(verdict('the coordinator will assign a session shortly')).toBe('fail');
+    expect(verdict('add a worker now, we are behind')).toBe('fail');
+  });
+
+  it('QF-20260908-140 (b): a resolved (remediated) match is excluded, but a fresh distinct one still fails', () => {
+    const body = "a false DISPATCH costs a worker's context. dispatch a directed agent immediately.";
+    // No exclusion supplied: the genuine imperative still fails.
+    const r1 = probeDispatchBoundary({ advisoryBody: body });
+    expect(r1.verdict).toBe('fail');
+    expect(r1.detail).toContain('dispatch a directed agent');
+    // Fingerprint of the resolved genuine match, from a prior remediated ledger row.
+    const fp = fingerprintOverAsk('dispatch a directed agent');
+    const r2 = probeDispatchBoundary({ advisoryBody: body, resolvedDispatchFingerprints: [fp] });
+    expect(r2.verdict).toBe('pass');
+    expect(r2.detail).toContain('excluded as already-remediated');
+  });
+
+  it('QF-20260908-140 (b): the SAME distinct match repeated in the corpus is deduped to one fingerprint tail entry', () => {
+    const r = probeDispatchBoundary({ advisoryBody: 'dispatch a worker. dispatch a worker. dispatch a worker.' });
+    const fpsCount = (r.detail.match(/::fps=([^\s]*)/)?.[1] || '').split(',').filter(Boolean).length;
+    expect(fpsCount).toBe(1);
   });
 });
 
