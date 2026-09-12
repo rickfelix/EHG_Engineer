@@ -29,6 +29,9 @@ const { SOLOMON_CONFIG } = require('../lib/solomon/self-score-config.cjs');
 // advisory rather than re-implemented so D3 counts the SAME post-dedup rows the send path
 // measures — an independent query would drop the cc_originator exclusion and diverge.
 const { checkConsultQuota } = require('./solomon-advisory.cjs');
+// QF-20260905-768: D3's other half -- attached in-process gatherer spend, read from the snapshot
+// a live Solomon session writes (see lib/solomon/attached-agent-signal.cjs header).
+const { classifyAttachedAgents, readAttachedAgentsSnapshot } = require('../lib/solomon/attached-agent-signal.cjs');
 
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9 — claude_sessions grows unbounded
 // (every session ever run); the D1 solomon-claim-violation count would silently undercount past
@@ -124,6 +127,14 @@ async function gatherSignals(sb) {
     } catch {
       return null;
     }
+  })();
+
+  // QF-20260905-768: attached in-process gatherer spend -- null (inconclusive) when no live
+  // session wrote a snapshot this cycle, a real flagged-count when one did.
+  signals.attached_agent_flag_count = (() => {
+    const snapshot = readAttachedAgentsSnapshot();
+    if (snapshot == null) return null;
+    return classifyAttachedAgents(snapshot).length;
   })();
 
   return signals;
