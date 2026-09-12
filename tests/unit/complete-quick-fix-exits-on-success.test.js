@@ -24,7 +24,11 @@ describe('complete-quick-fix — deterministic, non-hanging exit wiring', () => 
   const orchestratorSrc = readFileSync(orchestratorPath, 'utf8');
 
   it('sets a deterministic success exit code with a non-hanging unref() fallback', () => {
-    expect(wrapperSrc).toMatch(/process\.exitCode\s*=\s*0/);
+    // QF-20260912-697: defaults to 0, but preserves a post-write stage's own non-zero
+    // signal (POST_WRITE_STAGE_TIMEOUT_EXIT_CODE) rather than stomping it -- see
+    // lib/completion/post-write-stage.js. The root-cause contract this test pins --
+    // a deterministic, non-hanging exit on the resolve path -- still holds.
+    expect(wrapperSrc).toMatch(/process\.exitCode\s*=\s*process\.exitCode\s*\|\|\s*0/);
     expect(wrapperSrc).toMatch(/\.unref\(\)/);
   });
 
