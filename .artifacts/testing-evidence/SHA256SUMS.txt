@@ -1,0 +1,6 @@
+99e2096f1a4414035880a3f2fba80b9edd3649ad789abfc9776a1d54b2c29dc4 *.artifacts/testing-evidence/runA-results.json
+33bc868fb6356313aae87b30b17554766351c1f58aef27704cdb6e38bb22df2d *.artifacts/testing-evidence/runB-results.json
+8cbcda2fdfe641d57aa2a454e7fb8229a3128688937f3a1985766ed4ce9c94fe *.artifacts/testing-evidence/runC-results.json
+eeb146751f133a27c0eb017f688f0088835f8f35c16d87310c5faea680b0eafd *.artifacts/testing-evidence/runA-console.log
+49dbf9e9f38f6bf3502dc60d6a5df0eabd2cae615c28a7cd8fdd6a117746660b *.artifacts/testing-evidence/runB-console.log
+88921327b0a8e77765d05fd4fda8bb01b15cd10713a1022460ed2317c930c465 *.artifacts/testing-evidence/runC-console.log

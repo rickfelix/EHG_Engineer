@@ -1,0 +1,983 @@
+{
+  "id": "PRD-SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E",
+  "directive_id": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E",
+  "title": "Pick-Reason Provenance on Every Claim",
+  "version": "1.0",
+  "status": "in_progress",
+  "category": "technical",
+  "priority": "high",
+  "executive_summary": "Extend the existing stampClaim() writer to carry a pick_reason (score, components, comparator version) on every claim, make it QF-aware, and prove chairman-label provenance never alters qf-gated-hold.cjs's exclusion.",
+  "business_context": null,
+  "technical_context": null,
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "priority": "CRITICAL",
+      "description": "Extend the entry built at claim-stamp.cjs:59-62 with pick_reason: {score, components, comparatorVersion}. Resolve the scoring function through an injectable seam mirroring resolveMergeFn (claim-stamp.cjs:41-44) -- e.g. resolveScoreFn(computePriorityScoreFn) that defaults to an optional dynamic import of lib/priority/comparator.cjs. TESTING-AGENT FINDING (evidence e21a99e7): a bare try/catch around a static/dynamic require of a not-yet-existing module path throws at RESOLUTION time in vitest, before any vi.mock can intercept it -- an injectable function parameter is the only way AC-1's numeric-score branch gets real test coverage before Child B (the comparator) merges to main. When no scoring function is available/injected, or its output has no numeric score, pick_reason.score MUST be the literal string 'UNSCORED', never a fabricated 0. No changes to CLAIM_HISTORY_CAP (20) or existing entry fields (session_id, claimed_at, identity_source).",
+      "requirement": "stampClaim() in lib/fleet/claim-stamp.cjs writes a pick_reason field on the claim_history entry it already appends, via an injectable scoring seam.",
+      "acceptance_criteria": [
+        "AC-1: A claim written through claimGuard(), tryClaim() (worker-checkin.cjs), sd-start.js, or session-conflict-checker.mjs produces a claim_history entry whose newest element has a pick_reason object; a unit test injects a fake computePriorityScoreFn to cover the numeric-score branch (Child B's comparator.cjs need not exist for this test to pass).",
+        "AC-2: When no scoring function is available (default path, comparator.cjs absent), pick_reason reads {score: \"UNSCORED\", components: {}, comparatorVersion: null} and stampClaim still returns non-null (fail-soft, not fail-open-to-throw). A NaN or thrown value from an injected scoring function must also degrade to UNSCORED, never propagate NaN/null into components.",
+        "AC-3: The 3 existing unit suites referencing claim_history entries (claim-identity.test.js, same-turn-next-claim.test.js, claim-stamp-concurrent-metadata-race.test.js) pass unmodified — pick_reason is additive, asserted via toMatchObject/targeted-key checks, not toEqual on the full entry. (Corrected count: 3 suites, not 4 — testing-agent evidence e21a99e7.)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "priority": "HIGH",
+      "description": "TESTING-AGENT FINDING (evidence e21a99e7, BLOCKING, now resolved): the originally-proposed 5th positional parameter for table/kind COLLIDES with claim-stamp.cjs's existing 5th parameter, mergeMetadataKeysFn (the injectable merge seam 8 existing test call sites across 3 files already depend on) -- inserting a kind param there breaks that injection and reaching the REAL mergeMetadataKeys in a unit test returns {merged:false} (stubbed pg creds), producing a confusing null. CORRECTED APPROACH: auto-detect the QF shape via a /^QF-/ test on sdRef, matching the existing repo idiom (directed-assignment.cjs:212, dispatch.cjs:348/:468, release-work-item.mjs:133) -- no signature change to stampClaim's existing 4 production call sites. For a QF-shaped ref, attempt an additive JSONB merge onto quick_fixes.metadata via a NEW, separate CAS-guarded merge function (mirroring safe-metadata-merge.mjs's removeMetadataKeyIfClaimedBy pattern: an explicit WHERE claiming_session_id = $sessionId guard, since no generic quick_fixes JSONB-merge helper exists in the repo). This new function must accept its own injectable seam (e.g. mergeQfMetadataFn) so it is unit-testable without a live quick_fixes.metadata column. Detect Postgres error 42703 specifically and return null without throwing -- and TR-3 (below) requires this to be a NAMED, narrow catch, not the existing blanket catch{return null} at claim-stamp.cjs:74-76, which currently makes every stampClaim failure mode indistinguishable and would make TR-3 unverifiable.",
+      "requirement": "stampClaim() auto-detects a QF-shaped ref (/^QF-/) and, for that shape, writes to quick_fixes.metadata when present, degrading fail-soft (no-op, no throw) when absent.",
+      "acceptance_criteria": [
+        "AC-4: With quick_fixes.metadata ABSENT (today's live schema), a QF self-claim through worker-checkin.cjs selfClaimQuickFix succeeds end-to-end and the QF-side merge returns null with no thrown error and no test failure.",
+        "AC-5: A unit test injects a fake mergeQfMetadataFn to assert a pick_reason-bearing entry is written additively (existing metadata keys preserved) under a claiming_session_id compare-and-swap guard, without requiring a live quick_fixes.metadata column.",
+        "AC-6: worker-checkin.cjs's tryClaim (the single choke point at :394, already used by selfClaimQuickFix at :765) is the only stamping call site needed to cover all 3 previously-named QF-id lanes (critical-qf-jump.cjs:113 and directed-assignment.cjs:270 both funnel through tryClaim, confirmed by testing-agent evidence e21a99e7 — they do not need separate edits). Evidence for this AC must be collected from a test file NOT in tests/quarantine-manifest.json (tests/unit/worker-checkin-critical-qf-priority-jump.test.js is quarantined and excluded from the unit project; use tests/unit/claim-liveness-fence-qf-surfaces-order.test.js or a new non-quarantined file)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "priority": "HIGH",
+      "description": "lib/sd-creation/source-adapters/qf.js:255 born-claims a newly minted SD key via .rpc('claim_sd') with zero stampClaim call — add one, using the existing SD-side stampClaim path (no migration dependency, sdKey there is already an SD key). scripts/qf-start.js:127 makes a genuine QF-id claim_sd call with zero stampClaim call — add one using the FR-2 QF-aware path. Do NOT modify either file's existing pre-checks (gated-hold check, liveness fence, worktree-quota-before-claim ordering in qf-start.js, or the born-claim session/status guards in qf.js) — those are validated, order-dependent fences, not accidental omissions.",
+      "requirement": "Add a provenance stamp on the 2 bypassing call sites that never call stampClaim today, without re-routing them through claimGuard().",
+      "acceptance_criteria": [
+        "AC-7: qf.js:255 and qf-start.js:127 each call stampClaim (directly or via a shared helper) immediately after their existing .rpc(claim_sd) success branch, with no change to the surrounding pre-check order.",
+        "AC-8: A test on qf-start.js confirms the existing gated-hold refusal (owner=chairman check) and worktree-quota-before-claim ordering are unchanged — stampClaim is added strictly after a successful claim, never before or in place of an existing guard."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "priority": "MEDIUM",
+      "description": "isChairmanGatedQF (lib/fleet/qf-gated-hold.cjs:23) must return byte-identical results before and after this SD's changes for the 3 live chairman-gated QF fixtures (QF-20260713-970, QF-20260905-884, QF-20260905-631, as representative shapes) and for a synthetic QF carrying a new pick_reason/provenance field alongside owner/release_condition. This is a proof of non-interference, not a new tripwire script — the review_by/'review_at passed with no dispatch' check named in the SD's original success criteria is explicitly OUT OF SCOPE per the LEAD-corrected scope (validation-agent 787c567b): it would fire on ~0 real rows and duplicates scripts/fleet-dashboard.cjs:1953 printChairmanGatedQfs.",
+      "requirement": "A unit test proves any chairman-label/provenance data added to a QF row does not alter qf-gated-hold.cjs's existing owner+release_condition hard-exclusion.",
+      "acceptance_criteria": [
+        "AC-9: isChairmanGatedQF(qf) returns true for all 3 live chairman-gated QF fixtures both with and without a pick_reason/provenance field present on the row.",
+        "AC-10: isChairmanGatedQF(qf) returns false for a non-gated QF fixture (owner != chairman, or empty release_condition) regardless of whether pick_reason is present.",
+        "AC-11: No new script or scheduled check is added for review_by/review_at — confirmed absent from the diff."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "priority": "MEDIUM",
+      "description": "Author database/migrations/<date>_add_quick_fixes_metadata.sql: `ALTER TABLE quick_fixes ADD COLUMN IF NOT EXISTS metadata jsonb;` (bare JSONB, no DEFAULT, matching the 20260728_add_quick_fix_runtime_observation.sql precedent) with a COMMENT ON COLUMN documenting the pick_reason shape. Per LEAD/PLAN investigation, LEO_MIGRATION_TIER_GATE_BYPASS is disabled (gate ON) so EXEC cannot self-apply this DDL — the migration ships committed-but-unapplied, same posture as the fleet's existing chairman-gated migration backlog. Actually applying it to production is explicitly OUT OF SCOPE for this child.",
+      "requirement": "Ship the additive quick_fixes.metadata migration as chairman-gated/deferred; the code path must work correctly whether or not it has been applied.",
+      "acceptance_criteria": [
+        "AC-12: The migration file exists, is additive-only (ADD COLUMN IF NOT EXISTS, no data rewrite, no NOT NULL), and follows the repo naming/header convention.",
+        "AC-13: With the migration UNAPPLIED, every code path touching quick_fixes.metadata (FR-2) degrades fail-soft with no thrown error, verified by a smoke test running against the live (unapplied) schema."
+      ]
+    }
+  ],
+  "non_functional_requirements": [],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "rationale": "safe-metadata-merge.mjs exists precisely to prevent a read-spread-write race that resurrects a concurrently-cleared flag; claim-stamp.cjs already uses it and must continue to.",
+      "requirement": "stampClaim() extension must use the existing mergeMetadataKeys() atomic JSONB partial-key merge for the strategic_directives_v2 path (no full-blob overwrite)."
+    },
+    {
+      "id": "TR-2",
+      "rationale": "Child B (the comparator) ships on a separate branch; Child E must not hard-depend on unmerged code, and must degrade to UNSCORED cleanly when the module lands later.",
+      "requirement": "lib/priority/comparator.cjs must be require()'d optionally (try/catch around require, or an existence check) since it is not present on main as of this PRD."
+    },
+    {
+      "id": "TR-3",
+      "rationale": "TESTING-AGENT FINDING (evidence e21a99e7): stampClaim's existing catch-all makes every failure mode (missing column, network error, malformed patch, genuine bug) return an identical null, so a requirement stated as 'catch 42703 specifically' is unverifiable and trivially satisfiable by the very broad catch it is meant to forbid. The new QF-merge function must surface a distinguishable code/reason on its own return value (not just null) so a caller or test can tell '42703, expected' apart from 'unexpected error, investigate'.",
+      "requirement": "The QF-side quick_fixes.metadata write path must catch Postgres error 42703 (undefined_column) by a NAMED, narrow check (error.code === '42703'), never the pre-existing blanket catch{return null} at claim-stamp.cjs:74-76."
+    },
+    {
+      "id": "TR-4",
+      "rationale": "These were independently validated (validation-agent 787c567b) as intentional, order-dependent design, not drift to be corrected by this SD.",
+      "requirement": "No changes to claimGuard()'s call-site set, qf-gated-hold.cjs's predicate logic, or the ordering of pre-claim fences in qf-start.js/session-conflict-checker.mjs/worker-checkin.cjs tryClaim."
+    },
+    {
+      "id": "TR-5",
+      "rationale": "14 live consumers of claim_history were enumerated (Explore evidence 0696b09c) and confirmed to be key-addressed/defensive — an additive-only change is the constraint that keeps that guarantee true.",
+      "requirement": "CLAIM_HISTORY_CAP (20) and the existing claim_history entry shape (session_id, claimed_at, optional identity_source) are preserved; pick_reason is additive only."
+    },
+    {
+      "id": "TR-6",
+      "rationale": "TESTING-AGENT FINDING (evidence e21a99e7): typeof NaN === 'number' passes a naive numeric guard, and JSON.stringify(NaN) silently serializes to null, corrupting the stored provenance field with no error. The UNSCORED-fallback check must use Number.isFinite(), not typeof === 'number'.",
+      "requirement": "A NaN or non-numeric result from an injected/optional scoring function must never reach JSON.stringify as null or NaN in the stored pick_reason."
+    }
+  ],
+  "system_architecture": "{\"overview\":\"A single extension point (stampClaim in lib/fleet/claim-stamp.cjs) grows two new capabilities: (1) it computes and attaches a pick_reason object using an optionally-available scoring module, and (2) it becomes table-aware so a QF-id claim can be stamped onto quick_fixes.metadata once that column exists. Two previously-silent call sites (qf.js, qf-start.js) gain their first-ever stampClaim call. No new services, no new RPC, no new API surface — this is a metadata-provenance layer riding on the existing claim_sd write path.\",\"components\":[{\"name\":\"stampClaim (extended)\",\"responsibility\":\"Builds and merges the claim_history entry, now including pick_reason; dispatches to strategic_directives_v2 or quick_fixes based on an explicit kind/table hint.\",\"technology\":\"Node.js CJS module (lib/fleet/claim-stamp.cjs)\"},{\"name\":\"comparator.cjs (optional dependency)\",\"responsibility\":\"Supplies computePriorityScore({criticality, alignment, leverage, age}) -> {score, components, comparatorVersion}; consumed via optional require with UNSCORED fallback.\",\"technology\":\"Node.js CJS module (lib/priority/comparator.cjs, ships on a sibling branch)\"},{\"name\":\"QF metadata merge path\",\"responsibility\":\"Additive, compare-and-swap-guarded JSONB write onto quick_fixes.metadata; fail-soft on missing column (42703).\",\"technology\":\"Supabase-js client + raw pg fallback for the JSONB merge, mirroring safe-metadata-merge.mjs conventions\"},{\"name\":\"quick_fixes.metadata migration\",\"responsibility\":\"Additive schema change enabling the QF metadata merge path once chairman-applied.\",\"technology\":\"PostgreSQL migration file (chairman-gated tier)\"},{\"name\":\"qf-gated-hold non-interference test\",\"responsibility\":\"Regression-proves isChairmanGatedQF is unaffected by any new provenance field.\",\"technology\":\"Vitest unit test\"}],\"data_flow\":\"A caller (claimGuard, tryClaim, sd-start.js, session-conflict-checker.mjs, qf.js, or qf-start.js) succeeds at .rpc('claim_sd') → calls the extended stampClaim(supabase, ref, sessionId, identitySource, {kind}) → stampClaim reads the current row (strategic_directives_v2 or quick_fixes depending on kind) → computes pick_reason via optional comparator.cjs → appends {session_id, claimed_at, identity_source, pick_reason} to claim_history (capped at 20) → writes back via an atomic partial-key JSONB merge (mergeMetadataKeys for SD; an equivalent CAS-guarded merge for QF) → returns the entry or null on any fail-soft condition.\",\"integration_points\":[\"lib/coordinator/safe-metadata-merge.mjs (reused for the SD-side atomic merge)\",\"lib/priority/comparator.cjs (optional; Child B branch)\",\"lib/fleet/qf-gated-hold.cjs (read-only regression target, not modified)\",\"scripts/worker-checkin.cjs (3 QF-id claim lanes: selfClaimQuickFix, critical-qf-jump.cjs, directed-assignment.cjs)\",\"lib/sd-creation/source-adapters/qf.js and scripts/qf-start.js (2 new stampClaim call sites)\"]}",
+  "data_model": {},
+  "api_specifications": [],
+  "ui_ux_requirements": [],
+  "implementation_approach": "{\"phases\":[{\"phase\":\"Phase 1: SD-side pick_reason\",\"description\":\"Extend stampClaim() to compute and attach pick_reason using an optionally-required comparator.cjs; extend all 4 existing unit suites to assert additive behavior.\",\"deliverables\":[\"lib/fleet/claim-stamp.cjs extended\",\"New/updated unit tests for TS-1, TS-2, TS-6\"]},{\"phase\":\"Phase 2: QF-awareness + migration\",\"description\":\"Add the table/kind parameter to stampClaim, implement the CAS-guarded QF metadata merge with 42703 fail-soft, author the additive migration file.\",\"deliverables\":[\"stampClaim QF-aware extension\",\"database migration file (unapplied)\",\"Unit tests for TS-3, TS-4, TS-9\"]},{\"phase\":\"Phase 3: Bypass-site provenance + gated-hold regression\",\"description\":\"Add stampClaim calls to qf.js:255 and qf-start.js:127; write the qf-gated-hold non-interference regression test.\",\"deliverables\":[\"qf.js and qf-start.js updated\",\"Tests for TS-7, TS-8, TS-5\"]}],\"technical_decisions\":[\"Extend the existing stampClaim() writer rather than build a new one, per the LEAD-corrected premise that a single writer already exists (validation-agent 787c567b).\",\"Do not re-route the 3 bypassing claim_sd call sites through claimGuard() — their pre-checks are validated as intentional, order-dependent fencing.\",\"Ship the quick_fixes.metadata migration as chairman-gated/deferred rather than block this SD on chairman DDL approval; code degrades fail-soft until applied.\",\"Drop the review_by/review_at tripwire from scope — it would fire on ~0 real rows and duplicates an existing fleet-dashboard.cjs surface.\"]}",
+  "technology_stack": [],
+  "dependencies": [],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "then": "the newest claim_history entry has pick_reason.score as a number and comparatorVersion matching comparator.cjs's COMPARATOR_VERSION",
+      "when": "claimGuard() successfully claims an SD",
+      "given": "lib/priority/comparator.cjs is present and returns a numeric score for given inputs",
+      "scenario": "SD claim through claimGuard() stamps pick_reason using a present comparator.cjs",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-2",
+      "then": "the newest claim_history entry has pick_reason.score === \"UNSCORED\", and stampClaim does not throw",
+      "when": "tryClaim() in worker-checkin.cjs successfully claims an SD",
+      "given": "lib/priority/comparator.cjs cannot be required (module not found, simulated via a test double)",
+      "scenario": "SD claim stamps UNSCORED when comparator.cjs is absent",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-3",
+      "then": "the claim succeeds, stampClaim returns null for the QF-side write, and no error propagates to the caller",
+      "when": "selfClaimQuickFix() in worker-checkin.cjs claims an open QF",
+      "given": "quick_fixes.metadata column does not exist (live production shape)",
+      "scenario": "QF self-claim succeeds when quick_fixes.metadata column is absent (todays live schema)",
+      "test_type": "integration"
+    },
+    {
+      "id": "TS-4",
+      "then": "the resulting metadata contains both foo: \"bar\" (preserved) and the new pick_reason-bearing claim_history-equivalent entry, under a claiming_session_id CAS guard",
+      "when": "the QF-aware stampClaim path runs for that row",
+      "given": "a mocked quick_fixes row with an existing metadata blob {foo: \"bar\"} and a present metadata column",
+      "scenario": "QF metadata merge is additive under a mocked present column",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-5",
+      "then": "it returns true, identically to the same fixture without the new field",
+      "when": "isChairmanGatedQF(qf) is called",
+      "given": "a QF fixture with owner=\"chairman\" and a non-empty release_condition, plus a new pick_reason/provenance field",
+      "scenario": "qf-gated-hold exclusion is unaffected by a new provenance field",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-6",
+      "then": "all suites pass unmodified",
+      "when": "run against the extended stampClaim output",
+      "given": "the 4 existing unit suites referencing claim_history (claim-identity.test.js, same-turn-next-claim.test.js, claim-stamp-concurrent-metadata-race.test.js, and any effort-experiment reader tests)",
+      "scenario": "Existing claim_history consumers tolerate the new key",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-7",
+      "then": "stampClaim is called and the SD's claim_history gains a pick_reason-bearing entry, with no change to the existing session/status guard logic",
+      "when": "the escalation born-claims a newly minted SD via qf.js:255",
+      "given": "a QF worker session with a matching sd_key === qf.id, live status",
+      "scenario": "qf.js born-claim now stamps provenance",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-8",
+      "then": "the claim succeeds, stampClaim is called after the quota check (never before), and a chairman-gated QF is still refused exactly as before this change",
+      "when": "qf-start.js claims it",
+      "given": "a QF that is NOT chairman-gated and passes the liveness fence and worktree-quota check",
+      "scenario": "qf-start.js claim now stamps provenance without disturbing gate ordering",
+      "test_type": "integration"
+    },
+    {
+      "id": "TS-9",
+      "then": "no test fails due to the missing column, and no error surfaces to a worker",
+      "when": "the full test suite and a live self-claim smoke test run",
+      "given": "the quick_fixes.metadata migration file has NOT been applied to the live database",
+      "scenario": "Migration is additive and safe to leave unapplied",
+      "test_type": "integration"
+    },
+    {
+      "id": "TS-10",
+      "then": "zero rows match, the merge returns a distinguishable not-mine/lost-race result (not the same null as a 42703), and no metadata is written",
+      "when": "the QF-side merge executes its CAS-guarded UPDATE",
+      "given": "a QF claim_sd already updated claiming_session_id to a DIFFERENT session before the metadata merge runs",
+      "scenario": "QF metadata merge loses a compare-and-swap race",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-11",
+      "then": "the NaN component and the thrown case both degrade to the literal string \"UNSCORED\" for that component, never NaN or null in the serialized JSON",
+      "when": "stampClaim resolves pick_reason",
+      "given": "a fake computePriorityScoreFn that returns NaN for one component and throws for another test case",
+      "scenario": "An injected scoring function returns NaN or throws",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-12",
+      "then": "the array is still capped at 20 entries (oldest dropped), and the size increase from pick_reason does not break the existing FIFO-cap test",
+      "when": "a 21st claim is stamped",
+      "given": "a claim_history array already at 20 entries, each now carrying a pick_reason object",
+      "scenario": "FIFO cap (20) still holds with the larger pick_reason payload",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-13",
+      "then": "old entries are left untouched (no backfill), the new entry has pick_reason, and every existing claim_history reader (claim-burn-gauge.cjs, plan-drift-detectors.js, work-boundary-gauges.js, leg2-uptake.js, stall-alert.js, etc. -- 22 files per testing-agent evidence e21a99e7) continues to read the array without error",
+      "when": "a new claim is stamped",
+      "given": "an SD row (representative of the ~1254 live SDs with claim_history per claim-burn-gauge.cjs) whose existing entries have no pick_reason key",
+      "scenario": "A pre-existing SD carries legacy (no-pick_reason) claim_history entries alongside new ones",
+      "test_type": "unit"
+    },
+    {
+      "id": "TS-14",
+      "then": "the CAS guard in the QF-side merge reads the ALREADY-SET claiming_session_id and succeeds on the first attempt for the claiming session (no race against its own claim)",
+      "when": "qf-start.js calls the QF-side stamp immediately after a successful claim_sd",
+      "given": "testing-agent evidence e21a99e7 confirmed claim_sd itself sets claiming_session_id (RPC lines 422-430) before any application-level stamp call",
+      "scenario": "qf-start.js claim_sd already sets claiming_session_id before the stamp runs",
+      "test_type": "integration"
+    }
+  ],
+  "acceptance_criteria": [
+    "A claim written through every one of the 6 production claim_sd call sites (claimGuard, session-conflict-checker.mjs, worker-checkin.cjs tryClaim, sd-start.js, lib/sd-creation/source-adapters/qf.js, scripts/qf-start.js) results in a pick_reason-bearing claim_history/metadata entry, or a documented, tested fail-soft no-op for the QF-metadata path while the migration is unapplied.",
+    "isChairmanGatedQF (lib/fleet/qf-gated-hold.cjs) is provably unaffected by any new provenance field, confirmed by a passing regression test against all 3 live chairman-gated QF fixtures.",
+    "All existing claim_history/stampClaim unit tests pass unmodified; no reader of claim_history breaks.",
+    "The quick_fixes.metadata migration exists, is additive-only, and the codebase functions correctly whether it is applied or not.",
+    "No re-routing of the 3 already-bypassing claim_sd call sites through claimGuard(), and no new review_by/review_at tripwire script — both explicitly out of scope per the LEAD-corrected scope."
+  ],
+  "performance_requirements": {},
+  "plan_checklist": [
+    {
+      "text": "PRD created and saved",
+      "checked": true
+    },
+    {
+      "text": "SD requirements mapped to technical specs",
+      "checked": true
+    },
+    {
+      "text": "Technical architecture defined",
+      "checked": true
+    },
+    {
+      "text": "Implementation approach documented",
+      "checked": true
+    },
+    {
+      "text": "Test scenarios defined",
+      "checked": true
+    },
+    {
+      "text": "Acceptance criteria established",
+      "checked": true
+    },
+    {
+      "text": "Integration & operationalization documented",
+      "checked": true
+    },
+    {
+      "text": "Exploration summary documented",
+      "checked": true
+    },
+    {
+      "text": "Resource requirements estimated",
+      "checked": false
+    },
+    {
+      "text": "Timeline and milestones set",
+      "checked": false
+    },
+    {
+      "text": "Risk assessment completed",
+      "checked": true
+    }
+  ],
+  "exec_checklist": [
+    {
+      "text": "Development environment setup",
+      "checked": false
+    },
+    {
+      "text": "Core functionality implemented",
+      "checked": false
+    },
+    {
+      "text": "Unit tests written",
+      "checked": false
+    },
+    {
+      "text": "Integration tests completed",
+      "checked": false
+    },
+    {
+      "text": "Code review completed",
+      "checked": false
+    },
+    {
+      "text": "Documentation updated",
+      "checked": false
+    }
+  ],
+  "validation_checklist": [
+    {
+      "text": "All acceptance criteria met",
+      "checked": false
+    },
+    {
+      "text": "Performance requirements validated",
+      "checked": false
+    },
+    {
+      "text": "Security review completed",
+      "checked": false
+    },
+    {
+      "text": "User acceptance testing passed",
+      "checked": false
+    },
+    {
+      "text": "Deployment readiness confirmed",
+      "checked": false
+    }
+  ],
+  "progress": 82,
+  "phase": "exec",
+  "phase_progress": {},
+  "risks": [
+    {
+      "risk": "quick_fixes.metadata migration sits chairman-gated/unapplied indefinitely, so the QF-side pick_reason stamping never actually activates in production.",
+      "impact": "MEDIUM",
+      "mitigation": "Design the code path to be fully correct and tested in the unapplied state (fail-soft, TS-3/TS-9) so shipping does not depend on migration timing; the SD's success is defined by the code being ready, not by chairman DDL approval, which is explicitly out of scope.",
+      "probability": "MEDIUM",
+      "rollback_plan": "No rollback needed for the unapplied-migration case since nothing changes in production behavior. If the migration is later applied and causes an unexpected issue, revert via a companion DOWN migration (ALTER TABLE quick_fixes DROP COLUMN IF EXISTS metadata)."
+    },
+    {
+      "risk": "A future caller of stampClaim assumes claim_history entries always have a numeric pick_reason.score, breaking on the UNSCORED sentinel string.",
+      "impact": "MEDIUM",
+      "mitigation": "Document the UNSCORED contract prominently in claim-stamp.cjs's docblock (mirroring comparator.cjs's own documented contract) and cover it with TS-2; any new consumer added later must type-check before arithmetic.",
+      "probability": "LOW",
+      "rollback_plan": "Revert the pick_reason field addition (feature-flaggable via a simple early-return in stampClaim) if a consumer regression is discovered; the entry shape reverts to the pre-existing 3-key form."
+    },
+    {
+      "risk": "The QF-side CAS-guarded metadata merge, being hand-rolled rather than using a shared helper (none exists for quick_fixes), introduces a subtle race distinct from the SD-side mergeMetadataKeys.",
+      "impact": "HIGH",
+      "mitigation": "Model the QF merge query directly on mergeMetadataKeys' COALESCE(metadata, '{}'::jsonb) || $2::jsonb pattern plus an explicit WHERE claiming_session_id = $sessionId guard, and cover it with a concurrent-write test analogous to tests/unit/fleet/claim-stamp-concurrent-metadata-race.test.js.",
+      "probability": "LOW",
+      "rollback_plan": "The QF-side write is fail-soft by construction (TS-4); if the race is found post-merge, disable the QF-side write path via a single guard flag while the SD-side path continues unaffected."
+    }
+  ],
+  "constraints": [],
+  "assumptions": [],
+  "stakeholders": [
+    {
+      "name": "Chairman (Solo Entrepreneur)",
+      "needs": [
+        "ROI visibility",
+        "Resource efficiency",
+        "Quick iteration",
+        "Strategic alignment"
+      ],
+      "persona_id": "chairman",
+      "pain_points": [
+        "Too much detail",
+        "Missing financial KPIs",
+        "Slow feedback loops"
+      ],
+      "success_criteria": [
+        "Clear ROI path",
+        "Minimal overhead",
+        "Measurable outcomes"
+      ]
+    },
+    {
+      "name": "EVA (AI Chief of Staff)",
+      "needs": [
+        "Clear orchestration APIs",
+        "Reliable automation",
+        "Observable state"
+      ],
+      "persona_id": "eva",
+      "pain_points": [
+        "Unclear agent boundaries",
+        "Missing context",
+        "Brittle integrations"
+      ],
+      "success_criteria": [
+        "Autonomous execution",
+        "Predictable behavior",
+        "Graceful degradation"
+      ]
+    },
+    {
+      "name": "DevOps Engineer",
+      "needs": [
+        "Reliable deployments",
+        "Clear monitoring",
+        "Fast rollback"
+      ],
+      "persona_id": "devops_engineer",
+      "pain_points": [
+        "Flaky pipelines",
+        "Missing logs",
+        "Configuration drift"
+      ],
+      "success_criteria": [
+        "Zero-downtime deploys",
+        "Full observability",
+        "Fast recovery"
+      ]
+    }
+  ],
+  "approved_by": null,
+  "approval_date": null,
+  "planned_start": null,
+  "planned_end": null,
+  "actual_start": null,
+  "actual_end": null,
+  "created_at": "2026-09-06T11:45:00.455462",
+  "updated_at": "2026-09-06T12:05:16.848984",
+  "created_by": "PLAN",
+  "updated_by": null,
+  "metadata": {
+    "created_via": "content_arg",
+    "validated_at": "2026-09-06T11:44:59.346Z",
+    "risk_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 85,
+      "sd_context": "dfdad20c-bf37-47ef-8588-0ebd82cfb874",
+      "executed_at": "2026-09-06T11:45:04.049Z",
+      "execution_id": "fc927b94-c60c-456b-b62d-ce94fe02bb31",
+      "generated_at": "2026-09-06T11:45:04.049Z",
+      "raw_analysis": null,
+      "justification": null,
+      "critical_issues": [
+        {
+          "issue": "Database changes: migration, schema, column. Schema migration required",
+          "score": 9,
+          "domain": "Data Migration",
+          "mitigation_required": true
+        }
+      ],
+      "recommendations": [
+        {
+          "title": "Critical Risk Mitigation Required",
+          "priority": "CRITICAL",
+          "description": "1 critical risk(s) identified. Develop mitigation plan before proceeding to EXEC phase. Consider: additional research, proof of concept, architecture review."
+        },
+        {
+          "title": "Data Migration Risk Management",
+          "priority": "HIGH",
+          "description": "High risk in data migration. Recommendations: Engage specialist sub-agent, add checkpoint validation, include fallback plan."
+        }
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "content_quality": {
+      "mode": "off",
+      "score": 100,
+      "passed": true,
+      "threshold": 70
+    },
+    "design_analysis": {
+      "sd_context": {
+        "id": "SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E",
+        "scope": "LEAD-CORRECTED SCOPE (validation-agent 787c567b, 2026-09-06): the original premise (\"no single write site exists\") is FALSE — lib/fleet/claim-stamp.cjs stampClaim() at lib/claim-guard.mjs:832, lib/session-conflict-checker.mjs:334, scripts/worker-checkin.cjs:394 and scripts/sd-start.js:1637 IS the single shared post-claim stamp today. This child EXTENDS that writer; it does not create one.\n\nIN SCOPE (corrected):\n1. Add pick_reason {score, components, comparatorVersion} to the claim_history entry stampClaim() already writes on strategic_directives_v2.metadata (Explore e5c346 confirmed: zero readers break, zero tests pin an exact key set — additive only). Optional-require lib/priority/comparator.cjs (Child B, not yet on main) with graceful UNSCORED fallback when absent/unmerged.\n2. Make stampClaim() QF-aware (accept a table/kind param) so the 3 QF-id tryClaim lanes that silently no-op today (worker-checkin.cjs:765 selfClaimQuickFix, lib/checkin/steps/critical-qf-jump.cjs:113, lib/checkin/steps/directed-assignment.cjs QF fallthrough) actually stamp once quick_fixes.metadata exists. Ship the additive migration 'ALTER TABLE quick_fixes ADD COLUMN IF NOT EXISTS metadata jsonb' (bare JSONB, no DEFAULT, per repo convention on this table) as chairman-gated/deferred (LEO_MIGRATION_TIER_GATE_BYPASS is disabled -> gate ON; EXEC cannot self-apply DDL) — code path fail-soft no-ops (42703-safe) until applied, matching the existing factory_lane/verified_at degrade pattern in this same file.\n3. Add stampClaim to lib/sd-creation/source-adapters/qf.js:255 (this call already passes an SD key, not a QF id — zero-risk, no migration dependency) and to scripts/qf-start.js:127 (genuine QF-id claim, gated by #2's fail-soft column check).\n4. Reconciliation with qf-gated-hold.cjs: a unit test proves a chairman-label/provenance stamp on a QF is ADDITIVE ONLY and does not alter isChairmanGatedQF's existing owner+release_condition hard-exclusion (no behavior change, test-only confirmation).\n\nOUT OF SCOPE (moved/dropped per validation 787c567b, Q8 deletion audit):\n- The review_by / \"review_at passed with no dispatch\" tripwire is DROPPED. Live measurement: only 2 of 33 open-release_condition QFs carry a review_at token (both from the same 09-06 oracle batch-mint sweep), 0 of the 11 genuine chairman-gated QFs carry one — the check would fire on ~0 real rows and duplicates scripts/fleet-dashboard.cjs:1953 printChairmanGatedQfs, which already surfaces every non-terminal gated row with age/condition/release command. No new tripwire script.\n- Re-routing the 3 already-bypassing call sites (qf-start.js, session-conflict-checker.mjs, worker-checkin.cjs tryClaim) through claimGuard() is DROPPED — their pre-checks (gated-hold, liveness fence, worktree-quota-before-claim, moot-recheck) are order-dependent and validated as intentional, not accidental drift.\n- Actually applying the quick_fixes.metadata migration to production is OUT OF SCOPE for this child (chairman DDL-gate decision, tracked separately) — the migration file ships committed-but-unapplied, same posture as the existing 5-migration chairman-gated backlog this fleet already carries.\n\nScope reduction: 2 of 4 original success-criteria mechanisms dropped/rescoped (review_at tripwire removed entirely; claimGuard re-routing removed; DDL application deferred to chairman) — >25% reduction from the original text.",
+        "title": "Child E: stamp the pick reason on every claim; reconcile chairman-label provenance with the existing qf-gated-hold.cjs hard-exclusion"
+      },
+      "generated_at": "2026-09-06T11:44:59.570Z",
+      "raw_analysis": "DESIGN Analysis Results:\nVerdict: CONDITIONAL_PASS\nConfidence: 60%\n\nRecommendations:\n  1. Validate infrastructure concerns: deployment, monitoring, rollback, CI/CD integration\n\nwarnings: [\n  {\n    \"severity\": \"HIGH\",\n    \"issue\": \"Sub-agent scanned an unresolved or empty repo (repo_resolved=true, probe_exists=false)\",\n    \"recommendation\": \"Verify the SD target_application resolves to the correct repo; an empty/wrong tree yields zero violations and must not pass as green\"\n  }\n]\n\ndetailed_analysis: {\n  \"sd_type\": \"infrastructure\",\n  \"sd_type_source\": \"declared\",\n  \"skip_reason\": \"Non-UI SD type (infrastructure) - UI/UX design validation not applicable\",\n  \"validation_approach\": \"Infrastructure design review: deployment, CI/CD, monitoring, rollback, config management\",\n  \"infra_checklist\": [\n    \"Deployment strategy documented\",\n    \"CI/CD pipeline integration verified\",\n    \"Monitoring and alerting configured\",\n    \"Rollback procedure defined\",\n    \"Configuration management approach specified\"\n  ]\n}\n\nfindings: {\n  \"design_system_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"component_analysis\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"accessibility_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"responsive_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"consistency_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"workflow_review\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no user-facing workflows\"\n  }\n}\n\nmetadata: {\n  \"repo_path\": \"C:/Users/rickf/Projects/_EHG/EHG_Engineer\",\n  \"repo_resolved\": true,\n  \"components_dir_exists\": true,\n  \"skip_reason\": \"non_ui_sd_type:infrastructure\",\n  \"registry_source\": \"db\",\n  \"executed_from_cwd\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E\",\n  \"probe_exists\": false,\n  \"verdict_chain\": [\n    {\n      \"from\": \"PASS\",\n      \"to\": \"CONDITIONAL_PASS\",\n      \"mutator\": \"lib/sub-agents/resolve-repo.js:applySubAgentRepoVerdict\",\n      \"reason\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\"\n    }\n  ]\n}\n\noptions: {\n  \"timeout\": 120000,\n  \"repo_path\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E\",\n  \"target_application\": \"EHG_Engineer\",\n  \"_injectedBrief\": \"--- Five-Point Brief ---\\nSymptom: <describe what IS happening>\\nLocation: <file/endpoint/table>\\nFrequency: <pattern/timing>\\nPrior Attempts: <what you already tried>\\nDesired Outcome: <clear success criteria>\\nContext: SD SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E\\n--- End Brief ---\",\n  \"taskContract\": {\n    \"contract_id\": \"06bb90c1-d312-4e3f-8124-d77e46c50a67\",\n    \"summary\": \"Contract 06bb90c1-d312-4e3f-8124-d77e46c50a67: LEO_EXECUTOR → DESIGN | Execute Senior Design Sub-Agent analysis for SD SD...\"\n  },\n  \"inputArtifacts\": [\n    \"fe74d4cc-0bf9-435b-a4c3-0cedee99cc21\"\n  ],\n  \"sdKey\": \"SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E\",\n  \"sdUUID\": \"dfdad20c-bf37-47ef-8588-0ebd82cfb874\"\n}\n\nconditions: [\n  {\n    \"action\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\",\n    \"priority\": \"medium\",\n    \"blocking\": false\n  }\n]\njustification: CONDITIONAL_PASS recorded by applySubAgentRepoVerdict: repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\n\nsub_agent: {\n  \"id\": \"2ebfbd8a-5aa0-4907-bb47-33a2dd04254f\",\n  \"code\": \"DESIGN\",\n  \"name\": \"Senior Design Sub-Agent\",\n  \"description\": \"## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition\\n\\n**🆕 NEW in v6.0.0**: Proactive learning, accessibility-first patterns, scope estimation protocol\\n\\n### Overview\\n**Mission**: Ensure design compliance, accessibility (WCAG 2.1 AA), and consistent UX across all implementations.\\n\\n**Philosophy**: **Accessibility-first design prevents technical debt.**\\n\\n**Tech Stack**: Vite + React + Shadcn UI + TypeScript + Tailwind CSS\\n\\n**Component Sizing Sweet Spot**: 300-600 lines of code (optimal for testing and maintenance)\\n\\n---\\n\\n## 🔍 PROACTIVE LEARNING INTEGRATION (SD-LEO-LEARN-001)\\n\\n### Before Starting ANY Design/UI Work\\n\\n**MANDATORY**: Query issue_patterns table for proven solutions:\\n\\n```bash\\n# Check for known UI/UX issue patterns\\nnode scripts/search-prior-issues.js \\\"UI component design\\\"\\n\\n# Query issue_patterns table\\nnode -e \\\"\\nimport { createDatabaseClient } from './lib/supabase-connection.js';\\n(async () => {\\n  const client = await createDatabaseClient('engineer', { verify: false });\\n  const result = await client.query(\\\\`\\n    SELECT pattern_id, issue_summary, proven_solutions, prevention_checklist\\n    FROM issue_patterns\\n    WHERE category IN ('design', 'ui', 'ux',"
+    },
+    "stories_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 95,
+      "sd_context": "dfdad20c-bf37-47ef-8588-0ebd82cfb874",
+      "executed_at": "2026-09-06T11:45:17.371Z",
+      "execution_id": "23d5df03-6e78-4e1c-9ae8-4051de2e25d1",
+      "generated_at": "2026-09-06T11:45:17.371Z",
+      "raw_analysis": null,
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        {
+          "title": "Stories Already Complete",
+          "description": "5 stories already have implementation context. This is a success - no additional work needed."
+        },
+        {
+          "title": "EXEC Phase Guidance",
+          "description": "User stories now include: implementation_context (architecture patterns, component locations), architecture_references (existing code to reference), example_code_patterns (code snippets), and testing_scenarios (test cases)."
+        }
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "database_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 100,
+      "sd_context": "dfdad20c-bf37-47ef-8588-0ebd82cfb874",
+      "executed_at": "2026-09-06T11:45:07.308Z",
+      "execution_id": "3a40974d-ad47-4d6a-a9ea-585eee435034",
+      "generated_at": "2026-09-06T11:45:07.308Z",
+      "raw_analysis": {},
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        "No database migrations needed for this SD"
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "generation_pattern": "generate_first_then_insert",
+    "plan_prd_sub_agents": {
+      "agents": [
+        {
+          "code": "DATABASE",
+          "verdict": "PASS",
+          "confidence": 100,
+          "executed_at": "2026-09-06T11:45:18.925Z"
+        },
+        {
+          "code": "RISK",
+          "verdict": "PASS",
+          "confidence": 85,
+          "executed_at": "2026-09-06T11:45:18.925Z"
+        },
+        {
+          "code": "STORIES",
+          "verdict": "PASS",
+          "confidence": 95,
+          "executed_at": "2026-09-06T11:45:18.925Z"
+        }
+      ],
+      "all_passed": true,
+      "executed_at": "2026-09-06T11:45:18.925Z"
+    },
+    "grounding_validation": {
+      "note": "10 requirements have <50% confidence but this is expected for implementation-level PRDs. No hallucination detected.",
+      "sd_id": "dfdad20c-bf37-47ef-8588-0ebd82cfb874",
+      "has_issues": false,
+      "all_results": [
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 8.756218905472636,
+              "detail": "10.9% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 6.666666666666666,
+              "detail": "1/6 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.7391304347826086,
+              "detail": "8.7% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.1716201600692191,
+          "is_flagged": true,
+          "explanation": "Low confidence (17%): This requirement may not be grounded in the SD source. 10.9% semantic overlap with SD. 1/6 key phrases match SD. 8.7% alignment with strategic objectives",
+          "requirement_id": "FR-1",
+          "requirement_type": "functional",
+          "requirement_title": "stampClaim() in lib/fleet/claim-stamp.cjs writes a pick_reason field on the claim_history entry it already appends."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 9.577464788732394,
+              "detail": "12.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.36986301369863,
+              "detail": "6.8% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.10947327802431024,
+          "is_flagged": true,
+          "explanation": "Low confidence (11%): This requirement may not be grounded in the SD source. 12.0% semantic overlap with SD. 0/2 key phrases match SD. 6.8% alignment with strategic objectives",
+          "requirement_id": "FR-2",
+          "requirement_type": "functional",
+          "requirement_title": "stampClaim() accepts an explicit target-table/kind and, for a QF-id claim, writes to quick_fixes when a metadata column is present, degrading fail-soft (no-op, no throw) when it is absent."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 11.313131313131313,
+              "detail": "14.1% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/3 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 0.96,
+              "detail": "4.8% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.12273131313131312,
+          "is_flagged": true,
+          "explanation": "Low confidence (12%): This requirement may not be grounded in the SD source. 0/3 key phrases match SD. 4.8% alignment with strategic objectives",
+          "requirement_id": "FR-3",
+          "requirement_type": "functional",
+          "requirement_title": "Add a provenance stamp on the 2 bypassing call sites that never call stampClaim today, without re-routing them through claimGuard()."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 16.517412935323385,
+              "detail": "20.6% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.013422818791946,
+              "detail": "10.1% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.1853083575411533,
+          "is_flagged": true,
+          "explanation": "Low confidence (19%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 10.1% alignment with strategic objectives",
+          "requirement_id": "FR-4",
+          "requirement_type": "functional",
+          "requirement_title": "A unit test proves any chairman-label/provenance data added to a QF row does not alter qf-gated-hold.cjs's existing owner+release_condition hard-exclusion."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 17.461928934010153,
+              "detail": "21.8% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 20,
+              "detail": "2/4 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.7808219178082192,
+              "detail": "8.9% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.3924275085181837,
+          "is_flagged": true,
+          "explanation": "Low confidence (39%): This requirement may not be grounded in the SD source. 8.9% alignment with strategic objectives",
+          "requirement_id": "FR-5",
+          "requirement_type": "functional",
+          "requirement_title": "Ship the additive quick_fixes.metadata migration as chairman-gated/deferred; the code path must work correctly whether or not it has been applied."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 2.2739018087855296,
+              "detail": "2.8% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 0.5333333333333333,
+              "detail": "2.7% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.028072351421188628,
+          "is_flagged": true,
+          "explanation": "Low confidence (3%): This requirement may not be grounded in the SD source. 2.8% semantic overlap with SD. 0/1 key phrases match SD. 2.7% alignment with strategic objectives",
+          "requirement_id": "TR-1",
+          "requirement_type": "technical",
+          "requirement_title": "stampClaim() extension must use the existing mergeMetadataKeys() atomic JSONB partial-key merge for the strategic_directives_v2 path (no full-blob overwrite)."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 2.2797927461139897,
+              "detail": "2.8% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 30,
+              "detail": "1/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 0.26666666666666666,
+              "detail": "1.3% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.32546459412780654,
+          "is_flagged": true,
+          "explanation": "Low confidence (33%): This requirement may not be grounded in the SD source. 2.8% semantic overlap with SD. 1.3% alignment with strategic objectives",
+          "requirement_id": "TR-2",
+          "requirement_type": "technical",
+          "requirement_title": "lib/priority/comparator.cjs must be require()'d optionally (try/catch around require, or an existence check) since it is not present on main as of this PRD."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 3.6923076923076925,
+              "detail": "4.6% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.75,
+              "detail": "8.8% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.05442307692307693,
+          "is_flagged": true,
+          "explanation": "Low confidence (5%): This requirement may not be grounded in the SD source. 4.6% semantic overlap with SD. 0/1 key phrases match SD. 8.8% alignment with strategic objectives",
+          "requirement_id": "TR-3",
+          "requirement_type": "technical",
+          "requirement_title": "The QF-side quick_fixes.metadata write path must detect Postgres error 42703 (undefined_column) specifically and treat it as a fail-soft no-op, not a generic catch-and-swallow."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 3.968668407310705,
+              "detail": "5.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/0 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 0.25,
+              "detail": "1.3% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.04218668407310705,
+          "is_flagged": true,
+          "explanation": "Low confidence (4%): This requirement may not be grounded in the SD source. 5.0% semantic overlap with SD. 0/0 key phrases match SD. 1.3% alignment with strategic objectives",
+          "requirement_id": "TR-4",
+          "requirement_type": "technical",
+          "requirement_title": "No changes to claimGuard()'s call-site set, qf-gated-hold.cjs's predicate logic, or the ordering of pre-claim fences in qf-start.js/session-conflict-checker.mjs/worker-checkin.cjs tryClaim."
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 3.75,
+              "detail": "4.7% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/0 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.5,
+              "detail": "12.5% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.0625,
+          "is_flagged": true,
+          "explanation": "Low confidence (6%): This requirement may not be grounded in the SD source. 4.7% semantic overlap with SD. 0/0 key phrases match SD. 12.5% alignment with strategic objectives",
+          "requirement_id": "TR-5",
+          "requirement_type": "technical",
+          "requirement_title": "CLAIM_HISTORY_CAP (20) and the existing claim_history entry shape (session_id, claimed_at, optional identity_source) are preserved; pick_reason is additive only."
+        }
+      ],
+      "issue_reason": null,
+      "validated_at": "2026-09-06T11:44:59.328Z",
+      "grounding_score": 0.14942073238293588,
+      "average_confidence": 0.14942073238293588,
+      "flagged_requirements": [
+        {
+          "id": "FR-1",
+          "type": "functional",
+          "title": "stampClaim() in lib/fleet/claim-stamp.cjs writes a pick_reason field on the claim_history entry it already appends.",
+          "confidence": 0.1716201600692191,
+          "explanation": "Low confidence (17%): This requirement may not be grounded in the SD source. 10.9% semantic overlap with SD. 1/6 key phrases match SD. 8.7% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-2",
+          "type": "functional",
+          "title": "stampClaim() accepts an explicit target-table/kind and, for a QF-id claim, writes to quick_fixes when a metadata column is present, degrading fail-soft (no-op, no throw) when it is absent.",
+          "confidence": 0.10947327802431024,
+          "explanation": "Low confidence (11%): This requirement may not be grounded in the SD source. 12.0% semantic overlap with SD. 0/2 key phrases match SD. 6.8% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-3",
+          "type": "functional",
+          "title": "Add a provenance stamp on the 2 bypassing call sites that never call stampClaim today, without re-routing them through claimGuard().",
+          "confidence": 0.12273131313131312,
+          "explanation": "Low confidence (12%): This requirement may not be grounded in the SD source. 0/3 key phrases match SD. 4.8% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-4",
+          "type": "functional",
+          "title": "A unit test proves any chairman-label/provenance data added to a QF row does not alter qf-gated-hold.cjs's existing owner+release_condition hard-exclusion.",
+          "confidence": 0.1853083575411533,
+          "explanation": "Low confidence (19%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 10.1% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-5",
+          "type": "functional",
+          "title": "Ship the additive quick_fixes.metadata migration as chairman-gated/deferred; the code path must work correctly whether or not it has been applied.",
+          "confidence": 0.3924275085181837,
+          "explanation": "Low confidence (39%): This requirement may not be grounded in the SD source. 8.9% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-1",
+          "type": "technical",
+          "title": "stampClaim() extension must use the existing mergeMetadataKeys() atomic JSONB partial-key merge for the strategic_directives_v2 path (no full-blob overwrite).",
+          "confidence": 0.028072351421188628,
+          "explanation": "Low confidence (3%): This requirement may not be grounded in the SD source. 2.8% semantic overlap with SD. 0/1 key phrases match SD. 2.7% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-2",
+          "type": "technical",
+          "title": "lib/priority/comparator.cjs must be require()'d optionally (try/catch around require, or an existence check) since it is not present on main as of this PRD.",
+          "confidence": 0.32546459412780654,
+          "explanation": "Low confidence (33%): This requirement may not be grounded in the SD source. 2.8% semantic overlap with SD. 1.3% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-3",
+          "type": "technical",
+          "title": "The QF-side quick_fixes.metadata write path must detect Postgres error 42703 (undefined_column) specifically and treat it as a fail-soft no-op, not a generic catch-and-swallow.",
+          "confidence": 0.05442307692307693,
+          "explanation": "Low confidence (5%): This requirement may not be grounded in the SD source. 4.6% semantic overlap with SD. 0/1 key phrases match SD. 8.8% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-4",
+          "type": "technical",
+          "title": "No changes to claimGuard()'s call-site set, qf-gated-hold.cjs's predicate logic, or the ordering of pre-claim fences in qf-start.js/session-conflict-checker.mjs/worker-checkin.cjs tryClaim.",
+          "confidence": 0.04218668407310705,
+          "explanation": "Low confidence (4%): This requirement may not be grounded in the SD source. 5.0% semantic overlap with SD. 0/0 key phrases match SD. 1.3% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-5",
+          "type": "technical",
+          "title": "CLAIM_HISTORY_CAP (20) and the existing claim_history entry shape (session_id, claimed_at, optional identity_source) are preserved; pick_reason is additive only.",
+          "confidence": 0.0625,
+          "explanation": "Low confidence (6%): This requirement may not be grounded in the SD source. 4.7% semantic overlap with SD. 0/0 key phrases match SD. 12.5% alignment with strategic objectives"
+        }
+      ],
+      "requirements_flagged": 10,
+      "implementation_context": "web",
+      "requirements_validated": 10,
+      "validation_duration_ms": 17
+    }
+  },
+  "content": "# Product Requirements Document\n\n## Strategic Directive\nSD-LEO-INFRA-PRIORITY-RECORD-ONE-001-E\n\n## Title\nChild E: stamp the pick reason on every claim; reconcile chairman-label provenance with the existing qf-gated-hold.cjs hard-exclusion\n\n## Status\nPlanning\n\n## Executive Summary\nExtend the existing stampClaim() writer to carry a pick_reason (score, components, comparator version) on every claim, make it QF-aware, and prove chairman-label provenance never alters qf-gated-hold.cjs's exclusion.\n\n## Functional Requirements\n\n### FR-1: stampClaim() in lib/fleet/claim-stamp.cjs writes a pick_reason field on the claim_history entry it already appends.\nExtend the entry built at claim-stamp.cjs:59-62 with pick_reason: {score, components, comparatorVersion}. Source the values by optional-requiring lib/priority/comparator.cjs (computePriorityScore) — a module that exists on the Child B branch but is not yet merged to main. When the module is absent (require throws MODULE_NOT_FOUND) or its output has no numeric score, pick_reason.score MUST be the literal string 'UNSCORED', never a fabricated 0 (mirrors comparator.cjs's own UNSCORED contract). No changes to CLAIM_HISTORY_CAP (20) or existing entry fields (session_id, claimed_at, identity_source).\n**Priority**: CRITICAL\n**Acceptance Criteria**:- AC-1: A claim written through claimGuard(), tryClaim() (worker-checkin.cjs), sd-start.js, or session-conflict-checker.mjs produces a claim_history entry whose newest element has a pick_reason object.- AC-2: When lib/priority/comparator.cjs is not present on disk, pick_reason reads {score: \"UNSCORED\", components: {}, comparatorVersion: null} and stampClaim still returns non-null (fail-soft, not fail-open-to-throw).- AC-3: All 4 existing unit suites referencing claim_history entries (claim-identity.test.js, same-turn-next-claim.test.js, claim-stamp-concurrent-metadata-race.test.js) pass unmodified — pick_reason is additive, asserted via toMatchObject/targeted-key checks, not toEqual on the full entry.\n\n### FR-2: stampClaim() accepts an explicit target-table/kind and, for a QF-id claim, writes to quick_fixes when a metadata column is present, degrading fail-soft (no-op, no throw) when it is absent.\nAdd a 5th optional parameter (e.g. {kind: 'qf'|'sd'} or auto-detect via the existing QF-id shape check already used elsewhere in the codebase, e.g. sdKey.startsWith('QF-')). For kind='qf', attempt an additive JSONB merge onto quick_fixes.metadata using the SAME atomic read-merge-write discipline as mergeMetadataKeys (a client-side read-then-write is acceptable ONLY behind an explicit compare-and-swap on claiming_session_id, since no generic quick_fixes JSONB merge helper exists in the repo today — do not introduce an unguarded full-blob overwrite). Detect the missing-column case via Postgres error code 42703 and return null without throwing, exactly like the existing qf.factory_lane / qf.verified_at degrade pattern in scripts/worker-checkin.cjs.\n**Priority**: HIGH\n**Acceptance Criteria**:- AC-4: With quick_fixes.metadata ABSENT (todays live schema), a QF self-claim through worker-checkin.cjs selfClaimQuickFix succeeds end-to-end and stampClaim returns null with no thrown error and no test failure.- AC-5: A unit test with a mocked quick_fixes.metadata column present asserts a pick_reason-bearing entry is written additively (existing metadata keys preserved) under a claiming_session_id compare-and-swap guard.- AC-6: lib/checkin/steps/critical-qf-jump.cjs and lib/checkin/steps/directed-assignment.cjs (the other 2 silent-no-op QF-id claim lanes identified in LEAD/PLAN investigation) route through the same QF-aware stampClaim path, not a separate implementation.\n\n### FR-3: Add a provenance stamp on the 2 bypassing call sites that never call stampClaim today, without re-routing them through claimGuard().\nlib/sd-creation/source-adapters/qf.js:255 born-claims a newly minted SD key via .rpc('claim_sd') with zero stampClaim call — add one, using the existing SD-side stampClaim path (no migration dependency, sdKey there is already an SD key). scripts/qf-start.js:127 makes a genuine QF-id claim_sd call with zero stampClaim call — add one using the FR-2 QF-aware path. Do NOT modify either file's existing pre-checks (gated-hold check, liveness fence, worktree-quota-before-claim ordering in qf-start.js, or the born-claim session/status guards in qf.js) — those are validated, order-dependent fences, not accidental omissions.\n**Priority**: HIGH\n**Acceptance Criteria**:- AC-7: qf.js:255 and qf-start.js:127 each call stampClaim (directly or via a shared helper) immediately after their existing .rpc(claim_sd) success branch, with no change to the surrounding pre-check order.- AC-8: A test on qf-start.js confirms the existing gated-hold refusal (owner=chairman check) and worktree-quota-before-claim ordering are unchanged — stampClaim is added strictly after a successful claim, never before or in place of an existing guard.\n\n### FR-4: A unit test proves any chairman-label/provenance data added to a QF row does not alter qf-gated-hold.cjs's existing owner+release_condition hard-exclusion.\nisChairmanGatedQF (lib/fleet/qf-gated-hold.cjs:23) must return byte-identical results before and after this SD's changes for the 3 live chairman-gated QF fixtures (QF-20260713-970, QF-20260905-884, QF-20260905-631, as representative shapes) and for a synthetic QF carrying a new pick_reason/provenance field alongside owner/release_condition. This is a proof of non-interference, not a new tripwire script — the review_by/'review_at passed with no dispatch' check named in the SD's original success criteria is explicitly OUT OF SCOPE per the LEAD-corrected scope (validation-agent 787c567b): it would fire on ~0 real rows and duplicates scripts/fleet-dashboard.cjs:1953 printChairmanGatedQfs.\n**Priority**: MEDIUM\n**Acceptance Criteria**:- AC-9: isChairmanGatedQF(qf) returns true for all 3 live chairman-gated QF fixtures both with and without a pick_reason/provenance field present on the row.- AC-10: isChairmanGatedQF(qf) returns false for a non-gated QF fixture (owner != chairman, or empty release_condition) regardless of whether pick_reason is present.- AC-11: No new script or scheduled check is added for review_by/review_at — confirmed absent from the diff.\n\n### FR-5: Ship the additive quick_fixes.metadata migration as chairman-gated/deferred; the code path must work correctly whether or not it has been applied.\nAuthor database/migrations/<date>_add_quick_fixes_metadata.sql: `ALTER TABLE quick_fixes ADD COLUMN IF NOT EXISTS metadata jsonb;` (bare JSONB, no DEFAULT, matching the 20260728_add_quick_fix_runtime_observation.sql precedent) with a COMMENT ON COLUMN documenting the pick_reason shape. Per LEAD/PLAN investigation, LEO_MIGRATION_TIER_GATE_BYPASS is disabled (gate ON) so EXEC cannot self-apply this DDL — the migration ships committed-but-unapplied, same posture as the fleet's existing chairman-gated migration backlog. Actually applying it to production is explicitly OUT OF SCOPE for this child.\n**Priority**: MEDIUM\n**Acceptance Criteria**:- AC-12: The migration file exists, is additive-only (ADD COLUMN IF NOT EXISTS, no data rewrite, no NOT NULL), and follows the repo naming/header convention.- AC-13: With the migration UNAPPLIED, every code path touching quick_fixes.metadata (FR-2) degrades fail-soft with no thrown error, verified by a smoke test running against the live (unapplied) schema.\n\n## Technical Requirements\n\n### TR-1: stampClaim() extension must use the existing mergeMetadataKeys() atomic JSONB partial-key merge for the strategic_directives_v2 path (no full-blob overwrite).\n**Rationale**: safe-metadata-merge.mjs exists precisely to prevent a read-spread-write race that resurrects a concurrently-cleared flag; claim-stamp.cjs already uses it and must continue to.\n\n### TR-2: lib/priority/comparator.cjs must be require()'d optionally (try/catch around require, or an existence check) since it is not present on main as of this PRD.\n**Rationale**: Child B (the comparator) ships on a separate branch; Child E must not hard-depend on unmerged code, and must degrade to UNSCORED cleanly when the module lands later.\n\n### TR-3: The QF-side quick_fixes.metadata write path must detect Postgres error 42703 (undefined_column) specifically and treat it as a fail-soft no-op, not a generic catch-and-swallow.\n**Rationale**: Mirrors the existing factory_lane/verified_at column-degrade pattern in scripts/worker-checkin.cjs; a broad catch would also hide genuine bugs in the merge query.\n\n### TR-4: No changes to claimGuard()'s call-site set, qf-gated-hold.cjs's predicate logic, or the ordering of pre-claim fences in qf-start.js/session-conflict-checker.mjs/worker-checkin.cjs tryClaim.\n**Rationale**: These were independently validated (validation-agent 787c567b) as intentional, order-dependent design, not drift to be corrected by this SD.\n\n### TR-5: CLAIM_HISTORY_CAP (20) and the existing claim_history entry shape (session_id, claimed_at, optional identity_source) are preserved; pick_reason is additive only.\n**Rationale**: 14 live consumers of claim_history were enumerated (Explore evidence 0696b09c) and confirmed to be key-addressed/defensive — an additive-only change is the constraint that keeps that guarantee true.\n\n## System Architecture\n### Overview\nA single extension point (stampClaim in lib/fleet/claim-stamp.cjs) grows two new capabilities: (1) it computes and attaches a pick_reason object using an optionally-available scoring module, and (2) it becomes table-aware so a QF-id claim can be stamped onto quick_fixes.metadata once that column exists. Two previously-silent call sites (qf.js, qf-start.js) gain their first-ever stampClaim call. No new services, no new RPC, no new API surface — this is a metadata-provenance layer riding on the existing claim_sd write path.\n### Components\n#### stampClaim (extended)- **Responsibility**: Builds and merges the claim_history entry, now including pick_reason; dispatches to strategic_directives_v2 or quick_fixes based on an explicit kind/table hint.- **Technology**: Node.js CJS module (lib/fleet/claim-stamp.cjs)\n#### comparator.cjs (optional dependency)- **Responsibility**: Supplies computePriorityScore({criticality, alignment, leverage, age}) -> {score, components, comparatorVersion}; consumed via optional require with UNSCORED fallback.- **Technology**: Node.js CJS module (lib/priority/comparator.cjs, ships on a sibling branch)\n#### QF metadata merge path- **Responsibility**: Additive, compare-and-swap-guarded JSONB write onto quick_fixes.metadata; fail-soft on missing column (42703).- **Technology**: Supabase-js client + raw pg fallback for the JSONB merge, mirroring safe-metadata-merge.mjs conventions\n#### quick_fixes.metadata migration- **Responsibility**: Additive schema change enabling the QF metadata merge path once chairman-applied.- **Technology**: PostgreSQL migration file (chairman-gated tier)\n#### qf-gated-hold non-interference test- **Responsibility**: Regression-proves isChairmanGatedQF is unaffected by any new provenance field.- **Technology**: Vitest unit test\n### Data Flow\nA caller (claimGuard, tryClaim, sd-start.js, session-conflict-checker.mjs, qf.js, or qf-start.js) succeeds at .rpc('claim_sd') → calls the extended stampClaim(supabase, ref, sessionId, identitySource, {kind}) → stampClaim reads the current row (strategic_directives_v2 or quick_fixes depending on kind) → computes pick_reason via optional comparator.cjs → appends {session_id, claimed_at, identity_source, pick_reason} to claim_history (capped at 20) → writes back via an atomic partial-key JSONB merge (mergeMetadataKeys for SD; an equivalent CAS-guarded merge for QF) → returns the entry or null on any fail-soft condition.\n### Integration Points- lib/coordinator/safe-metadata-merge.mjs (reused for the SD-side atomic merge)- lib/priority/comparator.cjs (optional; Child B branch)- lib/fleet/qf-gated-hold.cjs (read-only regression target, not modified)- scripts/worker-checkin.cjs (3 QF-id claim lanes: selfClaimQuickFix, critical-qf-jump.cjs, directed-assignment.cjs)- lib/sd-creation/source-adapters/qf.js and scripts/qf-start.js (2 new stampClaim call sites)\n\n## Implementation Approach\n### Phases\n#### Phase 1: SD-side pick_reasonExtend stampClaim() to compute and attach pick_reason using an optionally-required comparator.cjs; extend all 4 existing unit suites to assert additive behavior.\n**Deliverables**:- lib/fleet/claim-stamp.cjs extended- New/updated unit tests for TS-1, TS-2, TS-6\n#### Phase 2: QF-awareness + migrationAdd the table/kind parameter to stampClaim, implement the CAS-guarded QF metadata merge with 42703 fail-soft, author the additive migration file.\n**Deliverables**:- stampClaim QF-aware extension- database migration file (unapplied)- Unit tests for TS-3, TS-4, TS-9\n#### Phase 3: Bypass-site provenance + gated-hold regressionAdd stampClaim calls to qf.js:255 and qf-start.js:127; write the qf-gated-hold non-interference regression test.\n**Deliverables**:- qf.js and qf-start.js updated- Tests for TS-7, TS-8, TS-5\n### Key Technical Decisions- Extend the existing stampClaim() writer rather than build a new one, per the LEAD-corrected premise that a single writer already exists (validation-agent 787c567b).- Do not re-route the 3 bypassing claim_sd call sites through claimGuard() — their pre-checks are validated as intentional, order-dependent fencing.- Ship the quick_fixes.metadata migration as chairman-gated/deferred rather than block this SD on chairman DDL approval; code degrades fail-soft until applied.- Drop the review_by/review_at tripwire from scope — it would fire on ~0 real rows and duplicates an existing fleet-dashboard.cjs surface.\n\n## Test Scenarios\n\n### TS-1: SD claim through claimGuard() stamps pick_reason using a present comparator.cjs\n**Type**: unit\n**Given**: lib/priority/comparator.cjs is present and returns a numeric score for given inputs\n**When**: claimGuard() successfully claims an SD\n**Then**: the newest claim_history entry has pick_reason.score as a number and comparatorVersion matching comparator.cjs's COMPARATOR_VERSION\n\n### TS-2: SD claim stamps UNSCORED when comparator.cjs is absent\n**Type**: unit\n**Given**: lib/priority/comparator.cjs cannot be required (module not found, simulated via a test double)\n**When**: tryClaim() in worker-checkin.cjs successfully claims an SD\n**Then**: the newest claim_history entry has pick_reason.score === \"UNSCORED\", and stampClaim does not throw\n\n### TS-3: QF self-claim succeeds when quick_fixes.metadata column is absent (todays live schema)\n**Type**: integration\n**Given**: quick_fixes.metadata column does not exist (live production shape)\n**When**: selfClaimQuickFix() in worker-checkin.cjs claims an open QF\n**Then**: the claim succeeds, stampClaim returns null for the QF-side write, and no error propagates to the caller\n\n### TS-4: QF metadata merge is additive under a mocked present column\n**Type**: unit\n**Given**: a mocked quick_fixes row with an existing metadata blob {foo: \"bar\"} and a present metadata column\n**When**: the QF-aware stampClaim path runs for that row\n**Then**: the resulting metadata contains both foo: \"bar\" (preserved) and the new pick_reason-bearing claim_history-equivalent entry, under a claiming_session_id CAS guard\n\n### TS-5: qf-gated-hold exclusion is unaffected by a new provenance field\n**Type**: unit\n**Given**: a QF fixture with owner=\"chairman\" and a non-empty release_condition, plus a new pick_reason/provenance field\n**When**: isChairmanGatedQF(qf) is called\n**Then**: it returns true, identically to the same fixture without the new field\n\n### TS-6: Existing claim_history consumers tolerate the new key\n**Type**: unit\n**Given**: the 4 existing unit suites referencing claim_history (claim-identity.test.js, same-turn-next-claim.test.js, claim-stamp-concurrent-metadata-race.test.js, and any effort-experiment reader tests)\n**When**: run against the extended stampClaim output\n**Then**: all suites pass unmodified\n\n### TS-7: qf.js born-claim now stamps provenance\n**Type**: unit\n**Given**: a QF worker session with a matching sd_key === qf.id, live status\n**When**: the escalation born-claims a newly minted SD via qf.js:255\n**Then**: stampClaim is called and the SD's claim_history gains a pick_reason-bearing entry, with no change to the existing session/status guard logic\n\n### TS-8: qf-start.js claim now stamps provenance without disturbing gate ordering\n**Type**: integration\n**Given**: a QF that is NOT chairman-gated and passes the liveness fence and worktree-quota check\n**When**: qf-start.js claims it\n**Then**: the claim succeeds, stampClaim is called after the quota check (never before), and a chairman-gated QF is still refused exactly as before this change\n\n### TS-9: Migration is additive and safe to leave unapplied\n**Type**: integration\n**Given**: the quick_fixes.metadata migration file has NOT been applied to the live database\n**When**: the full test suite and a live self-claim smoke test run\n**Then**: no test fails due to the missing column, and no error surfaces to a worker\n\n## Acceptance Criteria\n\n1. A claim written through every one of the 6 production claim_sd call sites (claimGuard, session-conflict-checker.mjs, worker-checkin.cjs tryClaim, sd-start.js, lib/sd-creation/source-adapters/qf.js, scripts/qf-start.js) results in a pick_reason-bearing claim_history/metadata entry, or a documented, tested fail-soft no-op for the QF-metadata path while the migration is unapplied.\n2. isChairmanGatedQF (lib/fleet/qf-gated-hold.cjs) is provably unaffected by any new provenance field, confirmed by a passing regression test against all 3 live chairman-gated QF fixtures.\n3. All existing claim_history/stampClaim unit tests pass unmodified; no reader of claim_history breaks.\n4. The quick_fixes.metadata migration exists, is additive-only, and the codebase functions correctly whether it is applied or not.\n5. No re-routing of the 3 already-bypassing claim_sd call sites through claimGuard(), and no new review_by/review_at tripwire script — both explicitly out of scope per the LEAD-corrected scope.\n\n## Risks & Mitigations\n\n### quick_fixes.metadata migration sits chairman-gated/unapplied indefinitely, so the QF-side pick_reason stamping never actually activates in production.\n**Probability**: MEDIUM\n**Impact**: MEDIUM\n**Mitigation**: Design the code path to be fully correct and tested in the unapplied state (fail-soft, TS-3/TS-9) so shipping does not depend on migration timing; the SD's success is defined by the code being ready, not by chairman DDL approval, which is explicitly out of scope.\n**Rollback Plan**: No rollback needed for the unapplied-migration case since nothing changes in production behavior. If the migration is later applied and causes an unexpected issue, revert via a companion DOWN migration (ALTER TABLE quick_fixes DROP COLUMN IF EXISTS metadata).\n\n### A future caller of stampClaim assumes claim_history entries always have a numeric pick_reason.score, breaking on the UNSCORED sentinel string.\n**Probability**: LOW\n**Impact**: MEDIUM\n**Mitigation**: Document the UNSCORED contract prominently in claim-stamp.cjs's docblock (mirroring comparator.cjs's own documented contract) and cover it with TS-2; any new consumer added later must type-check before arithmetic.\n**Rollback Plan**: Revert the pick_reason field addition (feature-flaggable via a simple early-return in stampClaim) if a consumer regression is discovered; the entry shape reverts to the pre-existing 3-key form.\n\n### The QF-side CAS-guarded metadata merge, being hand-rolled rather than using a shared helper (none exists for quick_fixes), introduces a subtle race distinct from the SD-side mergeMetadataKeys.\n**Probability**: LOW\n**Impact**: HIGH\n**Mitigation**: Model the QF merge query directly on mergeMetadataKeys' COALESCE(metadata, '{}'::jsonb) || $2::jsonb pattern plus an explicit WHERE claiming_session_id = $sessionId guard, and cover it with a concurrent-write test analogous to tests/unit/fleet/claim-stamp-concurrent-metadata-race.test.js.\n**Rollback Plan**: The QF-side write is fail-soft by construction (TS-4); if the race is found post-merge, disable the QF-side write path via a single guard flag while the SD-side path continues unaffected.\n\n\n---\n*Generated by LLM PRD Content Generation (GPT 5.2)*\n*Date: 2026-09-06T11:44:59.440Z*",
+  "evidence_appendix": null,
+  "backlog_items": [],
+  "sd_id": "dfdad20c-bf37-47ef-8588-0ebd82cfb874",
+  "planning_section": {
+    "quality_gates": [],
+    "risk_analysis": {},
+    "success_metrics": [],
+    "timeline_breakdown": {},
+    "implementation_steps": [],
+    "reasoning_depth_used": "standard",
+    "resource_requirements": {}
+  },
+  "reasoning_analysis": {},
+  "complexity_analysis": {},
+  "reasoning_depth": "standard",
+  "confidence_score": null,
+  "research_confidence_score": null,
+  "exploration_summary": {
+    "files_read": [
+      "lib/fleet/claim-stamp.cjs",
+      "lib/claim-guard.mjs",
+      "lib/session-conflict-checker.mjs",
+      "scripts/worker-checkin.cjs",
+      "scripts/sd-start.js",
+      "scripts/qf-start.js",
+      "lib/sd-creation/source-adapters/qf.js",
+      "lib/fleet/qf-gated-hold.cjs",
+      "lib/coordinator/safe-metadata-merge.mjs",
+      "lib/priority/comparator.cjs (Child B branch)",
+      "tests/unit/same-turn-next-claim.test.js",
+      "tests/unit/claim-identity.test.js",
+      "tests/unit/fleet/claim-stamp-concurrent-metadata-race.test.js",
+      "database/migrations/20260728_add_quick_fix_runtime_observation.sql"
+    ],
+    "key_decisions": [
+      "Extend stampClaim() rather than create a parallel writer, correcting the SD's original premise.",
+      "Defer the quick_fixes.metadata migration APPLICATION to the chairman DDL-gate process; ship the migration file and fail-soft code now.",
+      "Drop the review_by/review_at tripwire from scope as near-zero-yield and duplicative of an existing surface.",
+      "Do not touch claimGuard()'s call-site set or qf-gated-hold.cjs's predicate -- only add a non-interference regression test."
+    ],
+    "exploration_date": "2026-09-06",
+    "patterns_identified": [
+      "Atomic JSONB partial-key merge (mergeMetadataKeys) is the required pattern for strategic_directives_v2 metadata writes -- never a full-blob overwrite.",
+      "quick_fixes JSONB additive columns are bare JSONB with no DEFAULT, added via ALTER TABLE ... ADD COLUMN IF NOT EXISTS, per the runtime_observation/factory_lane/verified_at precedents.",
+      "Fail-soft column degradation (catch 42703 specifically, fall back gracefully) is the established convention in worker-checkin.cjs for staged-but-unapplied columns.",
+      "UNSCORED (never a fabricated 0) is the established sentinel for a missing scoring input, per comparator.cjs."
+    ]
+  },
+  "document_type": "prd",
+  "integration_operationalization": {
+    "consumers": [
+      {
+        "name": "Coordinator weekly review / SRE audit",
+        "frequency": "Weekly",
+        "interaction": "Reads claim_history[].pick_reason to audit whether top-ranked picks advanced the wave (MOVED-THE-NUMBER rate), per the parent SD chairman ruling."
+      },
+      {
+        "name": "Every fleet worker session (via tryClaim/claimGuard/sd-start.js)",
+        "frequency": "Every claim (continuous)",
+        "interaction": "Triggers stampClaim as a side effect of a normal claim; no direct interaction required."
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "lib/priority/comparator.cjs (Child B)",
+        "type": "upstream",
+        "contract": "Optional require; computePriorityScore(item, inputs) -> {score, components, comparatorVersion}",
+        "failure_handling": "Module absent or throws -> pick_reason.score = \"UNSCORED\", no error propagates."
+      },
+      {
+        "name": "quick_fixes.metadata column (chairman-gated migration)",
+        "type": "upstream",
+        "contract": "Bare JSONB column, additive",
+        "failure_handling": "Column absent (42703) -> QF-side stamp is a no-op, claim still succeeds."
+      }
+    ],
+    "data_contracts": [
+      {
+        "schema": "{ score: number | \"UNSCORED\", components: Record<string, number|\"UNSCORED\">, comparatorVersion: string|null }",
+        "validation": "Unit-tested shape assertions (TS-1, TS-2); no DB-level CHECK constraint (JSONB sub-shape, matching existing claim_history convention).",
+        "versioning": "comparatorVersion field carries the source formula version forward for future audit.",
+        "contract_name": "claim_history[].pick_reason"
+      }
+    ],
+    "runtime_config": {
+      "feature_flags": [],
+      "environment_variables": [],
+      "deployment_considerations": "No deployment-time flag needed; the fail-soft design means the code is safe to ship regardless of migration state."
+    },
+    "observability_rollout": {
+      "alerts": [],
+      "monitoring": [
+        "Count of claim_history entries carrying a numeric (non-UNSCORED) pick_reason.score over time, as a proxy for comparator.cjs adoption once Child B merges."
+      ],
+      "rollback_trigger": "A regression in any of the 4 existing claim_history unit suites, or a production claim failure traced to the pick_reason extension.",
+      "rollout_strategy": "Direct merge — additive-only change with fail-soft degradation, no phased rollout required.",
+      "rollback_procedure": "Revert the stampClaim extension commit; claim_history reverts to its pre-existing 3-key entry shape with no data loss (pick_reason was purely additive)."
+    }
+  },
+  "goal_summary": null,
+  "venture_id": null,
+  "smoke_test_cmd": null,
+  "activation_test_id": null
+}
