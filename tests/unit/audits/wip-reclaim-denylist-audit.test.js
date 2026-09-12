@@ -1,15 +1,45 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
+import { execFileSync } from 'node:child_process';
+
+// QF-20260912-147: this script's fetches MUST NEVER pass --depth. This repo's worktrees
+// share one .git object store, so a depth-limited `git fetch` against origin from ANY
+// worktree shallows the SHARED repository for every other worktree/session on the fleet —
+// confirmed live: running this exact script (before this fix) shallowed the root and every
+// worktree, breaking every seat's `git merge --ff-only origin/main` until the coordinator
+// ran `git fetch --unshallow`. Mocked here so this guard runs with zero real git/network.
+vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }));
+
+const {
   parseLsRemoteHeads,
   groupRefsBySha,
   findDenylistedPaths,
   runAudit,
-} from '../../../scripts/audits/wip-reclaim-denylist-audit.mjs';
+  fetchTreePaths,
+  computeBaselineTrackedPaths,
+} = await import('../../../scripts/audits/wip-reclaim-denylist-audit.mjs');
 
 // QF-20260911-567: one-shot READ-ONLY audit of existing origin wip/reclaim/* refs for
 // denylisted per-host identity paths (sibling of QF-20260911-379's forward-only guard).
 // runAudit's I/O is injectable so these tests exercise the real finding logic against a
 // fixture tree, never real git/network.
+
+describe('fetchTreePaths / computeBaselineTrackedPaths — never shallow the shared .git', () => {
+  it('fetchTreePaths never passes a --depth flag to git fetch', () => {
+    execFileSync.mockReturnValue('');
+    fetchTreePaths('wip/reclaim/QF-X/t1');
+    const fetchCall = execFileSync.mock.calls.find(([cmd, args]) => cmd === 'git' && args[0] === 'fetch');
+    expect(fetchCall).toBeTruthy();
+    expect(fetchCall[1].some((a) => String(a).startsWith('--depth'))).toBe(false);
+  });
+
+  it('computeBaselineTrackedPaths never passes a --depth flag to git fetch', () => {
+    execFileSync.mockReturnValue('');
+    computeBaselineTrackedPaths();
+    const fetchCall = execFileSync.mock.calls.find(([cmd, args]) => cmd === 'git' && args[0] === 'fetch');
+    expect(fetchCall).toBeTruthy();
+    expect(fetchCall[1].some((a) => String(a).startsWith('--depth'))).toBe(false);
+  });
+});
 
 describe('parseLsRemoteHeads', () => {
   it('extracts {sha, ref} pairs, stripping refs/heads/, and skips blank lines', () => {
