@@ -105,7 +105,9 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('createFromQF metadata propagates security_reviewed=true when the flag is set', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 5000);
+      // Window widened 5000->5300 (QF-20260912-933 added the backupPlan/deletionApproved
+      // metadata lines earlier in the function body).
+      const body = src.slice(idx, idx + 5300);
       expect(body).toMatch(/opts\.securityReviewed\s*\?\s*\{\s*security_reviewed:\s*true\s*\}/);
     });
 
@@ -113,20 +115,38 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     // --security-reviewed above -- it was silently dropped before reaching createFromQF.
     it('createFromQF metadata propagates migration_reviewed=true when the flag is set', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 5000);
+      // Window widened 5000->5300 (QF-20260912-933, same reason as above).
+      const body = src.slice(idx, idx + 5300);
       expect(body).toMatch(/opts\.migrationReviewed\s*\?\s*\{\s*migration_reviewed:\s*true\s*\}/);
     });
 
     it('CLI passes args.includes(--security-reviewed) and args.includes(--migration-reviewed) to createFromQF', () => {
       const idx = src.indexOf("args[0] === '--from-qf'");
       expect(idx).toBeGreaterThan(0);
-      // Window widened 1200->1800 (QF-20260911-484 added the qfLinkReasonIdx line and its
-      // preceding comment block earlier in this same CLI branch, pushing the createFromQF
-      // call further from the 'args[0] === --from-qf' anchor).
-      const block = src.slice(idx, idx + 1800);
+      // Window widened 1800->2100 (QF-20260912-933 added the backupPlan/deletionApproved
+      // args lines and a preceding comment earlier in this same CLI branch, pushing the
+      // createFromQF call further from the 'args[0] === --from-qf' anchor).
+      const block = src.slice(idx, idx + 2100);
       expect(block).toMatch(/securityReviewed:\s*args\.includes\(['"]--security-reviewed['"]\),/);
       expect(block).toMatch(/migrationReviewed:\s*args\.includes\(['"]--migration-reviewed['"]\),/);
       expect(block).toMatch(/await createFromQF\(args\[1\],\s*\{[\s\S]*?\}\)/);
+    });
+  });
+
+  describe('--backup-plan / --deletion-approved on --from-qf (QF-20260912-933: GR-DELETION-SAFEGUARD had no CLI flag on this route, unlike sibling GR-SECURITY-BASELINE/GR-MIGRATION-REVIEW)', () => {
+    it('createFromQF metadata propagates backup_plan=true / deletion_approved=true when the flags are set', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const body = src.slice(idx, idx + 5300);
+      expect(body).toMatch(/opts\.backupPlan\s*\?\s*\{\s*backup_plan:\s*true\s*\}/);
+      expect(body).toMatch(/opts\.deletionApproved\s*\?\s*\{\s*deletion_approved:\s*true\s*\}/);
+    });
+
+    it('CLI passes args.includes(--backup-plan) / --deletion-approved to createFromQF', () => {
+      const idx = src.indexOf("args[0] === '--from-qf'");
+      expect(idx).toBeGreaterThan(0);
+      const block = src.slice(idx, idx + 2100);
+      expect(block).toMatch(/backupPlan:\s*args\.includes\(['"]--backup-plan['"]\),/);
+      expect(block).toMatch(/deletionApproved:\s*args\.includes\(['"]--deletion-approved['"]\),/);
     });
   });
 
@@ -134,10 +154,10 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     it('CLI parses --roadmap-link-reason on the --from-qf lane and passes roadmapLinkReason to createFromQF', () => {
       const idx = src.indexOf("args[0] === '--from-qf'");
       expect(idx).toBeGreaterThan(0);
-      // Window widened 1200->1800 (QF-20260911-484 added the qfLinkReasonIdx line and its
-      // preceding comment block earlier in this same CLI branch, pushing the createFromQF
-      // call further from the 'args[0] === --from-qf' anchor).
-      const block = src.slice(idx, idx + 1800);
+      // Window widened 1800->2100 (QF-20260912-933 added the backupPlan/deletionApproved
+      // args lines and a preceding comment earlier in this same CLI branch, pushing the
+      // qfLinkReasonIdx/roadmapLinkReason lines further from the anchor).
+      const block = src.slice(idx, idx + 2100);
       expect(block).toMatch(/const qfLinkReasonIdx = args\.indexOf\(['"]--roadmap-link-reason['"]\)/);
       expect(block).toMatch(/roadmapLinkReason:\s*qfLinkReasonIdx\s*!==\s*-1\s*\?\s*args\[qfLinkReasonIdx\s*\+\s*1\]\s*:\s*null,/);
     });
