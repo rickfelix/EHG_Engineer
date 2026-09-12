@@ -21,6 +21,10 @@ function makeQueryBuilder(rows) {
   const builder = {
     select: () => builder,
     not: () => builder,
+    // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-C: loadInboxItems() now chains .or(...) after .not(...)
+    // to exclude actively-snoozed rows — the mock must accept it or every call through
+    // loadInboxItems() throws "builder.or is not a function".
+    or: () => builder,
     order: () => builder,
     range: () => Promise.resolve({ data: rows, error: null }),
   };

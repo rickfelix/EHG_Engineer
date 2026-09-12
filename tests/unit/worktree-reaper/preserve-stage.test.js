@@ -229,7 +229,8 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
     const gitRunner = makeGitRunner([
       { match: /^ls-files --others/, result: { code: 0, stdout: 'untracked.txt\n' } },
       { match: /^diff --cached --quiet/, result: { code: 1, stdout: '' } }, // has staged changes
-      { match: /^diff --cached$/, result: { code: 0, stdout: '+const x = 1;' } },
+      { match: /^diff --cached --name-only/, result: { code: 0, stdout: 'untracked.txt\n' } },
+      { match: /^diff --cached -- untracked\.txt/, result: { code: 0, stdout: 'diff --git a/untracked.txt b/untracked.txt\n+const x = 1;' } },
       { match: /^commit/, result: { code: 0, stdout: '' } },
       { match: /^push origin/, result: { code: 0, stdout: '' } },
       { match: /^rev-parse HEAD/, result: { code: 0, stdout: `${sha}\n` } },
@@ -251,7 +252,8 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
     const gitRunner = makeGitRunner([
       { match: /^ls-files --others/, result: { code: 0, stdout: '' } },
       { match: /^diff --cached --quiet/, result: { code: 1, stdout: '' } },
-      { match: /^diff --cached$/, result: { code: 0, stdout: '+const x = 1;' } },
+      { match: /^diff --cached --name-only/, result: { code: 0, stdout: 'src/foo.js\n' } },
+      { match: /^diff --cached -- src\/foo\.js/, result: { code: 0, stdout: 'diff --git a/src/foo.js b/src/foo.js\n+const x = 1;' } },
       { match: /^commit/, result: { code: 0, stdout: '' } },
       { match: /^push origin/, result: { code: 1, stdout: '', stderr: 'simulated network failure' } },
     ]);
@@ -291,7 +293,8 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
     const gitRunner = makeGitRunner([
       { match: /^ls-files --others/, result: { code: 0, stdout: '' } },
       { match: /^diff --cached --quiet/, result: { code: 1, stdout: '' } },
-      { match: /^diff --cached$/, result: { code: 0, stdout: '+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJI' } },
+      { match: /^diff --cached --name-only/, result: { code: 0, stdout: '.env.leak\n' } },
+      { match: /^diff --cached -- \.env\.leak/, result: { code: 0, stdout: 'diff --git a/.env.leak b/.env.leak\n+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJI' } },
       { match: /^reset/, result: { code: 0, stdout: '' } },
     ]);
 
@@ -306,6 +309,48 @@ describe('runPreserveStage() (TS-2 partial, TS-4, TS-5)', () => {
     expect(gitRunner.mock.calls.some((c) => c[0][0] === 'commit')).toBe(false);
     // the tree is left as found
     expect(gitRunner.mock.calls.some((c) => c[0][0] === 'reset')).toBe(true);
+  });
+
+  it('QF-20260912-698: a per-file diff read that fails (simulated ENOBUFS/runner error) fails the WHOLE tree closed -- never commits an unscanned set', async () => {
+    const logger = vi.fn();
+    const gitRunner = makeGitRunner([
+      { match: /^ls-files --others/, result: { code: 0, stdout: '' } },
+      { match: /^diff --cached --quiet/, result: { code: 1, stdout: '' } },
+      { match: /^diff --cached --name-only/, result: { code: 0, stdout: 'a/clean.js\nb/huge-file.json\n' } },
+      { match: /^diff --cached -- a\/clean\.js/, result: { code: 0, stdout: 'diff --git a/a/clean.js b/a/clean.js\n+ok;' } },
+      // Simulates the real measured failure: a single file's diff read overflows the
+      // runner's buffer and returns a nonzero code with truncated/empty stdout.
+      { match: /^diff --cached -- b\/huge-file\.json/, result: { code: 1, stdout: '', stderr: 'ENOBUFS' } },
+      { match: /^reset$/, result: { code: 0, stdout: '' } },
+    ]);
+
+    const result = await runPreserveStage(
+      { wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' },
+      { gitRunner, nowMs: NOW, logger }
+    );
+
+    expect(result.verdict).toBe(PRESERVE_VERDICT.HELD_SECRET);
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'commit')).toBe(false);
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'push')).toBe(false);
+    expect(gitRunner.mock.calls.some((c) => c[0].join(' ') === 'reset')).toBe(true);
+    expect(logger.mock.calls.some((c) => /diff read failed.*b\/huge-file\.json.*failing closed/.test(c[0]))).toBe(true);
+  });
+
+  it('QF-20260912-698: a failed --name-only enumeration also fails closed (cannot scan what it cannot list)', async () => {
+    const gitRunner = makeGitRunner([
+      { match: /^ls-files --others/, result: { code: 0, stdout: '' } },
+      { match: /^diff --cached --quiet/, result: { code: 1, stdout: '' } },
+      { match: /^diff --cached --name-only/, result: { code: 1, stdout: '', stderr: 'simulated failure' } },
+      { match: /^reset$/, result: { code: 0, stdout: '' } },
+    ]);
+
+    const result = await runPreserveStage(
+      { wtPath: '/repo/.worktrees/foo', key: 'foo', ownerSessionId: 's1' },
+      { gitRunner, nowMs: NOW }
+    );
+
+    expect(result.verdict).toBe(PRESERVE_VERDICT.HELD_SECRET);
+    expect(gitRunner.mock.calls.some((c) => c[0][0] === 'commit')).toBe(false);
   });
 
   it('pushes an already-clean (unpushed-commit-only) tree with nothing staged', async () => {
@@ -408,7 +453,8 @@ describe('runPreserveStage() never advances the checked-out branch (QF-20260904-
       const cmd = args.join(' ');
       if (/^ls-files --others/.test(cmd)) return { code: 0, stdout: 'untracked.txt\n' };
       if (/^diff --cached --quiet/.test(cmd)) return { code: 1, stdout: '' };
-      if (/^diff --cached$/.test(cmd)) return { code: 0, stdout: '+const x = 1;' };
+      if (/^diff --cached --name-only/.test(cmd)) return { code: 0, stdout: 'untracked.txt\n' };
+      if (/^diff --cached -- untracked\.txt/.test(cmd)) return { code: 0, stdout: 'diff --git a/untracked.txt b/untracked.txt\n+const x = 1;' };
       if (/^commit/.test(cmd)) return { code: 0, stdout: '' };
       if (/^rev-parse HEAD/.test(cmd)) {
         revParseCallCount += 1;
@@ -448,7 +494,8 @@ describe('runPreserveStage() never advances the checked-out branch (QF-20260904-
       const cmd = args.join(' ');
       if (/^ls-files --others/.test(cmd)) return { code: 0, stdout: '' };
       if (/^diff --cached --quiet/.test(cmd)) return { code: 1, stdout: '' };
-      if (/^diff --cached$/.test(cmd)) return { code: 0, stdout: '+const x = 1;' };
+      if (/^diff --cached --name-only/.test(cmd)) return { code: 0, stdout: 'untracked.txt\n' };
+      if (/^diff --cached -- untracked\.txt/.test(cmd)) return { code: 0, stdout: 'diff --git a/untracked.txt b/untracked.txt\n+const x = 1;' };
       if (/^commit/.test(cmd)) return { code: 0, stdout: '' };
       if (/^rev-parse HEAD/.test(cmd)) {
         revParseCallCount += 1;
@@ -696,12 +743,9 @@ describe('runPreserveStage() withholds matching files instead of holding the who
       const gitRunner = makeSequentialGitRunner([
         { match: /^ls-files --others/, results: [{ code: 0, stdout: '' }] },
         { match: /^diff --cached --quiet$/, results: [{ code: 1, stdout: '' }, { code: 1, stdout: '' }] }, // staged before AND after (safe.js remains)
-        { match: /^diff --cached$/, results: [{ code: 0, stdout: [
-          'diff --git a/src/safe.js b/src/safe.js',
-          '+const x = 1;',
-          'diff --git a/.artifacts/unit-tier-results.json b/.artifacts/unit-tier-results.json',
-          '+{"db":"postgresql://user:pass@host/db"}',
-        ].join('\n') }] },
+        { match: /^diff --cached --name-only$/, results: [{ code: 0, stdout: 'src/safe.js\n.artifacts/unit-tier-results.json\n' }] },
+        { match: /^diff --cached -- src\/safe\.js$/, results: [{ code: 0, stdout: 'diff --git a/src/safe.js b/src/safe.js\n+const x = 1;' }] },
+        { match: /^diff --cached -- \.artifacts\/unit-tier-results\.json$/, results: [{ code: 0, stdout: 'diff --git a/.artifacts/unit-tier-results.json b/.artifacts/unit-tier-results.json\n+{"db":"postgresql://user:pass@host/db"}' }] },
         { match: /^reset -- \.artifacts\/unit-tier-results\.json$/, results: [{ code: 0, stdout: '' }] },
         { match: /^commit/, results: [{ code: 0, stdout: '' }] },
         { match: /^push origin/, results: [{ code: 0, stdout: '' }] },
@@ -733,10 +777,8 @@ describe('runPreserveStage() withholds matching files instead of holding the who
       const gitRunner = makeSequentialGitRunner([
         { match: /^ls-files --others/, results: [{ code: 0, stdout: '' }] },
         { match: /^diff --cached --quiet$/, results: [{ code: 1, stdout: '' }, { code: 0, stdout: '' }] }, // staged before, clean after withholding
-        { match: /^diff --cached$/, results: [{ code: 0, stdout: [
-          'diff --git a/.artifacts/unit-tier-results.json b/.artifacts/unit-tier-results.json',
-          '+{"db":"postgresql://user:pass@host/db"}',
-        ].join('\n') }] },
+        { match: /^diff --cached --name-only$/, results: [{ code: 0, stdout: '.artifacts/unit-tier-results.json\n' }] },
+        { match: /^diff --cached -- \.artifacts\/unit-tier-results\.json$/, results: [{ code: 0, stdout: 'diff --git a/.artifacts/unit-tier-results.json b/.artifacts/unit-tier-results.json\n+{"db":"postgresql://user:pass@host/db"}' }] },
         { match: /^reset -- \.artifacts\/unit-tier-results\.json$/, results: [{ code: 0, stdout: '' }] },
         { match: /^push origin HEAD:/, results: [{ code: 0, stdout: '' }] },
         { match: /^rev-parse HEAD/, results: [{ code: 0, stdout: `${sha}\n` }] },
