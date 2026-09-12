@@ -30,7 +30,14 @@ describe('TARGET_ALREADY_TERMINAL — deferred branch (FR-1)', () => {
     const idx = src.indexOf('TARGET_ALREADY_TERMINAL');
     const deferredIdx = src.indexOf("claimResult.status === 'deferred'", idx);
     expect(deferredIdx).toBeGreaterThan(idx);
-    const elseIdx = src.indexOf('} else {', deferredIdx);
+    // QF-20260912-346 nested an if/else INSIDE the deferred branch (gating the printed
+    // remedy on hold ownership), so the first '} else {' after deferredIdx is now that
+    // inner else, not the outer deferred-vs-completed boundary. Anchor on text unique to
+    // the completed/cancelled branch instead.
+    const outerElseAnchor = 'already finished, cannot be (re)claimed';
+    const anchorIdx = src.indexOf(outerElseAnchor, deferredIdx);
+    expect(anchorIdx).toBeGreaterThan(deferredIdx);
+    const elseIdx = src.lastIndexOf('} else {', anchorIdx);
     expect(elseIdx).toBeGreaterThan(deferredIdx);
     const deferredBody = src.slice(deferredIdx, elseIdx);
     expect(deferredBody).toMatch(/buildUnparkExitCommand/);
@@ -43,5 +50,15 @@ describe('TARGET_ALREADY_TERMINAL — deferred branch (FR-1)', () => {
 
   it('imports buildUnparkExitCommand from lib/claim-guard.mjs', () => {
     expect(src).toMatch(/import\s*\{[^}]*buildUnparkExitCommand[^}]*\}\s*from\s*'\.\.\/lib\/claim-guard\.mjs'/);
+  });
+
+  it('QF-20260912-346: the deferred branch gates the printed remedy on role-seat/other-session hold', () => {
+    const idx = src.indexOf('TARGET_ALREADY_TERMINAL');
+    const deferredIdx = src.indexOf("claimResult.status === 'deferred'", idx);
+    const elseIdx = src.indexOf('} else {', deferredIdx);
+    const deferredBody = src.slice(deferredIdx, elseIdx);
+    expect(deferredBody).toMatch(/heldByRoleSeat/);
+    expect(deferredBody).toMatch(/heldByOtherSession/);
+    expect(deferredBody).toMatch(/ask the coordinator/i);
   });
 });

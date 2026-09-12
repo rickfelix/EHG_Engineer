@@ -1079,8 +1079,23 @@ async function main() {
     console.log(`\n${colors.red}${colors.bold}🚫 TARGET_ALREADY_TERMINAL${colors.reset}`);
     if (claimResult.status === 'deferred') {
       // SD-LEO-INFRA-DEFERRED-STATE-ENTRANCE-001 (FR-1): deferred is PARKED, not finished.
-      console.log(`   ${effectiveId} has status=${claimResult.status} — parked, not finished. Restore it with:`);
-      console.log(`\n   ${colors.cyan}${buildUnparkExitCommand(claimResult.sdKey || effectiveId)}${colors.reset}`);
+      console.log(`   ${effectiveId} has status=${claimResult.status} — parked, not finished.`);
+      // QF-20260912-346: only print the self-service unpark remedy when this park is the
+      // caller's OWN (no session recorded, or the same session) and held by nobody's role
+      // seat -- printing it unconditionally let a worker undo a coordinator's park three
+      // times in 25 minutes just by following this tool's own printed instruction.
+      const ROLE_SEAT_PARKERS = ['coordinator', 'adam', 'solomon', 'chairman'];
+      const parkedBy = typeof claimResult.parkedBy === 'string' ? claimResult.parkedBy.toLowerCase() : null;
+      const heldByRoleSeat = parkedBy && ROLE_SEAT_PARKERS.includes(parkedBy);
+      const heldByOtherSession = Boolean(claimResult.parkedBySession) && claimResult.parkedBySession !== session.session_id;
+      if (heldByRoleSeat || heldByOtherSession) {
+        console.log(`   PARKED by ${claimResult.parkedBy || 'unknown'}${claimResult.parkedBySession ? ` (session ${claimResult.parkedBySession})` : ''} — ask the coordinator before unparking.`);
+        if (claimResult.parkReleaseCondition) console.log(`   Release condition: ${claimResult.parkReleaseCondition}`);
+        if (claimResult.parkReviewAt) console.log(`   Review at: ${claimResult.parkReviewAt}`);
+      } else {
+        console.log(`   Restore it with:`);
+        console.log(`\n   ${colors.cyan}${buildUnparkExitCommand(claimResult.sdKey || effectiveId)}${colors.reset}`);
+      }
     } else {
       console.log(`   ${effectiveId} has status=${claimResult.status} — already finished, cannot be (re)claimed.`);
       console.log(`   Completed: ${sd.completion_date || sd.updated_at || 'unknown'}${sd.updated_by ? ` (updated_by: ${sd.updated_by})` : ''}`);
