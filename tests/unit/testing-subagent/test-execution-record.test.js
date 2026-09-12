@@ -29,9 +29,22 @@ describe('isMeasuredExecution', () => {
     expect(isMeasuredExecution(buildTestExecution({ executed: 0 }))).toBe(false);
   });
 
-  it('false for undefined/null/malformed input — never throws', () => {
-    expect(isMeasuredExecution(undefined)).toBe(false);
-    expect(isMeasuredExecution(null)).toBe(false);
-    expect(isMeasuredExecution('not an object')).toBe(false);
+  // SUPERSEDES the old "false for undefined/null/malformed input" expectation (RCA
+  // 2026-09-02, SD-LEARN-FIX-ADDRESS-IMPROVEMENT-LEARN-012 FR-1 corrective): `false` must mean
+  // "confirmed tests_executed===0", never "cannot tell". Collapsing both into `false` is what
+  // silently hard-blocked legacy partial-shape rows at the EXEC-TO-PLAN gate.
+  it('null for undefined/null/malformed input — cannot confirm, not confirmed-zero — never throws', () => {
+    expect(isMeasuredExecution(undefined)).toBeNull();
+    expect(isMeasuredExecution(null)).toBeNull();
+    expect(isMeasuredExecution('not an object')).toBeNull();
+  });
+
+  it('null when tests_executed key is absent, even with other counters present (legacy partial shape)', () => {
+    expect(isMeasuredExecution({ tests_passed: 960, tests_failed: 0 })).toBeNull();
+    expect(isMeasuredExecution({ tests_run: 224, tests_passed: 224 })).toBeNull();
+  });
+
+  it('null when tests_executed IS present but the other three keys are not — incomplete shape never trusted as measured, even at >0', () => {
+    expect(isMeasuredExecution({ tests_executed: 500, tests_failed: 500 })).toBeNull();
   });
 });
