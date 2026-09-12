@@ -7,6 +7,7 @@
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -119,7 +120,9 @@ async function main() {
   console.log(`OK: ${SD_KEY} LEAD evaluation fields written and verified.`);
 }
 
-main().catch((err) => {
-  console.error('FAILED:', err.message);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error('FAILED:', err.message);
+    process.exit(1);
+  });
+}
