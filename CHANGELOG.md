@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-12](#2026-09-12)
+  - [Infrastructure](#infrastructure-12)
 - [2026-09-11](#2026-09-11)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -195,6 +197,15 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-12
+
+### Infrastructure
+
+- **Staged (not applied) a content-column WHEN-clause allowlist for the feedback append-only trigger, unparking 7 children of SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001** - SD-LEO-INFRA-FEEDBACK-LIFECYCLE-UPDATE-ALLOWLIST-001 (PR #8707)
+  - The 20260907 `feedback_no_update` trigger rejects every UPDATE unconditionally, on a premise SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001's census falsified: 41 live `.update()` call sites write lifecycle columns (status, resolution tracking, triage, assignment, promotion, dedup counters), all broken since the trigger applied 2026-09-08. Per chairman decision `ba4055b7` (option A, carried by Adam), `database/chairman-gated/20260912_feedback_no_update_lifecycle_allowlist.sql` (+ `_DOWN` sibling) replaces the trigger's unconditional body with a `WHEN` clause guarding content columns only (title, description, category, etc.) -- lifecycle columns become freely updatable again. `feedback_freeze()`, `feedback_no_delete_trg`, and `feedback_no_truncate_trg` are untouched; never an in-place edit of the applied 20260907 file.
+  - Column classification is evidence-grounded: `database/schema-reference-snapshot.json` cross-referenced against an exhaustive repo-wide grep of every `.from('feedback').update()` call site, not guessed from column names. A 15-case migration-shape unit test (`tests/unit/migrations/feedback-no-update-lifecycle-allowlist-migration-shape.test.js`) pins the direction (content columns guarded, lifecycle columns excluded) so a future "simplification" can't silently invert it.
+  - Two genuinely separate defects surfaced by the census, filed rather than folded in: `QF-20260912-316` (`burst-detector.js` mutates `feedback.title`, genuine content, silently broken since 09-08) and `QF-20260912-253` (3 call sites write 6 columns that don't exist on the table at all). A third, more structural finding -- `scripts/verify-migration-apply-state.mjs`'s trigger check is name-existence-only with no content/WHEN-clause comparison, so a migration that *redefines* an existing trigger can be falsely reported APPLIED -- is filed as `QF-20260912-708`; this SD's own `CHAIRMAN_APPLY_VERIFICATION` gate result should not be read as proof the live trigger has actually changed. Apply remains strictly the chairman's 3c ceremony (`@approved-by` still `<PENDING>`).
 
 ## 2026-09-11
 
