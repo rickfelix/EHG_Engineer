@@ -113,6 +113,10 @@ async function releaseClaim(supabase, sd) {
     sdKey: sd.sd_key,
     holderSessionId: sd.claiming_session_id,
     reason: 'cold_recovery_orphan',
+    // QF-20260912-175: explicit, not the default. A cold-recovery orphan's holder session is
+    // presumed gone (the coordinator itself just cold-started) — 'released' is the genuine
+    // reconcile semantic this path exists for.
+    sessionStatus: 'released',
   });
   if (r.error) throw new Error(`releaseClaim failed for ${sd.sd_key}: ${r.error}`);
 }

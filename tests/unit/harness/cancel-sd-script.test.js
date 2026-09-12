@@ -45,13 +45,15 @@ describe('QF-20260509-CANCEL-SD: cancel-sd.js canonical script', () => {
     expect(src).toMatch(/cancellation_reason:\s*reason/);
   });
 
-  it('releases claude_sessions row scoped to the SD-being-cancelled', () => {
+  it('clears the CLAIM on claude_sessions scoped to the SD-being-cancelled, via the shared status helper', () => {
     const src = fs.readFileSync(scriptPath, 'utf-8');
     expect(src).toMatch(/from\(['"]claude_sessions['"]\)/);
-    // SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-E: the literal now routes through the shared
-    // terminalSessionUpdate('released', {...}) chokepoint (adds is_alive:false) rather than a
-    // bare `status: 'released'` object literal.
-    expect(src).toMatch(/status:\s*'released'|terminalSessionUpdate\(\s*['"]released['"]/);
+    // QF-20260912-175: a cancel is a CLAIM release, not necessarily a SESSION exit — the literal
+    // routes through the shared sessionStatusUpdate(exiting ? 'released' : 'idle', {...})
+    // chokepoint (only the exiting=true branch adds is_alive:false), never an unconditional
+    // `status: 'released'` object literal.
+    expect(src).toMatch(/sessionStatusUpdate\(\s*exiting\s*\?\s*['"]released['"]\s*:\s*['"]idle['"]/);
+    expect(src).toMatch(/exiting\s*=\s*args\.includes\(['"]--exiting['"]\)/);
     // Must filter by both session_id AND sd_key (not blind release)
     expect(src).toMatch(/\.eq\(['"]session_id['"],\s*claimedSessionId\)/);
     expect(src).toMatch(/\.eq\(['"]sd_key['"],\s*sd\.sd_key\)/);

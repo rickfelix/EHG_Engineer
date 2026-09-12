@@ -6,6 +6,8 @@ import {
   classifySeat,
   absentFromClaudeImages,
   isSeatReconcileEnabled,
+  reinstateSeat,
+  REINSTATE_MAX_HEARTBEAT_AGE_MS,
 } from '../../../scripts/reconcile-seats.mjs';
 import { MIN_ACTIVITY_SAMPLE_GAP_MS } from '../../../lib/fleet/console-reaper.mjs';
 
@@ -124,5 +126,95 @@ describe('FR5-SEAT / QF-20260911-969: seats classify concurrently, not sequentia
     expect(peak).toBeGreaterThan(1); // proves concurrent, not one-at-a-time
     expect(elapsedMs).toBeLessThan(20 * seats.length); // far below the sequential N x 20ms bound
     expect(r.examined).toBe(3);
+  });
+});
+
+// QF-20260912-175 (c): reinstateSeat is the sanctioned reversal for a seat that was released
+// while its process was actually still alive. It must REFUSE unless both a fresh heartbeat AND
+// a verifiably live pid are present — the only two things this module has ever trusted for
+// liveness — never reviving a genuinely dead seat.
+describe('QF-20260912-175: reinstateSeat', () => {
+  function makeDb(row) {
+    const state = { ...row };
+    const updates = [];
+    return {
+      state,
+      updates,
+      from() {
+        const b = {
+          select() { return b; },
+          update(payload) { b._payload = payload; return b; },
+          eq(k, v) { b._filters = { ...(b._filters || {}), [k]: v }; return b; },
+          async maybeSingle() { return { data: { ...state }, error: null }; },
+          then(onF, onR) {
+            // Only reached via .update(...).eq(...).eq(...) (no maybeSingle chained after)
+            const matches = Object.entries(b._filters || {}).every(([k, v]) => state[k] === v);
+            if (matches) { updates.push({ ...b._payload }); Object.assign(state, b._payload); }
+            return Promise.resolve({ error: null }).then(onF, onR);
+          },
+        };
+        return b;
+      },
+    };
+  }
+
+  const freshHeartbeat = new Date(Date.now() - 60_000).toISOString(); // 1 min ago
+
+  it('refuses without a reason (unattributed reinstate)', async () => {
+    const db = makeDb({ session_id: 's1', status: 'released', pid: 42, heartbeat_at: freshHeartbeat });
+    const r = await reinstateSeat(db, 's1', { probePid: () => 'MATCH' });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/reason is required/);
+    expect(db.updates).toHaveLength(0);
+  });
+
+  it('refuses a stale heartbeat even with a live pid — never revives a possibly-dead seat', async () => {
+    const staleHeartbeat = new Date(Date.now() - (REINSTATE_MAX_HEARTBEAT_AGE_MS + 60_000)).toISOString();
+    const db = makeDb({ session_id: 's1', status: 'released', pid: 42, heartbeat_at: staleHeartbeat });
+    const r = await reinstateSeat(db, 's1', { reason: 'test', probePid: () => 'MATCH' });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/heartbeat too stale/);
+    expect(db.updates).toHaveLength(0);
+  });
+
+  it('refuses when the pid does not verifiably belong to a live claude.exe', async () => {
+    const db = makeDb({ session_id: 's1', status: 'released', pid: 42, heartbeat_at: freshHeartbeat });
+    const r = await reinstateSeat(db, 's1', { reason: 'test', probePid: () => 'NO_MATCH' });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/pid not verifiably live/);
+    expect(db.updates).toHaveLength(0);
+  });
+
+  it('refuses a PROBE_FAILED pid check (unknown must never collapse to "alive")', async () => {
+    const db = makeDb({ session_id: 's1', status: 'released', pid: 42, heartbeat_at: freshHeartbeat });
+    const r = await reinstateSeat(db, 's1', { reason: 'test', probePid: () => 'PROBE_FAILED' });
+    expect(r.ok).toBe(false);
+  });
+
+  it('refuses a row that is not currently released (nothing to reinstate)', async () => {
+    const db = makeDb({ session_id: 's1', status: 'idle', pid: 42, heartbeat_at: freshHeartbeat });
+    const r = await reinstateSeat(db, 's1', { reason: 'test', probePid: () => 'MATCH' });
+    expect(r.ok).toBe(false);
+    expect(r.reason).toMatch(/not 'released'/);
+  });
+
+  it('reinstates to idle when the row holds no sd_key', async () => {
+    const db = makeDb({ session_id: 's1', status: 'released', pid: 42, heartbeat_at: freshHeartbeat, sd_key: null, metadata: { foo: 'bar' } });
+    const r = await reinstateSeat(db, 's1', { reason: 'live the whole time', by: 'operator', probePid: () => 'MATCH' });
+    expect(r.ok).toBe(true);
+    expect(r.targetStatus).toBe('idle');
+    expect(db.state.status).toBe('idle');
+    expect(db.state.is_alive).toBe(true);
+    expect(db.state.released_at).toBeNull();
+    expect(db.state.released_reason).toBeNull();
+    expect(db.state.metadata).toMatchObject({ foo: 'bar', reinstated_by: 'operator', reinstated_reason: 'live the whole time' });
+  });
+
+  it('reinstates to active when the row still holds a claimed sd_key', async () => {
+    const db = makeDb({ session_id: 's1', status: 'released', pid: 42, heartbeat_at: freshHeartbeat, sd_key: 'SD-X', metadata: {} });
+    const r = await reinstateSeat(db, 's1', { reason: 'test', probePid: () => 'MATCH' });
+    expect(r.ok).toBe(true);
+    expect(r.targetStatus).toBe('active');
+    expect(db.state.status).toBe('active');
   });
 });
