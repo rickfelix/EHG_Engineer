@@ -1,0 +1,115 @@
+{
+  "executive_summary": "PAT-LES-5fdc0399f479: lib/eva/decision-filter-engine.js's low_score trigger is a two-tier check (min_score for a HIGH-severity floor, chairman_review_score for a MEDIUM-severity ceiling, per the Vision v4.7 redesign), but the chairman_review_score preference key was undocumented across all three places the EVA decision-filter preferences are documented -- a downstream consumer reading the docs would not know the key exists or that low_score has two tiers at all. LEAD-TO-PLAN's own mechanism-claim-verifier gate caught that the pattern's stated default (9) does not match the source (3.0); this PRD's scope is documentation-only, using the verified value. No code behavior changes.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Document the two-tier low_score trigger in filter-triggers.md (the canonical per-trigger reference)",
+      "description": "Rewrite Trigger 4's Configuration and Evaluation Logic sections in docs/guides/workflow/cli-venture-lifecycle/reference/filter-triggers.md to show both filter.min_score (default 2.0, HIGH floor) and filter.chairman_review_score (default 3.0, MEDIUM ceiling, verified at lib/eva/decision-filter-engine.js:75), the real three-way branch, and the stage 3/5 STAGE_SCORE_THRESHOLDS overrides. Correct the pre-existing wrong key name (filter.min_score_threshold -> filter.min_score). Add a caveat flagging that the adjacent Score Interpretation / Chairman Override Capability subsections still assume an unverified 0-10 scale, left unfixed as a separate, deeper finding.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "filter-triggers.md's Trigger 4 Configuration table lists both preference keys with their verified defaults",
+        "The Evaluation Logic block shows the HIGH/MEDIUM/no-trigger three-way branch, not a single IF/THEN",
+        "filter.min_score_threshold no longer appears anywhere in the file"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Document the same two-tier trigger in gate-thresholds.md (summary table, detailed section, override table, and illustrative DEFAULTS block)",
+      "description": "Update all four places docs/guides/workflow/cli-venture-lifecycle/reference/gate-thresholds.md mentions the low_score trigger or its key: the #4 row in the Trigger Threshold Summary table, the '4. low_score' detailed subsection, the 'Filter: low_score' row in the Chairman Preference Overrides table, and the min_score_threshold line in the illustrative DEFAULTS code sample -- each corrected to filter.min_score (2.0) and filter.chairman_review_score (3.0).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "All four locations in gate-thresholds.md show both keys with default 2.0/3.0",
+        "filter.min_score_threshold no longer appears anywhere in the file",
+        "The illustrative DEFAULTS block's other, unrelated keys (gross_margin_min, breakeven_months_max, etc.) are left untouched -- confirmed pre-existing and out of this SD's scope"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Document the same two-tier trigger in 03-decision-filter-engine.md (the primary narrative doc)",
+      "description": "Update docs/guides/workflow/cli-venture-lifecycle/03-decision-filter-engine.md's '### 4. low_score' narrative section, its Preference Key Mapping table, and its Conservative Defaults table. This file already used the correct key name (filter.min_score) but showed a stale default of 7 (actual: 2.0) and had no mention of chairman_review_score at all -- found by an independent Explore sub-agent check, not named in the SD's original two-file scope.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "03-decision-filter-engine.md's low_score section documents both min_score (2.0) and chairman_review_score (3.0)",
+        "The stale '7 (out of 10)' default no longer appears in this file's Conservative Defaults table",
+        "Preference Key Mapping table has a row for chairman_review_score"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No code changes -- documentation only",
+      "description": "This SD touches zero files under lib/ or scripts/ (other than the one-off sub-agent-evidence script required by the LEO protocol itself). The fix is three markdown edits verified against the live, unmodified source file lib/eva/decision-filter-engine.js.",
+      "priority": "high"
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Documented defaults match source",
+      "type": "manual-verification",
+      "expected": "Every numeric default cited in the three edited docs matches the corresponding DEFAULTS/STAGE_SCORE_THRESHOLDS entry in lib/eva/decision-filter-engine.js"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "No stale key-name references remain",
+      "type": "grep",
+      "expected": "grep -r 'min_score_threshold' docs/guides/workflow/cli-venture-lifecycle/ returns zero matches"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Two-tier branching logic described consistently across all three files",
+      "type": "manual-verification",
+      "expected": "filter-triggers.md, gate-thresholds.md, and 03-decision-filter-engine.md each describe the same HIGH/MEDIUM/no-trigger branch and the same stage 3/5 override values (2.5/2.8/3.6/3.7), with no file contradicting another"
+    }
+  ],
+  "acceptance_criteria": [
+    "filter.chairman_review_score is documented in all three target files with its correct default (3.0) and the two-tier evaluation logic",
+    "The pre-existing wrong key name (filter.min_score_threshold) and stale min_score defaults (6/7 out of 10) are corrected to the real key (filter.min_score) and real default (2.0) everywhere they appeared in the same sections being edited",
+    "No lib/ or scripts/ production code is modified"
+  ],
+  "risks": [
+    {
+      "risk": "The SD's own stated defect premise (default 9) is factually wrong, which could mislead a PLAN/EXEC pass that trusted the SD text verbatim instead of the source file",
+      "mitigation": "Verified independently via an Explore sub-agent against lib/eva/decision-filter-engine.js:63,75 before any doc edit; the mechanism-claim-verifier gate's remediation (metadata.mechanism_verifications) records the citation and the correction on the SD record itself."
+    },
+    {
+      "risk": "docs/guides/workflow/cli-venture-lifecycle/reference/gate-thresholds.md's broader DEFAULTS illustration block mixes in several keys (gross_margin_min, breakeven_months_max, etc.) that do not belong to decision-filter-engine.js at all -- a pre-existing, separate staleness this SD does not fix",
+      "mitigation": "Out of scope, named explicitly here and in the completion attestation so it is not mistaken for 'already checked'."
+    },
+    {
+      "risk": "Other EVA-adjacent docs (05-chairman-preferences.md, reference/chairman-decisions.md, reference/kill-gates.md, and ~8 more) were matched during the Explore pass but contain no min_score/chairman_review_score threshold documentation at all -- a reader could assume they were also checked-and-clean for THIS specific key when they simply never mentioned it",
+      "mitigation": "Confirmed via Explore sub-agent evidence (stored, LEAD-TO-PLAN gate) that these files were searched and found to not reference the threshold values in question; no edit was needed or made to them."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Any engineer or EVA-stage author reading docs/guides/workflow/cli-venture-lifecycle/ to understand available chairman preference keys"
+    ],
+    "dependencies": [
+      "lib/eva/decision-filter-engine.js (read-only -- source of truth for all documented values)"
+    ]
+  },
+  "system_architecture": {
+    "summary": "No architecture change. Three markdown reference documents are brought into agreement with the already-shipped two-tier low_score implementation in lib/eva/decision-filter-engine.js.",
+    "components": ["docs/guides/workflow/cli-venture-lifecycle/reference/filter-triggers.md", "docs/guides/workflow/cli-venture-lifecycle/reference/gate-thresholds.md", "docs/guides/workflow/cli-venture-lifecycle/03-decision-filter-engine.md"]
+  },
+  "implementation_approach": {
+    "summary": "Verify-then-document: an Explore sub-agent independently confirmed the live PREFERENCE_KEYS/DEFAULTS/STAGE_SCORE_THRESHOLDS values and found a third undocumented file beyond the two named candidates, before any markdown edit was made. Each edit cites the exact source line it reflects."
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "grep -rn 'chairman_review_score' docs/guides/workflow/cli-venture-lifecycle/",
+      "expected_outcome": "Matches in filter-triggers.md, gate-thresholds.md, and 03-decision-filter-engine.md, each showing default 3.0"
+    },
+    {
+      "step_number": 2,
+      "instruction": "grep -rn 'min_score_threshold' docs/guides/workflow/cli-venture-lifecycle/",
+      "expected_outcome": "No matches"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEARN-FIX-ADDRESS-PAT-LES-009"
+  }
+}

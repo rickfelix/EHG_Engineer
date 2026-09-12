@@ -374,11 +374,20 @@ terminology.
 
 ### 4. low_score
 
-**Severity**: MEDIUM
-**Checks**: Whether `input.score` is below the minimum threshold
-**Preference key**: `filter.min_score`
-**Default**: 7 (out of 10)
-**Trigger message**: "Score X/10 below threshold Y/10"
+Two-tier per Vision v4.7 (PAT-LES-5fdc0399f479): the severity depends on which of two
+thresholds the score falls below.
+
+**Severity**: HIGH when `input.score` is below `filter.min_score`; MEDIUM when it is at or
+above `filter.min_score` but below `filter.chairman_review_score`
+**Checks**: Whether `input.score` is below the minimum threshold (HIGH) or the
+chairman-review threshold (MEDIUM)
+**Preference keys**: `filter.min_score` (HIGH floor, default 2.0) and
+`filter.chairman_review_score` (MEDIUM ceiling, default 3.0)
+**Trigger message**: "Score X below threshold Y"
+
+Stages 3 and 5 use their own override thresholds instead of these global defaults (stage 3
+is an advisory/non-blocking kill; stage 5 is the authoritative blocking kill) — see
+`STAGE_SCORE_THRESHOLDS` in `lib/eva/decision-filter-engine.js`.
 
 ### 5. novel_pattern
 
@@ -410,7 +419,8 @@ value changes and structural changes in constraint objects.
 | Trigger Type | Preference Key | Value Type |
 |-------------|---------------|------------|
 | cost_threshold | `filter.cost_max_usd` | number |
-| low_score | `filter.min_score` | number |
+| low_score (HIGH floor) | `filter.min_score` | number |
+| low_score (MEDIUM ceiling) | `filter.chairman_review_score` | number |
 | new_tech_vendor (tech) | `filter.approved_tech_list` | string[] |
 | new_tech_vendor (vendors) | `filter.approved_vendor_list` | string[] |
 | strategic_pivot | `filter.pivot_keywords` | string[] |
@@ -429,7 +439,8 @@ engine uses these defaults:
 | Preference Key | Default Value | Rationale |
 |---------------|---------------|-----------|
 | `filter.cost_max_usd` | 10,000 | Low threshold forces review of significant costs |
-| `filter.min_score` | 7 | Requires above-average quality to auto-proceed |
+| `filter.min_score` | 2.0 | Below this, the trigger fires HIGH severity (chairman review required) |
+| `filter.chairman_review_score` | 3.0 | Below this (but at/above min_score), the trigger fires MEDIUM severity (proceed with caution) |
 | `filter.approved_tech_list` | [] (empty) | No pre-approved tech; all tech triggers review |
 | `filter.approved_vendor_list` | [] (empty) | No pre-approved vendors; all vendors trigger review |
 | `filter.pivot_keywords` | ["pivot", "rebrand", "abandon", "restart", "scrap"] | Common pivot indicators |
