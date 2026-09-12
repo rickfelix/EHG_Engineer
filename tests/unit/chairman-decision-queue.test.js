@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   parseArgs, routeDecision, effectivePriority, sortPending, priorityRank,
   partitionQueue, isTerminalRecord, isCorrectiveFinding, renderPendingLine,
-  deferralActorLabel, USAGE,
+  deferralActorLabel, USAGE, diffVentureSnapshot,
 } from '../../lib/chairman/decision-queue.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -220,7 +220,25 @@ describe('routing — each decision_type maps to exactly one writer', () => {
   it('chairman_approval RPC actions are approved/rejected', async () => {
     const w = mockWriters();
     await routeDecision({ decisionType: 'chairman_approval', id: 'a', decision: 'approve' }, w);
-    expect(w.chairmanDecide).toHaveBeenCalledWith('a', 'approved', undefined);
+    expect(w.chairmanDecide).toHaveBeenCalledWith('a', 'approved', undefined, undefined);
+  });
+
+  // QF-20260912-547: --force-stale must reach the chairmanDecide writer so it can pass
+  // p_force_stale to the live RPC.
+  it('parseArgs extracts --force-stale on decide', () => {
+    const p = parseArgs(['decide', 'chairman_approval:x-1', 'approve', '--rationale', 'ok', '--force-stale']);
+    expect(p).toMatchObject({ command: 'decide', decision: 'approve', rationale: 'ok', forceStale: true });
+  });
+
+  it('parseArgs defaults forceStale to false when --force-stale is absent', () => {
+    const p = parseArgs(['decide', 'chairman_approval:x-1', 'approve', '--rationale', 'ok']);
+    expect(p.forceStale).toBe(false);
+  });
+
+  it('routeDecision propagates forceStale through to chairmanDecide', async () => {
+    const w = mockWriters();
+    await routeDecision({ decisionType: 'chairman_approval', id: 'a', decision: 'approve', rationale: 'r', forceStale: true }, w);
+    expect(w.chairmanDecide).toHaveBeenCalledWith('a', 'approved', 'r', true);
   });
 
   it('flag_review reject maps to wont_fix; approve maps to resolved', async () => {
@@ -403,5 +421,43 @@ describe('SD-LEO-FIX-FIX-DOMAIN-REGISTRAR-001 FR-4 — parseArgs acquisition res
   it('USAGE documents acquisition resolve and its independent-re-check guarantee', () => {
     expect(USAGE).toMatch(/acquisition resolve <decisionId> --verified-not-registered/);
     expect(USAGE).toMatch(/never trusted on its own/);
+  });
+});
+
+// QF-20260912-427: diffVentureSnapshot is the pure predicate behind the STALE_CONTEXT
+// auto-retry-vs-refuse decision — no field changed -> safe to auto-retry; a field changed ->
+// surface it and stop; no snapshot to compare -> "unknowable", never silently treated as safe.
+describe('diffVentureSnapshot', () => {
+  const snapshot = { name: 'AltifyAI', status: 'active', current_lifecycle_stage: 5, deployment_url: null };
+
+  it('comparable + unchanged when every snapshotted field still matches (only updated_at moved)', () => {
+    const live = { ...snapshot };
+    expect(diffVentureSnapshot(snapshot, live)).toEqual({ comparable: true, changed: false, changedFields: [] });
+  });
+
+  it('comparable + changed, naming exactly the field(s) that differ', () => {
+    const live = { ...snapshot, status: 'paused' };
+    const d = diffVentureSnapshot(snapshot, live);
+    expect(d).toEqual({ comparable: true, changed: true, changedFields: ['status'] });
+  });
+
+  it('reports multiple changed fields', () => {
+    const live = { ...snapshot, status: 'paused', deployment_url: 'https://new.example' };
+    const d = diffVentureSnapshot(snapshot, live);
+    expect(d.changedFields.sort()).toEqual(['deployment_url', 'status']);
+  });
+
+  it('not comparable when there is no snapshot (a decision minted before this fix) — never reads as safe', () => {
+    expect(diffVentureSnapshot(null, { name: 'x' })).toEqual({ comparable: false, changed: false, changedFields: [] });
+  });
+
+  it('not comparable when the live venture could not be fetched', () => {
+    expect(diffVentureSnapshot(snapshot, null)).toEqual({ comparable: false, changed: false, changedFields: [] });
+  });
+
+  it('treats null and undefined as equivalent (a snapshot predating a field is not a false change)', () => {
+    const older = { name: 'x', status: null, current_lifecycle_stage: null, deployment_url: null };
+    const live = { name: 'x', status: undefined, current_lifecycle_stage: undefined, deployment_url: undefined };
+    expect(diffVentureSnapshot(older, live)).toEqual({ comparable: true, changed: false, changedFields: [] });
   });
 });

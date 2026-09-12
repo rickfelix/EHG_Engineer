@@ -340,23 +340,66 @@ describe('releaseHeldSend — refusal cases + success', () => {
     expect(stampWrite.vals.last_error).toContain('ans-2');
   });
 
-  it('FIX 2: an unanswered hold past hold_expires_at is abandoned (never left immortal in status=held)', async () => {
+  it('FIX 2: an unanswered hold past hold_expires_at with a LIVE Solomon oracle (implicit decline) is abandoned (never left immortal in status=held)', async () => {
     const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null }));
     const sendChairmanSMS = vi.fn();
     const enqueueChairmanSmsFn = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    // QF-20260912-079: Solomon LIVE at expiry -> this is the "declined" bucket, abandon stands.
+    const getActiveSolomonId = vi.fn(async () => 'solomon-live-session');
     const supabase = makeFakeSupabase();
     const outcome = await releaseHeldSend(
       supabase,
       heldRow({ hold_expires_at: '2026-01-01T00:00:00Z' }),
-      { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS, enqueueChairmanSms: enqueueChairmanSmsFn, context: { now: Date.parse('2026-01-02T00:00:00Z') } },
+      { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS, enqueueChairmanSms: enqueueChairmanSmsFn, getActiveSolomonId, context: { now: Date.parse('2026-01-02T00:00:00Z') } },
     );
     expect(outcome).toMatchObject({ action: 'abandoned', reason: 'consult_hold_expired_unanswered', heldSendId: 'held-1', noticeEnqueued: true });
     const abandonWrite = supabase.writes.find((w) => w.vals.status === 'abandoned');
     expect(abandonWrite).toBeTruthy();
     expect(abandonWrite.vals.metadata.void_reason).toContain('QF-20260905-746');
+    expect(abandonWrite.vals.metadata.void_reason).toContain('live Solomon oracle simply never answered');
     expect(enqueueChairmanSmsFn).toHaveBeenCalledTimes(1);
     expect(enqueueChairmanSmsFn.mock.calls[0][1]).toMatchObject({ kind: 'heartbeat_status', dedupeKey: 'chairman-held-sends-abandoned:held-1' });
     expect(sendChairmanSMS).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260912-079: an unanswered hold past hold_expires_at with an ABSENT Solomon oracle is DEFERRED once, not abandoned', async () => {
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null }));
+    const sendChairmanSMS = vi.fn();
+    const enqueueChairmanSmsFn = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-2' }));
+    // No live Solomon session found -> the oracle is ABSENT, not declined.
+    const getActiveSolomonId = vi.fn(async () => null);
+    const supabase = makeFakeSupabase();
+    const outcome = await releaseHeldSend(
+      supabase,
+      heldRow({ hold_expires_at: '2026-01-01T00:00:00Z' }),
+      { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS, enqueueChairmanSms: enqueueChairmanSmsFn, getActiveSolomonId, context: { now: Date.parse('2026-01-02T00:00:00Z') } },
+    );
+    expect(outcome).toMatchObject({ action: 'deferred', reason: 'consult_hold_expired_oracle_absent', heldSendId: 'held-1', noticeEnqueued: true });
+    expect(outcome.newExpiresAt).toBeTruthy();
+    const deferWrite = supabase.writes.find((w) => w.vals.metadata && w.vals.metadata.qf_20260912_079_deferred_at);
+    expect(deferWrite).toBeTruthy();
+    expect(deferWrite.vals.hold_expires_at).toBe(outcome.newExpiresAt);
+    expect(supabase.writes.some((w) => w.vals.status === 'abandoned')).toBe(false);
+    expect(enqueueChairmanSmsFn).toHaveBeenCalledTimes(1);
+    expect(enqueueChairmanSmsFn.mock.calls[0][1]).toMatchObject({ kind: 'heartbeat_status', dedupeKey: 'chairman-held-sends-deferred:held-1' });
+    expect(sendChairmanSMS).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260912-079: a hold already deferred once for an absent oracle abandons on the SECOND expiry, even if still absent', async () => {
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null }));
+    const sendChairmanSMS = vi.fn();
+    const enqueueChairmanSmsFn = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-3' }));
+    const getActiveSolomonId = vi.fn(async () => null); // still absent
+    const supabase = makeFakeSupabase();
+    const outcome = await releaseHeldSend(
+      supabase,
+      heldRow({ hold_expires_at: '2026-01-02T00:00:00Z', metadata: { qf_20260912_079_deferred_at: '2026-01-01T00:00:00Z' } }),
+      { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS, enqueueChairmanSms: enqueueChairmanSmsFn, getActiveSolomonId, context: { now: Date.parse('2026-01-03T00:00:00Z') } },
+    );
+    expect(outcome).toMatchObject({ action: 'abandoned', reason: 'consult_hold_expired_unanswered', heldSendId: 'held-1' });
+    const abandonWrite = supabase.writes.find((w) => w.vals.status === 'abandoned');
+    expect(abandonWrite.vals.metadata.void_reason).toContain('already given one deferral window');
+    expect(enqueueChairmanSmsFn.mock.calls[0][1].body).toContain('re-checked once');
   });
 
   it('FIX 2: an unanswered hold NOT yet past hold_expires_at stays held (no premature abandonment)', async () => {
