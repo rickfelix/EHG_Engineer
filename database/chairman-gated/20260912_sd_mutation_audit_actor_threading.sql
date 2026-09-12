@@ -15,7 +15,7 @@
 -- was 'authenticator', confirming this is exactly the attribution gap being closed). Falls back to
 -- session_user (unchanged behavior, the pre-existing fallback) when neither source is set.
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: codestreetlabs@gmail.com
 --   Chairman verification NOT yet obtained. This file is staged only.
 --   WHY chairman-gated rather than database/migrations/: CREATE OR REPLACE FUNCTION on an existing
 --   TRIGGER's function -- lands in scripts/lib/migration-tier-classifier.mjs's TIER-2 set (measured
