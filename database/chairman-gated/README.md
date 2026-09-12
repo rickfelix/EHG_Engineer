@@ -1367,15 +1367,15 @@ The sole write path is `lib/chairman/ratification-verification-store.mjs`'s
 not exist yet, so `lib/chairman/ratification-writer.mjs`'s `markRatificationEncoded` never depended
 on this migration landing to keep encoding: recording is best-effort, not a gate. Two callers:
 the live encode path (`markRatificationEncoded`, `attempt_kind='live_encode'`), and a one-off
-legacy-row audit, `scripts/one-off/backfill-ratification-verification-audit-20260911.mjs` — a
-dry-run-by-default script classifying every already-encoded `chairman_ratifications` row against
-its OWN historical `encoded_at` (never "now"), recording `attempt_kind='legacy_backfill_audit'`.
-Delete that one-off script after its single successful `--apply` run, per this repo's one-off
-convention.
+legacy-row audit that ran once against production immediately after this migration was applied
+(2026-09-12) — 99 already-encoded `chairman_ratifications` rows classified against their OWN
+historical `encoded_at` (never "now"): 73 `verified`, 26 `marker_absent`, 0 `no_commit_pin`. The
+script (`scripts/one-off/backfill-ratification-verification-audit-20260911.mjs`) and its test file
+were deleted after that single successful `--apply` run, per this repo's one-off convention — its
+logic is not part of the ongoing runtime and does not need permanent regression coverage.
 
 **Deliberately not part of this SD's own OPERATOR_CONTRACT triple** (same reasoning as
 `chairman_ratifications` above): `scripts/one-off/ratification-verification-audit-001-operator-
 contract-waiver.mjs` recorded an armed_cadence/reaper waiver (expires 2026-11-24) — nothing to
 arm a cadence against until this table is live, and a reaper/TTL is semantically wrong for a
 permanent, INSERT-only verification-attempt audit trail whose own triggers would block it anyway.
-Run the one-off backfill script once, manually, after this migration is applied.
