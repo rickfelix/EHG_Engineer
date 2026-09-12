@@ -54,13 +54,16 @@ router.post('/:id/promote-to-sd', async (req, res) => {
     }
 
     // SD-LEO-INFRA-WIRE-FEEDBACK-QUALITY-001: Vetting gate before SD promotion
-    // Quality score must meet minimum threshold for promotion
-    if (feedback.quality_score != null && feedback.quality_score < 40) {
-      console.log(`⚠️ [SERVER] Feedback ${id} blocked: quality_score ${feedback.quality_score} < 40`);
+    // Quality score must meet minimum threshold for promotion.
+    // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: feedback.quality_score does not exist on the
+    // table (real columns are rubric_score/quality_assessment) -- this gate has always been
+    // a silent no-op. Corrected to read rubric_score.
+    if (feedback.rubric_score != null && feedback.rubric_score < 40) {
+      console.log(`⚠️ [SERVER] Feedback ${id} blocked: rubric_score ${feedback.rubric_score} < 40`);
       return res.status(422).json({
         error: 'Feedback quality too low for SD promotion',
         code: 'QUALITY_GATE_FAILED',
-        quality_score: feedback.quality_score,
+        quality_score: feedback.rubric_score,
         threshold: 40,
         message: 'Improve feedback quality before promoting to SD. Add details, reproduction steps, or impact assessment.'
       });
@@ -113,7 +116,10 @@ router.post('/:id/promote-to-sd', async (req, res) => {
       return res.status(500).json({ error: 'Failed to create Strategic Directive', details: insertError.message });
     }
 
-    // Update the feedback with the SD reference
+    // Update the feedback with the SD reference. TS-12: a failed update now returns an error
+    // response instead of silently warn-and-succeeding -- a warn-only path let a repeat click
+    // mint a second SD, because the idempotency guard above never saw resolution_sd_id land
+    // on a failed write.
     const { error: updateError } = await dbLoader.supabase
       .from('feedback')
       .update({
@@ -124,7 +130,12 @@ router.post('/:id/promote-to-sd', async (req, res) => {
       .eq('id', id);
 
     if (updateError) {
-      console.error('⚠️ Failed to update feedback with SD reference:', updateError.message);
+      console.error('❌ Failed to update feedback with SD reference:', updateError.message);
+      return res.status(500).json({
+        error: 'Strategic Directive created, but failed to record the feedback link',
+        sd_id: newSD.sd_key,
+        details: updateError.message,
+      });
     }
 
     console.log(`✅ [SERVER] Created SD ${newSD.sd_key} from feedback ${id}`);

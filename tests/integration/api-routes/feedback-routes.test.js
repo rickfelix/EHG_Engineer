@@ -91,7 +91,7 @@ describe('Feedback Routes', () => {
         type: 'bug',
         occurrence_count: 3,
         error_type: 'auth',
-        quality_score: 80,
+        rubric_score: 80,
         resolution_sd_id: null,
       };
 
@@ -136,6 +136,48 @@ describe('Feedback Routes', () => {
       expect(res.jsonData.feedback_id).toBe('fb-1');
     });
 
+    it('TS-12: returns 500 (never success:true) when the feedback UPDATE fails, closing the pre-existing duplicate-mint bug', async () => {
+      const feedback = {
+        id: 'fb-1',
+        title: 'Login bug',
+        rubric_score: 80,
+        resolution_sd_id: null,
+      };
+      const newSD = { id: 'uuid-err', sd_key: 'SD-FB-20260317-ERR' };
+
+      const fetchChain = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: feedback, error: null }),
+      };
+      const insertChain = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: newSD, error: null }),
+      };
+      const updateChain = {
+        update: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockResolvedValue({ error: { message: 'update rejected' } }),
+      };
+
+      let callCount = 0;
+      mockSupabase.from = vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return fetchChain;
+        if (callCount === 2) return insertChain;
+        return updateChain;
+      });
+
+      const req = createMockReq({}, { id: 'fb-1' });
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.jsonData.success).toBeUndefined();
+      expect(res.jsonData.sd_id).toBe('SD-FB-20260317-ERR');
+    });
+
     it('returns 404 when feedback not found', async () => {
       mockSupabase.from = vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
@@ -175,11 +217,11 @@ describe('Feedback Routes', () => {
       expect(res.jsonData.existing).toBe(true);
     });
 
-    it('returns 422 when quality_score is below threshold', async () => {
+    it('returns 422 when rubric_score is below threshold', async () => {
       const feedback = {
         id: 'fb-1',
         title: 'Low quality feedback',
-        quality_score: 20,
+        rubric_score: 20,
         resolution_sd_id: null,
       };
 
@@ -201,8 +243,6 @@ describe('Feedback Routes', () => {
     });
 
     it('returns 503 when database not connected', async () => {
-      // Temporarily make supabase null
-      const origSupabase = mockSupabase.from;
       // The route checks dbLoader.supabase truthiness — we need the whole mock object to be falsy
       // Since we mock at module level, we need to re-import. Instead, test it differently.
       // The supabase mock is always truthy in our setup, so this branch is hard to trigger.
