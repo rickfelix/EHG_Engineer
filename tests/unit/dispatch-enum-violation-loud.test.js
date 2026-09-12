@@ -44,7 +44,7 @@ const ENUM_ERR = {
   data: null,
   error: { message: 'invalid input value for enum coordination_message_type: "FENCE_NOTICE"', code: '22P02' },
 };
-const TARGET = 'broadcast'; // sentinel — skips the live-session lookup
+const TARGET = 'broadcast-coordinator'; // sentinel — skips the live-session lookup (bare 'broadcast' retired, QF-20260911-753)
 
 describe('QF-20260725-367 — enum violation is LOUD, not a silent drop', () => {
   it('throws DISPATCH_INVALID_MESSAGE_TYPE instead of returning id=null', async () => {

@@ -230,7 +230,7 @@ describe('reapExpiredPendingRequests() — FR-1', () => {
     expect(n).toBe(2);
     expect(coordInserts.length).toBe(2);
     expect(coordInserts[0].payload).toMatchObject({ kind: 'spawn_request_expired', request_id: 'req-1', callsign: 'Bravo', age_min: 60 });
-    expect(coordInserts[0].target_session).toBe('broadcast'); // no requester on this fixture row
+    expect(coordInserts[0].target_session).toBe('broadcast-coordinator'); // no requester on this fixture row (QF-20260911-753: bare 'broadcast' retired)
     expect(coordInserts[1].payload).toMatchObject({ kind: 'spawn_request_expired', request_id: 'req-2', callsign: 'Charlie', age_min: 30 });
   });
 

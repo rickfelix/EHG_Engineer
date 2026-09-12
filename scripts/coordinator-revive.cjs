@@ -101,7 +101,11 @@ async function reapExpiredPendingRequests(supabase, { callsign = null, nowIso = 
   for (const row of reaped) {
     const ageMin = Math.round((Date.parse(nowIso) - Date.parse(row.requested_at)) / 60000);
     await insertCoordinationRow(supabase, {
-      target_session: row.requested_by_session_id || 'broadcast',
+      // QF-20260911-753: bare 'broadcast' retired (0/91 rows ever acknowledged, all-time);
+      // 'broadcast-coordinator' is the correct fallback here — the coordinator owns the
+      // spawn-request queue this expiry came from, so it is who should learn of it when the
+      // original requester is unknown.
+      target_session: row.requested_by_session_id || 'broadcast-coordinator',
       message_type: 'INFO',
       subject: `Spawn request expired unfulfilled: ${row.requested_callsign}`,
       body: `worker_spawn_requests row id=${row.id} for callsign ${row.requested_callsign} (requested by ${row.requested_by_session_id || 'unknown'}) expired unfulfilled after ${ageMin}m with no consumer. If the revival need still exists, re-file via coordinator-revive.cjs.`,
