@@ -927,5 +927,21 @@
    "input": "Each schema_migrations_applied row returned by listApplied({success:true}) -- specifically its `id` (the ledger's primary key) and `migration_path` (used upstream by isGenuinePhantom to decide phantom-or-not). undispositionedPhantoms() itself consumes only `id`, checked for a matching key in docs/audits/migration-ledger-phantom-dispositions.json. It reads no other columns and no environment variables directly (listApplied, which it is composed with in main(), needs SUPABASE_URL/SUPABASE_*_KEY, but the extracted pure function does not).",
    "seen": "Real positive observed live against production on 2026-09-08 (this QF's own root-cause investigation): a full sweep found 5 previously-ticketed phantom rows plus 13 more of the identical shape the ticket never named, all verified via git ls-files/git log and confirmed absent from the ledger's own docs/audits/migration-ledger-phantom-dispositions.json (nonexistent at the time). After this QF adds all 21 entries (18 PHANTOM_LEDGER_ROW + 3 RENAMED_LEDGER_ROW) to that ledger, a direct run of node scripts/audit/migration-ledger-phantom-audit.mjs against the live table returns '0 undispositioned phantom ledger row(s) (21 known-phantom, all dispositioned).'"
   }
+ },
+ {
+  "name": "self-score-gauge-writer-lint",
+  "script": "scripts/lint/self-score-gauge-writer-lint.mjs",
+  "rootFlag": null,
+  "seedTest": "tests/unit/lint/self-score-gauge-writer-lint.test.js",
+  "neuter": {
+   "find": "if (!latest || (Date.now() - latest) > THIRTY_DAYS_MS) {",
+   "replace": "if (false) {",
+   "why": "Disables checkSelfScoreGaugeWriters()'s only staleness/absence branch, so it never reports a violation regardless of whether an enabled gauge's writer has ever fired or has gone silent -- the exact QF-20260911-404 defect shape (coordinator_self_score_age shipped enabled:false with a writer that had produced 0 rows ever, and nothing detected it). A neutered control would let a future change flip any self-score-age gauge to enabled:true with a dead writer and report clean, exactly the failure this lint exists to catch."
+  },
+  "note": "QF-20260911-404. Uses the seedTest form with a fully mocked supabase client (no live DB connection, no side effects) rather than fixtures: checkSelfScoreGaugeWriters()'s real input is a database query result (feedback.created_at per category), not a source-file shape, so a mocked query response is the natural and sufficient seed-test fixture -- no live-DB justification is needed the way it is for schema-reference-snapshot or migration-ledger-phantom-audit above, since this control has no committed-file side effect and no credential requirement in its pure exported function.",
+  "observability_proof": {
+   "input": "The most recent feedback.created_at row per category (adam_self_assessment / coordinator_self_assessment / solomon_self_assessment), for each self-score-age gauge id currently enabled:true in GAUGE_REGISTRY.",
+   "seen": "Real positive observed live during this QF's own implementation (2026-09-12): with coordinator_self_score_age temporarily flipped to enabled:true (its writer's real, live category has 0 rows ever), a direct run of node scripts/lint/self-score-gauge-writer-lint.mjs against the live database FAILED with 'coordinator_self_score_age: writer has never produced a row'. Reverted to the shipped enabled:false state, the same run PASSED. adam_self_score_age and solomon_self_score_age (shipped enabled:true) were independently verified live: feedback rows with category=adam_self_assessment (174 rows, most recent 2026-09-12T05:10Z) and category=solomon_self_assessment (84 rows, most recent 2026-09-12T04:37Z), both well within the 48h staleness convention this lint's 30-day window is deliberately looser than."
+  }
  }
 ]

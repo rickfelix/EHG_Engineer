@@ -22,7 +22,8 @@ import {
 import fs from 'fs';
 import os from 'os';
 
-import { REPO_PATHS, EHG_ROOT } from './constants.js';
+import { EHG_ROOT } from './constants.js';
+import { resolveRepoPath } from '../../../lib/repo-paths.js';
 import { runTests, runTypeScriptCheck, displayTestResults, computeTestsPass } from './test-runner.js';
 import { autoDetectGitInfo, analyzeGitDiff, commitAndPushChanges, mergeToMain, resolveQFWorktreeFromCwd, isDocsOnlyDiff, canSkipTestGate, reconcileDeclaredTypeVsFiles, touchesFrontend, getScopedUnitTestFiles, isEmptyDiff, buildRateLimitHint, refuseIfSharedRoot } from './git-operations.js';
 // SD-LEO-INFRA-QF-FALSE-COMPLETION-WITNESS-GAP-001: merge-verification witness so a
@@ -429,7 +430,11 @@ export async function completeQuickFix(qfId, options = {}) {
 
   // Determine test directory from target_application
   const targetApplication = qf.target_application || 'EHG';
-  let testDir = REPO_PATHS[targetApplication] || EHG_ROOT;
+  // QF-20260912-825: resolveRepoPath normalizes via normalizeAppName (lowercase + strip
+  // non-alphanumeric) so a case/separator-variant target_application (e.g. 'ehg_engineer')
+  // still resolves correctly, unlike a raw REPO_PATHS[targetApplication] bracket lookup keyed
+  // by the registry's exact-cased app.name.
+  let testDir = resolveRepoPath(targetApplication) || EHG_ROOT;
 
   const cwdWorktree = resolveQFWorktreeFromCwd(qfId);
   if (cwdWorktree && cwdWorktree !== testDir) {
@@ -861,6 +866,10 @@ export async function completeQuickFix(qfId, options = {}) {
     testsPass,
     uatVerified,
     testsVerifiedRecently: true,
+    // QF-20260911-021: a guard may decline to run but must never report a verdict it did
+    // not take. --skip-tests means testsPass is a trusted default/override, not a measured
+    // result this run — thread that so Check 3 can report it truthfully.
+    testsSkipped: Boolean(options.skipTestRun),
     // QF-20260911-755: the self-verifier's Check 3 must not report an e2e run that never
     // executed as "verified".
     e2eNotRunnable: Boolean(e2eTestResult?.notRunnable),

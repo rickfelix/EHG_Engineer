@@ -4,6 +4,9 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   PRESERVE_FREEZE_CUT_MINUTES,
   PRESERVE_VERDICT,
@@ -12,6 +15,9 @@ import {
   preserveTimestamp,
   buildPreserveRefName,
   scanStagedDiffForSecrets,
+  splitCachedDiffByFile,
+  scanStagedFilesForSecrets,
+  withholdMatchedFiles,
   isDenylistedUntrackedPath,
   runPreserveStage,
   appendReaperPreservedPointer,
@@ -557,5 +563,194 @@ describe('appendReaperPreservedPointer()', () => {
   it('returns ok:false without throwing when supabase is unavailable', async () => {
     const result = await appendReaperPreservedPointer(null, { key: 'SD-X', isQf: false }, { ref: 'r' });
     expect(result).toEqual({ ok: false, skipped: true, reason: 'no_supabase_client' });
+  });
+});
+
+describe('splitCachedDiffByFile() (QF-20260912-495)', () => {
+  it('splits a two-file diff on `diff --git a/... b/...` boundaries', () => {
+    const diff = [
+      'diff --git a/safe.txt b/safe.txt',
+      '+safe line',
+      'diff --git a/secret.json b/secret.json',
+      '+"postgresql://user:pass@host:5432/db"',
+    ].join('\n');
+    const segments = splitCachedDiffByFile(diff);
+    expect(segments).toEqual([
+      { path: 'safe.txt', body: '+safe line' },
+      { path: 'secret.json', body: '+"postgresql://user:pass@host:5432/db"' },
+    ]);
+  });
+
+  it('falls back to one unpathed segment when no `diff --git` header is present', () => {
+    expect(splitCachedDiffByFile('+bare content, no header')).toEqual([
+      { path: null, body: '+bare content, no header' },
+    ]);
+  });
+});
+
+describe('scanStagedFilesForSecrets() (QF-20260912-495)', () => {
+  it('flags only the matching file -- a postgresql:// connection string no longer holds the whole diff', () => {
+    const diff = [
+      'diff --git a/safe.txt b/safe.txt',
+      '+const x = 1;',
+      'diff --git a/.artifacts/unit-tier-results.json b/.artifacts/unit-tier-results.json',
+      '+{"db": "postgresql://evaluser:s3cr3t@127.0.0.1:5432/app"}',
+    ].join('\n');
+    const results = scanStagedFilesForSecrets(diff);
+    expect(results).toEqual([
+      { path: 'safe.txt', held: false, findings: [] },
+      { path: '.artifacts/unit-tier-results.json', held: true, findings: [{ id: 'DB-CONN-STRING', name: 'db_connection_string_with_password', matches: expect.any(Array) }] },
+    ]);
+  });
+
+  it('a matching line in a TRACKED SOURCE file still holds that file (no change to the scan itself)', () => {
+    const diff = [
+      'diff --git a/lib/db-config.js b/lib/db-config.js',
+      '+const url = "postgresql://admin:hunter2@prod-db:5432/app";',
+    ].join('\n');
+    expect(scanStagedFilesForSecrets(diff)[0].held).toBe(true);
+  });
+});
+
+describe('withholdMatchedFiles() (QF-20260912-495)', () => {
+  let wtPath, repoRoot;
+  const ts = '2026-09-12T12-00-00-000Z';
+
+  function mkTmp() {
+    wtPath = fs.mkdtempSync(path.join(os.tmpdir(), 'qf495-wt-'));
+    repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qf495-repo-'));
+  }
+  function rmTmp() {
+    for (const d of [wtPath, repoRoot]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best-effort */ } }
+  }
+
+  it('moves the held file to the audit sink and deletes it from the tree', () => {
+    mkTmp();
+    try {
+      const target = path.join(wtPath, '.artifacts', 'unit-tier-results.json');
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, '{"db":"postgresql://user:pass@host/db"}');
+
+      const heldFiles = [{ path: '.artifacts/unit-tier-results.json', held: true, findings: [{ id: 'DB-CONN-STRING', name: 'db_connection_string_with_password' }] }];
+      const result = withholdMatchedFiles({ wtPath, heldFiles, repoRoot, ts, logger: () => {} });
+
+      expect(result.failed).toEqual([]);
+      expect(result.withheld).toEqual([{ path: '.artifacts/unit-tier-results.json', pattern: 'db_connection_string_with_password' }]);
+      expect(fs.existsSync(target)).toBe(false); // gone from the tree -- no longer reads dirty
+
+      const sinkFile = path.join(repoRoot, 'scratch', `preserved-from-${path.basename(wtPath)}`, 'withheld', ts, '.artifacts', 'unit-tier-results.json');
+      expect(fs.existsSync(sinkFile)).toBe(true);
+      expect(fs.readFileSync(sinkFile, 'utf8')).toBe('{"db":"postgresql://user:pass@host/db"}');
+    } finally { rmTmp(); }
+  });
+
+  it('a held file with no identifiable path (null) fails closed without touching the filesystem', () => {
+    mkTmp();
+    try {
+      const result = withholdMatchedFiles({ wtPath, heldFiles: [{ path: null, held: true, findings: [{ name: 'x' }] }], repoRoot, ts, logger: () => {} });
+      expect(result.withheld).toEqual([]);
+      expect(result.failed).toEqual(['null']);
+    } finally { rmTmp(); }
+  });
+});
+
+describe('runPreserveStage() withholds matching files instead of holding the whole tree (QF-20260912-495)', () => {
+  let wtPath, repoRoot;
+
+  function mkTmp() {
+    wtPath = fs.mkdtempSync(path.join(os.tmpdir(), 'qf495-wt-'));
+    repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qf495-repo-'));
+  }
+  function rmTmp() {
+    for (const d of [wtPath, repoRoot]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* best-effort */ } }
+  }
+
+  // makeGitRunner is first-match-wins and static -- withholding calls
+  // `diff --cached --quiet` TWICE (the original probe, then a re-probe after matches
+  // are relocated) expecting DIFFERENT results. This sequential variant returns the
+  // next result in a rule's own list on each successive call to that rule.
+  function makeSequentialGitRunner(rules) {
+    const callIndex = new Map();
+    return vi.fn((args) => {
+      const cmd = args.join(' ');
+      for (const r of rules) {
+        if (r.match.test(cmd)) {
+          const i = callIndex.get(r) || 0;
+          callIndex.set(r, i + 1);
+          const results = r.results;
+          return results[Math.min(i, results.length - 1)];
+        }
+      }
+      return { code: 0, stdout: '', stderr: '' };
+    });
+  }
+
+  it('TS-e: one safe + one matching file -- the safe file proceeds to commit/push, the match is withheld, verdict PUSHED', async () => {
+    mkTmp();
+    try {
+      const evidencePath = path.join(wtPath, '.artifacts', 'unit-tier-results.json');
+      fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
+      fs.writeFileSync(evidencePath, '{"db":"postgresql://user:pass@host/db"}');
+
+      const sha = 'safecommitsha';
+      const gitRunner = makeSequentialGitRunner([
+        { match: /^ls-files --others/, results: [{ code: 0, stdout: '' }] },
+        { match: /^diff --cached --quiet$/, results: [{ code: 1, stdout: '' }, { code: 1, stdout: '' }] }, // staged before AND after (safe.js remains)
+        { match: /^diff --cached$/, results: [{ code: 0, stdout: [
+          'diff --git a/src/safe.js b/src/safe.js',
+          '+const x = 1;',
+          'diff --git a/.artifacts/unit-tier-results.json b/.artifacts/unit-tier-results.json',
+          '+{"db":"postgresql://user:pass@host/db"}',
+        ].join('\n') }] },
+        { match: /^reset -- \.artifacts\/unit-tier-results\.json$/, results: [{ code: 0, stdout: '' }] },
+        { match: /^commit/, results: [{ code: 0, stdout: '' }] },
+        { match: /^push origin/, results: [{ code: 0, stdout: '' }] },
+        { match: /^rev-parse HEAD/, results: [{ code: 0, stdout: `${sha}\n` }] },
+        { match: /^ls-remote origin/, results: [{ code: 0, stdout: `${sha}\trefs/heads/wip/reclaim/foo\n` }] },
+      ]);
+
+      const result = await runPreserveStage(
+        { wtPath, key: 'foo', ownerSessionId: 's1' },
+        { gitRunner, nowMs: Date.parse('2026-09-12T12:00:00.000Z'), repoRoot, logger: () => {} }
+      );
+
+      expect(result.verdict).toBe(PRESERVE_VERDICT.PUSHED);
+      expect(result.withheld).toEqual([{ path: '.artifacts/unit-tier-results.json', pattern: 'db_connection_string_with_password' }]);
+      expect(fs.existsSync(evidencePath)).toBe(false);
+      expect(gitRunner.mock.calls.some((c) => c[0].join(' ') === 'reset -- .artifacts/unit-tier-results.json')).toBe(true);
+      expect(gitRunner.mock.calls.some((c) => c[0][0] === 'commit')).toBe(true);
+    } finally { rmTmp(); }
+  });
+
+  it('TS-b: the safe subset is EMPTY after withholding (unpushed=0, dirty-only-unsafe) -- falls through to push-HEAD and reads reclaimable (verdict PUSHED)', async () => {
+    mkTmp();
+    try {
+      const evidencePath = path.join(wtPath, '.artifacts', 'unit-tier-results.json');
+      fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
+      fs.writeFileSync(evidencePath, '{"db":"postgresql://user:pass@host/db"}');
+
+      const sha = 'headonlysha';
+      const gitRunner = makeSequentialGitRunner([
+        { match: /^ls-files --others/, results: [{ code: 0, stdout: '' }] },
+        { match: /^diff --cached --quiet$/, results: [{ code: 1, stdout: '' }, { code: 0, stdout: '' }] }, // staged before, clean after withholding
+        { match: /^diff --cached$/, results: [{ code: 0, stdout: [
+          'diff --git a/.artifacts/unit-tier-results.json b/.artifacts/unit-tier-results.json',
+          '+{"db":"postgresql://user:pass@host/db"}',
+        ].join('\n') }] },
+        { match: /^reset -- \.artifacts\/unit-tier-results\.json$/, results: [{ code: 0, stdout: '' }] },
+        { match: /^push origin HEAD:/, results: [{ code: 0, stdout: '' }] },
+        { match: /^rev-parse HEAD/, results: [{ code: 0, stdout: `${sha}\n` }] },
+        { match: /^ls-remote origin/, results: [{ code: 0, stdout: `${sha}\trefs/heads/wip/reclaim/foo\n` }] },
+      ]);
+
+      const result = await runPreserveStage(
+        { wtPath, key: 'foo', ownerSessionId: 's1' },
+        { gitRunner, nowMs: Date.parse('2026-09-12T12:00:00.000Z'), repoRoot, logger: () => {} }
+      );
+
+      expect(result.verdict).toBe(PRESERVE_VERDICT.PUSHED);
+      expect(gitRunner.mock.calls.some((c) => c[0][0] === 'commit')).toBe(false); // nothing left to commit
+      expect(result.withheld).toEqual([{ path: '.artifacts/unit-tier-results.json', pattern: 'db_connection_string_with_password' }]);
+    } finally { rmTmp(); }
   });
 });

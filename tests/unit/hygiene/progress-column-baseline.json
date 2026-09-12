@@ -90,21 +90,21 @@
     },
     {
       "file": "lib/sd-park.js",
-      "line": 95,
+      "line": 98,
       "rule": "D",
       "method": "query",
       "snippet": "raw SQL query text"
     },
     {
       "file": "lib/sd-park.js",
-      "line": 117,
+      "line": 120,
       "rule": "D",
       "method": "query",
       "snippet": "raw SQL query text"
     },
     {
       "file": "lib/sd-park.js",
-      "line": 251,
+      "line": 294,
       "rule": "D",
       "method": "query",
       "snippet": "raw SQL query text"

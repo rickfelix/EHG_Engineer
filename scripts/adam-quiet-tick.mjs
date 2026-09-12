@@ -284,21 +284,43 @@ export async function readCriticalPathParents(sb) {
 // hand — the chairman found ten sitting 6-12 days stale before the seat did. This is a HARD
 // line (act-on-flagged-lines contract), not informational: silence on a manual child must be
 // impossible. Fail-soft: any read error degrades to n=0, never aborts the tick.
+// QF-20260911-888: checkBoardStale is the first UNGUARDED probe run right after the PM-board
+// stall-alert pass in main()'s tick order — the exact point where five consecutive quiet-tick
+// runs hung past a 150s external timeout on 2026-09-11 (post-quota-freeze DB burst; the likely
+// class is an unbounded select or a lock wait, not a data-volume issue, since fetchAllPaginated
+// already paginates). A wall-clock budget lets a hung query name itself instead of eating the
+// whole tick; the timeout folds into this function's existing fail-soft catch (same shape as
+// any other query error), so main() is unaffected and the tick's later probes still run.
+const CHECK_BOARD_STALE_TIMEOUT_MS = 20_000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`PROBE_TIMEOUT:${label} exceeded ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export async function checkBoardStale(sb) {
+  const startedAt = Date.now();
   try {
-    const rows = await fetchAllPaginated(() => sb
+    const rows = await withTimeout(fetchAllPaginated(() => sb
       .from(TASK_LEDGER_TABLE)
       .select('id, title, updated_at, status, tier, source_kind, risk')
       .eq('tier', 'child')
       .eq('source_kind', 'manual')
       .in('status', ['open', 'in_progress', 'blocked'])
-      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+      .order('id', { ascending: true })), CHECK_BOARD_STALE_TIMEOUT_MS, 'checkBoardStale'); // unique tiebreaker (FR-6)
+    if (process.argv.includes('--verbose')) console.error(`QUIET_TICK_PROBE_ELAPSED=checkBoardStale ms=${Date.now() - startedAt}`);
     const items = rows.filter((r) => isManualChildStale(r)).map((r) => {
       const meta = parseManualChildMeta(r.risk) || {};
       return { id: r.id, title: r.title, owner: meta.owner || '(unassigned)', review_by: meta.review_by || '(none)', updated_at: r.updated_at };
     });
     return { count: items.length, items };
   } catch (e) {
+    if (e && e.message && e.message.startsWith('PROBE_TIMEOUT:')) {
+      console.log(`[QUIET_TICK_PROBE_TIMEOUT=checkBoardStale] ms=${Date.now() - startedAt}`);
+    }
     return { count: 0, items: [], error: e && e.message };
   }
 }
@@ -933,6 +955,12 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
     // ever encoded at some of the contracts it named. Informational by construction — it never
     // reaches `regressed`, because the append-only freeze trigger makes these unrepairable in place.
     const contractsShort = [];
+    // QF-20260912-125: rows that NAME target contracts but never reach the coverage check above
+    // because no commit pin was derivable at all -- distinct from contractsShort (checked, and
+    // found short) and from a row naming zero contracts (nothing to check in the first place).
+    // Reported as a standing backlog count so "unmeasurable" is visibly a counted, tracked
+    // population rather than silently absent from every report.
+    const contractCoverageUnpinnable = [];
     for (const row of data || []) {
       const sectionId = row.encoded_ref && row.encoded_ref.section_id;
       const targetFile = sectionId && newerManifest.meta && newerManifest.meta[sectionId] && newerManifest.meta[sectionId].target_file;
@@ -966,6 +994,7 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
       // a miss, which is what keeps the dry-run count at 21 rather than 45.
       let contractCoverage;
       const namedContracts = Array.isArray(row.target_contracts) ? row.target_contracts.filter(Boolean) : [];
+      if (namedContracts.length > 0 && !(pin && pin.commit)) contractCoverageUnpinnable.push(row);
       if (pin && pin.commit && namedContracts.length > 0) {
         const missing = [];
         let readAny = false;
@@ -994,6 +1023,8 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
       rows: regressed, count: regressed.length,
       markerInvalidRows: markerInvalid, markerInvalidCount: markerInvalid.length,
       contractsShortRows: contractsShort, contractsShortCount: contractsShort.length,
+      contractCoverageUnpinnableRows: contractCoverageUnpinnable,
+      contractCoverageUnpinnableCount: contractCoverageUnpinnable.length,
     };
   } catch (e) {
     return { rows: [], count: 0, error: e && e.message };
@@ -1879,6 +1910,14 @@ async function main() {
     for (const r of (regressedRatifications.contractsShortRows || [])) {
       const sectionId = r.encoded_ref && r.encoded_ref.section_id;
       console.log(`QUIET_TICK_RATIFICATION_CONTRACT_UNVERIFIED=adam id=${r.id} section=${sectionId} missing=${(r.contractsMissing || []).join(',')} — the ruling names target contracts whose rendered files do not carry marker_text at the encode-time pin. Historical shortfall, NOT a reverted clause: the append-only ledger cannot be re-encoded, so this needs the chairman-gated data-repair path, not a re-run.`);
+    }
+    // QF-20260912-125: a standing count of rows this tick could NOT check at all (no derivable
+    // commit pin), so "unmeasurable" is a visible, tracked backlog rather than silently absent
+    // from every report — these are the same rows the comment above already excludes from the
+    // miss count, now surfaced rather than only implied by their absence.
+    const unpinnableCount = regressedRatifications.contractCoverageUnpinnableCount || 0;
+    if (unpinnableCount > 0) {
+      console.log(`QUIET_TICK_RATIFICATION_CONTRACT_UNPINNABLE_BACKLOG=adam count=${unpinnableCount} — encoded rulings naming target contracts with no derivable commit pin; unchecked-until-repaired, never counted as a miss.`);
     }
   }
   return result;

@@ -47,18 +47,24 @@ describe('MICHAEL_TASKS and the plan', () => {
     }
     expect(INTERVAL_MINUTES).toBe(15); expect(START_TIME).toBe('00:00');
   });
-  it('todoist-brief and brief-assemble are on the host (ratification 00f696f1) and every windowEt mirrors FEEDERS; every feeder script exists in this repo (QF-20260911-145)', () => {
+  it('todoist-brief and brief-assemble are on the host (ratification 00f696f1) and every windowEt mirrors FEEDERS (single window or QF-20260911-282 multi-window); every feeder script exists in this repo (QF-20260911-145)', () => {
     for (const t of MICHAEL_TASKS) {
       const f = FEEDERS[t.feeder];
       expect(f, `${t.feeder} is not in FEEDERS`).toBeTruthy();
-      expect(t.windowEt).toBe(`${f.window.start}-${f.window.end}`);
+      const windows = Array.isArray(f.window) ? f.window : [f.window];
+      expect(t.windowEt).toBe(windows.map((w) => `${w.start}-${w.end}`).join(', '));
       expect(f.intervalMinutes).toBe(INTERVAL_MINUTES);
       expect(t.script).toMatch(/ --apply$/);
       expect(fs.existsSync(scriptFileOf(t, REAL_REPO)), `${t.script} missing from the repo`).toBe(true);
     }
-    expect(MICHAEL_TASKS.find((t) => t.feeder === 'todoist-brief')).toMatchObject({ taskName: 'EHG Michael todoist-brief', windowEt: '04:45-05:30' });
+    // QF-20260911-282: three read feeders now carry the ratified midday/evening windows too.
+    expect(MICHAEL_TASKS.find((t) => t.feeder === 'calendar-read')).toMatchObject({ taskName: 'EHG Michael calendar-read', windowEt: '04:00-05:00, 12:00-12:30, 18:00-18:30' });
+    expect(MICHAEL_TASKS.find((t) => t.feeder === 'gmail-triage')).toMatchObject({ taskName: 'EHG Michael gmail-triage', windowEt: '04:30-05:30, 12:00-12:30, 18:00-18:30' });
+    expect(MICHAEL_TASKS.find((t) => t.feeder === 'todoist-brief')).toMatchObject({ taskName: 'EHG Michael todoist-brief', windowEt: '04:45-05:30, 12:00-12:30, 18:00-18:30' });
     expect(MICHAEL_TASKS.find((t) => t.feeder === 'brief-assemble')).toMatchObject({ taskName: 'EHG Michael brief-assemble', windowEt: '05:15-06:00' });
     expect(MICHAEL_TASKS.filter((t) => t.promotable).map((t) => t.feeder)).toEqual(['gmail-triage']);
+    // QF-20260911-282 / ratification 04c9dd29 point 2: tasks-classifier registers DISABLED, and only it.
+    expect(MICHAEL_TASKS.filter((t) => t.disabled).map((t) => t.feeder)).toEqual(['tasks-classifier']);
   });
   it('the create args carry /SC MINUTE /MO 15 /ST 00:00 /F and NEITHER /RU NOR /NP (measured denied unelevated); the TR action is the quoted hidden launcher', () => {
     const plan = buildPlan({ repoRoot: REPO });
@@ -125,17 +131,35 @@ describe('main (injected deps, no host mutation)', () => {
     expect(pre.calls).toEqual([]); expect(pre.writes).toEqual([]);
   });
   it('register writes the seven wrappers, runs seven /Create calls and clears the battery restrictions on each registered task; --with-modify promotes only gmail-triage', async () => {
-    const { d, calls, writes, batteryCalls, warns } = deps();
+    const { d, calls, writes, batteryCalls, warns, logs } = deps();
     expect(await main(['node', 'x'], d)).toMatchObject({ exitCode: 0, action: 'registered', withModify: false });
     expect(writes.map(([p]) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new', 'michael-todoist-brief-task.cmd.new', 'michael-brief-assemble-task.cmd.new', 'michael-oracle-extract-task.cmd.new', 'michael-health-sync-task.cmd.new']);
-    expect(calls).toHaveLength(7);
+    // 7 /Create + 1 /Change /DISABLE (tasks-classifier only, QF-20260911-282 / ratification 04c9dd29 point 2)
+    expect(calls).toHaveLength(8);
+    const createCalls = calls.filter((c) => c[0] === '/Create');
+    expect(createCalls).toHaveLength(7);
+    expect(calls.filter((c) => c[0] === '/Change')).toEqual([['/Change', '/TN', 'EHG Michael tasks-classifier', '/DISABLE']]);
     expect(batteryCalls).toEqual(MICHAEL_TASKS.map((t) => t.taskName)); expect(warns).toEqual([]);
-    for (const c of calls) { expect(c[0]).toBe('/Create'); expect(c).not.toContain('/RU'); expect(c).not.toContain('/NP'); }
+    for (const c of createCalls) { expect(c).not.toContain('/RU'); expect(c).not.toContain('/NP'); }
     expect(writes.every(([, c]) => !/--modify/.test(c))).toBe(true);
     const p = deps();
     expect(await main(['node', 'x', '--with-modify'], p.d)).toMatchObject({ exitCode: 0, action: 'registered', withModify: true });
     expect(p.writes.filter(([, c]) => /--modify/.test(c)).map(([f]) => path.basename(f))).toEqual(['michael-gmail-triage-task.cmd.new']);
     expect(p.renames.map(([, to]) => path.basename(to))).toContain('michael-gmail-triage-task.cmd');
+    // FR-5 (QF-20260911-282): the chairman's exact re-registration keystroke is printed at the end of a live run.
+    expect(logs.some((l) => l.includes('node scripts/setup-michael-host-tasks.mjs && node scripts/setup-michael-host-tasks.mjs --verify'))).toBe(true);
+  });
+  it('QF-20260911-282: tasks-classifier is disabled on every register pass (idempotent), non-fatally warned if the /Change /DISABLE call fails', async () => {
+    const ok = deps();
+    expect(await main(['node', 'x'], ok.d)).toMatchObject({ exitCode: 0, action: 'registered' });
+    expect(ok.warns).toEqual([]);
+    expect(ok.logs.some((l) => /tasks-classifier.*DISABLED/.test(l))).toBe(true);
+    const failDisable = deps({ schtasks: (args) => (args[0] === '/Change' ? { ok: false, code: 1, stderr: 'ERROR: Access is denied.' } : { ok: true, stdout: 'SUCCESS' }) });
+    expect(await main(['node', 'x'], failDisable.d)).toMatchObject({ exitCode: 0, action: 'registered' }); // non-fatal
+    expect(failDisable.warns).toHaveLength(1);
+    expect(failDisable.warns[0]).toMatch(/could not disable 'EHG Michael tasks-classifier'.*Access is denied/);
+    // the wrapper still swaps in and the task is still created even if the disable step fails
+    expect(failDisable.renames.map(([, to]) => path.basename(to))).toContain('michael-tasks-classifier-task.cmd');
   });
   it('refuses to register when run-hidden.vbs is missing; a failed /Create yields exit 1', async () => {
     const { d, calls } = deps({ exists: false });
@@ -187,9 +211,13 @@ describe('main (injected deps, no host mutation)', () => {
     expect(await main(['node', 'x', '--remove'], rm.d)).toEqual({ exitCode: 0, action: 'removed' });
     expect(rm.calls.map((c) => c.slice(0, 3))).toEqual(MICHAEL_TASKS.map((t) => ['/Delete', '/TN', t.taskName]));
     const wrapperOf = (name) => path.join(REPO, 'scripts', 'cron', `michael-${name}-task.cmd`);
-    const xmlFor = (wrapper) => `<Task><Actions><Exec><Command>wscript.exe</Command><Arguments>//B "${path.join(REPO, 'scripts', 'cron', 'run-hidden.vbs')}" "${wrapper}"</Arguments></Exec></Actions><Triggers><TimeTrigger><Repetition><Interval>PT15M</Interval></Repetition></TimeTrigger></Triggers><Settings><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries></Settings></Task>`;
-    // each query answers with the XML of the task asked about, naming that task's own wrapper
-    const perTask = (args) => ({ ok: true, stdout: xmlFor(wrapperOf(MICHAEL_TASKS.find((t) => t.taskName === args[2]).feeder)) });
+    // QF-20260911-282: `enabled: false` injects <Enabled>false</Enabled> (tasks-classifier is registered DISABLED on purpose).
+    const xmlFor = (wrapper, { enabled = true } = {}) => `<Task><Actions><Exec><Command>wscript.exe</Command><Arguments>//B "${path.join(REPO, 'scripts', 'cron', 'run-hidden.vbs')}" "${wrapper}"</Arguments></Exec></Actions><Triggers><TimeTrigger><Repetition><Interval>PT15M</Interval></Repetition></TimeTrigger></Triggers><Settings>${enabled ? '' : '<Enabled>false</Enabled>'}<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries></Settings></Task>`;
+    // each query answers with the XML of the task asked about, naming that task's own wrapper; tasks-classifier's is DISABLED
+    const perTask = (args) => {
+      const feeder = MICHAEL_TASKS.find((t) => t.taskName === args[2]).feeder;
+      return { ok: true, stdout: xmlFor(wrapperOf(feeder), { enabled: feeder !== 'tasks-classifier' }) };
+    };
     expect(wrapperPathFromXml(xmlFor('C:\\x\\w.cmd'))).toBe('C:\\x\\w.cmd');
     expect(wrapperPathFromXml('<Task></Task>')).toBe(null);
     const v = deps({ schtasks: perTask });
@@ -227,5 +255,17 @@ describe('main (injected deps, no host mutation)', () => {
     const br = await main(['node', 'x', '--verify'], onBattery.d);
     expect(br.exitCode).toBe(1); expect(br.results.filter((x) => !x.ok).map((x) => x.taskName)).toEqual(['EHG Michael todoist-brief']);
     expect(onBattery.errors.filter((e) => /todoist-brief.*Batteries> is not false/.test(e))).toHaveLength(2);
+    // QF-20260911-282 / ratification 04c9dd29 point 2: --verify FAILS if the OS reports tasks-classifier ENABLED
+    // (the invariant is enforced, not just passively read), and the healthy case says DISABLED, never "enabled".
+    const enabledClassifier = deps({ schtasks: (args) => (args[2] === 'EHG Michael tasks-classifier' ? { ok: true, stdout: xmlFor(wrapperOf('tasks-classifier'), { enabled: true }) } : perTask(args)) });
+    const ec = await main(['node', 'x', '--verify'], enabledClassifier.d);
+    expect(ec.exitCode).toBe(1);
+    expect(ec.results.find((x) => x.taskName === 'EHG Michael tasks-classifier')).toMatchObject({ ok: false });
+    expect(enabledClassifier.errors.join('\n')).toMatch(/must stay DISABLED.*but the OS reports it enabled/);
+    const disabledVerify = deps({ schtasks: perTask });
+    const dv = await main(['node', 'x', '--verify'], disabledVerify.d);
+    expect(dv.exitCode).toBe(0);
+    expect(disabledVerify.logs.find((l) => /tasks-classifier/.test(l))).toMatch(/DISABLED \(dead by construction/);
+    expect(disabledVerify.logs.find((l) => /tasks-classifier/.test(l))).not.toMatch(/, enabled,/);
   });
 });

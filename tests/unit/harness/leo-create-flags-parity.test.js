@@ -120,8 +120,37 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     it('CLI passes args.includes(--security-reviewed) and args.includes(--migration-reviewed) to createFromQF', () => {
       const idx = src.indexOf("args[0] === '--from-qf'");
       expect(idx).toBeGreaterThan(0);
-      const block = src.slice(idx, idx + 1200);
-      expect(block).toMatch(/await createFromQF\(args\[1\],\s*\{\s*securityReviewed:\s*args\.includes\(['"]--security-reviewed['"]\),\s*migrationReviewed:\s*args\.includes\(['"]--migration-reviewed['"]\),?\s*\}\)/);
+      // Window widened 1200->1800 (QF-20260911-484 added the qfLinkReasonIdx line and its
+      // preceding comment block earlier in this same CLI branch, pushing the createFromQF
+      // call further from the 'args[0] === --from-qf' anchor).
+      const block = src.slice(idx, idx + 1800);
+      expect(block).toMatch(/securityReviewed:\s*args\.includes\(['"]--security-reviewed['"]\),/);
+      expect(block).toMatch(/migrationReviewed:\s*args\.includes\(['"]--migration-reviewed['"]\),/);
+      expect(block).toMatch(/await createFromQF\(args\[1\],\s*\{[\s\S]*?\}\)/);
+    });
+  });
+
+  describe('--roadmap-link-reason on --from-qf (QF-20260911-484: had NO path at all, unlike --from-plan/--from-proposal/--proposal-b64/--proposal-stdin/--child)', () => {
+    it('CLI parses --roadmap-link-reason on the --from-qf lane and passes roadmapLinkReason to createFromQF', () => {
+      const idx = src.indexOf("args[0] === '--from-qf'");
+      expect(idx).toBeGreaterThan(0);
+      // Window widened 1200->1800 (QF-20260911-484 added the qfLinkReasonIdx line and its
+      // preceding comment block earlier in this same CLI branch, pushing the createFromQF
+      // call further from the 'args[0] === --from-qf' anchor).
+      const block = src.slice(idx, idx + 1800);
+      expect(block).toMatch(/const qfLinkReasonIdx = args\.indexOf\(['"]--roadmap-link-reason['"]\)/);
+      expect(block).toMatch(/roadmapLinkReason:\s*qfLinkReasonIdx\s*!==\s*-1\s*\?\s*args\[qfLinkReasonIdx\s*\+\s*1\]\s*:\s*null,/);
+    });
+
+    it('createFromQF passes a TOP-LEVEL roadmap_link_reason to createSD (mirrors plan.js/child.js, not under metadata)', () => {
+      const idx = src.indexOf('async function createFromQF');
+      const body = src.slice(idx, idx + 5000);
+      expect(body).toMatch(/roadmap_link_reason:\s*resolveQfRoadmapLinkReason\(qf,\s*opts\)/);
+    });
+
+    it('resolveQfRoadmapLinkReason is exported and never falls through to no-reason-supplied (a caller-omitted flag still defaults to a real reason)', () => {
+      expect(src).toMatch(/export function resolveQfRoadmapLinkReason\(qf,\s*opts\s*=\s*\{\}\)/);
+      expect(src).toMatch(/`escalated from \$\{qf\.id\}: \$\{escalationReason\}`/);
     });
   });
 
@@ -135,7 +164,9 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     it('createFromQF never writes a metadata field on quick_fixes (no metadata column exists on that table)', () => {
       const idx = src.indexOf('async function createFromQF');
       const end = src.indexOf('\nasync function', idx + 1);
-      const body = src.slice(idx, end > 0 ? end : idx + 5500);
+      // Fallback widened 5500->6500 (QF-20260911-484 added the roadmap_link_reason line and
+      // its preceding comment block earlier in the function body).
+      const body = src.slice(idx, end > 0 ? end : idx + 6500);
       const qfUpdateIdx = body.indexOf("status: 'escalated',");
       expect(qfUpdateIdx).toBeGreaterThan(-1);
       const updateBlock = body.slice(qfUpdateIdx, qfUpdateIdx + 200);
@@ -159,7 +190,9 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('exhausted retries throw an Error naming the already-created SD key and a manual recovery UPDATE', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 6000);
+      // Window widened 6000->7000 (QF-20260911-484 added the roadmap_link_reason line and
+      // its preceding comment block earlier in the function body).
+      const body = src.slice(idx, idx + 7000);
       const catchIdx = body.indexOf('} catch (updErr) {');
       expect(catchIdx).toBeGreaterThan(-1);
       const catchBlock = body.slice(catchIdx, catchIdx + 700);
@@ -170,7 +203,9 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
 
     it('the wrapped update fn routes through the single canonical writer, which throws explicitly on a Supabase error (SD-LEO-INFRA-SINGLE-ESCALATION-WRITER-001 -- supabase-js does not throw on its own; the explicit-throw guarantee now lives inside setQuickFixStatus, covered by tests/unit/quick-fix/status-writer.test.js, rather than inline at each call site)', () => {
       const idx = src.indexOf('async function createFromQF');
-      const body = src.slice(idx, idx + 5500);
+      // Window widened 5500->6500 (QF-20260911-484 added the roadmap_link_reason line and
+      // its preceding comment block earlier in the function body).
+      const body = src.slice(idx, idx + 6500);
       expect(body).toMatch(/await setQuickFixStatus\(supabase, qf\.id, \{/);
     });
   });

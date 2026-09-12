@@ -151,9 +151,11 @@ describe('coldRecover', () => {
     expect(payload).not.toHaveProperty('current_phase');
     expect(payload).not.toHaveProperty('progress_percentage');
     // re-dispatch broadcast to RESUME with phase preserved
+    // QF-20260911-753: bare 'broadcast' retired (0/91 rows ever acknowledged) -- redispatchResume
+    // now uses the broadcast-coordinator sentinel, which dispatch.cjs still short-circuits.
     expect(dispatch).toHaveBeenCalledTimes(1);
     const [, row] = dispatch.mock.calls[0];
-    expect(row.target_session).toBe('broadcast');
+    expect(row.target_session).toBe('broadcast-coordinator');
     expect(row.payload.kind).toBe('resume');
     expect(row.payload.current_phase).toBe('EXEC');
     expect(report.released).toEqual(['SD-ORPHAN']);

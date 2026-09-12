@@ -140,8 +140,11 @@ describe('classifyDirectTarget — sentinels and reserved words are NEVER a dire
     expect(r.isBlockedPeerWord).toBe(true);
     expect(r.isDirectTarget).toBe(false);
   });
-  it('every SENTINEL_TARGETS value is blocked (broadcast, broadcast-coordinator, broadcast-adam)', () => {
-    for (const s of ['broadcast', 'broadcast-coordinator', 'broadcast-adam']) {
+  it('every SENTINEL_TARGETS value is blocked (broadcast-coordinator, broadcast-adam)', () => {
+    // Bare 'broadcast' removed from this list by QF-20260911-753 — it is no longer a
+    // SENTINEL_TARGETS value, so classifyDirectTarget correctly stops blocking it too
+    // (isSentinelTarget derives from the same canonical dispatch.cjs list).
+    for (const s of ['broadcast-coordinator', 'broadcast-adam']) {
       const r = classifyDirectTarget(s, false);
       expect(r.isBlockedPeerWord).toBe(true);
       expect(r.isDirectTarget).toBe(false);

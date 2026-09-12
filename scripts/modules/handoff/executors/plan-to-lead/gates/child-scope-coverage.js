@@ -18,6 +18,22 @@ import { safeQuery } from '../../../../../../lib/db/safe-query.mjs';
 
 const GATE_NAME = 'CHILD_SCOPE_COVERAGE';
 
+// QF-20260911-793: the exact set of coordination-template FR titles parent-orchestrator-handler.js
+// emits for every auto-generated orchestrator PRD. metadata.coordination_only alone is NOT trusted
+// as sufficient — prd.functional_requirements is free-form JSONB writable by any PRD author (human,
+// add-prd-to-database.js, or an LLM-authored PRD), so an unnamespaced flag could silently exempt a
+// real deliverable from coverage scoring. Requiring BOTH the flag AND an exact name match against
+// this known, narrow set keeps the exclusion pinned to what this file itself generates.
+export const COORDINATION_TEMPLATE_NAMES = new Set([
+  'Child SD Orchestration',
+  'Work Decomposition Structure',
+  'Progress Tracking'
+]);
+
+function isCoordinationTemplate(deliverable) {
+  return Boolean(deliverable?.metadata?.coordination_only) && COORDINATION_TEMPLATE_NAMES.has(deliverable?.deliverable_name);
+}
+
 export function createChildScopeCoverageGate(supabase) {
   return {
     name: GATE_NAME,
@@ -43,10 +59,13 @@ export function createChildScopeCoverageGate(supabase) {
 
       try {
         // Get parent SD deliverables
+        // QF-20260911-793: metadata IS requested — the coordination_only exclusion below
+        // depends on it. PostgREST returns only projected columns; omitting this silently
+        // makes the exclusion a no-op (pd.metadata reads undefined for every row).
         const parentDeliverables = await safeQuery(
           supabase
             .from('sd_scope_deliverables')
-            .select('id, deliverable_name, deliverable_type')
+            .select('id, deliverable_name, deliverable_type, metadata')
             .eq('sd_id', sdId),
           { site: 'child-scope-coverage:parent_deliverables' }
         );
@@ -80,6 +99,26 @@ export function createChildScopeCoverageGate(supabase) {
           });
         }
 
+        // QF-20260911-793: parent-orchestrator-handler.js emits 3 hard-coded coordination-only
+        // FRs ("Child SD Orchestration", "Work Decomposition Structure", "Progress Tracking")
+        // for every auto-generated orchestrator PRD. They describe coordinator-only work no
+        // child would ever phrase in its own scope, so they are structurally unpassable by
+        // keyword overlap. Excluded from the coverage denominator entirely (never scored,
+        // never counted as uncovered) — marked via metadata.coordination_only, threaded
+        // through by extract-deliverables-from-prd.js. Checked BEFORE the child-deliverables
+        // query below so the all-template case short-circuits without needing it.
+        const substantiveDeliverables = parentDeliverables.filter(pd => !isCoordinationTemplate(pd));
+        const templateOnlyCount = parentDeliverables.length - substantiveDeliverables.length;
+
+        if (substantiveDeliverables.length === 0) {
+          console.log(`   ℹ️  All ${parentDeliverables.length} parent deliverable(s) are auto-generated coordination template — nothing substantive for children to cover`);
+          return buildSemanticResult({
+            passed: true, score: 100, confidence: 0.8,
+            warnings: ['Only auto-generated coordination-template deliverables present — gate auto-passes'],
+            details: { isOrchestrator: true, childCount: children.length, parentDeliverables: parentDeliverables.length, templateOnly: templateOnlyCount }
+          });
+        }
+
         // Get all child deliverables
         const childIds = children.map(c => c.id);
         const childDeliverables = await safeQuery(
@@ -95,7 +134,7 @@ export function createChildScopeCoverageGate(supabase) {
         let covered = 0;
         const uncovered = [];
 
-        for (const pd of parentDeliverables) {
+        for (const pd of substantiveDeliverables) {
           const pdTitle = pd.deliverable_name.toLowerCase();
           // Simple keyword overlap check
           const isCovered = childTitles.some(ct =>
@@ -110,17 +149,17 @@ export function createChildScopeCoverageGate(supabase) {
           }
         }
 
-        const score = Math.round((covered / parentDeliverables.length) * 100);
+        const score = Math.round((covered / substantiveDeliverables.length) * 100);
         const confidence = computeConfidence({
-          dataPoints: (childDeliverables || []).length + parentDeliverables.length,
-          expectedPoints: parentDeliverables.length * 2
+          dataPoints: (childDeliverables || []).length + substantiveDeliverables.length,
+          expectedPoints: substantiveDeliverables.length * 2
         });
         const passed = score >= 80;
 
         // Check child completion status
         const completedChildren = children.filter(c => c.status === 'completed').length;
 
-        console.log(`   📊 Coverage: ${covered}/${parentDeliverables.length} parent deliverables covered by children`);
+        console.log(`   📊 Coverage: ${covered}/${substantiveDeliverables.length} substantive parent deliverables covered by children (${templateOnlyCount} coordination-only excluded)`);
         console.log(`   📊 Children: ${completedChildren}/${children.length} completed`);
         console.log(`   ${passed ? '✅' : '❌'} Score: ${score}/100 | Confidence: ${confidence}`);
 
@@ -136,7 +175,8 @@ export function createChildScopeCoverageGate(supabase) {
           issues: !passed ? [`${uncovered.length} parent deliverable(s) not covered by any child`] : [],
           details: {
             isOrchestrator: true,
-            parentDeliverables: parentDeliverables.length,
+            parentDeliverables: substantiveDeliverables.length,
+            templateExcluded: templateOnlyCount,
             childCount: children.length,
             completedChildren,
             childDeliverables: (childDeliverables || []).length,

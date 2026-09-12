@@ -234,6 +234,27 @@ export const SD_HOLDER_FRESHNESS_WINDOW_MS = 15 * 60 * 1000; // 15 min
 // a QF is exactly the self-initiated-claim path the check-in gate blocks. Import the check-in
 // gate's own predicate (isSelfClaimDisabled, exported from ./worker-checkin.cjs) rather than
 // re-copying its flag list — one function, two callers, per the Solomon-shaped fix.
+/**
+ * QF-20260911-840: hinting a QF invites a SECOND claim -- unlike the generic "idle" question
+ * elsewhere, a session that currently holds a claim on EITHER table must never be hinted, even
+ * while sdHolderFreshnessWindowMs (above) is treating it as "HELD, available for other work"
+ * for the shared idle predicate. MEASURED: a seat holding SD-LEO-FIX-PRE-COMMIT-SECRET-001 with
+ * a frozen last_tool_at (tool-silent past the freshness window) but a fresh heartbeat still read
+ * as idle capacity and was hinted a QF -- if the seat wakes and honours the hint, the second
+ * claim silently evicts the first (the 2ND-CLAIM-EVICTS trap). Reads the AUTHORITATIVE Sets only,
+ * never the stale sd_key mirror; a failed/absent resolution (null/undefined) is a no-op here,
+ * deferring entirely to seatIdleVerdict's own existing sd_key-mirror fallback for that case. The
+ * excluded seat is not silenced -- SD-LEO-INFRA-SILENT-HOLDER-AUDIT-001's existing hourly duty
+ * independently catches a frozen holder from both claim tables.
+ */
+export function isRawClaimHolder(session, qfHolderSessionIds, sdHolderSessionIds) {
+  const id = session?.session_id;
+  if (!id) return false;
+  if (qfHolderSessionIds && qfHolderSessionIds.has(id)) return true;
+  if (sdHolderSessionIds instanceof Set && sdHolderSessionIds.has(id)) return true;
+  return false;
+}
+
 export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new Set(), seatBusySessionIds = new Set(), sdHolderSessionIds = null, tailInFlightSessionIds = new Set()) {
   return (liveWorkers || []).filter((w) => seatIdleVerdict(w, {
     nowMs,
@@ -244,7 +265,7 @@ export function eligibleIdleWorkers(liveWorkers, nowMs, qfHolderSessionIds = new
     recentlyReleasedWindowMs: RECENTLY_RELEASED_WINDOW_MS,
     spinUpGraceMs: SPIN_UP_GRACE_MS,
     sdHolderFreshnessWindowMs: SD_HOLDER_FRESHNESS_WINDOW_MS,
-  }).idle && !isSelfClaimDisabled(w.metadata));
+  }).idle && !isSelfClaimDisabled(w.metadata) && !isRawClaimHolder(w, qfHolderSessionIds, sdHolderSessionIds));
 }
 
 /** Pure: the ranked, eligible-for-hint QF candidate list (belt-and-suspenders governance applied). */

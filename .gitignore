@@ -640,3 +640,6 @@ database/chairman-gated/__test-*
 # of the untracked-by-convention pattern QF-20260902-429 covers for seat records and artifacts.
 scripts/one-off/encode-backup-*/
 scripts/one-off/adam-provenance-split/
+
+# per-worktree reaper marker (lib/fleet worktree reaper reads it from disk; never tracked -- #8690 committed one by mistake)
+.reap-protected.json

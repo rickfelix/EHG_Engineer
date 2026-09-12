@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import fleetQuiescence from '../../lib/coordinator/fleet-quiescence.cjs';
 
-const { assessFleetActivity } = fleetQuiescence;
+const { assessFleetActivity, decideQuiescence } = fleetQuiescence;
 
 // Chainable Supabase mock: builder methods return the builder; awaiting resolves to
 // resolver({table, columns, filters}). resolver may throw to simulate a query error.
@@ -52,7 +52,7 @@ describe('SD-REFILL-00IO6NQJ: liveActiveWorkers PID-aliveness', () => {
     const sb = sbWithSessions([
       { session_id: 's1', sd_key: 'SD-X-001', heartbeat_age_seconds: 9999, computed_status: 'active', terminal_id: TERM('12345') },
     ]);
-    const r = await assessFleetActivity(sb, { now: Date.now(), aliveCcPids: new Set(['12345']) });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok', aliveCcPids: new Set(['12345']) });
     expect(r.signals.liveActiveWorkers).toBe(1);
     expect(r.quiescent).toBe(false);
   });
@@ -61,7 +61,7 @@ describe('SD-REFILL-00IO6NQJ: liveActiveWorkers PID-aliveness', () => {
     const sb = sbWithSessions([
       { session_id: 's1', sd_key: 'SD-X-001', heartbeat_age_seconds: 10, computed_status: 'active', terminal_id: TERM('99999') },
     ]);
-    const r = await assessFleetActivity(sb, { now: Date.now(), aliveCcPids: new Set() });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok', aliveCcPids: new Set() });
     expect(r.signals.liveActiveWorkers).toBe(1);
   });
 
@@ -69,7 +69,7 @@ describe('SD-REFILL-00IO6NQJ: liveActiveWorkers PID-aliveness', () => {
     const sb = sbWithSessions([
       { session_id: 's1', sd_key: 'SD-X-001', heartbeat_age_seconds: 9999, computed_status: 'active', terminal_id: TERM('77777') },
     ]);
-    const r = await assessFleetActivity(sb, { now: Date.now(), aliveCcPids: new Set(['12345']) });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok', aliveCcPids: new Set(['12345']) });
     expect(r.signals.liveActiveWorkers).toBe(0);
     expect(r.quiescent).toBe(true);
   });
@@ -78,7 +78,7 @@ describe('SD-REFILL-00IO6NQJ: liveActiveWorkers PID-aliveness', () => {
     const sb = sbWithSessions([
       { session_id: 's1', sd_key: null, heartbeat_age_seconds: 9999, computed_status: 'active', terminal_id: TERM('12345') },
     ]);
-    const r = await assessFleetActivity(sb, { now: Date.now(), aliveCcPids: new Set(['12345']) });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok', aliveCcPids: new Set(['12345']) });
     expect(r.signals.liveActiveWorkers).toBe(0);
   });
 
@@ -86,7 +86,7 @@ describe('SD-REFILL-00IO6NQJ: liveActiveWorkers PID-aliveness', () => {
     const sb = sbWithSessions([
       { session_id: 's1', sd_key: 'SD-X-001', heartbeat_age_seconds: 9999, computed_status: 'idle', terminal_id: TERM('12345') },
     ]);
-    const r = await assessFleetActivity(sb, { now: Date.now(), aliveCcPids: new Set(['12345']) });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok', aliveCcPids: new Set(['12345']) });
     expect(r.signals.liveActiveWorkers).toBe(0);
   });
 
@@ -94,7 +94,47 @@ describe('SD-REFILL-00IO6NQJ: liveActiveWorkers PID-aliveness', () => {
     const sb = sbWithSessions([
       { session_id: 's1', sd_key: 'SD-X-001', heartbeat_age_seconds: 9999, computed_status: 'active', terminal_id: TERM('12345') },
     ]);
-    const r = await assessFleetActivity(sb, { now: Date.now(), aliveCcPids: new Set() });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok', aliveCcPids: new Set() });
     expect(r.signals.liveActiveWorkers).toBe(0);
+  });
+});
+
+// QF-20260911-907: a guard may decline to run but must never report a number it did not
+// take. Before this fix, an absent/unreadable marker read silently degraded to
+// heartbeat-only counting with no distinct signal -- a parked worker with a stale
+// heartbeat could vanish from the live count with the tick reporting a confident
+// "quiescent" it never actually measured.
+describe('QF-20260911-907: could_not_determine is surfaced and forces not-quiescent', () => {
+  it('decideQuiescence: couldNotDetermine forces quiescent=false regardless of the other counts', () => {
+    const r = decideQuiescence({ liveActiveWorkers: 0, inProgressBuilds: 0, recentTransitions: 0, couldNotDetermine: true });
+    expect(r.quiescent).toBe(false);
+    expect(r.reason).toMatch(/^could_not_determine/);
+  });
+
+  it('decideQuiescence: couldNotDetermine=false with all-zero counts is still quiescent (no regression)', () => {
+    const r = decideQuiescence({ liveActiveWorkers: 0, inProgressBuilds: 0, recentTransitions: 0, couldNotDetermine: false });
+    expect(r.quiescent).toBe(true);
+  });
+
+  it('assessFleetActivity: markerReadState=absent surfaces couldNotDetermine and forces not-quiescent, even with 0 sessions/builds/transitions', async () => {
+    const sb = sbWithSessions([]); // no live sessions, no builds, no transitions -- would be quiescent but for the marker read
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'absent' });
+    expect(r.signals.couldNotDetermine).toBe(true);
+    expect(r.quiescent).toBe(false);
+    expect(r.reason).toMatch(/^could_not_determine/);
+  });
+
+  it('assessFleetActivity: markerReadState=unreadable also surfaces couldNotDetermine', async () => {
+    const sb = sbWithSessions([]);
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'unreadable' });
+    expect(r.signals.couldNotDetermine).toBe(true);
+    expect(r.quiescent).toBe(false);
+  });
+
+  it('assessFleetActivity: markerReadState=ok with 0 sessions/builds/transitions is genuinely quiescent (no regression)', async () => {
+    const sb = sbWithSessions([]);
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok' });
+    expect(r.signals.couldNotDetermine).toBe(false);
+    expect(r.quiescent).toBe(true);
   });
 });

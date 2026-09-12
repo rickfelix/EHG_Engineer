@@ -18,7 +18,7 @@ const guardSrc = fs.readFileSync(guardPath, 'utf-8');
 describe('FR-1: claim-guard.mjs refuses claims on cancelled SDs', () => {
   it('reads strategic_directives_v2.status (+ cancellation_reason) by sd_key before acquiring', () => {
     // Anchor on the FR-1-specific select (there is an earlier sd_type select in the TTL resolver).
-    const selIdx = guardSrc.indexOf(".select('status, cancellation_reason')");
+    const selIdx = guardSrc.indexOf(".select('status, cancellation_reason, metadata')");
     expect(selIdx).toBeGreaterThan(0);
     const block = guardSrc.slice(selIdx - 80, selIdx + 200);
     expect(block).toMatch(/from\(['"]strategic_directives_v2['"]\)/);
@@ -39,7 +39,7 @@ describe('FR-1: claim-guard.mjs refuses claims on cancelled SDs', () => {
   });
 
   it('the status check runs BEFORE the claude_sessions claim query (pre-acquire)', () => {
-    const statusIdx = guardSrc.indexOf(".select('status, cancellation_reason')");
+    const statusIdx = guardSrc.indexOf(".select('status, cancellation_reason, metadata')");
     const sessionsIdx = guardSrc.indexOf("from('claude_sessions')");
     expect(statusIdx).toBeGreaterThan(0);
     expect(sessionsIdx).toBeGreaterThan(statusIdx);

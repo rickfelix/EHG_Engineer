@@ -404,7 +404,8 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
     if (process.env.LEO_TELEMETRY_DEBUG === '1') {
       console.error(`SessionStart:capture-session-id: upsert skipped — supabaseUrl/Key missing in env (URL=${Boolean(supabaseUrl)} KEY=${Boolean(supabaseKey)})`);
     }
-    return;
+    // SD-LEO-INFRA-WIRE-MODEL-POLICY-001: no GET was even attempted -- hadPriorRow is false.
+    return { existingMetadata: {}, hadPriorRow: false };
   }
 
   // QF-20260903-195: lets a test prove credential-resolution (dotenv self-load reached this
@@ -415,7 +416,8 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
     if (process.env.LEO_TELEMETRY_DEBUG === '1') {
       console.error('SessionStart:capture-session-id: dry-run — upsert skipped (LEO_HOOK_DRY_RUN=1), credentials resolved OK');
     }
-    return;
+    // SD-LEO-INFRA-WIRE-MODEL-POLICY-001: dry-run bails before the GET -- hadPriorRow is false.
+    return { existingMetadata: {}, hadPriorRow: false };
   }
 
   const url = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/claude_sessions`;
@@ -428,6 +430,12 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
   // callsign-churn source (sibling to QF-20260627-108). Read the existing metadata first and MERGE,
   // so the stamped fields persist. Fail-open to {} (new session / GET error -> nothing to preserve).
   let existingMetadata = {};
+  // SD-LEO-INFRA-WIRE-MODEL-POLICY-001 FR-1: hadPriorRow distinguishes "we confirmed a real
+  // prior row with well-shaped metadata" from every other case (no row yet, GET failed/timed
+  // out, or malformed metadata) -- existingMetadata is ALWAYS {} in every one of those other
+  // cases, so it alone cannot make this distinction. Both this variable and existingMetadata
+  // are returned below so a caller can classify a session's role WITHOUT a second DB round-trip.
+  let hadPriorRow = false;
   try {
     const getCtrl = new AbortController();
     const getTimer = setTimeout(() => getCtrl.abort(), 2000);
@@ -440,7 +448,7 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
       if (getRes.ok) {
         const rows = await getRes.json();
         const m = Array.isArray(rows) && rows[0] && rows[0].metadata;
-        if (m && typeof m === 'object' && !Array.isArray(m)) existingMetadata = m;
+        if (m && typeof m === 'object' && !Array.isArray(m)) { existingMetadata = m; hadPriorRow = true; }
       }
     } finally { clearTimeout(getTimer); }
   } catch { /* fail-open: new session / GET unavailable -> no existing fields to preserve */ }
@@ -526,7 +534,7 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
           if (debug && attempt > 1) {
             console.error(`SessionStart:capture-session-id: upsert PATCH OK on attempt ${attempt}/${MAX_ATTEMPTS}`);
           }
-          return;
+          return { existingMetadata, hadPriorRow };
         }
         // 0 rows matched — row does not exist yet. Fall back to INSERT, same attempt.
         const insertRes = await fetch(url, {
@@ -545,7 +553,7 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
           if (debug && attempt > 1) {
             console.error(`SessionStart:capture-session-id: upsert INSERT-fallback OK on attempt ${attempt}/${MAX_ATTEMPTS}`);
           }
-          return;
+          return { existingMetadata, hadPriorRow };
         }
         lastStatus = insertRes.status;
         if (insertRes.status === 409) {
@@ -557,7 +565,7 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
         if (isNonRetryable4xx(insertRes.status)) {
           const insertBodyText = await insertRes.text().catch(() => '');
           logLoud4xx('INSERT-fallback', insertRes.status, insertBodyText);
-          return;
+          return { existingMetadata, hadPriorRow };
         }
         if (debug) console.error(`SessionStart:capture-session-id: upsert INSERT-fallback status=${insertRes.status} attempt=${attempt}/${MAX_ATTEMPTS}`);
         continue;
@@ -568,7 +576,7 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
         const patchBodyText = await patchRes.text().catch(() => '');
         clearTimeout(timer);
         logLoud4xx('PATCH', patchRes.status, patchBodyText);
-        return;
+        return { existingMetadata, hadPriorRow };
       }
       if (debug) {
         console.error(`SessionStart:capture-session-id: upsert PATCH status=${patchRes.status} attempt=${attempt}/${MAX_ATTEMPTS}`);
@@ -588,6 +596,76 @@ async function upsertSessionRow(sessionId, ccPid, source, model) {
   // (3 retries failed) is never silent — operator-trust violation tracked across 5
   // prior reproductions of failure mode F.
   console.error(`SessionStart:capture-session-id: upsert exhausted ${MAX_ATTEMPTS} attempts (last_status=${lastStatus}, last_error=${lastError?.message || 'n/a'})`);
+  // SD-LEO-INFRA-WIRE-MODEL-POLICY-001: retries exhausted -- the write never confirmed, but
+  // existingMetadata/hadPriorRow were already established (or not) by the GET above, independent
+  // of write success. Returned explicitly rather than falling off the end as implicit undefined.
+  return { existingMetadata, hadPriorRow };
+}
+
+/**
+ * SD-LEO-INFRA-WIRE-MODEL-POLICY-001 FR-1: fail-open, additive model-policy mismatch signal.
+ * Follow-up to QF-20260911-878, which pinned a per-seat-class model policy at spawn time but
+ * added no SessionStart-time check. Exported (with injected deps) so it is directly testable
+ * without invoking main()'s stdin-based machinery at all.
+ *
+ * DESIGN NOTE (why hadPriorRow, not existingMetadata truthiness): existingMetadata is ALWAYS {}
+ * on every "we cannot classify" path (no prior row, GET failed/timed out, malformed metadata) --
+ * verdictFromMetadata({}) returns 'worker', so a plain truthiness/null check would still
+ * false-positive on every one of those paths. hadPriorRow is the only reliable signal.
+ *
+ * DESIGN NOTE (why this checks LEO_HOOK_DRY_RUN itself): neither upsertSessionRow()'s nor the
+ * tick-spawn block's existing LEO_HOOK_DRY_RUN early-returns return from main() itself, so a
+ * tail-call here would still fire (and INSERT) during a dry-run test without this explicit,
+ * independent check -- the QF-20260903-195 defect class.
+ *
+ * DESIGN NOTE (why NOT model-policy.cjs's checkModelMismatch/seatClassFor): both collapse an
+ * absent/unrecognized role to 'worker', reproducing the exact false positive this SD fixes
+ * (measured live on the coordinator seat, is_coordinator:true with no role string). This
+ * function uses role-status-identity.cjs's verdictFromMetadata (three-state: role/worker/
+ * unknown) plus model-policy.cjs's policyModelFor/coarseModelAlias ONLY.
+ *
+ * @param {object} o
+ * @param {object} o.existingMetadata  the pre-write claude_sessions.metadata snapshot (from upsertSessionRow's return)
+ * @param {boolean} o.hadPriorRow      true only when a real prior row with well-shaped metadata was confirmed
+ * @param {string} [o.model]          the observed model id for this SessionStart
+ * @param {object} [o.supabase]       injectable supabase-js client (production: lazily created)
+ * @param {Function} [o.emit]         injectable emitFeedback-shaped function (production: the real emitFeedback)
+ * @param {Function} [o.now]          injectable clock, () => Date (production: real Date)
+ */
+async function signalModelPolicyMismatch({ existingMetadata, hadPriorRow, model, supabase, emit, now } = {}) {
+  if (process.env.LEO_MODEL_POLICY_SIGNAL === '0') return;
+  if (process.env.LEO_HOOK_DRY_RUN === '1') return;
+  if (!hadPriorRow) return;
+
+  const { verdictFromMetadata } = require('../../lib/fleet/role-status-identity.cjs');
+  const verdict = verdictFromMetadata(existingMetadata);
+  if (verdict !== 'role' && verdict !== 'worker') return;
+
+  const { policyModelFor, coarseModelAlias } = require('../../lib/fleet/model-policy.cjs');
+  const observedAlias = coarseModelAlias(model);
+  if (observedAlias === null) return; // absent/unrecognized observed model -- nothing to compare
+  const expectedModel = policyModelFor(verdict);
+  if (observedAlias === coarseModelAlias(expectedModel)) return; // on-policy
+
+  const nowFn = now || (() => new Date());
+  const today = nowFn().toISOString().slice(0, 10);
+
+  const doEmit = emit || (await import('../../lib/governance/emit-feedback.js')).emitFeedback;
+  const supabaseClient = supabase || (() => {
+    const { createClient } = require('@supabase/supabase-js');
+    return createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  })();
+
+  await doEmit({
+    supabase: supabaseClient,
+    title: `Model-policy mismatch: ${verdict} seat observed running ${model}`,
+    description: `Seat classified as '${verdict}' via lib/fleet/role-status-identity.cjs's verdictFromMetadata; expected policy model '${expectedModel}' (lib/fleet/model-policy.cjs), observed '${model}'.`,
+    category: 'model_policy_mismatch',
+    severity: 'medium',
+    source_type: 'auto_capture',
+    metadata: { verdict, expected_model: expectedModel, observed_model: model },
+    dedup_key: `model-policy-mismatch:${verdict}:${today}`,
+  });
 }
 
 function main() {
@@ -754,7 +832,7 @@ function main() {
         // silently no-ops and the identity chain between env var, markers, and DB
         // breaks. Insert-if-not-exists here so tick has a target. Uses PostgREST
         // directly (no supabase-js dep) to match session-tick.cjs pattern.
-        await upsertSessionRow(sessionId, ccPid, data.source, data.model);
+        const { existingMetadata, hadPriorRow } = await upsertSessionRow(sessionId, ccPid, data.source, data.model);
 
         // ── SD-LEO-INFRA-WORKER-SOURCE-SIDE-001: spawn detached session-tick ──
         // Writes process_alive_at every 30s until the parent CC exits.
@@ -831,6 +909,18 @@ function main() {
         } catch (tickErr) {
           logSpawnError(sessionId, ccPid, tickErr, tickErr.code || 'SYNC_THROW');
         }
+
+        // ── SD-LEO-INFRA-WIRE-MODEL-POLICY-001 FR-1: model-policy mismatch signal ──
+        // LAST statement in main(), after the upsert and tick-spawn, in its own try/catch so a
+        // throw here can never block/delay/fail the registration work above it. Fail-open by
+        // design -- see signalModelPolicyMismatch's own docblock for why.
+        try {
+          await signalModelPolicyMismatch({ existingMetadata, hadPriorRow, model: data.model });
+        } catch (signalErr) {
+          if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+            console.error(`SessionStart:model-policy-signal: non-fatal: ${signalErr?.message || signalErr}`);
+          }
+        }
       } catch {
         // Invalid JSON or other error — don't block session start
       }
@@ -857,7 +947,7 @@ function main() {
 }
 
 // SD-LEO-INFRA-FIX-CLAUDE-CODE-001 (FR-5): expose pure helpers for unit tests.
-module.exports = { selectAncestorFromChain, findClaudeCodePid, upsertSessionRow, buildSessionMetadata, resolveRepoRoot, findLiveTickPid };
+module.exports = { selectAncestorFromChain, findClaudeCodePid, upsertSessionRow, buildSessionMetadata, resolveRepoRoot, findLiveTickPid, signalModelPolicyMismatch };
 
 if (require.main === module) {
   main().then(() => drainAndExit(0)).catch(() => drainAndExit(0));

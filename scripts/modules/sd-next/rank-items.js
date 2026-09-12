@@ -264,9 +264,12 @@ export function rankItems(items, context = {}) {
       compositeRank = compositeRank * policyBoost;
     }
 
-    // Urgency from metadata (SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-A)
+    // Urgency from metadata (SD-EHG-ORCH-INTELLIGENCE-INTEGRATION-001-A). QF-20260911-669:
+    // SD order is priority-column-first with NO age-based promotion (that exists only for QFs,
+    // via qfUrgencyBand's age term above) -- band is always derived from score, never read
+    // directly off metadata.urgency_band, which nothing legitimately writes for SDs.
     const urgencyScore = sd.metadata?.urgency_score ?? null;
-    const urgencyBand = sd.metadata?.urgency_band ?? (urgencyScore !== null ? scoreToBand(urgencyScore) : 'P3');
+    const urgencyBand = urgencyScore !== null ? scoreToBand(urgencyScore) : 'P3';
     const urgencyNumeric = bandToNumeric(urgencyBand);
 
     const rankedEntry = {

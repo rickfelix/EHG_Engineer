@@ -49,6 +49,9 @@ const RECONCILIATION_MIGRATION_PATHS = [
   // QF-20260906-154: self_escalation and notification_permission_wait, coordinator-only (both
   // were addressed to role=coordinator but absent from every drain set until now).
   path.join(REPO_ROOT, 'database/migrations/20260907_role_drain_sets_add_self_escalation_notification_wait.sql'),
+  // QF-20260911-078: notification_permission_wait's two split siblings, coordinator-only (same
+  // addressee, same gap class as the line above if left unregistered).
+  path.join(REPO_ROOT, 'database/migrations/20260911_role_drain_sets_add_notification_split_kinds.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -187,9 +190,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('michael', 'michael_handoff',");
   });
 
-  it('total seed row count for solomon/adam/coordinator/worker/michael is exactly 118 (116 prior rows + 2 new coordinator rows, QF-20260906-154: self_escalation, notification_permission_wait)', () => {
+  it('total seed row count for solomon/adam/coordinator/worker/michael is exactly 120 (118 prior rows + 2 new coordinator rows, QF-20260911-078: notification_idle_prompt, notification_usage_limit_reset)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker|michael)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(118);
+    expect(matches.length).toBe(120);
   });
 });

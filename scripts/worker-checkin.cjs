@@ -668,7 +668,7 @@ async function rehydrateCallsign(sb, sessionId, currentMeta) {
  * or null (caller then falls through to idle). Never throws (fail-open).
  * SD-LEO-INFRA-MAKE-OPEN-QFS-001.
  */
-async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
+async function selfClaimQuickFix(sb, sessionId, base, sessionModel, reservationCtx) {
   try {
     // factory_lane is a staged, not-yet-applied column
     // (database/migrations/20260713_quick_fixes_factory_lane.sql). The comment here previously
@@ -769,16 +769,65 @@ const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routin
       entityType: 'qf',
     }).catch(() => {});
     const qfCandidates = await withheldFilteredQfs(severityOrderedQfs, {});
+    // QF-20260911-388: the QF self-claim loop emitted NO per-candidate trace, so a silently
+    // refused claim (tryClaim !ok) left no error string anywhere the worker or the coordinator
+    // could read after the fact (QF-20260911-117 was first-eligible in two seats' candidate
+    // lists yet skipped both times with nothing to attribute it to). Additive logging only --
+    // never changes ordering or claim behaviour. Capped so a large belt can't bloat the JSON.
+    const QF_TRACE_CAP = 10;
+    const pushQfTrace = (entry) => {
+      if (!base.qf_candidates_trace) base.qf_candidates_trace = [];
+      if (base.qf_candidates_trace.length < QF_TRACE_CAP) base.qf_candidates_trace.push(entry);
+    };
+    // withheldFilteredQfs already removed in-flight-git QFs from qfCandidates -- they never
+    // reach the loop below, so surface them here (from the extra .withheld property it now
+    // stashes on the returned array) or the same "why not X" gap would persist for this class.
+    if (Array.isArray(qfCandidates.withheld)) {
+      for (const w of qfCandidates.withheld) {
+        pushQfTrace({ qf_id: w.id, severity: null, picker_verdict: null, work_class_reason: null, reservation_reason: null, withheld_reason: w.reason, moot: null, tryClaim: null });
+      }
+    }
     for (const qf of qfCandidates) {
+      const trace = { qf_id: qf.id, severity: qf.severity ?? null, picker_verdict: null, work_class_reason: null, reservation_reason: null, withheld_reason: null, moot: null, tryClaim: null };
       // SD-LEO-INFRA-PRIORITY-RECORD-ONE-001-A: a QF held out ONLY by staleness is demoted to
       // claimable-with-verify rather than excluded (see getQfPickerVerdict's doc comment).
       const verdict = getQfPickerVerdict(qf, nowMs);
-      if (!verdict.eligible) continue;
+      trace.picker_verdict = !verdict.eligible ? 'ineligible' : (verdict.needsVerify ? 'eligible_needs_verify' : 'eligible');
+      if (!verdict.eligible) { pushQfTrace(trace); continue; }
       const wcReason = typeof sessionModel === 'string' ? workClassIneligibilityReason(qf, sessionModel) : null;
       if (wcReason) {
+        trace.work_class_reason = wcReason;
         if (!base.work_class_fenced) base.work_class_fenced = [];
         base.work_class_fenced.push({ qf: qf.id, reason: wcReason, derived_class: deriveWorkClass(qf) });
+        pushQfTrace(trace);
         continue;
+      }
+      // QF-20260911-004: the SAME coordinator_reservation fence axis that already gates SD
+      // self-claim (merged-pool-self-claim.cjs) now also gates QF self-claim, keyed by qf.id
+      // (claim-eligibility.cjs's coordinatorReservation row.sd_key||row.id). Cheap, DB-free
+      // pre-check; absent reservations makes this a no-op single object check.
+      if (reservationCtx && reservationCtx.reservations) {
+        const fenceReason = coordinatorReservation({ id: qf.id }, { ...reservationCtx, sessionId });
+        if (fenceReason) {
+          trace.reservation_reason = fenceReason;
+          const now = Date.now();
+          const fences = reservationCtx.reservations[qf.id] || [];
+          const activeFence = fences.find((f) => {
+            const exp = f.expiresAt ? Date.parse(f.expiresAt) : NaN;
+            return !(Number.isFinite(exp) && exp <= now);
+          }) || fences[0] || {};
+          if (!base.reservation_fences_skipped) base.reservation_fences_skipped = [];
+          base.reservation_fences_skipped.push({
+            qf: qf.id,
+            reason: fenceReason,
+            reserved_for_session: activeFence.reservedForSession || null,
+            reserved_for_tier: activeFence.reservedForTier || null,
+            lane_pattern: activeFence.lanePattern || null,
+            expires_at: activeFence.expiresAt || null,
+          });
+          pushQfTrace(trace);
+          continue;
+        }
       }
       // SD-FDBK-FIX-RETRO-ACTION-ITEM-001 / FR-2: claim-time moot-recheck for
       // auto-promoted retro action-item QFs -- if the SD explicitly named in
@@ -786,11 +835,15 @@ const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routin
       // work is stale; auto-cancel and move on rather than let a worker burn
       // a claim cycle discovering "nothing to do" (the QF-20260713-800 class).
       const mootCheck = await checkQfMoot(sb, qf);
+      trace.moot = mootCheck.moot;
       if (mootCheck.moot) {
         await cancelMootQf(sb, qf.id, mootCheck.sdKey, mootCheck.status);
+        pushQfTrace(trace);
         continue;
       }
       const claimed = await tryClaim(sb, qf.id, sessionId);
+      trace.tryClaim = { ok: claimed.ok, error: claimed.ok ? null : (claimed.error || null) };
+      pushQfTrace(trace);
       if (claimed.ok) {
         return {
           ...base,

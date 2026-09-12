@@ -74,9 +74,16 @@ describe('findExpiredUnreadMissed', () => {
     expect(capturedNots).toContainEqual(['target_session', 'is', null]);
     const sentinelCall = capturedNots.find(([col, op]) => col === 'target_session' && op === 'in');
     expect(sentinelCall).toBeTruthy();
-    for (const sentinel of ['broadcast', 'broadcast-coordinator', 'broadcast-solomon', 'broadcast-adam', 'broadcast-michael']) {
+    // Bare 'broadcast' was removed from SENTINEL_TARGETS by QF-20260911-753 (0 of 91 rows
+    // ever acknowledged, all-time) — it is deliberately NOT in this exclusion list anymore,
+    // so rows still carrying it (legacy, or a future misuse) now count as missed rather
+    // than being silently excluded as "legitimate broadcast."
+    for (const sentinel of ['broadcast-coordinator', 'broadcast-solomon', 'broadcast-adam', 'broadcast-michael']) {
       expect(sentinelCall[2]).toContain(sentinel);
     }
+    // Substring check, not a prefix false-positive: 'broadcast-coordinator' also contains
+    // 'broadcast', so split into exact elements before asserting bare 'broadcast' is absent.
+    expect(String(sentinelCall[2]).split(',')).not.toContain('broadcast');
     // Must use an is-null-OR-not-equal shape, never a bare .neq() -- NULL <> 'roll_call' is NULL
     // in SQL, which would silently drop every row with no payload.kind at all.
     expect(capturedOr).toContain('payload->>kind.is.null');

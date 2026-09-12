@@ -1,8 +1,8 @@
-<!-- file_content_hash: 82d074b014015aed -->
+<!-- file_content_hash: 298fea9496df9662 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-11 5:03:23 PM
+**Generated**: 2026-09-12 11:13:24 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -487,6 +487,9 @@ manual is read.
 
 - **MICHAEL READ CADENCE — three read windows a day, classifier stays disabled (ratification d5905408)** — Chairman in-terminal at the Adam terminal 2026-09-11 ~20:47Z, verbatim: "I agree", answering Adam's recommendation after he asked "Do you think the frequency of that is appropriate? Based on what you know in terms of how I interact with Michael" — minutes after he ran `node scripts/setup-michael-host-tasks.mjs` and `--verify` himself (seven EHG Michael tasks VERIFIED hidden-window, repeating, enabled, battery-tolerant: the 439c07d1 keystroke read-back, closing the 00f696f1 venue move). The read he agreed to: the every-15-minutes repeat is RETRY DENSITY only; what was registered is ONE pre-dawn read of Todoist, Gmail and Calendar per day (03:45-06:00 ET) feeding one 06:00 brief, which leaves Michael answering the chairman all day from a picture up to eighteen hours old and puts the whole day's brief on the laptop's most-asleep hour. Ruling: keep the 06:00 ET brief as the anchor; ADD 12:00-12:30 and 18:00-18:30 ET read windows for calendar-read, gmail-triage and todoist-brief (defaults; the chairman named no other times); tasks-classifier stays DISABLED per ratification 04c9dd29 point 2 until a measurement shows its parser and producer agree. Delivery = QF-20260911-282 (window lists per feeder, classifier registered disabled, --verify asserts it) followed by ONE re-registration keystroke by the chairman, carried by Adam with the exact two commands. Expectation to measure after: michael_todoist_snapshot rows in three windows a day. **Adam share:** a cadence question from the chairman is answered from how he actually uses the assistant, not from the scheduler's repeat interval; a registered task the chairman previously ruled dead stays disabled until measured, even when a fresh script re-enables it.
 
+- **SMS APPLY ANSWERING A PACKET IS A COMPLETE VERBAL FOR THAT PACKET ONLY (ratification 01ad693d)** — Chairman by verified SMS 2026-09-12T00:20:06Z (sms_relay_staging c72a4aad, signature valid), verbatim: "Apply", answering the Adam 21:00 ET packet for decision e92009de (migration_apply, database/chairman-gated/20260911_chairman_ratification_verifications.sql, from SD-LEO-INFRA-RATIFICATION-ENCODE-VERIFICATION-001; options A apply tonight, reply "apply" / B wait for morning, the recommended default; no reply = B; never auto-apply). Applied under the 3c ceremony from .worktrees/adhoc/adam-ceremony-20260912 (branch chore/adam-apply-ceremony-20260912, .reap-protected.json written first, header scribed to codestreetlabs@gmail.com, PR #8690 merged 26fe3713): single-use token issued and consumed in the same shell environment, --prod-deploy with --allow-any-path because the file lives under the chairman-gated directory, MIGRATION_APPLY_PROD_PASS sha256 e48525b0, 37 statements, 00:33:39Z, ledger row aa936ba4; readback independent of the file's own verify block: table chairman_ratification_verifications present, triggers no_update / no_delete_trg / no_truncate_trg enabled, indexes pkey, crv_not_verified_idx, crv_one_backfill_audit_per_ratification and crv_target_ratification_idx; decision e92009de approved through fn_chairman_decide with the rationale on the row; the coordinator unparked the SD and it completed 00:43Z; the chairman received a confirmation reply (row 19be766b) inside the same slot. **Adam share, three parts.** (1) A one-word SMS that matches an option label the packet itself defined is a complete verbal for exactly that option and nothing beyond it: it binds the packeted file at the packeted content, and any later change to the applied object is a fresh verbal. (2) The packet must already have named the exact filename, its one-line effect, the options and the no-reply default before the word arrives; a reply to a packet that did not name them is a question back to the chairman, not an authorisation. (3) The apply token lives only in the shell environment for the one command that consumes it, never in a heredoc, a file or the seat record; the two stray tokens this ceremony produced (an unquoted-heredoc expansion at 00:04Z, ledger row ade5d54e, and a refused first apply at 00:3xZ, row 43727b6c) were voided by setting token_consumed_at and disclosed to the coordinator and the chairman the same night. A refused apply takes a fresh token, never a retried one.
+
+
 
 ## Crew-comms routing protocol (organizing layer)
 
@@ -530,6 +533,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-11*
+*Generated from database: 2026-09-12*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
