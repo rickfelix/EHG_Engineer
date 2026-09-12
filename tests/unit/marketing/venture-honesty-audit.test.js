@@ -133,3 +133,72 @@ describe('FR-8: consent counts use latest-event-wins, the same rule the send pat
     expect(a.consent.total_events).toBe(3);
   });
 });
+
+// SECURITY finding SEC-M4 (sub_agent_execution_results 3ed447ec-de8c-4798-9fdc-5a0c814623a5):
+// this audit's whole job is reporting whether a venture really contacted real humans, so a mock
+// send must never be folded into the same total as a live one.
+describe('FR-8/SEC-M4: sends splits live vs. mock, and degrades gracefully when execution_mode is unknown', () => {
+  function supabaseForLedger(ledgerLimit) {
+    return {
+      from(t) {
+        if (t === 'venture_demand_verdicts') {
+          return { select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [verdictRow('PASS')], error: null }) }) }) }) };
+        }
+        if (t === 'venture_consent_events') {
+          return { select: () => ({ eq: () => ({ order: async () => ({ data: [], error: null }) }) }) };
+        }
+        if (t === 'venture_channel_publish_ledger') {
+          return { select: () => ({ eq: () => ({ order: () => ({ limit: ledgerLimit }) }) }) };
+        }
+        throw new Error(`unexpected table ${t}`);
+      },
+    };
+  }
+
+  it('splits total into live and mock counts when execution_mode is present', async () => {
+    const rows = [
+      { channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live', created_at: '2026-09-01T00:00:00Z' },
+      { channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock', created_at: '2026-09-02T00:00:00Z' },
+      { channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock', created_at: '2026-09-03T00:00:00Z' },
+    ];
+    const supabase = supabaseForLedger(async () => ({ data: rows, error: null }));
+    const a = await buildHonestyAudit({ supabase, ventureId: VENTURE });
+    expect(a.sends.readable).toBe(true);
+    expect(a.sends.execution_mode_known).toBe(true);
+    expect(a.sends.total).toBe(3);
+    expect(a.sends.live).toBe(1);
+    expect(a.sends.mock).toBe(2);
+    expect(renderHonestyAudit(a)).toContain('publish-ledger entries: 3 (live: 1, mock: 2)');
+  });
+
+  it('falls back gracefully and flags the gap when execution_mode does not exist in the live schema (42703)', async () => {
+    const rows = [
+      { channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', created_at: '2026-09-01T00:00:00Z' },
+      { channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', created_at: '2026-09-02T00:00:00Z' },
+    ];
+    let call = 0;
+    const supabase = supabaseForLedger(async () => {
+      call += 1;
+      if (call === 1) {
+        return { data: null, error: { code: '42703', message: 'column venture_channel_publish_ledger.execution_mode does not exist' } };
+      }
+      return { data: rows, error: null };
+    });
+    const a = await buildHonestyAudit({ supabase, ventureId: VENTURE });
+    expect(a.sends.readable).toBe(true);
+    expect(a.sends.execution_mode_known).toBe(false);
+    expect(a.sends.total).toBe(2);
+    expect(a.sends.live).toBeUndefined();
+    expect(a.sends.mock).toBeUndefined();
+    expect(a.gaps.join(' ')).toMatch(/execution_mode does not exist in the live schema yet/);
+    expect(renderHonestyAudit(a)).toContain('publish-ledger entries: 2 (live/mock split unknown — execution_mode not yet in schema)');
+  });
+
+  it('a genuinely unreadable ledger (non-schema error) still reports UNREADABLE, not a false split', async () => {
+    const supabase = supabaseForLedger(async () => ({ data: null, error: { message: 'connection reset' } }));
+    const a = await buildHonestyAudit({ supabase, ventureId: VENTURE });
+    expect(a.sends.readable).toBe(false);
+    expect(a.sends.detail).toBe('connection reset');
+    expect(a.gaps.join(' ')).toMatch(/publish ledger unreadable/);
+  });
+});

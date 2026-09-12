@@ -14,22 +14,21 @@
 --
 -- PREDICATE (mirrors assertOutreachAuthorized()'s positive shape exactly): a row may be
 -- inserted only if the linked venture resolves AND is_demo=false AND status='active' AND
--- current_lifecycle_stage>=24 AND launch_mode='live' -- UNLESS a consumed chairman override
--- exists for this exact (venture_id, channel_type:content_ref) pair, reconstructing the same
--- override_key the application layer uses (checkPublishAuthorization's actorId is
--- `${channelType}:${contentId}`, and this table's own channel_type/content_ref columns are
--- exactly those two values on the row being inserted).
+-- current_lifecycle_stage>=24 AND launch_mode='live'. NO chairman override escape hatch --
+-- SECURITY finding SEC-H2 (sub_agent_execution_results 3ed447ec-de8c-4798-9fdc-5a0c814623a5):
+-- an earlier draft of this trigger checked `consumed_at IS NOT NULL`, the OPPOSITE of
+-- hasActiveOverride()'s one-shot `consumed_at IS NULL` atomic-claim semantics -- inverted this
+-- way, a single spent override would have licensed UNLIMITED direct INSERTs for its
+-- (venture_id, override_key) pair until undo_deadline expired, against exactly the manual-
+-- insert threat this trigger exists to close. The application layer (assertOutreachAuthorized,
+-- via checkStageGate's hasActiveOverride) already owns the one-shot chairman override as the
+-- sole touchpoint; this DB-level defense-in-depth layer is deliberately absolute with no
+-- escape hatch of its own, so it cannot itself become a vector for exactly the standing-bypass
+-- class of bug an override mechanism is supposed to avoid.
 --
 -- SCOPE: fires on INSERT only. UPDATE is not gated here -- the only production UPDATE path on
 -- this table is recordPublishOutcome() (setting outcome/outcome_ref on an already-accepted
 -- row), which does not create new send authority and is out of scope for this gate.
---
--- KNOWN LIMITATION, documented not silently absorbed: content_ref is nullable on this table;
--- a NULL content_ref reconstructs the override_key as '<channel_type>:' (empty suffix), which
--- will not match an application-side override minted with a real contentId. This is an edge
--- case with zero real overrides recorded against it today (0 rows in chairman_decisions with
--- decision_type='stage_gate_override') and does not weaken the primary predicate -- it only
--- means the override escape hatch may not reach a NULL-content_ref row.
 --
 -- @approved-by: codestreetlabs@gmail.com
 --   Chairman verification NOT yet obtained. This file is staged only -- per coordinator
@@ -40,16 +39,18 @@
 -- NOTE: no top-level BEGIN/COMMIT -- scripts/apply-migration.js wraps the whole file in its
 -- own transaction (this directory's established convention).
 
+-- SECURITY finding (sub_agent_execution_results 3ed447ec): no SECURITY DEFINER -- this
+-- function does not need elevated privilege to be fail-closed. As INVOKER, a caller whose
+-- own RLS hides the linked venture row hits the SAME "NOT FOUND -> does not resolve"
+-- rejection this function already raises for a genuinely unresolvable venture_id, which is
+-- the correct fail-closed outcome anyway.
 CREATE OR REPLACE FUNCTION check_venture_channel_publish_ledger_outbound_gate()
 RETURNS TRIGGER
 LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_catalog
+SET search_path = pg_catalog, public
 AS $$
 DECLARE
   v_venture RECORD;
-  v_override_key TEXT;
-  v_has_override BOOLEAN;
 BEGIN
   SELECT is_demo, status, current_lifecycle_stage, launch_mode
     INTO v_venture
@@ -67,37 +68,9 @@ BEGIN
      OR v_venture.current_lifecycle_stage < 24
      OR v_venture.launch_mode IS DISTINCT FROM 'live'
   THEN
-    -- One-shot chairman override escape hatch, mirroring the application layer's own
-    -- override_key = `${channelType}:${contentId}` scoping.
-    --
-    -- MEASURED (2026-09-12): chairman_decisions.override_key does NOT exist in the live
-    -- schema yet -- it is part of a separate, still-unapplied predecessor migration
-    -- (SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 FR-4). This lookup fails safe (treats the
-    -- error as "no override", same fail-closed direction as the primary predicate) rather
-    -- than letting an undefined_column error propagate as an unrelated 500 on every single
-    -- rejected insert -- this trigger's own PRIMARY predicate must not depend on that
-    -- separate migration having landed. Once it lands, the override escape hatch here
-    -- activates automatically with no further change to this file.
-    v_override_key := NEW.channel_type || ':' || COALESCE(NEW.content_ref, '');
-    v_has_override := FALSE;
-    BEGIN
-      SELECT EXISTS (
-        SELECT 1 FROM chairman_decisions
-         WHERE override_key = v_override_key
-           AND decision_type = 'stage_gate_override'
-           AND venture_id = NEW.venture_id
-           AND consumed_at IS NOT NULL
-           AND undo_deadline > now()
-      ) INTO v_has_override;
-    EXCEPTION WHEN undefined_column OR undefined_table THEN
-      v_has_override := FALSE;
-    END;
-
-    IF NOT v_has_override THEN
-      RAISE EXCEPTION 'OUTBOUND_GATE_REJECTED: venture % is not outreach-authorized (is_demo=%, status=%, stage=%, launch_mode=%)',
-        NEW.venture_id, v_venture.is_demo, v_venture.status, v_venture.current_lifecycle_stage, v_venture.launch_mode
-        USING ERRCODE = 'P0001';
-    END IF;
+    RAISE EXCEPTION 'OUTBOUND_GATE_REJECTED: venture % is not outreach-authorized (is_demo=%, status=%, stage=%, launch_mode=%)',
+      NEW.venture_id, v_venture.is_demo, v_venture.status, v_venture.current_lifecycle_stage, v_venture.launch_mode
+      USING ERRCODE = 'P0001';
   END IF;
 
   RETURN NEW;

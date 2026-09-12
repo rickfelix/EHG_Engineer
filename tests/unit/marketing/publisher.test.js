@@ -353,12 +353,16 @@ describe('Publisher — SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-3/FR-6
     expect(result.dryRun).toBe(true);
     expect(result.postId).toContain('dry-run-no-credentials');
     expect(result.reason).toContain('No venture-specific credentials');
-    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-3: mode here is authCheck.mode (propagated), not a
-    // hardcoded 'mock' -- an authorized (mode:'live') send that hits missing credentials must
-    // still carry mode:'live' so the ledger row (written by checkPublishAuthorization, BEFORE
+    // SECURITY finding SEC-M1 (sub_agent_execution_results 3ed447ec): this branch never
+    // dispatched anything, so `mode` (the DISPATCH vocabulary — only 'real' means
+    // adapter.publish() actually ran) must be absent here, never 'live'. `authMode` carries
+    // authCheck.mode (assertOutreachAuthorized()'s 'live'|'mock' AUTHORIZATION vocabulary)
+    // instead: an authorized (authMode:'live') send that hits missing credentials must still
+    // carry authMode:'live' so the ledger row (written by checkPublishAuthorization, BEFORE
     // this dry-run branch runs) can be reconciled via recordPublishOutcome(), not silently
     // miscounted. This fixture's venture is fully outreach-authorized (see createMockSupabase).
-    expect(result.mode).toBe('live');
+    expect(result.authMode).toBe('live');
+    expect(result.mode).toBeUndefined();
   });
 
   it('ADVERSARIAL-REVIEW FIX (round 2): an unresolvable secret_ref (row exists but keyring lookup misses) ALSO forces dry-run, never a fallback identity', async () => {
