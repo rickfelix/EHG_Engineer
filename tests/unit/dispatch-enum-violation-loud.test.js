@@ -15,9 +15,10 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { insertCoordinationRow } = require('../../lib/coordinator/dispatch.cjs');
 
-// Minimal supabase double. target_session='broadcast' is a SENTINEL, which short-circuits
-// assertValidTarget entirely (dispatch.cjs SENTINEL_TARGETS), so the fixture only has to return a
-// canned insert result to exercise the post-insert branch under test.
+// Minimal supabase double. target_session='broadcast-coordinator' is a SENTINEL, which
+// short-circuits assertValidTarget entirely (dispatch.cjs SENTINEL_TARGETS; QF-20260911-753
+// retargeted this from bare 'broadcast', retired), so the fixture only has to return a canned
+// insert result to exercise the post-insert branch under test.
 function fakeSupabase(insertResult) {
   const api = {
     select() { return api; },
