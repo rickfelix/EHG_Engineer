@@ -8,6 +8,7 @@ import {
   isSmsQuietHour, smsQuietWindowReleaseIso, etLocalHour, etLocalMinute, et6amIso, etDateStr,
   etPrior545Iso, isValidCanonicalZone, formatChairmanTimestamp,
   nextHeartbeatSlotIso, currentHeartbeatSlotIso, HEARTBEAT_ET_SLOT_HOURS,
+  buildLiveSlotDedupeKeyCandidates,
 } from '../../../lib/time/chairman-et-wall-clock.js';
 
 // QF-20260828-884 (QF-20260828-188 leg 4): the mechanical chairman-facing timestamp formatter.
@@ -236,5 +237,25 @@ describe('nextHeartbeatSlotIso / currentHeartbeatSlotIso — fixed ET heartbeat 
   it('currentHeartbeatSlotIso and nextHeartbeatSlotIso agree exactly on a slot boundary', () => {
     const boundary = new Date('2026-03-15T13:00:00.000Z'); // 9am ET (EDT)
     expect(currentHeartbeatSlotIso(boundary)).toBe(nextHeartbeatSlotIso(boundary));
+  });
+});
+
+// QF-20260911-252: shared here (not just in the sweep) so both the sweep
+// (scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs) and the drain-time re-verify
+// (lib/chairman/sms-outbound-worker.js) recognize the exact same set of historical dedupe_key
+// formats without duplicating -- and drifting -- the format list between them.
+describe('buildLiveSlotDedupeKeyCandidates', () => {
+  it('returns both known historical dedupe_key formats for a slot', () => {
+    expect(buildLiveSlotDedupeKeyCandidates(21, '2026-09-11')).toEqual([
+      'slot-2100-20260911',
+      'adam-slot-2026-09-11-2100et',
+    ]);
+  });
+
+  it('pads a single-digit slot hour to two digits in both formats', () => {
+    expect(buildLiveSlotDedupeKeyCandidates(6, '2026-09-11')).toEqual([
+      'slot-0600-20260911',
+      'adam-slot-2026-09-11-0600et',
+    ]);
   });
 });

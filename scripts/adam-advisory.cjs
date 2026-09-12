@@ -693,6 +693,48 @@ async function recordFramingEscalation(supabase, r, routed) {
   }
 }
 
+/**
+ * QF-20260912-245 (FR-b): a PICK-CLASS oracle framing is a deliberate portfolio-altitude call —
+ * a genuine chairman-worthy escalation, unlike 'unproven' (an unclassified send, comms-quality
+ * noise). The comment above this drain site has long claimed pick-class calls recordPendingDecision
+ * with blocking:false / decisionType:'framing_escalation'; the body never did (it always fell
+ * through to the same feedback-only recordFramingEscalation as 'unproven'). This makes the comment
+ * true: 0 pick-class rows exist historically (measured live 2026-09-12), so this newly-live branch
+ * carries zero backfill risk — it only starts firing the day a sender deliberately classifies a
+ * send as pick. blocking:false + decisionType 'framing_escalation' (never 'session_question') keeps
+ * shouldAutoEscalate() false — queued for decision-scheduler surfacing, never a standout email/SMS
+ * (same non-auto-escalating guarantee QF-20260725-450 required of this fork). Idempotent per
+ * advisory row id (drainInbox re-drains an unacked row every tick until `ack`).
+ */
+async function recordFramingChairmanEscalation(supabase, r) {
+  try {
+    const { data: existing } = await supabase
+      .from('chairman_decisions')
+      .select('id')
+      .eq('brief_data->context->>advisory_row_id', String(r.id))
+      .limit(1);
+    if (existing && existing.length > 0) return true;
+    const body = (r.payload && r.payload.body) || r.body || r.subject || '';
+    const { recordPendingDecision } = await import('../lib/chairman/record-pending-decision.mjs');
+    const res = await recordPendingDecision(supabase, {
+      title: `Pick-class framing escalation: ${String(body).slice(0, 90) || '(no body)'}`,
+      decisionType: 'framing_escalation',
+      blocking: false,
+      raisedBy: 'solomon',
+      context: { advisory_row_id: String(r.id), sender_session: r.sender_session || null },
+      recommendation: String(body).slice(0, 400),
+    });
+    if (!res || !res.recorded) {
+      console.error(`  ✖ CHAIRMAN ESCALATION WRITE FAILED (id=${r.id}): ${(res && res.error) || 'unknown'}`);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error(`  ✖ CHAIRMAN ESCALATION WRITE FAILED (id=${r.id}): ${(e && e.message) || e}`);
+    return false;
+  }
+}
+
 async function drainInbox(supabase, sessionId, { quiet = false, background = false, windowMs = DEFAULT_DRAIN_WINDOW_MS } = {}) {
   // SD-LEO-INFRA-ADAM-INBOX-SURFACE-NOT-STAMP-001 (FR-4): recoverable filter is
   // acknowledged_at IS NULL — a row any background/legacy pass read-stamped still surfaces
@@ -789,20 +831,28 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     const skew = detectVersionSkew(r.payload);
     if (skew) console.warn(`  ⚠ PROTOCOL VERSION SKEW: sender v${skew.senderVersion}, receiver v${skew.receiverVersion} (id=${r.id})`);
     // SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed pick-vs-instrument ROUTING
-    // (supersedes the -B interim PICK-CLASS warn). pick/unproven oracle framings route to the
-    // chairman-escalation fork (recordPendingDecision -> decision-scheduler surfacing) with
-    // EXPLICIT non-auto-escalating params (blocking:false, decisionType:'framing_escalation')
-    // so shouldAutoEscalate() is provably false — rows QUEUE, no per-row standout email/SMS
-    // (RISK conditions a+b). instrument framings render sourcing-eligible and flow as today.
-    // Escalation writes are fail-SOFT for drain liveness but LOUD on failure, and a failed
-    // write is rendered routing:escalation-write-failed — never as safely routed.
+    // (supersedes the -B interim PICK-CLASS warn). instrument framings render sourcing-eligible
+    // and flow as today. Escalation writes are fail-SOFT for drain liveness but LOUD on failure,
+    // and a failed write is rendered routing:escalation-write-failed — never as safely routed.
+    // QF-20260912-245 (FR-b): pick-class and unproven are NOT the same case and no longer share
+    // a rendered tag. pick-class is a deliberate portfolio-altitude call -> a REAL
+    // recordPendingDecision escalation (recordFramingChairmanEscalation), EXPLICIT
+    // non-auto-escalating params (blocking:false, decisionType:'framing_escalation') so
+    // shouldAutoEscalate() is provably false — rows QUEUE, no per-row standout email/SMS.
+    // unproven (missing/unrecognized framing_class — the ONLY reason ever observed live, 1,473/
+    // 1,473 measured 2026-09-12) is comms-quality noise, not a decision: it keeps the existing
+    // feedback-only recordFramingEscalation, now rendered routing:comms-quality-record so a
+    // reader is never told an escalation happened when it did not.
     const framingClass = r.payload && r.payload.framing_class;
     const framingTag = framingClass ? ` framing:${framingClass}` : '';
     const routed = routeFraming(r);
     let routingTag = '';
-    if (routed.route === FRAMING_ROUTES.CHAIRMAN_ESCALATION) {
-      const ok = await recordFramingEscalation(supabase, r, routed);
+    if (routed.route === FRAMING_ROUTES.CHAIRMAN_ESCALATION && routed.reason === 'pick-class') {
+      const ok = await recordFramingChairmanEscalation(supabase, r);
       routingTag = ok ? ' routing:chairman-escalation' : ' routing:escalation-write-failed';
+    } else if (routed.route === FRAMING_ROUTES.CHAIRMAN_ESCALATION) {
+      const ok = await recordFramingEscalation(supabase, r, routed);
+      routingTag = ok ? ' routing:comms-quality-record' : ' routing:escalation-write-failed';
     } else if (routed.route === FRAMING_ROUTES.ADAM_SOURCING) {
       routingTag = ' routing:adam-sourcing';
     }

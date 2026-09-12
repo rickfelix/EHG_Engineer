@@ -57,6 +57,12 @@ function getHeartbeatFile(sessionId) {
   if (!isValidSessionId(sessionId)) return null;
   return path.join(os.tmpdir(), `claude-coordination-inbox-heartbeat-${sessionId}.json`);
 }
+// QF-20260912-772: rate-limit file for the tool-active-lane-blind nudge (part b's worker-side
+// fallback) -- same per-session-file convention as the throttle/heartbeat files above.
+function getLaneBlindNudgeFile(sessionId) {
+  if (!isValidSessionId(sessionId)) return null;
+  return path.join(os.tmpdir(), `claude-coordination-inbox-lane-blind-nudge-${sessionId}.json`);
+}
 
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — friction-detection counter file.
 // Per-session counter of recurring failures; emits proactive /signal nudge when
@@ -384,6 +390,69 @@ async function updateHeartbeat(supabase, sessionId) {
       .update(stampBranch({ heartbeat_at: new Date().toISOString() }))
       .eq('session_id', sessionId);
   } catch { /* fail silently */ }
+}
+
+// QF-20260912-772: rate-limit the tool-active-lane-blind nudge to once per 5 min, same
+// file-per-session convention as shouldCheck/shouldHeartbeat above.
+const LANE_BLIND_NUDGE_INTERVAL_MS = 5 * 60 * 1000;
+function shouldPrintLaneBlindNudge(sessionId) {
+  const file = getLaneBlindNudgeFile(sessionId);
+  if (!file) return true;
+  try {
+    if (!fs.existsSync(file)) return true;
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return (Date.now() - data.lastPrinted) > LANE_BLIND_NUDGE_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+function markLaneBlindNudgePrinted(sessionId) {
+  const file = getLaneBlindNudgeFile(sessionId);
+  if (!file) return;
+  try {
+    fs.writeFileSync(file, JSON.stringify({ lastPrinted: Date.now() }));
+  } catch { /* ignore */ }
+}
+
+/**
+ * QF-20260912-772: find the OLDEST unread DIRECTIVE-class row among an already-fetched batch
+ * (message_type=WORK_ASSIGNMENT, or payload.kind in DIRECTIVE_KINDS). Pure -- no DB call, reuses
+ * rows the caller already fetched (the oldest-5-unread batch main() builds regardless) rather
+ * than issuing a second query. `rows` is assumed already ordered oldest-first (created_at asc),
+ * matching every query site in this file that builds it.
+ * @param {Array<{message_type?:string, payload?:object}>} rows
+ * @returns {object|null}
+ */
+function findOldestUnreadDirectiveRow(rows) {
+  for (const r of rows || []) {
+    const kind = r && r.payload && r.payload.kind;
+    if (r && (DIRECTED_SURFACE_TYPES.includes(r.message_type) || DIRECTIVE_KINDS.includes(kind))) {
+      return r;
+    }
+  }
+  return null;
+}
+
+/**
+ * QF-20260912-772 (MECHANISM, part b fallback): a tool-active worker that skips /checkin reads
+ * every reply-class row within minutes (this hook drains those) but drains NO directive-class
+ * row at all (only /checkin's ackMessage does) -- so a directed WORK_ASSIGNMENT cannot reach a
+ * tool-active-but-/checkin-skipping seat by construction. This hook already fires on every tool
+ * call (proving recent tool activity by construction -- no separate heartbeat-freshness check
+ * needed here), so the only remaining condition is an unread directive-class row aged past the
+ * cut point.
+ * @param {object|null} oldestDirectiveRow - from findOldestUnreadDirectiveRow()
+ * @param {{now?:number, cutMinutes?:number}} [opts]
+ * @returns {{blind:boolean, ageMinutes:number|null}}
+ */
+function classifyToolActiveLaneBlind(oldestDirectiveRow, opts = {}) {
+  if (!oldestDirectiveRow) return { blind: false, ageMinutes: null };
+  const nowMs = Number.isFinite(opts.now) ? opts.now : Date.now();
+  const cutMinutes = Number.isFinite(opts.cutMinutes) ? opts.cutMinutes : 15;
+  const createdMs = Date.parse(oldestDirectiveRow.created_at);
+  if (!Number.isFinite(createdMs)) return { blind: false, ageMinutes: null };
+  const ageMinutes = Math.round((nowMs - createdMs) / 60000);
+  return { blind: ageMinutes > cutMinutes, ageMinutes };
 }
 
 // SD-LEO-INFRA-TWO-WAY-COORDINATOR-001 / FR-5c — friction-detection helpers.
@@ -940,6 +1009,19 @@ async function main() {
     return;
   }
 
+  // QF-20260912-772: tool-active-lane-blind nudge (part b fallback) -- reuses oldestBatch
+  // (already fetched above, no extra query) rather than gating on isIdle/messages.length, since
+  // the whole point is a seat whose directive-class row CANNOT reach it via the paths those
+  // gates protect. Rate-limited to once per 5 min per session.
+  if (!tableErr) {
+    const oldestDirectiveRow = findOldestUnreadDirectiveRow(oldestBatch || []);
+    const { blind, ageMinutes } = classifyToolActiveLaneBlind(oldestDirectiveRow);
+    if (blind && shouldPrintLaneBlindNudge(sessionId)) {
+      console.log(`\x1b[31m1 directive row unread for ${ageMinutes} min — run /checkin\x1b[0m`);
+      markLaneBlindNudgePrinted(sessionId);
+    }
+  }
+
   // PROACTIVE CHECK: If idle with no messages, check for available SDs directly
   if (isIdle && !emittedDirective) {
     try {
@@ -1086,5 +1168,11 @@ module.exports = {
   // SD-LEO-INFRA-MID-FLIGHT-DIRECTIVE-001 / FR-1 — exposed for unit tests
   mergePriorityExempt,
   // QF-20260815-659 FIX HALF 2 — exposed for unit tests
-  oldestBatchExcludedKinds
+  oldestBatchExcludedKinds,
+  // QF-20260912-772 — exposed for unit tests
+  findOldestUnreadDirectiveRow,
+  classifyToolActiveLaneBlind,
+  shouldPrintLaneBlindNudge,
+  markLaneBlindNudgePrinted,
+  getLaneBlindNudgeFile
 };

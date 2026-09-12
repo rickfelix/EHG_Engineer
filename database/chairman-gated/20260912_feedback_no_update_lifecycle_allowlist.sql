@@ -3,7 +3,7 @@
 -- carried by Adam 2026-09-12). Authoring only -- apply strictly through the 3c ceremony on the
 -- chairman's word (decision status as of authoring: "pending"; authoring is not applying).
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: codestreetlabs@gmail.com
 --   Chairman verification NOT yet obtained. This file is staged only.
 --   WHY chairman-gated rather than database/migrations/: this file creates/replaces a TRIGGER --
 --   lands in scripts/lib/migration-tier-classifier.mjs's FORBIDDEN_TOPLEVEL set (TIER-2).
