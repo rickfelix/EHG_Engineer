@@ -955,6 +955,12 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
     // ever encoded at some of the contracts it named. Informational by construction — it never
     // reaches `regressed`, because the append-only freeze trigger makes these unrepairable in place.
     const contractsShort = [];
+    // QF-20260912-125: rows that NAME target contracts but never reach the coverage check above
+    // because no commit pin was derivable at all -- distinct from contractsShort (checked, and
+    // found short) and from a row naming zero contracts (nothing to check in the first place).
+    // Reported as a standing backlog count so "unmeasurable" is visibly a counted, tracked
+    // population rather than silently absent from every report.
+    const contractCoverageUnpinnable = [];
     for (const row of data || []) {
       const sectionId = row.encoded_ref && row.encoded_ref.section_id;
       const targetFile = sectionId && newerManifest.meta && newerManifest.meta[sectionId] && newerManifest.meta[sectionId].target_file;
@@ -988,6 +994,7 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
       // a miss, which is what keeps the dry-run count at 21 rather than 45.
       let contractCoverage;
       const namedContracts = Array.isArray(row.target_contracts) ? row.target_contracts.filter(Boolean) : [];
+      if (namedContracts.length > 0 && !(pin && pin.commit)) contractCoverageUnpinnable.push(row);
       if (pin && pin.commit && namedContracts.length > 0) {
         const missing = [];
         let readAny = false;
@@ -1016,6 +1023,8 @@ export async function checkRatificationRegressions(sb, { repoRoot = REPO_ROOT } 
       rows: regressed, count: regressed.length,
       markerInvalidRows: markerInvalid, markerInvalidCount: markerInvalid.length,
       contractsShortRows: contractsShort, contractsShortCount: contractsShort.length,
+      contractCoverageUnpinnableRows: contractCoverageUnpinnable,
+      contractCoverageUnpinnableCount: contractCoverageUnpinnable.length,
     };
   } catch (e) {
     return { rows: [], count: 0, error: e && e.message };
@@ -1901,6 +1910,14 @@ async function main() {
     for (const r of (regressedRatifications.contractsShortRows || [])) {
       const sectionId = r.encoded_ref && r.encoded_ref.section_id;
       console.log(`QUIET_TICK_RATIFICATION_CONTRACT_UNVERIFIED=adam id=${r.id} section=${sectionId} missing=${(r.contractsMissing || []).join(',')} — the ruling names target contracts whose rendered files do not carry marker_text at the encode-time pin. Historical shortfall, NOT a reverted clause: the append-only ledger cannot be re-encoded, so this needs the chairman-gated data-repair path, not a re-run.`);
+    }
+    // QF-20260912-125: a standing count of rows this tick could NOT check at all (no derivable
+    // commit pin), so "unmeasurable" is a visible, tracked backlog rather than silently absent
+    // from every report — these are the same rows the comment above already excludes from the
+    // miss count, now surfaced rather than only implied by their absence.
+    const unpinnableCount = regressedRatifications.contractCoverageUnpinnableCount || 0;
+    if (unpinnableCount > 0) {
+      console.log(`QUIET_TICK_RATIFICATION_CONTRACT_UNPINNABLE_BACKLOG=adam count=${unpinnableCount} — encoded rulings naming target contracts with no derivable commit pin; unchecked-until-repaired, never counted as a miss.`);
     }
   }
   return result;
