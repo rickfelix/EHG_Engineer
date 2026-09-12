@@ -220,7 +220,25 @@ describe('routing — each decision_type maps to exactly one writer', () => {
   it('chairman_approval RPC actions are approved/rejected', async () => {
     const w = mockWriters();
     await routeDecision({ decisionType: 'chairman_approval', id: 'a', decision: 'approve' }, w);
-    expect(w.chairmanDecide).toHaveBeenCalledWith('a', 'approved', undefined);
+    expect(w.chairmanDecide).toHaveBeenCalledWith('a', 'approved', undefined, undefined);
+  });
+
+  // QF-20260912-547: --force-stale must reach the chairmanDecide writer so it can pass
+  // p_force_stale to the live RPC.
+  it('parseArgs extracts --force-stale on decide', () => {
+    const p = parseArgs(['decide', 'chairman_approval:x-1', 'approve', '--rationale', 'ok', '--force-stale']);
+    expect(p).toMatchObject({ command: 'decide', decision: 'approve', rationale: 'ok', forceStale: true });
+  });
+
+  it('parseArgs defaults forceStale to false when --force-stale is absent', () => {
+    const p = parseArgs(['decide', 'chairman_approval:x-1', 'approve', '--rationale', 'ok']);
+    expect(p.forceStale).toBe(false);
+  });
+
+  it('routeDecision propagates forceStale through to chairmanDecide', async () => {
+    const w = mockWriters();
+    await routeDecision({ decisionType: 'chairman_approval', id: 'a', decision: 'approve', rationale: 'r', forceStale: true }, w);
+    expect(w.chairmanDecide).toHaveBeenCalledWith('a', 'approved', 'r', true);
   });
 
   it('flag_review reject maps to wont_fix; approve maps to resolved', async () => {

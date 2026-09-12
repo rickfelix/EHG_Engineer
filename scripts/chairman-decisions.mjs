@@ -137,11 +137,23 @@ if (parsed.command === 'list') {
 const writers = {
   // chairman_decisions rows — the existing atomic RPC (fn_chairman_decide; the
   // planned name decide_chairman_decision does not exist on the live DB).
-  chairmanDecide: async (id, action, rationale) => {
+  chairmanDecide: async (id, action, rationale, forceStale = false) => {
+    // QF-20260912-547: p_force_stale is a live RPC parameter (DEFAULT false) that this CLI never
+    // passed, so the only way past a STALE_CONTEXT refusal was a hand-rolled RPC call bypassing
+    // the CLI. Prefixing the rationale (rather than a new DB column) records the force without
+    // needing a chairman-gated schema/RPC change.
+    const effectiveRationale = forceStale ? `[force-stale] ${rationale || '(no rationale provided)'}` : rationale;
     const { data, error } = await db.rpc('fn_chairman_decide', {
-      p_decision_id: id, p_action: action, p_decided_by: DECIDED_BY, p_rationale: rationale,
+      p_decision_id: id, p_action: action, p_decided_by: DECIDED_BY, p_rationale: effectiveRationale,
+      p_force_stale: forceStale,
     });
     if (error) throw new Error('fn_chairman_decide: ' + error.message);
+    if (data && data.code === 'STALE_CONTEXT' && !forceStale) {
+      throw new Error(
+        `fn_chairman_decide refused: ${data.error} Re-run with --force-stale to decide anyway ` +
+        `(venture "${data.venture_name}" updated_at ${data.venture_updated_at} is newer than this decision's created_at ${data.decision_created_at}).`
+      );
+    }
     if (data && data.success === false) throw new Error('fn_chairman_decide refused: ' + (data.error || data.code));
     const result = { table: 'chairman_decisions', via: 'fn_chairman_decide RPC', id, action, data };
 
