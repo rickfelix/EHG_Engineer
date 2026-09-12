@@ -149,12 +149,12 @@ Flags:
                         guardrail (required when scope contains drop/delete/truncate/purge
                         keywords). Attests a backup/rollback plan is authored in the SD's own
                         description -- the flag is consent, not the plan itself. Honored on
-                        --from-feedback (QF-20260818-873; mirrors --security-reviewed at :143)
-                        and --from-plan (QF-20260819-415).
+                        --from-feedback (QF-20260818-873; mirrors --security-reviewed at :143),
+                        --from-plan (QF-20260819-415), and --from-qf (QF-20260912-933).
   --deletion-approved    Set metadata.deletion_approved=true -- alternate GR-DELETION-SAFEGUARD
                         attestation (explicit approval in lieu of an authored backup plan).
-                        Honored on --from-feedback (QF-20260818-873) and --from-plan
-                        (QF-20260819-415).
+                        Honored on --from-feedback (QF-20260818-873), --from-plan
+                        (QF-20260819-415), and --from-qf (QF-20260912-933).
   --scope-slice <JSON>  (--child only) Declare the slice of parent orchestrator scope this
                         child claims. JSON shape: {stages?: number[], deliverable_globs?: string[]}.
                         Example: --scope-slice='{"stages":[18]}'
@@ -348,10 +348,15 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // sensitive-path escalation through this lane recorded the register-first exception
       // reason-less. args[1] is always the QF id positional here (no .find() scan to
       // protect, unlike --from-feedback), so no value-position exclusion is needed.
+      // QF-20260912-933: --backup-plan/--deletion-approved had NO path at all on --from-qf
+      // (unlike --from-feedback), so a Tier-3 QF whose narrative merely illustrates a
+      // deletion-class keyword was unescapably blocked by GR-DELETION-SAFEGUARD.
       const qfLinkReasonIdx = args.indexOf('--roadmap-link-reason');
       const qfRes = await createFromQF(args[1], {
         securityReviewed: args.includes('--security-reviewed'),
         migrationReviewed: args.includes('--migration-reviewed'),
+        backupPlan: args.includes('--backup-plan'),
+        deletionApproved: args.includes('--deletion-approved'),
         roadmapLinkReason: qfLinkReasonIdx !== -1 ? args[qfLinkReasonIdx + 1] : null,
       });
       exitFromResult(qfRes);
