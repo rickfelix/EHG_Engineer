@@ -1180,8 +1180,8 @@ function humanTableRow({ wtPath, branch, categories, dirtyCount, unpushedCount, 
     path.basename(wtPath).padEnd(40).slice(0, 40),
     (branch || '-').padEnd(28).slice(0, 28),
     (categories.join(',') || '-').padEnd(24).slice(0, 24),
-    String(dirtyCount).padStart(5),
-    String(unpushedCount).padStart(6),
+    (dirtyCount == null ? '?' : String(dirtyCount)).padStart(5),
+    (unpushedCount == null ? '?' : String(unpushedCount)).padStart(6),
     (ageDays == null ? '-' : String(ageDays)).padStart(4),
     verdict.padEnd(13),
     String(preserveCount).padStart(4),
@@ -1552,15 +1552,18 @@ export async function main(argv = process.argv) {
     if (isCursorWorktree(wt.path)) {
       const evidence = {};
       if (siblingGauge.matched) { evidence['sibling-outside-worktrees'] = siblingGauge; }
+      // QF-20260903-092: this branch never scans for dirt (it keeps the tree regardless), so a
+      // measured-looking 0 was a false safety signal on a removal-safety field. Report `null`
+      // (undetermined / not scanned) rather than a fabricated zero.
       const rec = buildRecord({
         schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
         reason: 'cursor_worktree_protected',
-        claim_status: 'n/a', dirtyCount: 0, unpushedCount: 0, ageDays: null,
+        claim_status: 'n/a', dirtyCount: null, unpushedCount: null, ageDays: null,
         preserveCount: 0, shipStatus: 'cursor', evidence,
       });
       records.push(rec);
       emitJsonLine(rec);
-      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: 0, unpushedCount: 0, ageDays: null, verdict: 'keep:cursor', preserveCount: 0 }));
+      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: null, unpushedCount: null, ageDays: null, verdict: 'keep:cursor', preserveCount: 0 }));
       continue;
     }
 
@@ -1570,16 +1573,20 @@ export async function main(argv = process.argv) {
     if (hasReapProtectedMarker(wt.path)) {
       const evidence = { marker: readReapProtectedMarker(wt.path) || {} };
       if (siblingGauge.matched) { evidence['sibling-outside-worktrees'] = siblingGauge; }
+      // QF-20260903-092: same as the cursor branch above -- this tree is kept unconditionally,
+      // so it was never actually scanned for dirt. A live specimen had two modified tracked
+      // files and reported 0, which is the exact shape that misleads a human weighing whether
+      // to override this marker. `null` marks the field as undetermined rather than measured.
       const rec = buildRecord({
         schema_version: SCHEMA_VERSION, wt, categories: [], verdict: 'keep',
         reason: 'reap_protected_marker',
-        claim_status: 'n/a', dirtyCount: 0, unpushedCount: 0, ageDays: null,
+        claim_status: 'n/a', dirtyCount: null, unpushedCount: null, ageDays: null,
         preserveCount: 0, shipStatus: 'protected',
         evidence,
       });
       records.push(rec);
       emitJsonLine(rec);
-      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: 0, unpushedCount: 0, ageDays: null, verdict: 'keep:protected', preserveCount: 0 }));
+      console.log(humanTableRow({ wtPath: wt.path, branch: wt.branch || '', categories: [], dirtyCount: null, unpushedCount: null, ageDays: null, verdict: 'keep:protected', preserveCount: 0 }));
       continue;
     }
 
@@ -2047,5 +2054,6 @@ export {
   preserveUntrackedFiles,
   removeWorktree,
   buildRecord,
+  humanTableRow,
   runPhantomOnlyMode,
 };
