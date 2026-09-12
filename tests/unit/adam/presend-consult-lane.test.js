@@ -293,3 +293,46 @@ describe('runPreSendConsultLane — FR-1 non-blocking + FR-2 discriminator', () 
     expect(seen[0]).toBeNull();
   });
 });
+
+describe('runPreSendConsultLane — QF-20260912-901 measured_by[] provenance refusal', () => {
+  it('refuses a consult-triggered body citing an unstamped first-use number', async () => {
+    const { deps, inserted } = makeDeps();
+    const out = await runPreSendConsultLane(
+      { ...INPUT, body: 'Every one of the 171 ventures reads below go-live.' },
+      deps,
+    );
+    expect(out).toMatchObject({ action: 'refuse', reason: 'unstamped_number', unstampedNumber: '171' });
+    expect(inserted).toHaveLength(0); // never opens the consult
+  });
+
+  it('proceeds to the consult when the cited number is stamped in measuredBy', async () => {
+    const { deps, inserted } = makeDeps();
+    const out = await runPreSendConsultLane(
+      {
+        ...INPUT,
+        body: 'Every one of the 171 ventures reads below go-live.',
+        measuredBy: [{ value: '171', instrument: 'venture-count-query', row_ref: 'ventures', measured_at: '2026-09-12T16:00:00Z' }],
+      },
+      deps,
+    );
+    expect(out.action).not.toBe('refuse');
+    expect(inserted).toHaveLength(1);
+  });
+
+  it('never refuses a body with no digit-bearing claim at all (the common case)', async () => {
+    const { deps, inserted } = makeDeps();
+    const out = await runPreSendConsultLane(INPUT, deps); // INPUT.body = 'the body', no digits
+    expect(out.action).not.toBe('refuse');
+    expect(inserted).toHaveLength(1);
+  });
+
+  it('does not refuse a body whose only numbers are ids/dates (QF-20260912-901, #8788, 2026-09-12)', async () => {
+    const { deps, inserted } = makeDeps();
+    const out = await runPreSendConsultLane(
+      { ...INPUT, body: 'See QF-20260912-901 and PR #8788, filed 2026-09-12.' },
+      deps,
+    );
+    expect(out.action).not.toBe('refuse');
+    expect(inserted).toHaveLength(1);
+  });
+});

@@ -94,6 +94,34 @@ describe('parseDecisionArgs (FR-5)', () => {
     expect(r.message.replyInstruction).toBe('Custom: reply 1 or 2');
   });
 
+  describe('--measured-by (QF-20260912-901)', () => {
+    it('parses one or more --measured-by JSON entries into message.measuredBy', () => {
+      const argv = [
+        ...baseArgs(),
+        '--measured-by', JSON.stringify({ value: '171', instrument: 'venture-count-query', row_ref: 'ventures', measured_at: '2026-09-12T16:00:00Z' }),
+      ];
+      const r = parseDecisionArgs(argv);
+      expect(r.ok).toBe(true);
+      expect(r.message.measuredBy).toEqual([
+        { value: '171', instrument: 'venture-count-query', row_ref: 'ventures', measured_at: '2026-09-12T16:00:00Z' },
+      ]);
+    });
+
+    it('defaults measuredBy to null when no --measured-by flag is given', () => {
+      const r = parseDecisionArgs(baseArgs());
+      expect(r.ok).toBe(true);
+      expect(r.message.measuredBy).toBeNull();
+    });
+
+    it('rejects a malformed --measured-by JSON value with exit code 1', () => {
+      const argv = [...baseArgs(), '--measured-by', 'not-json'];
+      const r = parseDecisionArgs(argv);
+      expect(r.ok).toBe(false);
+      expect(r.exitCode).toBe(1);
+      expect(r.error).toMatch(/not valid JSON/);
+    });
+  });
+
   describe('buildDefaultReplyInstruction', () => {
     it('joins 2 options with "or"', () => {
       expect(buildDefaultReplyInstruction(2, 'ref1')).toBe('Reply 1 or 2, or DETAILS for more context (ref ref1).');
