@@ -1425,3 +1425,56 @@ Runs the real UP body (both `ADD COLUMN`s, the backfill, `SET NOT NULL`, `ADD CO
 backfilled to `'live'` only, proves the CHECK constraint genuinely rejects an out-of-vocabulary
 value, then runs the real DOWN body and asserts both columns and the constraint are gone again.
 Confirmed PASS 2026-09-12.
+
+## Applying `20260912_venture_channel_publish_ledger_outbound_gate_trigger.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260912_venture_channel_publish_ledger_outbound_gate_trigger_DOWN.sql` (drops the
+trigger, then its function).
+
+(SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-5, per coordinator directive 7c1c6622 — Solomon's amended
+design.) A `BEFORE INSERT` trigger on `venture_channel_publish_ledger` mirroring
+`assertOutreachAuthorized()`'s positive predicate exactly (venture resolves AND is_demo=false AND
+status='active' AND current_lifecycle_stage>=24 AND launch_mode='live') as a DB-level last-line
+defense, independent of application code — "the guard lives in the absence of a send path, not
+in a sentence." Honors the same one-shot chairman override the application layer uses,
+reconstructing `override_key` as `<channel_type>:<content_ref>` from the row's own columns.
+
+**Does not replace** the application-level gate (`assertOutreachAuthorized()` in
+`lib/governance/stage-gate-predicate.js`) — that remains primary and the only layer that can log
+rich context. This is defense-in-depth only.
+
+**MEASURED (2026-09-12): `chairman_decisions.override_key` does not exist in the live schema
+yet** — it is part of a separate, still-unapplied predecessor migration
+(SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 FR-4). The trigger function's override lookup is wrapped
+in its own exception block (`EXCEPTION WHEN undefined_column OR undefined_table`) so this fails
+safe (treated as "no override," the same fail-closed direction as the primary predicate) rather
+than letting an unrelated schema-drift error surface on every single rejected insert. The
+override escape hatch activates automatically once that predecessor migration lands — no further
+change to this file needed.
+
+Proof sequence — transactional, SAVEPOINT-guarded around 3 deliberate rejection probes, safe to
+re-run against production any time (always `ROLLBACK`s, nothing persisted):
+
+```
+node database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger_dry_run.mjs
+```
+
+Runs the real UP body (function + trigger + its own `DO $verify$` existence proof), builds 3
+disposable synthetic fixture ventures (with the dozen+ unrelated `ventures`-table governance
+triggers — company-access auto-populate, the stage-write-token canonical-writer choke, the
+launch-mode-audit-ticket flip guard, etc. — bypassed via `session_replication_role='replica'`
+for fixture setup only; the trigger under test is re-armed at full strength before any assertion
+runs), then proves: a fully-authorized venture's insert succeeds; a below-go-live venture's
+insert is rejected via the intended `OUTBOUND_GATE_REJECTED` exception (message-matched, not
+just "some error occurred"); a below-go-live venture WITH a consumed chairman override (the
+`override_key` column temporarily added within the same rolled-back transaction, to exercise the
+real override code path rather than only its graceful fallback) succeeds; an unresolvable venture
+id is rejected via the intended "does not resolve" exception; the DOWN file removes both the
+function and trigger cleanly. Confirmed PASS 2026-09-12.
