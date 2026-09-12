@@ -258,6 +258,9 @@ scripts/verify-*.cjs
 # UPSTREAM_ARTIFACT_TYPES parity check (SD-MAN-FIX-STAGE-MARKETING-COPY-001)
 # Wired into CI to detect drift between EHG_Engineer canonical and EHG SPA copy.
 !scripts/verify-upstream-types-parity.js
+# SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-147: chairman_decisions CHECK-constraint-vs-EVA-template
+# decision-type drift checker (read-only; see the script's own header for coverage caveats).
+!scripts/verify-chairman-decision-constraint-sync.mjs
 # SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-LANES-001 (FR-3): manual, standalone live cross-check of the
 # JS terminal-status mirror against complete_orchestrator_sd()'s guard 4 -- lives outside vitest's
 # db-tier project since the function only exists in the one production database.

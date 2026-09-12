@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-FDBK-INFRA-LOOP-REWARDS-CATCHES-001 / FR-1, FR-2, FR-4
 -- Recurrence ledger keyed on defect CLASS with a verified-fix date per class, so the weekly
 -- number is classes that recurred after a verified fix (not QFs/SDs minted). Additive only --
