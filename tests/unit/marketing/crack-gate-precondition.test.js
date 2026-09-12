@@ -52,6 +52,12 @@ function makeTrackingSupabase({ autonomyState = null, ledgerAccepted = null, cra
     }),
     from: vi.fn((table) => {
       if (table === 'v_venture_gate_attestations_latest') return chainable({ data: null, error: null });
+      // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001: assertOutreachAuthorized() (inside
+      // checkPublishAuthorization, now unconditionally enforced) reads 'ventures' and writes
+      // 'audit_log' -- this file's tests are about the crack-gate precondition, not outreach
+      // authorization, so the venture here is fully outreach-authorized.
+      if (table === 'ventures') return chainable({ data: { is_demo: false, current_lifecycle_stage: 25, launch_mode: 'live', status: 'active' }, error: null });
+      if (table === 'audit_log') return { insert: vi.fn(() => Promise.resolve({ error: null })) };
       if (table === 'system_events') {
         return { insert: vi.fn((row) => { calls.systemEventsInsert.push(row); return Promise.resolve({ error: null }); }) };
       }

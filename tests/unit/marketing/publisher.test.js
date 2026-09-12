@@ -43,6 +43,10 @@ const TEST_SECRET_REF = 'venture_channel_secrets:v-1:x';
 function createMockSupabase(overrides = {}) {
   const tableConfig = {
     campaign_content: { maybeSingle: { data: null, error: null }, limitData: [] },
+    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001: assertOutreachAuthorized() (called inside
+    // checkPublishAuthorization) requires the venture to resolve as non-demo, active,
+    // stage>=24, launch_mode='live' -- "everything wired and healthy" now includes this.
+    ventures: { maybeSingle: { data: { is_demo: false, current_lifecycle_stage: 25, launch_mode: 'live', status: 'active' }, error: null } },
     venture_channel_autonomy: { maybeSingle: { data: { autonomy_state: 'autonomous' }, error: null } },
     venture_channel_publish_ledger: { maybeSingle: { data: null, error: null }, count: 0, gteError: null },
     venture_guardrail_state: {

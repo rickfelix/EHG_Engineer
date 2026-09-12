@@ -10,6 +10,8 @@ vi.mock('../../../lib/feature-flags/evaluator.js', () => ({ isEnabled }));
 import {
   checkStageGate,
   shouldEnforceBlock,
+  assertOutreachAuthorized,
+  OUTREACH_REFUSAL_REASON,
   countRecentOverrides,
   OVERRIDE_RATE_WEEKLY_THRESHOLD,
   VERDICT,
@@ -115,7 +117,7 @@ describe('checkStageGate — scope rules', () => {
   it('TS-4: null ventureId is out of scope, no audit row, never blocks', async () => {
     const supabase = makeSupabase();
     const r = await checkStageGate({ supabase, ventureId: null, requiredStage: 24, actorType: 'sd', actorId: 'SD-X' });
-    expect(r).toEqual({ inScope: false, blocked: false, verdict: VERDICT.OUT_OF_SCOPE, reason: 'no_venture_id', armed: false });
+    expect(r).toEqual({ inScope: false, blocked: false, verdict: VERDICT.OUT_OF_SCOPE, reason: 'no_venture_id', armed: false, venture: null });
     expect(supabase._insert).not.toHaveBeenCalled();
   });
 
@@ -353,6 +355,81 @@ describe('shouldEnforceBlock', () => {
     expect(shouldEnforceBlock({ armed: false, blocked: true })).toBe(false);
     expect(shouldEnforceBlock({ armed: true, blocked: false })).toBe(false);
     expect(shouldEnforceBlock(null)).toBe(false);
+  });
+});
+
+describe('assertOutreachAuthorized — SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 (Solomon design, coordinator directive 7c1c6622)', () => {
+  it('null ventureId is REFUSED (not OUT_OF_SCOPE like checkStageGate treats it)', async () => {
+    const supabase = makeSupabase();
+    const r = await assertOutreachAuthorized({ supabase, ventureId: null, actorType: 'channel_publish', actorId: 'x:1' });
+    expect(r).toEqual({ authorized: false, mode: 'mock', reason: OUTREACH_REFUSAL_REASON.NO_VENTURE_ID, snapshot: { stage: null, is_demo: null, status: null, launch_mode: null } });
+    expect(supabase._insert).not.toHaveBeenCalled();
+  });
+
+  it('is_demo=true is REFUSED (not OUT_OF_SCOPE like checkStageGate treats it), even at stage>=24/launch_mode=live/status=active', async () => {
+    const supabase = makeSupabase({ venture: { is_demo: true, current_lifecycle_stage: 25, launch_mode: 'live', status: 'active' } });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'v1', actorType: 'channel_publish', actorId: 'x:1' });
+    expect(r.authorized).toBe(false);
+    expect(r.mode).toBe('mock');
+    expect(r.reason).toBe(OUTREACH_REFUSAL_REASON.IS_DEMO);
+  });
+
+  it("a non-demo, active, stage>=24, launch_mode='live' venture is authorized (mode:live)", async () => {
+    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 25, launch_mode: 'live', status: 'active' } });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'v1', actorType: 'channel_publish', actorId: 'x:1' });
+    expect(r).toEqual({ authorized: true, mode: 'live', reason: null, snapshot: { stage: 25, is_demo: false, status: 'active', launch_mode: 'live' } });
+  });
+
+  it("status='cancelled' refuses even at stage>=24 with launch_mode='live' -- the exact DataDistill/MarketLens shape", async () => {
+    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 27, launch_mode: 'live', status: 'cancelled' } });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'v1', actorType: 'channel_publish', actorId: 'x:1' });
+    expect(r.authorized).toBe(false);
+    expect(r.reason).toBe(OUTREACH_REFUSAL_REASON.NOT_ACTIVE);
+  });
+
+  it('below-stage (AltifyAI shape: active, non-demo, S23, simulated) refuses on below_stage', async () => {
+    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 23, launch_mode: 'simulated', status: 'active' } });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'v1', actorType: 'channel_publish', actorId: 'x:1' });
+    expect(r.authorized).toBe(false);
+    expect(r.reason).toBe(OUTREACH_REFUSAL_REASON.BELOW_STAGE);
+  });
+
+  it("launch_mode='simulated' at stage>=24 refuses on launch_mode_not_live, never a bare '!= simulated' test", async () => {
+    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 25, launch_mode: 'simulated', status: 'active' } });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'v1', actorType: 'channel_publish', actorId: 'x:1' });
+    expect(r.authorized).toBe(false);
+    expect(r.reason).toBe(OUTREACH_REFUSAL_REASON.LAUNCH_MODE_NOT_LIVE);
+  });
+
+  it('an unresolvable venture row refuses on unresolvable_venture', async () => {
+    const supabase = makeSupabase({ venture: null });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'ghost', actorType: 'channel_publish', actorId: 'x:1' });
+    expect(r.authorized).toBe(false);
+    expect(r.reason).toBe(OUTREACH_REFUSAL_REASON.UNRESOLVABLE_VENTURE);
+  });
+
+  it('a chairman override authorizes (mode:live) even when the raw snapshot would otherwise refuse (below stage)', async () => {
+    const supabase = makeSupabase({
+      venture: { is_demo: false, current_lifecycle_stage: 5, launch_mode: 'simulated', status: 'active' },
+      overrideRow: { id: 'ov-1' },
+    });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'v1', actorType: 'channel_publish', actorId: 'x:1' });
+    expect(r.authorized).toBe(true);
+    expect(r.mode).toBe('live');
+    expect(r.reason).toBe('chairman_override');
+  });
+
+  it('the STAGE_GATE_PREDICATE_ARMED flag state is irrelevant -- armed is always forced true regardless of isEnabled()', async () => {
+    isEnabled.mockResolvedValue(false); // shadow mode for the SD-gating predicate
+    const supabase = makeSupabase({ venture: { is_demo: false, current_lifecycle_stage: 5, launch_mode: 'simulated', status: 'active' } });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'v1', actorType: 'channel_publish', actorId: 'x:1' });
+    // If armed were left to default to the (false) flag, checkStageGate would report
+    // blocked:false-because-unarmed and this refusal would be indistinguishable from a
+    // real pass -- but assertOutreachAuthorized never even reads .blocked, it reads the
+    // venture snapshot directly, so this is refused regardless.
+    expect(r.authorized).toBe(false);
+    expect(r.reason).toBe(OUTREACH_REFUSAL_REASON.BELOW_STAGE);
+    expect(isEnabled).not.toHaveBeenCalled(); // armed:true was passed explicitly to checkStageGate
   });
 });
 
