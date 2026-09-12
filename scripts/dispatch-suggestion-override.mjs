@@ -57,7 +57,10 @@ export async function recordOverride(supabase, suggestionId, reason) {
 
   const res = await insertCoordinationRow(supabase, {
     sender_type: 'system',
-    target_session: 'broadcast',
+    // QF-20260911-753: bare 'broadcast' retired (0/91 rows ever acknowledged, all-time);
+    // 'broadcast-coordinator' matches the sibling writer in lib/fleet/dispatch-suggestions.cjs
+    // for the same "fleet-wide advisory, not addressed to one session" class of row.
+    target_session: 'broadcast-coordinator',
     message_type: 'INFO',
     subject: `[DISPATCH_OVERRIDE] ${suggestion.payload.sd_key || suggestionId}`,
     body: `Coordinator overrule of suggestion ${suggestionId}: ${trimmedReason}`,

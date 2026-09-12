@@ -34,9 +34,14 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
  *
  * ADDRESSING PATHS, measured over the full table — a uuid-equality filter covers only the first:
  *   1. `target_session` = the seat's full uuid.
- *   2. BROADCAST SENTINELS, live and heavily used: `broadcast` (102 rows),
- *      `broadcast-coordinator` (333), `broadcast-adam` (6). The `/coordinator start` flow drains
- *      and re-targets `broadcast-coordinator`, so these are delivery, not debris.
+ *   2. BROADCAST SENTINELS: `broadcast-coordinator` (333 rows) and `broadcast-adam` (6) are live
+ *      and heavily used — the `/coordinator start` flow drains and re-targets
+ *      `broadcast-coordinator`, so these are delivery, not debris. Bare `broadcast` (102 rows at
+ *      the time this file was written) was measured (QF-20260911-753) to have 0 of 91 rows EVER
+ *      acknowledged across all history — this clause shows the rows, but nothing ever drains
+ *      them; they were debris, not delivery. dispatch.cjs's SENTINEL_TARGETS no longer accepts
+ *      new writes to it (QF-20260911-753) — this clause stays only to surface pre-existing
+ *      legacy rows, not because bare `broadcast` is still a live addressing path.
  *   3. ⚠ TRUNCATED ADDRESSES — A DEFECT, NOT A DESIGN. Something writes EIGHT-CHARACTER session
  *      PREFIXES into `target_session` instead of full uuids (af78b5da 7 rows, b25ec3e5 2,
  *      d6f66610 1). Those rows can never match an equality filter on a full uuid: they are

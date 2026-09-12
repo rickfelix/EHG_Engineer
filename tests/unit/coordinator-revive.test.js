@@ -8,7 +8,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const { NATO, findIdleCallsigns, reviveOne, isExpiredPendingRow, reapExpiredPendingRequests } = require('../../scripts/coordinator-revive.cjs');
+const { NATO, findIdleCallsigns, reviveOne, insertSpawnRequest, isExpiredPendingRow, reapExpiredPendingRequests } = require('../../scripts/coordinator-revive.cjs');
 
 describe('NATO roster', () => {
   it('contains the canonical 8 callsigns in order', () => {
@@ -173,6 +173,31 @@ describe('reviveOne()', () => {
   });
 });
 
+// QF-20260911-753 round 3 (adversarial-review agent ae8b829c): insertSpawnRequest's own
+// SPAWN_REQUEST broadcast was missed in both round 1 and round 2 of retiring the bare
+// 'broadcast' sentinel -- it still targeted 'broadcast', which the real (unmocked)
+// insertCoordinationRow/assertValidTarget now REJECTS with DISPATCH_TARGET_INVALID, silently
+// swallowed by insertSpawnRequest's own .catch(). No existing test exercised this broadcast's
+// actual target value, so the regression shipped invisibly. This test uses the REAL
+// dispatch.cjs (not mocked) so it genuinely re-validates against SENTINEL_TARGETS.
+describe('insertSpawnRequest() — SPAWN_REQUEST broadcast target validity (QF-20260911-753)', () => {
+  it('broadcasts on a live sentinel the real dispatch guard accepts, not the retired bare "broadcast"', async () => {
+    const row = { id: 'spawn-1', requested_at: '2026-09-12T00:00:00Z', expires_at: '2026-09-12T01:00:00Z' };
+    const coordInserts = [];
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const supabase = mockSupabase({ insertResult: row, insertError: null, coordInserts });
+    await insertSpawnRequest(supabase, 'Bravo', 'session-123');
+    // Flush the fire-and-forget broadcast promise chain (not awaited by insertSpawnRequest itself).
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(coordInserts).toHaveLength(1);
+    expect(coordInserts[0].target_session).not.toBe('broadcast');
+    expect(coordInserts[0].message_type).toBe('SPAWN_REQUEST');
+    // A DISPATCH_TARGET_INVALID throw would be caught here and never reach the mock's insert().
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringMatching(/guard refused/));
+    warnSpy.mockRestore();
+  });
+});
+
 // SD-REFILL-00H0UNO7: fleet revival was broken because an expired-but-still-'pending'
 // worker_spawn_requests row holds the partial unique index and permanently blocks fresh revivals.
 describe('isExpiredPendingRow() — FR-3 pure predicate', () => {
@@ -230,7 +255,7 @@ describe('reapExpiredPendingRequests() — FR-1', () => {
     expect(n).toBe(2);
     expect(coordInserts.length).toBe(2);
     expect(coordInserts[0].payload).toMatchObject({ kind: 'spawn_request_expired', request_id: 'req-1', callsign: 'Bravo', age_min: 60 });
-    expect(coordInserts[0].target_session).toBe('broadcast'); // no requester on this fixture row
+    expect(coordInserts[0].target_session).toBe('broadcast-coordinator'); // no requester on this fixture row (QF-20260911-753: bare 'broadcast' retired)
     expect(coordInserts[1].payload).toMatchObject({ kind: 'spawn_request_expired', request_id: 'req-2', callsign: 'Charlie', age_min: 30 });
   });
 

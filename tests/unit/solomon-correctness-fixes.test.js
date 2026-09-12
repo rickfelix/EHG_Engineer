@@ -31,8 +31,9 @@ describe('Phase C — broadcast-solomon sentinel (dispatch.cjs)', () => {
     }
   });
 
-  it('no regression — pre-existing sentinels still present', () => {
-    expect(dispatch.SENTINEL_TARGETS).toContain('broadcast');
+  it('no regression — pre-existing broadcast-coordinator sentinel still present', () => {
+    // Bare 'broadcast' was deliberately removed by QF-20260911-753 (0 of 91 rows ever
+    // acknowledged, all-time) — its absence here is intentional, not a regression.
     expect(dispatch.SENTINEL_TARGETS).toContain('broadcast-coordinator');
   });
 });

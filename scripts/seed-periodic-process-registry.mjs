@@ -221,16 +221,31 @@ export async function seedHostAlarmCrons() {
 // row out of sync with the real schedule (the exact consumer-vs-producer mismatch this QF's own
 // evidence warns about). self_stamped + no last_fired_at: reports UNVERIFIED until each feeder
 // wires its own stamp, same as every other self_stamped row -- no watcher change needed.
+// QF-20260911-282: calendar-read/gmail-triage/todoist-brief now carry an ARRAY of windows in
+// FEEDERS (pre-dawn + midday + evening) -- the feeder's own gate (lib/michael/feeder.mjs
+// inWindow) checks all of them. periodic_process_registry.expected_window_et keeps its original
+// single-{start,end}-object shape (DB CHECK constraint
+// periodic_process_registry_expected_window_et_shape_check requires jsonb_typeof='object'), so an
+// array would fail the write; this row is a coarse liveness-watcher signal, not the enforcement
+// point, so it is represented by the EARLIEST window only (unchanged from before this QF for
+// these three feeders). display_name lists every window for a human reading the registry.
+function windowsOf(window) {
+  return Array.isArray(window) ? window : [window];
+}
+function windowLabel(window) {
+  return windowsOf(window).map((w) => `${w.start}-${w.end}`).join(', ');
+}
+
 export async function seedMichaelFeederCrons() {
   return Object.entries(FEEDERS)
     .filter(([, reg]) => reg.venue === 'task_scheduler')
     .map(([feederId, reg]) => ({
       process_key: `host_cron:michael-${feederId}`,
-      display_name: `Host Task Scheduler: michael-${feederId} (${reg.window.start}-${reg.window.end} ET)`,
+      display_name: `Host Task Scheduler: michael-${feederId} (${windowLabel(reg.window)} ET)`,
       owner: 'coordinator-fleet',
       process_type: 'standalone_cron',
       expected_interval_seconds: reg.intervalMinutes * 60,
-      expected_window_et: reg.window,
+      expected_window_et: windowsOf(reg.window)[0],
       liveness_source: 'self_stamped',
       liveness_source_ref: { discovered_from: 'qf_20260907_830_michael_feeder_enrollment', script: `scripts/michael/${feederId}.mjs`, venue: 'task_scheduler' },
       session_bound: false,
