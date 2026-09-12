@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import {
   parseArgs, routeDecision, effectivePriority, sortPending, priorityRank,
   partitionQueue, isTerminalRecord, isCorrectiveFinding, renderPendingLine,
-  deferralActorLabel, USAGE,
+  deferralActorLabel, USAGE, diffVentureSnapshot,
 } from '../../lib/chairman/decision-queue.mjs';
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -391,5 +391,43 @@ describe('SD-LEO-INFRA-CHAIRMAN-DECISION-VALUE-001 FR-4 — parseArgs withdraw c
   it('USAGE documents withdraw as a structurally distinct hygiene action, never a decision', () => {
     expect(USAGE).toMatch(/withdraw is a STRUCTURALLY DISTINCT hygiene action/);
     expect(USAGE).toMatch(/node scripts\/chairman-decisions\.mjs withdraw/);
+  });
+});
+
+// QF-20260912-427: diffVentureSnapshot is the pure predicate behind the STALE_CONTEXT
+// auto-retry-vs-refuse decision — no field changed -> safe to auto-retry; a field changed ->
+// surface it and stop; no snapshot to compare -> "unknowable", never silently treated as safe.
+describe('diffVentureSnapshot', () => {
+  const snapshot = { name: 'AltifyAI', status: 'active', current_lifecycle_stage: 5, deployment_url: null };
+
+  it('comparable + unchanged when every snapshotted field still matches (only updated_at moved)', () => {
+    const live = { ...snapshot };
+    expect(diffVentureSnapshot(snapshot, live)).toEqual({ comparable: true, changed: false, changedFields: [] });
+  });
+
+  it('comparable + changed, naming exactly the field(s) that differ', () => {
+    const live = { ...snapshot, status: 'paused' };
+    const d = diffVentureSnapshot(snapshot, live);
+    expect(d).toEqual({ comparable: true, changed: true, changedFields: ['status'] });
+  });
+
+  it('reports multiple changed fields', () => {
+    const live = { ...snapshot, status: 'paused', deployment_url: 'https://new.example' };
+    const d = diffVentureSnapshot(snapshot, live);
+    expect(d.changedFields.sort()).toEqual(['deployment_url', 'status']);
+  });
+
+  it('not comparable when there is no snapshot (a decision minted before this fix) — never reads as safe', () => {
+    expect(diffVentureSnapshot(null, { name: 'x' })).toEqual({ comparable: false, changed: false, changedFields: [] });
+  });
+
+  it('not comparable when the live venture could not be fetched', () => {
+    expect(diffVentureSnapshot(snapshot, null)).toEqual({ comparable: false, changed: false, changedFields: [] });
+  });
+
+  it('treats null and undefined as equivalent (a snapshot predating a field is not a false change)', () => {
+    const older = { name: 'x', status: null, current_lifecycle_stage: null, deployment_url: null };
+    const live = { name: 'x', status: undefined, current_lifecycle_stage: undefined, deployment_url: undefined };
+    expect(diffVentureSnapshot(older, live)).toEqual({ comparable: true, changed: false, changedFields: [] });
   });
 });
