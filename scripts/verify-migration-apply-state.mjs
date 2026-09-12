@@ -27,7 +27,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { armCliTeardown } from '../lib/cli-graceful-exit.js';
-import { MIGRATION_ROOTS } from '../lib/migration-audit-reader.js';
+import { MIGRATION_ROOTS, normalizeMigrationPath, listApplied } from '../lib/migration-audit-reader.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.resolve(__dirname, '..', 'database', 'migrations');
@@ -740,7 +740,7 @@ function daysSinceToken(token, now) {
  * (TR-2) so age_days is deterministic under test — classifyFiles itself never calls
  * Date.now()/new Date() unconditionally.
  */
-export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date(), liveFunctionBodies = new Map(), liveTriggerDefs = new Map()) {
+export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date(), liveFunctionBodies = new Map(), liveTriggerDefs = new Map(), appliedLedgerPaths = null) {
   const survivingByFile = new Map();
   for (const { cls, name, file } of expected.values()) {
     if (!survivingByFile.has(file)) survivingByFile.set(file, []);
@@ -810,7 +810,22 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
     // relabeling it CEREMONY_PENDING would falsely claim a chairman apply ceremony is still
     // outstanding for something already applied. Excluded so a body-drifted chairman-gated
     // function stays BODY_MISMATCH (the true state), never masquerading as a pending apply.
-    if (status !== 'APPLIED' && status !== 'BODY_MISMATCH' && file.startsWith(CHAIRMAN_GATED_PREFIX)) {
+    // QF-20260912-533: for database/chairman-gated/, object existence alone is not proof of
+    // apply -- the chairman apply ceremony is the only legitimate applier and every ceremony
+    // writes a schema_migrations_applied success row, so a chairman-gated file that classifies
+    // APPLIED on object existence but carries NO ledger row is a REPLACE-shaped false pass
+    // (same-name object recreated by something other than the ceremony, or never actually
+    // applied at all -- SD-LEO-INFRA-FEEDBACK-LIFECYCLE-UPDATE-ALLOWLIST-001's live specimen).
+    // `appliedLedgerPaths` is `null` when the ledger query itself was unavailable/failed
+    // (fail-open, mirrors the disposition-ledger's own convention below in main()) -- ONLY a
+    // successfully-queried Set (even an empty one) demotes an unledgered APPLIED file.
+    // BODY_MISMATCH is deliberately excluded here too, same reasoning as the branch above it:
+    // its objects ARE live, so relabeling it CEREMONY_PENDING would falsely claim a ceremony is
+    // still outstanding for something already (if incorrectly) applied.
+    const isChairmanGated = file.startsWith(CHAIRMAN_GATED_PREFIX);
+    const unledgeredApply = status === 'APPLIED' && isChairmanGated
+      && appliedLedgerPaths != null && !appliedLedgerPaths.has(normalizeMigrationPath(file));
+    if ((status !== 'APPLIED' && status !== 'BODY_MISMATCH' && isChairmanGated) || unledgeredApply) {
       result.status = 'CEREMONY_PENDING';
       const token = migrationDateToken(file);
       if (token) result.age_days = daysSinceToken(token, now);
@@ -981,6 +996,20 @@ async function main() {
   if (ledgerLoadError) console.error(`Disposition ledger module unavailable (suppressing nothing): ${ledgerLoadError}`);
   else if (ledgerStatus !== 'ok' && ledgerStatus !== 'absent') console.error(`Disposition ledger is ${ledgerStatus} (suppressing nothing) — fix ${ledgerApi.DEFAULT_LEDGER_PATH}`);
 
+  // QF-20260912-533: chairman-gated apply ledger — a SEPARATE Set from the disposition ledger
+  // above (that one SUPPRESSES known gaps; this one PROVES a chairman-gated APPLIED file was
+  // actually applied by the ceremony, per schema_migrations_applied, the canonical read API's
+  // migration-audit-reader.js). `null` (not an empty Set) on a lookup failure, so classifyFiles
+  // can tell "queried, zero rows" (demote unledgered APPLIED files) apart from "could not query"
+  // (fail-open — never demote on infrastructure the ceremony's own writer does not depend on).
+  let appliedLedgerPaths = null;
+  try {
+    const rows = await listApplied({ success: true, limit: 1000 });
+    appliedLedgerPaths = new Set(rows.map((r) => normalizeMigrationPath(r.migration_path)));
+  } catch (e) {
+    console.error(`Chairman-gated apply ledger unavailable (no chairman-gated APPLIED file will be demoted this run): ${e.message}`);
+  }
+
   let live;
   let liveFunctionBodies;
   let liveTriggerDefs;
@@ -1013,7 +1042,7 @@ async function main() {
     try { await client?.end(); } catch { /* already closed */ }
   }
 
-  const results = classifyFiles(forward, expected, perFile, live, undefined, liveFunctionBodies, liveTriggerDefs);
+  const results = classifyFiles(forward, expected, perFile, live, undefined, liveFunctionBodies, liveTriggerDefs, appliedLedgerPaths);
   const { summary, gaps, bodyMismatches } = summarizeResults(results, {
     scanned: forward.length, excludedDown: down.length, droppedLater: droppedLater.length,
   });
