@@ -214,8 +214,11 @@ export const STANDARD_LOOPS = [
     prompt: 'node scripts/drain-inventory.mjs' },
   // Work-triggered tri-party self-review: cheap poller (no-op below COORD_REVIEW_EVERY completed-SD delta),
   // fires the coordinator<->workers<->Adam review only when due. SD-LEO-INFRA-ARM-CANONICALIZE-WORK-001.
+  // QF-20260911-404: --force added — COORD_SELF_SCORE_V1 was never set anywhere (0 self-score
+  // rows ever, coordinator_self_score_age gauge would trip permanently); mirrors Adam's own
+  // chairman-directed --force override of its parallel ships-inert flag (adam-startup-check.mjs).
   { key: 'self-review', label: 'Coordinator self-review (work-triggered tri-party)', script: 'coordinator-self-review.mjs', cron: '*/5 * * * *',
-    prompt: 'node scripts/coordinator-self-review.mjs' },
+    prompt: 'node scripts/coordinator-self-review.mjs --force' },
   // Hourly responsibilities review for the coordinator + a reminder to live Adam. CYCLE-DOWN:
   // self-suppresses when the fleet is quiescent (0 active workers/builds, nothing moved in 20m)
   // via lib/coordinator/fleet-quiescence.cjs — no churn when the line is stopped. Chairman req 2026-06-09.
