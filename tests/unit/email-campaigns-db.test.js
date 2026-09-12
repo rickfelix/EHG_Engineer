@@ -174,7 +174,13 @@ describe('processStep (campaign_enrollments UPDATE)', () => {
     const supabase = makeSupabaseStub({
       campaign_enrollments: { update: updateMock },
       // FR-7: a send now requires a captured opt-in. Stated explicitly rather than defaulted.
-      venture_consent_events: consentLog(OPT_IN_ON_RECORD)
+      venture_consent_events: consentLog(OPT_IN_ON_RECORD),
+      // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001: assertOutreachAuthorized() requires a resolvable,
+      // fully-authorized venture -- this test is about the step-advance bookkeeping, not the
+      // outreach gate, so the venture is outreach-authorized by construction.
+      ventures: {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 25, launch_mode: 'live', status: 'active' }, error: null }) }) })
+      }
     });
     const ec = createEmailCampaigns({
       supabase,
@@ -187,7 +193,8 @@ describe('processStep (campaign_enrollments UPDATE)', () => {
       current_step: 0,
       opened_previous: true,
       lead_email: 'a@b.co',
-      campaign_id: 'c-1'
+      campaign_id: 'c-1',
+      venture_id: 'v-1'
     };
     const steps = [{ subject: 's', htmlA: 'A', htmlB: 'B', delayHours: 1 }];
 
@@ -257,7 +264,7 @@ describe('processStep — SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 stage-gate call-
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
-  it('an armed but PASSING stage gate (venture already at S24) falls through and sends', async () => {
+  it('an armed but PASSING stage gate (venture already at S24, launch_mode=live) falls through and sends', async () => {
     isEnabled.mockResolvedValueOnce(true); // armed
     const sendSpy = vi.fn(async () => ({ id: 'msg-1' }));
     const { updateMock } = (() => {
@@ -269,7 +276,7 @@ describe('processStep — SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 stage-gate call-
       campaign_enrollments: { update: updateMock },
       venture_consent_events: consentLog(OPT_IN_ON_RECORD),
       ventures: {
-        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 24 }, error: null }) }) })
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 24, launch_mode: 'live', status: 'active' }, error: null }) }) })
       }
     });
     const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: sendSpy } } });
@@ -281,6 +288,65 @@ describe('processStep — SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 stage-gate call-
 
     const res = await ec.processStep(enrollment, steps);
     expect(res.action).toBe('sent');
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-2: an armed stage gate at S24 but launch_mode!='live' still suppresses the send", async () => {
+    isEnabled.mockResolvedValueOnce(true); // armed
+    const sendSpy = vi.fn(async () => ({ id: 'msg-1' }));
+    const supabase = makeSupabaseStub({
+      venture_consent_events: consentLog(OPT_IN_ON_RECORD),
+      ventures: {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 24, launch_mode: 'simulated' }, error: null }) }) })
+      }
+    });
+    const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: sendSpy } } });
+    const enrollment = {
+      id: 'e-1', status: ENROLLMENT_STATUS.ACTIVE, current_step: 0, opened_previous: true,
+      lead_email: 'a@b.co', campaign_id: 'c-1', venture_id: 'v-1'
+    };
+    const steps = [{ subject: 's', htmlA: 'A', htmlB: 'B', delayHours: 1 }];
+
+    const res = await ec.processStep(enrollment, steps);
+    expect(res.action).toBe('suppressed');
+    expect(res.reason).toBe('stage_gate');
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendEmail — SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-5: gated independently of processStep()', () => {
+  it('throws when ventureId is omitted (caller-contract violation, fails closed rather than sending ungated)', async () => {
+    const supabase = makeSupabaseStub({});
+    const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: async () => ({ id: 'msg-1' }) } } });
+    await expect(
+      ec.sendEmail({ to: 'a@b.co', subject: 's', html: '<p>hi</p>' })
+    ).rejects.toThrow(/ventureId/);
+  });
+
+  it('refuses a direct call (bypassing processStep) for a below-go-live venture, never invoking the real Resend client', async () => {
+    const sendSpy = vi.fn(async () => ({ id: 'msg-1' }));
+    const supabase = makeSupabaseStub({
+      ventures: {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 1, launch_mode: 'simulated', status: 'active' }, error: null }) }) })
+      }
+    });
+    const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: sendSpy } } });
+    const res = await ec.sendEmail({ ventureId: 'v-1', to: 'a@b.co', subject: 's', html: '<p>hi</p>' });
+    expect(res.success).toBe(false);
+    expect(res.refused).toBe(true);
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it('sends for a fully outreach-authorized venture when called directly', async () => {
+    const sendSpy = vi.fn(async () => ({ id: 'msg-1' }));
+    const supabase = makeSupabaseStub({
+      ventures: {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 25, launch_mode: 'live', status: 'active' }, error: null }) }) })
+      }
+    });
+    const ec = createEmailCampaigns({ supabase, resendClient: { emails: { send: sendSpy } } });
+    const res = await ec.sendEmail({ ventureId: 'v-1', to: 'a@b.co', subject: 's', html: '<p>hi</p>' });
+    expect(res.success).toBe(true);
     expect(sendSpy).toHaveBeenCalledTimes(1);
   });
 });

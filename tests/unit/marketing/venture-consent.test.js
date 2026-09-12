@@ -165,7 +165,24 @@ describe('FR-7: the send path itself is suppressed, not just the resolver', () =
       }),
     };
     const enrollments = { update: () => ({ eq: async () => ({ error: null }) }) };
-    return { from: (t) => (t === 'venture_consent_events' ? consent : enrollments) };
+    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001: assertOutreachAuthorized() (called from
+    // processStep()) requires a resolvable, fully-authorized venture and writes to
+    // audit_log -- this describe block is about the consent path, so the venture is
+    // outreach-authorized by construction.
+    const ventures = {
+      select: () => ventures,
+      eq: () => ventures,
+      maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: 25, launch_mode: 'live', status: 'active' }, error: null }),
+    };
+    const auditLog = { insert: async () => ({ error: null }) };
+    return {
+      from: (t) => {
+        if (t === 'venture_consent_events') return consent;
+        if (t === 'ventures') return ventures;
+        if (t === 'audit_log') return auditLog;
+        return enrollments;
+      },
+    };
   }
 
   const enrollment = {

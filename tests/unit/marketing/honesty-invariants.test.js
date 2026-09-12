@@ -39,11 +39,12 @@ function makeSupabase({
   contentRow = { lifecycle_state: 'SCHEDULE' }, contentError = null,
   writeBudget = { is_over_budget: false, writes_used: 1, writes_remaining: 99 }, writeBudgetError = null,
   autonomyState = 'autonomous', insertData = { id: 'ledger-1' }, insertError = null,
-  // SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: undefined (the pre-existing default) leaves
-  // current_lifecycle_stage absent, which fails checkStageGate CLOSED (unresolvable_stage) --
-  // harmless for every pre-existing test here since armed defaults to isEnabled()=false
-  // (mocked). Pass a number to exercise the call-site suppression tests below.
-  ventureStage,
+  // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001: assertOutreachAuthorized() is now unconditionally
+  // enforced (armed:true, not left to isEnabled()'s shadow default), so this file's tests --
+  // which are about the HONESTY invariants, not the outreach gate itself -- need a fully
+  // outreach-authorized venture by default. Pass an explicit ventureStage/ventureStatus to
+  // exercise the dedicated stage-gate call-site suppression tests below.
+  ventureStage = 25, ventureStatus = 'active',
 } = {}) {
   const enrollmentsChain = {
     select: vi.fn().mockReturnThis(),
@@ -71,7 +72,7 @@ function makeSupabase({
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn(() => Promise.resolve({
-      data: { is_demo: false, name: 'Real Venture', launch_mode: 'live', current_lifecycle_stage: ventureStage },
+      data: { is_demo: false, name: 'Real Venture', launch_mode: 'live', current_lifecycle_stage: ventureStage, status: ventureStatus },
       error: null,
     })),
   };
@@ -312,19 +313,20 @@ describe('FR-1 enforcement inside checkPublishAuthorization', () => {
   });
 });
 
-describe('SD-LEO-INFRA-STAGE-GATE-PREDICATE-001: stage-gate call-site suppression (FR-3)', () => {
-  it('an armed + blocked stage gate suppresses BEFORE the venture_channel_autonomy lookup — the honesty invariants never even run', async () => {
-    isEnabled.mockResolvedValueOnce(true); // armed
+describe('SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001: outreach-gate call-site suppression (supersedes FR-3\'s shadow-mode framing — the gate is now unconditionally enforced)', () => {
+  it('an unconditionally-enforced outreach gate suppresses BEFORE the venture_channel_autonomy lookup — the honesty invariants never even run', async () => {
+    // isEnabled() is irrelevant now -- assertOutreachAuthorized() forces armed:true
+    // internally regardless of the STAGE_GATE_PREDICATE_ARMED flag's live state.
     const supabase = makeSupabase({ ventureStage: 1 }); // below the S24 requirement
     const r = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
     expect(r.allowed).toBe(false);
-    expect(r.reason).toContain('STAGE_GATE_BLOCKED');
+    expect(r.mode).toBe('mock');
+    expect(r.reason).toContain('below_stage');
     expect(supabase.contentChain.maybeSingle).not.toHaveBeenCalled();
     expect(supabase.ledgerChain.insert).not.toHaveBeenCalled();
   });
 
-  it('an armed but PASSING stage gate (venture already at S24) falls through to normal authorization', async () => {
-    isEnabled.mockResolvedValueOnce(true); // armed
+  it('a passing outreach gate (venture already at S24, active, launch_mode=live) falls through to normal authorization', async () => {
     const supabase = makeSupabase({ ventureStage: 24 });
     const r = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
     expect(r.allowed).toBe(true);

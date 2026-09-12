@@ -43,6 +43,10 @@ const TEST_SECRET_REF = 'venture_channel_secrets:v-1:x';
 function createMockSupabase(overrides = {}) {
   const tableConfig = {
     campaign_content: { maybeSingle: { data: null, error: null }, limitData: [] },
+    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001: assertOutreachAuthorized() (called inside
+    // checkPublishAuthorization) requires the venture to resolve as non-demo, active,
+    // stage>=24, launch_mode='live' -- "everything wired and healthy" now includes this.
+    ventures: { maybeSingle: { data: { is_demo: false, current_lifecycle_stage: 25, launch_mode: 'live', status: 'active' }, error: null } },
     venture_channel_autonomy: { maybeSingle: { data: { autonomy_state: 'autonomous' }, error: null } },
     venture_channel_publish_ledger: { maybeSingle: { data: null, error: null }, count: 0, gteError: null },
     venture_guardrail_state: {
@@ -139,6 +143,10 @@ describe('Publisher', () => {
 
     expect(result.success).toBe(true);
     expect(result.postId).toBe('x-123');
+    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-3: mode:'real' is the producer half of the
+    // mode contract content-pipeline.js/owned-audience-content-loop.js now depend on --
+    // a regression hardcoding this away would silently reopen the laundering vector.
+    expect(result.mode).toBe('real');
   });
 
   it('should publish to bluesky platform', async () => {
@@ -345,6 +353,16 @@ describe('Publisher — SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-3/FR-6
     expect(result.dryRun).toBe(true);
     expect(result.postId).toContain('dry-run-no-credentials');
     expect(result.reason).toContain('No venture-specific credentials');
+    // SECURITY finding SEC-M1 (sub_agent_execution_results 3ed447ec): this branch never
+    // dispatched anything, so `mode` (the DISPATCH vocabulary — only 'real' means
+    // adapter.publish() actually ran) must be absent here, never 'live'. `authMode` carries
+    // authCheck.mode (assertOutreachAuthorized()'s 'live'|'mock' AUTHORIZATION vocabulary)
+    // instead: an authorized (authMode:'live') send that hits missing credentials must still
+    // carry authMode:'live' so the ledger row (written by checkPublishAuthorization, BEFORE
+    // this dry-run branch runs) can be reconciled via recordPublishOutcome(), not silently
+    // miscounted. This fixture's venture is fully outreach-authorized (see createMockSupabase).
+    expect(result.authMode).toBe('live');
+    expect(result.mode).toBeUndefined();
   });
 
   it('ADVERSARIAL-REVIEW FIX (round 2): an unresolvable secret_ref (row exists but keyring lookup misses) ALSO forces dry-run, never a fallback identity', async () => {

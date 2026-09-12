@@ -56,7 +56,9 @@ describe('content-pipeline.js budget call signatures (QF-20260707-848)', () => {
   it('calls recordSpend with POSITIONAL args after a successful publish', async () => {
     checkBudget.mockResolvedValue({ allowed: true, budget: {} });
     generateContent.mockResolvedValue({ contentId: 'c-1', variants: [{ body: 'b', headline: 'h', cta: 'go' }] });
-    publish.mockResolvedValue({ success: true });
+    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-3: content-pipeline.js now also requires
+    // mode:'real' (not bare success:true) before crediting a publish/recording spend.
+    publish.mockResolvedValue({ success: true, mode: 'real' });
 
     await executePipeline({
       supabase: fakeSupabase(),
@@ -66,5 +68,21 @@ describe('content-pipeline.js budget call signatures (QF-20260707-848)', () => {
     });
 
     expect(recordSpend).toHaveBeenCalledWith(expect.anything(), 'v-1', 'email', 0);
+  });
+
+  it("SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-3: a mock/denied publish (success:true, mode!='real') never records spend", async () => {
+    checkBudget.mockResolvedValue({ allowed: true, budget: {} });
+    generateContent.mockResolvedValue({ contentId: 'c-1', variants: [{ body: 'b', headline: 'h', cta: 'go' }] });
+    publish.mockResolvedValue({ success: true, mode: 'mock', dryRun: true });
+
+    const result = await executePipeline({
+      supabase: fakeSupabase(),
+      ventureId: 'v-1',
+      ventureContext: { name: 'Acme', description: 'desc' },
+      channelIds: ['email'],
+    });
+
+    expect(recordSpend).not.toHaveBeenCalled();
+    expect(result.summary.totalPublished).toBe(0);
   });
 });

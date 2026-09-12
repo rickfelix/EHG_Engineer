@@ -21,7 +21,7 @@
  * DO NOT add this file to tests/quarantine-manifest.json.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { checkStageGate } from '../../../lib/governance/stage-gate-predicate.js';
+import { checkStageGate, assertOutreachAuthorized } from '../../../lib/governance/stage-gate-predicate.js';
 
 /** The fenced, non-demo CI test venture fixture — a mock, not a live DB row. */
 const FENCED_TEST_VENTURE = Object.freeze({ id: 'ci-fenced-stage-gate-venture', is_demo: false });
@@ -32,7 +32,7 @@ function assertFixtureValid(venture, stage) {
   }
 }
 
-function makeSupabase(stage) {
+function makeSupabase(stage, launchMode = 'live') {
   const insert = vi.fn().mockResolvedValue({ error: null });
   // SECURITY finding SG-M9-V (round 3): this flag proves the override query reached its
   // terminal .maybeSingle() rather than throwing partway through and being swallowed by
@@ -44,7 +44,7 @@ function makeSupabase(stage) {
   return {
     from: (table) => {
       if (table === 'ventures') {
-        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: stage }, error: null }) }) }) };
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { is_demo: false, current_lifecycle_stage: stage, launch_mode: launchMode }, error: null }) }) }) };
       }
       if (table === 'chairman_decisions') {
         // SECURITY finding M9 (EXEC-TO-PLAN review), UPDATED post ship-gate-review atomic-claim
@@ -102,10 +102,106 @@ describe('FR-6: paired non-quarantinable CI controls (stage-gate predicate)', ()
     expect(r.verdict).toBe('PASS');
   });
 
+  it("SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-2 control: fenced venture at stage 24 but launch_mode!='live' — the guard must still FIRE", async () => {
+    assertFixtureValid(FENCED_TEST_VENTURE, 24);
+    const supabase = makeSupabase(24, 'simulated');
+    const r = await checkStageGate({
+      supabase,
+      ventureId: FENCED_TEST_VENTURE.id,
+      requiredStage: 24,
+      actorType: 'sd',
+      actorId: 'CI-LAUNCH-MODE-CONTROL-SD',
+      armed: true,
+    });
+    expect(r.blocked).toBe(true);
+    expect(r.verdict).toBe('BLOCK');
+  });
+
   it('FR-6 AC-4: the fixture-presence assertion itself fails loudly on a malformed fixture (not a dead mutation)', () => {
     expect(() => assertFixtureValid(null, 1)).toThrow(/fixture invariant violated/);
     expect(() => assertFixtureValid({ is_demo: true }, 1)).toThrow(/fixture invariant violated/);
     expect(() => assertFixtureValid(FENCED_TEST_VENTURE, 'not-a-number')).toThrow(/fixture invariant violated/);
     expect(() => assertFixtureValid(FENCED_TEST_VENTURE, 1)).not.toThrow();
+  });
+});
+
+/**
+ * SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-6 — paired, non-quarantinable CI controls for the
+ * actual OUTREACH choke point (assertOutreachAuthorized), which supersedes checkStageGate/
+ * shouldEnforceBlock as the enforcement discriminator for real customer-facing sends (per
+ * coordinator directive 7c1c6622). The negative-test matrix mirrors the two measured real
+ * below-go-live active ventures this SD exists to gate: AltifyAI (S23, launch_mode=simulated)
+ * and ApexNiche AI (S21, launch_mode=simulated) -- reproduced here as fenced fixture shapes,
+ * not live rows, for the same CI-isolation reasons as the block above.
+ */
+function makeOutreachSupabase({ venture, overrideRow = null }) {
+  const insert = vi.fn().mockResolvedValue({ error: null });
+  return {
+    from: (table) => {
+      if (table === 'ventures') {
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: venture, error: null }) }) }) };
+      }
+      if (table === 'chairman_decisions') {
+        return {
+          update: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ is: () => ({ gt: () => ({ select: () => ({
+            maybeSingle: async () => ({ data: overrideRow, error: null }),
+          }) }) }) }) }) }) }),
+        };
+      }
+      if (table === 'audit_log') return { insert };
+      throw new Error(`unexpected table: ${table}`);
+    },
+    _insert: insert,
+  };
+}
+
+describe('FR-6: paired non-quarantinable CI controls (assertOutreachAuthorized — the real outreach choke point)', () => {
+  it('NEGATIVE control: AltifyAI-shaped venture (active, non-demo, S23, launch_mode=simulated) — outreach must be REFUSED', async () => {
+    const supabase = makeOutreachSupabase({
+      venture: { is_demo: false, status: 'active', current_lifecycle_stage: 23, launch_mode: 'simulated' },
+    });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'ci-fenced-altifyai-shape', actorType: 'channel_publish', actorId: 'x:CI-NEG-1' });
+    expect(r.authorized).toBe(false);
+    expect(r.mode).toBe('mock');
+  });
+
+  it('NEGATIVE control: ApexNiche-AI-shaped venture (active, non-demo, S21, launch_mode=simulated) — outreach must be REFUSED', async () => {
+    const supabase = makeOutreachSupabase({
+      venture: { is_demo: false, status: 'active', current_lifecycle_stage: 21, launch_mode: 'simulated' },
+    });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'ci-fenced-apexniche-shape', actorType: 'channel_publish', actorId: 'x:CI-NEG-2' });
+    expect(r.authorized).toBe(false);
+    expect(r.mode).toBe('mock');
+  });
+
+  it('POSITIVE control: fully outreach-authorized venture (active, non-demo, S25, launch_mode=live) — outreach must be PERMITTED', async () => {
+    const supabase = makeOutreachSupabase({
+      venture: { is_demo: false, status: 'active', current_lifecycle_stage: 25, launch_mode: 'live' },
+    });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'ci-fenced-authorized-shape', actorType: 'channel_publish', actorId: 'x:CI-POS-1' });
+    expect(r.authorized).toBe(true);
+    expect(r.mode).toBe('live');
+  });
+
+  it('SCOPE CONTROL: an is_demo=true venture is REFUSED even at S25/launch_mode=live — is_demo is never a permit, unlike checkStageGate\'s OUT_OF_SCOPE for SD-gating', async () => {
+    const supabase = makeOutreachSupabase({
+      venture: { is_demo: true, status: 'active', current_lifecycle_stage: 25, launch_mode: 'live' },
+    });
+    const r = await assertOutreachAuthorized({ supabase, ventureId: 'ci-fenced-demo-shape', actorType: 'channel_publish', actorId: 'x:CI-SCOPE-1' });
+    expect(r.authorized).toBe(false);
+  });
+
+  it('DISCRIMINATOR CONTROL: the CI assertion is on .authorized, never on checkStageGate\'s own .blocked/.verdict, which would pass green against an already-inert stage-only comparison', async () => {
+    // AltifyAI-shape again: checkStageGate's raw rule (e) already correctly computes BLOCK for
+    // this venture on stage alone (23 < 24) -- proving nothing about whether launch_mode/status/
+    // is_demo are actually enforced. This control fails on purpose if a future refactor swaps the
+    // discriminator back to checkStageGate output instead of assertOutreachAuthorized's own snapshot-based decision.
+    const supabase = makeOutreachSupabase({
+      venture: { is_demo: false, status: 'active', current_lifecycle_stage: 23, launch_mode: 'simulated' },
+    });
+    const stageGateOnly = await checkStageGate({ supabase, ventureId: 'ci-fenced-discriminator-shape', requiredStage: 24, actorType: 'channel_publish', actorId: 'x:CI-DISC-1', armed: true });
+    const outreach = await assertOutreachAuthorized({ supabase, ventureId: 'ci-fenced-discriminator-shape', actorType: 'channel_publish', actorId: 'x:CI-DISC-2' });
+    expect(stageGateOnly.blocked).toBe(true); // true for the wrong (stage-only) reason too
+    expect(outreach.authorized).toBe(false); // the actual discriminator this SD's gate uses
   });
 });

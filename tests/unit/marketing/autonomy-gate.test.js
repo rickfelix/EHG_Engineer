@@ -118,6 +118,70 @@ describe('evaluateGraduation', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe('db down');
   });
+
+  it('SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-4: a mixed fixture (older real shipped_clean rows behind a NEWER mock-discriminated row) does NOT graduate -- the mock row breaks the streak at its position, an all-mock fixture alone would not exercise this', async () => {
+    // Ordered newest-first, matching the real .order('created_at', {ascending:false}) query.
+    const rows = [
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock' }, // newest: mock -> breaks immediately
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live' },
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live' },
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live' },
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live' },
+    ];
+    const supabase = makeSupabase({
+      recentRows: rows,
+      demandVerdict: { verdict: 'PASS', citation: 'test fixture', computed_at: '2026-08-09T00:00:00Z' },
+    });
+
+    const result = await evaluateGraduation({ supabase, ventureId: 'v-1', channelType: 'x', requiredStreak: 5 });
+
+    expect(result.cleanStreak).toBe(0);
+    expect(result.autonomyState).toBe('propose_and_approve');
+  });
+
+  it('FR-4: execution_mode not yet in the live schema (undefined_column) falls back gracefully -- pre-existing streak-counting behavior is unaffected', async () => {
+    let callCount = 0;
+    const rows = Array.from({ length: 5 }, () => ({ decision: 'accepted', outcome: 'shipped_clean' }));
+    const verdictChain = {
+      select: vi.fn(function () { return this; }),
+      eq: vi.fn(function () { return this; }),
+      order: vi.fn(function () { return this; }),
+      limit: vi.fn(function () { return this; }),
+      maybeSingle: vi.fn(() => Promise.resolve({ data: { verdict: 'PASS', citation: 'fixture', computed_at: '2026-08-09T00:00:00Z' }, error: null })),
+    };
+    const ledgerChain = {
+      select: vi.fn(function () { return this; }),
+      eq: vi.fn(function () { return this; }),
+      neq: vi.fn(function () { return this; }),
+      order: vi.fn(function () { return this; }),
+      limit: vi.fn(() => {
+        callCount += 1;
+        if (callCount === 1) return Promise.resolve({ data: null, error: { code: '42703', message: 'column venture_channel_publish_ledger.execution_mode does not exist' } });
+        return Promise.resolve({ data: rows, error: null });
+      }),
+      update: vi.fn(function () { return this; }),
+    };
+    const autonomyChain = { upsert: vi.fn(() => Promise.resolve({ error: null })) };
+    // checkCrackGateObserveOnly() runs unconditionally once streakEarned && demandValidated
+    // (both true here) -- it must NOT share ledgerChain's counted .limit(), or its own internal
+    // queries would inflate callCount and corrupt this test's assertion about the ledger query
+    // specifically. Fails safe (try/catch) on the missing .rpc(), same as production.
+    const inertChain = { select: vi.fn(function () { return this; }), eq: vi.fn(function () { return this; }), order: vi.fn(function () { return this; }), limit: vi.fn(function () { return this; }), maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })), insert: vi.fn(() => Promise.resolve({ error: null })) };
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'venture_channel_autonomy') return autonomyChain;
+        if (table === 'venture_demand_verdicts') return verdictChain;
+        if (table === 'venture_channel_publish_ledger') return ledgerChain;
+        return inertChain;
+      }),
+    };
+
+    const result = await evaluateGraduation({ supabase, ventureId: 'v-1', channelType: 'x', requiredStreak: 5 });
+
+    expect(callCount).toBe(2); // first attempt (with execution_mode) fails, falls back to the plain query
+    expect(result.success).toBe(true);
+    expect(result.autonomyState).toBe('autonomous');
+  });
 });
 
 describe('recordPublishOutcome', () => {
@@ -158,7 +222,12 @@ describe('recordPublishOutcome', () => {
 });
 
 describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing', () => {
-  function makeAuthSupabase({ autonomyState = null, autonomyError = null, acceptedRow = null, acceptedError = null, existingPending = null, existingPendingError = null, insertData = { id: 'ledger-new' }, insertError = null, ventureRow = { is_demo: false, name: 'Real Venture', launch_mode: 'live' },
+  function makeAuthSupabase({ autonomyState = null, autonomyError = null, acceptedRow = null, acceptedError = null, existingPending = null, existingPendingError = null, insertData = { id: 'ledger-new' }, insertError = null,
+    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001: assertOutreachAuthorized() now also requires
+    // current_lifecycle_stage>=24 and status='active' (not just is_demo/launch_mode) --
+    // this describe block tests autonomy-tier/ledger/fixture-detection logic downstream
+    // of that gate, so the default venture is fully outreach-authorized to reach it.
+    ventureRow = { is_demo: false, name: 'Real Venture', launch_mode: 'live', current_lifecycle_stage: 25, status: 'active' },
     // SD-LEO-FEAT-CODIFY-HONEST-ACTIVATION-001 FR-1: the autonomous branch now evaluates
     // four honesty invariants before authorizing. Defaults are the honest-and-healthy path
     // (content past REVIEW, write budget under cap) so the pre-existing autonomous cases
@@ -240,6 +309,77 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
     expect(result.reason).toContain('fail-closed');
   });
 
+  // SECURITY finding SEC-H1-R (sub_agent_execution_results 9b8602a9-76bb-4b2c-b36f-01f4625b720c):
+  // a process that cached "execution_mode absent" BEFORE the chairman applies the FR-4
+  // migration, and is still running AFTER, must self-heal on the very next attempt rather than
+  // hard-failing every ledger INSERT for the rest of its lifetime.
+  describe('SEC-H1-R: self-heals when execution_mode is confirmed absent, then found NOT NULL-violated', () => {
+    beforeEach(async () => {
+      const { __resetExecutionModeProbeForTests } = await import('../../../lib/marketing/ledger-execution-mode-probe.js');
+      __resetExecutionModeProbeForTests();
+    });
+    afterEach(async () => {
+      const { __resetExecutionModeProbeForTests } = await import('../../../lib/marketing/ledger-execution-mode-probe.js');
+      __resetExecutionModeProbeForTests();
+    });
+
+    it('invalidates the stale cache and retries once, succeeding on the second attempt', async () => {
+      let probeCallCount = 0;
+      let insertCallCount = 0;
+      const supabase = makeAuthSupabase({ autonomyState: 'autonomous' });
+      // Override just the ledger chain's probe (select().limit()) and insert (insert().select().single())
+      // behavior: the probe first reports "absent" (cached false), the first insert attempt then
+      // hits the 23502 this SD's own FR-4 migration would cause, and the SECOND probe call (after
+      // invalidateExecutionModeProbeCache()) reports "present" so the retry succeeds with the stamp.
+      supabase.ledgerChain.limit = vi.fn(() => {
+        probeCallCount += 1;
+        if (probeCallCount === 1) {
+          return Promise.resolve({ data: null, error: { code: '42703', message: 'column venture_channel_publish_ledger.execution_mode does not exist' } });
+        }
+        return Promise.resolve({ data: [], error: null });
+      });
+      supabase.ledgerChain.single = vi.fn(() => {
+        insertCallCount += 1;
+        if (insertCallCount === 1) {
+          return Promise.resolve({ data: null, error: { code: '23502', message: 'null value in column "execution_mode" of relation "venture_channel_publish_ledger" violates not-null constraint' } });
+        }
+        return Promise.resolve({ data: { id: 'ledger-self-healed-1' }, error: null });
+      });
+
+      const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+
+      expect(result.allowed).toBe(true);
+      expect(result.ledgerEntryId).toBe('ledger-self-healed-1');
+      expect(probeCallCount).toBe(2);
+      expect(insertCallCount).toBe(2);
+      // First insert omitted the stamp (probe said absent); second carried it (probe re-confirmed present).
+      expect(supabase.ledgerChain.insert.mock.calls[0][0]).not.toHaveProperty('execution_mode');
+      expect(supabase.ledgerChain.insert.mock.calls[1][0]).toMatchObject({ execution_mode: 'live' });
+    });
+
+    it('does NOT retry (and stays fail-closed) when the insert fails for an unrelated reason', async () => {
+      let probeCallCount = 0;
+      let insertCallCount = 0;
+      const supabase = makeAuthSupabase({ autonomyState: 'autonomous' });
+      supabase.ledgerChain.limit = vi.fn(() => {
+        probeCallCount += 1;
+        return Promise.resolve({ data: null, error: { code: '42703', message: 'column venture_channel_publish_ledger.execution_mode does not exist' } });
+      });
+      supabase.ledgerChain.single = vi.fn(() => {
+        insertCallCount += 1;
+        return Promise.resolve({ data: null, error: { message: 'db unavailable' } });
+      });
+
+      const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('fail-closed');
+      // No retry: an unrelated failure must not be masked as a self-heal opportunity.
+      expect(probeCallCount).toBe(1);
+      expect(insertCallCount).toBe(1);
+    });
+  });
+
   it('allows when an accepted ledger entry exists for this exact content', async () => {
     const supabase = makeAuthSupabase({ autonomyState: 'propose_and_approve', acceptedRow: { id: 'ledger-1' } });
     const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
@@ -260,28 +400,30 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
     );
   });
 
-  // SD-FDBK-FIX-ISFIXTUREVENTURE-FALSE-POSITIVES-001 (supersedes the QF-20260710-243
-  // launch_mode signal, CONFIRMED false: real ventures are BORN launch_mode='simulated', so
-  // keying fixture-detection on it silently self-skipped the chairman gate for EVERY real
-  // Stage-0 venture). This exact venture shape (is_demo=false, no recognized name pattern) is
-  // now indistinguishable from a real venture and correctly proceeds to notify -- a documented,
-  // accepted tradeoff versus the historical QF's narrower is_demo-omitting-fixture-factory case.
-  it('a venture indistinguishable from real (is_demo=false, launch_mode=simulated, no fixture-name pattern) now proceeds to notify -- launch_mode is no longer a fixture signal', async () => {
+  // SD-FDBK-FIX-ISFIXTUREVENTURE-FALSE-POSITIVES-001 originally guarded: don't let
+  // launch_mode='simulated' be treated as a fixture-detection signal for skipping the
+  // chairman notification, since every real venture is BORN launch_mode='simulated'.
+  // SUPERSEDED (SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001): assertOutreachAuthorized() now
+  // refuses ANY launch_mode!='live' venture at the very top of checkPublishAuthorization,
+  // before autonomy_state/fixture-detection is ever reached -- so this exact regression
+  // (launch_mode=simulated silently reaching the notify path) is now structurally
+  // impossible via this function, not merely correctly handled once reached.
+  it("a launch_mode='simulated' venture (is_demo=false, no fixture-name pattern) is refused by the outreach gate before autonomy_state/fixture-detection ever runs", async () => {
     const supabase = makeAuthSupabase({
       autonomyState: 'propose_and_approve', acceptedRow: null, existingPending: null,
-      ventureRow: { is_demo: false, name: 'Test Venture for Owned-Audience Loop', launch_mode: 'simulated' },
+      ventureRow: { is_demo: false, name: 'Test Venture for Owned-Audience Loop', launch_mode: 'simulated', current_lifecycle_stage: 25, status: 'active' },
     });
     const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1', correlationId: 'corr-1' });
 
     expect(result.allowed).toBe(false);
-    expect(supabase.ledgerChain.insert).toHaveBeenCalledWith(expect.objectContaining({ correlation_id: 'corr-1', decision: 'pending' }));
-    expect(recordPendingDecision).toHaveBeenCalledWith(
-      supabase,
-      expect.objectContaining({ decisionType: 'outbound_publish_approval', ventureId: 'v-1' })
-    );
+    expect(result.mode).toBe('mock');
+    expect(result.reason).toContain('launch_mode_not_live');
+    // Refused before the pending-ledger-insert/chairman-notify path is ever reached.
+    expect(supabase.ledgerChain.insert).not.toHaveBeenCalled();
+    expect(recordPendingDecision).not.toHaveBeenCalled();
   });
 
-  it('still skips the chairman_decisions notification for a genuine fixture (is_demo=true), ledger row still written', async () => {
+  it('an is_demo=true venture is refused by the outreach gate before autonomy_state/fixture-detection ever runs', async () => {
     const supabase = makeAuthSupabase({
       autonomyState: 'propose_and_approve', acceptedRow: null, existingPending: null,
       ventureRow: { is_demo: true, name: 'Any Name', launch_mode: 'simulated' },
@@ -289,7 +431,9 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
     const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1', correlationId: 'corr-1' });
 
     expect(result.allowed).toBe(false);
-    expect(supabase.ledgerChain.insert).toHaveBeenCalledWith(expect.objectContaining({ correlation_id: 'corr-1', decision: 'pending' }));
+    expect(result.mode).toBe('mock');
+    expect(result.reason).toContain('is_demo');
+    expect(supabase.ledgerChain.insert).not.toHaveBeenCalled();
     expect(recordPendingDecision).not.toHaveBeenCalled();
   });
 
