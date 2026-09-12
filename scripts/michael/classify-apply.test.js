@@ -177,6 +177,12 @@ describe('runClassifyApply', () => {
     const early = await runClassifyApply({ sb, argv: ['--file', FILE, '--apply'], now: NOW, root: ROOT, fs: fsFor(envelope({ produced_at: '2026-09-06T08:00:00.000Z' })) }); // 04:00 ET
     expect(early).toMatchObject({ ok: true, action: 'inert', reason: 'outside_et_window' });
   });
+  it('QF-20260912-163: the widened seat-classify window applies a file produced at 12:09 ET (the new midday slot), not just the pre-dawn block', async () => {
+    const noon = new Date('2026-09-06T16:09:00.000Z'); // 12:09 ET (EDT = UTC-4)
+    const { sb } = db();
+    const r = await runClassifyApply({ sb, argv: ['--file', FILE, '--apply'], now: noon, root: ROOT, fs: fsFor(envelope({ produced_at: '2026-09-06T16:09:00.000Z' })) });
+    expect(r).toMatchObject({ ok: true, action: 'run', status: 'ok' });
+  });
   it('dry-run by default: validates, reads the seat row, writes nothing, previews the merged row', async () => {
     const { sb, calls } = db();
     const r = await runClassifyApply({ sb, argv: ['--file', FILE], now: NOW, root: ROOT, fs: fsFor(envelope()) });
