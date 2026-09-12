@@ -135,3 +135,26 @@ describe('SMS leg — recipients are validated and capped', () => {
     await expect(sendDriveSms({ facts: FACTS, recipients: TO, runId: 'r' })).rejects.toThrow(/send must be injected/);
   });
 });
+
+// QF-20260911-111 — a chairman-facing SMS ("Drive 3.1666666666666665/6 | capacity UNKNOWN",
+// measured live 2026-09-11 14:11Z) carried an unrounded IEEE float and printed a missing
+// measurement as if it were a reading. formatBody is the SINGLE formatter both this SMS
+// backstop and the Adam SessionStart hook read (scripts/hooks/session-role-orient.cjs
+// imports it directly), so fixing it here fixes both producers.
+describe('QF-20260911-111: score rounding and the UNKNOWN-as-a-value defect', () => {
+  it('a repeating-decimal score renders to exactly one decimal (3.1666.. -> 3.2/6)', () => {
+    const body = formatBody({ score: 3.1666666666666665, possible: 6, verdict: 'TIGHT', unavailableLegs: 0, unownedBlockers: 0 });
+    expect(body).toBe('Drive 3.2/6 | capacity TIGHT');
+  });
+
+  it('a whole-number score stays clean (no trailing .0) — no regression for the common case', () => {
+    const body = formatBody({ score: 4, possible: 6, verdict: 'TIGHT', unavailableLegs: 0, unownedBlockers: 0 });
+    expect(body).toBe('Drive 4/6 | capacity TIGHT');
+  });
+
+  it('an unavailable capacity leg renders a named-input sentence, never the bare word UNKNOWN', () => {
+    const body = formatBody({ score: 3, possible: 6, verdict: 'UNKNOWN', unavailableLegs: 0, unownedBlockers: 0 });
+    expect(body).not.toMatch(/\bUNKNOWN\b/);
+    expect(body).toBe('Drive 3/6 | capacity not measured this run');
+  });
+});
