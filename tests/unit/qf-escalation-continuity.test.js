@@ -272,7 +272,10 @@ describe('Description/scope inheritance (QF-20260729-534 option C)', () => {
     // description field used the short behavior summary (per the preference test above)...
     expect(h.createSDArgs.description).toBe('Expected: short expected\nActual: short actual');
     // ...but nothing from the long original narrative was discarded.
+    // QF-20260912-394: qf_origin_body also preserves the QF's own untruncated title now
+    // (title itself may be bounded to fit the SD's varchar(500) column; the original survives here).
     expect(h.createSDArgs.metadata.qf_origin_body).toEqual({
+      title: 'Test QF',
       description: long,
       expected_behavior: 'short expected',
       actual_behavior: 'short actual',
