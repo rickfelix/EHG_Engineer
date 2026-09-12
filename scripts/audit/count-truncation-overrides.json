@@ -8003,5 +8003,10 @@
   "classification": "paginated",
   "match": ".select(INTAKE_SELECT_COLUMNS)",
   "note": "QF-20260911-117: this .select( lives inside a `buildQuery(table)` factory (returns a closure, not an executed query) that is passed BY NAME to fetchAllPaginated(buildQuery('eva_todoist_intake')) / fetchAllPaginated(buildQuery('eva_youtube_intake')) several lines below, in a separate statement -- the actual bug this QF fixes was the PRIOR code capping at 500 combined rows via .slice(), so this site is deliberately uncapped-by-.limit() and instead range-paginated by fetchAllPaginated, which applies .range() to the object the factory returns on each page call. chainWindow's textual heuristic (backward 3 lines / forward 12 lines from the .select( line) cannot see 'fetchAllPaginated' because it is neither in the factory body nor within its 12-line forward window -- it is the caller of the factory, in a different statement entirely. Verified paginated in lib/integrations/__tests__/wave-clusterer.test.js (multi-page-cap regression test) and against live data (91 previously-invisible rows now returned, including the two chairman decisions this QF's incident report named)."
+ },
+ "lib/governance/plan-drift-detectors.js:201": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, occurrence_count, first_seen')",
+  "note": "QF-20260911-515: pre-existing single-row lookup bounded by .order('created_at', {ascending:false}).limit(1) 35 lines below -- this diff only added first_seen to the column list (so a re-emission can carry the original first_seen forward instead of resetting it), which re-triggers diff-lint classification of an already-bounded query. chainWindow's 12-line forward window cannot reach .limit(1) because ~18 of those lines are a single extensively-documented predicate-rationale comment block (category/source_type/feedback_type/archived_at security rationale) sitting between the predicates and .order()/.limit() -- same class as wave-clusterer.js:129 above (heuristic window too short for a long inline chain), not an unbounded read."
  }
 }
