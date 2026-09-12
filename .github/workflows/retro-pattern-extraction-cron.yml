@@ -1,0 +1,48 @@
+name: "Retro pattern-extraction hop (cron)"
+
+# QF-20260911-299 (Solomon Friday Foundation Audit #2 item 7): the retro -> issue_patterns
+# learning-extraction hop (scripts/auto-extract-patterns-from-retro.js) has always been a
+# manual npm script with no cron, workflow or hook invoker, while issue_patterns itself IS
+# read on the sub-agent, handoff, /learn and cron paths -- 568/608 retrospectives in 14d never
+# got learning_extracted_at stamped. This registers the missing invoker. Needs only the
+# Supabase service-role secret (already used by sibling cron workflows), no host-only
+# dependency, so this runs on GitHub Actions rather than a local scheduled task.
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  extract-pending-retro-patterns:
+    name: Extract pending retro patterns
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Extract pending retro patterns
+        run: node scripts/extract-pending-retro-patterns.mjs
