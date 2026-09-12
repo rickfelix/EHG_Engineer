@@ -103,7 +103,11 @@ async function main() {
   await insertCoordinationRow(supabase, {
     sender_session: role,
     sender_type: role,
-    target_session: 'broadcast',       // broadcast so the per-role gauge reads every role's ack
+    // QF-20260911-753: bare 'broadcast' retired (0/91 rows ever acknowledged, all-time). The
+    // per-role compliance gauge (lib/coordinator/chairman-directive-gauge.cjs) matches acks by
+    // payload.kind='chairman_directive_ack' + payload.directive_id, never by target_session, so
+    // retargeting here does not affect gauge behavior.
+    target_session: 'broadcast-coordinator',
     message_type: 'INFO',
     subject: `[CHAIRMAN_DIRECTIVE_ACK ${directiveId}] role=${role}`,
     body: note || `${role} actioned chairman_directive ${directiveId}`,

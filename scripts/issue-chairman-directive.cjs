@@ -15,8 +15,9 @@
  * The ack is keyed by directive_id (NOT topic_id), so this child is dependency-free.
  *
  * Insert routes through lib/coordinator/dispatch.cjs insertCoordinationRow with
- * target_session='broadcast' + message_type='INFO' (assertSdDispatchable only fires for
- * WORK_ASSIGNMENT, so an INFO broadcast passes the dispatch guard).
+ * target_session='broadcast-coordinator' + message_type='INFO' (assertSdDispatchable only fires
+ * for WORK_ASSIGNMENT, so an INFO broadcast passes the dispatch guard; QF-20260911-753 retargeted
+ * this from bare 'broadcast', retired).
  *
  * Usage:
  *   node scripts/issue-chairman-directive.cjs --directive "<text>" [--id <slug>] [--roles adam,coordinator,solomon]
@@ -60,7 +61,11 @@ async function main() {
   await insertCoordinationRow(supabase, {
     sender_session: 'chairman',
     sender_type: 'chairman',
-    target_session: 'broadcast',   // broadcast sentinel — dispatch short-circuits the live-session lookup
+    // QF-20260911-753: bare 'broadcast' retired (0/91 rows ever acknowledged, all-time; this
+    // script itself had written 0 chairman_directive rows as of that measurement).
+    // broadcast-coordinator sentinel — dispatch short-circuits the live-session lookup, and the
+    // coordinator relays to adam/solomon per its own role-based routing.
+    target_session: 'broadcast-coordinator',
     message_type: 'INFO',          // assertSdDispatchable only fires for WORK_ASSIGNMENT → INFO passes
     subject: `[CHAIRMAN_DIRECTIVE ${directiveId}]`,
     body: String(directive),

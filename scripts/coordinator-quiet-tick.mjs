@@ -75,11 +75,12 @@ const {
   defaultPersistCeilingEvent,
 } = require('../lib/fleet/context-ceiling-default-deps.cjs');
 // SD-LEO-INFRA-COORDINATOR-WAKE-ON-DIRECTIVE-001 FR-1 (adversarial-review finding): a
-// chairman_directive rides on target_session='broadcast' (never a real session id — see
-// scripts/issue-chairman-directive.cjs), so it can NEVER match the target_session=coordinatorId
-// filter a plain session_coordination query uses. Its own compliance tracking is a SEPARATE
-// mechanism (chairman_directive_ack rows, keyed by directive_id + role, not read_at at all) —
-// reuse the existing, purpose-built gauge rather than re-deriving broadcast-lane detection.
+// chairman_directive rides on target_session='broadcast-coordinator' (never a real session id
+// -- see scripts/issue-chairman-directive.cjs; QF-20260911-753 retargeted this from bare
+// 'broadcast', retired), so it can NEVER match the target_session=coordinatorId filter a plain
+// session_coordination query uses. Its own compliance tracking is a SEPARATE mechanism
+// (chairman_directive_ack rows, keyed by directive_id + role, not read_at at all) — reuse the
+// existing, purpose-built gauge rather than re-deriving broadcast-lane detection.
 const { loadRoleDirectiveStatus } = require('../lib/coordinator/chairman-directive-gauge.cjs');
 
 const execFileAsync = promisify(execFile);
@@ -320,10 +321,11 @@ function saveLastState(s) {
  *
  * Does NOT cover chairman_directive — see hasOutstandingChairmanDirective below,
  * a deliberately SEPARATE check (adversarial-review finding on PR #5794): a
- * chairman_directive is issued with target_session='broadcast' (a literal sentinel,
- * never a real session id — scripts/issue-chairman-directive.cjs), so it can never
- * match this function's target_session=coordinatorId filter, and its compliance is
- * tracked by a wholly different mechanism (chairman_directive_ack rows, not read_at).
+ * chairman_directive is issued with target_session='broadcast-coordinator' (a literal
+ * sentinel, never a real session id — scripts/issue-chairman-directive.cjs; QF-20260911-753
+ * retargeted this from bare 'broadcast', retired), so it can never match this function's
+ * target_session=coordinatorId filter, and its compliance is tracked by a wholly different
+ * mechanism (chairman_directive_ack rows, not read_at).
  *
  * Fail-soft: a query error returns false (never blocks the tick, never forces a
  * false hard-wake on an unrelated DB hiccup).
