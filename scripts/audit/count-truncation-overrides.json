@@ -1,4 +1,9 @@
 {
+ "scripts/extract-pending-retro-patterns.mjs:25": {
+  "classification": "bounded-by-design",
+  "match": ".select('id, created_at')",
+  "note": "QF-20260911-299: bounded by .limit(limit) on the same chain (3 lines below), where `limit` defaults to the module-level BATCH_LIMIT = 100 constant -- the classifier's \\.limit\\(\\s*(\\d+)\\s*\\) regex requires a literal digit and cannot see through the named-constant default, but the effective bound is a literal 100, well under the 1000 cap."
+ },
  "scripts/modules/handoff/executors/exec-to-plan/retrospective.js:477": {
   "classification": "bounded-by-design",
   "match": ".eq('id', existing.id).select()",
