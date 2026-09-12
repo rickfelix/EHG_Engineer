@@ -5,11 +5,22 @@
  * have escalated at the 3rd DISTINCT site) + false-positive negatives modeled
  * on the corrective-sd-generator failures (single-doc, zero site diversity).
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   siteKeyFrom, mergeSite, shouldEscalate, buildClassSdInput,
   recordSiteAndMaybeEscalate, minSites, DEFAULT_MIN_SITES, MIN_SITES_FLOOR, SITES_CAP,
 } from '../../../lib/learning/class-escalation.js';
+
+// QF-20260911-015: escalateToClassSd lazy-imports these two — mock both so the
+// >24h-timeout escalation path below is fully exercised without a real DB insert.
+vi.mock('../../../scripts/leo-create-sd.js', () => ({
+  createSD: vi.fn(async (input) => (input?.sdKey ? { sd_key: input.sdKey, id: input.sdKey } : { ok: false })),
+}));
+vi.mock('../../../scripts/modules/sd-key-generator.js', () => ({
+  generateSDKey: vi.fn(async ({ source, type }) => `SD-${source}-${String(type || 'GEN').toUpperCase()}-MOCKKEY-001`),
+}));
+import { createSD } from '../../../scripts/leo-create-sd.js';
+import { generateSDKey } from '../../../scripts/modules/sd-key-generator.js';
 
 const basePattern = (over = {}) => ({
   id: 'uuid-1', pattern_id: 'PAT-AUTO-test1234', status: 'active',
@@ -158,6 +169,64 @@ describe('recordSiteAndMaybeEscalate — seam contract (fail-soft)', () => {
   it('a null/invalid pattern is a safe no-op', async () => {
     const r = await recordSiteAndMaybeEscalate(mockSb(), null, { file: 'a.js' }, { env: {} });
     expect(r).toEqual({ distinctCount: 0, escalatedSdKey: null });
+  });
+});
+
+describe('escalateToClassSd — QF-20260911-015: >24h CHAIRMAN_APPLY_VERIFICATION timeout mints its tracking SD', () => {
+  const okSb = () => ({
+    from: vi.fn(() => ({ update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })) })),
+  });
+
+  beforeEach(() => {
+    createSD.mockClear();
+    generateSDKey.mockClear();
+  });
+
+  it('generates a caller-side sdKey and mints the SD once site diversity crosses threshold', async () => {
+    // Two prior sites already on the ledger; the third occurrence is the exact
+    // WAIT_TIMEOUT_EXCEEDED (>24h) site shape lib/rca/rca-orchestrator.js builds for a
+    // CHAIRMAN_APPLY_VERIFICATION gate failure ({ sd_id, gate, file: null, stage: null }).
+    let md = {};
+    ({ metadata: md } = mergeSite(md, { file: 'lib/sd-creation/pipeline.js' }));
+    ({ metadata: md } = mergeSite(md, { gate: 'PR_MERGE_VERIFICATION' }));
+    const pattern = basePattern({
+      metadata: md,
+      issue_summary: 'CHAIRMAN_APPLY_VERIFICATION: WAIT_TIMEOUT_EXCEEDED — gate has been waiting >24h',
+    });
+
+    const r = await recordSiteAndMaybeEscalate(
+      okSb(),
+      pattern,
+      { gate: 'CHAIRMAN_APPLY_VERIFICATION', sd_id: 'SD-EXAMPLE-001', file: null, stage: null },
+      { env: {} },
+    );
+
+    expect(generateSDKey).toHaveBeenCalledTimes(1);
+    expect(generateSDKey).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'PATTERN', type: 'infrastructure', title: expect.stringContaining('Class fix:') })
+    );
+
+    // The QF-20260911-015 bug: createSD used to be invoked with NO sdKey at all, so
+    // pipeline.js's SDKEY_REQUIRED guard refused it and the escalation vanished silently.
+    expect(createSD).toHaveBeenCalledTimes(1);
+    const passedInput = createSD.mock.calls[0][0];
+    expect(passedInput.sdKey).toBeTruthy();
+
+    // Escalation SD/row is actually created — not swallowed as a non-fatal null.
+    expect(r.escalatedSdKey).toBe(passedInput.sdKey);
+    expect(r.escalatedSdKey).not.toBeNull();
+  });
+
+  it('stays FAIL-SOFT when createSD itself errors (never throws into the RCA/knowledge-base host seam)', async () => {
+    createSD.mockImplementationOnce(async () => { throw new Error('boom'); });
+    let md = {};
+    ({ metadata: md } = mergeSite(md, { file: 'a.js' }));
+    ({ metadata: md } = mergeSite(md, { file: 'b.js' }));
+    const pattern = basePattern({ metadata: md });
+
+    await expect(
+      recordSiteAndMaybeEscalate(okSb(), pattern, { file: 'c.js' }, { env: {} })
+    ).resolves.toEqual(expect.objectContaining({ escalatedSdKey: null }));
   });
 });
 
