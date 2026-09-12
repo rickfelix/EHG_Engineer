@@ -343,6 +343,7 @@
     "lint:fix": "eslint scripts/ lib/ tools/ --ext .js,.ts --fix",
     "lint:e2e": "eslint tests/e2e/ --ext .js,.ts",
     "lint:e2e:fix": "eslint tests/e2e/ --ext .js,.ts --fix",
+    "lint:eva-logger": "node scripts/lint/eva-logger-required-lint.mjs",
     "validate:story-mapping": "node scripts/validate-story-test-mapping.js",
     "validate:story-mapping:verbose": "node scripts/validate-story-test-mapping.js --verbose",
     "validate:story-mapping:fix": "node scripts/validate-story-test-mapping.js --fix",
