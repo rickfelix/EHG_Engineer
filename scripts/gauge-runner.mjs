@@ -69,7 +69,6 @@ import {
   fetchLastNDispatchedKeys,
   hasOpenFinding,
   findOpenFinding,
-  OPEN_FINDING_STATUSES,
 } from '../lib/governance/plan-drift-detectors.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { checkGhostCeos } from '../lib/agents/ghost-ceo-gauge.js';
@@ -671,41 +670,28 @@ export async function routeFinding(supabase, entry, result) {
   }
 
   if (open) {
-    // RE-EMISSION. Stamp freshness on the existing row rather than inserting a new one.
-    // Modelled on scripts/clockwork/gh-failure-monitor.cjs:96-110 -- THE UPDATE HALF ONLY.
-    // Its LOOKUP at :91-95 is a NAMED ANTI-PRECEDENT (PRD TR-4): it filters on error_hash with NO
-    // status filter, so it bumps counts on CLOSED rows -- live, a ci_failure row sits at
-    // occurrence_count 586 with a fresh last_seen while that table holds 2,101 resolved.
-    const { data: stamped, error } = await supabase
-      .from('feedback')
-      .update({
-        last_seen: new Date().toISOString(),
-        occurrence_count: (open.occurrence_count || 1) + 1,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', open.id)
-      // RE-ASSERTED, NOT ASSUMED — and re-asserting the FULL lookup predicate, not a subset. The
-      // lookup already proved these, but the invariant "this runner only ever bumps its OWN open
-      // gauge rows" then lives split across two statements in two files, and the anti-precedent
-      // above is exactly what that split produces: a correct-looking UPDATE fed by a lookup that
-      // lost a predicate. It is a no-op whenever the lookup is right.
-      .eq('category', 'invariant_gauge_finding')
-      .eq('source_type', 'auto_capture')
-      .eq('feedback_type', 'sentry_error')
-      .is('archived_at', null)
-      .in('status', OPEN_FINDING_STATUSES)
-      // ZERO ROWS MATCHED IS NOT SUCCESS. Without .select() supabase-js returns {error:null} for an
-      // UPDATE that touched NOTHING, so a row triaged or archived out of scope between the lookup
-      // and the stamp would be reported 'suppressed' with nothing written — the trip silently
-      // dropped, and counted as healthy dedup on the very tally that exists to detect silence.
-      // Reporting success for work that did not happen is the defect class this whole SD is about.
-      .select('id');
+    // RE-EMISSION. QF-20260911-515: this used to stamp freshness on the existing row with an
+    // UPDATE (modelled on scripts/clockwork/gh-failure-monitor.cjs:96-110 -- the anti-precedent
+    // in its LOOKUP at :91-95 is unrelated and still avoided below by construction, since the
+    // lookup here is unchanged). database/chairman-gated/20260907_feedback_immutability_trigger.sql
+    // (SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E FR-3) now makes `feedback` append-only, so every
+    // UPDATE is rejected outright ('feedback is append-only: row <id> cannot be modified after
+    // insert') and this branch reported 'error' on every single re-emission.
+    // FIX: a re-emission is now a NEW row -- the trigger's own prescribed pattern ("a correction
+    // is a new row, so the original survives"). occurrence_count/first_seen carry forward from
+    // `open`; metadata.re_emission_of points back at it. findOpenFinding orders by created_at desc,
+    // so this new row becomes the anchor the NEXT pass finds -- no lookup change needed.
+    const now = new Date().toISOString();
+    const row = buildFindingRow(entry, result);
+    const { error } = await supabase.from('feedback').insert({
+      ...row,
+      first_seen: open.first_seen || now,
+      last_seen: now,
+      occurrence_count: (open.occurrence_count || 1) + 1,
+      metadata: { ...row.metadata, re_emission_of: open.id },
+    });
     if (error) {
       console.error(`[gauge-runner] ${entry.id}: re-emission stamp failed (non-fatal): ${error.message}`);
-      return 'error';
-    }
-    if (!Array.isArray(stamped) || stamped.length === 0) {
-      console.error(`[gauge-runner] ${entry.id}: re-emission stamp matched NO row (row ${open.id} moved out of scope between lookup and update) — reporting error, not suppressed`);
       return 'error';
     }
     return 'suppressed';

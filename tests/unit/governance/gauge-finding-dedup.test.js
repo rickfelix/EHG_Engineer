@@ -131,9 +131,11 @@ describe('THE LOOKUP MUST MATCH A ROW THE RUNNER ACTUALLY WROTE', () => {
     // The fixture is buildFindingRow() output plus the real column defaults. If any filter in the
     // lookup cannot be satisfied by the row the runner itself writes, this fails — which is the
     // whole class of defect, not just the feedback_type instance.
+    // QF-20260911-515: a re-emission is now recorded as a new row (feedback is append-only), so
+    // this asserts exactly one insert rather than none.
     const sb = makeSupabase({ openRow: realGaugeRow() });
     expect(await routeFinding(sb, ENTRY, { count: 1 })).toBe('suppressed');
-    expect(sb.calls.inserts).toEqual([]);
+    expect(sb.calls.inserts).toHaveLength(1);
   });
 
   it('hasOpenFinding still sees an existing open row — value preserved, not just type', async () => {
@@ -154,34 +156,30 @@ describe('THE LOOKUP MUST MATCH A ROW THE RUNNER ACTUALLY WROTE', () => {
     expect(await routeFinding(venture, ENTRY, { count: 1 })).toBe('inserted');
   });
 
-  it('an UPDATE that matches zero rows is an ERROR, never a silent suppressed', async () => {
-    // A row triaged or archived out of scope between lookup and stamp. supabase-js returns
-    // {error:null} for an UPDATE that touched nothing, so without the .select() this trip would be
-    // dropped AND counted as healthy dedup on the tally that exists to detect silence.
-    const sb = makeSupabase({ openRow: realGaugeRow() });
-    const origFrom = sb.from.bind(sb);
-    sb.from = () => { const q = origFrom(); const origUpdate = q.update;
-      q.update = (payload) => { const u = origUpdate(payload); const origSelect = u.select;
-        u.select = () => { void origSelect; return Promise.resolve({ data: [], error: null }); }; return u; }; return q; };
-    expect(await routeFinding(sb, ENTRY, { count: 1 })).toBe('error');
-  });
+  // QF-20260911-515: feedback's append-only trigger made every UPDATE-based re-emission stamp
+  // fail outright ('feedback is append-only...'), so the "UPDATE matched zero rows" race this test
+  // used to guard no longer exists as a code path -- re-emission is an INSERT now (below), and an
+  // insert failure is covered by 'reports error (not silent success) when the stamp itself fails'.
 });
 
-describe('routeFinding: re-emission is stamped, not re-inserted', () => {
-  it('SUPPRESSES a re-emission and stamps last_seen + occurrence_count on the existing row', async () => {
-    const sb = makeSupabase({ openRow: realGaugeRow({ occurrence_count: 7 }) });
+describe('routeFinding: re-emission is a new row pointing back at the one it re-emits (QF-20260911-515)', () => {
+  // feedback is append-only (20260907_feedback_immutability_trigger.sql): an UPDATE-based stamp
+  // is rejected outright, so a re-emission is recorded as a NEW row rather than a mutation of the
+  // old one -- the trigger's own prescribed correction pattern.
+  it('SUPPRESSES a re-emission via a NEW row carrying occurrence_count/first_seen forward, never an UPDATE', async () => {
+    const sb = makeSupabase({ openRow: realGaugeRow({ occurrence_count: 7, first_seen: '2026-01-01T00:00:00.000Z' }) });
     const verdict = await routeFinding(sb, ENTRY, { count: 1 });
     expect(verdict).toBe('suppressed');
-    expect(sb.calls.inserts).toEqual([]);           // the whole point: no new row
-    expect(sb.calls.updates).toHaveLength(1);
-    expect(sb.calls.updates[0].payload.occurrence_count).toBe(8);
-    expect(sb.calls.updates[0].payload.last_seen).toEqual(expect.any(String));
-    // THE UPDATE RE-ASSERTS ITS OWN SCOPE. The lookup already proved category and open-status, but
-    // the named anti-precedent in this very PR (gh-failure-monitor, live-bumping a RESOLVED row to
-    // occurrence_count 586) is precisely a correct-looking UPDATE fed by a lookup that lost a
-    // predicate. Split across two files, that invariant is one careless edit from gone.
-    expect(sb.calls.updates[0].category).toBe('invariant_gauge_finding');
-    expect(sb.calls.updates[0].status).toEqual(OPEN_FINDING_STATUSES);
+    expect(sb.calls.updates).toEqual([]);           // the whole point: never an UPDATE any more
+    expect(sb.calls.inserts).toHaveLength(1);
+    const inserted = sb.calls.inserts[0];
+    expect(inserted.occurrence_count).toBe(8);
+    expect(inserted.last_seen).toEqual(expect.any(String));
+    expect(inserted.first_seen).toBe('2026-01-01T00:00:00.000Z'); // carried forward, not reset
+    expect(inserted.category).toBe('invariant_gauge_finding');
+    // Points back at the row it re-emits, so a reader can reconstruct the chain even though the
+    // old row can no longer be touched.
+    expect(inserted.metadata.re_emission_of).toBe('row-1');
   });
 
   it('INSERTS a first emission and stamps BOTH first_seen and last_seen', async () => {
@@ -197,12 +195,38 @@ describe('routeFinding: re-emission is stamped, not re-inserted', () => {
     expect(sb.calls.inserts[0].first_seen).toEqual(expect.any(String));
     expect(sb.calls.inserts[0].last_seen).toEqual(expect.any(String));
     expect(sb.calls.inserts[0].category).toBe('invariant_gauge_finding');
+    expect(sb.calls.inserts[0].metadata.re_emission_of).toBeUndefined();
   });
 
   it('treats occurrence_count NULL as 1 rather than producing NaN', async () => {
     const sb = makeSupabase({ openRow: realGaugeRow({ occurrence_count: null }) });
     await routeFinding(sb, ENTRY, { count: 1 });
-    expect(sb.calls.updates[0].payload.occurrence_count).toBe(2);
+    expect(sb.calls.inserts[0].occurrence_count).toBe(2);
+  });
+
+  it('falls back to now() for first_seen when the open row never had one (pre-existing rows)', async () => {
+    const sb = makeSupabase({ openRow: realGaugeRow({ occurrence_count: 1, first_seen: null }) });
+    await routeFinding(sb, ENTRY, { count: 1 });
+    expect(sb.calls.inserts[0].first_seen).toEqual(expect.any(String));
+  });
+});
+
+describe('routeFinding: a second pass against a mocked append-only feedback reports suppressed, not error (QF-20260911-515)', () => {
+  // The QF's own acceptance test: run the runner twice against a feedback stand-in that REJECTS
+  // every UPDATE (mirroring the live trigger) and assert error=0, suppressed>=1 on the second pass.
+  it('two passes: first inserts, second suppresses via insert -- zero UPDATE calls, zero errors', async () => {
+    // Both fixtures reject any UPDATE the way the live trigger does, so an UPDATE attempt anywhere
+    // in either pass would surface as an 'error' verdict rather than silently no-op'ing.
+    const APPEND_ONLY_ERROR = 'feedback is append-only: row x cannot be modified after insert';
+    const first = makeSupabase({ openRow: null, updateError: APPEND_ONLY_ERROR });
+    expect(await routeFinding(first, ENTRY, { count: 1 })).toBe('inserted');
+
+    // Second pass: the row just inserted is now the open finding.
+    const secondPass = makeSupabase({ openRow: realGaugeRow({ occurrence_count: 1 }), updateError: APPEND_ONLY_ERROR });
+    const second = await routeFinding(secondPass, ENTRY, { count: 1 });
+    expect(second).toBe('suppressed');
+    expect(secondPass.calls.updates).toEqual([]); // never attempted -- would have hit updateError
+    expect(secondPass.calls.inserts).toHaveLength(1);
   });
 });
 
@@ -264,12 +288,14 @@ describe('fail direction: toward a duplicate row, never toward silence', () => {
     expect(verdict).toBe('inserted');
   }, DEDUP_LOOKUP_TIMEOUT_MS + 3000);
 
-  it('reports error (not silent success) when the stamp itself fails', async () => {
-    const sb = makeSupabase({ openRow: realGaugeRow({ occurrence_count: 1 }), updateError: 'permission denied' });
+  it('reports error (not silent success) when a re-emission stamp fails', async () => {
+    // QF-20260911-515: the stamp is an INSERT now (feedback is append-only), so its failure mode
+    // is insertError, not updateError.
+    const sb = makeSupabase({ openRow: realGaugeRow({ occurrence_count: 1 }), insertError: 'permission denied' });
     expect(await routeFinding(sb, ENTRY, { count: 1 })).toBe('error');
   });
 
-  it('reports error when the insert fails', async () => {
+  it('reports error when a first-emission insert fails', async () => {
     const sb = makeSupabase({ openRow: null, insertError: 'constraint violation' });
     expect(await routeFinding(sb, ENTRY, { count: 1 })).toBe('error');
   });

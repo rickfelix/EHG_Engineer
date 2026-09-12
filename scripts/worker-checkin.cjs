@@ -1130,6 +1130,29 @@ const STRANDED_MIN_AGE_MS = 5 * 60 * 1000;
 // lane is the only path back). Both phases are one handoff (LEAD-FINAL-APPROVAL) from shipped.
 const STRANDED_RECOVERABLE_PHASES = ['LEAD_FINAL', 'PLAN_VERIFICATION'];
 
+// QF-20260911-529: the newest sd_phase_handoffs row for a stranded SD may carry a live WAIT
+// verdict (validation_details.wait / waiting_gates — HandoffRecorder.js's own persisted shape),
+// e.g. CHAIRMAN_APPLY_VERIFICATION pending a chairman-gated migration apply. That is a legitimate,
+// re-checkable lifecycle state, not "stranded" — resume_final read only strategic_directives_v2
+// and never this row, so it adopted, sd-start'd, and re-ran a handoff certain to WAIT again, every
+// single check-in, until the gate's own external condition cleared. Exported for direct testing.
+async function newestHandoffWaitingGates(sb, sdId) {
+  if (!sdId) return [];
+  try {
+    const { data } = await sb
+      .from('sd_phase_handoffs')
+      .select('validation_details, metadata')
+      .eq('sd_id', sdId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const row = (data || [])[0];
+    const gates = row?.validation_details?.waiting_gates || row?.metadata?.waiting_gates;
+    return Array.isArray(gates) ? gates.filter(Boolean) : [];
+  } catch {
+    return []; // fail-open: a probe fault must not block a genuinely-recoverable row
+  }
+}
+
 async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
   try {
     const cutoffIso = new Date(Date.now() - STRANDED_MIN_AGE_MS).toISOString();
@@ -1137,7 +1160,8 @@ async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
       .from('strategic_directives_v2')
       // SD-LEO-INFRA-RESUME-FINAL-READ-001 (FR-1/FR-2): metadata added. It was ABSENT, which is the
       // whole incident — this lane could not see a hold because it never read one.
-      .select('sd_key, status, current_phase, updated_at, metadata, sd_type, target_application, parent_sd_id')
+      // QF-20260911-529: id added, to look up the row's newest sd_phase_handoffs by sd_id.
+      .select('id, sd_key, status, current_phase, updated_at, metadata, sd_type, target_application, parent_sd_id')
       .eq('status', 'pending_approval')
       .in('current_phase', STRANDED_RECOVERABLE_PHASES)
       .is('claiming_session_id', null)
@@ -1146,6 +1170,14 @@ async function recoverStrandedFinal(sb, sessionId, base, tierCtx = {}) {
       .limit(STRANDED_CANDIDATE_LIMIT);
     const skipped = [];
     for (const sd of (stranded || [])) {
+      // QF-20260911-529: a live WAIT on the newest handoff means this row is WAITING, not
+      // stranded — skip it (loud, via the same carried `skipped` mechanism) until a new handoff
+      // row lands, the gate clears, or (as here) a chairman-gated migration gets applied.
+      const waitingGates = await newestHandoffWaitingGates(sb, sd.id);
+      if (waitingGates.length) {
+        skipped.push(`${sd.sd_key}: WAITING on gate(s) ${waitingGates.join(', ')} — not stranded, re-checkable once the gate's own condition clears`);
+        continue;
+      }
       // FR-1. THE FENCE ALREADY EXISTED AND THIS LANE BYPASSED IT — that is the defect, not a
       // missing mechanism. classifyDispatchIneligibility (metadata.requires_human_action,
       // test-fixture keys, live-held, claim-time fitness) is the SAME shared predicate the
@@ -2141,7 +2173,7 @@ async function main() {
 // top (imports are referenced directly — never re-derived).
 const CHECKIN_HELPERS = { ws, tryClaim, stampDirectedAssignment, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchOutstandingSignals, formatOutstandingWarning, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, seatCapabilityIsVerified, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
-module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, isClaimableWithVerify, getQfPickerVerdict, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs, carryFencedRefusals };
+module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, isClaimableWithVerify, getQfPickerVerdict, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, newestHandoffWaitingGates, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs, carryFencedRefusals };
 
 if (require.main === module) {
   main().catch(err => {
