@@ -1,0 +1,12 @@
+import 'dotenv/config';
+import * as sp from '../lib/adam/standing-priority.js';
+import { createClient } from '@supabase/supabase-js';
+const s = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+console.log('exports:', Object.keys(sp).join(','));
+const ev = await sp.evaluateStandingPriority(s);
+console.log('EVAL:', JSON.stringify({ status: ev.status, servedBy: ev.servedBy, anchored: ev.anchored }));
+console.log('PRIORITY:', JSON.stringify(ev.priority).slice(0, 900));
+const { data: m } = await s.from('strategic_directives_v2').select('sd_key,status,current_phase,claiming_session_id,updated_at').ilike('sd_key', '%MICHAEL%').order('updated_at', { ascending: false }).limit(12);
+console.log('Michael SDs:'); for (const x of m || []) console.log('  ', x.sd_key, x.status, x.current_phase, 'claimed', String(x.claiming_session_id || '-').slice(0, 8), String(x.updated_at).slice(0, 16));
+const { data: q } = await s.from('quick_fixes').select('id,status,severity,claiming_session_id,title').or('id.eq.QF-20260911-282,title.ilike.%michael%').in('status', ['open', 'in_progress']).limit(8);
+console.log('open Michael QFs:'); for (const x of q || []) console.log('  ', x.id, x.status, x.severity, 'claimed', String(x.claiming_session_id || '-').slice(0, 8), '|', String(x.title).slice(0, 90));

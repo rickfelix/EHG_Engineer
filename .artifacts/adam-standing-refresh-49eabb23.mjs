@@ -1,0 +1,13 @@
+import 'dotenv/config';
+import * as sp from '../lib/adam/standing-priority.js';
+import { createClient } from '@supabase/supabase-js';
+const s = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const cur = await sp.readStandingPriority(s);
+const p = cur && (cur.priority || cur);
+console.log('current keys:', Object.keys(p || {}).join(','), '| priority_id', p?.priority_id, '| source', p?.source, '| set_by', p?.set_by, '| linked', JSON.stringify(p?.linked_sd_keys));
+const head = String(p.title).split('\n')[0];
+const refreshed = head + '\n\nSTATE REFRESHED BY ADAM 2026-09-12 ~01:05Z (measured live; supersedes the 09-07 refresh below the line): the Michael parent SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002 COMPLETED 2026-09-11 14:58Z with all ten children A-J completed; SD-LEO-INFRA-MICHAEL-ADAM-COMMS-001 completed 09-07; the chairman registered and --verify-ed the seven Michael host tasks himself on 09-11 (hidden-window, repeating, battery-tolerant) and ruled the read cadence (ratification d5905408: 06:00 anchor + 12:00 and 18:00 ET read windows, classifier stays disabled). No Michael SD is in flight, so this priority reads UNSERVED by construction (linked_sd_keys only count SD statuses). REMAINING MICHAEL GAPS, all tracked: QF-20260911-282 (add the two read windows; medium; directed in the coordinator queue), QF-20260911-848 (CLAUDE_MICHAEL.md names a non-existent --inline flag; low), then ONE re-registration keystroke by the chairman after 282 ships. PROPOSAL carried to the chairman at the 06:00 brief: CLEAR this override (his call, ratification 04c9dd29 lineage) or re-scope it to the two QFs. Until his word it stays set; Adam refreshed only the state text, never the standing order.\n\n--- prior text (09-07 refresh) ---\n' + String(p.title).split('\n').slice(2).join('\n');
+const res = await sp.setStandingPriority(s, { priority_id: p.priority_id, title: refreshed, source: p.source, roadmap_evidence: p.roadmap_evidence, linked_sd_keys: p.linked_sd_keys || [], set_by: 'adam-49eabb23 (state refresh only)' });
+console.log('SET:', JSON.stringify(res).slice(0, 200));
+const ev = await sp.evaluateStandingPriority(s);
+console.log('EVAL after:', ev.status, 'anchored', ev.anchored, '| title head:', String(ev.priority?.title).slice(0, 80));
