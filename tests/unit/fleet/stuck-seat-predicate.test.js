@@ -227,6 +227,7 @@ describe('fetchPopulation BEHAVIOURALLY — the gap that let the defect through 
         const q = {
           select(cols) { capture.columns = cols; return q; },
           in(col, vals) { capture.statusFilter = { col, vals }; working = working.filter((r) => vals.includes(r[col])); return q; },
+          is(col, val) { capture.releasedFilter = { col, val }; working = working.filter((r) => (val === null ? r[col] == null : r[col] === val)); return q; },
           order(col, opts) { capture.order = { col, ...opts }; return q; },
           async limit(n) { capture.limit = n; return { data: working.slice(0, n), error: null }; }
         };
@@ -286,7 +287,7 @@ describe('fetchPopulation BEHAVIOURALLY — the gap that let the defect through 
 
   it('throws on a query error instead of returning an empty population', async () => {
     // An empty population and a failed query render identically as "0 stuck" — the failure must be loud.
-    const failing = { from: () => ({ select: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) };
+    const failing = { from: () => ({ select: () => ({ in: () => ({ is: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) }) };
     await expect(fetchPopulation(failing)).rejects.toThrow(/boom/);
   });
 });
@@ -344,6 +345,7 @@ describe('the dashboard strip RENDER path — uncovered until printStuckSeatStri
   function fakeClient(rows) {
     return { from: () => { let w = rows.slice(); const q = {
       select: () => q, in: (c, v) => { w = w.filter((r) => v.includes(r[c])); return q; },
+      is: (c, v) => { w = w.filter((r) => (v === null ? r[c] == null : r[c] === v)); return q; },
       order: () => q, limit: async (n) => ({ data: w.slice(0, n), error: null }) }; return q; } };
   }
   function capture(fn) {
@@ -382,7 +384,7 @@ describe('the dashboard strip RENDER path — uncovered until printStuckSeatStri
   });
 
   it('a DB failure says so rather than rendering a clean zero', async () => {
-    const failing = { from: () => ({ select: () => ({ in: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) };
+    const failing = { from: () => ({ select: () => ({ in: () => ({ is: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) }) };
     const out = await capture(() => printStuckSeatStrip(failing));
     expect(out).toContain('check unavailable');
     expect(out).not.toContain('stuck=0');

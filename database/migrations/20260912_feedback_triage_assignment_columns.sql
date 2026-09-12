@@ -1,3 +1,5 @@
+-- @approved-by: codestreetlabs@gmail.com
+-- Chairman verbal "Apply All" in the room 2026-09-12 12:4xZ (decision be559366); additive ADD COLUMN IF NOT EXISTS only.
 -- QF-20260912-253: add 6 columns that real code already assumes exist on public.feedback.
 --
 -- Confirmed via 3 independent checks (live DB select(*), database/schema-reference-snapshot.json,
