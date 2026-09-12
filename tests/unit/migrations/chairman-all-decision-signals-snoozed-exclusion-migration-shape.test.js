@@ -82,8 +82,12 @@ describe('SNOOZE-3: staging discipline', () => {
     }
   });
 
-  it('carries no chairman approval yet (staged, not applied)', () => {
-    expect(sql).toMatch(/@approved-by: <PENDING/);
+  it('carries the ceremony marker: the PENDING placeholder while staged, or the chairman @approved-by attestation once the apply ceremony scribed it', () => {
+    // The header is the apply-ceremony marker, not apply state: pre-ceremony it reads
+    // "@approved-by: <PENDING ...>"; the ceremony replaces it with the chairman's address
+    // (2026-09-12 ceremony d, chairman SMS "A apply now"). Either form is the staged shape;
+    // a file with NO @approved-by line at all is the defect this test guards.
+    expect(sql).toMatch(/@approved-by: (<PENDING|[^s<>@]+@[^s<>@]+)/);
   });
 
   it('ships a DOWN file restoring the pre-change definition (no snoozed_until exclusion in the actual view body)', () => {
