@@ -1,0 +1,11 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+import { createOrUpsertNode } from '../lib/adam/task-ledger.js';
+const s = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const key = 'QF-20260911-593';
+const { data: cur } = await s.from('quick_fixes').select('description').eq('id', key).single();
+const addendum = " FOLD ADDENDUM 2026-09-12 01:1xZ (Alpha 64728de4 RCA, signal d42c260b 01:01Z, relayed by the coordinator 617b9b5e; this ticket is the single fold target - Alpha's own filing on the same numbers is to be marked superseded-by QF-20260911-593): FLEET NUMBERS - 9 of 10 template-carrying orchestrator parents fail CHILD_SCOPE_COVERAGE; 75 of 244 parents-with-deliverables fail; 210 of 273 accepted orchestrator PLAN-TO-LEAD rows since 2026-03-08 carry no gate_results, so 09-11 was the gate's FIRST real evaluation of a template parent; completion_status is not in the gate's SELECT, so marking the boilerplate rows completed is a no-op; computeConfidence measures row volume, not match quality (always 1.0). ADDED FIX SHAPE (Alpha, adopted): exclude deliverables with metadata.producer='orchestrator_completion_guardian' (or PRD prd_type='parent_orchestrator') from the denominator; auto-pass with a warning when none remain; stopword + minimum-token filtering in the keyword overlap so 'work' cannot match 'network'. Together with (a)/(b) above: three changes, one PR, tests for each.";
+const { error } = await s.from('quick_fixes').update({ description: String(cur.description) + addendum }).eq('id', key);
+console.log(error ? 'ERR ' + error.message : 'FOLDED into ' + key);
+const n = await createOrUpsertNode(s, { source_kind: 'sourced_sd', source_ref: key, tier: 'child', parent_id: '45ee754a-59ab-46dd-81da-9f39f4b3c282', title: key + " (Tier 2, medium, FOLD TARGET): CHILD_SCOPE_COVERAGE boilerplate names (9/10 template parents fail; 210/273 accepted rows had no gate_results) + parent-completion newest-row read; Alpha RCA d42c260b folded" });
+console.log('BOARD', n && n.id);
