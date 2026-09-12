@@ -24,6 +24,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const CANCELLATION_NOTE = 'CANCELLED 2026-09-12 (STOP-AND-VERIFY directive 2c068299): premise '
   + 'falsified by database/chairman-gated/20260912_feedback_no_update_lifecycle_allowlist.sql '
@@ -71,7 +72,9 @@ async function main() {
   console.log(`OK: marked ${touched} FR(s) cancelled (FR-7, FR-8, FR-9) on ${PRD_ID}`);
 }
 
-main().catch((err) => {
-  console.error('FAILED:', err.message);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error('FAILED:', err.message);
+    process.exit(1);
+  });
+}
