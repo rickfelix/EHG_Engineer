@@ -173,10 +173,19 @@ describe('classifyRowCoverage — status-decision table (finding G1)', () => {
   it('undelivered (any age) -> unfilled (retry)', () => {
     expect(classifyRowCoverage({ status: 'undelivered', created_at: now.toISOString() }, now)).toBe('unfilled');
   });
-  it('canceled -> do_not_retry', () => {
-    expect(classifyRowCoverage({ status: 'canceled', created_at: now.toISOString() }, now)).toBe('do_not_retry');
+  // QF-20260911-372: 'canceled' is NEVER do_not_retry. voidStaleAndCollapseObligations only ever
+  // cancels the most-recent row of a kind when nothing newer was ever created (the plain
+  // staleness-void path) -- collapse-of-duplicates always spares the newest row instead. So a
+  // canceled MOST-RECENT row always means "never delivered, nothing fresher attempted", the same
+  // as undelivered/failed -- never a deliberate stop-retrying decision (that is 'owed_escalate'
+  // alone). This replaces the pre-fix assertion that canceled -> do_not_retry.
+  it('canceled -> unfilled (retry) -- the QF-20260911-372 fix', () => {
+    expect(classifyRowCoverage({ status: 'canceled', created_at: now.toISOString() }, now)).toBe('unfilled');
   });
-  it('owed_escalate -> do_not_retry', () => {
+  it('canceled, ownKind=true -> unfilled (retry) -- reproduces the live incident: the backstop\'s own prior row was voided stale during a freeze with no dispatcher running, and must still trigger a fresh fill', () => {
+    expect(classifyRowCoverage({ status: 'canceled', created_at: now.toISOString() }, now, { ownKind: true })).toBe('unfilled');
+  });
+  it('owed_escalate -> do_not_retry (the ONLY genuine stop-retrying status)', () => {
     expect(classifyRowCoverage({ status: 'owed_escalate', created_at: now.toISOString() }, now)).toBe('do_not_retry');
   });
 
@@ -255,6 +264,44 @@ describe('TS-A — missed-hour: no qualifying row in the trailing window -> enqu
   });
 });
 
+describe('QF-20260911-372 — freeze-time backstop incident reproduction (09-10 cancel reasons)', () => {
+  it('own-kind row voided stale (canceled) during a freeze, live row absent -> still enqueues exactly once (the 68h silent-freeze bug, now fixed)', async () => {
+    const rows = [
+      { kind: BACKSTOP_KIND, status: 'canceled', created_at: MID_DAY.toISOString() },
+    ];
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('enqueued');
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('own-kind row genuinely owed_escalate (a real stuck-and-escalated attempt) -> no send (the one genuine do_not_retry case)', async () => {
+    const rows = [
+      { kind: BACKSTOP_KIND, status: 'owed_escalate', created_at: MID_DAY.toISOString() },
+    ];
+    const enqueue = vi.fn();
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('no_send');
+    expect(r.summary.reason).toBe('do_not_retry');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('a live send in the slot still suppresses the backstop even with a canceled backstop-own row present', async () => {
+    const rows = [
+      { kind: LIVE_KIND, status: 'delivered', created_at: MID_DAY.toISOString() },
+      { kind: BACKSTOP_KIND, status: 'canceled', created_at: MID_DAY.toISOString() },
+    ];
+    const enqueue = vi.fn();
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
+
+    expect(r.action).toBe('no_send');
+    expect(r.summary.reason).toBe('filled');
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+});
+
 describe('TS-B — present-hour, live delivered -> zero enqueue calls', () => {
   it('a heartbeat_status row (status=delivered) in the trailing window suppresses the backstop', async () => {
     const rows = [{ kind: LIVE_KIND, status: 'delivered', created_at: MID_DAY.toISOString() }];
@@ -314,9 +361,20 @@ describe('TS-E — present-hour, backstop already filled -> zero enqueue calls',
   });
 });
 
-describe('TS-F — present-hour, canceled/owed_escalate -> do-not-retry, zero enqueue calls', () => {
-  it('a canceled live row is never retried', async () => {
+describe('TS-F — present-hour, owed_escalate -> do-not-retry, zero enqueue calls; canceled now DOES retry (QF-20260911-372)', () => {
+  // QF-20260911-372: a canceled row means "never delivered", never a deliberate stop-retrying
+  // decision (see classifyRowCoverage's docblock) — so this now enqueues instead of staying
+  // silent. This replaces the pre-fix assertion that a canceled live row suppressed the backstop.
+  it('a canceled live row still triggers an enqueue (the exact incident this QF fixes)', async () => {
     const rows = [{ kind: LIVE_KIND, status: 'canceled', created_at: MID_DAY.toISOString() }];
+    const enqueue = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
+    expect(r.action).toBe('enqueued');
+    expect(enqueue).toHaveBeenCalledTimes(1);
+  });
+
+  it('an owed_escalate live row is never retried (the one genuine do_not_retry status)', async () => {
+    const rows = [{ kind: LIVE_KIND, status: 'owed_escalate', created_at: MID_DAY.toISOString() }];
     const enqueue = vi.fn();
     const r = await main(['node', 's', '--once'], baseDeps({ enqueue, supabase: makeFilterAwareSupabase(rows) }));
     expect(r.action).toBe('no_send');

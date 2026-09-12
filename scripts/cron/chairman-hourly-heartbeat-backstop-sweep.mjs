@@ -187,6 +187,25 @@ function buildSupabase() {
  * drained the queue, the opposite of what this SD exists to prevent. `ownKind: true` is passed
  * ONLY for the backstop's own kind's row; the live path's staleness/grace behavior (a stuck live
  * send genuinely warrants a backstop fill after the grace period) is unchanged.
+ *
+ * QF-20260911-372: 'canceled' is now handled SEPARATELY from 'owed_escalate', never grouped with
+ * it. Live incident (freeze 2026-09-08→09-11, 68.4h): the backstop's own prior 'owed' rows for
+ * three due slots (09-10 16:59Z/20:02Z/22:34Z) were voided as stale by
+ * lib/chairman/sms-outbound-worker.js's voidStaleAndCollapseObligations (DEFAULT_STALE_THRESHOLD_MS
+ * = 6h, no credentialed dispatcher ran during the freeze to actually deliver them) — and this
+ * classifier then read the now-'canceled' row as 'do_not_retry', silencing the chairman for 68h
+ * from the one mechanism built to speak when the fleet is dark. Proof that 'canceled' can NEVER
+ * legitimately mean "do not retry" for the MOST RECENT row of a kind (which is exactly what this
+ * function is always given — see fetchLatestRowForKind): voidStaleAndCollapseObligations only ever
+ * cancels a row when a NEWER one exists to supersede it (the by-kind collapse pass, which sorts
+ * oldest-first and cancels every entry except `newest`) or when nothing newer exists at all (the
+ * plain staleness-void pass). Either way, a 'canceled' MOST-RECENT row means "never delivered, and
+ * nothing fresher was ever attempted" — never a deliberate stop-retrying decision. That genuine
+ * decision state is 'owed_escalate' alone (a stuck row escalated after a failed/ambiguous
+ * provider-check — see sms-outbound-worker.js's STUCK-STATE RECONCILE doc). So 'canceled' now
+ * falls through to the same 'unfilled' (always retry) bucket as undelivered/failed, for both the
+ * live and the backstop's own kind — there is no in-flight grace to apply, since 'canceled' is
+ * already a terminal status no process will ever act on again.
  * @param {{status?: string, created_at?: string}|null} row the most recent row for one kind,
  *   within the trailing lookback window (or null if none exists)
  * @param {Date} now
@@ -202,13 +221,13 @@ export function classifyRowCoverage(row, now, { ownKind = false, sinceMs } = {})
   }
   const { status } = row;
   if (status === 'sent' || status === 'delivered') return 'filled';
-  if (status === 'canceled' || status === 'owed_escalate') return 'do_not_retry';
+  if (status === 'owed_escalate') return 'do_not_retry';
   if (status === 'owed' || status === 'sending') {
     if (ownKind) return 'in_flight'; // F6 fix: never re-enqueue merely because our own prior attempt hasn't been dispatched yet.
     const ageMs = row.created_at ? now.getTime() - new Date(row.created_at).getTime() : Infinity;
     return ageMs < STALENESS_GRACE_MS ? 'in_flight' : 'unfilled';
   }
-  return 'unfilled'; // undelivered | failed — a terminal failure signal, always retry (own or live).
+  return 'unfilled'; // undelivered | failed | canceled — a terminal, never-delivered signal, always retry (own or live).
 }
 
 /**
