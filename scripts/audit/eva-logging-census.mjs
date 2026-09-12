@@ -46,7 +46,7 @@ function main() {
   const args = process.argv.slice(2);
   const asJson = args.includes('--json');
   const rootIdx = args.indexOf('--root');
-  const repoRoot = rootIdx >= 0 ? path.resolve(args[rootIdx + 1]) : REPO_ROOT;
+  const repoRoot = (rootIdx >= 0 && args[rootIdx + 1]) ? path.resolve(args[rootIdx + 1]) : REPO_ROOT;
   const result = runCensus(repoRoot);
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));

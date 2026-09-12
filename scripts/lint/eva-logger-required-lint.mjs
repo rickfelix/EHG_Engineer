@@ -96,14 +96,24 @@ const TEST_FILE_RE = /\.(test|spec)\.(js|mjs)$/;
 // "if" (still correctly counted as executable logic by matching a REAL function/arrow/class
 // elsewhere, or, if truly the only construct in the file, catching it here is not wrong either --
 // excluded purely to keep the heuristic's intent legible, not because matching would be unsafe).
-const METHOD_SHORTHAND_RE = /\b(?!if\b|for\b|while\b|switch\b|catch\b|function\b|class\b)(?:async\s+)?(?:\*\s*)?[A-Za-z_$][\w$]*\s*\([^()]*\)\s*\{/;
-const EXECUTABLE_LOGIC_RE = /\bfunction\s*[\w$]*\s*\(|=>\s*[{(]|=>\s*[^\s;]|\bclass\s+[\w$]+|\bclass\s*\{/;
+// SECURITY: [\w$]* immediately followed by \s* (two adjacent quantifiers over disjoint-but-
+// adjacent character classes, both able to match zero-width) is a classic catastrophic-
+// backtracking shape once a required literal follows and can fail -- EXEC-phase SECURITY
+// sub-agent evidence (row 2278c851) measured this exact shape in the original
+// EXECUTABLE_LOGIC_RE at O(n^2): 200KB=21.6s, 800KB timed out at 180s via the real CLI: a
+// ~6-8MB adversarial lib/eva/*.js file would exhaust a CI job's time limit. Fixed by merging
+// each such adjacent pair into ONE quantified character class ([\w$\s]*) so there is exactly
+// one way to partition any given run -- same characters accepted, no ambiguity, linear time.
+const METHOD_SHORTHAND_RE = /\b(?!if\b|for\b|while\b|switch\b|catch\b|function\b|class\b)(?:async\s+)?(?:\*\s*)?[A-Za-z_$][\w$\s]*\([^()]*\)\s*\{/;
+const EXECUTABLE_LOGIC_RE = /\bfunction\b[\w$\s]*\(|=>\s*[{(]|=>\s*[^\s;]|\bclass\s+[\w$]+|\bclass\s*\{/;
 // TOP-LEVEL IMPERATIVE SCRIPT code: a module with no function/class/method wrapper at all, just
 // statements run directly at load time (e.g. lib/eva/workers/index.js -- registers and starts
 // workers, with `if (...)` guards and `new WorkerScheduler()` at the top level, EXEC-phase
 // TESTING sub-agent evidence, row 3d991407). `new X(` and control-flow keywords are strong,
 // low-noise signals of real logic that neither pattern above catches.
-const TOP_LEVEL_IMPERATIVE_RE = /\bnew\s+[A-Za-z_$][\w$]*\s*\(|\b(?:if|for|while|try)\s*[({]/;
+// SECURITY: same adjacent-quantifier merge as above ([\w$]*\s* -> [\w$\s]*) to avoid the
+// measured catastrophic-backtracking shape.
+const TOP_LEVEL_IMPERATIVE_RE = /\bnew\s+[A-Za-z_$][\w$\s]*\(|\b(?:if|for|while|try)\s*[({]/;
 
 // Anchored to the START of a (post-comment-strip) line -- a commented-out import
 // ("// import ... from '../logger.js'") or one embedded in a string/template literal never
@@ -247,7 +257,7 @@ function main() {
   const args = process.argv.slice(2);
   const asJson = args.includes('--json');
   const rootIdx = args.indexOf('--root');
-  const repoRoot = rootIdx >= 0 ? path.resolve(args[rootIdx + 1]) : REPO_ROOT;
+  const repoRoot = (rootIdx >= 0 && args[rootIdx + 1]) ? path.resolve(args[rootIdx + 1]) : REPO_ROOT;
   const mode = args.includes('--all') ? 'all' : 'diff';
 
   if (process.env.LEO_DISABLE_EVA_LOGGER_LINT === '1' || String(process.env.LEO_DISABLE_EVA_LOGGER_LINT).toLowerCase() === 'true') {
