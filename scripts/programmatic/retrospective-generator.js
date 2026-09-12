@@ -19,6 +19,7 @@ import { parseArgs } from 'node:util';
 import { runProgrammaticTask, resolveProvider } from '../../lib/programmatic/tool-loop.js';
 import { createSupabaseTool, createSupabaseUpsertTool } from '../../lib/programmatic/tools/supabase-tool.js';
 import { createGitTools } from '../../lib/programmatic/tools/git-tool.js';
+import { updateRetrospectiveWithToken } from '../../lib/retro/write-with-token.js';
 
 const { values: args } = parseArgs({
   options: {
@@ -210,11 +211,14 @@ async function generateFallbackRetrospective(supabaseClient, sdKey, branchName, 
     .limit(1);
 
   if (existing && existing.length > 0) {
-    // Update existing (newest) retrospective with enriched content
-    const { error: updateErr } = await supabaseClient
-      .from('retrospectives')
-      .update(retroContent)
-      .eq('id', existing[0].id);
+    // Update existing (newest) retrospective with enriched content.
+    // QF-20260911-275: same-statement override for the PUBLISHED-guard trigger. Registered
+    // in retro_canonical_writer_policy() as 'retro_generator_auto_fallback'.
+    const { error: updateErr } = await updateRetrospectiveWithToken(
+      (payload) => supabaseClient.from('retrospectives').update(payload).eq('id', existing[0].id),
+      retroContent,
+      'retro_generator_auto_fallback'
+    );
 
     if (updateErr) throw new Error(`Fallback retro update failed: ${updateErr.message}`);
     return { retrospective_id: existing[0].id, quality_score: 60, sd_id: sdKey, fallback: true };
