@@ -56,10 +56,24 @@ const DISPOSED_BY = 'scripts/reconcile-escalated-completed-sd-quick-fixes.mjs';
 
 /**
  * Fetch the target population: quick_fixes rows with an unfulfilled escalated_to_sd_id
- * promise (resolution_sd_id still NULL) whose target strategic_directives_v2 row has
- * status='completed'. QF-20260911-059: matched on escalated_to_sd_id/resolution_sd_id
+ * promise -- NOT YET DISPOSITIONED BY THIS RECONCILER -- whose target strategic_directives_v2
+ * row has status='completed'. QF-20260911-059: matched on escalated_to_sd_id/resolution_sd_id
  * alone, regardless of the row's current status -- a row re-opened away from 'escalated'
  * (e.g. to 'in_progress') carries the exact same unfulfilled promise.
+ *
+ * QF-20260911-983: the "not yet reconciled" signal is disposition_reason_code IS NULL, NOT
+ * resolution_sd_id IS NULL. scripts/qf-link-resolution.mjs (an operator-confirmed, separately
+ * invoked tool) can set resolution_sd_id on an escalated row WITHOUT ever setting disposition:
+ * its qfOpen check explicitly excludes status='escalated' rows from its own cancel path (by
+ * design -- "explicitly awaiting an SD, not simply closed-loop work"), so it falls through to a
+ * raw .update({resolution_sd_id}) that stamps nothing else. The old resolution_sd_id-based
+ * filter then treated that row as "already reconciled" forever, since this reconciler's own
+ * candidate set never saw it again. Live-measured 2026-09-12: QF-20260903-379 and
+ * QF-20260903-433 both carry resolution_sd_id === escalated_to_sd_id (set by qf-link-resolution.mjs)
+ * with disposition_reason_code still NULL and status stuck at 'escalated' -- exactly this gap.
+ * Verified no cross-population risk: 0 of 143 live escalated_to_sd_id rows have
+ * disposition_reason_code NULL AND resolution_sd_id pointing at a DIFFERENT SD than
+ * escalated_to_sd_id (the shape that would make this widening pick the wrong target).
  * @param {object} supabase
  * @returns {Promise<Array<{id:string, escalated_to_sd_id:string, sd_key:string}>>}
  */
@@ -79,7 +93,7 @@ export async function findTargetRows(supabase) {
     e.code = 'RECONCILE_FETCH_FAILED';
     throw e;
   }
-  const candidates = (escalated || []).filter((r) => r.resolution_sd_id == null);
+  const candidates = (escalated || []).filter((r) => r.disposition_reason_code == null);
   if (candidates.length === 0) return [];
 
   const targetIds = [...new Set(candidates.map((r) => r.escalated_to_sd_id))];

@@ -126,11 +126,29 @@ describe('findTargetRows — selects only escalated rows pointing at a completed
     expect(targets).toEqual([{ id: 'QF-B', escalated_to_sd_id: 'sd-2', sd_key: 'SD-DONE-001' }]);
   });
 
-  it('TS-5 (idempotency half): a row already carrying resolution_sd_id is excluded even if its target SD is completed', async () => {
+  it('QF-20260911-983: a row with resolution_sd_id already set but disposition_reason_code still NULL is INCLUDED -- resolution_sd_id alone is not proof of reconciliation', async () => {
+    // scripts/qf-link-resolution.mjs can set resolution_sd_id on an escalated row without ever
+    // dispositioning it (its qfOpen check excludes status='escalated' from the cancel path,
+    // falling through to a raw update that stamps only resolution_sd_id). The old
+    // resolution_sd_id-based filter treated this as "already reconciled" forever. Live specimen:
+    // QF-20260903-379 (resolution_sd_id === escalated_to_sd_id, disposition_reason_code NULL,
+    // status stuck at 'escalated').
     const quickFixes = [
-      { id: 'QF-C', status: 'escalated', escalated_to_sd_id: 'sd-3', resolution_sd_id: 'sd-3' },
+      { id: 'QF-C', status: 'escalated', escalated_to_sd_id: 'sd-3', resolution_sd_id: 'sd-3', disposition_reason_code: null },
     ];
     const sds = [{ id: 'sd-3', sd_key: 'SD-DONE-002', status: 'completed' }];
+    supabaseInstance = makeSupabaseMock({ quickFixes, sds });
+
+    const { findTargetRows } = await importScript();
+    const targets = await findTargetRows(supabaseInstance);
+    expect(targets).toEqual([{ id: 'QF-C', escalated_to_sd_id: 'sd-3', sd_key: 'SD-DONE-002' }]);
+  });
+
+  it('TS-5 (idempotency half, corrected): a row already dispositioned by THIS reconciler is excluded', async () => {
+    const quickFixes = [
+      { id: 'QF-H', status: 'closed', escalated_to_sd_id: 'sd-8', resolution_sd_id: 'sd-8', disposition_reason_code: 'escalated_sd_completed' },
+    ];
+    const sds = [{ id: 'sd-8', sd_key: 'SD-DONE-007', status: 'completed' }];
     supabaseInstance = makeSupabaseMock({ quickFixes, sds });
 
     const { findTargetRows } = await importScript();
@@ -201,9 +219,9 @@ describe('TS-2: live mode transitions through setQuickFixStatus with every Guard
 });
 
 describe('TS-5 (write half): re-running live after a successful reconciliation is a no-op', () => {
-  it('a second run against a row that already carries resolution_sd_id performs zero further writes', async () => {
+  it('a second run against a row this reconciler already dispositioned performs zero further writes', async () => {
     const quickFixes = [
-      { id: 'QF-F', status: 'closed', escalated_to_sd_id: 'sd-6', resolution_sd_id: 'sd-6' },
+      { id: 'QF-F', status: 'closed', escalated_to_sd_id: 'sd-6', resolution_sd_id: 'sd-6', disposition_reason_code: 'escalated_sd_completed' },
     ];
     const sds = [{ id: 'sd-6', sd_key: 'SD-DONE-005', status: 'completed' }];
     supabaseInstance = makeSupabaseMock({ quickFixes, sds });
