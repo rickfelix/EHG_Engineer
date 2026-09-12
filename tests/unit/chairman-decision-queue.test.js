@@ -394,6 +394,36 @@ describe('SD-LEO-INFRA-CHAIRMAN-DECISION-VALUE-001 FR-4 — parseArgs withdraw c
   });
 });
 
+describe('SD-LEO-FIX-FIX-DOMAIN-REGISTRAR-001 FR-4 — parseArgs acquisition resolve command', () => {
+  it('requires the resolve subcommand', () => {
+    const p = parseArgs(['acquisition', 'bogus', 'dec-1']);
+    expect(p.error).toMatch(/requires a subcommand: resolve/);
+  });
+
+  it('requires --verified-not-registered — the flag names the claim, not a bypass', () => {
+    const p = parseArgs(['acquisition', 'resolve', 'dec-1']);
+    expect(p.error).toMatch(/--verified-not-registered/);
+  });
+
+  it('requires a decisionId', () => {
+    const p = parseArgs(['acquisition', 'resolve', '--verified-not-registered']);
+    expect(p.error).toMatch(/<decisionId>/);
+  });
+
+  it('parseArgs round-trips a valid acquisition resolve, flag before or after the id', () => {
+    const a = parseArgs(['acquisition', 'resolve', 'dec-1', '--verified-not-registered']);
+    expect(a).toEqual({ command: 'acquisition_resolve', id: 'dec-1' });
+
+    const b = parseArgs(['acquisition', 'resolve', '--verified-not-registered', 'dec-1']);
+    expect(b).toEqual({ command: 'acquisition_resolve', id: 'dec-1' });
+  });
+
+  it('USAGE documents acquisition resolve and its independent-re-check guarantee', () => {
+    expect(USAGE).toMatch(/acquisition resolve <decisionId> --verified-not-registered/);
+    expect(USAGE).toMatch(/never trusted on its own/);
+  });
+});
+
 // QF-20260912-427: diffVentureSnapshot is the pure predicate behind the STALE_CONTEXT
 // auto-retry-vs-refuse decision — no field changed -> safe to auto-retry; a field changed ->
 // surface it and stop; no snapshot to compare -> "unknowable", never silently treated as safe.

@@ -12,6 +12,7 @@ import {
   getDispositionBySubject,
   updateDispositionStatus,
   listAwaitingDisposition,
+  deleteDisposition,
 } from '../../lib/decision-binding/disposition.js';
 
 /** In-memory fake of the system_events surface this module touches. */
@@ -80,6 +81,21 @@ function makeFakeSupabase() {
               }),
             }),
           };
+        },
+        delete() {
+          const delState = { filters: [] };
+          const delBuilder = {
+            eq(col, val) { delState.filters.push([col, val]); return delBuilder; },
+            then(resolve) {
+              const toRemove = rows.filter((r) => delState.filters.every(([col, val]) => r[col] === val));
+              for (const r of toRemove) {
+                const idx = rows.indexOf(r);
+                if (idx !== -1) rows.splice(idx, 1);
+              }
+              return resolve({ data: null, error: null });
+            },
+          };
+          return delBuilder;
         },
       };
     },
@@ -223,5 +239,27 @@ describe('listAwaitingDisposition (FR-5)', () => {
     const sb = makeFakeSupabase();
     const result = await listAwaitingDisposition(sb, 'not_a_real_type');
     expect(result).toEqual([]);
+  });
+});
+
+describe('deleteDisposition (SD-LEO-FIX-FIX-DOMAIN-REGISTRAR-001 FR-4)', () => {
+  it('removes the row so a subsequent recordDisposition creates a genuinely fresh one', async () => {
+    const sb = makeFakeSupabase();
+    const subject = { venture_id: 'v1', domain: 'lumina.com' };
+    const { row: first } = await recordDisposition(sb, { decisionType: 'domain_acquisition', subject, status: 'awaiting_disposition' });
+    expect(sb._rows).toHaveLength(1);
+
+    await deleteDisposition(sb, first.payload.question_key);
+    expect(sb._rows).toHaveLength(0);
+    expect(await getDispositionBySubject(sb, 'domain_acquisition', subject)).toBeNull();
+
+    const { row: second, created } = await recordDisposition(sb, { decisionType: 'domain_acquisition', subject, status: 'awaiting_disposition' });
+    expect(created).toBe(true);
+    expect(second.payload.question_key).toBe(first.payload.question_key); // same content, fresh row
+  });
+
+  it('is a no-op (never throws) when the question_key does not exist', async () => {
+    const sb = makeFakeSupabase();
+    await expect(deleteDisposition(sb, 'dq_missing')).resolves.toEqual({ deleted: true });
   });
 });
