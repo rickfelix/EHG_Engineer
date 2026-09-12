@@ -121,17 +121,35 @@ describe('rankItems — Phase 1 baseline parity', () => {
   });
 
   it('urgency band dominates composite_rank (P0 before everything else)', () => {
+    // QF-20260911-669: band is derived from metadata.urgency_score (the only legitimate SD
+    // urgency source), never read directly off metadata.urgency_band.
     const baselineMap = new Map([
       ['SD-P0-BIG-RANK', { sd_id: 'SD-P0-BIG-RANK', sequence_rank: 9000 }],
       ['SD-P3-LOW-RANK', { sd_id: 'SD-P3-LOW-RANK', sequence_rank: 10 }],
     ]);
     const result = rankItems([
-      sd({ sd_key: 'SD-P0-BIG-RANK', category: 'infrastructure', metadata: { urgency_band: 'P0' } }),
-      sd({ sd_key: 'SD-P3-LOW-RANK', category: 'infrastructure', metadata: { urgency_band: 'P3' } }),
+      sd({ sd_key: 'SD-P0-BIG-RANK', category: 'infrastructure', metadata: { urgency_score: 0.9 } }),
+      sd({ sd_key: 'SD-P3-LOW-RANK', category: 'infrastructure', metadata: {} }),
     ], { baselineItemsMap: baselineMap });
 
     expect(result.tracks.A[0].sd_key).toBe('SD-P0-BIG-RANK');
     expect(result.tracks.A[1].sd_key).toBe('SD-P3-LOW-RANK');
+  });
+
+  it('QF-20260911-669: the ranker never reads metadata.urgency_band directly on SD rows -- SD order is priority-column-first, no age promotion', () => {
+    // A direct urgency_band override with NO urgency_score must be ignored entirely (falls
+    // back to P3) -- only age-based promotion exists for QFs (qfUrgencyBand), never for SDs.
+    const withBandOnly = rankItems([
+      sd({ sd_key: 'SD-BAND-ONLY', category: 'infrastructure', metadata: { urgency_band: 'P0' } }),
+    ]);
+    expect(withBandOnly.tracks.A[0].urgency_band).toBe('P3');
+
+    // When urgency_score IS present, a conflicting urgency_band is still ignored -- the score
+    // alone determines the band.
+    const withBothSet = rankItems([
+      sd({ sd_key: 'SD-BAND-VS-SCORE', category: 'infrastructure', metadata: { urgency_band: 'P0', urgency_score: 0.1 } }),
+    ]);
+    expect(withBothSet.tracks.A[0].urgency_band).toBe('P3'); // score (0.1) wins, not the P0 band override
   });
 
   it('sequence_rank defaults to 9999 when SD has no baseline entry', () => {
@@ -192,9 +210,9 @@ describe('rankItems — Phase 1 baseline parity', () => {
       ['SD-P1-C', { sd_id: 'SD-P1-C', sequence_rank: 100 }],
     ]);
     const result = rankItems([
-      sd({ sd_key: 'SD-P1-A', category: 'infrastructure', metadata: { urgency_band: 'P1', urgency_score: 50 } }),
-      sd({ sd_key: 'SD-P1-B', category: 'infrastructure', metadata: { urgency_band: 'P1', urgency_score: 70 } }),
-      sd({ sd_key: 'SD-P1-C', category: 'infrastructure', metadata: { urgency_band: 'P1', urgency_score: 70 } }),
+      sd({ sd_key: 'SD-P1-A', category: 'infrastructure', metadata: { urgency_score: 50 } }),
+      sd({ sd_key: 'SD-P1-B', category: 'infrastructure', metadata: { urgency_score: 70 } }),
+      sd({ sd_key: 'SD-P1-C', category: 'infrastructure', metadata: { urgency_score: 70 } }),
     ], { baselineItemsMap: baselineMap });
 
     // P1-B and P1-C share higher urgency_score than P1-A; within that, composite_rank breaks the tie.
@@ -274,8 +292,8 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
 
   it('TS-3: P0 bug QF ranks above medium-priority SDs in Track C', () => {
     const items = [
-      sd({ sd_key: 'SD-C-1', category: 'quality', metadata: { urgency_band: 'P2' } }),
-      sd({ sd_key: 'SD-C-2', category: 'quality', metadata: { urgency_band: 'P2' } }),
+      sd({ sd_key: 'SD-C-1', category: 'quality', metadata: { urgency_score: 0.5 } }),
+      sd({ sd_key: 'SD-C-2', category: 'quality', metadata: { urgency_score: 0.5 } }),
       qf({ id: 'QF-001', severity: 'critical', type: 'bug' }),
     ];
     const { tracks } = rankItems(items, { now: NOW });
@@ -317,8 +335,10 @@ describe('rankItems — Phase 3 Quick Fix interleaving', () => {
   // --- Ranking semantics for mixed SD+QF fleets ---
 
   it('Mixed fleet: sort within track treats SDs and QFs uniformly', () => {
+    // QF-20260911-669: SD-P2's band comes from urgency_score (0.5 -> P2), not a direct
+    // metadata.urgency_band override.
     const items = [
-      sd({ sd_key: 'SD-P2', category: 'quality', metadata: { urgency_band: 'P2' } }),
+      sd({ sd_key: 'SD-P2', category: 'quality', metadata: { urgency_score: 0.5 } }),
       qf({ id: 'QF-HI', severity: 'high', type: 'bug' }),   // P1 urgency
       qf({ id: 'QF-LO', severity: 'low', type: 'bug' }),    // P3 urgency
     ];
