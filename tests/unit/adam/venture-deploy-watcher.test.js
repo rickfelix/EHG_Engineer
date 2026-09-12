@@ -82,10 +82,10 @@ function makeStub({ apps = [], pendingDecisions = [] } = {}) {
   return {
     from(table) {
       if (table === 'applications') {
-        return { select: () => ({ not: async () => ({ data: apps, error: null }) }) };
+        return { select: () => ({ not: () => ({ limit: async () => ({ data: apps, error: null }) }) }) };
       }
       if (table === 'chairman_decisions') {
-        return { select: () => ({ eq: () => ({ eq: async () => ({ data: pendingDecisions, error: null }) }) }) };
+        return { select: () => ({ eq: () => ({ eq: () => ({ limit: async () => ({ data: pendingDecisions, error: null }) }) }) }) };
       }
       throw new Error(`unexpected table: ${table}`);
     },
