@@ -31,6 +31,12 @@ const me = process.env.CLAUDE_SESSION_ID;
 const t = Date.now();
 const STATE = resolve('.coord-review-last.json');
 const REVIEW_EVERY = parseInt(process.env.COORD_REVIEW_EVERY || '8', 10);
+// QF-20260911-404: COORD_SELF_SCORE_V1 was never set anywhere (machine/user env, .env, CI) --
+// 0 self-score rows ever, unlike Adam/Solomon's parallel flags, which ship the SAME
+// ships-inert-by-default convention but ALSO ship a --force bypass their own cron prompts
+// invoke (adam-startup-check.mjs, chairman-directed override, QF-20260719-825). Mirrors that
+// exact pattern so the coordinator's writer can actually be told to fire.
+const FORCE_SELF_SCORE = process.argv.includes('--force');
 // SD-LEO-INFRA-BIDIRECTIONAL-REVIEW-MININTERVAL-001 (FR-1): a MIN-INTERVAL FLOOR on the review trigger.
 // In a heavy build stretch the every-N-SD work gate fires repeatedly in a short window, diluting the
 // review into ritual. The floor suppresses a re-fire until MIN_REVIEW_INTERVAL_MS has elapsed since the
@@ -346,7 +352,7 @@ export async function selfReviewMain() {
   // (COORD_SELF_SCORE_V1) -> byte-identical when off, mirroring ADAM_SELF_SCORE_CADENCE's own
   // ships-inert convention. Persists ONE feedback row (category=coordinator_self_assessment)
   // with the common tri-party score schema, idempotent on review_key. FAIL-OPEN.
-  if (process.env.COORD_SELF_SCORE_V1 === 'on') {
+  if (process.env.COORD_SELF_SCORE_V1 === 'on' || FORCE_SELF_SCORE) {
     try {
       // SD-LEO-INFRA-GATE-SIDE-BELT-001: this was the raw
       //   .eq('status','draft').is('claiming_session_id', null)

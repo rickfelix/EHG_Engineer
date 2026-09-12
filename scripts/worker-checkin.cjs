@@ -668,7 +668,7 @@ async function rehydrateCallsign(sb, sessionId, currentMeta) {
  * or null (caller then falls through to idle). Never throws (fail-open).
  * SD-LEO-INFRA-MAKE-OPEN-QFS-001.
  */
-async function selfClaimQuickFix(sb, sessionId, base, sessionModel) {
+async function selfClaimQuickFix(sb, sessionId, base, sessionModel, reservationCtx) {
   try {
     // factory_lane is a staged, not-yet-applied column
     // (database/migrations/20260713_quick_fixes_factory_lane.sql). The comment here previously
@@ -779,6 +779,31 @@ const QF_CANDIDATE_COLUMNS = 'id, status, pr_url, commit_sha, created_at, routin
         if (!base.work_class_fenced) base.work_class_fenced = [];
         base.work_class_fenced.push({ qf: qf.id, reason: wcReason, derived_class: deriveWorkClass(qf) });
         continue;
+      }
+      // QF-20260911-004: the SAME coordinator_reservation fence axis that already gates SD
+      // self-claim (merged-pool-self-claim.cjs) now also gates QF self-claim, keyed by qf.id
+      // (claim-eligibility.cjs's coordinatorReservation row.sd_key||row.id). Cheap, DB-free
+      // pre-check; absent reservations makes this a no-op single object check.
+      if (reservationCtx && reservationCtx.reservations) {
+        const fenceReason = coordinatorReservation({ id: qf.id }, { ...reservationCtx, sessionId });
+        if (fenceReason) {
+          const now = Date.now();
+          const fences = reservationCtx.reservations[qf.id] || [];
+          const activeFence = fences.find((f) => {
+            const exp = f.expiresAt ? Date.parse(f.expiresAt) : NaN;
+            return !(Number.isFinite(exp) && exp <= now);
+          }) || fences[0] || {};
+          if (!base.reservation_fences_skipped) base.reservation_fences_skipped = [];
+          base.reservation_fences_skipped.push({
+            qf: qf.id,
+            reason: fenceReason,
+            reserved_for_session: activeFence.reservedForSession || null,
+            reserved_for_tier: activeFence.reservedForTier || null,
+            lane_pattern: activeFence.lanePattern || null,
+            expires_at: activeFence.expiresAt || null,
+          });
+          continue;
+        }
       }
       // SD-FDBK-FIX-RETRO-ACTION-ITEM-001 / FR-2: claim-time moot-recheck for
       // auto-promoted retro action-item QFs -- if the SD explicitly named in
