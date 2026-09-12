@@ -95,7 +95,7 @@ branches** (each with its own error boundary, so one failing never suppresses th
 | Check | Covers | Mechanism |
 |-------|--------|-----------|
 | `hasUnactionedDirective(sb, coordinatorId)` | Session-targeted `DIRECTIVE_KINDS` rows (`target_session = <real session id>`) | `read_at IS NULL` |
-| `hasOutstandingChairmanDirective(sb)` | `chairman_directive` rows — issued with `target_session='broadcast'` (a literal sentinel, never a real session id, per `scripts/issue-chairman-directive.cjs`) | reuses `lib/coordinator/chairman-directive-gauge.cjs` `loadRoleDirectiveStatus('coordinator')`, since broadcast directives track compliance via a separate `chairman_directive_ack` mechanism, not `read_at` |
+| `hasOutstandingChairmanDirective(sb)` | `chairman_directive` rows — issued with `target_session='broadcast-coordinator'` (a literal sentinel, never a real session id, per `scripts/issue-chairman-directive.cjs`; retargeted from bare `'broadcast'`, retired by QF-20260911-753/SD-LEO-FIX-DISPATCH-CJS-ACCEPTS-001 — 0/91 rows on that sentinel were ever acknowledged, all-time) | reuses `lib/coordinator/chairman-directive-gauge.cjs` `loadRoleDirectiveStatus('coordinator')`, since broadcast directives track compliance via a separate `chairman_directive_ack` mechanism, not `read_at` |
 
 The two-check split exists because a plain `target_session=coordinatorId` query structurally
 cannot see broadcast-lane `chairman_directive` rows — the exact flagship incident scenario —
