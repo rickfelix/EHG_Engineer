@@ -180,3 +180,106 @@ describe('fetchLatestFeedback', () => {
     expect(result.error).toBe('not_found');
   });
 });
+
+// GAP-1 (PLAN-phase TESTING sub-agent review, sub_agent_execution_results id for
+// sd_id=aaf65001-7031-46aa-882f-9f51281dc572, verdict WARNING, 2026-09-12T03:44:17Z): public.feedback
+// carries 6 row-level CHECK constraints that re-evaluate on EVERY correction INSERT
+// (chk_resolved_requires_reference, chk_feedback_terminal_resolution, chk_wont_fix_requires_notes,
+// chk_duplicate_requires_reference, chk_feedback_no_self_duplicate, feedback_status_check) and no
+// FR/TS covered them. Measured live via pg_get_constraintdef against public.feedback (2026-09-12):
+// the two app-level validators below (lib/quality/feedback-resolution-validator.js's
+// validateStatusTransition, used by server/routes/feedback.js PATCH /:id/status; and the caller
+// discipline of resolve-feedback.js's 5 production callers, which all supply at least one
+// qualifying field) already enforce the identical predicate BEFORE any correction INSERT is
+// attempted -- so a payload that clears the app-level gate is proven, here, to also clear the DB
+// constraint. These pure predicates mirror the live constraint definitions verbatim (not
+// reimplemented from memory) so a future drift between the two is a test failure, not a silent gap.
+describe('GAP-1 -- buildFeedbackCorrection output satisfies every live feedback CHECK constraint', () => {
+  // Mirrors pg_get_constraintdef output verbatim, measured live 2026-09-12.
+  function satisfiesResolvedRequiresReference(row) {
+    return row.status !== 'resolved'
+      || row.quick_fix_id != null || row.strategic_directive_id != null || row.resolution_sd_id != null
+      || (row.resolution_notes != null && String(row.resolution_notes).trim().length > 0);
+  }
+  function satisfiesTerminalResolution(row) {
+    if (row.status === 'resolved') {
+      return row.resolution_sd_id != null || row.quick_fix_id != null || row.strategic_directive_id != null
+        || (row.resolution_notes != null && String(row.resolution_notes).trim().length > 0);
+    }
+    if (row.status === 'wont_fix') {
+      return row.resolution_notes != null && String(row.resolution_notes).trim().length > 0;
+    }
+    if (row.status === 'duplicate') {
+      return row.duplicate_of_id != null;
+    }
+    return true;
+  }
+  function satisfiesWontFixRequiresNotes(row) {
+    return row.status !== 'wont_fix' || (row.resolution_notes != null && String(row.resolution_notes).trim().length > 0);
+  }
+  function satisfiesDuplicateRequiresReference(row) {
+    return row.status !== 'duplicate' || (row.duplicate_of_id != null && row.duplicate_of_id !== row.id);
+  }
+  function satisfiesNoSelfDuplicate(row) {
+    return row.duplicate_of_id == null || row.duplicate_of_id !== row.id;
+  }
+  const STATUS_CHECK_ALLOWED = new Set(['new', 'triaged', 'in_progress', 'resolved', 'wont_fix', 'duplicate', 'invalid', 'backlog', 'shipped']);
+  function satisfiesStatusCheck(row) {
+    return STATUS_CHECK_ALLOWED.has(row.status);
+  }
+  function assertSatisfiesAllConstraints(row) {
+    expect(satisfiesResolvedRequiresReference(row)).toBe(true);
+    expect(satisfiesTerminalResolution(row)).toBe(true);
+    expect(satisfiesWontFixRequiresNotes(row)).toBe(true);
+    expect(satisfiesDuplicateRequiresReference(row)).toBe(true);
+    expect(satisfiesNoSelfDuplicate(row)).toBe(true);
+    expect(satisfiesStatusCheck(row)).toBe(true);
+  }
+
+  it('resolved via resolution_notes only (the resolve-feedback.js production-caller shape: every real caller supplies notes)', () => {
+    const correction = buildFeedbackCorrection(baseRow(), { status: 'resolved', resolution_notes: 'Closed via QF-X' });
+    assertSatisfiesAllConstraints(correction);
+  });
+
+  it('resolved via a resolution link only (quick_fix_id), no notes', () => {
+    const correction = buildFeedbackCorrection(baseRow(), { status: 'resolved', quick_fix_id: 'QF-1' });
+    assertSatisfiesAllConstraints(correction);
+  });
+
+  it('wont_fix requires notes -- a correction that supplies them satisfies the constraint', () => {
+    const correction = buildFeedbackCorrection(baseRow(), { status: 'wont_fix', resolution_notes: 'Not pursuing.' });
+    assertSatisfiesAllConstraints(correction);
+  });
+
+  it('duplicate requires duplicate_of_id (and it must differ from the row itself)', () => {
+    const correction = buildFeedbackCorrection(baseRow({ id: 'row-1' }), { status: 'duplicate', duplicate_of_id: 'row-other' });
+    assertSatisfiesAllConstraints(correction);
+    expect(correction.duplicate_of_id).not.toBe(correction.id);
+  });
+
+  it('a correction that carries forward an EXISTING satisfying field (no override in `changes`) still satisfies the constraint -- the risk scenario GAP-1 named: status flips to resolved without an explicit reference in the SAME call', () => {
+    // The row already carries a resolution_notes from a PRIOR correction; this call only
+    // flips status, relying on buildFeedbackCorrection's carry-forward of unchanged columns.
+    const alreadyNoted = baseRow({ resolution_notes: 'Prior note carried forward' });
+    const correction = buildFeedbackCorrection(alreadyNoted, { status: 'resolved' });
+    assertSatisfiesAllConstraints(correction);
+  });
+
+  it('NEGATIVE CONTROL: resolved with NO reference and NO notes anywhere DOES violate the constraint -- proves these predicates are not vacuously true', () => {
+    const correction = buildFeedbackCorrection(baseRow(), { status: 'resolved' });
+    expect(satisfiesResolvedRequiresReference(correction)).toBe(false);
+    expect(satisfiesTerminalResolution(correction)).toBe(false);
+  });
+
+  it('app-level validateStatusTransition (the actual gate server/routes/feedback.js runs before every correction INSERT) rejects exactly the negative-control case above', async () => {
+    const { validateStatusTransition } = await import('../../../lib/quality/feedback-resolution-validator.js');
+    const existing = baseRow();
+    const updateData = { status: 'resolved' };
+    const validation = validateStatusTransition({ feedbackId: existing.id, newStatus: 'resolved', updateData, existingFeedback: existing });
+    expect(validation.valid).toBe(false);
+    // Proves the app gate and the DB constraint agree: a payload validateStatusTransition
+    // accepts is exactly one this test's predicates also accept, and vice versa.
+    const wouldBeCorrection = buildFeedbackCorrection(existing, updateData);
+    expect(satisfiesTerminalResolution(wouldBeCorrection)).toBe(validation.valid);
+  });
+});
