@@ -12,9 +12,13 @@
  * present, rather than leaving the fix to only ever help NEW orchestrators going forward.
  *
  * Scope is deliberately narrow and matches child-scope-coverage.js's own
- * COORDINATION_TEMPLATE_NAMES exactly (name-match is the binding guard there too) — this
- * backfill can never mistakenly tag a real deliverable, only rows sharing these 3 exact titles
- * on a parent whose sd_type is 'orchestrator'.
+ * COORDINATION_TEMPLATE_NAMES exactly (name-match is the binding guard there too), on a parent
+ * whose sd_type is 'orchestrator'. This narrows, but does not eliminate, the mistagging risk:
+ * a manually-authored orchestrator deliverable that happens to share one of these 3 exact
+ * titles would also be tagged (PR #8703 adversarial review). Live-verified before running
+ * --execute: all 30 matching rows had a uniform 10x3 distribution across the 10 orchestrator
+ * SDs found -- the signature of the auto-generated triple, not a name collision (a collision
+ * victim would show as an orphan without its siblings; none did).
  *
  * Usage: node scripts/one-off/backfill-coordination-only-child-scope-coverage-001.mjs [--execute]
  * (dry-run by default; --execute performs the writes)
