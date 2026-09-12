@@ -227,6 +227,41 @@ describe('eligibleIdleWorkers — self-claim-disabled exclusion (QF-20260906-196
   });
 });
 
+// QF-20260911-840: a session that currently holds a claim on EITHER table must never be hinted,
+// even when sdHolderFreshnessWindowMs would treat it as "HELD, available for other work" for the
+// shared idle predicate elsewhere. MEASURED: a seat holding an SD with a frozen last_tool_at
+// (tool-silent past the freshness window) but a fresh heartbeat still read as idle capacity and
+// was hinted a QF — the 2ND-CLAIM-EVICTS trap if the seat wakes and honours the hint.
+describe('eligibleIdleWorkers — raw claim-holder exclusion for hinting specifically (QF-20260911-840)', () => {
+  it('the incident specimen: heartbeat-fresh, tool-silent (last_tool_at stale), and an authoritative SD holder — no hint', () => {
+    const w = worker({
+      session_id: 'frozen-holder',
+      sd_key: 'SD-LEO-FIX-PRE-COMMIT-SECRET-001',
+      heartbeat_at: new Date(NOW - 60_000).toISOString(), // fresh heartbeat
+      last_tool_at: new Date(NOW - 20 * 60 * 1000).toISOString(), // stale — past the 15min freshness window
+    });
+    const sdHolders = new Set(['frozen-holder']);
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), sdHolders)).toEqual([]);
+  });
+
+  it('also excludes an authoritative QF holder unconditionally (not just SD)', () => {
+    const w = worker({ session_id: 'qf-holder' });
+    const qfHolders = new Set(['qf-holder']);
+    expect(eligibleIdleWorkers([w], NOW, qfHolders)).toEqual([]);
+  });
+
+  it('[TWO-SIDED] a session NOT in either holder set is unaffected by the new gate', () => {
+    const w = worker({ session_id: 'w-idle' });
+    const sdHolders = new Set(['someone-else']);
+    expect(eligibleIdleWorkers([w], NOW, new Set(['another-else']), new Set(), sdHolders).map((x) => x.session_id)).toEqual(['w-idle']);
+  });
+
+  it('a null sdHolderSessionIds (resolution failed) is a no-op for this new gate — defers entirely to the existing sd_key-mirror fallback', () => {
+    const w = worker({ session_id: 'w-idle', sd_key: null });
+    expect(eligibleIdleWorkers([w], NOW, new Set(), new Set(), null).map((x) => x.session_id)).toEqual(['w-idle']);
+  });
+});
+
 describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live insert)', () => {
   function qfsForSelect(qfs, selectedCols) {
     if (selectedCols.includes('verified_at')) return qfs;
@@ -391,12 +426,20 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
       expect(summary.hinted).toBe(0);
     });
 
-    it('a stale (blocked, not advancing) SD holder now counts as idle and gets hinted -- HELD, available for other work', async () => {
+    // QF-20260911-840 CORRECTS this specimen. QF-903-789's own idle predicate still treats a
+    // stale (non-advancing) SD holder as "HELD, available for other work" -- unchanged, and
+    // still true for every OTHER consumer of eligibleIdleWorkers/seatIdleVerdict. But hinting a
+    // QF is a different act than merely COUNTING idle capacity: it invites a SECOND claim, and a
+    // frozen holder who wakes and honours the hint silently evicts its own first claim (the
+    // 2ND-CLAIM-EVICTS trap) -- MEASURED live (session_coordination a287a638, 15:29:29Z): a
+    // frozen SD holder was hinted QF-20260911-755. isRawClaimHolder now excludes ANY current
+    // holder from the HINT specifically, regardless of the freshness window.
+    it('a stale (blocked, not advancing) SD holder is STILL excluded from hinting -- avoids the 2ND-CLAIM-EVICTS trap', async () => {
       const heldHolder = worker({ session_id: 'held-1', sd_key: 'SD-LIVE-001', last_tool_at: new Date(NOW - 20 * 60 * 1000).toISOString() });
       const sb = makeFakeSupabase({ sessions: [heldHolder], qfs: [qf()], sdHolders: [{ claiming_session_id: 'held-1' }] });
       const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
-      expect(summary.idleWorkers).toBe(1);
-      expect(summary.hinted).toBe(1);
+      expect(summary.idleWorkers).toBe(0);
+      expect(summary.hinted).toBe(0);
     });
   });
 
