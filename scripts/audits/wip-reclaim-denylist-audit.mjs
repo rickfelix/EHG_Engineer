@@ -9,10 +9,18 @@
  * refs; 3 confirmed carrying .account-identity-last.json were deleted on Adam's GO
  * (8de5f7e7); the rest were unaudited. This script closes that gap.
  *
- * NEVER deletes, NEVER pushes — read-only `git fetch --depth=1` of one ref per distinct tree
- * SHA (many refs share an identical tree; auditing per-SHA instead of per-ref cuts a ~469-ref
- * run to ~250 fetches) followed by `git ls-tree`. Findings are for the coordinator to action
- * under the same GO-then-delete shape already used for the first three hits.
+ * NEVER deletes, NEVER pushes — read-only `git fetch` of one ref per distinct tree SHA (many
+ * refs share an identical tree; auditing per-SHA instead of per-ref cuts a ~469-ref run to
+ * ~250 fetches) followed by `git ls-tree`. Findings are for the coordinator to action under
+ * the same GO-then-delete shape already used for the first three hits.
+ *
+ * QF-20260912-147: NEVER pass --depth to these fetches. This repo's worktrees share one .git
+ * object store, so a --depth=1 fetch against `origin` from ANY worktree creates/deepens a
+ * shallow boundary on the SHARED repository — confirmed live: running this script shallowed
+ * the root and every other worktree, breaking every seat's `git merge --ff-only origin/main`
+ * fleet-wide until the coordinator ran `git fetch --unshallow`. A depth-less fetch only pulls
+ * objects not already present and never touches shallow state, so it is safe to run from any
+ * worktree at any time — the only cost is a (typically small) amount of extra history fetched.
  *
  * BASELINE EXCLUSION (found live during a smoke run, not in the original spec): naively
  * applying isDenylistedUntrackedPath to a full `ls-tree -r` output floods every result with
@@ -71,15 +79,22 @@ export function listWipReclaimRefs(remote = 'origin') {
   return parseLsRemoteHeads(git(['ls-remote', '--heads', remote, REF_GLOB]));
 }
 
-/** Shallow, single-ref fetch + tree listing — touches nothing beyond this one tree. */
+/**
+ * Single-ref fetch + tree listing — touches nothing beyond this one tree's objects.
+ * NEVER pass --depth here (QF-20260912-147): this repo's worktrees share one .git, and a
+ * depth-limited fetch against origin shallows the SHARED repository for every worktree.
+ */
 export function fetchTreePaths(ref, remote = 'origin') {
-  git(['fetch', '--depth=1', '--no-tags', remote, `refs/heads/${ref}`]);
+  git(['fetch', '--no-tags', remote, `refs/heads/${ref}`]);
   return git(['ls-tree', '-r', '--name-only', 'FETCH_HEAD']).split('\n').filter(Boolean);
 }
 
-/** Fresh, read-only snapshot of every path currently tracked on main — the exclusion set. */
+/**
+ * Fresh, read-only snapshot of every path currently tracked on main — the exclusion set.
+ * NEVER pass --depth here (QF-20260912-147) — see fetchTreePaths.
+ */
 export function computeBaselineTrackedPaths(remote = 'origin', branch = 'main') {
-  git(['fetch', '--depth=1', '--no-tags', remote, branch]);
+  git(['fetch', '--no-tags', remote, branch]);
   return new Set(git(['ls-tree', '-r', '--name-only', 'FETCH_HEAD']).split('\n').filter(Boolean));
 }
 
