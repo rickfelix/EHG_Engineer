@@ -1,6 +1,6 @@
 -- database/chairman-gated/20260911_chairman_ratification_verifications.sql
 -- @chairman-gated
--- @approved-by: PENDING -- chairman must replace this with their git config user.email + issue a
+-- @approved-by: codestreetlabs@gmail.com
 --   token before apply. The ENFORCED gate is the absence of a line matching
 --   scripts/lib/migration-guards.js APPROVED_BY_RE; the '@chairman-gated' tag is the ceremony
 --   marker the README reads. TIER-2 by measurement, not assumption: scripts/lib/
