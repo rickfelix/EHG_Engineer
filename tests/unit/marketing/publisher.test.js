@@ -143,6 +143,10 @@ describe('Publisher', () => {
 
     expect(result.success).toBe(true);
     expect(result.postId).toBe('x-123');
+    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-3: mode:'real' is the producer half of the
+    // mode contract content-pipeline.js/owned-audience-content-loop.js now depend on --
+    // a regression hardcoding this away would silently reopen the laundering vector.
+    expect(result.mode).toBe('real');
   });
 
   it('should publish to bluesky platform', async () => {
@@ -349,6 +353,12 @@ describe('Publisher — SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-3/FR-6
     expect(result.dryRun).toBe(true);
     expect(result.postId).toContain('dry-run-no-credentials');
     expect(result.reason).toContain('No venture-specific credentials');
+    // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-3: mode here is authCheck.mode (propagated), not a
+    // hardcoded 'mock' -- an authorized (mode:'live') send that hits missing credentials must
+    // still carry mode:'live' so the ledger row (written by checkPublishAuthorization, BEFORE
+    // this dry-run branch runs) can be reconciled via recordPublishOutcome(), not silently
+    // miscounted. This fixture's venture is fully outreach-authorized (see createMockSupabase).
+    expect(result.mode).toBe('live');
   });
 
   it('ADVERSARIAL-REVIEW FIX (round 2): an unresolvable secret_ref (row exists but keyring lookup misses) ALSO forces dry-run, never a fallback identity', async () => {

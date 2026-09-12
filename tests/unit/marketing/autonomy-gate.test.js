@@ -118,6 +118,70 @@ describe('evaluateGraduation', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe('db down');
   });
+
+  it('SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-4: a mixed fixture (older real shipped_clean rows behind a NEWER mock-discriminated row) does NOT graduate -- the mock row breaks the streak at its position, an all-mock fixture alone would not exercise this', async () => {
+    // Ordered newest-first, matching the real .order('created_at', {ascending:false}) query.
+    const rows = [
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock' }, // newest: mock -> breaks immediately
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live' },
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live' },
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live' },
+      { decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live' },
+    ];
+    const supabase = makeSupabase({
+      recentRows: rows,
+      demandVerdict: { verdict: 'PASS', citation: 'test fixture', computed_at: '2026-08-09T00:00:00Z' },
+    });
+
+    const result = await evaluateGraduation({ supabase, ventureId: 'v-1', channelType: 'x', requiredStreak: 5 });
+
+    expect(result.cleanStreak).toBe(0);
+    expect(result.autonomyState).toBe('propose_and_approve');
+  });
+
+  it('FR-4: execution_mode not yet in the live schema (undefined_column) falls back gracefully -- pre-existing streak-counting behavior is unaffected', async () => {
+    let callCount = 0;
+    const rows = Array.from({ length: 5 }, () => ({ decision: 'accepted', outcome: 'shipped_clean' }));
+    const verdictChain = {
+      select: vi.fn(function () { return this; }),
+      eq: vi.fn(function () { return this; }),
+      order: vi.fn(function () { return this; }),
+      limit: vi.fn(function () { return this; }),
+      maybeSingle: vi.fn(() => Promise.resolve({ data: { verdict: 'PASS', citation: 'fixture', computed_at: '2026-08-09T00:00:00Z' }, error: null })),
+    };
+    const ledgerChain = {
+      select: vi.fn(function () { return this; }),
+      eq: vi.fn(function () { return this; }),
+      neq: vi.fn(function () { return this; }),
+      order: vi.fn(function () { return this; }),
+      limit: vi.fn(() => {
+        callCount += 1;
+        if (callCount === 1) return Promise.resolve({ data: null, error: { code: '42703', message: 'column venture_channel_publish_ledger.execution_mode does not exist' } });
+        return Promise.resolve({ data: rows, error: null });
+      }),
+      update: vi.fn(function () { return this; }),
+    };
+    const autonomyChain = { upsert: vi.fn(() => Promise.resolve({ error: null })) };
+    // checkCrackGateObserveOnly() runs unconditionally once streakEarned && demandValidated
+    // (both true here) -- it must NOT share ledgerChain's counted .limit(), or its own internal
+    // queries would inflate callCount and corrupt this test's assertion about the ledger query
+    // specifically. Fails safe (try/catch) on the missing .rpc(), same as production.
+    const inertChain = { select: vi.fn(function () { return this; }), eq: vi.fn(function () { return this; }), order: vi.fn(function () { return this; }), limit: vi.fn(function () { return this; }), maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })), insert: vi.fn(() => Promise.resolve({ error: null })) };
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'venture_channel_autonomy') return autonomyChain;
+        if (table === 'venture_demand_verdicts') return verdictChain;
+        if (table === 'venture_channel_publish_ledger') return ledgerChain;
+        return inertChain;
+      }),
+    };
+
+    const result = await evaluateGraduation({ supabase, ventureId: 'v-1', channelType: 'x', requiredStreak: 5 });
+
+    expect(callCount).toBe(2); // first attempt (with execution_mode) fails, falls back to the plain query
+    expect(result.success).toBe(true);
+    expect(result.autonomyState).toBe('autonomous');
+  });
 });
 
 describe('recordPublishOutcome', () => {
