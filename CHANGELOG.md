@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-12](#2026-09-12)
+  - [Infrastructure](#infrastructure)
 - [2026-09-11](#2026-09-11)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -195,6 +197,15 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-12
+
+### Infrastructure
+
+- **Model-policy mismatches on fleet seats had no automated signal — a seat running off its expected model went unnoticed until someone happened to look** - SD-LEO-INFRA-WIRE-MODEL-POLICY-001 (PR #8704)
+  - `scripts/hooks/capture-session-id.cjs`'s SessionStart hook now emits a deduped `feedback` row when a session is observed running off its policy model. Classification uses `lib/fleet/role-status-identity.cjs`'s `verdictFromMetadata` (role/worker/unknown), never the collapse-to-worker `checkModelMismatch`/`seatClassFor` path from `lib/fleet/model-policy.cjs` that would misclassify a coordinator/role seat as a worker. Guarded by `LEO_MODEL_POLICY_SIGNAL=0` and the existing `LEO_HOOK_DRY_RUN=1`.
+  - `scripts/fleet-dashboard.cjs`'s worker view prints a "Seats off model policy" count via a new pure `countSeatsOffPolicy()`, using the same classification and abstaining (never a false `0`) if classification itself throws.
+  - Two rounds of sub-agent-caught, code-verified design corrections preceded implementation: a naive `seatClassFor` collapse-to-worker design was caught before EXEC, and a since-fixed dead-by-construction FR-1 design (no return-value seam to detect "no prior session row") was caught at PLAN-TO-EXEC. Shipped as two independently revertible commits (FR-1, FR-2) per the PRD.
 
 ## 2026-09-11
 
