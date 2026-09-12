@@ -1781,6 +1781,66 @@ async function main() {
         process.stderr.write(`[pre-tool-enforce] ENF-19 errored (fail-open): ${heredocErr.message}\n`);
       }
     }
+
+    // --- ENFORCEMENT 20: Shallow-Fetch Guard (QF-20260912-292) ---
+    // Every worktree of this repo shares ONE `.git` object store and ONE shallow boundary.
+    // Measured 2026-09-12 05:06-05:28Z: a worker's audit script ran `git fetch --depth=1
+    // --no-tags origin <ref>` ~250 times from its own worktree; `.git/shallow` grew fleet-wide
+    // in ~20s and every OTHER seat's `git merge --ff-only origin/main` failed until the
+    // coordinator ran `--unshallow` and repaired it. Cheap parse first (lib/shallow-fetch-
+    // guard.cjs's parseGitShallowCommand, pure regex, no exec) — only pay the git-common-dir
+    // resolution below when a shallow-affecting flag is actually present. `--git-dir`/`-C`
+    // pointing OUTSIDE this repo's object store (a scratch clone) is never operative: git
+    // itself resolves the override, so this reuses git's own CLI rather than reimplementing
+    // path resolution. Decision logic lives in the lib (unit-tested); this owns cwd/coordinator
+    // resolution + audit + exit. Fail-open on any internal error. Off-switch: LEO_SHALLOW_FETCH_GUARD=off.
+    if (process.env.LEO_SHALLOW_FETCH_GUARD !== 'off') {
+      try {
+        const { parseGitShallowCommand, decideShallowFetchGuard } = require('./lib/shallow-fetch-guard.cjs');
+        const parsed = parseGitShallowCommand(cmd);
+        if (parsed.isGitShallowOp) {
+          const { execFileSync } = require('child_process');
+          const hookCwd = (input && input.cwd) || process.cwd();
+          const resolveCommonDir = (extraArgs) => {
+            try {
+              const out = execFileSync('git', [...extraArgs, 'rev-parse', '--git-common-dir'], {
+                cwd: hookCwd, encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'],
+              }).trim();
+              return path.isAbsolute(out) ? path.normalize(out) : path.normalize(path.resolve(hookCwd, out));
+            } catch { return null; }
+          };
+          const fleetCommonDir = resolveCommonDir([]);
+          const targetCommonDir = parsed.explicitGitDir
+            ? resolveCommonDir(parsed.explicitGitDirKind === 'C' ? ['-C', parsed.explicitGitDir] : [`--git-dir=${parsed.explicitGitDir}`])
+            : fleetCommonDir;
+
+          let coordinatorSessionId = null;
+          try {
+            const pointer = require('../../lib/coordinator/resolve.cjs').readPointerFile();
+            coordinatorSessionId = pointer && pointer.session_id ? pointer.session_id : null;
+          } catch { coordinatorSessionId = null; }
+          const isCoordinator = !!coordinatorSessionId && coordinatorSessionId === _SESSION_ID;
+
+          const decision = decideShallowFetchGuard(cmd, { targetCommonDir, fleetCommonDir, isCoordinator });
+          if (decision.matched) {
+            const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-20', `Shallow-fetch guard: git ${decision.verb} with ${decision.flags.join(', ')} against the shared fleet object store`, 'block', { verb: decision.verb, flags: decision.flags });
+            process.stderr.write(
+              `[ENF-20] SHALLOW-FETCH BLOCKED: \`git ${decision.verb}\` with ${decision.flags.join(', ')} would shallow the SHARED fleet\n` +
+              `  object store every worktree reads from — one such fetch broke fleet-wide ff-only merges for 20+ minutes on 2026-09-12.\n` +
+              `  Safe alternatives: a depth-less fetch of a single ref; \`git ls-remote\`; \`git cat-file\` on already-fetched objects;\n` +
+              `  or a scratch clone under the scratchpad directory (outside this repo's object store, never gated).\n` +
+              `  \`--unshallow\` (the repair) is allowed from the active coordinator session only. Override: LEO_SHALLOW_FETCH_GUARD=off\n`
+            );
+            await auditAndExit(auditPromise, 2);
+          }
+        }
+      } catch (shallowFetchErr) {
+        // Fail-open: any internal error in ENF-20 must NOT block tool execution.
+        if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+          process.stderr.write(`[pre-tool-enforce] ENF-20 errored (fail-open): ${shallowFetchErr.message}\n`);
+        }
+      }
+    }
   }
 
   // --- ENFORCEMENT 10: Source-Side Telemetry Writer (SD-LEO-INFRA-WORKER-SOURCE-SIDE-001) ---
