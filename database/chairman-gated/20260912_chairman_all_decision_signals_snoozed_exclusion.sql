@@ -1,11 +1,11 @@
 -- SD-LEO-INFRA-CHAIRMAN-ALL-DECISION-001 — exclude snoozed critical/high feedback rows from the
 -- chairman decision queue.
 --
--- ============================ STAGED. NOT APPLIED. ============================
+-- ================= STAGED 2026-09-12; APPLIED 2026-09-12 16:04:56Z (chairman ceremony) =================
 -- CREATE OR REPLACE VIEW is TIER-2 under scripts/lib/migration-tier-classifier.mjs — never
--- auto-applied. No @approved-by attestation. The builder stages; the chairman applies.
+-- auto-applied. @approved-by attestation scribed at the apply ceremony. The builder stages; the chairman applies.
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- ============================ WHAT'S BROKEN ============================
 -- Found as out-of-scope finding F3 during PLAN-phase prospective TESTING review of
