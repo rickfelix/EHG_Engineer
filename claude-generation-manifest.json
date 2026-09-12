@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-12T09:14:02.025Z",
-  "git_commit": "b817ccbf",
+  "generated_at": "2026-09-12T13:40:20.092Z",
+  "git_commit": "48634567",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -141,10 +141,10 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 54629,
-      "bytes": 55154,
-      "estimated_tokens": 13658,
-      "content_hash": "3584103e464d30ce",
+      "chars": 55253,
+      "bytes": 55782,
+      "estimated_tokens": 13814,
+      "content_hash": "2ccd790cd5a7baf2",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CHILD-SCOPE-COVERAGE-001\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "d608d80afe18f5bb",
+    "global": "ccf03a33328cc51c",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -514,7 +514,7 @@
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "e1f45e93a0853957",
+      "611": "02b556f62e5c76b6",
       "612": "7eae71fb94ef4f0e",
       "613": "1e1de64689c1ad82",
       "614": "d48bc892b437a0fa",
