@@ -129,7 +129,10 @@ export async function promoteFinding(supabase, feedbackId, { promotedBy = 'corre
       .eq('id', row.gate_run_id);
   }
 
-  await supabase.from('feedback')
+  // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-G: supabase-js resolves with {error} rather than
+  // throwing on a PostgREST rejection -- this call previously didn't check the result at all,
+  // so a rejected UPDATE (e.g. the 2026-09-08 append-only-trigger break) was completely silent.
+  const { error: promoteUpdateError } = await supabase.from('feedback')
     .update({
       status: 'in_progress',
       promoted_to_sd_id: newSD.sd_key,
@@ -137,6 +140,9 @@ export async function promoteFinding(supabase, feedbackId, { promotedBy = 'corre
       promoted_by: promotedBy,
     })
     .eq('id', feedbackId);
+  if (promoteUpdateError) {
+    throw new Error(`promote: feedback status update failed for ${feedbackId}: ${promoteUpdateError.message}`);
+  }
 
   publishVisionEvent(VISION_EVENTS.CORRECTIVE_PROMOTED_TO_SD, {
     originSdKey: sourceSdId,

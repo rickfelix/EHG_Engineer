@@ -48,3 +48,10 @@ describe('prod-error-sweep-loop is actually scheduled (was 0 runs ever)', () => 
     expect(SCRIPT).toMatch(/\[SKIP\]/);
   });
 });
+
+describe('SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-G: markBridgeNeedsEscalation no longer swallows a rejected feedback UPDATE silently', () => {
+  it('checks the returned {error} from the metadata update and logs it (was previously un-destructured, so a rejected write was fully silent)', () => {
+    expect(SCRIPT).toMatch(/const \{ error \} = await db\.from\('feedback'\)\.update\(\{ metadata: md \}\)\.eq\('id', row\.id\);/);
+    expect(SCRIPT).toMatch(/if \(error\) console\.warn\(`\[prod-error-sweep\] markBridgeNeedsEscalation update failed/);
+  });
+});
