@@ -13,12 +13,29 @@
 // tests/unit/eva-phantom-column-alignment.test.js -- a static list, not a live DB RPC, so this
 // lint has no DB dependency and runs the same in CI as locally). ADVISORY-FIRST: exit 0 by
 // default; pass --enforce for exit 1 on an unknown column.
+//
+// --root <dir>: scan <dir>/.claude/commands instead of this repo's own -- a scoping mechanism
+// required so control-seed-test-lint.mjs (scripts/audit/control-seed-specs.json) can point this
+// control at a scratch-dir fixture and prove it actually fires on a seeded phantom-column
+// defect, rather than being reported UNENFORCEABLE (a control that cannot be aimed cannot be
+// seed-tested). The allowlist stays pinned to THIS repo's real file regardless of --root -- a
+// scratch fixture trial should never read (or need) a real allowlist entry.
+//
+// KNOWN LIMITATION (declared, not discovered by incident): only select/update/upsert/insert/eq
+// calls are scanned -- a phantom column referenced ONLY via .order()/.in()/.neq()/.is()/.match()/
+// .or() is invisible to this control. Also, LIVE_COLUMNS below is a hand-maintained, checked-in
+// snapshot with no automated drift detector against the real schema -- a future genuine column
+// rename that nobody updates this file for will make the control report all-clear while the
+// underlying skill script is actually broken. Both are accepted tradeoffs for a lint with zero
+// live-DB dependency, not oversights; a future SD could add a live-schema smoke check.
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const COMMANDS_DIR = resolve(ROOT, '.claude/commands');
+const rootArgIdx = process.argv.indexOf('--root');
+const SCAN_ROOT = rootArgIdx !== -1 && process.argv[rootArgIdx + 1] ? resolve(process.argv[rootArgIdx + 1]) : ROOT;
+const COMMANDS_DIR = resolve(SCAN_ROOT, '.claude/commands');
 const ALLOWLIST_PATH = resolve(ROOT, 'scripts/lint/claim-md-claude-sessions-column-allowlist.json');
 
 // Live columns, verified against the EHG_Engineer DB 2026-09-12 (QF-20260912-810). v_active_sessions
