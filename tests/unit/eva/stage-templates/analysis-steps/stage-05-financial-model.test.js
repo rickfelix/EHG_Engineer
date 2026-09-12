@@ -368,4 +368,40 @@ describe('analyzeStage05', () => {
       expect(prompt).toContain('Web: Financial benchmarks here');
     });
   });
+
+  describe('keyAssumptions prompt context (SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-146)', () => {
+    it('includes stage1Data.keyAssumptions in the prompt when present', async () => {
+      mockComplete.mockResolvedValueOnce(makeFinancialResponse());
+
+      await analyzeStage05({
+        stage1Data: { ...validStage1Data, keyAssumptions: ['Market grows 20% YoY', 'CAC stays flat'] },
+        logger,
+      });
+
+      const prompt = mockComplete.mock.calls[0][1];
+      expect(prompt).toContain('Market grows 20% YoY');
+      expect(prompt).toContain('CAC stays flat');
+    });
+
+    it('omits keyAssumptions text when absent', async () => {
+      mockComplete.mockResolvedValueOnce(makeFinancialResponse());
+
+      await analyzeStage05({ stage1Data: validStage1Data, logger });
+
+      const prompt = mockComplete.mock.calls[0][1];
+      expect(prompt).not.toContain('Key Assumptions');
+    });
+
+    it('omits keyAssumptions text when the array is empty', async () => {
+      mockComplete.mockResolvedValueOnce(makeFinancialResponse());
+
+      await analyzeStage05({
+        stage1Data: { ...validStage1Data, keyAssumptions: [] },
+        logger,
+      });
+
+      const prompt = mockComplete.mock.calls[0][1];
+      expect(prompt).not.toContain('Key Assumptions');
+    });
+  });
 });
