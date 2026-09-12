@@ -21,6 +21,12 @@ on:
       - 'scripts/lint/eva-logger-required-lint.mjs'
       - '.github/workflows/eva-logger-required-lint.yml'
 
+# QF-20260912-847: explicit least-privilege token, matching this repo's own stated convention
+# (workflow-path-filter-lint.yml:48-52) -- otherwise this job inherits the repo-wide
+# default_workflow_permissions=write (can_approve_pull_request_reviews=true) it never uses.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
