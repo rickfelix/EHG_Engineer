@@ -35,16 +35,36 @@ require('dotenv').config();
 const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function claimStatus() {
-  // Get current session
-  const { data: session } = await supabase
-    .from('claude_sessions')
-    .select('session_id, sd_id, heartbeat_at, status')
-    .eq('status', 'active')
-    .order('heartbeat_at', { ascending: false })
-    .limit(1)
-    .single();
+  // Resolve THIS session's own row by CLAUDE_SESSION_ID -- QF-20260912-810 found two stacked
+  // defects here: (1) claude_sessions has sd_key, NOT sd_id, so the old select errored and the
+  // error was silently discarded, read as 'no claim' while a real claim was live; (2) even with
+  // the column fixed, the old 'most-recently-active session in the WHOLE FLEET' heuristic (no
+  // session_id filter) picks a DIFFERENT worker's session under the concurrency this fleet runs
+  // under by default -- confirmed live: 4 concurrent active sessions, 3 with a MORE recent
+  // heartbeat than this one. Scoping by CLAUDE_SESSION_ID (the precedent fix for the identical
+  // class in scripts/get-working-on-sd.js, QF-20260703-742) makes this unambiguous.
+  const sessionId = process.env.CLAUDE_SESSION_ID;
+  if (!sessionId) {
+    console.log('');
+    console.log('  CLAUDE_SESSION_ID is not set -- cannot resolve which claim belongs to this session.');
+    console.log('');
+    return;
+  }
 
-  if (!session || !session.sd_id) {
+  const { data: session, error: sessionError } = await supabase
+    .from('claude_sessions')
+    .select('session_id, sd_key, heartbeat_at, status')
+    .eq('session_id', sessionId)
+    .maybeSingle();
+
+  if (sessionError) {
+    console.log('');
+    console.log('  Error querying claude_sessions: ' + sessionError.message);
+    console.log('');
+    return;
+  }
+
+  if (!session || !session.sd_key) {
     console.log('');
     console.log('  No active claim');
     console.log('');
@@ -65,7 +85,7 @@ async function claimStatus() {
     console.log('');
     console.log('  No active claim found in v_active_sessions');
     console.log('  Session: ' + session.session_id);
-    console.log('  SD (from session): ' + session.sd_id);
+    console.log('  SD (from session): ' + session.sd_key);
     console.log('');
     return;
   }
@@ -113,16 +133,33 @@ require('dotenv').config();
 const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function releaseClaim() {
-  // Get current session
-  const { data: session } = await supabase
-    .from('claude_sessions')
-    .select('session_id, sd_id')
-    .eq('status', 'active')
-    .order('heartbeat_at', { ascending: false })
-    .limit(1)
-    .single();
+  // Resolve THIS session's own row by CLAUDE_SESSION_ID -- see claimStatus() above for the two
+  // stacked defects QF-20260912-810 found (phantom sd_id column, plus a whole-fleet
+  // most-recently-active heuristic that picks a DIFFERENT worker's session under concurrency).
+  // The second defect made /claim release doubly dangerous: releasing based on the wrong
+  // session's row would have run release_sd against ANOTHER worker's live claim, not this one.
+  const sessionId = process.env.CLAUDE_SESSION_ID;
+  if (!sessionId) {
+    console.log('');
+    console.log('  CLAUDE_SESSION_ID is not set -- cannot resolve which claim belongs to this session.');
+    console.log('');
+    return;
+  }
 
-  if (!session || !session.sd_id) {
+  const { data: session, error: sessionError } = await supabase
+    .from('claude_sessions')
+    .select('session_id, sd_key')
+    .eq('session_id', sessionId)
+    .maybeSingle();
+
+  if (sessionError) {
+    console.log('');
+    console.log('  Error querying claude_sessions: ' + sessionError.message);
+    console.log('');
+    return;
+  }
+
+  if (!session || !session.sd_key) {
     console.log('');
     console.log('  No active claim to release.');
     console.log('  Run /claim status to check your current state.');
@@ -130,8 +167,7 @@ async function releaseClaim() {
     return;
   }
 
-  const sdId = session.sd_id;
-  const sessionId = session.session_id;
+  const sdId = session.sd_key;
 
   // Release via RPC (use single-param overload to avoid ambiguity)
   const { error: releaseError } = await supabase.rpc('release_sd', {
@@ -156,17 +192,14 @@ async function releaseClaim() {
     }
   }
 
-  // Clear claiming_session_id and is_working_on on the SD
+  // Clear claiming_session_id and is_working_on on the SD -- needed for the fallback direct-
+  // release path above (release_sd's own RPC body already does this on the success path, and
+  // already clears claude_sessions.sd_key too, so no separate 'clear sd_id on the session'
+  // step belongs here -- that phantom-column update was the QF-20260912-810 defect).
   await supabase
     .from('strategic_directives_v2')
     .update({ claiming_session_id: null, is_working_on: false })
     .eq('sd_key', sdId);
-
-  // Clear sd_id on the session
-  await supabase
-    .from('claude_sessions')
-    .update({ sd_id: null })
-    .eq('session_id', sessionId);
 
   console.log('');
   console.log('  Released: ' + sdId);

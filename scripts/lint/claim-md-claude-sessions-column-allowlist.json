@@ -1,0 +1,4 @@
+{
+  "_doc": "Allowlist for claim-md-claude-sessions-column-lint.mjs (QF-20260912-810). Keys are '<file>:<line>' or a whole-file path; each entry requires a non-empty reason. Empty as of landing -- the fix removed the only known unknown-column reference.",
+  "allow": {}
+}
