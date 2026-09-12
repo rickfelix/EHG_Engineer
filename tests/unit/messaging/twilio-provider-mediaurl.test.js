@@ -70,7 +70,7 @@ describe('twilio-provider checkMessageStatus (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-00
     });
     vi.stubGlobal('fetch', fetchMock);
     const result = await checkMessageStatus('SM123');
-    expect(result).toEqual({ status: 'delivered', dateUpdated: null });
+    expect(result).toEqual({ status: 'delivered', dateUpdated: null, errorCode: null, errorMessage: null });
   });
 
   it('QF-20260729-286: passes through Twilio\'s date_updated so the caller can stamp true delivery time, not its own poll tick', async () => {
@@ -80,7 +80,17 @@ describe('twilio-provider checkMessageStatus (SD-LEO-INFRA-SMS-DELIVERY-TRUTH-00
     }));
     vi.stubGlobal('fetch', fetchMock);
     const result = await checkMessageStatus('SM123');
-    expect(result).toEqual({ status: 'delivered', dateUpdated: 'Thu, 30 Jul 2026 20:12:31 +0000' });
+    expect(result).toEqual({ status: 'delivered', dateUpdated: 'Thu, 30 Jul 2026 20:12:31 +0000', errorCode: null, errorMessage: null });
+  });
+
+  it('QF-20260912-394: passes through error_code/error_message so a caller can distinguish a permanent carrier rejection from a transient failure', async () => {
+    fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ status: 'undelivered', error_code: 30007, error_message: 'Carrier violation' }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await checkMessageStatus('SM123');
+    expect(result).toEqual({ status: 'undelivered', dateUpdated: null, errorCode: '30007', errorMessage: 'Carrier violation' });
   });
 
   it('throws when Twilio credentials are not configured (fail closed, never guesses)', async () => {

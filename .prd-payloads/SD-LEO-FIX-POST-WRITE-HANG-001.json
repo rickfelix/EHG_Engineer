@@ -1,0 +1,59 @@
+{
+  "title": "Wire runPostWriteStage into the 5 zero-protection sites in LEAD-FINAL-APPROVAL and the 3 in learning/sd-creation.js",
+  "executive_summary": "QF-20260912-150 (escalated, PR #8772's post-write-stage helper wired into complete-quick-fix.js only) named two more scripts still exhibiting the post-write-hang defect class: a core DB write succeeds and persists, then an unbounded post-write await hangs past the caller's external kill timeout, exiting 143 with zero output even though the write already landed. An independent Explore investigation (stored in sub_agent_execution_results) confirmed and corrected the scope: scripts/modules/handoff/executors/lead-final-approval/index.js has 5 post-write steps with ZERO protection of any kind (no try/catch, no timeout) -- resolveLearningItems, rescoreOriginalSD, runProgrammaticRetrospective, releaseSessionClaim, checkAndCompleteParentSD -- plus ~20 other steps that are try/caught against throws but not timeout-bound against hangs (explicitly deferred, see Out of Scope). scripts/modules/learning/sd-creation.js has exactly 3 unwrapped post-write steps after its core SD-creation write: tagSourceItems, createDecisionRecord, and a learning_decisions status update. Both sets get wrapped with the existing lib/completion/post-write-stage.js helper (runPostWriteStage), mirroring the exact pattern already proven in scripts/modules/complete-quick-fix/orchestrator.js.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Wrap the 3 unwrapped post-write steps in scripts/modules/learning/sd-creation.js's executeSDCreationWorkflow (tagSourceItems L407, createDecisionRecord L413-417, the learning_decisions UPDATE L421-436) with runPostWriteStage from lib/completion/post-write-stage.js. On timeout, log the existing 'core write already persisted; do NOT re-run' message from the helper and continue (never throw, never block the function's return) -- the SD/QF row these steps tag or record against has already landed by this point.",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Wrap the 5 confirmed zero-protection post-write steps in scripts/modules/handoff/executors/lead-final-approval/index.js (resolveLearningItems L905, rescoreOriginalSD L939, runProgrammaticRetrospective L988, releaseSessionClaim L1024, checkAndCompleteParentSD L1115) with runPostWriteStage, matching the existing console.warn-on-failure style already used by the ~20 adjacent try/caught steps in the same file (never throw past this point -- the SD's own completion stamp, stampCompletion/stampExecutionContext, already landed before any of these run).",
+      "priority": "P0"
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Unit tests per wrapped site (8 total: 3 from FR-1, 5 from FR-2) injecting a never-resolving promise for the wrapped function and asserting: the stage-start marker is logged, runPostWriteStage returns timedOut:true within the configured timeoutMs, the caller does not throw, and execution continues past the wrapped call to whatever comes next in the function. This is the safe, deterministic substitute for 'reproducing the live hang on a fixture SD' -- it proves the exact failure mode without needing to force a real external-timeout kill.",
+      "priority": "P0"
+    }
+  ],
+  "out_of_scope": [
+    "Retrofitting timeout-bounds onto the ~20 already-try/caught-but-not-timeout-bound steps in lead-final-approval/index.js (recordSdCompleted, autoCloseFeedback, updateKRFromSDCompletion, runCapabilityScoringOnCompletion, analyzeSDRejections, runShipReviewFindingsPopulator, runQfResolutionLinkAdvisory, runRankOnCompletionHook, runRoadmapStampOnCompletionHook, runPostCompletionTailPopulator, runVisionHealIfTriggered, runFinalApprovalShipping, orchestrator-completion-hook, worktree cleanup) -- a much larger, separate hardening pass than this SD's first cut at the zero-protection sites. Filed as a follow-up finding.",
+    "scripts/sd-start.js and scripts/add-prd-to-database.js (the 2 addenda the original QF accumulated after its title was set) -- each already has its own PRIOR, unrelated partial fix for a different hang shape (event-loop-kept-alive-after-main-resolves, via heartbeat/socket cleanup), which must not be confused with or assumed to cover this defect class. Each deserves its own scoped look, especially add-prd-to-database.js's autoInvokePlanSubAgents -> orchestrate-phase-subagents.js path, confirmed via grep to have zero timeout protection anywhere and the single most likely hang candidate for that script. Filed as a follow-up.",
+    "The idempotent re-run guard (learning/index.js refusing to re-create a learn SD that already exists for the same source; LEAD-FINAL refusing a second run on an already-accepted handoff) -- a distinct behavioral change with real per-script edge cases, already explicitly deferred once by the QF-20260912-697 predecessor for the same reason."
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "sd-creation.js FR-1: tagSourceItems never resolves", "expected_outcome": "executeSDCreationWorkflow still returns success:true with the SD already created, and a TIMED OUT marker is logged for tagSourceItems" },
+    { "id": "TS-2", "scenario": "sd-creation.js FR-1: createDecisionRecord never resolves", "expected_outcome": "same non-blocking behavior and marker" },
+    { "id": "TS-3", "scenario": "sd-creation.js FR-1: the learning_decisions update never resolves", "expected_outcome": "same non-blocking behavior and marker" },
+    { "id": "TS-4", "scenario": "lead-final-approval FR-2: resolveLearningItems never resolves", "expected_outcome": "executeSpecific's completion path continues past it (no hang/throw) and a TIMED OUT marker is logged" },
+    { "id": "TS-5", "scenario": "lead-final-approval FR-2: rescoreOriginalSD never resolves", "expected_outcome": "same non-blocking behavior and marker" },
+    { "id": "TS-6", "scenario": "lead-final-approval FR-2: runProgrammaticRetrospective never resolves", "expected_outcome": "same non-blocking behavior and marker" },
+    { "id": "TS-7", "scenario": "lead-final-approval FR-2: releaseSessionClaim never resolves", "expected_outcome": "same non-blocking behavior and marker" },
+    { "id": "TS-8", "scenario": "lead-final-approval FR-2: checkAndCompleteParentSD never resolves", "expected_outcome": "same non-blocking behavior and marker" },
+    { "id": "TS-9", "scenario": "Control case per file: all 8 wrapped steps resolve normally (no injected hang)", "expected_outcome": "no regression to the existing success path and no unexpected TIMED OUT markers" }
+  ],
+  "acceptance_criteria": [
+    "All 8 TS-* tests pass.",
+    "No existing test in tests/unit/ that touches learning/sd-creation.js or lead-final-approval/index.js regresses.",
+    "Neither file's wrapped call sites change their success-path behavior or return shape when the wrapped function resolves normally and quickly (parity with pre-fix behavior in the non-hang case)."
+  ],
+  "success_criteria": [
+    { "criterion": "The 3 sd-creation.js post-write steps are bounded and non-blocking", "measure": "TS-1/TS-2/TS-3 pass" },
+    { "criterion": "The 5 lead-final-approval/index.js zero-protection post-write steps are bounded and non-blocking", "measure": "TS-4 through TS-8 pass" },
+    { "criterion": "No regression to the existing success path in either file", "measure": "TS-9 passes in both files; full existing unit suites for both files still pass" }
+  ],
+  "key_changes": [
+    { "change": "Wrap 3 unwrapped post-write steps in scripts/modules/learning/sd-creation.js with runPostWriteStage", "impact": "A hang in tagSourceItems/createDecisionRecord/the learning_decisions update can no longer block the auto-approve CLI past its external kill timeout after the learn SD has already been created" },
+    { "change": "Wrap 5 zero-protection post-write steps in scripts/modules/handoff/executors/lead-final-approval/index.js with runPostWriteStage", "impact": "A hang in resolveLearningItems/rescoreOriginalSD/runProgrammaticRetrospective/releaseSessionClaim/checkAndCompleteParentSD can no longer block LEAD-FINAL-APPROVAL past its external kill timeout after the SD's completion stamp has already landed" },
+    { "change": "8 new unit tests with injected never-resolving promises per wrapped site", "impact": "Diagnostically proves each site's hang-safety without needing to force a live production hang" }
+  ],
+  "success_metrics": [
+    { "metric": "Post-write hang recurrence on these 2 scripts' wrapped sites", "baseline": "5 live specimens across this defect class fleet-wide since QF-20260912-697", "target": "0 new specimens on the 8 newly-wrapped sites", "actual": "N/A", "measurement": "Worker signal reports naming a hang at one of these exact 8 call sites" }
+  ],
+  "strategic_objectives": [
+    "Close the 2 of 4 scripts this defect class's own escalated QF named as still-uncovered, matching the QF's literal scope",
+    "Establish unit-test coverage proving hang-safety at each wrapped site, not just code presence"
+  ]
+}

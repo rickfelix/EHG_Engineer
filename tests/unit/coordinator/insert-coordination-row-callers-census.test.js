@@ -68,11 +68,11 @@ describe('caller census — no entrypoint is exempted silently (FR-2 AC-2 / FR-3
 });
 
 describe('caller census — completeness bookkeeping', () => {
-  it('FR-2 + FR-3 entries total 25 real call sites across 25 distinct durable-caller files (14 FR-2 files + 11 FR-3 files)', () => {
+  it('FR-2 + FR-3 entries total 26 real call sites across 26 distinct durable-caller files (14 FR-2 files + 12 FR-3 files)', () => {
     const fr2Files = new Set(FR2_CLI_ENTRYPOINTS.map((e) => e.file));
     const fr3Files = new Set(FR3_NON_CLI_CALLERS.map((e) => e.file));
     expect(fr2Files.size).toBe(14);
-    expect(fr3Files.size).toBe(11);
+    expect(fr3Files.size).toBe(12);
     // No file appears in both partitions.
     for (const f of fr2Files) expect(fr3Files.has(f)).toBe(false);
   });

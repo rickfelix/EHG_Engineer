@@ -175,14 +175,26 @@ describe('FR-3 — EXHAUSTED is distinct from UNREACHABLE', () => {
 });
 
 describe('FR-1 — display mapping is configuration, and unset is safe', () => {
-  it('unset FLEET_ACCOUNT_IDENTITY_MAP keeps registry labels (today behaviour)', async () => {
+  it('unset FLEET_ACCOUNT_IDENTITY_MAP keeps PROFILE-slot registry labels; the unvouched ' +
+     'hostDefault slot gets a measured fallback, never its fixed label (QF-20260911-082)', async () => {
+    // Profile slots read a FIXED directory, so their registry name cannot drift. The hostDefault
+    // slot's content CAN drift (a /login rotation), so its fixed registry name ("Code Street
+    // Labs") is an assumption, not a measurement — this is the defect QF-20260911-082 was filed
+    // for. With no FLEET_ACCOUNT_IDENTITY_MAP to vouch for it and no matching profile alias, the
+    // hostDefault reading must carry the measured fallback instead of the label it cannot vouch
+    // for.
     let n = 0;
     const out = await readAllAccounts({
       env: ENV, fs: fsWithTokens,
       fetchImpl: fetchReturning(200, { five_hour: { utilization: 1 }, seven_day: { utilization: 1 } }),
       getAccountIdentity: () => ({ email: 'a@b.invalid', orgName: 'O', accountUuid8: `u-${n++}` }),
     });
-    expect(out.map((r) => r.name)).toEqual(ACCOUNT_REGISTRY.map((e) => e.name));
+    const hostDefaultEntry = ACCOUNT_REGISTRY.find((e) => e.hostDefault);
+    const profileNames = ACCOUNT_REGISTRY.filter((e) => !e.hostDefault).map((e) => e.name);
+    const byName = Object.fromEntries(out.map((r) => [r.name, r]));
+    for (const name of profileNames) expect(byName[name]).toBeDefined();
+    expect(byName[hostDefaultEntry.name]).toBeUndefined();
+    expect(out.some((r) => /^host-default \(u-\d\)$/.test(r.name))).toBe(true);
   });
 
   it('a configured map relabels a slot from its CREDENTIALS, not its directory', async () => {
@@ -285,5 +297,60 @@ describe('FR-1 — display mapping is configuration, and unset is safe', () => {
       getAccountIdentity: () => ({ email: 'a@b.invalid', orgName: 'O', accountUuid8: `u-${n++}` }),
     });
     expect(out).toHaveLength(ACCOUNT_REGISTRY.length);
+  });
+});
+
+describe('QF-20260911-082 — the hostDefault slot never shows a fixed label it cannot vouch for', () => {
+  it('a FLEET_ACCOUNT_IDENTITY_MAP entry for the hostDefault uuid8 vouches for its registry name', async () => {
+    const hostDefaultEntry = ACCOUNT_REGISTRY.find((e) => e.hostDefault);
+    let n = 0;
+    const out = await readAllAccounts({
+      env: { ...ENV, FLEET_ACCOUNT_IDENTITY_MAP: JSON.stringify({ 'u-1': hostDefaultEntry.name }) },
+      fs: fsWithTokens,
+      fetchImpl: fetchReturning(200, { five_hour: { utilization: 1 }, seven_day: { utilization: 1 } }),
+      getAccountIdentity: () => ({ email: 'a@b.invalid', orgName: 'O', accountUuid8: `u-${n++}` }),
+    });
+    // Registry order: Deep Soul=u-0, hostDefault=u-1, canary=u-2 — the map vouches for u-1.
+    expect(out.find((r) => r.name === hostDefaultEntry.name)).toBeDefined();
+    expect(out.some((r) => /^host-default \(/.test(r.name))).toBe(false);
+  });
+
+  it('an alias with a real profile slot is left to the existing DUPLICATE_IDENTITY path, not the fallback label', async () => {
+    const hostDefaultEntry = ACCOUNT_REGISTRY.find((e) => e.hostDefault);
+    const out = await readAllAccounts({
+      env: ENV,
+      fs: fsWithTokens,
+      fetchImpl: fetchReturning(200, { five_hour: { utilization: 1 }, seven_day: { utilization: 1 } }),
+      // Every slot resolves to the SAME account — a genuine alias, not an unknown identity.
+      getAccountIdentity: () => ({ email: 'x@y.invalid', orgName: 'Org', accountUuid8: 'same-uuid' }),
+    });
+    expect(out.some((r) => /^host-default \(/.test(r.name))).toBe(false);
+    const hostReading = out.find((r) => r.name === hostDefaultEntry.name);
+    expect(hostReading?.reason).toBe(UNAVAILABLE_REASONS.DUPLICATE_IDENTITY);
+  });
+
+  it('resolveDisplayIdentities stays keyed exactly as the hostDefault fallback reading is named', async () => {
+    let i = 0;
+    const opts = {
+      env: ENV,
+      fs: fsWithTokens,
+      fetchImpl: fetchReturning(200, { five_hour: { utilization: 1 }, seven_day: { utilization: 1 } }),
+      getAccountIdentity: () => ({ email: 'a@b.invalid', orgName: 'O', accountUuid8: `u-${i++}` }),
+    };
+    const readings = await readAllAccounts(opts);
+    i = 0; // same identity sequence, so the two calls describe the same fleet
+    const identities = resolveDisplayIdentities(opts);
+    expect([...identities.keys()].sort()).toEqual(readings.map((r) => r.name).sort());
+  });
+
+  it('no resolvable identity at all leaves the raw registry name untouched (nothing to fall back to)', async () => {
+    const hostDefaultEntry = ACCOUNT_REGISTRY.find((e) => e.hostDefault);
+    const out = await readAllAccounts({
+      env: ENV,
+      fs: fsWithTokens,
+      fetchImpl: fetchReturning(200, { five_hour: { utilization: 1 }, seven_day: { utilization: 1 } }),
+      getAccountIdentity: () => null,
+    });
+    expect(out.find((r) => r.name === hostDefaultEntry.name)).toBeDefined();
   });
 });
