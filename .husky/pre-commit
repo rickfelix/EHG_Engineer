@@ -269,23 +269,70 @@ fi
 echo ""
 echo "🔐 Running secret detection scan..."
 
+# SD-LEO-FIX-PRE-COMMIT-SECRET-001: on a merge commit, a diff against HEAD only reads every
+# line the OTHER parent brings in as newly ADDED, so main's own pre-existing content gets
+# rescanned as if entering the tree (false-positive block on a legitimate merge -- witnessed
+# blocking PR #8490). Detect an in-progress merge via `git rev-parse` (exit code), NEVER a
+# literal `.git/MERGE_HEAD` path test: inside a git worktree `.git` is a FILE (a gitdir
+# pointer), and MERGE_HEAD actually lives at `.git/worktrees/<name>/MERGE_HEAD` -- every fleet
+# worker ships from a worktree, so a literal path test would be inert exactly where this bug
+# bites.
+IS_MERGE_COMMIT=0
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  IS_MERGE_COMMIT=1
+fi
+
 # Get all staged file contents (excluding pre-commit hook itself to avoid false positives)
 # The hook contains regex patterns that would otherwise trigger detection
-STAGED_CONTENT=$(git diff --cached --diff-filter=ACM -U0 -- ':!.husky/pre-commit' ':!.githooks/*' ':!docs/design/apa-calibration-fixtures/*' 2>/dev/null || true)
+STAGED_CONTENT_HEAD_RAW=$(git diff --cached HEAD --diff-filter=ACM -U0 -- ':!.husky/pre-commit' ':!.githooks/*' ':!docs/design/apa-calibration-fixtures/*' 2>/dev/null)
+STAGED_CONTENT_HEAD=$(printf '%s\n' "$STAGED_CONTENT_HEAD_RAW" | grep -E '^\+' | grep -vE '^\+\+\+' || true)
 
 # QF-20260708-650: frozen design fixtures under docs/design/apa-calibration-fixtures/**
 # inline-embed base64 PNG screenshots that false-positive-match the AKIA pattern.
 # Narrowly scoped allowlist: strip ONLY base64 image-data-URI lines from that path's
 # diff -- any other content in those files (e.g. a real secret) is still scanned.
-FIXTURE_CONTENT=$(git diff --cached --diff-filter=ACM -U0 -- 'docs/design/apa-calibration-fixtures/*' 2>/dev/null | grep -viE '^\+.*data:image/(png|jpe?g|gif);base64,' || true)
+FIXTURE_CONTENT_HEAD_RAW=$(git diff --cached HEAD --diff-filter=ACM -U0 -- 'docs/design/apa-calibration-fixtures/*' 2>/dev/null)
+FIXTURE_CONTENT_HEAD=$(printf '%s\n' "$FIXTURE_CONTENT_HEAD_RAW" | grep -viE '^\+.*data:image/(png|jpe?g|gif);base64,' | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+
+if [ "$IS_MERGE_COMMIT" -eq 1 ]; then
+  # SD-LEO-FIX-PRE-COMMIT-SECRET-001: restrict each stream's scanned added-line set to lines
+  # added relative to BOTH parents, so main's own pre-existing content (brought in by the
+  # merge) does not read as newly entering the tree. Each stream is diffed against MERGE_HEAD
+  # independently, mirroring the HEAD-basis construction above.
+  STAGED_CONTENT_MERGE_RAW=$(git diff --cached MERGE_HEAD --diff-filter=ACM -U0 -- ':!.husky/pre-commit' ':!.githooks/*' ':!docs/design/apa-calibration-fixtures/*' 2>/dev/null)
+  STAGED_CONTENT_MERGE_STATUS=$?
+  STAGED_CONTENT_MERGE=$(printf '%s\n' "$STAGED_CONTENT_MERGE_RAW" | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+
+  FIXTURE_CONTENT_MERGE_RAW=$(git diff --cached MERGE_HEAD --diff-filter=ACM -U0 -- 'docs/design/apa-calibration-fixtures/*' 2>/dev/null)
+  FIXTURE_CONTENT_MERGE_STATUS=$?
+  FIXTURE_CONTENT_MERGE=$(printf '%s\n' "$FIXTURE_CONTENT_MERGE_RAW" | grep -viE '^\+.*data:image/(png|jpe?g|gif);base64,' | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+
+  # Fall back to the HEAD-only basis for a stream ONLY on a real git failure (nonzero exit),
+  # never merely because the MERGE_HEAD-basis result is empty -- an empty result is the
+  # NORMAL, correct outcome of a clean non-conflicting merge (nothing the other parent
+  # brought in is genuinely new relative to itself); treating emptiness alone as a failure
+  # signal would silently reintroduce the exact false-positive bug this fixes. Intersect via
+  # `grep -Fxf` (fixed-string, whole-line, sorted-input-independent) -- NEVER `comm -12`,
+  # which requires SORTED input and silently emits empty output with a non-zero exit on
+  # unsorted input, swallowed by this hook's own `2>/dev/null || true` style.
+  if [ "$STAGED_CONTENT_MERGE_STATUS" -ne 0 ]; then
+    STAGED_CONTENT="$STAGED_CONTENT_HEAD"
+  else
+    STAGED_CONTENT=$(printf '%s\n' "$STAGED_CONTENT_HEAD" | grep -Fxf <(printf '%s\n' "$STAGED_CONTENT_MERGE") 2>/dev/null || true)
+  fi
+
+  if [ "$FIXTURE_CONTENT_MERGE_STATUS" -ne 0 ]; then
+    FIXTURE_CONTENT="$FIXTURE_CONTENT_HEAD"
+  else
+    FIXTURE_CONTENT=$(printf '%s\n' "$FIXTURE_CONTENT_HEAD" | grep -Fxf <(printf '%s\n' "$FIXTURE_CONTENT_MERGE") 2>/dev/null || true)
+  fi
+else
+  STAGED_CONTENT="$STAGED_CONTENT_HEAD"
+  FIXTURE_CONTENT="$FIXTURE_CONTENT_HEAD"
+fi
+
 STAGED_CONTENT="${STAGED_CONTENT}
 ${FIXTURE_CONTENT}"
-
-# SD-LEO-FIX-STRIP-DEAD-DB-CREDENTIAL-LITERALS-001: scan ADDED lines only. The -U0 diff
-# includes REMOVED lines (leading "-"), so a commit that REDACTS a secret (deleting the
-# old line, adding a placeholder) was blocked by construction — the scanner must block
-# secrets ENTERING the tree, never secrets LEAVING it. "+++" file headers are excluded.
-STAGED_CONTENT=$(printf '%s\n' "$STAGED_CONTENT" | grep -E '^\+' | grep -vE '^\+\+\+' || true)
 
 # Define secret patterns (regex)
 # These patterns match common API key and credential formats

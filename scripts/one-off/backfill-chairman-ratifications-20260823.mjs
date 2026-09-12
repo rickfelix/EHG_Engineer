@@ -122,9 +122,15 @@ async function main() {
     const row = await recordHistoricalRatification(sb, {
       quote: s.quote, source: s.source, targetContracts: s.targetContracts, scribeSeat: s.scribeSeat,
     }, RATIFIED_AT);
-    const { affected } = await markRatificationEncoded(sb, row.id, {
+    const { affected, refused } = await markRatificationEncoded(sb, row.id, {
       sectionId: s.sectionId, manifestHash: s.manifestHash, markerText: s.markerText,
     });
+    // SD-LEO-INFRA-RATIFICATION-ENCODE-VERIFICATION-001 (FR-2): markRatificationEncoded can now
+    // return a structured refusal (affected:0, refused:'<reason>') instead of writing encoded_at,
+    // when no resolvable+pin-verified commit backs the mark. Distinguish that from the pre-existing
+    // "already encoded" no-op (affected:0, refused:undefined) so this refusal never crashes
+    // indistinguishably from a benign re-run.
+    if (refused) throw new Error(`markRatificationEncoded REFUSED for ${row.id}: ${refused} (no resolvable commit pin backs this seeded specimen — supply a real manifest_hash or run this backfill after the row's target file is committed)`);
     if (affected !== 1) throw new Error(`markRatificationEncoded did not affect exactly 1 row for ${row.id}`);
     inserted += 1;
   }
