@@ -41,6 +41,57 @@ export function isSeatReconcileEnabled(env = process.env) {
   return env.FLEET_SEAT_RECONCILE_ENABLED === 'on';
 }
 
+// QF-20260912-175 (c): no sanctioned writer existed to REVERSE an incorrectly (or now stale-ly)
+// released seat back to a live status — only this reconciler's own markReleased() and the
+// cancel-sd.js / release-claim-both-surfaces.mjs release paths this QF fixes. 10min mirrors the
+// same-file MIN_ACTIVITY_SAMPLE_GAP_MS heartbeat-staleness horizon used to classify a seat dead.
+export const REINSTATE_MAX_HEARTBEAT_AGE_MS = 10 * 60 * 1000;
+
+/**
+ * Reverse a claude_sessions row that was retired to 'released' while its process was actually
+ * still alive (or has since restarted with the SAME pid — an edge case narrow enough not to
+ * special-case). REFUSES unless BOTH the heartbeat is fresh AND the pid is verifiably a live
+ * claude.exe process — this must never be able to revive a genuinely dead seat.
+ * @returns {{ok: boolean, sessionId: string, reason?: string, targetStatus?: string}}
+ */
+export async function reinstateSeat(supabase, sessionId, opts = {}) {
+  const { reason, by = 'operator', probePid = pidIsClaude, now = () => Date.now() } = opts;
+  if (!sessionId) return { ok: false, sessionId, reason: 'sessionId is required' };
+  if (!reason) return { ok: false, sessionId, reason: 'reason is required — an unattributed reinstate is refused' };
+
+  const { data: row, error: readErr } = await supabase
+    .from('claude_sessions')
+    .select('session_id, pid, status, heartbeat_at, sd_key, metadata')
+    .eq('session_id', sessionId)
+    .maybeSingle();
+  if (readErr || !row) return { ok: false, sessionId, reason: readErr?.message || 'session not found' };
+  if (row.status !== 'released') return { ok: false, sessionId, reason: `status is '${row.status}', not 'released' — nothing to reinstate` };
+
+  const heartbeatAgeMs = row.heartbeat_at ? now() - new Date(row.heartbeat_at).getTime() : Infinity;
+  if (heartbeatAgeMs > REINSTATE_MAX_HEARTBEAT_AGE_MS) {
+    return { ok: false, sessionId, reason: `heartbeat too stale (${Math.round(heartbeatAgeMs / 60000)}min) — refusing to reinstate a possibly-dead seat` };
+  }
+  const pidVerdict = Number.isInteger(row.pid) ? probePid(row.pid) : 'PROBE_FAILED';
+  if (pidVerdict !== 'MATCH') {
+    return { ok: false, sessionId, reason: `pid not verifiably live (${pidVerdict}) — refusing to reinstate` };
+  }
+
+  const targetStatus = row.sd_key ? 'active' : 'idle';
+  const { error: updErr } = await supabase
+    .from('claude_sessions')
+    .update({
+      status: targetStatus,
+      is_alive: true,
+      released_at: null,
+      released_reason: null,
+      metadata: { ...(row.metadata || {}), reinstated_at: new Date().toISOString(), reinstated_by: by, reinstated_reason: reason },
+    })
+    .eq('session_id', sessionId)
+    .eq('status', 'released'); // CAS: only reinstate a row still 'released' at write time
+  if (updErr) return { ok: false, sessionId, reason: updErr.message };
+  return { ok: true, sessionId, targetStatus };
+}
+
 /**
  * pidIsClaude is TRI-STATE ('MATCH' | 'NO_MATCH' | 'PROBE_FAILED'). Leg A asks "is the pid ABSENT
  * from the claude.exe image set", so:
@@ -136,6 +187,20 @@ async function main() {
     console.error(`${TAG} would compare the database to itself, which is the defect it exists to fix.`);
     process.exit(2);
   }
+
+  // QF-20260912-175 (c): --reinstate <session_id> --reason "<text>" is a separate mode from the
+  // classify/release sweep above — always writes (no --reconcile/FLEET_SEAT_RECONCILE_ENABLED
+  // gate), since reinstateSeat's own heartbeat+pid refusal is the safety, not an env flag.
+  const reinstateIdx = process.argv.indexOf('--reinstate');
+  if (reinstateIdx !== -1) {
+    const sessionId = process.argv[reinstateIdx + 1];
+    const reasonIdx = process.argv.indexOf('--reason');
+    const reason = reasonIdx !== -1 ? process.argv[reasonIdx + 1] : null;
+    const r = await reinstateSeat(createSupabaseServiceClient(), sessionId, { reason });
+    console.log(JSON.stringify(r, null, 2));
+    process.exit(r.ok ? 0 : 1);
+  }
+
   const write = process.argv.includes('--reconcile');
   const out = await reconcileSeats(createSupabaseServiceClient(), { write });
   console.log(JSON.stringify({ ...out, results: undefined }, null, 2));
