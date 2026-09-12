@@ -61,7 +61,7 @@ describe('SD-REFILL-00C7I5BY: assessFleetActivity recentTransitions anchor', () 
     const sb = makeSb(function (ctx) {
       return baseResolver(ctx, { handoffs: { data: [], error: null } });
     });
-    const r = await assessFleetActivity(sb, { now: Date.now() });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok' });
     expect(r.signals.recentTransitions).toBe(0);
     expect(r.quiescent).toBe(true);
   });
@@ -75,7 +75,7 @@ describe('SD-REFILL-00C7I5BY: assessFleetActivity recentTransitions anchor', () 
         nearTerminal: { data: [], error: null },
       });
     });
-    const r = await assessFleetActivity(sb, { now: Date.now() });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok' });
     expect(r.signals.recentTransitions).toBe(0);
   });
 
@@ -86,7 +86,7 @@ describe('SD-REFILL-00C7I5BY: assessFleetActivity recentTransitions anchor', () 
         nearTerminal: { data: [{ id: 'uuid-done' }], error: null },
       });
     });
-    const r = await assessFleetActivity(sb, { now: Date.now() });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok' });
     expect(r.signals.recentTransitions).toBe(1);
     expect(r.quiescent).toBe(false); // recent activity → not quiescent
   });
@@ -98,7 +98,7 @@ describe('SD-REFILL-00C7I5BY: assessFleetActivity recentTransitions anchor', () 
       }
       return baseResolver(ctx, { nearTerminal: { data: [{ id: 'uuid-done' }], error: null } });
     });
-    const r = await assessFleetActivity(sb, { now: Date.now() });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok' });
     expect(r.signals.recentTransitions).toBe(1);
   });
 
@@ -107,7 +107,7 @@ describe('SD-REFILL-00C7I5BY: assessFleetActivity recentTransitions anchor', () 
       if (ctx.table === 'sd_phase_handoffs') throw new Error('handoff query boom');
       return baseResolver(ctx, {});
     });
-    const r = await assessFleetActivity(sb, { now: Date.now() });
+    const r = await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok' });
     expect(r.quiescent).toBe(false);
     expect(r.reason).toMatch(/^assessment_error_fail_active/);
     expect(r.signals.error).toBe('handoff query boom');
@@ -119,7 +119,7 @@ describe('SD-REFILL-00C7I5BY: assessFleetActivity recentTransitions anchor', () 
       ctx.filters.forEach(function (f) { if (f[0] === 'gte') seen.push({ table: ctx.table, col: f[1] }); });
       return baseResolver(ctx, {});
     });
-    await assessFleetActivity(sb, { now: Date.now() });
+    await assessFleetActivity(sb, { now: Date.now(), markerReadState: 'ok' });
     // the only gte filter must be on sd_phase_handoffs.created_at — never strategic_directives_v2.updated_at
     expect(seen).toContainEqual({ table: 'sd_phase_handoffs', col: 'created_at' });
     expect(seen.some(function (s) { return s.col === 'updated_at'; })).toBe(false);
