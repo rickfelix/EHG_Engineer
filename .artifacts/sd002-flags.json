@@ -1,0 +1,4 @@
+[
+  {"type":"harness","item":"reconcile-escalated-completed-sd-quick-fixes.mjs backlog grows again: QF-20260903-379 is now a 3rd row (after QF-20260903-433 and the 24 pre-existing) whose resolution_sd_id is linked and target SD is completed, but status stays 'escalated' (isNeedsSdRow never auto-cancels it). Still blocked on the same known disposition-NULL bug in the --live path per session memory."},
+  {"type":"friction","item":"The generic TESTING sub-agent's E2E-mandatory path blocked unconditionally on this zero-UI-surface SD for a THIRD time this session (after SD-LEO-FIX-SESSION-COORDINATION-INSERT-001 and SD-LEO-FIX-ADAM-DURABLE-DUTY-001). A durable pattern now measured three times independently -- worth a dedicated fix to auto-detect zero-UI-surface diffs and route to a unit/integration-only evidence path."}
+]

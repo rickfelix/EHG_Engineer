@@ -1,0 +1,166 @@
+{
+  "executive_summary": "Four gates returned confidently wrong verdicts on correct work in one night, each by a different mechanism (wrong field read, wrong phase, wrong artifact scanned, wrong entry point bypassing a wrapper). All four named instances were independently re-verified to be ALREADY fixed before this SD was picked up (QF-20260903-722/020/822, QF-20260903-239 -> SD-LEO-FIX-GATE-PLAN-EXEC-001, all completed/closed -- confirmed from git history alone, zero open TODO markers remain). This SD's actual delivered scope -- deliberately NOT a fifth instance repair -- is the mirror of the already-ratified input-side gate-evidence-provenance rule (chairman-ratified 2026-09-02, 6c263823: no gate may accept evidence without producer/run/hash) applied to the OUTPUT side: a gate verdict should name what it measured, so a reader can tell a measurement of the work from a measurement of something adjacent to it without reading the write site. Delivered as Quick-Fix QF-20260903-379, merged via PR #8682 (commit 01ac0ae796b) BEFORE this SD existed -- escalated only because the diff touched a sensitive gate-criteria path that complete-quick-fix.js's eligibility preflight refuses to self-close without a full SD, by design, with no bypass flag. This SD is a retroactive verification record, re-derived fresh from the repo at HEAD rather than accepted from the commit message.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "An optional, additive measured-provenance contract on every gate verdict",
+      "description": "ValidatorRegistry.normalizeResult() (scripts/modules/handoff/validation/validator-registry/core.js) passes through an OPTIONAL `measured: { subject, producer }` field when a validator supplies one, via a conditional spread that adds zero keys when absent. Every gate that does not set it is completely unchanged -- confirmed: 7 total normalizeResult call sites across the gates directory, only 1 supplies measured, the other 6 are byte-identical to before this change. This is a fail-open contract, not a retrofit of every existing gate.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "normalizeResult({...}) with no `measured` key returns an object with no `measured` property at all (not `measured: undefined`).",
+        "normalizeResult({..., measured: {subject, producer}}) returns the `measured` object unchanged.",
+        "normalizeResult({..., measured: null}) does not leak an empty/null `measured` key into the output."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "One exemplar gate wired, not a retrofit of all four historically-buggy gates",
+      "description": "prdQualityValidation (gate-1-plan-to-exec.js) -- the same gate family QF-20260903-722 fixed after a prior version substring-matched a serialised requirement object instead of prose -- now builds `measured: { subject: 'PRD functional_requirements/acceptance_criteria/executive_summary (heuristic|AI-rubric scoring)', producer: 'validatePRDQuality (...)' }` and passes it into normalizeResult. The other three historically-buggy gates deliberately do NOT yet emit `measured` -- retrofitting every gate individually would repeat the exact 'fix instances, not the class' mistake this SD's own premise names.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Calling the registered prdQualityValidation validator returns a result whose `measured.subject` matches /PRD/ and `measured.producer` matches /validatePRDQuality/.",
+        "This holds for both the heuristic and AI-rubric scoring paths."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "The measured line is visible to an operator at the actual read site, not only the write site",
+      "description": "HandoffOrchestrator.js's PLAN-TO-EXEC precheck \"GATE SCORES (Precheck)\" display loop imports formatMeasuredLine (lib/governance/verdict-measured-provenance.js, a small pure/testable helper) and prints the measured line for a gate result when present, immediately after that gate's existing pass/fail/percentage line. A gate result with no `measured` field prints nothing extra -- unchanged display for every other gate.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "formatMeasuredLine(gateResult) returns null when gateResult has no measured field, or when subject/producer is missing.",
+        "formatMeasuredLine(gateResult) returns a string naming both the subject and the producer when both are present.",
+        "HandoffOrchestrator.js's precheck loop calls formatMeasuredLine per gate result and only logs the line when it is non-null."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No schema change, no migration",
+      "description": "Pure code + test change across 4 files (1 new module + its test, 2 existing handoff modules + 1 existing test file updated). No database/chairman-gated or database/migrations touched."
+    },
+    {
+      "id": "TR-2",
+      "title": "Retroactive SD -- code already shipped and merged",
+      "description": "The implementation shipped via Quick-Fix QF-20260903-379, PR #8682, merged as commit 01ac0ae796b, BEFORE this SD was created. This SD's PLAN/EXEC phases verify the already-merged state at HEAD rather than author new code; EXEC-TO-PLAN and PLAN-TO-LEAD evidence is produced by re-running the shipped tests and re-deriving the diff from the repo, not by re-implementing anything."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "measured passes through unchanged when a validator supplies it; is entirely absent when it does not",
+      "type": "unit",
+      "expected": "normalizeResult's three pass-through/omission/null-safety cases all hold."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "The exemplar gate's verdict carries measured.subject/measured.producer",
+      "type": "unit",
+      "expected": "prdQualityValidation's returned result, after going through normalizeResult, has measured.subject matching /PRD/ and measured.producer matching /validatePRDQuality/."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "formatMeasuredLine is null-safe and only prints when both fields are present",
+      "type": "unit",
+      "expected": "hasMeasuredProvenance/formatMeasuredLine direct unit coverage (8 cases) all pass."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "No regression in the 6 other gates that call normalizeResult, nor in the 7 other suites touching the 3 changed modules",
+      "type": "unit",
+      "expected": "124 tests across 7 regression suites pass unchanged (the 8th requested file is excluded by a pre-existing, 3-months-older, unrelated quarantine entry)."
+    }
+  ],
+  "acceptance_criteria": [
+    "All three functional requirements (FR-1/FR-2/FR-3) are verifiably true at HEAD on main (commit 01ac0ae796b or later), independently re-derived, not copied from the PR description.",
+    "No regression in any of the 7 other test suites that exercise the 3 changed handoff modules.",
+    "The ticket's own premise (all 4 named sibling-instance defects already fixed) is re-verified true from repo evidence (git log, code comments), not merely asserted."
+  ],
+  "risks": [
+    {
+      "risk": "A reviewer could read this SD as re-fixing the four cited gates, when it deliberately does not",
+      "mitigation": "Explicitly documented in the PRD, the commit message, and the PR description: all 4 named instances were already fixed individually before this SD existed; this SD's only new surface is the provenance CONTRACT plus ONE exemplar.",
+      "severity": "low"
+    },
+    {
+      "risk": "The additive `measured` field could be mistaken for a required field, causing a future caller to assume every gate result has one",
+      "mitigation": "hasMeasuredProvenance/formatMeasuredLine are both null-safe by construction (optional chaining, explicit Boolean()), and the contract's own module header states plainly that omitting it is unchanged, fail-open behavior.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "HandoffOrchestrator.js's PLAN-TO-EXEC precheck display (the one current consumer of formatMeasuredLine)",
+      "Any future gate author who opts in to the measured contract when registering a new validator"
+    ],
+    "dependencies": [
+      "ValidatorRegistry.normalizeResult() (scripts/modules/handoff/validation/validator-registry/core.js) -- the one canonical choke point every gate result already passes through"
+    ],
+    "data_contracts": [
+      "none"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Verified by direct command execution: the 2 new/updated test suites (20/20) and the 7 other regression suites touching the 3 changed modules (124/124, 1 of 8 requested files excluded by an unrelated pre-existing quarantine entry)."
+    ]
+  },
+  "system_architecture": {
+    "summary": "A gate verdict can now optionally name what it measured (subject + producer), passed through the existing canonical normalizeResult choke point and surfaced at the existing precheck display read site -- additive, fail-open, one exemplar wired.",
+    "components": [
+      {
+        "name": "lib/governance/verdict-measured-provenance.js",
+        "change": "NEW -- pure helpers hasMeasuredProvenance/formatMeasuredLine"
+      },
+      {
+        "name": "scripts/modules/handoff/validation/validator-registry/core.js",
+        "change": "normalizeResult passes through an optional measured field"
+      },
+      {
+        "name": "scripts/modules/handoff/validation/validator-registry/gates/gate-1-plan-to-exec.js",
+        "change": "prdQualityValidation now builds and supplies measured"
+      },
+      {
+        "name": "scripts/modules/handoff/HandoffOrchestrator.js",
+        "change": "PLAN-TO-EXEC precheck display prints the measured line when present"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Already shipped via QF-20260903-379 / PR #8682 (merged, commit 01ac0ae796b) before this SD existed; this SD is a retroactive verification record required because the diff touched a sensitive gate-criteria path.",
+    "steps": [
+      "Re-verify the ticket's own premise (all 4 named sibling instances already fixed) from git history alone, independent of the escalating commit's own claim.",
+      "Re-derive each of the 3 functional requirements against the repo at HEAD (not the commit message) via an Explore sub-agent.",
+      "Confirm the 2 new/updated test suites pass 20/20 and the 7 regression suites touching the 3 changed modules pass 124/124.",
+      "Confirm the 2 flagged lint findings predate this change by diff-hunk location, not merely by git-stash provenance.",
+      "Drive this SD through PLAN-TO-EXEC / EXEC-TO-PLAN / PLAN-TO-LEAD / LEAD-FINAL-APPROVAL citing the already-shipped evidence, then link QF-20260903-379's escalated_to_sd_id record to completion."
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run `npx vitest run tests/unit/governance/verdict-measured-provenance.test.js tests/unit/plan-to-exec/gate1-prd-quality-leniency.test.js`",
+      "expected_outcome": "2 test files, 20 tests, all passing."
+    },
+    {
+      "step_number": 2,
+      "instruction": "Read lib/governance/verdict-measured-provenance.js and scripts/modules/handoff/validation/validator-registry/core.js at HEAD",
+      "expected_outcome": "normalizeResult's return is an explicit literal with a conditional spread for measured that adds zero keys when absent; the new module exports hasMeasuredProvenance and formatMeasuredLine as pure, null-safe functions."
+    },
+    {
+      "step_number": 3,
+      "instruction": "Grep the repo for the literal shape `measured:\\s*\\{` outside the new module and its test",
+      "expected_outcome": "No other existing gate already emits this contract -- it is genuinely new, not a duplicate."
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-FOUR-GATES-RETURNED-001",
+    "source_qf_id": "QF-20260903-379",
+    "shipped_pr": "https://github.com/rickfelix/EHG_Engineer/pull/8682",
+    "shipped_commit": "01ac0ae796b",
+    "retroactive_verification": true,
+    "sibling_tickets_reverified": ["QF-20260903-722", "QF-20260903-020", "QF-20260903-822", "QF-20260903-239"]
+  }
+}
