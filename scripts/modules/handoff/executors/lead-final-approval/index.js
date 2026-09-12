@@ -14,6 +14,7 @@ import ResultBuilder from '../../ResultBuilder.js';
 import { runPreflightRetroCheck } from '../../retro-filters.js';
 import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
 import { deriveBypassAwareRecordFields, buildPersistedBypassMetadata } from '../../../../../lib/handoff/bypass-stamp.js';
+import { runPostWriteStage, POST_WRITE_STAGE_TIMEOUT_EXIT_CODE } from '../../../../../lib/completion/post-write-stage.js';
 
 /**
  * Project the orchestrator's per-gate results into a compact, queryable shape for persistence
@@ -902,7 +903,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     }
 
     // Resolve patterns/improvements if this SD was created from /learn
-    await resolveLearningItems(sd, this.supabase);
+    // QF-20260912-150: the SD's completion stamp already persisted -- a hang here must never
+    // block the caller past its external kill timeout. runPostWriteStage bounds it and marks
+    // a distinct exit code instead of hanging -- see lib/completion/post-write-stage.js.
+    const learningItemsStage = await runPostWriteStage('resolveLearningItems', () => resolveLearningItems(sd, this.supabase));
+    if (learningItemsStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+    else if (!learningItemsStage.ok) console.warn(`   ⚠️  resolveLearningItems failed (non-blocking): ${learningItemsStage.error?.message || learningItemsStage.error}`);
 
     // SD-LEO-INFRA-ACTIVATE-CAPABILITY-SCORING-001 (FR-4): score the SD's freshly
     // registered capabilities (maturity/extraction -> trigger recomputes plane1_score)
@@ -936,7 +942,10 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001: Auto-rescore after corrective SD completion
     // If this SD was created to fix a vision gap (has vision_origin_score_id), re-score the
     // original SD to measure whether the gap was closed.
-    await rescoreOriginalSD(sd, this.supabase);
+    // QF-20260912-150: same unbounded-await gap as resolveLearningItems above.
+    const rescoreStage = await runPostWriteStage('rescoreOriginalSD', () => rescoreOriginalSD(sd, this.supabase));
+    if (rescoreStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+    else if (!rescoreStage.ok) console.warn(`   ⚠️  rescoreOriginalSD failed (non-blocking): ${rescoreStage.error?.message || rescoreStage.error}`);
 
     // SD-LEO-INFRA-PR-TRACKING-BACKFILL-001: Populate canonical PR-to-SD join row.
     // Looks up the latest merged PR for this SD's branch and inserts a row into
@@ -985,7 +994,12 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // SD-LEO-INFRA-PROGRAMMATIC-TOOL-CALLING-001: Auto-populate retrospective via programmatic scorer.
     // Generates SD-specific insights with real file references — avoids RETROSPECTIVE_QUALITY_GATE failures.
     // Fail-safe: non-blocking, never prevents SD completion.
-    await runProgrammaticRetrospective(sd);
+    // QF-20260912-150: same unbounded-await gap as resolveLearningItems/rescoreOriginalSD above
+    // (the function's own internal spawnSync has a 60s timeout, but anything awaited before it
+    // runs is not covered by that bound).
+    const retroStage = await runPostWriteStage('runProgrammaticRetrospective', () => runProgrammaticRetrospective(sd));
+    if (retroStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+    else if (!retroStage.ok) console.warn(`   ⚠️  runProgrammaticRetrospective failed (non-blocking): ${retroStage.error?.message || retroStage.error}`);
 
     // SD-LEO-INFRA-AUTO-ENFORCE-POST-001 (FR-001): record the post-completion
     // ceremony tail (/document, /heal, /learn) this SD type requires into
@@ -1021,7 +1035,10 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     );
 
     // Release the session claim
-    await releaseSessionClaim(sd, this.supabase);
+    // QF-20260912-150: same unbounded-await gap as the steps above.
+    const releaseClaimStage = await runPostWriteStage('releaseSessionClaim', () => releaseSessionClaim(sd, this.supabase));
+    if (releaseClaimStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+    else if (!releaseClaimStage.ok) console.warn(`   ⚠️  releaseSessionClaim failed (non-blocking): ${releaseClaimStage.error?.message || releaseClaimStage.error}`);
 
     // SD-LEO-ENH-AUTO-PROCEED-001-04: Clear AUTO-PROCEED state on SD completion
     // Only clear for top-level SDs; child SDs retain state for continuation
@@ -1112,7 +1129,13 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     }
 
     if (sd.parent_sd_id) {
-      const parentInfo = await checkAndCompleteParentSD(sd, this.supabase, { shippingResults });
+      // QF-20260912-150: same unbounded-await gap as the steps above. On timeout, fall back to
+      // the function's own documented "no completion" default shape ({orchestratorCompleted:
+      // false}) rather than leaving parentInfo undefined for the field accesses below.
+      const parentStage = await runPostWriteStage('checkAndCompleteParentSD', () => checkAndCompleteParentSD(sd, this.supabase, { shippingResults }));
+      if (parentStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+      else if (!parentStage.ok) console.warn(`   ⚠️  checkAndCompleteParentSD failed (non-blocking): ${parentStage.error?.message || parentStage.error}`);
+      const parentInfo = parentStage.ok ? parentStage.result : { orchestratorCompleted: false };
       if (orchestratorChainingInfo.orchestratorCompleted) {
         // This SD's own orchestrator-completion chaining wins; parent staging info augments it.
         if (parentInfo.parentRoutedToLeadFinal) {
