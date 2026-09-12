@@ -207,6 +207,63 @@ describe('Publisher', () => {
     expect(result.success).toBe(true);
     expect(result.deduplicated).toBe(true);
   });
+
+  // SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001 FR-1 (TS-1, unit form): the
+  // ledger-to-campaign_content join the outcome observer depends on is dead by
+  // construction on the approval-gated (propose_and_approve) path unless
+  // campaign_content is keyed on authCheck.correlationId -- the ORIGINAL
+  // propose-time correlation_id -- rather than a fresh per-call idempotencyKey.
+  // This drives the real two-attempt sequence (attempt 1 denied+pending,
+  // attempt 2 approved+dispatched) against the existing table-aware mock, never
+  // a real DB (describeDb is unconditionally inert in this repo).
+  it('keys the campaign_content dispatch on the propose-time correlation_id, not a fresh per-call key (FR-1 root-cause fix)', async () => {
+    const attempt1Supabase = createMockSupabase({
+      venture_channel_autonomy: { maybeSingle: { data: { autonomy_state: 'propose_and_approve' }, error: null } },
+      venture_channel_publish_ledger: { maybeSingle: { data: null, error: null } }
+    });
+
+    const denied = await publish({
+      supabase: attempt1Supabase,
+      content: { id: 'c-1', body: 'Test' },
+      platform: 'x',
+      ventureId: 'v-1'
+    });
+    expect(denied.success).toBe(false);
+    expect(denied.blockedBy).toBe('autonomy-gate');
+
+    // Attempt 2: the chairman has since approved -- checkPublishAuthorization's
+    // "already accepted" branch now finds the ledger row and returns ITS
+    // correlation_id (the propose-time key), which is durably different from
+    // whatever fresh idempotencyKey this second publish() call builds locally.
+    const PROPOSE_TIME_CORRELATION_ID = 'v-1:x:c-1:1700000000';
+    const attempt2Supabase = createMockSupabase({
+      venture_channel_autonomy: { maybeSingle: { data: { autonomy_state: 'propose_and_approve' }, error: null } },
+      venture_channel_publish_ledger: {
+        maybeSingle: { data: { id: 'ledger-1', correlation_id: PROPOSE_TIME_CORRELATION_ID }, error: null }
+      }
+    });
+
+    const approved = await publish({
+      supabase: attempt2Supabase,
+      content: { id: 'c-1', body: 'Test' },
+      platform: 'x',
+      ventureId: 'v-1',
+      campaignId: 'camp-1'
+    });
+    expect(approved.success).toBe(true);
+    expect(approved.mode).toBe('real');
+
+    // Find the campaign_content chain whose .upsert was actually invoked (the
+    // dedup-check call on the same table only ever invokes .select/.limit).
+    const campaignContentCalls = attempt2Supabase.from.mock.results
+      .filter((r, i) => attempt2Supabase.from.mock.calls[i][0] === 'campaign_content');
+    const upsertChain = campaignContentCalls.map(r => r.value).find(chain => chain.upsert.mock.calls.length > 0);
+    expect(upsertChain).toBeDefined();
+    expect(upsertChain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotency_key: PROPOSE_TIME_CORRELATION_ID }),
+      expect.anything()
+    );
+  });
 });
 
 describe('Publisher — SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C FR-3/FR-6 hard gates', () => {
