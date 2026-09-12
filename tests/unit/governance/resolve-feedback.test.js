@@ -16,28 +16,38 @@ const RESOLVE_FB_SRC = fs.readFileSync(
 const VALID_UUID_1 = '6639e063-b269-4dd0-bfef-fabd8ef0fc09';
 const VALID_UUID_2 = '8ccd01b1-5e60-4c79-8280-20967e515580';
 
-function makeMockSupabase({ updateRows = [], updateError = null } = {}) {
+// SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: resolveFeedback() now resolves the latest row in a
+// correction chain (fetchLatestFeedback: one .eq().maybeSingle() + one .or().order().order()
+// .limit().maybeSingle()) before inserting a correction (never .update()). This mock supports
+// both read shapes plus the insert.
+function makeMockSupabase({ existingRow = null, latestRow = undefined, fetchError = null, insertError = null } = {}) {
+  const captured = { table: null, insert: null, fetchedIds: [] };
+  const resolvedLatest = latestRow === undefined ? existingRow : latestRow;
   const mock = {
-    _captured: { table: null, update: null, eqs: [], neq: null, select: null },
+    _captured: captured,
     from(table) {
-      mock._captured.table = table;
-      return mock;
-    },
-    update(payload) {
-      mock._captured.update = payload;
-      return mock;
-    },
-    eq(column, value) {
-      mock._captured.eqs.push({ column, value });
-      return mock;
-    },
-    neq(column, value) {
-      mock._captured.neq = { column, value };
-      return mock;
-    },
-    select(cols) {
-      mock._captured.select = cols;
-      return Promise.resolve({ data: updateRows, error: updateError });
+      captured.table = table;
+      return {
+        select: () => ({
+          eq: (col, val) => {
+            captured.fetchedIds.push(val);
+            return { maybeSingle: async () => ({ data: existingRow, error: fetchError }) };
+          },
+          or: () => ({
+            order: () => ({
+              order: () => ({
+                limit: () => ({
+                  maybeSingle: async () => ({ data: resolvedLatest, error: fetchError }),
+                }),
+              }),
+            }),
+          }),
+        }),
+        insert: (payload) => {
+          captured.insert = payload;
+          return Promise.resolve({ error: insertError });
+        },
+      };
     },
   };
   return mock;
@@ -65,7 +75,7 @@ describe('parseFeedbackFooters', () => {
   });
 
   it('rejects malformed UUID (too short)', () => {
-    const text = `Closes feedback abcd-1234\n`;
+    const text = 'Closes feedback abcd-1234\n';
     expect(parseFeedbackFooters(text)).toEqual([]);
   });
 
@@ -114,31 +124,50 @@ describe('parseFeedbackFooters', () => {
   });
 });
 
-describe('resolveFeedback', () => {
-  it('returns { updated: true, id } when the UPDATE matched a non-resolved row', async () => {
-    const sb = makeMockSupabase({ updateRows: [{ id: VALID_UUID_1 }] });
+const openRow = (over = {}) => ({
+  id: VALID_UUID_1,
+  status: 'new',
+  type: 'issue',
+  created_at: '2026-01-01T00:00:00.000Z',
+  metadata: {},
+  ...over,
+});
+
+describe('resolveFeedback (SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: insert-correction, never UPDATE)', () => {
+  it('TS-9/TS-10: returns { updated: true, id } and issues an INSERT (never .update()) when the resolved chain-tip is not yet resolved', async () => {
+    const sb = makeMockSupabase({ existingRow: openRow() });
     const result = await resolveFeedback({ supabase: sb, feedbackId: VALID_UUID_1, quickFixId: 'QF-X', notes: 'ship via QF-X' });
     expect(result).toEqual({ updated: true, id: VALID_UUID_1 });
     expect(sb._captured.table).toBe('feedback');
-    expect(sb._captured.update.status).toBe('resolved');
-    expect(sb._captured.update.quick_fix_id).toBe('QF-X');
-    expect(sb._captured.update.resolution_notes).toBe('ship via QF-X');
-    expect(sb._captured.neq).toEqual({ column: 'status', value: 'resolved' });
+    expect(sb._captured.insert).toBeTruthy();
+    expect(sb._captured.insert.status).toBe('resolved');
+    expect(sb._captured.insert.quick_fix_id).toBe('QF-X');
+    expect(sb._captured.insert.resolution_notes).toBe('ship via QF-X');
+    expect(sb._captured.insert.id).toBeUndefined();
   });
 
-  it('returns idempotent {updated:false, reason:"no_row_or_already_resolved"} when zero rows match', async () => {
-    const sb = makeMockSupabase({ updateRows: [] });
+  it('TS-10: returns the pinned reason string byte-identical when the resolved chain-tip is already resolved, and issues no INSERT', async () => {
+    const sb = makeMockSupabase({ existingRow: openRow({ status: 'resolved' }) });
     const result = await resolveFeedback({ supabase: sb, feedbackId: VALID_UUID_1 });
     expect(result.updated).toBe(false);
     expect(result.reason).toBe('no_row_or_already_resolved');
     expect(result.error).toBeUndefined();
+    expect(sb._captured.insert).toBeNull();
   });
 
-  it('returns {updated:false, error} on DB error (does not throw)', async () => {
-    const sb = makeMockSupabase({ updateError: { message: 'connection refused' } });
+  it('fail-closed: a fetchLatestFeedback error returns {updated:false, error} and issues no INSERT (never falls back to the stale row)', async () => {
+    const sb = makeMockSupabase({ existingRow: openRow(), fetchError: { message: 'connection refused' } });
     const result = await resolveFeedback({ supabase: sb, feedbackId: VALID_UUID_1 });
     expect(result.updated).toBe(false);
     expect(result.error).toBe('connection refused');
+    expect(sb._captured.insert).toBeNull();
+  });
+
+  it('returns {updated:false, error} when the INSERT itself fails (does not throw)', async () => {
+    const sb = makeMockSupabase({ existingRow: openRow(), insertError: { message: 'insert rejected' } });
+    const result = await resolveFeedback({ supabase: sb, feedbackId: VALID_UUID_1 });
+    expect(result.updated).toBe(false);
+    expect(result.error).toBe('insert rejected');
   });
 
   it('rejects malformed feedbackId', async () => {
@@ -163,25 +192,25 @@ describe('resolveFeedback', () => {
   });
 
   it('does NOT add quick_fix_id / resolution_sd_id / resolution_notes when not supplied', async () => {
-    const sb = makeMockSupabase({ updateRows: [{ id: VALID_UUID_1 }] });
+    const sb = makeMockSupabase({ existingRow: openRow() });
     await resolveFeedback({ supabase: sb, feedbackId: VALID_UUID_1 });
-    expect(sb._captured.update.quick_fix_id).toBeUndefined();
-    expect(sb._captured.update.resolution_sd_id).toBeUndefined();
-    expect(sb._captured.update.resolution_notes).toBeUndefined();
-    expect(sb._captured.update.status).toBe('resolved');
-    expect(sb._captured.update.resolved_at).toBeDefined();
+    expect(sb._captured.insert.quick_fix_id).toBeUndefined();
+    expect(sb._captured.insert.resolution_sd_id).toBeUndefined();
+    expect(sb._captured.insert.resolution_notes).toBeUndefined();
+    expect(sb._captured.insert.status).toBe('resolved');
+    expect(sb._captured.insert.resolved_at).toBeDefined();
   });
 
   // QF-20260902-882: resolution_type is a real feedback column (no CHECK enum) that
   // callers may want to set for auditability, alongside the already-supported fields.
   it('sets resolution_type when supplied, omits it when not', async () => {
-    const sb = makeMockSupabase({ updateRows: [{ id: VALID_UUID_1 }] });
+    const sb = makeMockSupabase({ existingRow: openRow() });
     await resolveFeedback({ supabase: sb, feedbackId: VALID_UUID_1, resolutionType: 'chairman_decision_applied' });
-    expect(sb._captured.update.resolution_type).toBe('chairman_decision_applied');
+    expect(sb._captured.insert.resolution_type).toBe('chairman_decision_applied');
 
-    const sb2 = makeMockSupabase({ updateRows: [{ id: VALID_UUID_1 }] });
+    const sb2 = makeMockSupabase({ existingRow: openRow() });
     await resolveFeedback({ supabase: sb2, feedbackId: VALID_UUID_1 });
-    expect(sb2._captured.update.resolution_type).toBeUndefined();
+    expect(sb2._captured.insert.resolution_type).toBeUndefined();
   });
 });
 
@@ -234,7 +263,7 @@ describe('parseAndExpandFeedbackFooters', () => {
 
   it('expands an 8-char short ID with a unique DB match', async () => {
     const sb = makeLookupSupabase({ rowsByRange: { 'acd4e5ab': [{ id: 'acd4e5ab-1111-2222-3333-444444444444' }] } });
-    const text = `body\n\nCloses feedback acd4e5ab\n`;
+    const text = 'body\n\nCloses feedback acd4e5ab\n';
     const result = await parseAndExpandFeedbackFooters({ text, supabase: sb });
     expect(result.uuids).toEqual(['acd4e5ab-1111-2222-3333-444444444444']);
     expect(result.warnings).toEqual([]);
@@ -247,7 +276,7 @@ describe('parseAndExpandFeedbackFooters', () => {
         { id: '12345678-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
       ] },
     });
-    const text = `Closes feedback 12345678\n`;
+    const text = 'Closes feedback 12345678\n';
     const result = await parseAndExpandFeedbackFooters({ text, supabase: sb });
     expect(result.uuids).toEqual([]);
     expect(result.warnings.length).toBe(1);
@@ -257,7 +286,7 @@ describe('parseAndExpandFeedbackFooters', () => {
 
   it('warn-skips short ID with no match', async () => {
     const sb = makeLookupSupabase({});
-    const text = `Closes feedback deadbeef\n`;
+    const text = 'Closes feedback deadbeef\n';
     const result = await parseAndExpandFeedbackFooters({ text, supabase: sb });
     expect(result.uuids).toEqual([]);
     expect(result.warnings.length).toBe(1);
@@ -276,14 +305,14 @@ describe('parseAndExpandFeedbackFooters', () => {
 
   it('silently drops non-hex / wrong-length tokens (e.g. 7-char, 12-char no-dashes)', async () => {
     const sb = makeLookupSupabase({});
-    const text = `Closes feedback abcdef0\nCloses feedback abcdef0123ab\nCloses feedback zzzzzzzz\n`;
+    const text = 'Closes feedback abcdef0\nCloses feedback abcdef0123ab\nCloses feedback zzzzzzzz\n';
     const result = await parseAndExpandFeedbackFooters({ text, supabase: sb });
     expect(result.uuids).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
 
   it('returns warning if short IDs are present but no supabase is supplied', async () => {
-    const text = `Closes feedback acd4e5ab\n`;
+    const text = 'Closes feedback acd4e5ab\n';
     const result = await parseAndExpandFeedbackFooters({ text });
     expect(result.uuids).toEqual([]);
     expect(result.warnings.length).toBe(1);

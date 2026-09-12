@@ -13,6 +13,7 @@ import {
   validateReferences,
   ERROR_CODES
 } from '../../lib/quality/feedback-resolution-validator.js';
+import { fetchLatestFeedback, buildFeedbackCorrection } from '../../lib/governance/feedback-correction.js';
 
 const router = Router();
 
@@ -31,17 +32,16 @@ router.post('/:id/promote-to-sd', async (req, res) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    // Get the feedback item
-    const { data: feedback, error: fetchError } = await dbLoader.supabase
-      .from('feedback')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !feedback) {
-      console.error('❌ Feedback not found:', fetchError?.message || 'No data');
+    // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: public.feedback is append-only. Resolve to the
+    // LATEST row in the correction chain (never trust the raw :id row for the idempotency
+    // guard below, which may already be stale) -- a resolution error is fail-closed, not
+    // silently treated as "not yet promoted".
+    const latestResult = await fetchLatestFeedback(dbLoader.supabase, id);
+    if (latestResult.error) {
+      console.error('❌ Feedback not found:', latestResult.error);
       return res.status(404).json({ error: 'Feedback not found' });
     }
+    const feedback = latestResult.row;
 
     // Check if already promoted
     if (feedback.resolution_sd_id) {
@@ -54,13 +54,16 @@ router.post('/:id/promote-to-sd', async (req, res) => {
     }
 
     // SD-LEO-INFRA-WIRE-FEEDBACK-QUALITY-001: Vetting gate before SD promotion
-    // Quality score must meet minimum threshold for promotion
-    if (feedback.quality_score != null && feedback.quality_score < 40) {
-      console.log(`⚠️ [SERVER] Feedback ${id} blocked: quality_score ${feedback.quality_score} < 40`);
+    // Quality score must meet minimum threshold for promotion.
+    // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: feedback.quality_score does not exist on the
+    // table (real columns are rubric_score/quality_assessment) -- this gate has always been
+    // a silent no-op. Corrected to read rubric_score.
+    if (feedback.rubric_score != null && feedback.rubric_score < 40) {
+      console.log(`⚠️ [SERVER] Feedback ${id} blocked: rubric_score ${feedback.rubric_score} < 40`);
       return res.status(422).json({
         error: 'Feedback quality too low for SD promotion',
         code: 'QUALITY_GATE_FAILED',
-        quality_score: feedback.quality_score,
+        quality_score: feedback.rubric_score,
         threshold: 40,
         message: 'Improve feedback quality before promoting to SD. Add details, reproduction steps, or impact assessment.'
       });
@@ -113,18 +116,24 @@ router.post('/:id/promote-to-sd', async (req, res) => {
       return res.status(500).json({ error: 'Failed to create Strategic Directive', details: insertError.message });
     }
 
-    // Update the feedback with the SD reference
-    const { error: updateError } = await dbLoader.supabase
-      .from('feedback')
-      .update({
-        resolution_sd_id: newSD.sd_key,
-        status: 'triaged',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
+    // Record the feedback -> SD link as a correction (feedback is append-only; UPDATE is
+    // rejected unconditionally). SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A / TS-12: a failed
+    // correction-insert now returns an error response instead of silently warn-and-succeeding
+    // -- the old warn-only path let a repeat click mint a second SD, because the idempotency
+    // guard above never saw resolution_sd_id land on a failed write.
+    const correctionPayload = buildFeedbackCorrection(feedback, {
+      resolution_sd_id: newSD.sd_key,
+      status: 'triaged',
+    });
+    const { error: correctionError } = await dbLoader.supabase.from('feedback').insert(correctionPayload);
 
-    if (updateError) {
-      console.error('⚠️ Failed to update feedback with SD reference:', updateError.message);
+    if (correctionError) {
+      console.error('❌ Failed to record feedback -> SD correction:', correctionError.message);
+      return res.status(500).json({
+        error: 'Strategic Directive created, but failed to record the feedback link',
+        sd_id: newSD.sd_key,
+        details: correctionError.message,
+      });
     }
 
     console.log(`✅ [SERVER] Created SD ${newSD.sd_key} from feedback ${id}`);
@@ -189,19 +198,17 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(400).json({ error: 'status field is required' });
     }
 
-    // Fetch existing feedback for merge validation
-    const { data: existing, error: fetchError } = await dbLoader.supabase
-      .from('feedback')
-      .select('*')
-      .eq('id', id)
-      .single();
-
-    if (fetchError || !existing) {
+    // Fetch existing feedback for merge validation. SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A:
+    // resolve to the LATEST row in the correction chain (never trust the raw :id row, which
+    // may already be stale) -- a resolution error is fail-closed, not treated as "not found".
+    const latestResult = await fetchLatestFeedback(dbLoader.supabase, id);
+    if (latestResult.error) {
       return res.status(404).json({
         error: 'Feedback not found',
         code: ERROR_CODES.FEEDBACK_REFERENCE_NOT_FOUND
       });
     }
+    const existing = latestResult.row;
 
     const updateData = { status };
     if (resolution_sd_id !== undefined) updateData.resolution_sd_id = resolution_sd_id;
@@ -232,16 +239,14 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(422).json(refValidation.error);
     }
 
-    // Persist the update
-    updateData.updated_at = new Date().toISOString();
-    const { error: updateError } = await dbLoader.supabase
-      .from('feedback')
-      .update(updateData)
-      .eq('id', id);
+    // Persist the change as a correction (feedback is append-only; UPDATE is rejected
+    // unconditionally).
+    const correctionPayload = buildFeedbackCorrection(existing, updateData);
+    const { error: correctionError } = await dbLoader.supabase.from('feedback').insert(correctionPayload);
 
-    if (updateError) {
-      console.error(`[feedback] Failed to update ${id}:`, updateError.message);
-      return res.status(500).json({ error: 'Failed to update feedback', details: updateError.message });
+    if (correctionError) {
+      console.error(`[feedback] Failed to record correction for ${id}:`, correctionError.message);
+      return res.status(500).json({ error: 'Failed to update feedback', details: correctionError.message });
     }
 
     res.json({ success: true, id, status, message: `Feedback status updated to '${status}'` });

@@ -10,15 +10,28 @@ import LeadFinalApprovalExecutor from '../../../scripts/modules/handoff/executor
 
 const UUID = 'cd74b43c-42fa-4cb7-8651-10ff06763bf3';
 
+// SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: resolveFeedback() now resolves the chain-tip via
+// fetchLatestFeedback (an .eq().maybeSingle() base fetch + an .or().order().order().limit()
+// .maybeSingle() root-scoped fetch) and inserts a correction instead of calling .update().
 function makeFakeSupabase(captured) {
-  const chain = {
-    update(obj) { captured.push(obj); return chain; },
-    eq() { return chain; },
-    neq() { return chain; },
-    // resolveFeedback ends in .select('id'); non-empty data => updated:true
-    select() { return Promise.resolve({ data: [{ id: UUID }], error: null }); },
+  const openRow = { id: UUID, status: 'new', type: 'issue', created_at: '2026-01-01T00:00:00.000Z', metadata: {} };
+  return {
+    from() {
+      return {
+        select: () => ({
+          eq: () => ({ maybeSingle: async () => ({ data: openRow, error: null }) }),
+          or: () => ({
+            order: () => ({
+              order: () => ({
+                limit: () => ({ maybeSingle: async () => ({ data: openRow, error: null }) }),
+              }),
+            }),
+          }),
+        }),
+        insert: (obj) => { captured.push(obj); return Promise.resolve({ error: null }); },
+      };
+    },
   };
-  return { from() { return chain; } };
 }
 
 describe('CAPA-1 resolveFeedbackFooters: footer-referenced rows get resolved', () => {
