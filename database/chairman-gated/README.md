@@ -1339,3 +1339,43 @@ unlike `feedback`, TRUNCATE hits this migration's own trigger directly.
 **Both migrations depend on the same SD's FR-1 census** (the write-caller census document above) —
 review it before applying either, and before extending this pattern to any of the deferred
 candidate tables it names.
+
+## Applying `20260911_chairman_ratification_verifications.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260911_chairman_ratification_verifications.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260911_chairman_ratification_verifications_DOWN.sql` (drops the four triggers, their
+four functions, the service_role policy, then the table itself — in that order).
+
+(SD-LEO-INFRA-RATIFICATION-ENCODE-VERIFICATION-001.) Creates `chairman_ratification_verifications`,
+an append-only ledger (`freeze`/`no_delete`/`no_truncate` + stamp-`verified_at` triggers,
+`ENABLE ALWAYS TRIGGER`, same posture as `chairman_ratifications` and
+`solomon_ledger_attestations`) that records every attempt to verify a ratification's `encoded_ref`
+marker against a pinned commit — never the encode decision itself, only its verification audit
+trail. Each row carries `producer`/`run_id`/`file_sha256`/`marker_sha256` provenance and one of five
+`outcome`s (`verified`, `marker_absent`, `no_commit_pin`, `unverifiable_infrastructure`,
+`not_applicable`), gated by CHECK constraints that admit a NULL `pin_tier` only for the two
+outcomes where no tree was ever read.
+
+The sole write path is `lib/chairman/ratification-verification-store.mjs`'s
+`recordVerificationAttempt` — it degrades to `{recorded:false}` (never throws) if this table does
+not exist yet, so `lib/chairman/ratification-writer.mjs`'s `markRatificationEncoded` never depended
+on this migration landing to keep encoding: recording is best-effort, not a gate. Two callers:
+the live encode path (`markRatificationEncoded`, `attempt_kind='live_encode'`), and a one-off
+legacy-row audit, `scripts/one-off/backfill-ratification-verification-audit-20260911.mjs` — a
+dry-run-by-default script classifying every already-encoded `chairman_ratifications` row against
+its OWN historical `encoded_at` (never "now"), recording `attempt_kind='legacy_backfill_audit'`.
+Delete that one-off script after its single successful `--apply` run, per this repo's one-off
+convention.
+
+**Deliberately not part of this SD's own OPERATOR_CONTRACT triple** (same reasoning as
+`chairman_ratifications` above): `scripts/one-off/ratification-verification-audit-001-operator-
+contract-waiver.mjs` recorded an armed_cadence/reaper waiver (expires 2026-11-24) — nothing to
+arm a cadence against until this table is live, and a reaper/TTL is semantically wrong for a
+permanent, INSERT-only verification-attempt audit trail whose own triggers would block it anyway.
+Run the one-off backfill script once, manually, after this migration is applied.
