@@ -1,8 +1,8 @@
-<!-- file_content_hash: c4a4b36ed7e8bf11 -->
+<!-- file_content_hash: 06f2f2a4b4b835c2 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-11 6:54:28 AM
+**Generated**: 2026-09-12 12:14:29 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -106,7 +106,7 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 ## Coordinator loop-registry governance (STANDARD_LOOPS)
 
-**The coordinator's operational heartbeat is governed, not ad hoc.** All 37 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
+**The coordinator's operational heartbeat is governed, not ad hoc.** All 38 of the coordinator's session-cron loops are registered in `scripts/coordinator-startup-check.mjs`'s `STANDARD_LOOPS` array — the ONLY place a loop's cadence, GHA-backing, or session-arming status is defined. **Loop changes land in the registry, never ad hoc** — a loop added, removed, or rescheduled outside this array is invisible to the coordinator's own startup check and to `.claude/commands/coordinator.md`'s "arm exactly the set this script emits" instruction.
 
 **2026-08-22 cron ruling (operator commission 60153bf2, encoded QF-20260822-510):** 7 of the 34 loops (`sweep`, `unranked-gauge`, `relay-drop-gauge`, `fleet-retro`, `row-growth`, `gauge-runner`, `feedback-sla`) carry `session_arm: false` — GHA-backed only, dropped from the session-armed set. Three GHA-backed loops (`relay-drain`, `sms-relay-drain`, `sms-status-relay-drain`) are a deliberate carve-out and remain session-armed. **Reversal condition** (through 2026-08-25T22:00:00Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, re-arm it as session-owned pending re-review.
 
@@ -119,6 +119,8 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 **2026-08-30 addition (SD-LEO-INFRA-ORPHAN-WRITERS-REGISTRY-001, FR-5):** `orphan-writers-triage` was registered (weekly, `20 9 * * 1`) to run `scripts/orphan-writers-count.mjs` + `scripts/orphan-writers-notify.mjs` — the SD's own registry-completeness triage pass now has a real invoker (VALIDATION sub-agent finding V-2: without this cron entry the pass's self-registered `periodic_process_registry` row had no way to ever be stamped, making the registry the fourth orphan specimen it exists to prevent).
 
 **2026-09-01 addition (SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A):** two entries added -- `index-jam-detector` (activates `standard_loop:index-jam-detector`, inert 35 days despite its own `activation_note` demanding this exact scheduler entry) and `safe-root-resync-fetch-ff-merge` (schedules ONLY the fetch+ff-merge half of `resync:safe`, never the clear-stale-index-lock step, per the parent SD's git-flow-expert refinement). Total loop count 35 -> 37.
+
+**2026-09-11 addition (QF-20260911-080):** `drain-inventory` was registered (daily, `0 10 * * *`, GHA-backed via `.github/workflows/drain-inventory-cron.yml`) to invoke `scripts/drain-inventory.mjs` -- its `periodic_process_registry` row (`standard_loop:drain-inventory`, `currently_expected_active=true`) had NO invoker anywhere (not in STANDARD_LOOPS, no workflow, no scheduled task) for months; every `last_fired_at` stamp was a hand run. The script also gained its own `dotenv/config` preload, which every sibling cron `.mjs` already self-loads but this one did not. Total loop count 37 -> 38, gha_backed count 16 -> 17.
 
 ## Triangulation Audit — coordinator duties (answerer every cycle, resolver on rotation)
 
@@ -181,6 +183,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-11*
+*Generated from database: 2026-09-12*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*
