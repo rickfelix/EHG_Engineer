@@ -1,0 +1,102 @@
+{
+  "executive_summary": "Child F of orchestrator SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001 fixes 6 feedback-table .update() call sites in the SD/QF completion tail and coordinator/chairman resolution flows, all broken by the live append-only trigger on public.feedback (database/chairman-gated/20260907_feedback_immutability_trigger.sql). PLAN-phase re-verification of the highest-priority site (lib/learning/outcome-tracker.js) corrected the parent orchestrator's risk framing: both of its update() calls (lines 176-183 bulk-resolve, 191-197 backfill) throw on error, but BOTH of its two callers (scripts/modules/handoff/executors/lead-final-approval/index.js:868-878 and scripts/modules/complete-quick-fix/orchestrator.js:1172-1178) already wrap the call in try/catch and log a warning rather than aborting the completion. This is a silent DATA-QUALITY gap (feedback rows never get status='resolved'/resolution_sd_id recorded on every SD/QF completion), not a completion-blocking crash as the parent's initial audit implied -- still high-value to fix given its every-completion reach, but not an emergency.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Fix lib/learning/outcome-tracker.js's two feedback.update() call sites",
+      "description": "Lines 176-183 (bulk status='resolved'+resolved_at+resolution_sd_id transition) and 191-197 (resolution_sd_id backfill), both keyed on .in('id', ids), currently throw on the append-only trigger rejection. Replace with an insert-based correction: for each affected feedback row, insert a NEW feedback row (or a dedicated small linkage table if a bulk multi-row correction doesn't fit the single-row insert-with-pointer shape cleanly) recording the resolution outcome, rather than mutating the original row. Confirmed callers already fail-soft (try/catch + warn), so this fix restores DATA CAPTURE, it does not unblock a currently-blocked completion path.",
+      "priority": "high",
+      "acceptance_criteria": ["A real or faithfully simulated SD/QF completion through both callers records the outcome data with 0 'Outcome loop closure failed' / 'Outcome-tracker record skipped' warnings in the logs"]
+    },
+    {
+      "id": "FR-2",
+      "title": "Fix scripts/modules/handoff/executors/lead-final-approval/index.js's feedback.update() call site",
+      "description": "L1579-1588 batch-sets status='resolved'+resolved_at/resolution_notes via .in('id', ...) in the core LEAD-FINAL-APPROVAL executor. Convert to the insert-with-supersedes-pointer pattern (QF-20260911-515 precedent).",
+      "priority": "high",
+      "acceptance_criteria": ["A real LEAD-FINAL-APPROVAL run resolves its linked feedback rows via the new pattern with 0 append-only trigger errors"]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fix lib/sub-agents/retro/db-operations.js's feedback.update() call site",
+      "description": "L660-666 bulk-sets status='acknowledged'+resolution_notes+updated_at, fail-soft, part of the SD completion/retro flow. Convert to the insert-with-pointer pattern.",
+      "priority": "medium",
+      "acceptance_criteria": ["A retro-generation run acknowledges its linked feedback rows via the new pattern with 0 append-only trigger errors"]
+    },
+    {
+      "id": "FR-4",
+      "title": "Fix lib/coordinator/pending-question-timer.cjs and lib/chairman/classifier-denial-guard.mjs feedback.update() call sites",
+      "description": "pending-question-timer.cjs L258-267 sets status='resolved'+resolved_at+resolution_notes+metadata (guarded on eq(status,'new'), flag-gated coordinator tick); classifier-denial-guard.mjs L190-194 sets status='resolved'+resolution_notes+resolved_at on matched completion_flag_finding rows (post-approval hook via chairman-decisions.mjs). Convert both to the insert-with-pointer pattern.",
+      "priority": "medium",
+      "acceptance_criteria": ["Both sites verified via their real trigger path (a coordinator tick; a chairman-decision approval) with 0 append-only trigger errors"]
+    },
+    {
+      "id": "FR-5",
+      "title": "Assess lib/learning/feedback-clusterer.js (low priority, orphaned)",
+      "description": "L296 bulk-sets cluster_processed_at. Confirmed at parent-audit time to be an orphaned standalone CLI, not imported anywhere and not wired into package.json or any clockwork loop. Re-confirm this at PLAN phase (it may since have been wired up); fix with the same pattern if live, or explicitly document as dead/deprioritized if still orphaned.",
+      "priority": "low",
+      "acceptance_criteria": ["Reachability re-confirmed; either fixed or explicitly documented as non-live with a one-line reason"]
+    }
+  ],
+  "system_architecture": {
+    "summary": "Reuses the QF-20260911-515 insert-with-supersedes-pointer pattern for all 5 sites in this child (no dedicated side table needed here, unlike sibling child E's claim/preclaim cluster) -- every site in this group is a simple status/resolution-note lifecycle transition, not a read-modify-write counter or lock.",
+    "components": [
+      { "name": "lib/learning/outcome-tracker.js", "change": "Two update() call sites converted to insert-with-pointer (or a small dedicated resolution-log table if the bulk multi-row shape doesn't fit cleanly)" },
+      { "name": "scripts/modules/handoff/executors/lead-final-approval/index.js", "change": "One update() call site converted to insert-with-pointer" },
+      { "name": "lib/sub-agents/retro/db-operations.js", "change": "One update() call site converted to insert-with-pointer" },
+      { "name": "lib/coordinator/pending-question-timer.cjs", "change": "One update() call site converted to insert-with-pointer" },
+      { "name": "lib/chairman/classifier-denial-guard.mjs", "change": "One update() call site converted to insert-with-pointer" },
+      { "name": "lib/learning/feedback-clusterer.js", "change": "Re-confirm reachability; fix if live, document if still orphaned" }
+    ]
+  },
+  "acceptance_criteria": [
+    "All 6 files' feedback.update() call sites are re-verified live against current main before any fix (per this child's own claim-time re-audit requirement)",
+    "lib/learning/outcome-tracker.js's two sites are fixed and independently verified via both real callers (LEAD-FINAL-APPROVAL and complete-quick-fix.js) with 0 'outcome loop closure failed' warnings",
+    "The remaining 4 sites (lead-final-approval/index.js, retro/db-operations.js, pending-question-timer.cjs, classifier-denial-guard.mjs) are converted to the insert-with-pointer pattern",
+    "feedback-clusterer.js's reachability is re-confirmed and handled (fixed or documented) accordingly"
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "outcome-tracker.js fix under a real LEAD-FINAL-APPROVAL completion", "type": "integration", "expected": "recordSdCompleted succeeds and the console shows 'Outcome loop closure recorded' with no warning, and the linked feedback rows carry the new insert-based resolution record" },
+    { "id": "TS-2", "scenario": "outcome-tracker.js fix under a real complete-quick-fix.js completion (with and without escalated_to_sd_id)", "type": "integration", "expected": "recordQfOutcomeOnComplete succeeds with 0 'Outcome-tracker record skipped' warnings in both branches" },
+    { "id": "TS-3", "scenario": "Each of the other 4 (or 5, if feedback-clusterer.js is live) sites exercised through its real trigger path", "type": "manual", "expected": "0 append-only trigger errors, correct resolution data recorded via the new pattern" }
+  ],
+  "implementation_approach": {
+    "summary": "Fix outcome-tracker.js first (highest reach), then the remaining 4-5 sites, each independently, using the shared insert-with-pointer helper pattern.",
+    "steps": [
+      "Re-verify all 6 sites' current liveness and exact line numbers against main (already done for outcome-tracker.js at PLAN phase; repeat for the other 5 before touching each)",
+      "Design and implement the insert-with-pointer conversion for lib/learning/outcome-tracker.js's two call sites first, given its every-completion reach",
+      "Verify outcome-tracker.js's fix against both real callers (LEAD-FINAL-APPROVAL, complete-quick-fix.js)",
+      "Convert the remaining 4 sites using the same pattern",
+      "Re-confirm feedback-clusterer.js's reachability and fix or document accordingly",
+      "Run the full test suite for all 6 touched files plus any new regression tests"
+    ]
+  },
+  "risks": [
+    {
+      "risk": "The parent orchestrator's initial risk framing overstated outcome-tracker.js's severity (implied a hard completion failure); PLAN-phase re-verification found both callers already fail-soft",
+      "mitigation": "Corrected in this PRD's executive summary and FR-1; the fix is still high-value (silent data loss on every completion) but not an emergency unblock",
+      "severity": "low"
+    },
+    {
+      "risk": "outcome-tracker.js's bulk multi-row update (many feedback ids at once) may not map cleanly onto a single insert-with-pointer row per correction",
+      "mitigation": "Evaluate at implementation time whether one insert per affected row, or a small dedicated resolution-log table, fits better; document the choice",
+      "severity": "medium"
+    },
+    {
+      "risk": "lib/learning/feedback-clusterer.js may have been wired up since the parent's 2026-09-12 audit, changing its priority",
+      "mitigation": "Explicit re-confirmation step (FR-5) before deciding to fix or defer it",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/modules/handoff/executors/lead-final-approval/index.js", "scripts/modules/complete-quick-fix/orchestrator.js", "coordinator periodic tick (pending-question-timer.cjs)", "chairman-decisions.mjs chairmanDecide (classifier-denial-guard.mjs)"],
+    "dependencies": ["database/chairman-gated/20260907_feedback_immutability_trigger.sql (already live in production)"],
+    "data_contracts": ["public.feedback table schema; no new table planned for this child (unlike child E)"],
+    "runtime_config": ["OUTCOME_TRACKER_ON_QF_COMPLETE env opt-out already exists in complete-quick-fix orchestrator.js -- unaffected by this fix"],
+    "observability_rollout": ["Verify via the real completion-tail console output ('Outcome loop closure recorded' vs '...failed') across a handful of real SD/QF completions after merge"]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Re-verify all 6 sites live against current main (outcome-tracker.js already confirmed at PLAN phase)", "expected_outcome": "6/6 confirmed live or explicitly reclassified" },
+    { "step_number": 2, "instruction": "Fix and verify lib/learning/outcome-tracker.js first via both real callers", "expected_outcome": "0 outcome-tracker warnings across a real LEAD-FINAL-APPROVAL and complete-quick-fix.js completion" },
+    { "step_number": 3, "instruction": "Fix the remaining sites and run the full test suite for all touched files", "expected_outcome": "0 test regressions across all 6 files" }
+  ]
+}

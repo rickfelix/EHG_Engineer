@@ -1,0 +1,18 @@
+{
+  "verdict": "PASS",
+  "confidence": 0.9,
+  "summary": "Re-verified lib/learning/outcome-tracker.js (the child's highest-priority site) against current main at claim time: L176-183 bulk-resolves feedback rows (status='resolved', resolved_at, resolution_sd_id) and L191-197 backfills resolution_sd_id, both via .from('feedback').update(...).in('id', ids). Confirmed still live and unmodified since the parent's 2026-09-12 audit. Both update calls throw on error (propagate, not fail-soft as the parent audit's summary characterization suggested) -- worth re-confirming caller-side error handling at PLAN phase before designing the fix.",
+  "detailed_analysis": "Read lib/learning/outcome-tracker.js lines 160-200 directly. Confirmed the exact call shape cited by the parent orchestrator's audit: two separate .from('feedback').update(...) chains, one bulk status-transition (unresolvedIds -> status='resolved') and one backfill (backfillIds -> resolution_sd_id only), both keyed on .in('id', [...]). Both throw a wrapped Error on a Supabase error rather than swallowing it -- this function is NOT fail-soft at the call site itself, though a caller further up the stack (the LEAD-FINAL-APPROVAL executor or complete-quick-fix.js) may or may not catch it; that caller-side behavior needs to be confirmed at this child's own PLAN phase before finalizing the remediation design, since it changes how urgently visible today's silent failures actually are.",
+  "findings": [
+    "lib/learning/outcome-tracker.js:176-183 and :191-197 both confirmed live against current main, matching the parent audit's citation",
+    "Both update calls THROW on error rather than fail-soft -- a correction to the parent audit's blanket characterization, worth re-verifying caller-side handling at PLAN"
+  ],
+  "recommendations": [
+    "At PLAN phase, trace the caller of resolveOutcomeForFeedback (or equivalent) in the LEAD-FINAL-APPROVAL executor and complete-quick-fix.js to confirm whether the throw is caught (fail-soft at a higher layer) or propagates and aborts the completion tail"
+  ],
+  "phase": "LEAD_PRE_APPROVAL",
+  "metadata": {
+    "child_of": "SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001",
+    "files_reverified": ["lib/learning/outcome-tracker.js"]
+  }
+}
