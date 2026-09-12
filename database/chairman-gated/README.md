@@ -1379,3 +1379,49 @@ logic is not part of the ongoing runtime and does not need permanent regression 
 contract-waiver.mjs` recorded an armed_cadence/reaper waiver (expires 2026-11-24) — nothing to
 arm a cadence against until this table is live, and a reaper/TTL is semantically wrong for a
 permanent, INSERT-only verification-attempt audit trail whose own triggers would block it anyway.
+
+## Applying `20260912_venture_channel_publish_ledger_execution_mode.sql`
+
+```
+node scripts/apply-migration.js --issue-token
+MIGRATION_APPLY_TOKEN=<token from above> node scripts/apply-migration.js \
+  "database/chairman-gated/20260912_venture_channel_publish_ledger_execution_mode.sql" \
+  --prod-deploy --allow-any-path
+```
+
+Rollback: `20260912_venture_channel_publish_ledger_execution_mode_DOWN.sql` (drops the CHECK
+constraint, then both columns — a full reverse).
+
+(SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-4, per coordinator directive 7c1c6622 — Solomon's amended
+design.) Adds `execution_mode TEXT NOT NULL CHECK (execution_mode IN ('live','mock'))` (no default
+— a writer that omits the column fails the INSERT rather than silently minting a live-looking row)
+plus `mock_run_id UUID` (nullable, for a future Part B mock-run correlation key) to
+`venture_channel_publish_ledger`. The 3 pre-existing rows (all `decision='pending'`,
+`outcome='unknown'`, dated July 2026 — genuine proposed-publish attempts predating any mock-mode
+concept) are backfilled `execution_mode='live'` in the same migration.
+
+**Not a live safety gap today.** `evaluateGraduation()` (`lib/marketing/autonomy-gate.js`) already
+filters `.neq('outcome','unknown')` and only counts `decision='accepted' AND outcome='shipped_clean'`
+rows toward a channel's autonomy graduation streak; `recordPublishOutcome()` — the only function
+that can move a row's outcome away from `'unknown'` — has **zero production callers** anywhere in
+this codebase (verified by repo-wide grep, 2026-09-12), so no channel can graduate via this
+mechanism regardless of mock or real activity today. This migration is forward-looking
+defense-in-depth: the discriminator must exist BEFORE any future change wires
+`recordPublishOutcome()` into a real outcome signal, per the coordinator's directive to land it
+"even under Part A alone."
+
+**Never applied by the builder** (per the coordinator's own instruction: "write it, do not apply
+it" — LEAD-FINAL-APPROVAL for this SD will WAIT on this migration's apply).
+
+Proof sequence — transactional, SAVEPOINT-guarded around its own deliberate constraint-violation
+probe, safe to re-run against production any time (always `ROLLBACK`s, nothing persisted):
+
+```
+node database/chairman-gated/20260912_venture_channel_publish_ledger_execution_mode_dry_run.mjs
+```
+
+Runs the real UP body (both `ADD COLUMN`s, the backfill, `SET NOT NULL`, `ADD CONSTRAINT`, its own
+`DO $verify$` block), asserts column shape + constraint existence + the 3 pre-existing rows
+backfilled to `'live'` only, proves the CHECK constraint genuinely rejects an out-of-vocabulary
+value, then runs the real DOWN body and asserts both columns and the constraint are gone again.
+Confirmed PASS 2026-09-12.
