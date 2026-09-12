@@ -82,6 +82,48 @@ describe('classifyFlag', () => {
     expect(c.reasons).not.toContain('stale-off-pending');
     expect(c.recommendation).toBe('kill');
   });
+
+  // QF-20260906-235: an enabled-never-rolled-out flag already GRADUATED in code should stop
+  // being re-recommended for graduation.
+  it('reports GRADUATED (not GRADUATE) for an enabled-never-rolled-out flag with a code marker', () => {
+    const c = classifyFlag(
+      { flag_key: 'LEO_HIGH_CONSEQUENCE_GATES_ENABLED', lifecycle_state: 'enabled', is_enabled: true, last_reviewed_at: daysAgo(1), rolled_out_at: null, created_at: daysAgo(ENABLED_UNROLLED_DAYS + 2) },
+      NOW,
+      { isGraduatedInCode: (k) => k === 'LEO_HIGH_CONSEQUENCE_GATES_ENABLED' }
+    );
+    expect(c.reasons).toContain('graduated-in-code');
+    expect(c.recommendation).toBe('graduated');
+    expect(c.detail).toMatch(/chairman-ceremony/);
+  });
+
+  it('still recommends GRADUATE when isGraduatedInCode is absent or returns false', () => {
+    const c = classifyFlag(
+      { flag_key: 'EU2', lifecycle_state: 'enabled', is_enabled: true, last_reviewed_at: daysAgo(1), rolled_out_at: null, created_at: daysAgo(ENABLED_UNROLLED_DAYS + 2) },
+      NOW,
+      { isGraduatedInCode: () => false }
+    );
+    expect(c.recommendation).toBe('graduate');
+  });
+
+  // QF-20260906-235 ADDENDUM: an operator-held disabled-aging flag should KEEP, not KILL.
+  it('downgrades KILL to KEEP for a disabled-aging flag carrying an [OPERATOR_HOLD] marker', () => {
+    const c = classifyFlag({
+      flag_key: 'VENTURE_FIXTURE_SWEEP_V1', lifecycle_state: 'disabled', is_enabled: false,
+      last_reviewed_at: daysAgo(1), created_at: daysAgo(DISABLED_AGING_DAYS + 5),
+      enablement_criteria: '[OPERATOR_HOLD: 87 of 89 ventures are fixture residue] Operator reviews the count and accepts.'
+    }, NOW);
+    expect(c.reasons).toContain('operator-hold');
+    expect(c.recommendation).toBe('keep');
+  });
+
+  it('still recommends KILL for disabled-aging without an [OPERATOR_HOLD] marker', () => {
+    const c = classifyFlag({
+      flag_key: 'DA2', lifecycle_state: 'disabled', is_enabled: false,
+      last_reviewed_at: daysAgo(1), created_at: daysAgo(DISABLED_AGING_DAYS + 5),
+      enablement_criteria: 'Operator reviews the count and accepts.'
+    }, NOW);
+    expect(c.recommendation).toBe('kill');
+  });
 });
 
 describe('computeStaleFlags', () => {

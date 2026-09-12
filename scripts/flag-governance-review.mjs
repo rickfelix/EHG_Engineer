@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { computeStaleFlags, formatDigest } from '../lib/feature-flags/governance-review.js';
-import { buildLiveReaderIndex } from '../lib/feature-flags/flag-reader-scan.js';
+import { buildFlagCodeIndices } from '../lib/feature-flags/flag-reader-scan.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -40,8 +40,10 @@ export async function reviewMain({ force = false } = {}) {
   // env injected for the registry-vs-runtime drift detector (QF-20260610-863).
   // hasLiveReaders (QF-20260721-951): scan the source tree ONCE for each flag's live code
   // readers so a disabled-aging-but-still-read flag is KEPT (load-bearing), not falsely KILLED.
-  const hasLiveReaders = buildLiveReaderIndex(REPO_ROOT, (flags || []).map((f) => f.flag_key).filter(Boolean));
-  const result = computeStaleFlags(flags || [], Date.now(), { env: process.env, hasLiveReaders });
+  // QF-20260906-235: one combined tree-walk (not two) computes both predicates in a single pass
+  // — an already-graduated-in-code flag reports GRADUATED instead of a daily GRADUATE nag.
+  const { hasLiveReaders, isGraduatedInCode } = buildFlagCodeIndices(REPO_ROOT, (flags || []).map((f) => f.flag_key).filter(Boolean));
+  const result = computeStaleFlags(flags || [], Date.now(), { env: process.env, hasLiveReaders, isGraduatedInCode });
   console.log(formatDigest(result));
 
   // Stamp last_reviewed_at on every reviewed flag (the automated review touched them this cycle).
