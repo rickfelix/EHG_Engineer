@@ -17,7 +17,6 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { resolveFeedback } from '../lib/governance/resolve-feedback.js';
-import { fetchLatestFeedback, buildFeedbackCorrection } from '../lib/governance/feedback-correction.js';
 
 const [feedbackId, targetId, ...rest] = process.argv.slice(2);
 const noResolve = rest.includes('--no-resolve');
@@ -29,12 +28,9 @@ if (!feedbackId || !targetId) {
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: resolve to the LATEST row in the correction chain
-// (public.feedback is append-only) -- widened from 'id, status' to the full row since the
-// link-only branch below now needs it to build a correction payload.
-const latestResult = await fetchLatestFeedback(supabase, feedbackId);
-if (latestResult.error) { console.error(`feedback ${feedbackId} not found: ${latestResult.error}`); process.exit(1); }
-const feedback = latestResult.row;
+const { data: feedback, error: fbErr } = await supabase
+  .from('feedback').select('id, status').eq('id', feedbackId).maybeSingle();
+if (fbErr || !feedback) { console.error(`feedback ${feedbackId} not found${fbErr ? ': ' + fbErr.message : ''}`); process.exit(1); }
 
 // Resolve target: try an SD (by sd_key, then by id) first, then a QF (by id).
 // Two separate parameterized .eq() lookups (not a string-interpolated .or() filter)
@@ -81,10 +77,8 @@ if (target.done && !noResolve) {
 } else {
   // Link-only: set the FK, leave status untouched. Mirrors qf-link-resolution.mjs's
   // --no-cancel escape hatch and the "target not yet completed" branch.
-  // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: recorded as a correction (feedback is append-only).
-  const changes = target.kind === 'sd' ? { resolution_sd_id: target.id } : { quick_fix_id: target.id };
-  const payload = buildFeedbackCorrection(feedback, changes);
-  const { error: upErr } = await supabase.from('feedback').insert(payload);
+  const update = target.kind === 'sd' ? { resolution_sd_id: target.id } : { quick_fix_id: target.id };
+  const { error: upErr } = await supabase.from('feedback').update(update).eq('id', feedback.id);
   if (upErr) { console.error('Link failed:', upErr.message); process.exit(1); }
   console.log(`Linked ${feedbackId} -> ${target.label} (${target.kind === 'sd' ? 'resolution_sd_id' : 'quick_fix_id'} set).`);
   console.log(target.done

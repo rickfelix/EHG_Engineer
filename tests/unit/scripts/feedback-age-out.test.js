@@ -1,93 +1,69 @@
 /**
- * SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: scripts/feedback-age-out.mjs converted from a bulk
- * set-based UPDATE (rejected by the append-only trigger, and had no per-row fetch at all) to
- * a root-scoped, per-row insert-correction. TS-16: a seeded 2-row fixture, run twice.
+ * SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: reverted to a bulk set-based UPDATE. The append-only
+ * trigger's lifecycle allowlist (database/chairman-gated/20260912_feedback_no_update_lifecycle_
+ * allowlist.sql) exempts archived_at, so a plain UPDATE works today -- the insert-correction
+ * conversion this SD originally shipped is unnecessary and was reverted.
  *
  * main() takes an injectable `supabase` client, so no process.argv / module-reset gymnastics
- * are needed -- call it directly (SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A).
+ * are needed -- call it directly.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { main } from '../../../scripts/feedback-age-out.mjs';
 
-function makeFullMock({ rows, alreadyArchivedIds = new Set() }) {
-  const insertCalls = [];
-  const byId = new Map(rows.map((r) => [r.id, r]));
+function makeMock({ candidateCount, updatedCount }) {
+  const updateCalls = [];
   const from = vi.fn(() => ({
-    select: vi.fn((cols, opts) => {
+    select: vi.fn((_cols, opts) => {
       if (opts?.count === 'exact' && opts?.head) {
         return {
-          eq: () => ({ is: () => ({ is: () => ({ lt: async () => ({ count: rows.length, error: null }) }) }) }),
+          eq: () => ({ is: () => ({ lt: async () => ({ count: candidateCount, error: null }) }) }),
         };
       }
+      return { eq: () => ({ is: () => ({ lt: async () => ({ count: updatedCount, error: null }) }) }) };
+    }),
+    update: vi.fn((payload) => {
+      updateCalls.push(payload);
       return {
-        eq: (col, val) => {
-          if (col === 'id') {
-            // fetchLatestFeedback base fetch
-            return { maybeSingle: async () => ({ data: byId.get(val) || null, error: null }) };
-          }
-          return {
-            is: () => ({
-              is: () => ({
-                lt: () => ({
-                  order: () => ({ range: async () => ({ data: rows, error: null }) }),
-                }),
-              }),
+        eq: () => ({
+          is: () => ({
+            lt: () => ({
+              select: vi.fn((_cols, opts) => {
+                if (opts?.count === 'exact' && opts?.head) {
+                  return async () => ({ count: updatedCount, error: null });
+                }
+                return async () => ({ count: updatedCount, error: null });
+              })(),
             }),
-          };
-        },
-        or: (filter) => {
-          const rootId = filter.match(/id\.eq\.([^,]+)/)[1];
-          const row = byId.get(rootId);
-          const latest = alreadyArchivedIds.has(rootId) ? { ...row, archived_at: '2026-01-01T00:00:00.000Z' } : row;
-          return {
-            order: () => ({ order: () => ({ limit: () => ({ maybeSingle: async () => ({ data: latest, error: null }) }) }) }),
-          };
-        },
+          }),
+        }),
       };
     }),
-    insert: vi.fn((payload) => {
-      insertCalls.push(payload);
-      return Promise.resolve({ error: null });
-    }),
   }));
-  return { from, _calls: { insertCalls } };
+  return { from, _calls: { updateCalls } };
 }
 
 beforeEach(() => {
   vi.spyOn(process, 'exit').mockImplementation(() => {});
 });
 
-describe('feedback-age-out.mjs main() (TS-16)', () => {
+describe('feedback-age-out.mjs main()', () => {
   it('dry run performs zero writes', async () => {
-    const rows = [{ id: 'R1', category: 'informational_note', archived_at: null, metadata: {}, updated_at: '2020-01-01T00:00:00.000Z' }];
-    const supabase = makeFullMock({ rows });
+    const supabase = makeMock({ candidateCount: 1, updatedCount: 0 });
     await main({ apply: false, supabase });
-    expect(supabase._calls.insertCalls.length).toBe(0);
+    expect(supabase._calls.updateCalls.length).toBe(0);
   });
 
-  it('first run archives a seeded 2-row fixture via correction inserts (archived_at, never a raw UPDATE)', async () => {
-    const rows = [
-      { id: 'R1', category: 'informational_note', archived_at: null, metadata: {}, updated_at: '2020-01-01T00:00:00.000Z' },
-      { id: 'R2', category: 'informational_note', archived_at: null, metadata: {}, updated_at: '2020-01-01T00:00:00.000Z' },
-    ];
-    const supabase = makeFullMock({ rows });
+  it('apply mode issues a single bulk UPDATE setting archived_at, never a per-row insert', async () => {
+    const supabase = makeMock({ candidateCount: 2, updatedCount: 2 });
     await main({ apply: true, supabase });
 
-    expect(supabase._calls.insertCalls.length).toBe(2);
-    for (const payload of supabase._calls.insertCalls) {
-      expect(payload.archived_at).toBeDefined();
-      expect(payload.id).toBeUndefined();
-    }
+    expect(supabase._calls.updateCalls.length).toBe(1);
+    expect(supabase._calls.updateCalls[0].archived_at).toBeDefined();
   });
 
-  it('second run inserts zero new rows once both are already archived -- proves termination', async () => {
-    const rows = [
-      { id: 'R1', category: 'informational_note', archived_at: null, metadata: {}, updated_at: '2020-01-01T00:00:00.000Z' },
-      { id: 'R2', category: 'informational_note', archived_at: null, metadata: {}, updated_at: '2020-01-01T00:00:00.000Z' },
-    ];
-    const supabase = makeFullMock({ rows, alreadyArchivedIds: new Set(['R1', 'R2']) });
+  it('zero candidates: apply mode skips the UPDATE entirely', async () => {
+    const supabase = makeMock({ candidateCount: 0, updatedCount: 0 });
     await main({ apply: true, supabase });
-
-    expect(supabase._calls.insertCalls.length).toBe(0);
+    expect(supabase._calls.updateCalls.length).toBe(0);
   });
 });

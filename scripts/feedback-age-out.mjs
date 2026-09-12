@@ -1,15 +1,12 @@
 #!/usr/bin/env node
 /**
  * FR-6: archive-not-delete age-out for informational feedback rows.
- * SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: converted from a bulk set-based UPDATE (rejected by
- * the append-only trigger) to a root-scoped per-row insert-correction. Previously had NO
- * per-row fetch at all; now selects the full matching root rows, chunked, and resolves each
- * to its latest state before deciding whether a correction is still needed.
  *
- * Sets archived_at = now() (via a correction row) on rows WHERE category='informational_note'
- * AND archived_at IS NULL AND updated_at < now() - 30 days. Rows in any other category are
- * structurally excluded by the WHERE clause -- actionable (harness_backlog) rows never age
- * out; they either get promoted (FR-5) or manually dispositioned. No DELETE is ever issued (TR-3).
+ * Sets archived_at = now() on rows WHERE category='informational_note' AND
+ * archived_at IS NULL AND updated_at < now() - 30 days. Rows in any other category
+ * are structurally excluded by the WHERE clause -- actionable (harness_backlog) rows
+ * never age out; they either get promoted (FR-5) or manually dispositioned. No DELETE
+ * is ever issued (TR-3).
  *
  * Usage:
  *   node scripts/feedback-age-out.mjs           # dry run (default)
@@ -18,11 +15,9 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { renderCount } from '../lib/db/fetch-all-paginated.mjs';
-import { fetchLatestFeedback, buildFeedbackCorrection } from '../lib/governance/feedback-correction.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 const AGE_OUT_DAYS = 30;
-const FETCH_CHUNK = 200;
 
 /**
  * Exported so tests can call it directly with explicit options -- reading argv / constructing
@@ -46,7 +41,6 @@ export async function main({ apply = false, supabase: injectedSupabase = null } 
     .select('id', { count: 'exact', head: true })
     .eq('category', 'informational_note')
     .is('archived_at', null)
-    .is('metadata->>corrects_feedback_id', null)
     .lt('updated_at', cutoff);
 
   if (selErr) {
@@ -62,7 +56,7 @@ export async function main({ apply = false, supabase: injectedSupabase = null } 
     process.exit();
   }
 
-  console.log(`Candidates: ${candidateCount} informational_note root row(s) untouched ${AGE_OUT_DAYS}+ days.`);
+  console.log(`Candidates: ${candidateCount} informational_note row(s) untouched ${AGE_OUT_DAYS}+ days.`);
 
   if (!apply) {
     console.log('Dry run only. Re-run with --apply to set archived_at.');
@@ -74,55 +68,25 @@ export async function main({ apply = false, supabase: injectedSupabase = null } 
     return;
   }
 
-  // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: fetch the full root rows (needed to build a
-  // correction payload) chunked via .range(), then resolve each to its latest state and skip
-  // anything already archived by another correction before inserting.
-  let archived = 0;
-  let skippedAlreadyHandled = 0;
-  for (let offset = 0; ; offset += FETCH_CHUNK) {
-    const { data: page, error: pageErr } = await supabase
-      .from('feedback')
-      .select('*')
-      .eq('category', 'informational_note')
-      .is('archived_at', null)
-      .is('metadata->>corrects_feedback_id', null)
-      .lt('updated_at', cutoff)
-      .order('id', { ascending: true })
-      .range(offset, offset + FETCH_CHUNK - 1);
+  // GAUGE on the UPDATE...RETURNING itself: the update is NOT row-limited (PostgREST's max-rows
+  // caps the RETURNING response, not how many rows the server-side UPDATE mutates), but a plain
+  // `.select('id')` RETURNING array WOULD be capped at 1000 for the reported count -- count:'exact'
+  // with head:true reports the true number of rows the UPDATE touched without a row-array cap.
+  const { count: updatedCountRaw, error: updErr } = await supabase
+    .from('feedback')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('category', 'informational_note')
+    .is('archived_at', null)
+    .lt('updated_at', cutoff)
+    .select('id', { count: 'exact', head: true });
 
-    if (pageErr) {
-      console.error('ERROR (fetch page):', JSON.stringify(pageErr));
-      process.exitCode = 1;
-      process.exit();
-    }
-    const rows = Array.isArray(page) ? page : [];
-    if (rows.length === 0) break;
-
-    for (const candidate of rows) {
-      const latestResult = await fetchLatestFeedback(supabase, candidate.id);
-      if (latestResult.error) {
-        console.error(`ERROR (resolve latest for ${candidate.id}): ${latestResult.error}`);
-        continue;
-      }
-      if (latestResult.row.archived_at) {
-        skippedAlreadyHandled++;
-        continue;
-      }
-
-      const payload = buildFeedbackCorrection(latestResult.row, { archived_at: new Date().toISOString() });
-      const { error: insertError } = await supabase.from('feedback').insert(payload);
-      if (insertError) {
-        console.error(`ERROR (insert correction for ${candidate.id}):`, JSON.stringify(insertError));
-        process.exitCode = 1;
-        process.exit();
-      }
-      archived++;
-    }
-
-    if (rows.length < FETCH_CHUNK) break;
+  if (updErr) {
+    console.error('ERROR (update):', JSON.stringify(updErr));
+    process.exitCode = 1;
+    process.exit();
   }
 
-  console.log(`Archived ${archived} row(s) (${skippedAlreadyHandled} already handled by a prior run/write).`);
+  console.log(`Archived ${renderCount(updatedCountRaw)} row(s).`);
 }
 
 if (isMainModule(import.meta.url)) {

@@ -3,16 +3,17 @@
 /**
  * Feedback Staleness Check
  * SD-LEO-INFRA-WIRE-FEEDBACK-QUALITY-001
- * SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: converted to insert-correction (public.feedback is
- * append-only; UPDATE is rejected unconditionally). ALSO: 'stale' is not a member of the live
+ * SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: 'stale' is not a member of the live
  * feedback_status_check CHECK constraint (allowed: new, triaged, in_progress, resolved,
  * wont_fix, duplicate, invalid, backlog, shipped) -- the original status='stale' write would
- * have failed on that constraint independent of the append-only trigger. Staleness is now
- * recorded via metadata.marked_stale_at + resolution_notes, leaving `status` unchanged.
+ * have failed on that constraint regardless of any append-only trigger. Staleness is recorded
+ * via metadata.marked_stale_at + resolution_notes, leaving `status` unchanged. A per-row
+ * UPDATE (not a bulk .in(id,ids) write) is required because metadata is a JSONB column and a
+ * bulk UPDATE would overwrite each row's existing metadata wholesale rather than merge into it.
  *
- * Marks feedback items older than N days (default: 90) as stale via a correction row.
- * Only affects items in 'new' or 'triaged' status that have not already been marked stale
- * (or otherwise corrected) by a prior run.
+ * Marks feedback items older than N days (default: 90) as stale.
+ * Only affects items in 'new' or 'triaged' status that have not already been marked stale by
+ * a prior run.
  *
  * Usage:
  *   node scripts/feedback-staleness-check.js            # Mark stale (90 days)
@@ -23,7 +24,6 @@
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import { fetchAllPaginated } from '../lib/db/fetch-all-paginated.mjs';
-import { fetchLatestFeedback, buildFeedbackCorrection } from '../lib/governance/feedback-correction.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 
 dotenv.config();
@@ -56,18 +56,17 @@ export async function main({ dryRun = false, days = 90, supabase: injectedSupaba
   console.log(`   Threshold: ${days} days (before ${cutoffISO.split('T')[0]})`);
   console.log(`   Mode: ${dryRun ? 'DRY RUN (no changes)' : 'LIVE'}\n`);
 
-  // Find stale ROOT candidates. Root-scoped (metadata->>corrects_feedback_id IS NULL) so a
-  // correction row inserted by a PRIOR run is never re-selected as a fresh candidate.
+  // Find stale candidates, excluding rows already marked by a prior run.
   // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: feedback is an unbounded
   // growing table and the lower bound is open-ended — paginate to completion.
   let staleCandidates;
   try {
     staleCandidates = await fetchAllPaginated(() => supabase
       .from('feedback')
-      .select('*')
+      .select('id, title, status, created_at, metadata')
       .in('status', ['new', 'triaged'])
       .lt('created_at', cutoffISO)
-      .is('metadata->>corrects_feedback_id', null)
+      .is('metadata->>marked_stale_at', null)
       .order('created_at', { ascending: true })
       .order('id', { ascending: true })); // unique tiebreaker (FR-6)
   } catch (e) {
@@ -88,40 +87,29 @@ export async function main({ dryRun = false, days = 90, supabase: injectedSupaba
   }
 
   if (dryRun) {
-    console.log(`\n⏭️  DRY RUN: Would evaluate ${staleCandidates.length} item(s) for staleness. Run without --dry-run to apply.`);
+    console.log(`\n⏭️  DRY RUN: Would mark ${staleCandidates.length} item(s) as stale. Run without --dry-run to apply.`);
     return;
   }
 
   let marked = 0;
-  let skippedAlreadyMarked = 0;
   for (const candidate of staleCandidates) {
-    // Resolve to the LATEST row in this candidate's correction chain -- a prior run (or any
-    // other write site) may have already superseded this root. A resolution error is
-    // fail-closed: skip this candidate rather than risk writing against a stale/unknown state.
-    const latestResult = await fetchLatestFeedback(supabase, candidate.id);
-    if (latestResult.error) {
-      console.error(`   ⚠️  ${candidate.id.substring(0, 8)}...: could not resolve latest state (${latestResult.error}) — skipping`);
-      continue;
-    }
-    const latest = latestResult.row;
-    if (latest.metadata?.marked_stale_at || !['new', 'triaged'].includes(latest.status)) {
-      skippedAlreadyMarked++;
-      continue;
-    }
+    const { error: updateError } = await supabase
+      .from('feedback')
+      .update({
+        resolution_notes: `Auto-marked stale after ${days} days without action.`,
+        metadata: { ...(candidate.metadata || {}), marked_stale_at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', candidate.id);
 
-    const payload = buildFeedbackCorrection(latest, {
-      resolution_notes: `Auto-marked stale after ${days} days without action.`,
-      metadata: { marked_stale_at: new Date().toISOString() },
-    });
-    const { error: insertError } = await supabase.from('feedback').insert(payload);
-    if (insertError) {
-      console.error(`\n❌ Insert error for ${candidate.id.substring(0, 8)}...: ${insertError.message}`);
+    if (updateError) {
+      console.error(`\n❌ Update error for ${candidate.id.substring(0, 8)}...: ${updateError.message}`);
       process.exit(1);
     }
     marked++;
   }
 
-  console.log(`\n✅ Marked ${marked} item(s) as stale (${skippedAlreadyMarked} already handled by a prior run/write).`);
+  console.log(`\n✅ Marked ${marked} item(s) as stale.`);
 }
 
 if (isMainModule(import.meta.url)) {

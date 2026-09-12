@@ -1,23 +1,24 @@
 /**
- * SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: scripts/feedback-staleness-check.js converted from
- * a bulk UPDATE (rejected by the append-only trigger, and would separately have violated the
- * feedback_status_check CHECK constraint via status='stale') to a root-scoped insert-correction.
- * TS-14 (never writes status='stale'), TS-15 (termination on a second run), TS-18 (root-only scan).
+ * SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: reverted to plain per-row UPDATEs. The append-only
+ * trigger's lifecycle allowlist (database/chairman-gated/20260912_feedback_no_update_lifecycle_
+ * allowlist.sql) exempts status/resolution_notes/metadata/updated_at, so UPDATE works today --
+ * the insert-correction conversion this SD originally shipped is unnecessary and was reverted.
+ * Still never writes status='stale' (not a valid feedback_status_check value) -- staleness is
+ * recorded via metadata.marked_stale_at + resolution_notes, status left unchanged. A per-row
+ * UPDATE (not bulk .in(id,ids)) is required so each row's existing metadata is merged, not
+ * overwritten wholesale.
  *
  * main() takes an injectable `supabase` client, so no process.argv / module-reset gymnastics
- * are needed -- call it directly (SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A).
+ * are needed -- call it directly.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { main } from '../../../scripts/feedback-staleness-check.js';
 
-function makeSupabaseMock({ candidates, latestByRoot = {} }) {
-  const insertCalls = [];
+function makeSupabaseMock({ candidates }) {
+  const updateCalls = [];
   const isCalls = [];
   const from = vi.fn(() => ({
     select: vi.fn(() => ({
-      // Root-scoped candidate scan: .in().lt().is().order().order() -- terminates without an
-      // explicit terminal method (fetchAllPaginated drives .range() itself); simulate that by
-      // resolving on the final .order() call in the chain.
       in: vi.fn(() => ({
         lt: vi.fn(() => ({
           is: vi.fn((col, val) => {
@@ -32,64 +33,45 @@ function makeSupabaseMock({ candidates, latestByRoot = {} }) {
           }),
         })),
       })),
-      // fetchLatestFeedback's base fetch
-      eq: vi.fn((col, val) => ({
-        maybeSingle: vi.fn(async () => ({ data: candidates.find(c => c.id === val) || null, error: null })),
-      })),
-      // fetchLatestFeedback's root-scoped fetch
-      or: vi.fn((filter) => {
-        const rootId = filter.match(/id\.eq\.([^,]+)/)[1];
-        return {
-          order: vi.fn(() => ({
-            order: vi.fn(() => ({
-              limit: vi.fn(() => ({
-                maybeSingle: vi.fn(async () => ({ data: latestByRoot[rootId] ?? candidates.find(c => c.id === rootId), error: null })),
-              })),
-            })),
-          })),
-        };
-      }),
     })),
-    insert: vi.fn((payload) => {
-      insertCalls.push(payload);
-      return Promise.resolve({ error: null });
+    update: vi.fn((payload) => {
+      updateCalls.push(payload);
+      return { eq: vi.fn(async () => ({ error: null })) };
     }),
   }));
-  return { from, _calls: { insertCalls, isCalls } };
+  return { from, _calls: { updateCalls, isCalls } };
 }
 
 beforeEach(() => {
   vi.spyOn(process, 'exit').mockImplementation(() => {});
 });
 
-describe('feedback-staleness-check.js main() (TS-14, TS-15, TS-18)', () => {
-  it('TS-14: never writes status=\'stale\'; marks staleness via metadata.marked_stale_at + resolution_notes, status unchanged', async () => {
-    const root = { id: 'R', status: 'new', created_at: '2020-01-01T00:00:00.000Z', metadata: {} };
+describe('feedback-staleness-check.js main()', () => {
+  it('never writes status=\'stale\'; marks staleness via metadata.marked_stale_at + resolution_notes, status untouched', async () => {
+    const root = { id: 'R', status: 'new', created_at: '2020-01-01T00:00:00.000Z', metadata: { other_key: 'preserved' } };
     const supabase = makeSupabaseMock({ candidates: [root] });
     await main({ dryRun: false, days: 1, supabase });
 
-    expect(supabase._calls.insertCalls.length).toBe(1);
-    const payload = supabase._calls.insertCalls[0];
-    expect(payload.status).not.toBe('stale');
-    expect(payload.status).toBe('new');
+    expect(supabase._calls.updateCalls.length).toBe(1);
+    const payload = supabase._calls.updateCalls[0];
+    expect(payload.status).toBeUndefined();
     expect(payload.metadata.marked_stale_at).toBeDefined();
+    expect(payload.metadata.other_key).toBe('preserved');
     expect(payload.resolution_notes).toMatch(/stale/i);
   });
 
-  it('TS-18: the candidate scan is root-scoped (metadata->>corrects_feedback_id IS NULL)', async () => {
+  it('the candidate scan excludes rows already marked stale (metadata->>marked_stale_at IS NULL)', async () => {
     const supabase = makeSupabaseMock({ candidates: [] });
     await main({ dryRun: false, days: 1, supabase });
 
-    expect(supabase._calls.isCalls.some(c => c.col === 'metadata->>corrects_feedback_id' && c.val === null)).toBe(true);
+    expect(supabase._calls.isCalls.some(c => c.col === 'metadata->>marked_stale_at' && c.val === null)).toBe(true);
   });
 
-  it('TS-15: a candidate already marked stale by a prior run is skipped -- proves termination', async () => {
-    const root = { id: 'R', status: 'new', created_at: '2020-01-01T00:00:00.000Z', metadata: {} };
-    const alreadyCorrected = { id: 'C1', status: 'new', created_at: '2020-06-01T00:00:00.000Z', metadata: { corrects_feedback_id: 'R', marked_stale_at: '2020-06-01T00:00:00.000Z' } };
-    const supabase = makeSupabaseMock({ candidates: [root], latestByRoot: { R: alreadyCorrected } });
+  it('a second run with no fresh candidates (all already marked) performs zero writes -- proves termination', async () => {
+    const supabase = makeSupabaseMock({ candidates: [] });
     await main({ dryRun: false, days: 1, supabase });
 
-    expect(supabase._calls.insertCalls.length).toBe(0);
+    expect(supabase._calls.updateCalls.length).toBe(0);
   });
 
   it('--dry-run performs zero writes', async () => {
@@ -97,6 +79,6 @@ describe('feedback-staleness-check.js main() (TS-14, TS-15, TS-18)', () => {
     const supabase = makeSupabaseMock({ candidates: [root] });
     await main({ dryRun: true, days: 1, supabase });
 
-    expect(supabase._calls.insertCalls.length).toBe(0);
+    expect(supabase._calls.updateCalls.length).toBe(0);
   });
 });

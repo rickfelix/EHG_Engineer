@@ -38,19 +38,4 @@ describe('SD-FDBK-ENH-UAT-AGENT-FEEDBACK-001: feedback-link-resolution.mjs', () 
     expect(code).toMatch(/Usage: node scripts\/feedback-link-resolution\.mjs <feedback-id> <SD-KEY-or-QF-ID>/);
     expect(code).toMatch(/process\.exit\(2\)/);
   });
-
-  // TS-17 (SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A): public.feedback is append-only -- both
-  // write branches (the resolveFeedback() delegate and the link-only else branch) must use
-  // insert-correction, never .update().
-  it('TS-17: uses the shared feedback-correction helper for the link-only branch, never .update() on feedback', () => {
-    expect(code).toMatch(/import\s*\{\s*fetchLatestFeedback,\s*buildFeedbackCorrection\s*\}\s*from\s*['"].*governance\/feedback-correction\.js['"]/);
-    const linkOnlyBlock = code.slice(code.indexOf('// Link-only'));
-    expect(linkOnlyBlock).toMatch(/buildFeedbackCorrection\(feedback, changes\)/);
-    expect(linkOnlyBlock).toMatch(/\.from\(['"]feedback['"]\)\.insert\(payload\)/);
-    expect(code).not.toMatch(/\.from\(['"]feedback['"]\)\.update\(/);
-  });
-
-  it('resolves the initial fetch through fetchLatestFeedback (correction-chain aware), not a raw .eq().maybeSingle()', () => {
-    expect(code).toMatch(/await fetchLatestFeedback\(supabase, feedbackId\)/);
-  });
 });

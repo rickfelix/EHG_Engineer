@@ -13,7 +13,6 @@ import {
   validateReferences,
   ERROR_CODES
 } from '../../lib/quality/feedback-resolution-validator.js';
-import { fetchLatestFeedback, buildFeedbackCorrection } from '../../lib/governance/feedback-correction.js';
 
 const router = Router();
 
@@ -32,16 +31,17 @@ router.post('/:id/promote-to-sd', async (req, res) => {
       return res.status(503).json({ error: 'Database not connected' });
     }
 
-    // SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A: public.feedback is append-only. Resolve to the
-    // LATEST row in the correction chain (never trust the raw :id row for the idempotency
-    // guard below, which may already be stale) -- a resolution error is fail-closed, not
-    // silently treated as "not yet promoted".
-    const latestResult = await fetchLatestFeedback(dbLoader.supabase, id);
-    if (latestResult.error) {
-      console.error('❌ Feedback not found:', latestResult.error);
+    // Get the feedback item
+    const { data: feedback, error: fetchError } = await dbLoader.supabase
+      .from('feedback')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !feedback) {
+      console.error('❌ Feedback not found:', fetchError?.message || 'No data');
       return res.status(404).json({ error: 'Feedback not found' });
     }
-    const feedback = latestResult.row;
 
     // Check if already promoted
     if (feedback.resolution_sd_id) {
@@ -116,23 +116,25 @@ router.post('/:id/promote-to-sd', async (req, res) => {
       return res.status(500).json({ error: 'Failed to create Strategic Directive', details: insertError.message });
     }
 
-    // Record the feedback -> SD link as a correction (feedback is append-only; UPDATE is
-    // rejected unconditionally). SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A / TS-12: a failed
-    // correction-insert now returns an error response instead of silently warn-and-succeeding
-    // -- the old warn-only path let a repeat click mint a second SD, because the idempotency
-    // guard above never saw resolution_sd_id land on a failed write.
-    const correctionPayload = buildFeedbackCorrection(feedback, {
-      resolution_sd_id: newSD.sd_key,
-      status: 'triaged',
-    });
-    const { error: correctionError } = await dbLoader.supabase.from('feedback').insert(correctionPayload);
+    // Update the feedback with the SD reference. TS-12: a failed update now returns an error
+    // response instead of silently warn-and-succeeding -- a warn-only path let a repeat click
+    // mint a second SD, because the idempotency guard above never saw resolution_sd_id land
+    // on a failed write.
+    const { error: updateError } = await dbLoader.supabase
+      .from('feedback')
+      .update({
+        resolution_sd_id: newSD.sd_key,
+        status: 'triaged',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
 
-    if (correctionError) {
-      console.error('❌ Failed to record feedback -> SD correction:', correctionError.message);
+    if (updateError) {
+      console.error('❌ Failed to update feedback with SD reference:', updateError.message);
       return res.status(500).json({
         error: 'Strategic Directive created, but failed to record the feedback link',
         sd_id: newSD.sd_key,
-        details: correctionError.message,
+        details: updateError.message,
       });
     }
 
@@ -198,17 +200,19 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(400).json({ error: 'status field is required' });
     }
 
-    // Fetch existing feedback for merge validation. SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A:
-    // resolve to the LATEST row in the correction chain (never trust the raw :id row, which
-    // may already be stale) -- a resolution error is fail-closed, not treated as "not found".
-    const latestResult = await fetchLatestFeedback(dbLoader.supabase, id);
-    if (latestResult.error) {
+    // Fetch existing feedback for merge validation
+    const { data: existing, error: fetchError } = await dbLoader.supabase
+      .from('feedback')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !existing) {
       return res.status(404).json({
         error: 'Feedback not found',
         code: ERROR_CODES.FEEDBACK_REFERENCE_NOT_FOUND
       });
     }
-    const existing = latestResult.row;
 
     const updateData = { status };
     if (resolution_sd_id !== undefined) updateData.resolution_sd_id = resolution_sd_id;
@@ -239,14 +243,16 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(422).json(refValidation.error);
     }
 
-    // Persist the change as a correction (feedback is append-only; UPDATE is rejected
-    // unconditionally).
-    const correctionPayload = buildFeedbackCorrection(existing, updateData);
-    const { error: correctionError } = await dbLoader.supabase.from('feedback').insert(correctionPayload);
+    // Persist the update
+    updateData.updated_at = new Date().toISOString();
+    const { error: updateError } = await dbLoader.supabase
+      .from('feedback')
+      .update(updateData)
+      .eq('id', id);
 
-    if (correctionError) {
-      console.error(`[feedback] Failed to record correction for ${id}:`, correctionError.message);
-      return res.status(500).json({ error: 'Failed to update feedback', details: correctionError.message });
+    if (updateError) {
+      console.error(`[feedback] Failed to update ${id}:`, updateError.message);
+      return res.status(500).json({ error: 'Failed to update feedback', details: updateError.message });
     }
 
     res.json({ success: true, id, status, message: `Feedback status updated to '${status}'` });
