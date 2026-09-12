@@ -64,7 +64,7 @@ export function formatSendResult(result) {
 if (isMainModule(import.meta.url)) {
   enforceCliSendGuard({
     scriptName: 'scripts/adam-chairman-sms.mjs',
-    flags: [{ name: '--dry-run' }, { name: '--body', takesValue: true }, { name: '--kind', takesValue: true }, { name: '--dedupe-key', takesValue: true }, { name: '--reply-to-inbound' }, { name: '--morning-brief' }],
+    flags: [{ name: '--dry-run' }, { name: '--body', takesValue: true }, { name: '--kind', takesValue: true }, { name: '--dedupe-key', takesValue: true }, { name: '--reply-to-inbound' }, { name: '--morning-brief' }, { name: '--measured-by', takesValue: true }],
   });
 
   const DRY = process.argv.includes('--dry-run');
@@ -79,6 +79,18 @@ if (isMainModule(import.meta.url)) {
     const i = process.argv.indexOf(flag);
     return i >= 0 && i + 1 < process.argv.length ? process.argv[i + 1] : null;
   };
+  // QF-20260912-901: per-number provenance stamps, one JSON object per --measured-by flag.
+  const measuredBy = [];
+  for (let i = 0; i < process.argv.length; i++) {
+    if (process.argv[i] === '--measured-by' && i + 1 < process.argv.length) {
+      try {
+        measuredBy.push(JSON.parse(process.argv[i + 1]));
+      } catch {
+        console.warn(`[adam-chairman-sms] --measured-by "${process.argv[i + 1]}" is not valid JSON — nothing sent`);
+        process.exit(1);
+      }
+    }
+  }
 
   if (MORNING_BRIEF && (argValue('--body') || argValue('--kind') || argValue('--dedupe-key'))) {
     console.warn('[adam-chairman-sms] --morning-brief composes kind/dedupe-key/body from instruments at send time — drop --body/--kind/--dedupe-key rather than hand-typing a number or key for this send. Nothing sent.');
@@ -107,7 +119,7 @@ if (isMainModule(import.meta.url)) {
     process.exit(0);
   }
 
-  const message = { type: 'status', body: body.trim(), kind, dedupeKey };
+  const message = { type: 'status', body: body.trim(), kind, dedupeKey, measuredBy: measuredBy.length ? measuredBy : null };
 
   if (DRY) {
     console.log('=== [ADAM CHAIRMAN SMS — DRY RUN] no send ===\nKIND: ' + kind + '\n---\n' + message.body + '\n---');

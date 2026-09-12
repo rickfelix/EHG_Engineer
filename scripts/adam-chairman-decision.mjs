@@ -64,6 +64,19 @@ export function parseDecisionArgs(argv) {
   const dry = argv.includes('--dry-run');
   const bodyText = argValue('--body');
   const options = argValues('--option').map((label) => ({ label }));
+  // QF-20260912-901: per-number provenance ({value, instrument, row_ref, measured_at}), one JSON
+  // object per --measured-by flag. A malformed entry is a genuine input error (distinct from
+  // "nothing to send"), so it exits 1 rather than being silently dropped -- an unparseable stamp
+  // is indistinguishable from no stamp at all to the pre-send refusal gate.
+  const measuredByRaw = argValues('--measured-by');
+  const measuredBy = [];
+  for (const raw of measuredByRaw) {
+    try {
+      measuredBy.push(JSON.parse(raw));
+    } catch {
+      return { ok: false, exitCode: 1, error: `--measured-by "${raw}" is not valid JSON -- expected {"value":"...","instrument":"...","row_ref":"...","measured_at":"..."}` };
+    }
+  }
   const recommend = argValue('--recommend');
   const replyId = argValue('--reply-id') || crypto.randomBytes(4).toString('hex');
   const noReplyConsequence = argValue('--no-reply-policy');
@@ -103,6 +116,7 @@ export function parseDecisionArgs(argv) {
     noReplyConsequence: noReplyConsequence.trim(),
     decisionId,
     dedupeKey: argValue('--dedupe-key') || null,
+    measuredBy: measuredBy.length ? measuredBy : null,
   };
   return { ok: true, dry, message };
 }
@@ -115,6 +129,7 @@ if (isMainModule(import.meta.url)) {
       { name: '--recommend', takesValue: true }, { name: '--reply-instruction', takesValue: true },
       { name: '--reply-id', takesValue: true }, { name: '--no-reply-policy', takesValue: true },
       { name: '--decision-id', takesValue: true }, { name: '--dedupe-key', takesValue: true },
+      { name: '--measured-by', takesValue: true },
     ],
   });
 
