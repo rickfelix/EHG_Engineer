@@ -1,0 +1,11 @@
+import fs from 'fs';
+const p = JSON.parse(fs.readFileSync('.artifacts/tst-prd-full.json','utf8'));
+console.log('=== TECHNICAL REQUIREMENTS ===');
+console.log(JSON.stringify(p.technical_requirements, null, 1));
+console.log('\n=== ACCEPTANCE CRITERIA ===');
+console.log(JSON.stringify(p.acceptance_criteria, null, 1));
+console.log('\n=== CHECKLISTS: exec ===');
+console.log(JSON.stringify(p.exec_checklist, null, 1));
+console.log('\n=== validation ===');
+console.log(JSON.stringify(p.validation_checklist, null, 1));
+console.log('\n=== smoke_test_cmd ===', JSON.stringify(p.smoke_test_cmd));

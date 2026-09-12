@@ -1,0 +1,1247 @@
+{
+  "id": "PRD-SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A",
+  "directive_id": "SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A",
+  "title": "Feedback lifecycle & API core: append-only correction pattern",
+  "version": "1.0",
+  "status": "approved",
+  "category": "technical",
+  "priority": "high",
+  "executive_summary": "The database/chairman-gated/20260907_feedback_immutability_trigger.sql migration made public.feedback append-only (UPDATE/DELETE/TRUNCATE all rejected via BEFORE ENABLE ALWAYS triggers).",
+  "business_context": null,
+  "technical_context": null,
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Shared feedback-correction helper module",
+      "priority": "critical",
+      "description": "New lib/governance/feedback-correction.js exports rootIdOf(row) (resolves metadata.corrects_feedback_id or row.id -- ALWAYS the root of the chain, never the immediately-prior row, so a single lookup finds the current state with no multi-hop chain-walking), buildFeedbackCorrection(existingRow, changes) (returns an INSERT payload: drops id/created_at, ALWAYS nulls error_hash and strips metadata.dedup_hash from the copied metadata to avoid colliding with the three live partial UNIQUE indexes on public.feedback keyed on those fields -- idx_feedback_venture_error_hash, idx_feedback_error_capture_hash, idx_feedback_telemetry_dedup -- applies changes, sets metadata.corrects_feedback_id=rootId and preserves metadata.original_created_at, sets a fresh updated_at), and fetchLatestFeedback(supabase, feedbackId) (resolves any id in a correction chain to its current row via a base fetch + a root-scoped .or('id.eq.ROOT,metadata->>corrects_feedback_id.eq.ROOT').order('created_at', {ascending:false}).order('id', {ascending:false}).limit(1) query -- the secondary order('id', desc) is a DETERMINISTIC tie-break, not a recency claim: two corrections can share a created_at timestamp, and without a fixed secondary key the same query could return a different row on repeated calls, silently breaking the idempotency guards in FR-2/FR-6 (adversarial LEAD-phase critique finding, warn-severity). fetchLatestFeedback's own DB-error path returns {error} explicitly and every caller MUST treat that as fail-closed -- refuse to write / surface an error -- NEVER silently fall back to trusting the raw root row as if it were current (an INV-001-class control-without-could-not-check-path gap the same critique flagged); this fail-closed contract is itself covered by a test (TS-26).",
+      "acceptance_criteria": [
+        "rootIdOf never returns an intermediate correction's id for a 2+-hop chain (TS-3)",
+        "buildFeedbackCorrection never reproduces error_hash or metadata.dedup_hash on the correction payload (TS-5)",
+        "fetchLatestFeedback resolves a mid-chain id to the newest row in the chain (TS-7)",
+        "Two corrections sharing an identical created_at timestamp resolve deterministically via the id-desc tie-break, same result on every call (TS-25)",
+        "A fetchLatestFeedback DB error is surfaced to the caller and never silently treated as 'root row is current' (TS-26)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "server/routes/feedback.js: POST /:id/promote-to-sd and PATCH /:id/status converted to insert-correction",
+      "priority": "critical",
+      "description": "Both live HTTP routes fetch the feedback row, resolve it to its LATEST correction via fetchLatestFeedback (never trust the raw .eq('id',id) row for status/idempotency decisions), then insert a correction via buildFeedbackCorrection instead of calling .update(). promote-to-sd's `if (feedback.resolution_sd_id)` idempotency guard reads the resolved latest row so a second click never mints a second strategic_directives_v2 row; a failed correction-insert now returns an error response instead of silently warn-and-succeed (closing a pre-existing duplicate-SD-mint bug the current warn-only path already has). PATCH /:id/status's FR-4 validateStatusTransition call is evaluated against the resolved latest row, not the stale root. Also fixes an incidental dead gate at L58 (feedback.quality_score does not exist on the table -- the real columns are rubric_score/quality_assessment -- so the quality gate has always been a no-op; corrected to read rubric_score, in the same file already being touched).",
+      "acceptance_criteria": [
+        "Two sequential POST /:id/promote-to-sd calls mint exactly one SD row (TS-11)",
+        "PATCH /:id/status validates transitions against current, not stale, state (TS-13)",
+        "Neither route issues a .from('feedback').update(...) call"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "scripts/feedback-staleness-check.js converted to insert-correction, never writes status='stale'",
+      "priority": "critical",
+      "description": "LEAD validation-agent confirmed 'stale' is not a member of the live feedback_status_check CHECK constraint (allowed: new, triaged, in_progress, resolved, wont_fix, duplicate, invalid, backlog, shipped) -- the ORIGINAL update() would fail on this constraint independent of the append-only trigger. Fix: the bulk scan is root-scoped (.is('metadata->>corrects_feedback_id', null)) so correction rows are never re-selected as fresh staleness candidates; for each candidate root, fetchLatestFeedback resolves current state and the script skips it if already marked stale (metadata.marked_stale_at present) or already moved off status new/triaged by another path. Otherwise it inserts a correction that leaves `status` UNCHANGED and records staleness via metadata.marked_stale_at + the existing resolution_notes message. Chunked at the existing UPDATE_CHUNK=200 convention.",
+      "acceptance_criteria": [
+        "No write ever sets status='stale' (would violate feedback_status_check)",
+        "Running the script twice over the same fixture root inserts zero rows on the second run (TS-15) -- the highest-risk regression class: without this it inserts one correction per candidate on every cron run forever",
+        "Root-only scan predicate is present and tested (TS-18)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "scripts/feedback-link-resolution.mjs converted to insert-correction (both write branches)",
+      "priority": "high",
+      "description": "Widen the initial select from 'id, status' to '*' (needed to build a full correction payload). Both the resolveFeedback()-delegating branch (already covered by FR-6) and the direct link-only .update() in the else branch (setting resolution_sd_id or quick_fix_id) are converted to insert a correction via the shared helper, resolved against fetchLatestFeedback first.",
+      "acceptance_criteria": [
+        "Both write branches (resolve path and link-only path) use insert-correction, not .update() (TS-17)"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "scripts/feedback-age-out.mjs converted to insert-correction (adds the per-row fetch it currently lacks)",
+      "priority": "medium",
+      "description": "The current implementation is a pure set-based bulk UPDATE with no per-row fetch at all. Fix: first SELECT the full matching root rows (category='informational_note', archived_at IS NULL, updated_at < cutoff, metadata->>corrects_feedback_id IS NULL), chunked; for each, resolve latest via fetchLatestFeedback and skip if already archived by another correction; otherwise insert a correction setting archived_at=now(). No live candidates exist today (0 rows), so this is a forward-looking, latent-defect fix verified via a seeded fixture, not observed production behavior.",
+      "acceptance_criteria": [
+        "A synthetic 2-row fixture: first run archives both via correction, second run inserts zero new rows (TS-16)",
+        "Root-only scan predicate present"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "lib/governance/resolve-feedback.js: resolveFeedback() converted to insert-correction, backward-compatible return contract",
+      "priority": "critical",
+      "description": "The canonical resolver (7 live callers) resolves the input feedbackId to its LATEST correction via fetchLatestFeedback; if the latest row's status is already 'resolved', returns the EXACT existing shape {updated:false, id:feedbackId, reason:'no_row_or_already_resolved'} unchanged (a LEAD risk-agent audit found 3 production callers -- complete-quick-fix/orchestrator.js, reconcile-feedback-references.js, apply-chairman-decision-captures.mjs -- compare this exact string with strict equality; changing it silently routes an already-resolved outcome into their failure branch). Otherwise inserts a correction with status='resolved', resolved_at=now(), and the optional quick_fix_id/resolution_sd_id/resolution_notes/resolution_type fields, and returns {updated:true, id:feedbackId} (the returned id stays the ORIGINAL input id for full backward compatibility -- no caller reads a 'new row id' field, confirmed by the same audit, so none is added).",
+      "acceptance_criteria": [
+        "resolveFeedback() never calls .update() on feedback (TS-9)",
+        "Calling it twice against an already-resolved chain returns the pinned reason string on the second call with no second INSERT (TS-10)",
+        "The reason string 'no_row_or_already_resolved' is byte-identical to the pre-existing value"
+      ]
+    },
+    {
+      "id": "FR-7",
+      "title": "New dedicated table withheld_promotion_markers replaces feedback.metadata bookkeeping for 2 pipeline sites",
+      "priority": "critical",
+      "description": "lib/governance/withheld-registry.mjs (writeMarkers/readPendingMarkers/consumeMarker/disposeMarker) and scripts/feedback-fingerprint-promoter.mjs's own promoted_to_qf metadata-merge site stop reading/writing feedback.metadata entirely for this bookkeeping (a LEAD risk-agent review measured the insert-correction alternative would add ~440 rows/day of pure bookkeeping churn against a ~132/day organic baseline, a +333% write-volume increase, AND found a hard architectural blocker: feedback-fingerprint-promoter.mjs's existing server-side PostgREST .or() predicate for 'pending marker not yet promoted/disposed' cannot be re-expressed as 'the latest correction in a chain', a defect class the file's own history already documents once). The new table (feedback_id PK/FK to feedback.id, fingerprint, member_feedback_ids uuid[], max_severity, admission_path, gauge_value, floor, engine, decision, first_withheld_at/run, last_withheld_at/run, withheld_run_count, promoted_at/qf_id/fingerprint, disposed_by/reason/at, created_at, updated_at) carries NO append-only trigger -- ordinary UPDATE is legal there -- and is confirmed TIER-1 (worker-auto-appliable via scripts/apply-migration.js, no chairman ceremony) by scripts/lib/migration-tier-classifier.mjs, PROVIDED the migration contains no ON DELETE CASCADE, no DO $verify$ block, and no COMMENT ON containing a forbidden verb (all three would flip it TIER-2 per a LEAD testing-agent probe) -- so behavioural verification is a separate db-tier vitest test (TS-19), never an inline DO block. RLS: the table is written/read exclusively by the SAME server-role Supabase client withheld-registry.mjs and feedback-fingerprint-promoter.mjs already construct today (SUPABASE_SERVICE_ROLE_KEY, which bypasses RLS entirely -- rolbypassrls=true, identical to every other governance table these two files touch); RLS is enabled with a single permissive service-role policy (mirrors the pattern already used elsewhere in lib/governance), and TS-27 proves the actual client construction these two files use can select/insert/update the new table end-to-end, not merely that a policy exists on paper (adversarial LEAD-phase critique finding, warn-severity: 'under-specified RLS can cause late integration failures').",
+      "acceptance_criteria": [
+        "database/migrations/<ts>_withheld_promotion_markers.sql classifies TIER-1 via classifyMigration() before merge",
+        "withheld-registry.mjs and feedback-fingerprint-promoter.mjs contain zero .from('feedback').update( calls for marker bookkeeping (TS-22)",
+        "Ordinary UPDATE against the new table succeeds (no trigger) (TS-19)",
+        "The exact service-role client construction used by both producer files can select/insert/update the new table (TS-27)"
+      ]
+    },
+    {
+      "id": "FR-8",
+      "title": "Backfill existing feedback.metadata markers into withheld_promotion_markers, with a before/after count gate",
+      "priority": "critical",
+      "description": "A LEAD testing-agent audit measured 136 live rows carrying metadata.withheld_pending (110 still pending) and 117 carrying metadata.promoted_to_qf. Shipping the new table with no backfill would silently drop every pending marker -- reproducing the exact silent-expiry defect withheld-registry.mjs's own module docstring says it was written to abolish. A one-off backfill script (scripts/one-off/backfill-withheld-promotion-markers.mjs) migrates every existing marker (both withheld_pending and promoted_to_qf) into the new table. Per an adversarial LEAD-phase critique finding (INV-002-repair-gated-on-code-present-not-data-present: 'a seeder/backfill ships with no acceptance criterion measuring the DATA it produces'), the backfill is NOT considered done on 'script ran without error' -- it prints and the EXEC evidence records an explicit before-count (measured from feedback.metadata) vs. after-count (measured from withheld_promotion_markers) comparison, and FR-9's cutover gate refuses to proceed unless those counts match.",
+      "acceptance_criteria": [
+        "Post-backfill readPendingMarkers() (rewired to the new table) returns the same pending set (by feedback_id) as the pre-backfill feedback.metadata scan returned (TS-21)",
+        "All 117 promoted_to_qf markers land in the new table's promoted_at/promoted_fingerprint columns",
+        "The backfill script's own output states the before-count and after-count explicitly (TS-28)"
+      ]
+    },
+    {
+      "id": "FR-9",
+      "title": "Reversible cutover for withheld_promotion_markers: verified-backfill gate + revert path",
+      "priority": "critical",
+      "description": "Directly closes the adversarial LEAD-phase critique's sole BLOCK finding: 'the plan provides no rollback/safety procedure if the backfill is wrong or the rewire causes dropped/duplicated markers in production... not trivially reversible once new writes start landing.' Sequencing (each step is a precondition for the next, not parallelizable): (1) apply the withheld_promotion_markers migration -- purely additive, does not touch feedback or existing producer behavior, safe on its own; (2) run the backfill script and verify its before/after counts match (FR-8) BEFORE any producer code changes ship -- at this point the new table is fully populated but nothing reads or writes it yet, so a bad backfill is trivially fixed by re-running it with zero production impact; (3) ONLY after the count-match gate passes, cut withheld-registry.mjs and feedback-fingerprint-promoter.mjs over to read/write the new table exclusively. Rollback if the cutover (step 3) misbehaves: git-revert the producer-file changes (step 1's migration and step 2's backfilled data are NOT reverted -- they are purely additive and harmless to leave in place); the reverted producer code resumes reading/writing feedback.metadata exactly as it did before this SD, which still holds the pre-cutover marker state untouched (this SD's design never deletes or mutates the legacy feedback.metadata markers -- it only stops writing new ones there), so a revert is a clean, zero-data-loss return to the pre-SD behavior. There is deliberately no dual-read/dual-write window: the critique's suggested alternative (feature-flagged dual-read) was rejected because it would require the SAME non-terminating-write hazard analysis (FR-1) applied to TWO code paths simultaneously for the marker-bookkeeping case that FR-7 exists specifically to avoid; a clean verified-then-atomic cutover with a pure-revert rollback is simpler and equally safe given step 2's pre-cutover verification gate.",
+      "acceptance_criteria": [
+        "The migration (step 1) and backfill (step 2) are committed and verified in a state where zero producer code has changed yet",
+        "Producer cutover (step 3) only proceeds once FR-8's count-match gate passes",
+        "A revert of the producer-file commit alone (without touching the migration/backfill commits) restores pre-SD behavior with no data loss"
+      ]
+    }
+  ],
+  "non_functional_requirements": [],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No UPDATE/DELETE/TRUNCATE against public.feedback anywhere in the 7 owned files",
+      "description": "The append-only trigger (feedback_no_update/feedback_no_delete_trg/feedback_no_truncate_trg, all ENABLE ALWAYS) is out of scope to modify -- it is a chairman-ratified, cross-cutting invariant (SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E). Every write in scope is an INSERT."
+    },
+    {
+      "id": "TR-2",
+      "title": "Correction inserts must not collide with live partial UNIQUE indexes",
+      "description": "idx_feedback_venture_error_hash (venture_id, error_hash) WHERE feedback_type='venture_error' AND venture_id IS NOT NULL; idx_feedback_error_capture_hash (error_hash) WHERE source_type='error_capture' AND feedback_type='sentry_error' AND venture_id IS NULL; idx_feedback_telemetry_dedup (category, metadata->>'dedup_hash') WHERE category='fleet_dormancy'. buildFeedbackCorrection nulls error_hash and strips metadata.dedup_hash unconditionally (NULL is never equal to NULL under a unique index, so this structurally avoids all three without per-index special-casing)."
+    },
+    {
+      "id": "TR-3",
+      "title": "New table migration must stay TIER-1",
+      "description": "No ON DELETE CASCADE on the feedback_id FK, no DO $verify$ block, no COMMENT ON containing a forbidden verb (UPDATE/DELETE/GRANT/etc). classifyMigration() from scripts/lib/migration-tier-classifier.mjs must return tier:1 before the migration is applied via scripts/apply-migration.js."
+    },
+    {
+      "id": "TR-4",
+      "title": "Backward-compatible resolveFeedback() contract",
+      "description": "resolveFeedback()'s returned shape ({updated, id, reason, error}) is unchanged in field names and in the exact string 'no_row_or_already_resolved'. No new required field is added that existing callers must adopt."
+    },
+    {
+      "id": "TR-5",
+      "title": "No DB-tier test may leave permanent residue on public.feedback",
+      "description": "feedback rows can never be deleted (append-only + no DELETE). All feedback-table interactions in this SD's tests use vi.mock('@supabase/supabase-js') (unit tier, no DB). The withheld_promotion_markers table has no such constraint, so its db-tier tests (tests/*.db.test.js via describeDb/itDb) may freely insert/update/delete fixture rows there."
+    },
+    {
+      "id": "TR-6",
+      "title": "Deterministic latest-row resolution",
+      "description": "fetchLatestFeedback orders by created_at DESC, id DESC (a fixed, deterministic secondary key -- not a recency claim, purely a tie-break so the same query always returns the same row). Any DB error from this resolution is returned to the caller explicitly and MUST be treated as fail-closed by every call site (refuse to write / surface an error) -- never silently treated as 'the root row is current'."
+    },
+    {
+      "id": "TR-7",
+      "title": "withheld_promotion_markers access is service-role only, matching existing producer clients",
+      "description": "No new role or credential is introduced. RLS is enabled with a permissive service-role policy; the table is reachable only via the SUPABASE_SERVICE_ROLE_KEY client withheld-registry.mjs and feedback-fingerprint-promoter.mjs already construct (rolbypassrls=true), identical to how these two files already reach every other table they touch."
+    }
+  ],
+  "system_architecture": "{\"summary\":\"A shared insert-correction helper for append-only-table writers, plus a purpose-built mutable side table for high-frequency pipeline bookkeeping that cannot tolerate the append-only model.\",\"components\":[{\"name\":\"lib/governance/feedback-correction.js\",\"change\":\"NEW -- shared rootIdOf/buildFeedbackCorrection/fetchLatestFeedback helpers\"},{\"name\":\"server/routes/feedback.js\",\"change\":\"MODIFIED -- 2 write sites converted, 1 incidental dead-gate fix\"},{\"name\":\"scripts/feedback-staleness-check.js\",\"change\":\"MODIFIED -- bulk write converted, root-scoped scan added\"},{\"name\":\"scripts/feedback-link-resolution.mjs\",\"change\":\"MODIFIED -- both write branches converted\"},{\"name\":\"scripts/feedback-age-out.mjs\",\"change\":\"MODIFIED -- adds per-row fetch, converts bulk write\"},{\"name\":\"lib/governance/resolve-feedback.js\",\"change\":\"MODIFIED -- canonical resolver converted, contract preserved\"},{\"name\":\"lib/governance/withheld-registry.mjs\",\"change\":\"MODIFIED -- rewired to withheld_promotion_markers table\"},{\"name\":\"scripts/feedback-fingerprint-promoter.mjs\",\"change\":\"MODIFIED -- marker-merge site rewired to the new table\"},{\"name\":\"database/migrations/<ts>_withheld_promotion_markers.sql\",\"change\":\"NEW -- TIER-1 table migration\"},{\"name\":\"scripts/one-off/backfill-withheld-promotion-markers.mjs\",\"change\":\"NEW -- one-time backfill\"}]}",
+  "data_model": {},
+  "api_specifications": [],
+  "ui_ux_requirements": [],
+  "implementation_approach": "{\"summary\":\"Build the shared helper and its tests first, then convert the 5 lifecycle sites one at a time (each independently testable), then build and apply the new table + backfill, then rewire the 2 pipeline files.\",\"steps\":[\"1. lib/governance/feedback-correction.js (with the deterministic tie-break + fail-closed error contract) + tests/unit/governance/feedback-correction.test.js (TS-1..TS-8, TS-25, TS-26)\",\"2. Convert resolve-feedback.js (TS-9, TS-10, TS-23) -- highest fan-in, unblocks confidence in the pattern\",\"3. Convert server/routes/feedback.js both sites (TS-11..TS-13) + the incidental quality_score fix\",\"4. Convert feedback-staleness-check.js (TS-14, TS-15, TS-18) and feedback-link-resolution.mjs (TS-17)\",\"5. Convert feedback-age-out.mjs with a seeded fixture (TS-16)\",\"6. FR-9 step 1: write + classify + apply the withheld_promotion_markers migration (TS-19, TS-27) -- purely additive, no producer code changed yet\",\"7. FR-9 step 2: write + run the backfill script with before/after count reporting (TS-21, TS-28) -- still no producer code changed; a bad backfill is a zero-impact re-run at this point\",\"8. FR-9 step 3 (gated on step 7's counts matching): rewire withheld-registry.mjs + feedback-fingerprint-promoter.mjs to the new table (TS-20, TS-22) -- commit this cutover separately from steps 6-7 so it is independently revertible\",\"9. Update existing regression suites that mock the old .update() shape (withheld-registry.test.js, resolve-feedback.test.js, feedback-link-resolution.test.js, lead-final-footer-resolve.test.js, qf-mint-gate.test.js)\",\"10. Full test suite + scope-drift guard (TS-24)\"]}",
+  "technology_stack": [],
+  "dependencies": [],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "type": "unit",
+      "expected": "returns row.id",
+      "scenario": "rootIdOf on an original row (no corrects_feedback_id)"
+    },
+    {
+      "id": "TS-2",
+      "type": "unit",
+      "expected": "returns metadata.corrects_feedback_id, never row.id",
+      "scenario": "rootIdOf on a correction row"
+    },
+    {
+      "id": "TS-3",
+      "type": "unit",
+      "expected": "rootIdOf(C2) returns R, not C1 -- proves the root pointer is never the immediately-prior row",
+      "scenario": "rootIdOf on a 2-hop correction chain (root R -> C1 -> C2)"
+    },
+    {
+      "id": "TS-4",
+      "type": "unit",
+      "expected": "omits id+created_at, applies changes, sets metadata.corrects_feedback_id=rootId, preserves metadata.original_created_at, fresh updated_at",
+      "scenario": "buildFeedbackCorrection payload shape"
+    },
+    {
+      "id": "TS-5",
+      "type": "unit",
+      "expected": "correction payload nulls error_hash and omits metadata.dedup_hash in all three cases",
+      "scenario": "buildFeedbackCorrection on a row matching a partial-unique-index predicate (venture_error+error_hash, error_capture+error_hash, fleet_dormancy+dedup_hash)"
+    },
+    {
+      "id": "TS-6",
+      "type": "unit",
+      "expected": "foreign metadata keys survive unchanged; only correction keys are added/removed",
+      "scenario": "buildFeedbackCorrection preserves unrelated metadata keys"
+    },
+    {
+      "id": "TS-7",
+      "type": "unit",
+      "expected": "issues base fetch then root-scoped .or() query ordered by created_at desc; returns the newest row in the chain",
+      "scenario": "fetchLatestFeedback given a mid-chain id"
+    },
+    {
+      "id": "TS-8",
+      "type": "unit",
+      "expected": "returns the row itself as latest",
+      "scenario": "fetchLatestFeedback on an id with no corrections"
+    },
+    {
+      "id": "TS-9",
+      "type": "unit",
+      "expected": "issues an INSERT, never .update(), on public.feedback",
+      "scenario": "resolveFeedback() write path"
+    },
+    {
+      "id": "TS-10",
+      "type": "unit",
+      "expected": "2nd call returns {updated:false, reason:'no_row_or_already_resolved'} and issues no 2nd INSERT",
+      "scenario": "resolveFeedback() called twice against an already-resolved chain"
+    },
+    {
+      "id": "TS-11",
+      "type": "integration",
+      "expected": "exactly one strategic_directives_v2 row is minted -- the resolution_sd_id idempotency guard reads the resolved latest row",
+      "scenario": "Two sequential POST /:id/promote-to-sd calls for the same feedback id"
+    },
+    {
+      "id": "TS-12",
+      "type": "integration",
+      "expected": "route returns an error response, never success:true (closes the pre-existing duplicate-mint bug in the current warn-only path)",
+      "scenario": "promote-to-sd correction-insert fails"
+    },
+    {
+      "id": "TS-13",
+      "type": "integration",
+      "expected": "validateStatusTransition receives the LATEST correction as existingFeedback, not the stale root",
+      "scenario": "PATCH /:id/status against a feedback id with a prior correction"
+    },
+    {
+      "id": "TS-14",
+      "type": "unit",
+      "expected": "never writes status='stale'; staleness recorded via metadata.marked_stale_at + resolution_notes, status left unchanged",
+      "scenario": "feedback-staleness-check.js write shape"
+    },
+    {
+      "id": "TS-15",
+      "type": "integration",
+      "expected": "2nd run inserts zero rows -- proves termination",
+      "scenario": "feedback-staleness-check.js run twice over the same fixture root"
+    },
+    {
+      "id": "TS-16",
+      "type": "integration",
+      "expected": "1st run archives both via correction; 2nd run inserts zero new rows",
+      "scenario": "feedback-age-out.mjs against a seeded 2-row informational_note fixture, run twice"
+    },
+    {
+      "id": "TS-17",
+      "type": "unit",
+      "expected": "both use insert-correction, not .update()",
+      "scenario": "feedback-link-resolution.mjs both write branches (resolve path and link-only else branch)"
+    },
+    {
+      "id": "TS-18",
+      "type": "unit",
+      "expected": "scan query includes .is('metadata->>corrects_feedback_id', null) so corrections are never re-selected as fresh candidates",
+      "scenario": "Bulk scan predicates (staleness-check, age-out) exclude correction rows"
+    },
+    {
+      "id": "TS-19",
+      "type": "database",
+      "expected": "table + FK + RLS policy exist; classifyMigration() returns tier:1; an ordinary UPDATE against the new table succeeds (no append-only trigger there)",
+      "scenario": "withheld_promotion_markers migration applies"
+    },
+    {
+      "id": "TS-20",
+      "type": "database",
+      "expected": "writeMarkers -> readPendingMarkers -> consumeMarker/disposeMarker all operate correctly; isPending() transitions hold",
+      "scenario": "withheld-registry.mjs round trip against the new table"
+    },
+    {
+      "id": "TS-21",
+      "type": "database",
+      "expected": "post-backfill readPendingMarkers() (rewired to the new table) returns the same pending feedback_id set the pre-backfill metadata scan returned",
+      "scenario": "Backfill script against the live 136 withheld_pending + 117 promoted_to_qf metadata markers"
+    },
+    {
+      "id": "TS-22",
+      "type": "unit",
+      "expected": "source contains no .from('feedback').update( for marker bookkeeping; MARKER_KEY is no longer written to feedback.metadata",
+      "scenario": "Static guard on withheld-registry.mjs and feedback-fingerprint-promoter.mjs"
+    },
+    {
+      "id": "TS-23",
+      "type": "unit",
+      "expected": "the reason string 'no_row_or_already_resolved' is pinned byte-identical; no caller depends on a new-row-id field",
+      "scenario": "resolveFeedback() production-caller contract"
+    },
+    {
+      "id": "TS-24",
+      "type": "unit",
+      "expected": "asserts the 5 lifecycle writer functions/routes and the 2 pipeline sites are converted, permits shared-helper (feedback-correction.js) adoption by sibling children without failing, and does not claim repo-wide freedom from the append-only rejection (the parent audit found ~30 live files across all children; ~23 remain broken after this child ships)",
+      "scenario": "Scope-drift guard (rephrased around call sites/functions, not a rigid file count -- adversarial LEAD-phase critique note)"
+    },
+    {
+      "id": "TS-25",
+      "type": "unit",
+      "expected": "resolves deterministically via the id-desc tie-break -- repeated calls against the same fixture always return the same row",
+      "scenario": "fetchLatestFeedback with two correction rows sharing an identical created_at timestamp"
+    },
+    {
+      "id": "TS-26",
+      "type": "unit",
+      "expected": "the error propagates to the caller explicitly; no call site (resolveFeedback, promote-to-sd, PATCH /:id/status, staleness-check, age-out, link-resolution) falls back to writing against the un-resolved root row",
+      "scenario": "fetchLatestFeedback's underlying query returns a DB error"
+    },
+    {
+      "id": "TS-27",
+      "type": "database",
+      "expected": "the exact service-role Supabase client construction used by withheld-registry.mjs and feedback-fingerprint-promoter.mjs today can select/insert/update the new table",
+      "scenario": "withheld_promotion_markers RLS/access path"
+    },
+    {
+      "id": "TS-28",
+      "type": "database",
+      "expected": "script output states the pre-backfill feedback.metadata marker count and the post-backfill withheld_promotion_markers row count explicitly, and the two match",
+      "scenario": "Backfill script before/after count reporting"
+    }
+  ],
+  "acceptance_criteria": [
+    "All 5 lifecycle sites (server/routes/feedback.js x2, feedback-staleness-check.js, feedback-link-resolution.mjs, feedback-age-out.mjs, resolve-feedback.js) issue zero .from('feedback').update() calls and correctly terminate (never re-fire against a stale root)",
+    "withheld-registry.mjs and feedback-fingerprint-promoter.mjs's marker bookkeeping is fully migrated to withheld_promotion_markers with zero data loss versus the pre-migration feedback.metadata state",
+    "resolveFeedback()'s public contract is unchanged for all existing callers",
+    "0 test regressions; new tests cover TS-1 through TS-24"
+  ],
+  "performance_requirements": {},
+  "plan_checklist": [
+    {
+      "text": "PRD created and saved",
+      "checked": true
+    },
+    {
+      "text": "SD requirements mapped to technical specs",
+      "checked": true
+    },
+    {
+      "text": "Technical architecture defined",
+      "checked": true
+    },
+    {
+      "text": "Implementation approach documented",
+      "checked": true
+    },
+    {
+      "text": "Test scenarios defined",
+      "checked": true
+    },
+    {
+      "text": "Acceptance criteria established",
+      "checked": true
+    },
+    {
+      "text": "Integration & operationalization documented",
+      "checked": true
+    },
+    {
+      "text": "Exploration summary documented"
+    },
+    {
+      "text": "Resource requirements estimated",
+      "checked": false
+    },
+    {
+      "text": "Timeline and milestones set",
+      "checked": false
+    },
+    {
+      "text": "Risk assessment completed",
+      "checked": true
+    }
+  ],
+  "exec_checklist": [
+    {
+      "text": "Development environment setup",
+      "checked": false
+    },
+    {
+      "text": "Core functionality implemented",
+      "checked": false
+    },
+    {
+      "text": "Unit tests written",
+      "checked": false
+    },
+    {
+      "text": "Integration tests completed",
+      "checked": false
+    },
+    {
+      "text": "Code review completed",
+      "checked": false
+    },
+    {
+      "text": "Documentation updated",
+      "checked": false
+    }
+  ],
+  "validation_checklist": [
+    {
+      "text": "All acceptance criteria met",
+      "checked": false
+    },
+    {
+      "text": "Performance requirements validated",
+      "checked": false
+    },
+    {
+      "text": "Security review completed",
+      "checked": false
+    },
+    {
+      "text": "User acceptance testing passed",
+      "checked": false
+    },
+    {
+      "text": "Deployment readiness confirmed",
+      "checked": false
+    }
+  ],
+  "progress": 73,
+  "phase": "planning",
+  "phase_progress": {},
+  "risks": [
+    {
+      "risk": "A converted site's read-before-write guard resolves against the stale root instead of the latest correction, making the site non-terminating (re-fires every run/request forever)",
+      "severity": "high",
+      "mitigation": "Every read-before-write decision routes through fetchLatestFeedback or an explicit root-scoped scan; TS-10/TS-11/TS-15/TS-16 each assert termination on a second run/request."
+    },
+    {
+      "risk": "Correction insert collides with a live partial UNIQUE index on public.feedback (venture_error/error_capture error_hash, fleet_dormancy dedup_hash)",
+      "severity": "high",
+      "mitigation": "buildFeedbackCorrection unconditionally nulls error_hash and strips metadata.dedup_hash; TS-5 pins this."
+    },
+    {
+      "risk": "The new withheld_promotion_markers migration drifts to TIER-2 (chairman-gated) if a future edit adds ON DELETE CASCADE, a DO block, or a destructive-verb COMMENT",
+      "severity": "medium",
+      "mitigation": "TR-3 states the constraint explicitly; classifyMigration() is run and its tier:1 verdict checked before apply."
+    },
+    {
+      "risk": "Backfill omits or duplicates existing withheld/promoted markers",
+      "severity": "high",
+      "mitigation": "TS-21 compares the pending set before and after backfill by feedback_id; TS-28 pins an explicit before/after count report; FR-9's cutover gate refuses producer changes until counts match."
+    },
+    {
+      "risk": "The withheld_promotion_markers migration + backfill + producer cutover is a persistent-side-effect change with no stated rollback (adversarial LEAD-phase critique BLOCK finding)",
+      "severity": "high",
+      "mitigation": "FR-9 sequences migration -> verified backfill -> producer cutover as three independently-committable steps; migration and backfill are purely additive and safe standalone; rollback of the cutover is a plain git-revert of the producer-file commit, restoring feedback.metadata reads/writes with the legacy markers still intact (never deleted)."
+    },
+    {
+      "risk": "Two correction rows for the same root share an identical created_at timestamp, making 'latest' nondeterministic across repeated fetchLatestFeedback calls and silently breaking an idempotency guard",
+      "severity": "medium",
+      "mitigation": "TR-6/TS-25 pin a deterministic order('created_at' desc, 'id' desc) tie-break."
+    },
+    {
+      "risk": "Cross-child coordination: sibling SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-F is active EXEC right now on files (lib/learning/outcome-tracker.js, scripts/modules/handoff/executors/lead-final-approval/index.js) that read feedback status/links possibly written by resolve-feedback.js",
+      "severity": "medium",
+      "mitigation": "resolveFeedback()'s contract is kept fully backward-compatible (TR-4); a coordinator signal was sent flagging the shared helper module for reuse and naming the residual root-scoping requirement for any sibling child's OWN feedback-status-reading gate."
+    },
+    {
+      "risk": "Downstream readers across the codebase (not in this child's scope) that query feedback by simple column filters will see both a stale original row and its correction as two apparent rows/states",
+      "severity": "medium",
+      "mitigation": "Explicitly out of scope for this child (its mandate is the 7 writer call sites, not the ~120+ production readers); documented as a known, deliberate scope boundary in completion flags, not silently left unaddressed."
+    }
+  ],
+  "constraints": [],
+  "assumptions": [],
+  "stakeholders": [
+    {
+      "name": "Chairman (Solo Entrepreneur)",
+      "needs": [
+        "ROI visibility",
+        "Resource efficiency",
+        "Quick iteration",
+        "Strategic alignment"
+      ],
+      "persona_id": "chairman",
+      "pain_points": [
+        "Too much detail",
+        "Missing financial KPIs",
+        "Slow feedback loops"
+      ],
+      "success_criteria": [
+        "Clear ROI path",
+        "Minimal overhead",
+        "Measurable outcomes"
+      ]
+    },
+    {
+      "name": "EVA (AI Chief of Staff)",
+      "needs": [
+        "Clear orchestration APIs",
+        "Reliable automation",
+        "Observable state"
+      ],
+      "persona_id": "eva",
+      "pain_points": [
+        "Unclear agent boundaries",
+        "Missing context",
+        "Brittle integrations"
+      ],
+      "success_criteria": [
+        "Autonomous execution",
+        "Predictable behavior",
+        "Graceful degradation"
+      ]
+    },
+    {
+      "name": "DevOps Engineer",
+      "needs": [
+        "Reliable deployments",
+        "Clear monitoring",
+        "Fast rollback"
+      ],
+      "persona_id": "devops_engineer",
+      "pain_points": [
+        "Flaky pipelines",
+        "Missing logs",
+        "Configuration drift"
+      ],
+      "success_criteria": [
+        "Zero-downtime deploys",
+        "Full observability",
+        "Fast recovery"
+      ]
+    }
+  ],
+  "approved_by": null,
+  "approval_date": null,
+  "planned_start": null,
+  "planned_end": null,
+  "actual_start": null,
+  "actual_end": null,
+  "created_at": "2026-09-12T03:20:34.137928",
+  "updated_at": "2026-09-12T03:33:33.740468",
+  "created_by": "PLAN",
+  "updated_by": null,
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A",
+    "created_via": "content_arg",
+    "validated_at": "2026-09-12T03:33:17.980Z",
+    "risk_analysis": {
+      "verdict": "PASS",
+      "warnings": [
+        {
+          "issue": "Security-related: auth. Authentication/authorization changes. Data exposure potential",
+          "score": 6,
+          "domain": "Security",
+          "monitoring_recommended": true
+        },
+        {
+          "issue": "Database changes: table, trigger. Modifying existing database structures",
+          "score": 6,
+          "domain": "Data Migration",
+          "monitoring_recommended": true
+        }
+      ],
+      "conditions": null,
+      "confidence": 85,
+      "sd_context": "aaf65001-7031-46aa-882f-9f51281dc572",
+      "executed_at": "2026-09-12T03:33:27.285Z",
+      "execution_id": "043da882-c348-4566-99df-e05b891745e7",
+      "generated_at": "2026-09-12T03:33:27.285Z",
+      "raw_analysis": null,
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        {
+          "title": "Security Review Required",
+          "priority": "HIGH",
+          "description": "Engage Chief Security Architect sub-agent for review. Validate: RLS policies, authentication flows, data exposure risks, input validation."
+        }
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "content_quality": {
+      "mode": "off",
+      "score": 74,
+      "passed": true,
+      "threshold": 70
+    },
+    "design_analysis": {
+      "sd_context": {
+        "id": "SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A",
+        "scope": "Child A of orchestrator SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001 (7 files, the \"canonical status/resolution writers\" group — the feedback table's own API route plus the shared resolution/withhold primitives other subsystems call into). Verified at server/routes/feedback.js:117 by feedback-update-audit-agent (a 2026-09-12 sub-agent audit that read the actual code, not grep-only). Each site confirmed LIVE against main by that audit (re-verify before fixing):\n\n- server/routes/feedback.js: L117-124 sets status='triaged'+resolution_sd_id on the live /api/feedback route (requireAuth); L237-240 sets status+FK links+resolution_notes. INSERT_CORRECTION_FITS.\n- scripts/feedback-staleness-check.js: L91-95 sets status='stale'+resolution_notes via 'npm run feedback:stale', chunked. INSERT_CORRECTION_FITS.\n- scripts/feedback-link-resolution.mjs: L81 sets resolution_sd_id or quick_fix_id via 'npm run feedback:link'. INSERT_CORRECTION_FITS.\n- scripts/feedback-fingerprint-promoter.mjs: L211-214 merges metadata (promoted_to_qf/at/fingerprint) across a matched group, live scheduled promoter. NEEDS_DEDICATED_TABLE (metadata read-modify-write across a group, not a single-row correction).\n- scripts/feedback-age-out.mjs: L65-72 sets archived_at on aged rows; CLI --apply, no cron wiring found live. INSERT_CORRECTION_FITS.\n- lib/governance/withheld-registry.mjs: 3 sites (L168-171/238-239/262-263) transition metadata.withheld_pending markers, called from feedback-fingerprint-promoter.mjs's cron. NEEDS_DEDICATED_TABLE.\n- lib/governance/resolve-feedback.js: L183-188 sets status='resolved'+resolved_at+optional FK/notes, guarded on neq(status,'resolved'); this is the canonical resolver called from the complete-quick-fix orchestrator post-merge. INSERT_CORRECTION_FITS.\n\nBoth this file's own resolve-feedback.js and withheld-registry.mjs are called FROM other children's files (feedback-fingerprint-promoter.mjs calls withheld-registry.mjs; the QF orchestrator calls resolve-feedback.js) — fix this child first where practical, since its two lib/governance/* primitives are shared building blocks.",
+        "title": "Feedback lifecycle & API core: fix 7 feedback.update() call sites broken by the append-only trigger"
+      },
+      "generated_at": "2026-09-12T03:33:18.169Z",
+      "raw_analysis": "DESIGN Analysis Results:\nVerdict: CONDITIONAL_PASS\nConfidence: 60%\n\nRecommendations:\n  1. Validate infrastructure concerns: deployment, monitoring, rollback, CI/CD integration\n\nwarnings: [\n  {\n    \"severity\": \"HIGH\",\n    \"issue\": \"Sub-agent scanned an unresolved or empty repo (repo_resolved=true, probe_exists=false)\",\n    \"recommendation\": \"Verify the SD target_application resolves to the correct repo; an empty/wrong tree yields zero violations and must not pass as green\"\n  }\n]\n\ndetailed_analysis: {\n  \"sd_type\": \"infrastructure\",\n  \"sd_type_source\": \"declared\",\n  \"skip_reason\": \"Non-UI SD type (infrastructure) - UI/UX design validation not applicable\",\n  \"validation_approach\": \"Infrastructure design review: deployment, CI/CD, monitoring, rollback, config management\",\n  \"infra_checklist\": [\n    \"Deployment strategy documented\",\n    \"CI/CD pipeline integration verified\",\n    \"Monitoring and alerting configured\",\n    \"Rollback procedure defined\",\n    \"Configuration management approach specified\"\n  ]\n}\n\nfindings: {\n  \"design_system_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"component_analysis\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"accessibility_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"responsive_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"consistency_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"workflow_review\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no user-facing workflows\"\n  }\n}\n\nmetadata: {\n  \"repo_path\": \"C:/Users/rickf/Projects/_EHG/EHG_Engineer\",\n  \"repo_resolved\": true,\n  \"components_dir_exists\": true,\n  \"skip_reason\": \"non_ui_sd_type:infrastructure\",\n  \"registry_source\": \"db\",\n  \"executed_from_cwd\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A\",\n  \"probe_exists\": false,\n  \"verdict_chain\": [\n    {\n      \"from\": \"PASS\",\n      \"to\": \"CONDITIONAL_PASS\",\n      \"mutator\": \"lib/sub-agents/resolve-repo.js:applySubAgentRepoVerdict\",\n      \"reason\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\"\n    }\n  ]\n}\n\noptions: {\n  \"timeout\": 120000,\n  \"repo_path\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A\",\n  \"target_application\": \"EHG_Engineer\",\n  \"_injectedBrief\": \"--- Five-Point Brief ---\\nSymptom: <describe what IS happening>\\nLocation: <file/endpoint/table>\\nFrequency: <pattern/timing>\\nPrior Attempts: <what you already tried>\\nDesired Outcome: <clear success criteria>\\nContext: SD SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A (LEAD phase)\\n--- End Brief ---\",\n  \"taskContract\": {\n    \"contract_id\": \"f66e7f04-a2d1-4591-a1e7-4b4ff2e4e637\",\n    \"summary\": \"Contract f66e7f04-a2d1-4591-a1e7-4b4ff2e4e637: LEO_EXECUTOR → DESIGN | Execute Senior Design Sub-Agent analysis for SD SD...\"\n  },\n  \"inputArtifacts\": [\n    \"ba0d9411-80e6-4195-9053-89d033066dfd\"\n  ],\n  \"sdKey\": \"SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A\",\n  \"sdUUID\": \"aaf65001-7031-46aa-882f-9f51281dc572\"\n}\n\nconditions: [\n  {\n    \"action\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\",\n    \"priority\": \"medium\",\n    \"blocking\": false\n  }\n]\njustification: CONDITIONAL_PASS recorded by applySubAgentRepoVerdict: repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\n\nsub_agent: {\n  \"id\": \"2ebfbd8a-5aa0-4907-bb47-33a2dd04254f\",\n  \"code\": \"DESIGN\",\n  \"name\": \"Senior Design Sub-Agent\",\n  \"description\": \"## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition\\n\\n**🆕 NEW in v6.0.0**: Proactive learning, accessibility-first patterns, scope estimation protocol\\n\\n### Overview\\n**Mission**: Ensure design compliance, accessibility (WCAG 2.1 AA), and consistent UX across all implementations.\\n\\n**Philosophy**: **Accessibility-first design prevents technical debt.**\\n\\n**Tech Stack**: Vite + React + Shadcn UI + TypeScript + Tailwind CSS\\n\\n**Component Sizing Sweet Spot**: 300-600 lines of code (optimal for testing and maintenance)\\n\\n---\\n\\n## 🔍 PROACTIVE LEARNING INTEGRATION (SD-LEO-LEARN-001)\\n\\n### Before Starting ANY Design/UI Work\\n\\n**MANDATORY**: Query issue_patterns table for proven solutions:\\n\\n```bash\\n# Check for known UI/UX issue patterns\\nnode scripts/search-prior-issues.js \\\"UI component design\\\"\\n\\n# Query issue_patterns table\\nnode -e \\\"\\nimport { createDatabaseClient } from './lib/supabase-connection.js';\\n(async () => {\\n  const client = await createDatabaseClient('engineer', { verify: false });\\n  const result = await client.query(\\\\`\\n    SELECT pattern_id, issue_summary, proven_solutions, prevention_checklist\\n    FROM issue_patterns\\n    WHERE category IN ('design', 'u"
+    },
+    "stories_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 95,
+      "sd_context": "aaf65001-7031-46aa-882f-9f51281dc572",
+      "executed_at": "2026-09-12T03:33:27.322Z",
+      "execution_id": "4de4b389-cb9a-4985-b674-21536bc3bd25",
+      "generated_at": "2026-09-12T03:33:27.322Z",
+      "raw_analysis": null,
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        {
+          "title": "Stories Already Complete",
+          "description": "8 stories already have implementation context. This is a success - no additional work needed."
+        },
+        {
+          "title": "EXEC Phase Guidance",
+          "description": "User stories now include: implementation_context (architecture patterns, component locations), architecture_references (existing code to reference), example_code_patterns (code snippets), and testing_scenarios (test cases)."
+        }
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "database_analysis": {
+      "verdict": "PASS",
+      "warnings": [],
+      "conditions": null,
+      "confidence": 100,
+      "sd_context": "aaf65001-7031-46aa-882f-9f51281dc572",
+      "executed_at": "2026-09-12T03:33:31.778Z",
+      "execution_id": "827b71a6-1cd7-47e0-b687-d5c1072c0e1e",
+      "generated_at": "2026-09-12T03:33:31.778Z",
+      "raw_analysis": {},
+      "justification": null,
+      "critical_issues": [],
+      "recommendations": [
+        "No database migrations needed for this SD"
+      ],
+      "validation_mode": "prospective",
+      "sub_agent_version": "1.0.0"
+    },
+    "generation_pattern": "generate_first_then_insert",
+    "plan_prd_sub_agents": {
+      "agents": [
+        {
+          "code": "DATABASE",
+          "verdict": "PASS",
+          "confidence": 100,
+          "executed_at": "2026-09-12T03:33:32.677Z"
+        },
+        {
+          "code": "RISK",
+          "verdict": "PASS",
+          "confidence": 85,
+          "executed_at": "2026-09-12T03:33:32.677Z"
+        },
+        {
+          "code": "STORIES",
+          "verdict": "PASS",
+          "confidence": 95,
+          "executed_at": "2026-09-12T03:33:32.677Z"
+        }
+      ],
+      "all_passed": true,
+      "executed_at": "2026-09-12T03:33:32.677Z"
+    },
+    "grounding_validation": {
+      "note": "16 requirements have <50% confidence but this is expected for implementation-level PRDs. No hallucination detected.",
+      "sd_id": "aaf65001-7031-46aa-882f-9f51281dc572",
+      "has_issues": false,
+      "all_results": [
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 11.815384615384616,
+              "detail": "14.8% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/4 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.6853932584269662,
+              "detail": "8.4% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.1350077787381158,
+          "is_flagged": true,
+          "explanation": "Low confidence (14%): This requirement may not be grounded in the SD source. 0/4 key phrases match SD. 8.4% alignment with strategic objectives",
+          "requirement_id": "FR-1",
+          "requirement_type": "functional",
+          "requirement_title": "Shared feedback-correction helper module"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 11.594202898550725,
+              "detail": "14.5% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/3 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.6666666666666665,
+              "detail": "13.3% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.1426086956521739,
+          "is_flagged": true,
+          "explanation": "Low confidence (14%): This requirement may not be grounded in the SD source. 0/3 key phrases match SD. 13.3% alignment with strategic objectives",
+          "requirement_id": "FR-2",
+          "requirement_type": "functional",
+          "requirement_title": "server/routes/feedback.js: POST /:id/promote-to-sd and PATCH /:id/status converted to insert-correction"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 16.793893129770993,
+              "detail": "21.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 3.8260869565217392,
+              "detail": "19.1% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.2061998008629273,
+          "is_flagged": true,
+          "explanation": "Low confidence (21%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 19.1% alignment with strategic objectives",
+          "requirement_id": "FR-3",
+          "requirement_type": "functional",
+          "requirement_title": "scripts/feedback-staleness-check.js converted to insert-correction, never writes status='stale'"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 10.987124463519313,
+              "detail": "13.7% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/0 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 3.9436619718309855,
+              "detail": "19.7% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.149307864353503,
+          "is_flagged": true,
+          "explanation": "Low confidence (15%): This requirement may not be grounded in the SD source. 0/0 key phrases match SD. 19.7% alignment with strategic objectives",
+          "requirement_id": "FR-4",
+          "requirement_type": "functional",
+          "requirement_title": "scripts/feedback-link-resolution.mjs converted to insert-correction (both write branches)"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 16.062992125984252,
+              "detail": "20.1% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.3214285714285716,
+              "detail": "11.6% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.18384420697412826,
+          "is_flagged": true,
+          "explanation": "Low confidence (18%): This requirement may not be grounded in the SD source. 0/1 key phrases match SD. 11.6% alignment with strategic objectives",
+          "requirement_id": "FR-5",
+          "requirement_type": "functional",
+          "requirement_title": "scripts/feedback-age-out.mjs converted to insert-correction (adds the per-row fetch it currently lacks)"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 18.11320754716981,
+              "detail": "22.6% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.65625,
+              "detail": "13.3% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.20769457547169812,
+          "is_flagged": true,
+          "explanation": "Low confidence (21%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 13.3% alignment with strategic objectives",
+          "requirement_id": "FR-6",
+          "requirement_type": "functional",
+          "requirement_title": "lib/governance/resolve-feedback.js: resolveFeedback() converted to insert-correction, backward-compatible return contract"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 17.272727272727273,
+              "detail": "21.6% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/8 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.2421524663677133,
+              "detail": "11.2% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.19514879739094987,
+          "is_flagged": true,
+          "explanation": "Low confidence (20%): This requirement may not be grounded in the SD source. 0/8 key phrases match SD. 11.2% alignment with strategic objectives",
+          "requirement_id": "FR-7",
+          "requirement_type": "functional",
+          "requirement_title": "New dedicated table withheld_promotion_markers replaces feedback.metadata bookkeeping for 2 pipeline sites"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 12.526690391459073,
+              "detail": "15.7% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.8346456692913384,
+              "detail": "14.2% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.15361336060750413,
+          "is_flagged": true,
+          "explanation": "Low confidence (15%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 14.2% alignment with strategic objectives",
+          "requirement_id": "FR-8",
+          "requirement_type": "functional",
+          "requirement_title": "Backfill existing feedback.metadata markers into withheld_promotion_markers, with a before/after count gate"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 12.128279883381925,
+              "detail": "15.2% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.8274111675126903,
+              "detail": "9.1% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.13955691050894614,
+          "is_flagged": true,
+          "explanation": "Low confidence (14%): This requirement may not be grounded in the SD source. 0/1 key phrases match SD. 9.1% alignment with strategic objectives",
+          "requirement_id": "FR-9",
+          "requirement_type": "functional",
+          "requirement_title": "Reversible cutover for withheld_promotion_markers: verified-backfill gate + revert path"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 12.813852813852813,
+              "detail": "16.0% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/0 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 5.142857142857142,
+              "detail": "25.7% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.17956709956709957,
+          "is_flagged": true,
+          "explanation": "Low confidence (18%): This requirement may not be grounded in the SD source. 0/0 key phrases match SD. 25.7% alignment with strategic objectives",
+          "requirement_id": "TR-1",
+          "requirement_type": "technical",
+          "requirement_title": "No UPDATE/DELETE/TRUNCATE against public.feedback anywhere in the 7 owned files"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 5.461847389558233,
+              "detail": "6.8% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.631578947368421,
+              "detail": "13.2% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.08093426336926654,
+          "is_flagged": true,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 6.8% semantic overlap with SD. 0/2 key phrases match SD. 13.2% alignment with strategic objectives",
+          "requirement_id": "TR-2",
+          "requirement_type": "technical",
+          "requirement_title": "Correction inserts must not collide with live partial UNIQUE indexes"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 5.517241379310345,
+              "detail": "6.9% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/4 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.2950819672131146,
+              "detail": "11.5% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.0781232334652346,
+          "is_flagged": true,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 6.9% semantic overlap with SD. 0/4 key phrases match SD. 11.5% alignment with strategic objectives",
+          "requirement_id": "TR-3",
+          "requirement_type": "technical",
+          "requirement_title": "New table migration must stay TIER-1"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 5.128205128205128,
+              "detail": "6.4% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/3 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 2.6229508196721314,
+              "detail": "13.1% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.07751155947877258,
+          "is_flagged": true,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 6.4% semantic overlap with SD. 0/3 key phrases match SD. 13.1% alignment with strategic objectives",
+          "requirement_id": "TR-4",
+          "requirement_type": "technical",
+          "requirement_title": "Backward-compatible resolveFeedback() contract"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 7.698744769874477,
+              "detail": "9.6% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/3 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 3.7681159420289854,
+              "detail": "18.8% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.11466860711903461,
+          "is_flagged": true,
+          "explanation": "Low confidence (11%): This requirement may not be grounded in the SD source. 9.6% semantic overlap with SD. 0/3 key phrases match SD. 18.8% alignment with strategic objectives",
+          "requirement_id": "TR-5",
+          "requirement_type": "technical",
+          "requirement_title": "No DB-tier test may leave permanent residue on public.feedback"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 5.877551020408164,
+              "detail": "7.3% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/1 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 1.8421052631578947,
+              "detail": "9.2% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.07719656283566058,
+          "is_flagged": true,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 7.3% semantic overlap with SD. 0/1 key phrases match SD. 9.2% alignment with strategic objectives",
+          "requirement_id": "TR-6",
+          "requirement_type": "technical",
+          "requirement_title": "Deterministic latest-row resolution"
+        },
+        {
+          "factors": [
+            {
+              "name": "sd_text_similarity",
+              "score": 8.962655601659751,
+              "detail": "11.2% semantic overlap with SD"
+            },
+            {
+              "name": "key_phrase_match",
+              "score": 0,
+              "detail": "0/2 key phrases match SD"
+            },
+            {
+              "name": "objectives_alignment",
+              "score": 3.783783783783784,
+              "detail": "18.9% alignment with strategic objectives"
+            }
+          ],
+          "confidence": 0.12746439385443536,
+          "is_flagged": true,
+          "explanation": "Low confidence (13%): This requirement may not be grounded in the SD source. 11.2% semantic overlap with SD. 0/2 key phrases match SD. 18.9% alignment with strategic objectives",
+          "requirement_id": "TR-7",
+          "requirement_type": "technical",
+          "requirement_title": "withheld_promotion_markers access is service-role only, matching existing producer clients"
+        }
+      ],
+      "issue_reason": null,
+      "validated_at": "2026-09-12T03:33:17.960Z",
+      "grounding_score": 0.14052798189059065,
+      "average_confidence": 0.14052798189059065,
+      "flagged_requirements": [
+        {
+          "id": "FR-1",
+          "type": "functional",
+          "title": "Shared feedback-correction helper module",
+          "confidence": 0.1350077787381158,
+          "explanation": "Low confidence (14%): This requirement may not be grounded in the SD source. 0/4 key phrases match SD. 8.4% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-2",
+          "type": "functional",
+          "title": "server/routes/feedback.js: POST /:id/promote-to-sd and PATCH /:id/status converted to insert-correction",
+          "confidence": 0.1426086956521739,
+          "explanation": "Low confidence (14%): This requirement may not be grounded in the SD source. 0/3 key phrases match SD. 13.3% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-3",
+          "type": "functional",
+          "title": "scripts/feedback-staleness-check.js converted to insert-correction, never writes status='stale'",
+          "confidence": 0.2061998008629273,
+          "explanation": "Low confidence (21%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 19.1% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-4",
+          "type": "functional",
+          "title": "scripts/feedback-link-resolution.mjs converted to insert-correction (both write branches)",
+          "confidence": 0.149307864353503,
+          "explanation": "Low confidence (15%): This requirement may not be grounded in the SD source. 0/0 key phrases match SD. 19.7% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-5",
+          "type": "functional",
+          "title": "scripts/feedback-age-out.mjs converted to insert-correction (adds the per-row fetch it currently lacks)",
+          "confidence": 0.18384420697412826,
+          "explanation": "Low confidence (18%): This requirement may not be grounded in the SD source. 0/1 key phrases match SD. 11.6% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-6",
+          "type": "functional",
+          "title": "lib/governance/resolve-feedback.js: resolveFeedback() converted to insert-correction, backward-compatible return contract",
+          "confidence": 0.20769457547169812,
+          "explanation": "Low confidence (21%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 13.3% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-7",
+          "type": "functional",
+          "title": "New dedicated table withheld_promotion_markers replaces feedback.metadata bookkeeping for 2 pipeline sites",
+          "confidence": 0.19514879739094987,
+          "explanation": "Low confidence (20%): This requirement may not be grounded in the SD source. 0/8 key phrases match SD. 11.2% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-8",
+          "type": "functional",
+          "title": "Backfill existing feedback.metadata markers into withheld_promotion_markers, with a before/after count gate",
+          "confidence": 0.15361336060750413,
+          "explanation": "Low confidence (15%): This requirement may not be grounded in the SD source. 0/2 key phrases match SD. 14.2% alignment with strategic objectives"
+        },
+        {
+          "id": "FR-9",
+          "type": "functional",
+          "title": "Reversible cutover for withheld_promotion_markers: verified-backfill gate + revert path",
+          "confidence": 0.13955691050894614,
+          "explanation": "Low confidence (14%): This requirement may not be grounded in the SD source. 0/1 key phrases match SD. 9.1% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-1",
+          "type": "technical",
+          "title": "No UPDATE/DELETE/TRUNCATE against public.feedback anywhere in the 7 owned files",
+          "confidence": 0.17956709956709957,
+          "explanation": "Low confidence (18%): This requirement may not be grounded in the SD source. 0/0 key phrases match SD. 25.7% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-2",
+          "type": "technical",
+          "title": "Correction inserts must not collide with live partial UNIQUE indexes",
+          "confidence": 0.08093426336926654,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 6.8% semantic overlap with SD. 0/2 key phrases match SD. 13.2% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-3",
+          "type": "technical",
+          "title": "New table migration must stay TIER-1",
+          "confidence": 0.0781232334652346,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 6.9% semantic overlap with SD. 0/4 key phrases match SD. 11.5% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-4",
+          "type": "technical",
+          "title": "Backward-compatible resolveFeedback() contract",
+          "confidence": 0.07751155947877258,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 6.4% semantic overlap with SD. 0/3 key phrases match SD. 13.1% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-5",
+          "type": "technical",
+          "title": "No DB-tier test may leave permanent residue on public.feedback",
+          "confidence": 0.11466860711903461,
+          "explanation": "Low confidence (11%): This requirement may not be grounded in the SD source. 9.6% semantic overlap with SD. 0/3 key phrases match SD. 18.8% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-6",
+          "type": "technical",
+          "title": "Deterministic latest-row resolution",
+          "confidence": 0.07719656283566058,
+          "explanation": "Low confidence (8%): This requirement may not be grounded in the SD source. 7.3% semantic overlap with SD. 0/1 key phrases match SD. 9.2% alignment with strategic objectives"
+        },
+        {
+          "id": "TR-7",
+          "type": "technical",
+          "title": "withheld_promotion_markers access is service-role only, matching existing producer clients",
+          "confidence": 0.12746439385443536,
+          "explanation": "Low confidence (13%): This requirement may not be grounded in the SD source. 11.2% semantic overlap with SD. 0/2 key phrases match SD. 18.9% alignment with strategic objectives"
+        }
+      ],
+      "requirements_flagged": 16,
+      "implementation_context": "web",
+      "requirements_validated": 16,
+      "validation_duration_ms": 20
+    }
+  },
+  "content": "# Product Requirements Document\n\n## Strategic Directive\nSD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-A\n\n## Title\nFeedback lifecycle & API core: fix 7 feedback.update() call sites broken by the append-only trigger\n\n## Status\nPlanning\n\n## Executive Summary\nThe database/chairman-gated/20260907_feedback_immutability_trigger.sql migration made public.feedback append-only (UPDATE/DELETE/TRUNCATE all rejected via BEFORE ENABLE ALWAYS triggers). This child of the parent audit orchestrator delivers TWO coupled changes, both required to close the defect: (1) a shared insert-a-correction-row helper (lib/governance/feedback-correction.js, precedent: QF-20260911-515's gauge-runner fix) applied to the 5 lifecycle-writer call sites this child owns across server/routes/feedback.js, feedback-staleness-check.js, feedback-link-resolution.mjs, feedback-age-out.mjs, and resolve-feedback.js; and (2) a genuinely dedicated, freely-mutable side table (withheld_promotion_markers, TIER-1 auto-appliable, no chairman ceremony) plus a verified backfill and a reversible cutover, replacing feedback.metadata bookkeeping in the 2 remaining owned sites (feedback-fingerprint-promoter.mjs, withheld-registry.mjs, 3 write sites) that a LEAD risk-agent review confirmed cannot safely share the append-only, insert-only model without unbounded row growth and a server-side query that cannot express 'latest correction wins'. This is explicitly NOT a narrow 7-call-site patch: FR-7/FR-8/FR-9 constitute a small, independent data-model change (new table, backfill, and a producer cutover with a defined rollback path) and are called out as such rather than folded silently into 'fixing an update() call'. Every converted read-before-write site is re-pointed to resolve against the LATEST correction in a chain (never the stale root row) via a deterministic tie-break, closing a non-termination class of regression a risk-agent review surfaced: without this, every converted site would re-fire on every subsequent run/request forever.\n\n## Functional Requirements\n\n### FR-1: undefined\nNew lib/governance/feedback-correction.js exports rootIdOf(row) (resolves metadata.corrects_feedback_id or row.id -- ALWAYS the root of the chain, never the immediately-prior row, so a single lookup finds the current state with no multi-hop chain-walking), buildFeedbackCorrection(existingRow, changes) (returns an INSERT payload: drops id/created_at, ALWAYS nulls error_hash and strips metadata.dedup_hash from the copied metadata to avoid colliding with the three live partial UNIQUE indexes on public.feedback keyed on those fields -- idx_feedback_venture_error_hash, idx_feedback_error_capture_hash, idx_feedback_telemetry_dedup -- applies changes, sets metadata.corrects_feedback_id=rootId and preserves metadata.original_created_at, sets a fresh updated_at), and fetchLatestFeedback(supabase, feedbackId) (resolves any id in a correction chain to its current row via a base fetch + a root-scoped .or('id.eq.ROOT,metadata->>corrects_feedback_id.eq.ROOT').order('created_at', {ascending:false}).order('id', {ascending:false}).limit(1) query -- the secondary order('id', desc) is a DETERMINISTIC tie-break, not a recency claim: two corrections can share a created_at timestamp, and without a fixed secondary key the same query could return a different row on repeated calls, silently breaking the idempotency guards in FR-2/FR-6 (adversarial LEAD-phase critique finding, warn-severity). fetchLatestFeedback's own DB-error path returns {error} explicitly and every caller MUST treat that as fail-closed -- refuse to write / surface an error -- NEVER silently fall back to trusting the raw root row as if it were current (an INV-001-class control-without-could-not-check-path gap the same critique flagged); this fail-closed contract is itself covered by a test (TS-26).\n**Priority**: critical\n**Acceptance Criteria**:- rootIdOf never returns an intermediate correction's id for a 2+-hop chain (TS-3)- buildFeedbackCorrection never reproduces error_hash or metadata.dedup_hash on the correction payload (TS-5)- fetchLatestFeedback resolves a mid-chain id to the newest row in the chain (TS-7)- Two corrections sharing an identical created_at timestamp resolve deterministically via the id-desc tie-break, same result on every call (TS-25)- A fetchLatestFeedback DB error is surfaced to the caller and never silently treated as 'root row is current' (TS-26)\n\n### FR-2: undefined\nBoth live HTTP routes fetch the feedback row, resolve it to its LATEST correction via fetchLatestFeedback (never trust the raw .eq('id',id) row for status/idempotency decisions), then insert a correction via buildFeedbackCorrection instead of calling .update(). promote-to-sd's `if (feedback.resolution_sd_id)` idempotency guard reads the resolved latest row so a second click never mints a second strategic_directives_v2 row; a failed correction-insert now returns an error response instead of silently warn-and-succeed (closing a pre-existing duplicate-SD-mint bug the current warn-only path already has). PATCH /:id/status's FR-4 validateStatusTransition call is evaluated against the resolved latest row, not the stale root. Also fixes an incidental dead gate at L58 (feedback.quality_score does not exist on the table -- the real columns are rubric_score/quality_assessment -- so the quality gate has always been a no-op; corrected to read rubric_score, in the same file already being touched).\n**Priority**: critical\n**Acceptance Criteria**:- Two sequential POST /:id/promote-to-sd calls mint exactly one SD row (TS-11)- PATCH /:id/status validates transitions against current, not stale, state (TS-13)- Neither route issues a .from('feedback').update(...) call\n\n### FR-3: undefined\nLEAD validation-agent confirmed 'stale' is not a member of the live feedback_status_check CHECK constraint (allowed: new, triaged, in_progress, resolved, wont_fix, duplicate, invalid, backlog, shipped) -- the ORIGINAL update() would fail on this constraint independent of the append-only trigger. Fix: the bulk scan is root-scoped (.is('metadata->>corrects_feedback_id', null)) so correction rows are never re-selected as fresh staleness candidates; for each candidate root, fetchLatestFeedback resolves current state and the script skips it if already marked stale (metadata.marked_stale_at present) or already moved off status new/triaged by another path. Otherwise it inserts a correction that leaves `status` UNCHANGED and records staleness via metadata.marked_stale_at + the existing resolution_notes message. Chunked at the existing UPDATE_CHUNK=200 convention.\n**Priority**: critical\n**Acceptance Criteria**:- No write ever sets status='stale' (would violate feedback_status_check)- Running the script twice over the same fixture root inserts zero rows on the second run (TS-15) -- the highest-risk regression class: without this it inserts one correction per candidate on every cron run forever- Root-only scan predicate is present and tested (TS-18)\n\n### FR-4: undefined\nWiden the initial select from 'id, status' to '*' (needed to build a full correction payload). Both the resolveFeedback()-delegating branch (already covered by FR-6) and the direct link-only .update() in the else branch (setting resolution_sd_id or quick_fix_id) are converted to insert a correction via the shared helper, resolved against fetchLatestFeedback first.\n**Priority**: high\n**Acceptance Criteria**:- Both write branches (resolve path and link-only path) use insert-correction, not .update() (TS-17)\n\n### FR-5: undefined\nThe current implementation is a pure set-based bulk UPDATE with no per-row fetch at all. Fix: first SELECT the full matching root rows (category='informational_note', archived_at IS NULL, updated_at < cutoff, metadata->>corrects_feedback_id IS NULL), chunked; for each, resolve latest via fetchLatestFeedback and skip if already archived by another correction; otherwise insert a correction setting archived_at=now(). No live candidates exist today (0 rows), so this is a forward-looking, latent-defect fix verified via a seeded fixture, not observed production behavior.\n**Priority**: medium\n**Acceptance Criteria**:- A synthetic 2-row fixture: first run archives both via correction, second run inserts zero new rows (TS-16)- Root-only scan predicate present\n\n### FR-6: undefined\nThe canonical resolver (7 live callers) resolves the input feedbackId to its LATEST correction via fetchLatestFeedback; if the latest row's status is already 'resolved', returns the EXACT existing shape {updated:false, id:feedbackId, reason:'no_row_or_already_resolved'} unchanged (a LEAD risk-agent audit found 3 production callers -- complete-quick-fix/orchestrator.js, reconcile-feedback-references.js, apply-chairman-decision-captures.mjs -- compare this exact string with strict equality; changing it silently routes an already-resolved outcome into their failure branch). Otherwise inserts a correction with status='resolved', resolved_at=now(), and the optional quick_fix_id/resolution_sd_id/resolution_notes/resolution_type fields, and returns {updated:true, id:feedbackId} (the returned id stays the ORIGINAL input id for full backward compatibility -- no caller reads a 'new row id' field, confirmed by the same audit, so none is added).\n**Priority**: critical\n**Acceptance Criteria**:- resolveFeedback() never calls .update() on feedback (TS-9)- Calling it twice against an already-resolved chain returns the pinned reason string on the second call with no second INSERT (TS-10)- The reason string 'no_row_or_already_resolved' is byte-identical to the pre-existing value\n\n### FR-7: undefined\nlib/governance/withheld-registry.mjs (writeMarkers/readPendingMarkers/consumeMarker/disposeMarker) and scripts/feedback-fingerprint-promoter.mjs's own promoted_to_qf metadata-merge site stop reading/writing feedback.metadata entirely for this bookkeeping (a LEAD risk-agent review measured the insert-correction alternative would add ~440 rows/day of pure bookkeeping churn against a ~132/day organic baseline, a +333% write-volume increase, AND found a hard architectural blocker: feedback-fingerprint-promoter.mjs's existing server-side PostgREST .or() predicate for 'pending marker not yet promoted/disposed' cannot be re-expressed as 'the latest correction in a chain', a defect class the file's own history already documents once). The new table (feedback_id PK/FK to feedback.id, fingerprint, member_feedback_ids uuid[], max_severity, admission_path, gauge_value, floor, engine, decision, first_withheld_at/run, last_withheld_at/run, withheld_run_count, promoted_at/qf_id/fingerprint, disposed_by/reason/at, created_at, updated_at) carries NO append-only trigger -- ordinary UPDATE is legal there -- and is confirmed TIER-1 (worker-auto-appliable via scripts/apply-migration.js, no chairman ceremony) by scripts/lib/migration-tier-classifier.mjs, PROVIDED the migration contains no ON DELETE CASCADE, no DO $verify$ block, and no COMMENT ON containing a forbidden verb (all three would flip it TIER-2 per a LEAD testing-agent probe) -- so behavioural verification is a separate db-tier vitest test (TS-19), never an inline DO block. RLS: the table is written/read exclusively by the SAME server-role Supabase client withheld-registry.mjs and feedback-fingerprint-promoter.mjs already construct today (SUPABASE_SERVICE_ROLE_KEY, which bypasses RLS entirely -- rolbypassrls=true, identical to every other governance table these two files touch); RLS is enabled with a single permissive service-role policy (mirrors the pattern already used elsewhere in lib/governance), and TS-27 proves the actual client construction these two files use can select/insert/update the new table end-to-end, not merely that a policy exists on paper (adversarial LEAD-phase critique finding, warn-severity: 'under-specified RLS can cause late integration failures').\n**Priority**: critical\n**Acceptance Criteria**:- database/migrations/<ts>_withheld_promotion_markers.sql classifies TIER-1 via classifyMigration() before merge- withheld-registry.mjs and feedback-fingerprint-promoter.mjs contain zero .from('feedback').update( calls for marker bookkeeping (TS-22)- Ordinary UPDATE against the new table succeeds (no trigger) (TS-19)- The exact service-role client construction used by both producer files can select/insert/update the new table (TS-27)\n\n### FR-8: undefined\nA LEAD testing-agent audit measured 136 live rows carrying metadata.withheld_pending (110 still pending) and 117 carrying metadata.promoted_to_qf. Shipping the new table with no backfill would silently drop every pending marker -- reproducing the exact silent-expiry defect withheld-registry.mjs's own module docstring says it was written to abolish. A one-off backfill script (scripts/one-off/backfill-withheld-promotion-markers.mjs) migrates every existing marker (both withheld_pending and promoted_to_qf) into the new table. Per an adversarial LEAD-phase critique finding (INV-002-repair-gated-on-code-present-not-data-present: 'a seeder/backfill ships with no acceptance criterion measuring the DATA it produces'), the backfill is NOT considered done on 'script ran without error' -- it prints and the EXEC evidence records an explicit before-count (measured from feedback.metadata) vs. after-count (measured from withheld_promotion_markers) comparison, and FR-9's cutover gate refuses to proceed unless those counts match.\n**Priority**: critical\n**Acceptance Criteria**:- Post-backfill readPendingMarkers() (rewired to the new table) returns the same pending set (by feedback_id) as the pre-backfill feedback.metadata scan returned (TS-21)- All 117 promoted_to_qf markers land in the new table's promoted_at/promoted_fingerprint columns- The backfill script's own output states the before-count and after-count explicitly (TS-28)\n\n### FR-9: undefined\nDirectly closes the adversarial LEAD-phase critique's sole BLOCK finding: 'the plan provides no rollback/safety procedure if the backfill is wrong or the rewire causes dropped/duplicated markers in production... not trivially reversible once new writes start landing.' Sequencing (each step is a precondition for the next, not parallelizable): (1) apply the withheld_promotion_markers migration -- purely additive, does not touch feedback or existing producer behavior, safe on its own; (2) run the backfill script and verify its before/after counts match (FR-8) BEFORE any producer code changes ship -- at this point the new table is fully populated but nothing reads or writes it yet, so a bad backfill is trivially fixed by re-running it with zero production impact; (3) ONLY after the count-match gate passes, cut withheld-registry.mjs and feedback-fingerprint-promoter.mjs over to read/write the new table exclusively. Rollback if the cutover (step 3) misbehaves: git-revert the producer-file changes (step 1's migration and step 2's backfilled data are NOT reverted -- they are purely additive and harmless to leave in place); the reverted producer code resumes reading/writing feedback.metadata exactly as it did before this SD, which still holds the pre-cutover marker state untouched (this SD's design never deletes or mutates the legacy feedback.metadata markers -- it only stops writing new ones there), so a revert is a clean, zero-data-loss return to the pre-SD behavior. There is deliberately no dual-read/dual-write window: the critique's suggested alternative (feature-flagged dual-read) was rejected because it would require the SAME non-terminating-write hazard analysis (FR-1) applied to TWO code paths simultaneously for the marker-bookkeeping case that FR-7 exists specifically to avoid; a clean verified-then-atomic cutover with a pure-revert rollback is simpler and equally safe given step 2's pre-cutover verification gate.\n**Priority**: critical\n**Acceptance Criteria**:- The migration (step 1) and backfill (step 2) are committed and verified in a state where zero producer code has changed yet- Producer cutover (step 3) only proceeds once FR-8's count-match gate passes- A revert of the producer-file commit alone (without touching the migration/backfill commits) restores pre-SD behavior with no data loss\n\n## Technical Requirements\n\n### TR-1: undefined\n\n### TR-2: undefined\n\n### TR-3: undefined\n\n### TR-4: undefined\n\n### TR-5: undefined\n\n### TR-6: undefined\n\n### TR-7: undefined\n\n## System Architecture\n### Components\n#### lib/governance/feedback-correction.js\n#### server/routes/feedback.js\n#### scripts/feedback-staleness-check.js\n#### scripts/feedback-link-resolution.mjs\n#### scripts/feedback-age-out.mjs\n#### lib/governance/resolve-feedback.js\n#### lib/governance/withheld-registry.mjs\n#### scripts/feedback-fingerprint-promoter.mjs\n#### database/migrations/<ts>_withheld_promotion_markers.sql\n#### scripts/one-off/backfill-withheld-promotion-markers.mjs\n\n## Implementation Approach\n\n## Test Scenarios\n\n### TS-1: rootIdOf on an original row (no corrects_feedback_id)\n\n### TS-2: rootIdOf on a correction row\n\n### TS-3: rootIdOf on a 2-hop correction chain (root R -> C1 -> C2)\n\n### TS-4: buildFeedbackCorrection payload shape\n\n### TS-5: buildFeedbackCorrection on a row matching a partial-unique-index predicate (venture_error+error_hash, error_capture+error_hash, fleet_dormancy+dedup_hash)\n\n### TS-6: buildFeedbackCorrection preserves unrelated metadata keys\n\n### TS-7: fetchLatestFeedback given a mid-chain id\n\n### TS-8: fetchLatestFeedback on an id with no corrections\n\n### TS-9: resolveFeedback() write path\n\n### TS-10: resolveFeedback() called twice against an already-resolved chain\n\n### TS-11: Two sequential POST /:id/promote-to-sd calls for the same feedback id\n\n### TS-12: promote-to-sd correction-insert fails\n\n### TS-13: PATCH /:id/status against a feedback id with a prior correction\n\n### TS-14: feedback-staleness-check.js write shape\n\n### TS-15: feedback-staleness-check.js run twice over the same fixture root\n\n### TS-16: feedback-age-out.mjs against a seeded 2-row informational_note fixture, run twice\n\n### TS-17: feedback-link-resolution.mjs both write branches (resolve path and link-only else branch)\n\n### TS-18: Bulk scan predicates (staleness-check, age-out) exclude correction rows\n\n### TS-19: withheld_promotion_markers migration applies\n\n### TS-20: withheld-registry.mjs round trip against the new table\n\n### TS-21: Backfill script against the live 136 withheld_pending + 117 promoted_to_qf metadata markers\n\n### TS-22: Static guard on withheld-registry.mjs and feedback-fingerprint-promoter.mjs\n\n### TS-23: resolveFeedback() production-caller contract\n\n### TS-24: Scope-drift guard (rephrased around call sites/functions, not a rigid file count -- adversarial LEAD-phase critique note)\n\n### TS-25: fetchLatestFeedback with two correction rows sharing an identical created_at timestamp\n\n### TS-26: fetchLatestFeedback's underlying query returns a DB error\n\n### TS-27: withheld_promotion_markers RLS/access path\n\n### TS-28: Backfill script before/after count reporting\n\n## Acceptance Criteria\n\n1. All 5 lifecycle sites (server/routes/feedback.js x2, feedback-staleness-check.js, feedback-link-resolution.mjs, feedback-age-out.mjs, resolve-feedback.js) issue zero .from('feedback').update() calls and correctly terminate (never re-fire against a stale root)\n2. withheld-registry.mjs and feedback-fingerprint-promoter.mjs's marker bookkeeping is fully migrated to withheld_promotion_markers with zero data loss versus the pre-migration feedback.metadata state\n3. resolveFeedback()'s public contract is unchanged for all existing callers\n4. 0 test regressions; new tests cover TS-1 through TS-24\n\n## Risks & Mitigations\n\n### A converted site's read-before-write guard resolves against the stale root instead of the latest correction, making the site non-terminating (re-fires every run/request forever)\n**Mitigation**: Every read-before-write decision routes through fetchLatestFeedback or an explicit root-scoped scan; TS-10/TS-11/TS-15/TS-16 each assert termination on a second run/request.\n\n### Correction insert collides with a live partial UNIQUE index on public.feedback (venture_error/error_capture error_hash, fleet_dormancy dedup_hash)\n**Mitigation**: buildFeedbackCorrection unconditionally nulls error_hash and strips metadata.dedup_hash; TS-5 pins this.\n\n### The new withheld_promotion_markers migration drifts to TIER-2 (chairman-gated) if a future edit adds ON DELETE CASCADE, a DO block, or a destructive-verb COMMENT\n**Mitigation**: TR-3 states the constraint explicitly; classifyMigration() is run and its tier:1 verdict checked before apply.\n\n### Backfill omits or duplicates existing withheld/promoted markers\n**Mitigation**: TS-21 compares the pending set before and after backfill by feedback_id; TS-28 pins an explicit before/after count report; FR-9's cutover gate refuses producer changes until counts match.\n\n### The withheld_promotion_markers migration + backfill + producer cutover is a persistent-side-effect change with no stated rollback (adversarial LEAD-phase critique BLOCK finding)\n**Mitigation**: FR-9 sequences migration -> verified backfill -> producer cutover as three independently-committable steps; migration and backfill are purely additive and safe standalone; rollback of the cutover is a plain git-revert of the producer-file commit, restoring feedback.metadata reads/writes with the legacy markers still intact (never deleted).\n\n### Two correction rows for the same root share an identical created_at timestamp, making 'latest' nondeterministic across repeated fetchLatestFeedback calls and silently breaking an idempotency guard\n**Mitigation**: TR-6/TS-25 pin a deterministic order('created_at' desc, 'id' desc) tie-break.\n\n### Cross-child coordination: sibling SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-F is active EXEC right now on files (lib/learning/outcome-tracker.js, scripts/modules/handoff/executors/lead-final-approval/index.js) that read feedback status/links possibly written by resolve-feedback.js\n**Mitigation**: resolveFeedback()'s contract is kept fully backward-compatible (TR-4); a coordinator signal was sent flagging the shared helper module for reuse and naming the residual root-scoping requirement for any sibling child's OWN feedback-status-reading gate.\n\n### Downstream readers across the codebase (not in this child's scope) that query feedback by simple column filters will see both a stale original row and its correction as two apparent rows/states\n**Mitigation**: Explicitly out of scope for this child (its mandate is the 7 writer call sites, not the ~120+ production readers); documented as a known, deliberate scope boundary in completion flags, not silently left unaddressed.\n\n\n---\n*Generated by LLM PRD Content Generation (GPT 5.2)*\n*Date: 2026-09-12T03:33:18.054Z*",
+  "evidence_appendix": null,
+  "backlog_items": [],
+  "sd_id": "aaf65001-7031-46aa-882f-9f51281dc572",
+  "planning_section": {
+    "quality_gates": [],
+    "risk_analysis": {},
+    "success_metrics": [],
+    "timeline_breakdown": {},
+    "implementation_steps": [],
+    "reasoning_depth_used": "standard",
+    "resource_requirements": {}
+  },
+  "reasoning_analysis": {},
+  "complexity_analysis": {},
+  "reasoning_depth": "standard",
+  "confidence_score": null,
+  "research_confidence_score": null,
+  "exploration_summary": null,
+  "document_type": "prd",
+  "integration_operationalization": {
+    "consumers": [
+      "server/routes/feedback.js is called by the QualityInboxPage frontend (promote-to-sd, PATCH /:id/status)",
+      "resolve-feedback.js is called by scripts/modules/complete-quick-fix/orchestrator.js and by sibling child -F's in-scope files",
+      "feedback-link-resolution.mjs and feedback-staleness-check.js/feedback-age-out.mjs are operator-invoked CLIs / cron jobs",
+      "withheld-registry.mjs is called from feedback-fingerprint-promoter.mjs's own 6-hourly cron"
+    ],
+    "dependencies": [
+      "database/chairman-gated/20260907_feedback_immutability_trigger.sql (the append-only trigger; already live, not modified by this SD)",
+      "scripts/lib/migration-tier-classifier.mjs (used to confirm the new table migration stays TIER-1)",
+      "scripts/apply-migration.js (applies the TIER-1 migration)"
+    ],
+    "data_contracts": [
+      "New table public.withheld_promotion_markers (feedback_id PK/FK -> feedback.id)",
+      "New feedback.metadata keys on correction rows: corrects_feedback_id, original_created_at, marked_stale_at (staleness sites only)",
+      "public.feedback's existing feedback_status_check CHECK constraint is respected (no new status values written)"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Unit test suite (TS-1..TS-18, TS-22..TS-24) run in CI",
+      "DB-tier tests (TS-19..TS-21) run against a real Postgres instance",
+      "Backfill script logs a before/after count comparison for manual verification at EXEC time"
+    ]
+  },
+  "goal_summary": null,
+  "venture_id": null,
+  "smoke_test_cmd": null,
+  "activation_test_id": null
+}

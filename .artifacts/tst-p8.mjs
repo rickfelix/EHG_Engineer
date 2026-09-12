@@ -1,0 +1,10 @@
+import 'dotenv/config';
+import pg from 'pg';
+const c = new pg.Client({ connectionString: process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL, ssl:{rejectUnauthorized:false} });
+await c.connect();
+const f = await c.query(`select prosrc from pg_proc where proname='log_feedback_resolution_violation'`);
+const src = f.rows[0].prosrc;
+console.log('LEN', src.length);
+console.log(src.slice(1400));
+console.log('\nRAISE EXCEPTION present?', /RAISE\s+EXCEPTION/i.test(src));
+await c.end();
