@@ -1,0 +1,13 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: 'C:/Users/rickf/Projects/_EHG/EHG_Engineer/.env' });
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const key = 'SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001';
+const { data: sd } = await sb.from('strategic_directives_v2').select('id,sd_key,status,current_phase,progress,is_working_on').eq('sd_key', key).single();
+console.log('SD', sd);
+const { data: h } = await sb.from('sd_phase_handoffs').select('handoff_type,status,created_at').eq('sd_id', sd.id).order('created_at');
+console.log('HANDOFFS', h);
+const { data: r } = await sb.from('sub_agent_execution_results').select('sub_agent_code,verdict,phase,created_at').eq('sd_id', sd.id).order('created_at', { ascending: false }).limit(20);
+console.log('SUBAGENT', r);
+const { data: prd } = await sb.from('product_requirements_v2').select('id,status').eq('sd_id', sd.id);
+console.log('PRD', prd);
