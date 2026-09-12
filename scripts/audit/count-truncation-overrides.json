@@ -1,4 +1,9 @@
 {
+ "lib/marketing/autonomy-gate.js:509": {
+  "classification": "bounded-by-design",
+  "match": ".select('decision, outcome, execution_mode, created_at')",
+  "note": "SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-4: bounded by .limit(requiredStreak) on the same chain a few lines below -- requiredStreak defaults to DEFAULT_GRADUATION_STREAK = 5 (a small graduation-streak-length parameter, never attacker- or caller-controlled beyond that default in any production call site), well under the 1000 cap. The classifier's \\.limit\\(\\s*(\\d+)\\s*\\) regex requires a literal digit and cannot see through the named-constant default, same class as the extract-pending-retro-patterns.mjs:25 entry below. Flagged as 'new' only because this PR added the execution_mode column to the select list; the surrounding bound is unchanged from the original FR-4 commit."
+ },
  "scripts/extract-pending-retro-patterns.mjs:25": {
   "classification": "bounded-by-design",
   "match": ".select('id, created_at')",
