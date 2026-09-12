@@ -110,9 +110,47 @@ describe('registrar adapter (FR-2)', () => {
   });
 
   it('normalizeQuote: honest unknown for missing price; registrable from available|registrable', () => {
-    expect(normalizeQuote({ available: true, price: 9.99 })).toEqual({ registrable: true, priceUsd: 9.99 });
-    expect(normalizeQuote({ registrable: true })).toEqual({ registrable: true, priceUsd: null });
-    expect(normalizeQuote(undefined)).toEqual({ registrable: false, priceUsd: null });
+    expect(normalizeQuote({ available: true, price: 9.99 })).toEqual({ registrable: true, priceUsd: 9.99, currency: null });
+    expect(normalizeQuote({ registrable: true })).toEqual({ registrable: true, priceUsd: null, currency: null });
+    expect(normalizeQuote(undefined)).toEqual({ registrable: false, priceUsd: null, currency: null });
+  });
+
+  // QF-20260912-744: real Cloudflare Registrar check response for altifyai.app, captured
+  // 2026-09-12 at the Adam terminal with the chairman (first live call with a valid token).
+  // The fee is under fees.registration_fee -- price/price_usd/fees.registration all absent --
+  // which is exactly what made every live quote come back priceUsd:null before this fix.
+  const ALTIFYAI_APP_CHECK_RESPONSE = {
+    name: 'altifyai.app',
+    supported_tld: true,
+    premium: false,
+    available: true,
+    can_register: true,
+    fees: { registration_fee: 14.2, renewal_fee: 14.2, transfer_fee: 14.2, redemption_fee: 55, currency: 'USD' },
+    hints: [],
+  };
+
+  it('QF-20260912-744: normalizeQuote reads fees.registration_fee from a real Cloudflare Registrar response', () => {
+    expect(normalizeQuote(ALTIFYAI_APP_CHECK_RESPONSE)).toEqual({ registrable: true, priceUsd: 14.2, currency: 'USD' });
+  });
+
+  it('QF-20260912-744: registrable is false when available:false, regardless of fee data', () => {
+    const notAvailable = { ...ALTIFYAI_APP_CHECK_RESPONSE, available: false, can_register: false };
+    expect(normalizeQuote(notAvailable)).toEqual({ registrable: false, priceUsd: 14.2, currency: 'USD' });
+  });
+
+  it('QF-20260912-744: a non-USD fee currency forces priceUsd to null rather than silently passing a foreign amount as USD', () => {
+    const nonUsd = { ...ALTIFYAI_APP_CHECK_RESPONSE, fees: { ...ALTIFYAI_APP_CHECK_RESPONSE.fees, currency: 'EUR' } };
+    expect(normalizeQuote(nonUsd)).toEqual({ registrable: true, priceUsd: null, currency: 'EUR' });
+  });
+
+  it('QF-20260912-744: pickRecommended selects the first registrable-and-affordable row instead of falling back to ranked[0] once priceUsd is a real number', () => {
+    const ranked = [
+      { domain: 'altifyai.io', candidate: true, verdict: 'ok', registrable: true, quoted_price_usd: 50 },
+      { domain: 'altifyai.app', candidate: true, verdict: 'ok', registrable: true, quoted_price_usd: normalizeQuote(ALTIFYAI_APP_CHECK_RESPONSE).priceUsd },
+      { domain: 'altifyai.co', candidate: true, verdict: 'ok', registrable: true, quoted_price_usd: 30 },
+    ];
+    const recommended = pickRecommended(ranked, 20);
+    expect(recommended).toBe('altifyai.app');
   });
 });
 
