@@ -309,6 +309,77 @@ describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing'
     expect(result.reason).toContain('fail-closed');
   });
 
+  // SECURITY finding SEC-H1-R (sub_agent_execution_results 9b8602a9-76bb-4b2c-b36f-01f4625b720c):
+  // a process that cached "execution_mode absent" BEFORE the chairman applies the FR-4
+  // migration, and is still running AFTER, must self-heal on the very next attempt rather than
+  // hard-failing every ledger INSERT for the rest of its lifetime.
+  describe('SEC-H1-R: self-heals when execution_mode is confirmed absent, then found NOT NULL-violated', () => {
+    beforeEach(async () => {
+      const { __resetExecutionModeProbeForTests } = await import('../../../lib/marketing/ledger-execution-mode-probe.js');
+      __resetExecutionModeProbeForTests();
+    });
+    afterEach(async () => {
+      const { __resetExecutionModeProbeForTests } = await import('../../../lib/marketing/ledger-execution-mode-probe.js');
+      __resetExecutionModeProbeForTests();
+    });
+
+    it('invalidates the stale cache and retries once, succeeding on the second attempt', async () => {
+      let probeCallCount = 0;
+      let insertCallCount = 0;
+      const supabase = makeAuthSupabase({ autonomyState: 'autonomous' });
+      // Override just the ledger chain's probe (select().limit()) and insert (insert().select().single())
+      // behavior: the probe first reports "absent" (cached false), the first insert attempt then
+      // hits the 23502 this SD's own FR-4 migration would cause, and the SECOND probe call (after
+      // invalidateExecutionModeProbeCache()) reports "present" so the retry succeeds with the stamp.
+      supabase.ledgerChain.limit = vi.fn(() => {
+        probeCallCount += 1;
+        if (probeCallCount === 1) {
+          return Promise.resolve({ data: null, error: { code: '42703', message: 'column venture_channel_publish_ledger.execution_mode does not exist' } });
+        }
+        return Promise.resolve({ data: [], error: null });
+      });
+      supabase.ledgerChain.single = vi.fn(() => {
+        insertCallCount += 1;
+        if (insertCallCount === 1) {
+          return Promise.resolve({ data: null, error: { code: '23502', message: 'null value in column "execution_mode" of relation "venture_channel_publish_ledger" violates not-null constraint' } });
+        }
+        return Promise.resolve({ data: { id: 'ledger-self-healed-1' }, error: null });
+      });
+
+      const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+
+      expect(result.allowed).toBe(true);
+      expect(result.ledgerEntryId).toBe('ledger-self-healed-1');
+      expect(probeCallCount).toBe(2);
+      expect(insertCallCount).toBe(2);
+      // First insert omitted the stamp (probe said absent); second carried it (probe re-confirmed present).
+      expect(supabase.ledgerChain.insert.mock.calls[0][0]).not.toHaveProperty('execution_mode');
+      expect(supabase.ledgerChain.insert.mock.calls[1][0]).toMatchObject({ execution_mode: 'live' });
+    });
+
+    it('does NOT retry (and stays fail-closed) when the insert fails for an unrelated reason', async () => {
+      let probeCallCount = 0;
+      let insertCallCount = 0;
+      const supabase = makeAuthSupabase({ autonomyState: 'autonomous' });
+      supabase.ledgerChain.limit = vi.fn(() => {
+        probeCallCount += 1;
+        return Promise.resolve({ data: null, error: { code: '42703', message: 'column venture_channel_publish_ledger.execution_mode does not exist' } });
+      });
+      supabase.ledgerChain.single = vi.fn(() => {
+        insertCallCount += 1;
+        return Promise.resolve({ data: null, error: { message: 'db unavailable' } });
+      });
+
+      const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('fail-closed');
+      // No retry: an unrelated failure must not be masked as a self-heal opportunity.
+      expect(probeCallCount).toBe(1);
+      expect(insertCallCount).toBe(1);
+    });
+  });
+
   it('allows when an accepted ledger entry exists for this exact content', async () => {
     const supabase = makeAuthSupabase({ autonomyState: 'propose_and_approve', acceptedRow: { id: 'ledger-1' } });
     const result = await checkPublishAuthorization({ supabase, ventureId: 'v-1', channelType: 'x', contentId: 'c-1' });
