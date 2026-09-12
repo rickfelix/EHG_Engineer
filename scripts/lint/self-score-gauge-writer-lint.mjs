@@ -14,6 +14,12 @@
  * entry to carry a writer-category field, which none besides these three do today; that is a
  * separate, larger effort, not smuggled into this QF's fix.
  *
+ * KNOWN LIMITATION: this lint is not currently wired into any CI workflow or pre-commit hook --
+ * it only runs when explicitly invoked. A future change that flips a self-score-age gauge to
+ * enabled:true with a dead writer, without the author running this lint locally, would NOT be
+ * caught automatically until someone runs it (or it is later wired into CI, tracked as a
+ * follow-up, not part of this QF's scope).
+ *
  * Usage: node scripts/lint/self-score-gauge-writer-lint.mjs
  */
 import 'dotenv/config';
