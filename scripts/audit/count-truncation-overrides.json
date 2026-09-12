@@ -8013,5 +8013,10 @@
   "classification": "bounded-by-design",
   "match": ".select('id, occurrence_count, first_seen')",
   "note": "QF-20260911-515: pre-existing single-row lookup bounded by .order('created_at', {ascending:false}).limit(1) 35 lines below -- this diff only added first_seen to the column list (so a re-emission can carry the original first_seen forward instead of resetting it), which re-triggers diff-lint classification of an already-bounded query. chainWindow's 12-line forward window cannot reach .limit(1) because ~18 of those lines are a single extensively-documented predicate-rationale comment block (category/source_type/feedback_type/archived_at security rationale) sitting between the predicates and .order()/.limit() -- same class as wave-clusterer.js:129 above (heuristic window too short for a long inline chain), not an unbounded read."
+ },
+ "scripts/enumerate-periodic-processes.mjs:29": {
+  "classification": "bounded-by-design",
+  "match": ".select('process_key, owner, process_type, currently_expected_active')",
+  "note": "QF-20260911-080: periodic_process_registry is a fixed-cardinality fleet process registry (one row per recurring process, bounded by the number of cron loops the repo has -- tens, not growth-unbounded); this site had an unbounded read pre-existing (only the column list grew, adding process_type/currently_expected_active for the new findOrphanedActiveCrons reverse-direction check). No pagination needed."
  }
 }

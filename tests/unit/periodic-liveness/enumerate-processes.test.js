@@ -11,6 +11,7 @@ import {
   discoverGhaCrons,
   discoverCronScripts,
   discoverStandardLoops,
+  findOrphanedActiveCrons,
 } from '../../../lib/periodic-liveness/enumerate-processes.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -108,6 +109,53 @@ describe('discovery against the live repo (read-only)', () => {
     const all = discoverAllProcesses(repoRoot);
     expect(all.some((p) => p.process_key === 'cron_script:index-jam-detector.mjs')).toBe(false);
     expect(all.some((p) => p.process_key === 'standard_loop:index-jam-detector')).toBe(true);
+  });
+});
+
+describe('findOrphanedActiveCrons (QF-20260911-080 — registry says active, no invoker found)', () => {
+  const discovered = [
+    { process_key: 'standard_loop:sweep' },
+    { process_key: 'gha_cron:backlog-rank-cron.yml' },
+  ];
+
+  it('flags an active standalone_cron row with no matching discovered invoker', () => {
+    const rows = [
+      { process_key: 'standard_loop:unregistered-loop', process_type: 'standalone_cron', currently_expected_active: true },
+    ];
+    expect(findOrphanedActiveCrons(discovered, rows).map((r) => r.process_key)).toEqual(['standard_loop:unregistered-loop']);
+  });
+
+  it('does not flag a row that IS discovered', () => {
+    const rows = [{ process_key: 'standard_loop:sweep', process_type: 'standalone_cron', currently_expected_active: true }];
+    expect(findOrphanedActiveCrons(discovered, rows)).toEqual([]);
+  });
+
+  it('does not flag currently_expected_active=false (intentionally stood down)', () => {
+    const rows = [{ process_key: 'standard_loop:retired-loop', process_type: 'standalone_cron', currently_expected_active: false }];
+    expect(findOrphanedActiveCrons(discovered, rows)).toEqual([]);
+  });
+
+  it('does not flag a non-standalone_cron process_type', () => {
+    const rows = [{ process_key: 'some:other-thing', process_type: 'session_watch', currently_expected_active: true }];
+    expect(findOrphanedActiveCrons(discovered, rows)).toEqual([]);
+  });
+
+  it('does not flag exempt prefixes (role_session:/scheduler_round:/g3-armed-/__) even if undiscovered and active', () => {
+    const rows = [
+      { process_key: 'role_session:abc', process_type: 'standalone_cron', currently_expected_active: true },
+      { process_key: 'scheduler_round:7', process_type: 'standalone_cron', currently_expected_active: true },
+      { process_key: 'g3-armed-xyz', process_type: 'standalone_cron', currently_expected_active: true },
+      { process_key: '__e2e_fixture__', process_type: 'standalone_cron', currently_expected_active: true },
+    ];
+    expect(findOrphanedActiveCrons(discovered, rows)).toEqual([]);
+  });
+
+  // QF-20260911-080's own defect: standard_loop:drain-inventory sat in the live registry with no
+  // STANDARD_LOOPS entry and no workflow for months. Pin it fixed against the real repo.
+  it('standard_loop:drain-inventory is no longer orphaned against the live repo (regression pin)', () => {
+    const live = discoverAllProcesses(repoRoot);
+    const rows = [{ process_key: 'standard_loop:drain-inventory', process_type: 'standalone_cron', currently_expected_active: true }];
+    expect(findOrphanedActiveCrons(live, rows)).toEqual([]);
   });
 });
 
