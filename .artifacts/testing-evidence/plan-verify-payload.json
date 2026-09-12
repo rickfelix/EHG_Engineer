@@ -1,0 +1,175 @@
+{
+  "verdict": "PASS",
+  "confidence_score": 95,
+  "critical_issues": [],
+  "warnings": [],
+  "summary": "PLAN_VERIFY TESTING PASS for SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001 at 346ba05b289 (PR #8633). Committed diff verified IDENTICAL to the change set reviewed prospectively at PLAN_PRD (same parent 01b7aca378b, same 6 files, same 6 files changed, 128 insertions(+), 19 deletions(-)). Full unit tier re-run from the SD worktree: 50243 passed / 0 failed / 209 skipped across 17045 suites. Targeted 28/28, hooks harness 314/314, db-test-guards 0 new. PR CI on this exact sha: 41/42 success, remainder still in-flight and locally reproduced green.",
+  "justification": "All three gaps identified by the prospective PLAN_PRD-phase TESTING review are closed in the committed code, and each is covered by a negative-controlled test that fails against the pre-fix implementation. The full unit-tier regression re-run from the SD own worktree shows zero failures, and the commit now under CI on PR #8633 is provably the same diff that was reviewed prospectively (same parent sha, same file set, same line counts).",
+  "metadata": {
+    "phase": "PLAN_VERIFY",
+    "session_id": "dbb159b6-22d9-4670-aab8-e15cfe321a23",
+    "worktree_cwd": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001",
+    "evidence": {
+      "git": {
+        "head": "346ba05b289b8fffcc424b409183985265e69d11",
+        "base": "01b7aca378bcfb0417c8491ad96695d7311f3fb8",
+        "branch": "feat/SD-LEO-INFRA-STAMP-CLAUDE-SESSIONS-001",
+        "shortstat": "6 files changed, 128 insertions(+), 19 deletions(-)",
+        "files_changed": 6,
+        "files": [
+          "lib/coordinator/insert-coordination-row-callers.cjs",
+          "scripts/adam-quiet-tick.mjs",
+          "scripts/hooks/session-register.cjs",
+          "tests/unit/adam/adam-quiet-tick-account-sampler-scope.test.js",
+          "tests/unit/hooks/session-register-account-capture.test.js",
+          "tests/unit/hooks/session-register-account-fallback.test.js"
+        ],
+        "diff_sha256": "a166bb55b452804edc4d56188940e5f3516258542c4b31940c998934233ea345",
+        "local_head_equals_origin_branch": true
+      },
+      "commit_identity_vs_prospective_review": {
+        "prior_evidence_row": "e116fbce-eace-4dbd-8960-ee312ee272e3",
+        "prior_phase": "PLAN_PRD",
+        "prior_recorded_git_head": "01b7aca378bcfb0417c8491ad96695d7311f3fb8",
+        "this_commit_parent": "01b7aca378bcfb0417c8491ad96695d7311f3fb8",
+        "parent_matches_prior_head": true,
+        "prior_recorded_diffstat": "128 insertions(+), 19 deletions(-)",
+        "prior_recorded_staged_files": 6,
+        "this_commit_shortstat": "6 files changed, 128 insertions(+), 19 deletions(-)",
+        "this_commit_files_changed": 6,
+        "verdict": "IDENTICAL - the committed diff is the same change set reviewed prospectively at PLAN_PRD: same parent sha, same 6 files, same 128 insertions / 19 deletions. Nothing in the code changed between the prospective review and the commit now under CI."
+      },
+      "pull_request": {
+        "number": 8633,
+        "url": "https://github.com/rickfelix/EHG_Engineer/pull/8633",
+        "head_ref_oid": "346ba05b289b8fffcc424b409183985265e69d11",
+        "head_oid_matches_local_head": true,
+        "base": "main",
+        "state": "OPEN",
+        "auto_merge": "SQUASH (enabled)",
+        "ci_runs_total": 42,
+        "ci_summary": {
+          "success": 41,
+          "in_progress": 1
+        },
+        "ci_not_yet_success": [
+          {
+            "workflow": "Test Coverage Enforcement",
+            "status": "in_progress",
+            "conclusion": null
+          }
+        ],
+        "ci_note": "CI is running on exactly this sha (headRefOid == local HEAD). The only runs not yet green are the long-running ones; the full unit tier was reproduced locally from this worktree at this sha with zero failures."
+      },
+      "results_files": [
+        {
+          "file": ".artifacts/testing-evidence/targeted-results.json",
+          "label": "targeted (the 3 test files touched by the commit)",
+          "scope": [
+            "tests/unit/adam/adam-quiet-tick-account-sampler-scope.test.js",
+            "tests/unit/hooks/session-register-account-capture.test.js",
+            "tests/unit/hooks/session-register-account-fallback.test.js"
+          ],
+          "runner": "vitest",
+          "produced_by": "npx vitest run --project unit --reporter=json --outputFile=<path> (runner-written report; sha256 computed from the file on disk, never hand-authored)",
+          "bytes": 14808,
+          "sha256": "c7828f8b121e9fc00e343b449f5a04c19ef54da4f06664f710ae2b4f25c62ff4",
+          "success": true,
+          "suites_total": 8,
+          "suites_passed": 8,
+          "suites_failed": 0,
+          "tests_total": 28,
+          "tests_passed": 28,
+          "tests_failed": 0,
+          "tests_skipped": 0
+        },
+        {
+          "file": ".artifacts/testing-evidence/hooks-harness-results.json",
+          "label": "hooks harness (local equivalent of CI \"Run Hooks Harness Tests\")",
+          "scope": [
+            "tests/unit/hooks/"
+          ],
+          "runner": "vitest",
+          "produced_by": "npx vitest run --project unit --reporter=json --outputFile=<path> (runner-written report; sha256 computed from the file on disk, never hand-authored)",
+          "bytes": 140697,
+          "sha256": "12a37da51bfbc969bd61f6107c639341a6f57a5daaf96a02db30d97ad72845aa",
+          "success": true,
+          "suites_total": 100,
+          "suites_passed": 100,
+          "suites_failed": 0,
+          "tests_total": 314,
+          "tests_passed": 314,
+          "tests_failed": 0,
+          "tests_skipped": 0
+        },
+        {
+          "file": ".artifacts/testing-evidence/unit-tier-results.json",
+          "label": "FULL unit tier regression (local equivalent of CI \"Unit Tier\")",
+          "scope": [
+            "--project unit (entire suite)"
+          ],
+          "runner": "vitest",
+          "produced_by": "npx vitest run --project unit --reporter=json --outputFile=<path> (runner-written report; sha256 computed from the file on disk, never hand-authored)",
+          "bytes": 19619222,
+          "sha256": "fe841db5ebf71d632484454dcf09c9f2a740c8839a8fbf0fe5c781cdf3ee5076",
+          "success": true,
+          "suites_total": 17045,
+          "suites_passed": 17045,
+          "suites_failed": 0,
+          "tests_total": 50454,
+          "tests_passed": 50243,
+          "tests_failed": 0,
+          "tests_skipped": 209
+        }
+      ],
+      "runner_status_distribution_full_unit_tier": {
+        "passed": 50243,
+        "failed": 0,
+        "skipped": 209,
+        "todo": 2,
+        "total": 50454,
+        "note": "Derived by iterating every assertionResult in the runner report; matches the report header counters exactly."
+      },
+      "local_gates": [
+        {
+          "gate": "db-test-guards ratchet (npm run test:db-guards)",
+          "result": "PASS",
+          "detail": "scanned 3764 unit-project test files; baseline 20 tolerated, 0 new"
+        }
+      ],
+      "gaps_closed_verified": [
+        {
+          "gap": "FR-4 provenance stamp: saveLastAccountIdentity() stamped source=resolveRealConfigPath() unconditionally, mislabeling a seat-scoped CLAUDE_CONFIG_DIR reading as machine-global - reintroducing the exact provenance lie QF-20260901-848 exists to prevent.",
+          "fix": "resolveAccountSamplerSourcePath() extracted as the SAME branch as resolveAccountSamplerIdentity(); main() passes it explicitly to saveLastAccountIdentity().",
+          "tests": "3 new tests including a branch-agreement invariant asserting identityFn was called with exactly resolveAccountSamplerSourcePath(env)",
+          "status": "PASS"
+        },
+        {
+          "gap": "FR-5 null-safety: opts = {} is a default PARAMETER that only fires on undefined, so an explicit null reached opts.resolveFn and threw OUTSIDE the try/catch, escaping the documented \"telemetry - never abort SessionStart\" contract.",
+          "fix": "(opts && opts.resolveFn) guard",
+          "tests": "1 new test asserting captureAccountIdentity(api, SID, null) resolves undefined without throwing",
+          "status": "PASS"
+        },
+        {
+          "gap": "FR-2 under-detection: the 2-field (email, uuid8) skip predicate disagreed with the fleet own canonical detectAccountSwitch(), stranding a stale account_org_name (the PRIMARY fleet-panel display field) beside a fresh account_email, and pinning account_auth_method to host_default forever for a seat that is now genuinely measured.",
+          "fix": "6-field IDENTITY_FIELDS predicate (email, org_name, org_id, subscription_type, auth_method, uuid8), excluding account_captured_at which changes every call by construction.",
+          "tests": "2 new write arms (org-only change, auth_method-only change) plus the preserved positive control that a genuinely unchanged 6-field identity still skips the write",
+          "status": "PASS"
+        }
+      ]
+    },
+    "test_execution": {
+      "tests_executed": 50454,
+      "tests_passed": 50243,
+      "tests_failed": 0,
+      "tests_skipped": 209,
+      "artifact_sha": "fe841db5ebf71d632484454dcf09c9f2a740c8839a8fbf0fe5c781cdf3ee5076",
+      "runner": "vitest",
+      "artifact_path": ".artifacts/testing-evidence/unit-tier-results.json",
+      "source": "runner-written JSON report (vitest --reporter=json --outputFile); sha256 computed from the file on disk -- gate-evidence-provenance: never hand-authored",
+      "mapped_candidates": null,
+      "found_files": 3
+    },
+    "content_hash": "bb89ed141e23480e1a835ea90fb1088a247a835d11e3385493d4bee796ffed99"
+  }
+}
