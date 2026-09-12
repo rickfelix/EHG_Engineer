@@ -429,7 +429,7 @@ export function buildLedgerRow(item, nowIso = new Date().toISOString()) {
   };
 }
 
-async function writeLedger(dispositionsPath) {
+export async function writeLedger(dispositionsPath) {
   const supabase = requireSupabase();
   const raw = readFileSync(dispositionsPath, 'utf8');
   const parsed = JSON.parse(raw);
@@ -466,7 +466,18 @@ async function writeLedger(dispositionsPath) {
       const id = existing[0].id;
       // Re-runs refresh the VERDICT fields but never clobber human triage state
       // (PR #5666 review): status/severity are set only on first insert.
-      const { status: _s, severity: _sev, ...verdictOnly } = row;
+      //
+      // QF/SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-G: this was a two-field DENYLIST
+      // ({status,severity} excluded, everything else in `row` included), which still let
+      // title/description/category/type/source_application/source_type through. category/type/
+      // source_application/source_type are constants (never distinct across writes for this
+      // ledger), but title/description are DERIVED FROM `disposition` and change on every genuine
+      // re-verification -- both are guarded CONTENT columns under feedback_no_update's WHEN clause
+      // (database/chairman-gated/20260912_feedback_no_update_lifecycle_allowlist.sql), so a real
+      // disposition change threw here even after that migration. Explicit allowlist instead: only
+      // `updated_at` and `metadata` (which carries `disposition` as the actual source of truth) are
+      // ever refreshed on a re-run; title/description keep whatever they were set to on first insert.
+      const verdictOnly = { updated_at: row.updated_at, metadata: row.metadata };
       // eslint-disable-next-line no-await-in-loop
       const { error: updErr } = await supabase.from('feedback').update(verdictOnly).eq('id', id);
       if (updErr) throw new Error(`ledger update failed for ${workKey}: ${updErr.message}`);
