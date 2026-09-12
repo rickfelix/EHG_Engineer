@@ -71,9 +71,13 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // 'notification_permission_wait' (lib/hooks/notification-permission-wait-core.cjs) added as
     // standalone literals — both were addressed to role=coordinator but absent from every drain
     // set, invisible until orphan-reroute-sweep rescued them.
+    // +2 to coordinator ONLY (35), the rest unchanged, as of QF-20260911-078: notification_
+    // permission_wait was split by notification_type into three kinds; the two new ones
+    // ('notification_idle_prompt', 'notification_usage_limit_reset') are addressed to
+    // role=coordinator exactly like the original and need the same registration.
     expect(DRAIN_SETS.adam.length).toBe(32);
     expect(DRAIN_SETS.solomon.length).toBe(22);
-    expect(DRAIN_SETS.coordinator.length).toBe(33);
+    expect(DRAIN_SETS.coordinator.length).toBe(35);
     expect(DRAIN_SETS.worker.length).toBe(27);
   });
 

@@ -299,6 +299,12 @@ const STUCK_PERMISSION_WAIT_LOOKBACK_H = 4;
 // than 500 distinct waits; truncation past that is a loud console line, not a silent drop.
 const STUCK_PERMISSION_WAIT_ROW_LIMIT = 500;
 
+// QF-20260911-078: the archive's row_timestamp is populated from expires_at, not created_at, so
+// it is a COARSE indexed bound widened by this margin -- the precise window is applied to each
+// revived row's own created_at below. Mirrors worker-signal-starvation.cjs's
+// ARCHIVE_COARSE_SLACK_MS for the identical class of gap (SD-LEO-INFRA-RETENTION-DESTROYS-REPLY-001).
+const STUCK_PERMISSION_WAIT_ARCHIVE_COARSE_SLACK_MS = 2 * 3600 * 1000;
+
 export async function checkStuckPermissionWaits(db, DRY, sendChairmanSMSFn = null, now = new Date()) {
   const windowStartIso = new Date(now.getTime() - STUCK_PERMISSION_WAIT_LOOKBACK_H * 3600000).toISOString();
   const { data: rows, error } = await db
@@ -313,11 +319,39 @@ export async function checkStuckPermissionWaits(db, DRY, sendChairmanSMSFn = nul
     console.error(`[stuck-permission-wait] rows TRUNCATED at ${STUCK_PERMISSION_WAIT_ROW_LIMIT} -- a genuinely stuck seat may be missing from this pass.`);
   }
 
-  // Most-recent row per session_id (rows are already newest-first).
+  // QF-20260911-078: ALSO read retention_archive. cleanup_expired_coordination archives a
+  // Notification-wait row well inside this 4h window (measured live: every one of this
+  // category's rows currently on file is in the archive, zero live) -- a live-only read
+  // false-zeros a seat whose wait already moved there, silently dropping the alert entirely.
+  let archivedRows = [];
+  try {
+    const coarseIso = new Date(now.getTime() - STUCK_PERMISSION_WAIT_LOOKBACK_H * 3600000 - STUCK_PERMISSION_WAIT_ARCHIVE_COARSE_SLACK_MS).toISOString();
+    const { data: archData, error: archErr } = await db
+      .from('retention_archive')
+      .select('row_data')
+      .eq('source_table', 'session_coordination')
+      .gte('row_timestamp', coarseIso)
+      .order('row_timestamp', { ascending: false })
+      .limit(500);
+    if (archErr) throw new Error(archErr.message);
+    archivedRows = (archData || [])
+      .map((r) => r && r.row_data)
+      .filter((d) => d && d.payload && d.payload.kind === 'notification_permission_wait' && d.created_at >= windowStartIso)
+      .map((d) => ({ payload: d.payload, created_at: d.created_at }));
+  } catch (e) {
+    // Fail-open but SAY SO: silently falling back to live-only rows is byte-identical to the
+    // defect this closes, and would let it regress invisibly.
+    console.error('[stuck-permission-wait] archive unreadable (' + e.message + ') -- an archived-only stuck seat is NOT visible this tick.');
+  }
+
+  // Most-recent row per session_id across BOTH sources.
   const latestBySession = new Map();
-  for (const r of rows || []) {
+  for (const r of [...(rows || []), ...archivedRows]) {
     const sid = r.payload?.session_id;
-    if (sid && !latestBySession.has(sid)) latestBySession.set(sid, r);
+    if (!sid) continue;
+    const existing = latestBySession.get(sid);
+    if (existing && existing.created_at >= r.created_at) continue; // newest wins
+    latestBySession.set(sid, r);
   }
   if (latestBySession.size === 0) { console.log('[stuck-permission-wait] no-alert: no waits in window'); return; }
 
