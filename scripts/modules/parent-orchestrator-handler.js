@@ -166,6 +166,9 @@ export class ParentOrchestratorHandler {
           title: 'Child SD Orchestration',
           description: `Coordinate execution of ${children.length} child SDs in proper sequence`,
           priority: 'critical',
+          // QF-20260911-793: coordinator-only work no child would ever phrase in its own scope —
+          // excluded from CHILD_SCOPE_COVERAGE's keyword-overlap denominator (see that gate).
+          coordination_only: true,
           acceptance_criteria: [
             `All ${children.length} child SDs complete successfully`,
             'Dependencies between children are respected',
@@ -177,6 +180,7 @@ export class ParentOrchestratorHandler {
           title: 'Work Decomposition Structure',
           description: 'Maintain proper parent-child hierarchy with clear scope boundaries per child',
           priority: 'high',
+          coordination_only: true,
           acceptance_criteria: [
             'Each child SD has distinct, non-overlapping scope',
             'Parent-child relationships recorded in database',
@@ -188,6 +192,7 @@ export class ParentOrchestratorHandler {
           title: 'Progress Tracking',
           description: 'Track overall initiative progress based on child SD completion',
           priority: 'high',
+          coordination_only: true,
           acceptance_criteria: [
             'Parent progress reflects aggregate of children',
             'Status transitions tracked through handoffs',

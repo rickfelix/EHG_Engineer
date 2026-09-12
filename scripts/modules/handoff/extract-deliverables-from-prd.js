@@ -175,7 +175,10 @@ export async function extractAndPopulateDeliverables(sdId, prd, supabase, option
             description: req.description || req.details || undefined,
             extracted_from: 'prd',
             priority: 'required',
-            completion_status: 'pending'
+            completion_status: 'pending',
+            // QF-20260911-793: carry the parent-orchestrator's coordination-only marker so
+            // CHILD_SCOPE_COVERAGE can exclude it from the coverage denominator.
+            metadata: req.coordination_only ? { coordination_only: true } : {}
           });
         });
 
