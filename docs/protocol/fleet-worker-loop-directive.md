@@ -167,6 +167,36 @@ one-line `/signal feedback "wakeup-armed +<N>s at <time>"` so the coordinator ca
 armed-but-never-fired externally, with timestamps, instead of only detecting silence after
 the fact.
 
+**QF-20260911-553** encodes a coordinator ruling on directed-assignment ordering (Solomon
+Friday Foundation Audit #2 item 10, feedback 89b3be6a; RULED by the coordinator
+`session_coordination` row `8f2e7ed7`, correlation `0296599f`, on Adam proposal `9bc0157f`):
+**a directed `WORK_ASSIGNMENT` never preempts a LIVE, continuously-held claim.** A live
+claim is a promise the belt already counts on. A directed assignment instead **QUEUES** and
+wins at that worker's **next release** — ahead of any belt self-claim tier (`self-claim-gates`,
+`critical-qf-jump`, `merged-pool-self-claim`, `self-claim-qf` in `lib/checkin/steps/index.cjs`)
+— never by interrupting work already in progress. This is unaffected by, and does not change,
+the existing narrower carve-out where `resume.cjs` yields a **rediscovered** (not
+continuously-held) claim to a directed row so it isn't stranded unread — see
+`resume-yield-fallback.cjs`'s own docblock in `lib/checkin/steps/index.cjs`.
+
+Two corollaries ride with it:
+- **(a) Explicit supersession before re-pointing.** If the coordinator wants a queued
+  directed assignment re-pointed at a different seat, it must explicitly supersede the
+  queued row first — never silently re-target it, which risks the same work running twice
+  (specimen: the 2026-09-11 double-run of the Michael-002 rollup by Alpha then Charlie).
+- **(b) `resume_final` adoption never outranks a queued directed row at release.** Re-adopting
+  a `waiting_gates` SD via the `resume_final` path is not itself a directed assignment and
+  must be ordered *below* any already-queued directed row when a seat releases (QF-20260911-529
+  is the code-side change that enforces this ordering in `lib/checkin/steps/index.cjs`; this QF
+  is documentation-only, per the ruling above — no step reordering here).
+
+`SD-LEO-INFRA-CHECKIN-DIRECTED-BEFORE-RESUME-001` (completed) is superseded by this ruling: its
+title asserted directed-assignment should run categorically before resume, which the ladder
+never fully implemented (a continuously-held claim is deliberately kept — see
+`resume.cjs`'s `'yielded_to_resume'` outcome) and which, per this ruling, never should. Its
+specimens remain the accurate historical record of what was measured; only the categorical
+title-level assertion is corrected here.
+
 ---
 ### Related documentation
 - [The LEO Harness](./README.md) — canonical overview tying the roles, channels, loop model, and failure modes together.
