@@ -356,7 +356,7 @@ The Decision Filter Engine uses 6 trigger types, each with configurable threshol
 | 1 | cost_threshold | 10,000 USD | `filter.cost_max_usd` | stage_output.cost > threshold |
 | 2 | new_tech_vendor | Approved list | `filter.approved_technologies` | tech not in list |
 | 3 | strategic_pivot | Baseline comparison | (not configurable) | drift from Stage 1 |
-| 4 | low_score | 6 (out of 10) | `filter.min_score_threshold` | stage score < threshold |
+| 4 | low_score | 2.0 (HIGH) / 3.0 (MEDIUM) | `filter.min_score` / `filter.chairman_review_score` | score < min_score = HIGH; score < chairman_review_score = MEDIUM (PAT-LES-5fdc0399f479) |
 | 5 | novel_pattern | Cross-venture check | (not configurable) | no precedent found |
 | 6 | constraint_drift | Severity threshold | `filter.max_drift_severity` | severity > threshold |
 
@@ -377,7 +377,7 @@ Stage Output
 [3] strategic direction changed?
      |
      v
-[4] score < min_score_threshold?
+[4] score < min_score (HIGH) or < chairman_review_score (MEDIUM)?
      |
      v
 [5] no historical precedent?
@@ -422,13 +422,22 @@ Result: { auto_proceed, triggers[], recommendation }
 
 **4. low_score**
 
+Two-tier per Vision v4.7 (PAT-LES-5fdc0399f479: `chairman_review_score` was previously
+undocumented here even though it has existed in the engine alongside `min_score` since the
+two-tier redesign):
+
 | Parameter | Value |
 |-----------|-------|
-| Default | 6 (out of 10) |
-| Preference key | `filter.min_score_threshold` |
-| Data type | number |
+| Default (HIGH-severity floor) | 2.0 |
+| Preference key | `filter.min_score` |
+| Default (chairman-review ceiling) | 3.0 |
+| Preference key | `filter.chairman_review_score` |
+| Data type | number (both keys) |
 | Source | stage_output.score |
-| Fires when | score < threshold |
+| Fires when | score < min_score -> HIGH (chairman review required); min_score <= score < chairman_review_score -> MEDIUM (proceed with caution); score >= chairman_review_score -> no trigger |
+
+See `docs/guides/workflow/cli-venture-lifecycle/reference/filter-triggers.md` Trigger 4 for the
+full evaluation logic, including the stage 3/5 override thresholds.
 
 **5. novel_pattern**
 
@@ -471,7 +480,7 @@ Result: { auto_proceed, triggers[], recommendation }
 | Filter: cost_threshold | cost_max_usd | Yes | Per-venture or global |
 | Filter: new_tech_vendor | approved_technologies | Yes | Per-venture or global |
 | Filter: strategic_pivot | (automatic) | No | -- |
-| Filter: low_score | min_score_threshold | Yes | Per-venture or global |
+| Filter: low_score | min_score, chairman_review_score | Yes | Per-venture or global |
 | Filter: novel_pattern | (automatic) | No | -- |
 | Filter: constraint_drift | max_drift_severity | Yes | Per-venture or global |
 
@@ -504,7 +513,8 @@ All hardcoded defaults are defined in the `DEFAULTS` object within `lib/eva/deci
 ```
 DEFAULTS = {
   cost_max_usd: 10000,
-  min_score_threshold: 6,
+  min_score: 2.0,
+  chairman_review_score: 3.0,
   max_drift_severity: 'HIGH',
   gross_margin_min: 0.40,
   breakeven_months_max: 18,

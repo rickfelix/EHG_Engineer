@@ -334,31 +334,50 @@ Strategic pivots are rare but high-impact events. Making this trigger configurab
 
 ### Configuration
 
+Two preference keys jointly control this trigger -- a low score does not just fire-or-pass,
+it escalates through two severity tiers (PAT-LES-5fdc0399f479):
+
 | Parameter | Value |
 |-----------|-------|
-| Preference key | `filter.min_score_threshold` |
-| Default value | 6 (out of 10) |
-| Data type | number |
-| Chairman override | Yes |
-| Scope | Per-venture or global |
+| Preference key (HIGH-severity floor) | `filter.min_score` |
+| Default value | 2.0 |
+| Preference key (chairman-review ceiling) | `filter.chairman_review_score` |
+| Default value | 3.0 |
+| Data type | number (both keys) |
+| Chairman override | Yes (both keys) |
+| Scope | Per-venture or global; stage-specific overrides exist for stages 3 and 5 |
 
 ### Input Data Source
 
 ```
-stageOutput.score --> numeric value 0-10
+stageOutput.score --> numeric value
 ```
 
-Every stage template produces a score (0-10) reflecting the AI's confidence in its analysis. Higher scores indicate more confidence, better data quality, or stronger conclusions.
+Every stage template produces a score reflecting the AI's confidence in its analysis. Higher scores indicate more confidence, better data quality, or stronger conclusions.
 
 ### Evaluation Logic
 
+Two-tier per Vision v4.7 -- the trigger's severity depends on WHICH threshold the score falls below, not just whether it fell below one:
+
 ```
-IF stageOutput.score < chairmanPrefs.filter.min_score_threshold
-THEN trigger fires
+IF stageOutput.score < chairmanPrefs.filter.min_score
+THEN trigger fires, severity HIGH (chairman review required)
+ELSE IF stageOutput.score < chairmanPrefs.filter.chairman_review_score
+THEN trigger fires, severity MEDIUM (proceed with caution)
 ELSE trigger passes
 ```
 
+Stages 3 and 5 use stage-specific overrides for both thresholds instead of the global
+preference values (stage 3 is an advisory/non-blocking kill; stage 5 is the authoritative
+blocking kill) -- see `lib/eva/decision-filter-engine.js` `STAGE_SCORE_THRESHOLDS`.
+
 ### Score Interpretation
+
+> **Note**: this table and the "Chairman Override Capability" examples below predate the
+> two-tier `min_score`/`chairman_review_score` split and assume a 0-10 scale; the live
+> defaults (2.0 / 3.0) and stage overrides (2.5-3.7) suggest a narrower working range.
+> Treat `lib/eva/decision-filter-engine.js` as ground truth for current threshold values
+> until this table itself is re-verified and updated (a separate pass from this fix).
 
 ```
 Score     Confidence     Typical Action
