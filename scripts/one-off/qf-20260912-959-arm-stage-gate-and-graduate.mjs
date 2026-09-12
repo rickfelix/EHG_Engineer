@@ -30,6 +30,7 @@ import {
   getFlag,
 } from '../../lib/feature-flags/registry.js';
 import { checkStageGate, shouldEnforceBlock } from '../../lib/governance/stage-gate-predicate.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
@@ -99,7 +100,7 @@ async function main() {
   process.exitCode = pass ? 0 : 1;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main().catch((err) => {
     console.error('QF-20260912-959 apply FAILED:', err.stack || err.message);
     process.exitCode = 1;
