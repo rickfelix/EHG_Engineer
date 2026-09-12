@@ -8,8 +8,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { createRegistrarAdapter, normalizeQuote } from '../../../lib/venture-acquisition/registrar-adapter.js';
-import { composeAcquisitionPacket, pickRecommended, resolvePurchaseCeilingUsd, PACKET_KIND, DEFAULT_DOMAIN_PURCHASE_CEILING_USD } from '../../../lib/venture-acquisition/decision-packet.js';
-import { executeAcquisition, PACKET_QUOTE_TTL_MS } from '../../../lib/venture-acquisition/acquire.js';
+import { composeAcquisitionPacket, pickRecommended, preflightRegistrarScope, resolvePurchaseCeilingUsd, PACKET_KIND, DEFAULT_DOMAIN_PURCHASE_CEILING_USD } from '../../../lib/venture-acquisition/decision-packet.js';
+import { executeAcquisition, resolveStuckAcquisition, PACKET_QUOTE_TTL_MS } from '../../../lib/venture-acquisition/acquire.js';
 import { REGISTRAR_PRICE_CEILING } from '../../../lib/venture-deploy/spend-guardrails.js';
 import { computeQuestionKey } from '../../../lib/decision-binding/disposition.js';
 
@@ -53,6 +53,30 @@ function fakeSupabase(tables) {
           },
         };
       },
+      delete() {
+        calls.deletes = calls.deletes || [];
+        calls.deletes.push({ table });
+        const deleteState = { filters: [] };
+        const deleteChain = {
+          eq(k, v) { deleteState.filters.push([k, v]); return deleteChain; },
+          then(resolve) {
+            const toRemove = rows.filter((r) => deleteState.filters.every(([k, v]) => {
+              if (k.includes('->>')) {
+                const [col, key] = k.split('->>');
+                return String((r[col] || {})[key]) === String(v);
+              }
+              return r[k] === v;
+            }));
+            for (const r of toRemove) {
+              const idx = rows.indexOf(r);
+              if (idx !== -1) rows.splice(idx, 1);
+            }
+            tables[table] = rows;
+            return resolve({ data: null, error: null });
+          },
+        };
+        return deleteChain;
+      },
     };
     return chain;
   }
@@ -77,6 +101,11 @@ const fakeRegistrar = (overrides = {}) => ({
   checkDomain: vi.fn(async (d) => ({ available: true, price: d === 'lumina.com' ? 12.5 : 32 })),
   registerDomain: vi.fn(async (d) => ({ domain: d, order_id: 'ord-1', status: 'registered' })),
   searchDomains: vi.fn(async () => []),
+  // FR-2 preflight defaults (SD-LEO-FIX-FIX-DOMAIN-REGISTRAR-001): composeAcquisitionPacket
+  // now calls these unconditionally whenever a registrar is injected, so every pre-existing
+  // test that passes fakeRegistrar() with no overrides needs a passing default here.
+  listDomains: vi.fn(async () => []),
+  checkBillingProfile: vi.fn(async () => ({ default_payment_method: 'pm_1' })),
   ...overrides,
 });
 
@@ -313,7 +342,10 @@ describe('consumed-exactly-once + fail-loud (FR-4/FR-6, TS-5/TS-7)', () => {
   it('TS-7 register failure: sanitized error persisted to brief_data, disposition NOT consumed (retry-able), non-success status', async () => {
     const tables = { chairman_decisions: [approvedPacket()], system_events: [], venture_artifacts: [] };
     const sb = fakeSupabase(tables);
-    const reg = fakeRegistrar({ registerDomain: vi.fn(async () => { throw new Error('registrar POST /domains/lumina.com/register: insufficient funds'); }) });
+    const registrarErr = new Error('registrar POST /registrations: insufficient funds');
+    registrarErr.registrarErrors = [{ code: 10000, message: 'insufficient funds' }];
+    registrarErr.registrarStatus = 402;
+    const reg = fakeRegistrar({ registerDomain: vi.fn(async () => { throw registrarErr; }) });
     const r = await executeAcquisition(sb, 'dec-1', { registrar: reg, execute: true, env: {} });
     expect(r.status).toBe('failed');
     expect(r.reason).toBe('register_failed');
@@ -321,6 +353,22 @@ describe('consumed-exactly-once + fail-loud (FR-4/FR-6, TS-5/TS-7)', () => {
     expect(tables.chairman_decisions[0].brief_data.acquisition_error.reason).toMatch(/insufficient funds/);
     const dispo = tables.system_events.find((e) => e.event_type === 'DECISION_DISPOSITION');
     expect(dispo.payload.status).toBe('awaiting_disposition'); // retry-able, NOT consumed
+  });
+
+  // FR-3, QF-20260912-746: the registrar's real error code/message must be surfaced
+  // distinctly, not folded only into a joined string — an operator needs the code.
+  it('FR-3: registrarErrors/registrarStatus from a failed register are surfaced on the decision row AND the return value', async () => {
+    const tables = { chairman_decisions: [approvedPacket()], system_events: [], venture_artifacts: [] };
+    const sb = fakeSupabase(tables);
+    const registrarErr = new Error('registrar POST /registrations: not authorized to perform this action');
+    registrarErr.registrarErrors = [{ code: 10000, message: 'You are not authorized to perform this action' }];
+    registrarErr.registrarStatus = 403;
+    const reg = fakeRegistrar({ registerDomain: vi.fn(async () => { throw registrarErr; }) });
+    const r = await executeAcquisition(sb, 'dec-1', { registrar: reg, execute: true, env: {} });
+    expect(r.registrarErrors).toEqual([{ code: 10000, message: 'You are not authorized to perform this action' }]);
+    expect(r.registrarStatus).toBe(403);
+    expect(tables.chairman_decisions[0].brief_data.acquisition_error.registrar_errors).toEqual([{ code: 10000, message: 'You are not authorized to perform this action' }]);
+    expect(tables.chairman_decisions[0].brief_data.acquisition_error.registrar_status).toBe(403);
   });
 
   it('disposition enum: domain_acquisition accepted, invalid type still throws (additive pin)', () => {
@@ -406,5 +454,134 @@ describe('adversarial-review fixes', () => {
     const r = await composeAcquisitionPacket(sb, 'v1', { registrar: fakeRegistrar(), env: {} });
     expect(r.status).toBe('pending_conflict');
     expect(r.unblock).toMatch(/pending slot/);
+  });
+});
+
+// ── SD-LEO-FIX-FIX-DOMAIN-REGISTRAR-001 (QF-20260912-746): documented registrar
+// endpoint (FR-1), registrar-scope preflight (FR-2), and the stuck-disposition
+// resolve path (FR-4). FR-3 (error surfacing) is covered above, inline with the
+// existing register-failure tests it extends. ─────────────────────────────────
+
+describe('registrar adapter registerDomain (FR-1)', () => {
+  function fetchImplFor(responses) {
+    let call = 0;
+    return vi.fn(async (url) => {
+      const r = responses[Math.min(call, responses.length - 1)];
+      call += 1;
+      return { ok: r.ok !== false, status: r.status ?? 200, json: async () => r.json, _url: url };
+    });
+  }
+
+  it('POSTs the documented /registrations endpoint with {domain_name, years, auto_renew, privacy_mode}', async () => {
+    const fetchImpl = fetchImplFor([{ json: { success: true, result: { completed: true, state: 'succeeded' } } }]);
+    const adapter = createRegistrarAdapter({ CLOUDFLARE_REGISTRAR_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'acct1' }, { fetchImpl });
+    const result = await adapter.registerDomain('altifyai.app', { years: 1, autoRenew: false, privacyMode: true });
+    expect(result).toEqual({ completed: true, state: 'succeeded' });
+    const [url, opts] = fetchImpl.mock.calls[0];
+    expect(url).toBe('https://api.cloudflare.com/client/v4/accounts/acct1/registrar/registrations');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual({ domain_name: 'altifyai.app', years: 1, auto_renew: false, privacy_mode: true });
+  });
+
+  it('polls result.links.self when completed is false, and stops once completed is true', async () => {
+    const fetchImpl = fetchImplFor([
+      { json: { success: true, result: { completed: false, links: { self: 'https://api.cloudflare.com/client/v4/accounts/acct1/registrar/registrations/reg-1' } } } },
+      { json: { success: true, result: { completed: false, links: { self: 'https://api.cloudflare.com/client/v4/accounts/acct1/registrar/registrations/reg-1' } } } },
+      { json: { success: true, result: { completed: true, state: 'succeeded' } } },
+    ]);
+    const adapter = createRegistrarAdapter({ CLOUDFLARE_REGISTRAR_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'acct1' }, { fetchImpl });
+    const result = await adapter.registerDomain('altifyai.app', { pollDelayMs: 0 });
+    expect(result).toEqual({ completed: true, state: 'succeeded' });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl.mock.calls[1][0]).toBe('https://api.cloudflare.com/client/v4/accounts/acct1/registrar/registrations/reg-1');
+    expect(fetchImpl.mock.calls[1][1].method).toBe('GET');
+  });
+
+  it('a failed register throws an error carrying .registrarErrors and .registrarStatus (never just a joined string)', async () => {
+    const fetchImpl = fetchImplFor([{ ok: false, status: 403, json: { success: false, errors: [{ code: 10000, message: 'You are not authorized to perform this action' }] } }]);
+    const adapter = createRegistrarAdapter({ CLOUDFLARE_REGISTRAR_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'acct1' }, { fetchImpl });
+    await expect(adapter.registerDomain('altifyai.app')).rejects.toMatchObject({
+      registrarStatus: 403,
+      registrarErrors: [{ code: 10000, message: 'You are not authorized to perform this action' }],
+    });
+  });
+
+  it('checkBillingProfile reads the account-scoped (non-registrar-prefixed) billing endpoint', async () => {
+    const fetchImpl = fetchImplFor([{ json: { success: true, result: { default_payment_method: 'pm_1' } } }]);
+    const adapter = createRegistrarAdapter({ CLOUDFLARE_REGISTRAR_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'acct1' }, { fetchImpl });
+    await adapter.checkBillingProfile();
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.cloudflare.com/client/v4/accounts/acct1/billing/profile');
+  });
+});
+
+describe('composeAcquisitionPacket registrar-scope preflight (FR-2)', () => {
+  it('refuses with registrar_scope_missing (naming the grant) on a 403 billing read, and inserts NOTHING', async () => {
+    const sb = fakeSupabase(tablesWithShortlist());
+    const billingErr = new Error('registrar GET .../billing/profile: insufficient permissions');
+    billingErr.registrarStatus = 403;
+    const reg = fakeRegistrar({
+      listDomains: vi.fn(async () => []),
+      checkBillingProfile: vi.fn(async () => { throw billingErr; }),
+    });
+    const r = await composeAcquisitionPacket(sb, 'v1', { registrar: reg, env: {} });
+    expect(r.status).toBe('registrar_scope_missing');
+    expect(r.unblock).toMatch(/Account > Billing > Edit or Read/);
+    expect(sb._calls.inserts).toHaveLength(0);
+  });
+
+  it('passes through to normal composition when the preflight succeeds', async () => {
+    const sb = fakeSupabase(tablesWithShortlist());
+    const reg = fakeRegistrar({ listDomains: vi.fn(async () => []), checkBillingProfile: vi.fn(async () => ({ default_payment_method: 'pm_1' })) });
+    const r = await composeAcquisitionPacket(sb, 'v1', { registrar: reg, env: {} });
+    expect(r.status).toBe('created');
+  });
+
+  it('preflightRegistrarScope is a no-op (null) in plan mode — nothing to preflight without a live registrar', async () => {
+    expect(await preflightRegistrarScope(null, 'lumina.com')).toBeNull();
+  });
+});
+
+describe('resolveStuckAcquisition (FR-4)', () => {
+  it('deletes the stuck disposition and reports resolved when the registrar confirms the domain is still registrable', async () => {
+    const key = computeQuestionKey('domain_acquisition', { venture_id: 'v1', domain: 'lumina.com' });
+    const tables = {
+      chairman_decisions: [approvedPacket()],
+      venture_artifacts: [],
+      system_events: [{ id: 'se-1', event_type: 'DECISION_DISPOSITION', idempotency_key: key, payload: { question_key: key, status: 'awaiting_disposition', decision_type: 'domain_acquisition' } }],
+    };
+    const sb = fakeSupabase(tables);
+    const reg = fakeRegistrar({ checkDomain: vi.fn(async () => ({ available: true, price: 12.5 })) });
+    const r = await resolveStuckAcquisition(sb, 'dec-1', { registrar: reg });
+    expect(r.status).toBe('resolved');
+    expect(tables.system_events).toHaveLength(0); // the row was deleted
+  });
+
+  it('refuses (and does NOT delete) when the registrar reports the domain as already registered', async () => {
+    const key = computeQuestionKey('domain_acquisition', { venture_id: 'v1', domain: 'lumina.com' });
+    const tables = {
+      chairman_decisions: [approvedPacket()],
+      venture_artifacts: [],
+      system_events: [{ id: 'se-1', event_type: 'DECISION_DISPOSITION', idempotency_key: key, payload: { question_key: key, status: 'awaiting_disposition', decision_type: 'domain_acquisition' } }],
+    };
+    const sb = fakeSupabase(tables);
+    const reg = fakeRegistrar({ checkDomain: vi.fn(async () => ({ available: false })) });
+    const r = await resolveStuckAcquisition(sb, 'dec-1', { registrar: reg });
+    expect(r.status).toBe('refused');
+    expect(r.reason).toMatch(/registrar_reports_domain_registered/);
+    expect(tables.system_events).toHaveLength(1); // NOT deleted
+  });
+
+  it('refuses without a registrar — never trusts an unverified claim', async () => {
+    const r = await resolveStuckAcquisition(fakeSupabase({ chairman_decisions: [], system_events: [], venture_artifacts: [] }), 'dec-1', {});
+    expect(r.status).toBe('refused');
+    expect(r.reason).toMatch(/registrar_adapter_required/);
+  });
+
+  it('refuses when there is no stuck disposition to resolve', async () => {
+    const sb = fakeSupabase({ chairman_decisions: [approvedPacket()], system_events: [], venture_artifacts: [] });
+    const reg = fakeRegistrar();
+    const r = await resolveStuckAcquisition(sb, 'dec-1', { registrar: reg });
+    expect(r.status).toBe('refused');
+    expect(r.reason).toBe('no_stuck_disposition_found');
   });
 });

@@ -69,6 +69,10 @@ const fakeRegistrar = () => ({
   checkDomain: vi.fn(async () => ({ available: true, price: 12.5 })),
   registerDomain: vi.fn(async (d) => ({ domain: d, order_id: 'ord-1' })),
   searchDomains: vi.fn(async () => []),
+  // FR-2 preflight defaults (SD-LEO-FIX-FIX-DOMAIN-REGISTRAR-001): composeAcquisitionPacket
+  // now calls these unconditionally whenever a registrar is injected.
+  listDomains: vi.fn(async () => []),
+  checkBillingProfile: vi.fn(async () => ({ default_payment_method: 'pm_1' })),
 });
 
 // ── TS-8 DNS idempotency ─────────────────────────────────────────────────────

@@ -20,6 +20,8 @@ import { armCliTeardown } from '../lib/cli-graceful-exit.js';
 import { CHAIRMAN_FEEDBACK_TYPE } from '../lib/chairman/feedback-decision-type.mjs';
 import { resolveAndWriteChairmanSiteReviewAttestation } from '../lib/eva/bridge/chairman-site-review-attestation.js';
 import { resolveAndRunAcquisitionPipeline } from '../lib/eva/bridge/domain-acquisition-trigger.js';
+import { resolveStuckAcquisition } from '../lib/venture-acquisition/acquire.js';
+import { createRegistrarAdapter } from '../lib/venture-acquisition/registrar-adapter.js';
 import { resolveAndVerifyClassifierDenial } from '../lib/chairman/classifier-denial-guard.mjs';
 import { planFixtureHygieneWithdrawal } from '../lib/chairman/fixture-hygiene-withdrawal.mjs';
 import { applyRetirement } from '../lib/chairman/decision-retirement.mjs';
@@ -251,6 +253,29 @@ const writers = {
     return { table: 'feedback', feedback_id: data?.[0]?.id, snoozed_until: snoozedUntil, note: 'item remains pending' };
   },
 };
+
+if (parsed.command === 'acquisition_resolve') {
+  try {
+    const registrar = createRegistrarAdapter();
+    if (!registrar) {
+      console.error('ACQUISITION_RESOLVE_ERR: registrar credentials absent (CLOUDFLARE_REGISTRAR_API_TOKEN / CLOUDFLARE_ACCOUNT_ID) — cannot independently verify domain status, refusing rather than trusting --verified-not-registered alone');
+      await armCliTeardown(1);
+    } else {
+      const out = await resolveStuckAcquisition(db, parsed.id, { registrar });
+      console.log(JSON.stringify(out, null, 2));
+      if (out.status === 'resolved') {
+        console.log('RESOLVED ' + parsed.id + ' — ' + out.reason);
+        await armCliTeardown(0);
+      } else {
+        console.error('ACQUISITION_RESOLVE_REFUSED: ' + out.reason);
+        await armCliTeardown(1);
+      }
+    }
+  } catch (e) {
+    console.error('ACQUISITION_RESOLVE_ERR: ' + e.message);
+    await armCliTeardown(1);
+  }
+}
 
 if (parsed.command === 'withdraw') {
   try {
