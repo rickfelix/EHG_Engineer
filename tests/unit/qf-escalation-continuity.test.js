@@ -259,6 +259,40 @@ describe('Description/scope inheritance (QF-20260729-534 option C)', () => {
     expect(h.createSDArgs.description).toBe(exact);
   });
 
+  // strategic_directives_v2.title is varchar(500) -- unlike description, title was passed
+  // through verbatim with no bound at all until this fix (found live escalating
+  // QF-20260912-959, whose own title alone is ~700 chars: "value too long for type
+  // character varying(500)" straight out of Postgres, no truncation, no metadata capture).
+  describe('title truncation (varchar(500) protection)', () => {
+    it('truncates a title exceeding MAX_TITLE_CHARS (440) with a marker, and preserves the full original in qf_origin_body', async () => {
+      const longTitle = Array.from({ length: 700 }, (_, i) => i % 10).join('');
+      h.cfg = { qfRow: baseQfRow({ title: longTitle }) };
+      await createFromQF('QF-TEST-1');
+      expect(h.createSDArgs.title).toBe(`${longTitle.slice(0, 440)}… [truncated; full text in metadata.qf_origin_body]`);
+      expect(h.createSDArgs.title.length).toBeLessThan(500);
+      expect(h.createSDArgs.metadata.qf_origin_body.title).toBe(longTitle);
+    });
+
+    it('does not truncate a title within the cap', async () => {
+      h.cfg = { qfRow: baseQfRow({ title: 'A perfectly normal QF title' }) };
+      await createFromQF('QF-TEST-1');
+      expect(h.createSDArgs.title).toBe('A perfectly normal QF title');
+    });
+
+    it('does not truncate a title at exactly MAX_TITLE_CHARS (boundary, not over it)', async () => {
+      const exact = 'v'.repeat(440);
+      h.cfg = { qfRow: baseQfRow({ title: exact }) };
+      await createFromQF('QF-TEST-1');
+      expect(h.createSDArgs.title).toBe(exact);
+    });
+
+    it('falls back to a generic label when the QF has no title at all', async () => {
+      h.cfg = { qfRow: baseQfRow({ title: null }) };
+      await createFromQF('QF-TEST-1');
+      expect(h.createSDArgs.title).toBe('Escalated quick-fix');
+    });
+  });
+
   it('preserves the full, untruncated original in metadata.qf_origin_body regardless of length', async () => {
     const long = 'z'.repeat(21693);
     h.cfg = {
@@ -273,6 +307,7 @@ describe('Description/scope inheritance (QF-20260729-534 option C)', () => {
     expect(h.createSDArgs.description).toBe('Expected: short expected\nActual: short actual');
     // ...but nothing from the long original narrative was discarded.
     expect(h.createSDArgs.metadata.qf_origin_body).toEqual({
+      title: 'Test QF',
       description: long,
       expected_behavior: 'short expected',
       actual_behavior: 'short actual',
