@@ -841,6 +841,85 @@ describe('TS-10: consuming gates tolerate the extended classification shape', ()
   });
 });
 
+describe('SD-LEO-FIX-IMPLEMENTATION-FIDELITY-GATE-001: aggregate UNDELIVERED message is has_work_product-aware', () => {
+  it('has_work_product===false: message states the true reason (no story/testing evidence), uses the UNDELIVERED count not total, and drops the false "sibling FRs are referenced" claim', async () => {
+    // 3 FRs, 1 approver-descoped, 0 stories, 0 TESTING rows -> has_work_product=false,
+    // undelivered=2 (< total=3, since a descope needs no work product) -- mirrors the
+    // prospective TESTING sub-agent's empirical probe against live code.
+    const c = await classifyFrDelivery(stub({ stories: [] }), {
+      sdId: 'sd-fidelity-false',
+      functionalRequirements: [{ id: 'FR-001', requirement: 'a' }, { id: 'FR-002', requirement: 'b' }, { id: 'FR-003', requirement: 'c' }],
+      sdMetadata: { descoped_frs: [{ fr_id: 'FR-001', approved_by: 'lead' }] },
+    });
+    expect(c.has_work_product).toBe(false);
+    expect(c.undelivered).toBe(2);
+    expect(c.total).toBe(3);
+
+    const r = projectGateResult(c, { enforced: false });
+    const all = r.warnings.join(' ');
+    expect(all).toMatch(/2\/3 FR\(s\) UNDELIVERED/);
+    expect(all).toMatch(/no validated story exists for this SD and no admitted TESTING evidence matched any FR/);
+    expect(all).not.toMatch(/sibling FRs are referenced/);
+    // FR-2: per-FR evidence text now reaches the list output, not only the aggregate line.
+    expect(all).toMatch(/nothing was built or validated/i);
+  });
+
+  it('has_work_product===true: aggregate message is byte-identical to the pre-fix text (a real gap -- convention demonstrably in use via a sibling FR)', async () => {
+    const stories = [{ id: 's1', title: 'implement FR-001 fully', status: 'completed' }];
+    const c = await classifyFrDelivery(stub({ stories }), {
+      sdId: 'sd-fidelity-true',
+      functionalRequirements: [{ id: 'FR-001', requirement: 'a' }, { id: 'FR-002', requirement: 'b' }],
+    });
+    expect(c.has_work_product).toBe(true);
+    expect(c.undelivered).toBe(1);
+
+    const r = projectGateResult(c, { enforced: false });
+    expect(r.warnings.join(' ')).toMatch(/1\/2 FR\(s\) UNDELIVERED — this SD does use the FR-reference convention \(sibling FRs are referenced\), so these are genuinely missing/);
+  });
+
+  it('legacy-shape fixture (has_work_product entirely absent) routes through the TRUE/existing branch, not the new false-branch message -- proves strict `=== false`, not truthiness', () => {
+    // Mirrors this file's own pre-existing hand-built fixtures (e.g. the FR-2 describe block
+    // above), which never set has_work_product at all.
+    const legacy = { frs: [{ id: 'FR-002', description: 'b', status: 'undelivered' }, { id: 'FR-001', description: 'a', status: 'delivered' }], total: 2, delivered: 1, descoped: 0, undelivered: 1 };
+    expect(legacy.has_work_product).toBeUndefined();
+    const r = projectGateResult(legacy, { enforced: false });
+    expect(r.warnings.join(' ')).toMatch(/sibling FRs are referenced/);
+    expect(r.warnings.join(' ')).not.toMatch(/no validated story exists for this SD and no admitted TESTING evidence matched any FR/);
+  });
+
+  it('mutual exclusivity: undelivered>0 and unverifiable>0 never both true in one real classification', async () => {
+    const fixtures = [
+      await classifyFrDelivery(stub({ stories: [] }), { sdId: 'sd-mx1', functionalRequirements: FRS }),
+      await classifyFrDelivery(stub({ stories: [{ id: 's1', title: 'unrelated work', status: 'completed' }] }), { sdId: 'sd-mx2', functionalRequirements: FRS }),
+      await classifyFrDelivery(stub({ stories: [{ id: 's1', title: 'implement FR-001', status: 'completed' }] }), { sdId: 'sd-mx3', functionalRequirements: [{ id: 'FR-001', requirement: 'a' }, { id: 'FR-002', requirement: 'b' }] }),
+    ];
+    for (const c of fixtures) {
+      expect(c.undelivered > 0 && c.unverifiable > 0).toBe(false);
+    }
+  });
+
+  it('non-regression: passed/score/required/over_ceiling are identical regardless of has_work_product -- only the message text changes', () => {
+    const base = { frs: [{ id: 'FR-001', description: 'a', status: 'undelivered' }], total: 1, delivered: 0, descoped: 0, undelivered: 1, unverifiable: 0 };
+    const rTrue = projectGateResult({ ...base, has_work_product: true }, { enforced: true });
+    const rFalse = projectGateResult({ ...base, has_work_product: false }, { enforced: true });
+    expect(rFalse.passed).toBe(rTrue.passed);
+    expect(rFalse.score).toBe(rTrue.score);
+    expect(rFalse.required).toBe(rTrue.required);
+    expect(rFalse.details.over_ceiling).toBe(rTrue.details.over_ceiling);
+    // The ONLY observable difference is the message text -- under enforced:true the UNDELIVERED
+    // line lands in `issues`, not `warnings` (see the `(enforced ? issues : warnings).push` line).
+    expect(rFalse.issues.join(' ')).not.toEqual(rTrue.issues.join(' '));
+  });
+
+  it('listOf() output is bounded by MAX_DIAGNOSTIC_ENTRIES, mirroring the sibling diagnostic arrays in this file (SECURITY sub-agent advisory)', () => {
+    const many = Array.from({ length: 60 }, (_, i) => ({ id: `FR-${i}`, description: 'x', status: 'undelivered', evidence: 'nothing was built or validated against this FR' }));
+    const c = { frs: many, total: 60, delivered: 0, descoped: 0, undelivered: 60, unverifiable: 0, has_work_product: false };
+    const r = projectGateResult(c, { enforced: false });
+    const undeliveredLines = r.warnings.filter((w) => w.startsWith('  Undelivered:'));
+    expect(undeliveredLines.length).toBeLessThanOrEqual(50);
+  });
+});
+
 describe('TR-5/TS-9: mutation test — regex_fr_mentions is genuinely non-load-bearing', () => {
   const SOURCE_PATH = fileURLToPath(new URL('../../../../scripts/modules/handoff/gates/fr-delivery-classifier.js', import.meta.url));
   const E2E_PATH_GUARD_URL = pathToFileURL(fileURLToPath(new URL('../../../../lib/stories/e2e-path-guard.js', import.meta.url))).href;

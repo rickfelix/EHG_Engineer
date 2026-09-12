@@ -579,11 +579,19 @@ export async function classifyFrDelivery(supabase, {
         evidence: `TESTING evidence (sub_agent_execution_results ${testingUndelivered.sub_agent_result_id}) explicitly marks ${id} undelivered with test_ref ${testingUndelivered.test_ref}`,
       };
     }
-    // Reachable only when unmeasurable===false and hasWorkProduct===true, which forces
-    // conventionInUse===true -- i.e. some OTHER (sibling) FR of this SD really is referenced,
-    // either by a story or by a matched testing-evidence entry. Signal-agnostic on purpose: an
-    // earlier draft always said "sibling FRs... ARE referenced" as if by a story specifically,
-    // which was false whenever the only work product was testing evidence with zero stories.
+    // Reachable in TWO distinct cases, matched by the ternary below (SD-LEO-FIX-IMPLEMENTATION-
+    // FIDELITY-GATE-001 FR-3 -- corrected a stale version of this comment that claimed only case
+    // (1) was reachable, the same reasoning error the aggregate UNDELIVERED message in
+    // projectGateResult (below) made before FR-1 corrected it there too):
+    //   (1) hasWorkProduct===true (which, given unmeasurable===false, forces
+    //       conventionInUse===true) -- some OTHER (sibling) FR of this SD really is referenced,
+    //       either by a story or by a matched testing-evidence entry.
+    //   (2) hasWorkProduct===false -- this SD has no work product at all (no validated story, no
+    //       matched testing-evidence entry anywhere), so nothing was built or validated against
+    //       ANY of its FRs.
+    // Signal-agnostic on purpose in case (1): an earlier draft always said "sibling FRs... ARE
+    // referenced" as if by a story specifically, which was false whenever the only work product
+    // was testing evidence with zero stories.
     const why = hasWorkProduct
       ? 'No validated story references this FR id, no admitted TESTING evidence matches it, and no approver-gated descope exists — yet this SD demonstrably uses the FR-reference convention (a sibling FR is referenced by a validated story or a matched testing-evidence entry)'
       : 'No validated story exists for this SD and no admitted TESTING evidence matched any FR — nothing was built or validated against this FR';
@@ -639,9 +647,19 @@ export function projectGateResult(classification, {
   const { frs, total, delivered, descoped, undelivered, unverifiable = 0 } = classification;
   const satisfied = delivered + descoped;
   const score = total === 0 ? NOT_MEASURED_SCORE : Math.round((satisfied / total) * 100);
+  // SD-LEO-FIX-IMPLEMENTATION-FIDELITY-GATE-001 FR-2: surface each FR's own evidence text
+  // (already computed correctly, per-FR, by classifyFrDelivery above) alongside id/description --
+  // previously discarded at this reporting layer, leaving the aggregate line (below) as the ONLY
+  // explanation a reader ever saw. Bounded by MAX_DIAGNOSTIC_ENTRIES (the same cap already used
+  // for the sibling diagnostic arrays above, e.g. unresolvedTestRefs) per SECURITY sub-agent
+  // advisory (2026-09-11): an unbounded list here would let a large FR roster produce a
+  // proportionally unbounded persisted payload (this gate's issues/warnings ARE persisted
+  // verbatim into sd_phase_handoffs.metadata.gate_results for non-LEAD-FINAL-APPROVAL handoffs --
+  // see HandoffRecorder.js:1097 -- so this is not merely a console-display concern).
   const listOf = (status, label) => frs
     .filter((f) => f.status === status)
-    .map((f) => `  ${label}: ${`${f.id}: ${f.description}`.trim()}`);
+    .slice(0, MAX_DIAGNOSTIC_ENTRIES)
+    .map((f) => `  ${label}: ${`${f.id}: ${f.description}`.trim()}${f.evidence ? ` (${f.evidence})` : ''}`);
   const undeliveredList = listOf('undelivered', 'Undelivered');
   const unverifiableList = listOf('unverifiable', 'Unverifiable');
   const ratio = total === 0 ? 0 : unverifiable / total;
@@ -678,7 +696,22 @@ export function projectGateResult(classification, {
   }
 
   if (undelivered > 0) {
-    const line = `${gateName}: ${undelivered}/${total} FR(s) UNDELIVERED — this SD does use the FR-reference convention (sibling FRs are referenced), so these are genuinely missing`;
+    // SD-LEO-FIX-IMPLEMENTATION-FIDELITY-GATE-001 FR-1: this line used to claim, unconditionally,
+    // that "this SD does use the FR-reference convention (sibling FRs are referenced)" -- true
+    // only when classification.has_work_product is true (a real gap: some sibling FR genuinely
+    // is referenced elsewhere in this SD, so the convention is demonstrably in use). When
+    // has_work_product is STRICTLY false (zero validated stories AND zero matched TESTING
+    // fr_coverage entries anywhere in the SD -- typical of a pure code-only/infrastructure SD),
+    // no such convention or sibling reference exists, so that claim was false. Branch on strict
+    // `=== false` (never a truthiness check): has_work_product is undefined, not false, in
+    // hand-built classification fixtures, and a truthy-based branch would misroute them. The
+    // "genuinely missing" / UNDELIVERED conclusion is kept verbatim in both cases -- this module
+    // deliberately does NOT excuse a zero-work-product SD as "unmeasurable"/blind (see the
+    // has_work_product/UNVERIFIABLE design above); only the stated REASON changes from a false
+    // claim to a true one.
+    const line = classification.has_work_product === false
+      ? `${gateName}: ${undelivered}/${total} FR(s) UNDELIVERED — no validated story exists for this SD and no admitted TESTING evidence matched any FR, so these are genuinely missing`
+      : `${gateName}: ${undelivered}/${total} FR(s) UNDELIVERED — this SD does use the FR-reference convention (sibling FRs are referenced), so these are genuinely missing`;
     (enforced ? issues : warnings).push(line, ...undeliveredList);
   }
 
