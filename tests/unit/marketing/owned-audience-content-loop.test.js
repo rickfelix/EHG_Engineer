@@ -7,7 +7,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { publishApprovedItem, computeWeeklyRollup, aggregateWeeklyMetrics } from '../../../lib/marketing/owned-audience-content-loop.js';
 
 vi.mock('../../../lib/marketing/publisher/index.js', () => ({
-  publish: vi.fn().mockResolvedValue({ success: true, postId: 'post-1' }),
+  // SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-3: publishApprovedItem now also requires
+  // mode:'real' (not bare success:true) before persisting status='posted'.
+  publish: vi.fn().mockResolvedValue({ success: true, postId: 'post-1', mode: 'real' }),
 }));
 vi.mock('../../../lib/marketing/marketlens-caps.js', () => ({
   recordWrite: vi.fn(),
@@ -72,6 +74,16 @@ describe('publishApprovedItem', () => {
     expect(publish).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.objectContaining({ id: 'q-1' }), platform: 'x', ventureId: 'v-1' })
     );
+  });
+
+  it("SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 FR-3: a mock/denied publish (success:true, mode!='real') is never persisted as posted", async () => {
+    publish.mockResolvedValueOnce({ success: true, postId: 'post-1', mode: 'mock', dryRun: true });
+    const supabase = buildSupabase();
+    const result = await publishApprovedItem({ queueItemId: 'q-1', ventureId: 'v-1', platform: 'x' }, { supabase, logger: mockLogger });
+    expect(result.ok).toBe(false);
+    // Only the initial read of marketing_content_queue -- never a second call to .update().
+    const queueCalls = supabase.from.mock.calls.filter(([table]) => table === 'marketing_content_queue');
+    expect(queueCalls.length).toBe(1);
   });
 
   it('rejects a non-approved queue item without ever calling publish', async () => {
