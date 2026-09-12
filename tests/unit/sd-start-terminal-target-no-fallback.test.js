@@ -26,7 +26,10 @@ describe('QF-20260704-825: TARGET_ALREADY_TERMINAL guard precedes auto-fallback'
   it('checks claimResult.error === "sd_terminal_status" and process.exit(1)s unconditionally', () => {
     const idx = src.indexOf('TARGET_ALREADY_TERMINAL');
     expect(idx).toBeGreaterThan(0);
-    const body = src.slice(idx - 400, idx + 1050);
+    // QF-20260912-346 widened the deferred branch (role-seat/other-session hold gating),
+    // pushing process.exit(1) further from the TARGET_ALREADY_TERMINAL anchor -- window
+    // widened accordingly (was +1050).
+    const body = src.slice(idx - 400, idx + 2500);
     expect(body).toMatch(/claimResult\.error === 'sd_terminal_status'/);
     expect(body).toMatch(/process\.exit\(1\)/);
   });
@@ -50,7 +53,9 @@ describe('QF-20260704-825: TARGET_ALREADY_TERMINAL guard precedes auto-fallback'
 
   it('surfaces the SD status and a completion timestamp in the exit message', () => {
     const idx = src.indexOf('TARGET_ALREADY_TERMINAL');
-    const body = src.slice(idx, idx + 700);
+    // QF-20260912-346 widened the deferred branch above this text -- window widened
+    // accordingly (was +700).
+    const body = src.slice(idx, idx + 2100);
     expect(body).toMatch(/status=\$\{claimResult\.status\}/);
     expect(body).toMatch(/sd\.completion_date \|\| sd\.updated_at/);
   });

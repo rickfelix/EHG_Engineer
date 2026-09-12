@@ -5,7 +5,11 @@
  *
  *   node scripts/sd-park.js park   <SD-KEY> --reason "<why>" [--actor <role>] \
  *     [--review-at <ISO-timestamp>] [--release-condition "<text>"]
- *   node scripts/sd-park.js unpark <SD-KEY> --reason "<why>" [--restore <status>] [--actor <role>]
+ *   node scripts/sd-park.js unpark <SD-KEY> --reason "<why>" [--restore <status>] [--actor <role>] [--force]
+ *
+ * --force (QF-20260912-346) is REQUIRED to unpark a hold set by a role seat (coordinator/
+ * adam/solomon/chairman) or a different session than the caller -- refuses with exit 2
+ * (UNPARK_HOLD_NOT_YOURS) otherwise. A self-park (same session) needs no --force.
  *
  * --reason is REQUIRED on unpark (mirrors park()) as of SD-LEO-INFRA-DEFERRED-STATE-ENTRANCE-001.
  * --restore is REQUIRED whenever metadata.parked_from_status is missing or not a workable
@@ -73,6 +77,7 @@ async function main() {
       const r = await unpark(client, sdKey, {
         reason, actor, restoreStatus: flag(rest, 'restore'),
         writingSessionId: process.env.CLAUDE_SESSION_ID || null,
+        force: rest.includes('--force'),
       });
       console.log(`✓ unparked ${r.sdKey} → ${r.status} (re-claim via: node scripts/sd-start.js ${r.sdKey})`);
     }
@@ -81,4 +86,7 @@ async function main() {
   }
 }
 
-main().catch((e) => { console.error('ERROR:', e.message); process.exit(1); });
+main().catch((e) => {
+  console.error('ERROR:', e.message);
+  process.exit(e.code === 'UNPARK_HOLD_NOT_YOURS' ? 2 : 1);
+});
