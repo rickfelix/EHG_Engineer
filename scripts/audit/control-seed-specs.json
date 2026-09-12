@@ -943,5 +943,46 @@
    "input": "The most recent feedback.created_at row per category (adam_self_assessment / coordinator_self_assessment / solomon_self_assessment), for each self-score-age gauge id currently enabled:true in GAUGE_REGISTRY.",
    "seen": "Real positive observed live during this QF's own implementation (2026-09-12): with coordinator_self_score_age temporarily flipped to enabled:true (its writer's real, live category has 0 rows ever), a direct run of node scripts/lint/self-score-gauge-writer-lint.mjs against the live database FAILED with 'coordinator_self_score_age: writer has never produced a row'. Reverted to the shipped enabled:false state, the same run PASSED. adam_self_score_age and solomon_self_score_age (shipped enabled:true) were independently verified live: feedback rows with category=adam_self_assessment (174 rows, most recent 2026-09-12T05:10Z) and category=solomon_self_assessment (84 rows, most recent 2026-09-12T04:37Z), both well within the 48h staleness convention this lint's 30-day window is deliberately looser than."
   }
+ },
+ {
+  "name": "eva-logger-required-lint",
+  "script": "scripts/lint/eva-logger-required-lint.mjs",
+  "rootFlag": "--root",
+  "extraArgs": [
+   "--all"
+  ],
+  "fixtures": [
+   {
+    "path": "lib/eva/__fixtures__/eva-logger-canary.js",
+    "content": "// Deliberately zero-instrumented canary fixture (control-seed-test.mjs).\nexport function doSomething(x) {\n  return x + 1;\n}\n"
+   }
+  ],
+  "note": "SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-145. extraArgs:['--all'] is required -- the rule's default --diff mode computes a merge-base with origin/main and this harness's scratch dir (mkdtempSync + `git init -q` + `git add -A`, per control-seed-test.mjs's runTrial) is never committed (no HEAD) and has no origin/main ref, so --diff would legitimately FAIL LOUD there (by design, per TS-10) rather than silently pass -- which the seed harness would misread as SILENT. --all walks lib/eva/** directly under --root and has no merge-base dependency. detectTokens intentionally omitted: the fixture's own basename (eva-logger-canary.js) is auto-derived from spec.fixtures and appears verbatim in the rule's own violation message.",
+  "observability_proof": {
+   "input": "Each non-test file under lib/eva/**/*.{js,mjs}: its source text, scanned for a top-level function/class declaration (executable logic) and for an import+call of createLogger (lib/logger.js) or OrchestratorTracer/createOrchestratorTracer (lib/eva/observability.js).",
+   "seen": "Live --all run via direct node execution against this repo's real lib/eva/ tree (not a temp-dir fixture), 2026-09-12: 646 files scanned, 605 flagged NOT_INSTRUMENTED (e.g. lib/eva/adapters/real-data-adapter.js, lib/eva/adherence-scorer.js), while the one genuine createLogger adopter (lib/eva/autonomy-model.js) was correctly NOT flagged."
+  }
+ },
+ {
+  "name": "eva-logging-census",
+  "script": "scripts/audit/eva-logging-census.mjs",
+  "rootFlag": "--root",
+  "extraArgs": [
+   "--json"
+  ],
+  "fixtures": [
+   {
+    "path": "lib/eva/__fixtures__/eva-logger-canary.js",
+    "content": "// Deliberately zero-instrumented canary fixture (control-seed-test.mjs).\nexport function doSomething(x) {\n  return x + 1;\n}\n"
+   }
+  ],
+  "detectTokens": [
+   "\"zeroInstrumentation\": 1"
+  ],
+  "note": "SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-145 FR-6. Not a pass/fail lint (always exits 0) -- the seed proof is a CONTENT match, not a filename match: detectTokens asserts the --json output's zeroInstrumentation count reflects the single planted fixture (1), which only happens if runCensus() actually walked the scratch dir's lib/eva/ and ran classifyFile() against the fixture. --json is required in extraArgs because the plain-text output reports only aggregate counts with no distinguishing per-run token.",
+  "observability_proof": {
+   "input": "The same per-file source text eva-logger-required-lint.mjs consumes (candidateFilesAll + classifyFile) -- this census reuses that classifier rather than re-implementing it.",
+   "seen": "Live run via direct node execution against this repo's real lib/eva/ tree (not a temp-dir fixture), 2026-09-12: `node scripts/audit/eva-logging-census.mjs` reported 646 files scanned, 605 (93.7%) with zero instrumentation -- matching the lint's own --all sweep exactly, confirming the shared classifier produces one consistent count."
+  }
  }
 ]

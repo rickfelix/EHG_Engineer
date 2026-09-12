@@ -1,0 +1,39 @@
+name: EVA Logger-Injection Required Lint
+
+# SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-145 (pattern PAT-LES-927aac4a3d0b)
+#
+# Blocks any PR that introduces a NEW or MODIFIES an EXISTING lib/eva/**/*.{js,mjs} file
+# containing executable logic with zero createLogger (lib/logger.js) or OrchestratorTracer
+# (lib/eva/observability.js) usage. Diff-scoped against the merge-base with main -- the
+# existing ~332-437 file backlog is never retroactively enforced (see
+# docs/reference/eva-logging-standard.md).
+#
+# fetch-depth: 0 is REQUIRED -- the rule's default mode computes a merge-base with
+# origin/main and FAILS LOUD (distinct non-zero exit) rather than silently reporting zero
+# violations if it cannot (per TS-10 -- a shallow clone must never look identical to a clean
+# PR).
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/**/*.js'
+      - 'lib/eva/**/*.mjs'
+      - 'scripts/lint/eva-logger-required-lint.mjs'
+      - '.github/workflows/eva-logger-required-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eva-logger-required-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect new/modified lib/eva files with zero logger or tracer instrumentation
+        run: node scripts/lint/eva-logger-required-lint.mjs
