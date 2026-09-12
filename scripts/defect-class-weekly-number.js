@@ -25,7 +25,9 @@ function getClient() {
 export async function computeWeeklyNumber({ weekStart = null, weekEnd = null, supabase = null } = {}) {
   const client = supabase || getClient();
 
-  let query = client.from('v_defect_class_weekly_recurrence').select('*');
+  // Bounded by construction: the view is grouped by defect class (a fixed, small taxonomy --
+  // 12 classes at first population per metadata.taxonomy_ref), never by raw specimen/row count.
+  let query = client.from('v_defect_class_weekly_recurrence').select('*').limit(500);
   if (weekStart) query = query.gte('first_recurrence_at', weekStart);
   if (weekEnd) query = query.lt('first_recurrence_at', weekEnd);
 

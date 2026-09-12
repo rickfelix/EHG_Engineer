@@ -9,6 +9,7 @@ function makeMockSupabase({ recurredRows = [], unclassifiedCount = 0 } = {}) {
       if (table === 'v_defect_class_weekly_recurrence') {
         const builder = {
           select: () => builder,
+          limit: () => builder,
           gte(field, value) {
             calls.viewFilters.push(['gte', field, value]);
             return builder;
