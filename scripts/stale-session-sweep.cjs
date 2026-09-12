@@ -221,7 +221,7 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
       try {
         const { data, error: liveErr } = await supabase
           .from('claude_sessions')
-          .select('sd_key, last_tool_at')
+          .select('sd_key, last_tool_at, heartbeat_at')
           .eq('session_id', s.session_id)
           .maybeSingle();
         if (!liveErr) liveRow = data;
@@ -238,6 +238,18 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
       const snapToolMs = t.last_tool_at ? Date.parse(t.last_tool_at) : null;
       if (Number.isFinite(liveToolMs) && (snapToolMs === null || liveToolMs > snapToolMs)) {
         actions.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — tool activity resumed since snapshot (window likely un-blocked)');
+        continue;
+      }
+      // QF-20260911-750: a fresh heartbeat is written by an INDEPENDENT process (session-tick.cjs)
+      // from last_tool_at/outbound-comms/expected-silence, so it is a genuinely separate liveness
+      // signal, not a re-derivation of the ones already checked above. MEASURED specimen: a seat
+      // holding SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 with heartbeat fresh was released, then committed
+      // 38min later with no knowledge of the release -- the probe's tool-silence heuristic produced
+      // a false positive the heartbeat signal would have caught. Same threshold as fleet-quiescence's
+      // FRESH_S / this file's own 300s convention elsewhere. Fail toward NOT releasing a live claim.
+      const liveHbMs = liveRow.heartbeat_at ? Date.parse(liveRow.heartbeat_at) : null;
+      if (Number.isFinite(liveHbMs) && (nowMs - liveHbMs) < 300_000) {
+        actions.push('CLAIM_BOUNDARY_PROBE: release aborted for ' + s.session_id + ' — heartbeat still fresh (' + Math.round((nowMs - liveHbMs) / 1000) + 's), session is live');
         continue;
       }
       // 1b. Release through the manual fence's own path — QF-aware release_sd_by_key RPC.
@@ -324,7 +336,7 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
             sender_type: 'sweep',
             target_session: 'broadcast-coordinator',
             subject: '[SWEEP] claim-boundary probe released ' + releasedSd + ' from ' + terminal,
-            body: 'Zero tool activity ' + Math.round(windowMs / 60000) + 'min after its ' + anchorType + ' boundary with heartbeat still fresh — window likely blocked by an interactive prompt (session-limit/trust/updater). Claim released via release_sd (re-claimable), session quarantined (self-clears at its next checkin). Operator: answer the prompt on terminal ' + terminal + '. NEVER kill the OS process from this alert alone.',
+            body: 'Zero tool activity ' + Math.round(windowMs / 60000) + 'min after its ' + anchorType + ' boundary, heartbeat also stale by then — window likely blocked by an interactive prompt (session-limit/trust/updater). Claim released via release_sd (re-claimable), session quarantined (self-clears at its next checkin). Operator: answer the prompt on terminal ' + terminal + '. NEVER kill the OS process from this alert alone.',
             payload: {
               kind: 'claim_boundary_released',
               session_id: s.session_id,
@@ -335,6 +347,21 @@ async function runClaimBoundaryProbe(supabase, classified, telemetryMap, now, ac
               anchor_type: anchorType,
               evidence: result.evidence,
             },
+            expires_at: new Date(nowMs + 24 * 60 * 60 * 1000).toISOString(),
+          });
+          // QF-20260911-750 facet (b): the released HOLDER itself gets no notice today — it can
+          // keep writing into a worktree it no longer owns for as long as it stays tool-silent to
+          // the sweep but genuinely active on disk (MEASURED: a commit landed 38min after release
+          // with the seat unaware it had been released, and a second seat was dispatched into the
+          // same SD in the gap). A directive-kind row on the released session's OWN lane means its
+          // next check-in surfaces this in pending_directives and cannot silently miss it.
+          await insertCoordinationRow(supabase, {
+            message_type: 'INFO',
+            sender_type: 'sweep',
+            target_session: s.session_id,
+            subject: '[SWEEP] your claim on ' + releasedSd + ' was released (claim-boundary probe)',
+            body: 'Your claim on ' + releasedSd + ' was released ' + Math.round(windowMs / 60000) + 'min after its ' + anchorType + ' boundary with no tool/comms activity observed. If you are still working: STOP pushing commits into this worktree — the claim is gone and another session may already be dispatched into it. Run /checkin to re-claim ' + releasedSd + ' (if still open) or pick up a new item.',
+            payload: { kind: 'coordinator_request', chairman_directive: false, released_sd: releasedSd, reason: 'claim_boundary_probe' },
             expires_at: new Date(nowMs + 24 * 60 * 60 * 1000).toISOString(),
           });
         }
