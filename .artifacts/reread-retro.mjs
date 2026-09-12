@@ -1,0 +1,20 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const supabase = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY);
+const { data, error } = await supabase.from('retrospectives').select('*').eq('id','7f9ab4d6-3a08-4643-a23e-caaaefa37830').maybeSingle();
+if (error) { console.error(error); process.exit(1); }
+console.log('id:', data.id);
+console.log('sd_id:', data.sd_id);
+console.log('retro_type:', data.retro_type, '| retrospective_type:', data.retrospective_type);
+console.log('quality_score:', data.quality_score);
+console.log('status:', data.status);
+console.log('created_at:', data.created_at);
+console.log('what_went_well len:', data.what_went_well?.length);
+console.log('what_needs_improvement len:', data.what_needs_improvement?.length);
+console.log('key_learnings len:', data.key_learnings?.length);
+console.log('action_items len:', data.action_items?.length);
+console.log('improvement_areas len:', data.improvement_areas?.length);
+console.log('quality_issues:', JSON.stringify(data.quality_issues));
+console.log('quality_validated_at:', data.quality_validated_at, '| by:', data.quality_validated_by);
+console.log('auto_generated:', data.auto_generated);

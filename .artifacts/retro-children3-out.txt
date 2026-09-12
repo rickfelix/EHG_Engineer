@@ -1,0 +1,392 @@
+◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A FULL DESCRIPTION ##########
+Child A of the chairman-ordered CAPA W6 durability workstream (ratification 49656c8c). Today, every role seat (Adam, Solomon, coordinator, Michael) keeps its entire operational memory in an untracked local markdown file with no database fallback -- the Adam seat lost checkpoints 1 through 27 on 2026-09-02 to a single untracked-file removal. This SD mirrors each LIVE seat state to a database checkpoint row carrying a byte-for-byte SHA-256 content hash, deduped by hash but freshness-stamped on every tick, and adds a daily check asserting zero seat mirrors older than 24 hours, named against the Solomon seat first.
+
+-- what_needs_improvement --
+[
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A missing handoffs: PLAN-TO-LEAD",
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A had blocking issues from: TESTING",
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A lacks unified test evidence in database"
+]
+
+-- action_items (full) --
+[
+ {
+  "owner": "Session Agent",
+  "action": "Record missing handoffs for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A in sd_phase_handoffs",
+  "source": "gap_analysis",
+  "deadline": "2026-09-13",
+  "priority": "medium",
+  "root_cause": "Phase transitions occurred without handoff recording",
+  "smart_format": true,
+  "success_criteria": "sd_phase_handoffs table has 4 records for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A: LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD",
+  "verification_query": "SELECT handoff_type FROM sd_phase_handoffs WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A' ORDER BY created_at"
+ },
+ {
+  "owner": "EXEC Phase Agent",
+  "action": "Re-run blocking sub-agents for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A until PASS verdict",
+  "source": "validation_failure",
+  "deadline": "2026-09-13",
+  "priority": "high",
+  "root_cause": "Sub-agent validation found issues that need resolution",
+  "smart_format": true,
+  "success_criteria": "All sub_agent_execution_results for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A show verdict='PASS'",
+  "verification_query": "SELECT sub_agent_code, verdict FROM sub_agent_execution_results WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A' ORDER BY created_at DESC"
+ },
+ {
+  "owner": "TESTING Sub-Agent",
+  "action": "Run E2E tests and store evidence for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A in unified_test_evidence",
+  "source": "evidence_gap",
+  "deadline": "2026-09-13",
+  "priority": "medium",
+  "root_cause": "Test execution pipeline not integrated with evidence storage",
+  "smart_format": true,
+  "success_criteria": "Record exists in unified_test_evidence with sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A' and pass_rate is populated",
+  "verification_query": "SELECT id, pass_rate, verdict FROM unified_test_evidence WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A'"
+ },
+ {
+  "owner": "LEO Protocol Team",
+  "action": "Update HANDOFF_ENFORCEMENT: Strengthen handoff validation: 1 handoff(s) missing from complete chain",
+  "source": "protocol_improvement",
+  "deadline": "Next SD cycle",
+  "priority": "medium",
+  "smart_format": true,
+  "success_criteria": "All phases validation includes this check"
+ },
+ "Address 1 protocol finding(s) in: HANDOFF_ENFORCEMENT"
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B FULL DESCRIPTION ##########
+Child SD of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001: W6 child B: require a commit-pinned path or an inline content hash on every durable row, and reconcile the rows citing paths that no longer resolve
+
+## Rationale
+Child of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001
+
+## Scope
+Child SD of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001: W6 child B: require a commit-pinned path or an inline content hash on every durable row, and reconcile the rows citing paths that no longer resolve
+
+-- what_needs_improvement --
+[
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B lacks unified test evidence in database"
+]
+
+-- action_items (full) --
+[
+ {
+  "owner": "TESTING Sub-Agent",
+  "action": "Run E2E tests and store evidence for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B in unified_test_evidence",
+  "source": "evidence_gap",
+  "deadline": "2026-09-14",
+  "priority": "medium",
+  "root_cause": "Test execution pipeline not integrated with evidence storage",
+  "smart_format": true,
+  "success_criteria": "Record exists in unified_test_evidence with sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B' and pass_rate is populated",
+  "verification_query": "SELECT id, pass_rate, verdict FROM unified_test_evidence WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B'"
+ },
+ {
+  "owner": "Implementing Agent",
+  "action": "Document SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B implementation patterns in issue_patterns table",
+  "source": "knowledge_capture",
+  "deadline": "Before next similar SD",
+  "priority": "low",
+  "smart_format": true,
+  "success_criteria": "Pattern with prevention_checklist exists in database"
+ },
+ {
+  "owner": "LEAD Supervisor",
+  "action": "Review retrospective learnings from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B in next LEAD phase",
+  "source": "continuous_improvement",
+  "deadline": "Next SD approval",
+  "priority": "low",
+  "smart_format": true,
+  "success_criteria": "Lessons applied to SD scope or validation criteria"
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C FULL DESCRIPTION ##########
+Child SD of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001: W6 child C: one transport-layer test isolation boundary at the shared email and SMS transports, replacing the per-site patches, with a CI assertion counting fixture-literal sends at zero
+
+FOURTH INSTANCE CONFIRMED 2026-09-03 17:1xZ, and it changes what this child must cover. A unit test writes to the PRODUCTION sessions table BY DESIGN, not by accident: scripts/hooks/__tests__/fr7-dotenv-self-load.test.js lines 100-119 spawns the real session-register hook with a sentinel session_id and asserts that stderr does NOT carry the upsert-skipped-for-missing-credentials message. Its SUCCESS CONDITION IS THAT THE LIVE WRITE HAPPENED. Every local run of the unit suite with real credentials refreshes the heartbeat of a session released on 2026-07-11, which then reads as a live fleet worker on the roster. WHY THIS RAISES THE BAR FOR THIS CHILD: the three earlier instances were leaks, where a fixture reached a live surface because nothing stopped it. This one is different in kind — a test that REQUIRES the production write in order to pass. A transport-layer isolation boundary that merely blocks sends would turn this test red rather than fixing it, so the boundary must be paired with a decision about tests whose assertions depend on the very write being blocked. Roster and heartbeat halves are minted separately as QF-20260903-195; the boundary half stays here.
+
+-- what_needs_improvement --
+[
+ "PR #8415's control-seed-test-lint check is currently FAILING (NO_SEED_TEST): the new lint control this SD ships (scripts/lint/transport-test-isolation-guard-lint.mjs) has no entry in scripts/audit/control-seed-specs.json. This is a real, merge-blocking gap discovered via a live `gh pr checks 8415` read at retro-generation time -- the SD's own framing going into this retrospective was \"all CI green except one pending coverage job\", which this live measurement corrects: there are two outstanding items, one pending (coverage) and one actively failing (control-seed-test-lint).",
+ "The SD's own framing cited \"24 new tests\" added; a live count of `it(`/`test(` additions via git diff finds 18 (7 in the new transport-test-isolation-guard.test.js, 9 in the new ci/transport-test-isolation-guard-lint.test.js, 1 each added inline to resend-adapter.test.js and twilio-provider-mediaurl.test.js), against 55 pre-existing = 73 total. A cited test count should be re-measured live rather than carried forward into a retrospective unverified.",
+ "The now-superseded per-caller guard at lib/comms/adam-outbound/chairman-sms-gate/index.js:243 was not removed or explicitly marked redundant in this change -- it still exists alongside the new shared guard, leaving two overlapping mechanisms in the codebase rather than one canonical one.",
+ "SECURITY returned CONDITIONAL_PASS (70) at EXEC-TO-PLAN, but its findings (an unrun RLS table census, 59 pre-existing SECURITY DEFINER functions callable by anon/authenticated) are repo-wide database posture issues unrelated to this SD's diff -- the verdict shape does not distinguish \"conditional on pre-existing, out-of-scope findings\" from \"conditional on this SD's own change\", which could cause a future reviewer to misattribute the finding to this PR."
+]
+
+-- action_items (full) --
+[
+ {
+  "action": "Register scripts/lint/transport-test-isolation-guard-lint.mjs in scripts/audit/control-seed-specs.json with a committed seeded-defect proof before PR #8415 merges -- control-seed-test-lint is currently failing and will block merge until this is done.",
+  "category": "testing",
+  "is_boilerplate": false
+ },
+ {
+  "action": "Investigate the shared root cause behind both harness-bug signals (f2ae7f99, cc23e2a1): TESTING and REGRESSION sub-agent runners both resolve their target repo independently of the invoking worktree/cwd for worktree-based SDs. Fix shape suggested in the signals: accept a --repo-path/worktree override, or resolve from the SD's actual current branch rather than applications.local_path.",
+  "category": "protocol",
+  "is_boilerplate": false
+ },
+ {
+  "action": "Confirm the `coverage` CI check completes (currently pending) before treating PR #8415 as merge-ready.",
+  "category": "process",
+  "is_boilerplate": false
+ },
+ {
+  "action": "Decide the disposition of the now-redundant per-caller guard at lib/comms/adam-outbound/chairman-sms-gate/index.js:243 -- remove it in favor of the shared guard, or document explicitly why both are intentionally retained.",
+  "category": "technical_debt",
+  "is_boilerplate": false
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D FULL DESCRIPTION ##########
+Child SD of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001: W6 child D: comms hardening, refuse before insert, delivery receipts on work assignments, readers unioning the archive, and expired unread chairman rows surfaced as missed.
+
+Four distinct, independently-measured gaps in the shared session_coordination comms table (2,108 live rows as of 2026-09-07, re-measured this session): (1) 663 expired-unread rows accumulate today with zero surfacing mechanism -- up from 159 on 2026-09-03, confirming the gap is growing, not stable; (2) no archive table exists (confirmed live: both coordination_archive and session_coordination_archive return PGRST205 not-found), so any future retention/eviction of answered rows would make them invisible to readers unless every reader path is verified to union live+archive from day one; (3) the dispatch backpressure guard (lib/coordinator/dispatch.cjs assertSendBackpressure, QF-20260831-560) already runs BEFORE the row insert at the shared choke point, but there is no structural marker/count to PROVE a refuse-after-insert regression reads zero going forward -- this child adds the observability, not a re-fix of an already-fixed ordering; (4) session_coordination carries delivered_at/read_at/acknowledged_at but nothing distinguishes a 'work assignment requiring a receipt' from routine traffic, so an overdue-receipt query is not yet expressible.
+
+-- what_needs_improvement --
+[
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D had blocking issues from: TESTING",
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D lacks unified test evidence in database"
+]
+
+-- action_items (full) --
+[
+ {
+  "owner": "EXEC Phase Agent",
+  "action": "Re-run blocking sub-agents for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D until PASS verdict",
+  "source": "validation_failure",
+  "deadline": "2026-09-14",
+  "priority": "high",
+  "root_cause": "Sub-agent validation found issues that need resolution",
+  "smart_format": true,
+  "success_criteria": "All sub_agent_execution_results for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D show verdict='PASS'",
+  "verification_query": "SELECT sub_agent_code, verdict FROM sub_agent_execution_results WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D' ORDER BY created_at DESC"
+ },
+ {
+  "owner": "TESTING Sub-Agent",
+  "action": "Run E2E tests and store evidence for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D in unified_test_evidence",
+  "source": "evidence_gap",
+  "deadline": "2026-09-14",
+  "priority": "medium",
+  "root_cause": "Test execution pipeline not integrated with evidence storage",
+  "smart_format": true,
+  "success_criteria": "Record exists in unified_test_evidence with sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D' and pass_rate is populated",
+  "verification_query": "SELECT id, pass_rate, verdict FROM unified_test_evidence WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D'"
+ },
+ {
+  "owner": "Implementing Agent",
+  "action": "Document SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D implementation patterns in issue_patterns table",
+  "source": "knowledge_capture",
+  "deadline": "Before next similar SD",
+  "priority": "low",
+  "smart_format": true,
+  "success_criteria": "Pattern with prevention_checklist exists in database"
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E FULL DESCRIPTION ##########
+Child SD of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001: W6 child E: audit table immutability triggers and revocations across the full candidate set, prepared with a census of write callers first
+
+## Rationale
+Child of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001
+
+## Scope
+Child SD of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001: W6 child E: audit table immutability triggers and revocations across the full candidate set, prepared with a census of write callers first
+
+-- what_needs_improvement --
+[
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E lacks unified test evidence in database"
+]
+
+-- action_items (full) --
+[
+ {
+  "owner": "TESTING Sub-Agent",
+  "action": "Run E2E tests and store evidence for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E in unified_test_evidence",
+  "source": "evidence_gap",
+  "deadline": "2026-09-14",
+  "priority": "medium",
+  "root_cause": "Test execution pipeline not integrated with evidence storage",
+  "smart_format": true,
+  "success_criteria": "Record exists in unified_test_evidence with sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E' and pass_rate is populated",
+  "verification_query": "SELECT id, pass_rate, verdict FROM unified_test_evidence WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E'"
+ },
+ {
+  "owner": "Implementing Agent",
+  "action": "Document SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E implementation patterns in issue_patterns table",
+  "source": "knowledge_capture",
+  "deadline": "Before next similar SD",
+  "priority": "low",
+  "smart_format": true,
+  "success_criteria": "Pattern with prevention_checklist exists in database"
+ },
+ {
+  "owner": "LEAD Supervisor",
+  "action": "Review retrospective learnings from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E in next LEAD phase",
+  "source": "continuous_improvement",
+  "deadline": "Next SD approval",
+  "priority": "low",
+  "smart_format": true,
+  "success_criteria": "Lessons applied to SD scope or validation criteria"
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F FULL DESCRIPTION ##########
+Child SD of SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001: W6 child F: close the worktree residue predicate gap for registered-but-broken entries and give husk detection a durable consumer on the ship path
+
+SOURCE FINDING CITATION added 2026-09-03 16:5xZ: this child is the sourced remedy for feedback 7714dcc8-036a-4ce4-b0a1-4f5ce50e3c19. The citation was MISSING until a coverage audit of the chairman-decision queue found this finding cited by no SD and no QF, even though the work existed. A reader auditing whether the finding was sourced would have read it as unsourced. Recording the link so the coverage question is answerable from the row rather than from my memory.
+
+-- what_needs_improvement --
+[
+ "Mutation testing was only applied on the re-verification pass, after the green-suite stdout/stderr defect had already passed the first TESTING gate. Applying mutation testing as a first-pass standard for any change to a parse-then-branch code path (real-subprocess vs mocked-subprocess) would catch this defect class before the first FAIL/PASS cycle rather than after a CRITICAL escape.",
+ "The stdout/stderr defect was invisible to a 417-test green suite because every unit test injected a gitRunner mock returning text on `.stdout` -- the one branch production actually exercises (raw execSync, no injected runner) had zero coverage. Per-function test counts do not surface this; coverage needs to be reasoned about per-branch (real-subprocess vs mock-injected) for any function with both.",
+ "Terminology drift between an RCA-sourced brief and the target repo's own code is a defect class that a generic \"read the brief\" review pass does not catch on its own -- it required a sub-agent that explicitly cross-referenced the brief's literal wording against the actual code definitions (close-husk.js, worktree-manager.js) before implementation began."
+]
+
+-- action_items (full) --
+[
+ {
+  "owner": "TESTING Sub-Agent",
+  "action": "For any worktree-reaper-family change adding or modifying a function with both a real-subprocess (execSync/spawnSync) branch and a mock-injected (gitRunner) branch, require at least one test that exercises the un-mocked stdout+stderr split of the actual subprocess, or document explicitly why that branch cannot be tested.",
+  "source": "a15d0f5d CRITICAL finding (stdout/stderr silent failure)",
+  "deadline": "2026-09-21",
+  "priority": "high",
+  "root_cause": "Every existing unit test injected a gitRunner mock returning output on .stdout only; the untested branch was the only one production calls.",
+  "smart_format": true,
+  "success_criteria": "New/changed worktree-reaper git-subprocess-parsing functions have a test asserting behavior against a real (or stderr-carrying) subprocess result, not only a mocked .stdout result.",
+  "verification_query": "SELECT sub_agent_code, verdict, summary FROM sub_agent_execution_results WHERE sd_id LIKE 'SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-%' AND sub_agent_code = 'TESTING' ORDER BY created_at DESC"
+ },
+ {
+  "owner": "VALIDATION Sub-Agent",
+  "action": "Continue cross-referencing RCA-sourced or brief-sourced terminology against the target repo's own code definitions before PRD authoring for any worktree-reaper-family SD, since \"husk\" has a repo-specific reserved meaning that collides with informal usage.",
+  "source": "69a19709 HIGH scope-precision finding (terminology collision)",
+  "deadline": "2026-09-21",
+  "priority": "medium",
+  "root_cause": "Sourcing RCA used \"husk\" informally for the prune-set residue class, which this repo's own code (close-husk.js, worktree-manager.js) already reserves for the opposite (deregistered-but-directory-survives) class.",
+  "smart_format": true,
+  "success_criteria": "Future worktree-reaper-family PRDs reference residue classes by the repo's own reserved terms (husk vs prune-set/registered-with-missing-gitdir), verified against close-husk.js and worktree-manager.js before FR authoring.",
+  "verification_query": "SELECT sd_id, summary FROM sub_agent_execution_results WHERE sub_agent_code = 'VALIDATION' AND phase = 'LEAD' AND sd_id LIKE 'SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-%' ORDER BY created_at DESC"
+ },
+ {
+  "owner": "Coordinator",
+  "action": "Track the deferred worktree-reaper cadence-schedule restoration as its own ticket (confirmed UNSOURCED -- no sibling/SD/QF currently claims it) rather than letting it remain an unfiled reference inside this SD's scope notes.",
+  "source": "Deferred out-of-scope item #1",
+  "deadline": "2026-09-14",
+  "priority": "medium",
+  "root_cause": "Cadence-schedule restoration was identified as needed during this SD but correctly excluded from its detection+visibility scope, and had not yet been independently filed.",
+  "smart_format": true,
+  "success_criteria": "A ticket (SD or QF) exists claiming worktree-reaper cadence-schedule restoration, distinct from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F.",
+  "verification_query": "SELECT sd_key FROM strategic_directives_v2 WHERE title ILIKE '%cadence%' AND title ILIKE '%worktree-reaper%'"
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G FULL DESCRIPTION ##########
+INHERITED from Solomon's chairman-commissioned compaction design (rows ef40102f and 2359659b, 2026-09-03), his item 4, which he explicitly scoped as FOLD-DO-NOT-MINT into this workstream. Adam sources; the design is his.
+
+THE DEFECT, and the good half first because it changes the scope. A real governance-decay countermeasure already exists and works: recordCompaction() at scripts/modules/handoff/gates/core-protocol-gate.js:405-411 stamps lastCompactionAt AND clears protocolGate.fileReads, so a protocol file read before a compaction no longer counts as read, and core-protocol-gate then blocks on the missing read. That is correct and it is not being replaced.
+
+THE RESIDUAL IS TWO SPECIFIC GAPS. (1) IT FIRES AT THE HANDOFF, NOT AT THE COMPACTION. A worker that compacts and then works for an hour before its next handoff spends that hour with cleared reads and no forced re-read; the window between compaction and handoff is unguarded. (2) IT CANNOT REACH THE ROLE SEATS AT ALL. Solomon, Adam and the coordinator never run handoffs, so this gate never fires for them. The three seats holding the most standing policy and the longest-running contexts are covered ONLY by hand-written STEP-0 text that each seat authors into its own cron prompt and must re-author on every rotation. Nothing catches a seat that forgets, and nothing catches a seat whose replacement never wrote it.
+
+WITNESSED PRECEDENT, ours, not hypothetical: on 2026-09-02 the prior Solomon seat DEFERRED a post-compaction re-read on a hash-unchanged rationale. The CHAIRMAN caught it by hand, producing drift flag ce3de628 and the standing correction that an unchanged hash is not an exception. Governance decay, observed in this fleet, caught by a human rather than by an instrument. SECOND-HAND CORROBORATION from the Adam lane: this seat's predecessor died overnight and the replacement had to re-author its own tick prompts from scratch, which is precisely the rotation case where self-authored enforcement text does not survive.
+
+PRIOR ART, web-sourced by Solomon and labelled as such: governance decay is a named, published failure mode (arXiv 2606.22528). A compaction optimised for task continuity does not preserve standing policy, because the policy is old and competes against active task state for a shrinking budget. Solomon's honest limit on that read: the PDF returned metadata only, so the phenomenon and its name are cited as prior art for the problem, NOT as the source of any remedy here.
+
+SCOPE: move the enforcement point. For role seats the natural trigger is the next tick or the next tool call, not the next phase boundary. This is a relocation of an existing, working check rather than new machinery, which is what keeps it inside the no-new-machinery constraint (ratification 76a3c081).
+
+---
+LEAD PREMISE CORRECTION (2026-09-07, Alpha-5 worker session bc70bff7, per VALIDATION evidence
+row 21ff50fc-f5c8-4c80-b02b-a21756b8501f confidence=88 and Explore evidence row
+e95179c6-e678-4d78-bc0e-72f31e2254ee confidence=90, both phase=LEAD):
+
+The original premise ("the good half already works: recordCompaction() clears
+protocolGate.fileReads and this is not being replaced") is FALSE for automatic compaction, the
+DOMINANT path. Verified: recordCompactionEvent() (core-protocol-gate.js:392-429) has zero
+callers; the peer protocol-compaction-hook.cjs recordCompaction() is reachable only from the
+MANUAL /context-compact slash command; the actual wired PreCompact hook
+(precompact-snapshot.ps1, .claude/settings.json:19-27) fires on both manual and automatic
+compaction but does NOT call either recordCompaction*() -- it deliberately PRESERVES
+protocolGate (QF-20260524-337) and never stamps lastCompactionAt.
+
+FOUR LEAD DECISIONS answering the evidence's blocking questions, made here so PLAN can write a
+defensible PRD:
+
+Q1 (preserve/narrow/reverse QF-20260524-337?) -> NARROW. Do not reverse the QF-337
+preservation (that would reopen its regression). The new role-seat enforcement reads a
+DIFFERENT tracker (protocolFileReadStatus, see Q2) and therefore does not need
+protocolGate.fileReads to clear on auto-compaction at all.
+
+Q2 (which tracker is authoritative for a role-seat contract read?) -> protocolFileReadStatus /
+contract_last_read_at (written by scripts/hooks/protocol-file-tracker.cjs, read by
+adam-register.cjs / solomon-register.cjs / coordinator-startup-check.mjs). protocolGate.fileReads
+remains authoritative ONLY for the existing worker-at-handoff path (core-protocol-gate.js),
+unchanged.
+
+Q3 (seat roster) -> CONFIRMED as originally commissioned: Solomon, Adam, coordinator. Michael
+(formalized 2026-09-03, after this SD was authored) is explicitly OUT OF SCOPE for this SD --
+its quiet-tick can be added to the same seat-agnostic host in a future SD if needed. Solomon's
+lack of a dedicated quiet-tick script is NOT a blocker: the recommended host
+(protocol-file-tracker.cjs) is a PostToolUse hook that already fires for every session
+including Solomon, independent of any per-seat tick script; role-capture-gate.mjs +
+.github/workflows/role-capture-gate-cron.yml is direct prior art proving Solomon is checkable
+without one.
+
+Q4 (is the auto-compaction path in scope?) -> YES, it is the path that matters most (it is the
+dominant, default compaction mode). Success criterion 4 is corrected above to name both
+compaction paths explicitly and to stop asserting a single vacuous claim.
+
+PLAN should build the PRD around: protocol-file-tracker.cjs (already tracks all role contract
+files, already wired PostToolUse) + the role-capture-gate.mjs pattern (check-at-recurring-choke,
+GHA-cron backstop for Solomon) as the no-new-machinery host, comparing
+protocolFileReadStatus/contract_last_read_at against ~/.claude/flags/last-compaction.json
+(filtered by the session's own sessionId field, since that marker file is shared per-machine).
+
+-- what_needs_improvement --
+[
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G had blocking issues from: TESTING",
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G lacks unified test evidence in database"
+]
+
+-- action_items (full) --
+[
+ {
+  "owner": "EXEC Phase Agent",
+  "action": "Re-run blocking sub-agents for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G until PASS verdict",
+  "source": "validation_failure",
+  "deadline": "2026-09-14",
+  "priority": "high",
+  "root_cause": "Sub-agent validation found issues that need resolution",
+  "smart_format": true,
+  "success_criteria": "All sub_agent_execution_results for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G show verdict='PASS'",
+  "verification_query": "SELECT sub_agent_code, verdict FROM sub_agent_execution_results WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G' ORDER BY created_at DESC"
+ },
+ {
+  "owner": "TESTING Sub-Agent",
+  "action": "Run E2E tests and store evidence for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G in unified_test_evidence",
+  "source": "evidence_gap",
+  "deadline": "2026-09-14",
+  "priority": "medium",
+  "root_cause": "Test execution pipeline not integrated with evidence storage",
+  "smart_format": true,
+  "success_criteria": "Record exists in unified_test_evidence with sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G' and pass_rate is populated",
+  "verification_query": "SELECT id, pass_rate, verdict FROM unified_test_evidence WHERE sd_id='SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G'"
+ },
+ {
+  "owner": "Implementing Agent",
+  "action": "Document SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G implementation patterns in issue_patterns table",
+  "source": "knowledge_capture",
+  "deadline": "Before next similar SD",
+  "priority": "low",
+  "smart_format": true,
+  "success_criteria": "Pattern with prevention_checklist exists in database"
+ }
+]

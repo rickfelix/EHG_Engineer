@@ -1,0 +1,711 @@
+◇ injected env (0) from .env // tip: ⌘ override existing { override: true }
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A ##########
+PRD by sd_key: none
+
+FULL SD_COMPLETION what_went_well: [
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A executed 3 handoffs (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN)",
+ "PRD \"Role-seat checkpoint mirror + daily freshness check\" defined 4 FRs - all addressed",
+ "13/18 sub-agent validations passed (VALIDATION, Explore, STORIES)"
+]
+
+FULL key_learnings: [
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A defined success metric: \"Role seats (live, per claude_sessions) with a DB mirror row whose last_verified_at is under 24h old\" with target 100% (0 stale).",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A -- baseline is 0/0 since the table does not exist yet (measured 2026-09-03)",
+    "metric": "Role seats (live, per claude_sessions) with a DB mirror row whose last_verified_at is under 24h old",
+    "target": "100% (0 stale)"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A defined success metric: \"Mirror row content_hash matches a fresh SHA-256 of the live seat file at read time\" with target 100% match, every daily check.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A -- no rows exist yet to compare",
+    "metric": "Mirror row content_hash matches a fresh SHA-256 of the live seat file at read time",
+    "target": "100% match, every daily check"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A defined success metric: \"Storage growth from the mirror table\" with target bounded by dedup-by-hash, not unconditional per-tick writes (~1.6MB total across all live seats today, not ~38MB/day).",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A -- not yet built",
+    "metric": "Storage growth from the mirror table",
+    "target": "bounded by dedup-by-hash, not unconditional per-tick writes (~1.6MB total across all live seats today, not ~38MB/day)"
+   }
+  ]
+ },
+ {
+  "category": "RISK_PATTERN",
+  "evidence": "All 3 RISK executions returned PASS",
+  "learning": "RISK passed consistently (3x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A demonstrates reliable RISK compliance pattern"
+ },
+ {
+  "category": "DATABASE_PATTERN",
+  "evidence": "All 3 DATABASE executions returned PASS",
+  "learning": "DATABASE passed consistently (3x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A demonstrates reliable DATABASE compliance pattern"
+ },
+ {
+  "category": "TESTING_VALIDATION",
+  "evidence": "Sub-agent execution chain: FAIL → FAIL → PASS → PASS → PASS",
+  "learning": "TESTING initially blocked (2x) then passed (3x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A. Resolution required 5 iterations.",
+  "applicability": "When TESTING blocks, check previous resolution patterns from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A"
+ },
+ {
+  "category": "VALIDATION_GAP",
+  "evidence": "Ran: VALIDATION, Explore, STORIES, RISK, DATABASE, DESIGN, TESTING, SECURITY. Missing: REGRESSION",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A did not execute REGRESSION sub-agents. Consider if these validations apply to this SD type.",
+  "applicability": "Evaluate sub-agent coverage for SD type"
+ },
+ {
+  "category": "REQUIREMENTS_ANALYSIS",
+  "evidence": "PRD ID: PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A, Title: \"Role-seat checkpoint mirror + daily freshness check\"",
+  "learning": "PRD for \"W6 child A: mirror every role seat state to a database checkpoint row with a content hash, and check daily that no seat mirror is older than 24 hours\" specified 4 functional requirements.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A PRD structure for similar scope estimation"
+ },
+ {
+  "category": "FR_PATTERN",
+  "evidence": "FR-1 from PRD PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A",
+  "learning": "FR example from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A: \"New table role_seat_checkpoints with columns: id, seat_name (text, ONE OF a f...\" - this specificity level enabled clear acceptance criteria.",
+  "applicability": "Use similar FR detail level for measurable completion"
+ },
+ {
+  "category": "EXECUTION_TIMELINE",
+  "evidence": "First: LEAD-TO-PLAN at 2026-09-06, Last: EXEC-TO-PLAN",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A completed 3 handoffs (LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC-TO-PLAN) over 5 hours.",
+  "applicability": "Use 5h as reference for similar SD scope"
+ },
+ {
+  "category": "SD_SPECIFIC",
+  "evidence": "SD SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A completion metadata",
+  "learning": "\"W6 child A: mirror every role seat state to a database checkpoint row with a content hash, and check daily that no seat mirror is older than 24 hours\" implemented and validated through 18 sub-agent executions across 3 phase transitions.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A patterns for similar future work",
+  "success_metrics": [
+   {
+    "actual": "N/A -- baseline is 0/0 since the table does not exist yet (measured 2026-09-03)",
+    "metric": "Role seats (live, per claude_sessions) with a DB mirror row whose last_verified_at is under 24h old",
+    "target": "100% (0 stale)"
+   },
+   {
+    "actual": "N/A -- no rows exist yet to compare",
+    "metric": "Mirror row content_hash matches a fresh SHA-256 of the live seat file at read time",
+    "target": "100% match, every daily check"
+   },
+   {
+    "actual": "N/A -- not yet built",
+    "metric": "Storage growth from the mirror table",
+    "target": "bounded by dedup-by-hash, not unconditional per-tick writes (~1.6MB total across all live seats today, not ~38MB/day)"
+   }
+  ]
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B ##########
+PRD by sd_key: none
+
+FULL SD_COMPLETION what_went_well: [
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B executed 6 handoffs (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN)",
+ "PRD \"W6 child B: commit-pinned worktree_path provenance + reconciliation\" defined 6 FRs - all addressed",
+ "5/8 sub-agent validations passed (VALIDATION, Explore, DESIGN)"
+]
+
+FULL key_learnings: [
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B defined success metric: \"Implementation completeness\" with target 100% of scope items implemented.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Implementation completeness",
+    "target": "100% of scope items implemented"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B defined success metric: \"Test coverage\" with target ≥80% code coverage for new code.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Test coverage",
+    "target": "≥80% code coverage for new code"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B defined success metric: \"Zero regressions\" with target 0 existing tests broken.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "0 regressions",
+    "metric": "Zero regressions",
+    "target": "0 existing tests broken"
+   }
+  ]
+ },
+ {
+  "category": "TESTING_PATTERN",
+  "evidence": "All 2 TESTING executions returned PASS",
+  "learning": "TESTING passed consistently (2x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B demonstrates reliable TESTING compliance pattern"
+ },
+ {
+  "category": "VALIDATION_GAP",
+  "evidence": "Ran: VALIDATION, Explore, DESIGN, DATABASE, RISK, TESTING, SECURITY. Missing: REGRESSION",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B did not execute REGRESSION sub-agents. Consider if these validations apply to this SD type.",
+  "applicability": "Evaluate sub-agent coverage for SD type"
+ },
+ {
+  "category": "REQUIREMENTS_ANALYSIS",
+  "evidence": "PRD ID: PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B, Title: \"W6 child B: commit-pinned worktree_path provenance + reconciliation\"",
+  "learning": "PRD for \"W6 child B: require a commit-pinned path or an inline content hash on every durable row, and reconcile the rows citing paths that no longer resolve\" specified 6 functional requirements.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B PRD structure for similar scope estimation"
+ },
+ {
+  "category": "FR_PATTERN",
+  "evidence": "FR-1 from PRD PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B",
+  "learning": "FR example from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B: \"EXEC-phase correction (RCA 2026-09-07): the original design targeted strategi...\" - this specificity level enabled clear acceptance criteria.",
+  "applicability": "Use similar FR detail level for measurable completion"
+ },
+ {
+  "category": "EXECUTION_TIMELINE",
+  "evidence": "First: LEAD-TO-PLAN at 2026-09-06, Last: EXEC-TO-PLAN",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B completed 6 handoffs (LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC-TO-PLAN) over 2 hours.",
+  "applicability": "Use 2h as reference for similar SD scope"
+ },
+ {
+  "category": "REWORK_PATTERN",
+  "evidence": "Handoff frequency analysis for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B had repeated handoffs: LEAD-TO-PLAN(2x), PLAN-TO-EXEC(3x). This indicates iteration was needed to pass gates.",
+  "applicability": "Repeated handoffs suggest areas for upfront validation"
+ },
+ {
+  "category": "SD_SPECIFIC",
+  "evidence": "SD SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B completion metadata",
+  "learning": "\"W6 child B: require a commit-pinned path or an inline content hash on every durable row, and reconcile the rows citing paths that no longer resolve\" implemented and validated through 8 sub-agent executions across 6 phase transitions.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-B patterns for similar future work",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Implementation completeness",
+    "target": "100% of scope items implemented"
+   },
+   {
+    "actual": "N/A",
+    "metric": "Test coverage",
+    "target": "≥80% code coverage for new code"
+   },
+   {
+    "actual": "0 regressions",
+    "metric": "Zero regressions",
+    "target": "0 existing tests broken"
+   },
+   {
+    "actual": "N/A",
+    "metric": "Issue recurrence",
+    "target": "0 recurrences after fix deployed"
+   }
+  ]
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-C ##########
+PRD by sd_key: none
+
+FULL SD_COMPLETION what_went_well: [
+ {
+  "achievement": "Root-cause consolidation instead of a third per-caller patch: rather than adding a third bespoke guard (there were already 1-of-8+ email callers and 0-of-2 SMS callers covered), the fix moved to the two actual network-call sites via one shared, tested module -- closing the gap at its structural root rather than patching the next symptom.",
+  "is_boilerplate": false
+ },
+ {
+  "achievement": "Detection design explicitly protects existing legitimate tests: `globalThis.fetch.mock !== undefined` was chosen specifically because both pre-existing test suites (resend-adapter.test.js, twilio-provider-mediaurl.test.js) already replace fetch with a vi.fn()/vi.stubGlobal mock -- a blanket VITEST-only check would have broken both. Live re-run confirms zero regressions: 73/73 tests pass across the 6 relevant files.",
+  "is_boilerplate": false
+ },
+ {
+  "achievement": "Additive-only diff independently verified twice: the REGRESSION sub-agent (row cf057bd5, PASS/92) found 487 insertions / 0 deletions across all 9 changed files via git diff --numstat, and this retro's own live re-run of the same command confirms it -- no pre-existing signature or code path was altered in place.",
+  "is_boilerplate": false
+ },
+ {
+  "achievement": "Two harness bugs were found mid-build and signaled to the coordinator rather than worked around silently, per the session's standing root-cause directive: (1) execute-subagent.js TESTING verdict is cwd-dependent for worktree-based SDs -- a canonical-root invocation measured an empty diff and returned a confident BLOCKED/100%, while the correct worktree invocation returned PASS/92% off a real 51/51-test diff; (2) lib/sub-agents/regression.js resolves its target repo via applications.local_path regardless of invoking cwd, producing a vacuous PASS/100% for this worktree-only SD. Both signals (session_coordination ids f2ae7f99, cc23e2a1) name the same underlying class -- confirmed twice in one session across two different sub-agent runners -- and neither false/vacuous verdict was allowed to stand as evidence: the worker independently re-measured from the correct worktree and recorded the real PASS/92 verdicts instead.",
+  "is_boilerplate": false
+ },
+ {
+  "achievement": "Clean 3/3 handoff chain: LEAD-TO-PLAN (94), PLAN-TO-EXEC (96), and EXEC-TO-PLAN (89) were all accepted, each above the 85% protocol target, with sub-agent evidence (VALIDATION, Explore, DESIGN, DATABASE, RISK, TESTING x2, REGRESSION x2, SECURITY) recorded before each handoff rather than discovered missing after a rejection.",
+  "is_boilerplate": false
+ },
+ {
+  "achievement": "The new CI lint control ships with its own unit-level seeded-defect self-test (tests/unit/ci/transport-test-isolation-guard-lint.test.js: \"is a seeded-defect self-test: reports absent when the guard is removed\"), demonstrating the control can actually detect the defect class it targets -- independent of the separate, still-unsatisfied control-seed-test-lint registration requirement (see what_needs_improvement).",
+  "is_boilerplate": false
+ }
+]
+
+FULL key_learnings: [
+ {
+  "learning": "A shared guard placed at the actual network-call sites closes coverage gaps far more completely than incrementally patching each caller: 1-of-8+ email callers and 0-of-2 SMS callers covered under the old per-caller model became complete coverage at both transports' single send functions under the new model, in one change.",
+  "is_boilerplate": false
+ },
+ {
+  "learning": "Detecting \"is fetch mocked\" via a `.mock` property check, rather than a blanket test-environment check, is what let this guard ship without regressing the 2 pre-existing test suites that legitimately replace global.fetch -- a coarser environment-only check would have broken both.",
+  "is_boilerplate": false
+ },
+ {
+  "learning": "A sub-agent runner's target-repo resolution needs the same worktree-awareness the human workflow already assumes: both TESTING (cwd-dependent) and REGRESSION (applications.local_path-dependent) silently produced a wrong-but-confident verdict for this worktree-only SD in the same session, each recoverable only by an independent live re-measurement from the correct worktree -- this is now a 2-of-2 confirmed pattern, not an isolated fluke, worth treating as one shared defect class.",
+  "is_boilerplate": false
+ },
+ {
+  "learning": "Signaling a harness bug the moment it is found -- rather than silently working around it and moving on -- turned two potentially-invisible false verdicts into two well-evidenced, independently actionable coordinator signals, each naming the exact mechanism, the exact wrong output, and a suggested fix shape.",
+  "is_boilerplate": false
+ },
+ {
+  "learning": "A new CI control shipping its own unit-level seeded-defect self-test is necessary but not sufficient: control-seed-test-lint is a separate gate that requires the control to also be registered in scripts/audit/control-seed-specs.json with a committed seeded-defect proof. The two mechanisms look similar (both prove \"can this control catch its own target defect\") but are enforced independently, and satisfying one does not satisfy the other.",
+  "is_boilerplate": false
+ },
+ {
+  "learning": "A cited count (test additions, CI status) carried into a retrospective from an earlier point in the session should be re-measured live before being restated as fact -- this retro found both the \"24 new tests\" figure and the \"all green except pending coverage\" framing were each off by one real, checkable fact (18 new tests measured; control-seed-test-lint is actively failing, not just coverage pending).",
+  "is_boilerplate": false
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D ##########
+PRD by sd_key: none
+
+FULL SD_COMPLETION what_went_well: [
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D executed 4 handoffs (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN)",
+ "PRD \"Comms hardening: backpressure gauge, work-assignment receipt gauge, coordination archive, expired-unread missed gauge\" defined 5 FRs - all addressed",
+ "5/10 sub-agent validations passed (VALIDATION, Explore, DESIGN)"
+]
+
+FULL key_learnings: [
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D defined success metric: \"Implementation completeness\" with target 100% of scope items implemented.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Implementation completeness",
+    "target": "100% of scope items implemented"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D defined success metric: \"Test coverage\" with target ≥80% code coverage for new code.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Test coverage",
+    "target": "≥80% code coverage for new code"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D defined success metric: \"Zero regressions\" with target 0 existing tests broken.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "0 regressions",
+    "metric": "Zero regressions",
+    "target": "0 existing tests broken"
+   }
+  ]
+ },
+ {
+  "category": "TESTING_VALIDATION",
+  "evidence": "Sub-agent execution chain: PASS → BLOCKED → BLOCKED → PASS",
+  "learning": "TESTING initially blocked (2x) then passed (2x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D. Resolution required 4 iterations.",
+  "applicability": "When TESTING blocks, check previous resolution patterns from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D"
+ },
+ {
+  "category": "VALIDATION_GAP",
+  "evidence": "Ran: VALIDATION, Explore, DESIGN, DATABASE, RISK, TESTING, SECURITY. Missing: REGRESSION",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D did not execute REGRESSION sub-agents. Consider if these validations apply to this SD type.",
+  "applicability": "Evaluate sub-agent coverage for SD type"
+ },
+ {
+  "category": "REQUIREMENTS_ANALYSIS",
+  "evidence": "PRD ID: PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D, Title: \"Comms hardening: backpressure gauge, work-assignment receipt gauge, coordination archive, expired-unread missed gauge\"",
+  "learning": "PRD for \"W6 child D: comms hardening, refuse before insert, delivery receipts on work assignments, readers unioning the archive, and expired unread chairman rows surfaced as missed\" specified 5 functional requirements.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D PRD structure for similar scope estimation"
+ },
+ {
+  "category": "FR_PATTERN",
+  "evidence": "FR-1 from PRD PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D",
+  "learning": "FR example from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D: \"assertSendBackpressure already runs before the session_coordination insert at...\" - this specificity level enabled clear acceptance criteria.",
+  "applicability": "Use similar FR detail level for measurable completion"
+ },
+ {
+  "category": "EXECUTION_TIMELINE",
+  "evidence": "First: LEAD-TO-PLAN at 2026-09-07, Last: EXEC-TO-PLAN",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D completed 4 handoffs (LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC-TO-PLAN) over 1 hours.",
+  "applicability": "Use 1h as reference for similar SD scope"
+ },
+ {
+  "category": "REWORK_PATTERN",
+  "evidence": "Handoff frequency analysis for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D had repeated handoffs: LEAD-TO-PLAN(2x). This indicates iteration was needed to pass gates.",
+  "applicability": "Repeated handoffs suggest areas for upfront validation"
+ },
+ {
+  "category": "SD_SPECIFIC",
+  "evidence": "SD SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D completion metadata",
+  "learning": "\"W6 child D: comms hardening, refuse before insert, delivery receipts on work assignments, readers unioning the archive, and expired unread chairman rows surfaced as missed\" implemented and validated through 10 sub-agent executions across 4 phase transitions.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-D patterns for similar future work",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Implementation completeness",
+    "target": "100% of scope items implemented"
+   },
+   {
+    "actual": "N/A",
+    "metric": "Test coverage",
+    "target": "≥80% code coverage for new code"
+   },
+   {
+    "actual": "0 regressions",
+    "metric": "Zero regressions",
+    "target": "0 existing tests broken"
+   },
+   {
+    "actual": "N/A",
+    "metric": "Issue recurrence",
+    "target": "0 recurrences after fix deployed"
+   }
+  ]
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E ##########
+PRD by sd_key: none
+
+FULL SD_COMPLETION what_went_well: [
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E executed 6 handoffs (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN)",
+ "PRD \"Audit-Table Immutability Triggers and Revocations (Census-First)\" defined 3 FRs - all addressed",
+ "13/18 sub-agent validations passed (VALIDATION, Explore, RISK)"
+]
+
+FULL key_learnings: [
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E defined success metric: \"Implementation completeness\" with target 100% of scope items implemented.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Implementation completeness",
+    "target": "100% of scope items implemented"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E defined success metric: \"Test coverage\" with target ≥80% code coverage for new code.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Test coverage",
+    "target": "≥80% code coverage for new code"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E defined success metric: \"Zero regressions\" with target 0 existing tests broken.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "0 regressions",
+    "metric": "Zero regressions",
+    "target": "0 existing tests broken"
+   }
+  ]
+ },
+ {
+  "category": "RISK_PATTERN",
+  "evidence": "All 4 RISK executions returned PASS",
+  "learning": "RISK passed consistently (4x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E demonstrates reliable RISK compliance pattern"
+ },
+ {
+  "category": "DATABASE_PATTERN",
+  "evidence": "All 4 DATABASE executions returned PASS",
+  "learning": "DATABASE passed consistently (4x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E demonstrates reliable DATABASE compliance pattern"
+ },
+ {
+  "category": "TESTING_PATTERN",
+  "evidence": "All 2 TESTING executions returned PASS",
+  "learning": "TESTING passed consistently (2x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E demonstrates reliable TESTING compliance pattern"
+ },
+ {
+  "category": "VALIDATION_GAP",
+  "evidence": "Ran: VALIDATION, Explore, RISK, STORIES, DATABASE, DESIGN, TESTING, SECURITY. Missing: REGRESSION",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E did not execute REGRESSION sub-agents. Consider if these validations apply to this SD type.",
+  "applicability": "Evaluate sub-agent coverage for SD type"
+ },
+ {
+  "category": "REQUIREMENTS_ANALYSIS",
+  "evidence": "PRD ID: PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E, Title: \"Audit-Table Immutability Triggers and Revocations (Census-First)\"",
+  "learning": "PRD for \"W6 child E: audit table immutability triggers and revocations across the full candidate set, prepared with a census of write callers first\" specified 3 functional requirements, 1 marked high-priority.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E PRD structure for similar scope estimation"
+ },
+ {
+  "category": "FR_PATTERN",
+  "evidence": "FR-1 from PRD PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E",
+  "learning": "FR example from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E: \"Produce docs/audits/SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E-write-caller-cens...\" - this specificity level enabled clear acceptance criteria.",
+  "applicability": "Use similar FR detail level for measurable completion"
+ },
+ {
+  "category": "EXECUTION_TIMELINE",
+  "evidence": "First: LEAD-TO-PLAN at 2026-09-07, Last: EXEC-TO-PLAN",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E completed 6 handoffs (LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC-TO-PLAN) over 1 hours.",
+  "applicability": "Use 1h as reference for similar SD scope"
+ },
+ {
+  "category": "REWORK_PATTERN",
+  "evidence": "Handoff frequency analysis for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E had repeated handoffs: LEAD-TO-PLAN(3x), PLAN-TO-EXEC(2x). This indicates iteration was needed to pass gates.",
+  "applicability": "Repeated handoffs suggest areas for upfront validation"
+ },
+ {
+  "category": "SD_SPECIFIC",
+  "evidence": "SD SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E completion metadata",
+  "learning": "\"W6 child E: audit table immutability triggers and revocations across the full candidate set, prepared with a census of write callers first\" implemented and validated through 18 sub-agent executions across 6 phase transitions.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E patterns for similar future work",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Implementation completeness",
+    "target": "100% of scope items implemented"
+   },
+   {
+    "actual": "N/A",
+    "metric": "Test coverage",
+    "target": "≥80% code coverage for new code"
+   },
+   {
+    "actual": "0 regressions",
+    "metric": "Zero regressions",
+    "target": "0 existing tests broken"
+   }
+  ]
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-F ##########
+PRD by sd_key: none
+
+FULL SD_COMPLETION what_went_well: [
+ "LEAD-phase VALIDATION sub-agent (evidence 69a19709) caught a HIGH-severity terminology collision before any code was written: the sourcing RCA's brief called the target residue class a \"husk\", but this repo's own code (close-husk.js, worktree-manager.js) reserves that word for the OPPOSITE residue class (deregistered-from-git, directory-survives). A test fixture built to the repo's real \"husk\" definition would have passed vacuously against unmodified code. Reframed to \"registered entry with missing gitdir target\" / \"the prune-set\" before PRD authoring.",
+ "EXEC-phase TESTING sub-agent (evidence a15d0f5d) caught a second, independent CRITICAL defect after the LEAD-phase issue was already fixed: detectPruneCandidates read only stdout via execSync, but `git worktree prune --dry-run -v` reports on stderr (measured directly on git 2.50.1.windows.1 against a real dangling registration: status=0, stdout empty, stderr carrying the line). Production (scripts/worktree-reaper.mjs:1275) injects no gitRunner, so it takes that execSync branch exclusively -- the shipped feature would have written zero worktree_prune_candidate rows in production forever, despite a fully green 417/417 test suite, because every test injected a mock gitRunner returning the text on `.stdout` -- the one branch production actually calls was the only one left untested.",
+ "The stdout/stderr fix was independently reproduced (a fresh throwaway repo with a real broken worktree registration, differential before/after proving the fix load-bearing) and re-verified by a fresh TESTING pass (evidence 3f971eb7) using mutation testing rather than reading assertions: 5 mutations (cwd-guard revert, both stderr-fix reverts, husk constant collision, husk write-site swap) -> 5 kills / 0 survivors, including proof that a `.not.toBe(EVENT_TYPE)` assertion was load-bearing and not redundant.",
+ "SECURITY sub-agent (evidence a1f40523) PASS at a clean surface: command injection, SQL injection (including an adversarial \"evil'; DROP TABLE audit_log; --\" string round-tripped byte-exact inside BEGIN/ROLLBACK), secrets, and RLS access control were all explicitly probed rather than assumed. Zero blocking findings; the one pre-existing LOW advisory (anon-key fallback that cannot actually write due to RLS) was correctly framed as a durability caveat, not a security hole.",
+ "Two out-of-scope items were explicitly deferred rather than silently expanded: restoring the worktree-reaper cadence schedule (confirmed UNSOURCED -- no sibling or SD/QF claims it, with a coordinator signal already sent) and closeHusk-based automatic removal for either residue class (a destructive-action decision correctly pushed beyond this SD's detection+visibility scope).",
+ "This SD's own ticket-of-origin family exhibited the same validation-agent pattern working: sibling ticket QF-20260904-652's filing premise (a schema migration was needed) had gone stale between filing and pickup, and was independently corrected back to a direct quick-fix after fresh verification found the premise false."
+]
+
+FULL key_learnings: [
+ {
+  "category": "TERMINOLOGY_VALIDATION",
+  "evidence": "sub_agent_execution_results 69a19709 (VALIDATION, LEAD phase, PASS with HIGH finding)",
+  "learning": "A sourcing RCA's informal terminology (\"husk\") collided with this repo's own reserved definition of the same word for the opposite residue class. Caught before PRD authoring, this prevented a test fixture that would have validated against the wrong (already-satisfied) definition and passed vacuously against unmodified code.",
+  "applicability": "Any worktree-reaper-family SD sourced from an RCA or external brief should cross-check residue-class terminology against close-husk.js and worktree-manager.js before writing acceptance criteria."
+ },
+ {
+  "category": "STDOUT_STDERR_TESTING_GAP",
+  "evidence": "sub_agent_execution_results a15d0f5d (TESTING, EXEC-TO-PLAN, FAIL) and 3f971eb7 (TESTING, EXEC-TO-PLAN, PASS re-verification)",
+  "learning": "A fully green 417/417 test suite hid a CRITICAL defect: detectPruneCandidates read only stdout, but `git worktree prune --dry-run -v` reports on stderr, so production (which uses raw execSync with no injected mock) would produce zero prune-candidate rows forever. Every test injected a gitRunner mock returning the fixture text on `.stdout`, leaving the one branch production actually calls completely uncovered.",
+  "applicability": "When a function has both a real-subprocess branch and a mock-injectable branch, \"tests are green\" only proves the mocked branch works. Coverage claims for such functions must be evaluated per-branch, and the real-subprocess branch needs its own direct verification (as done in 3f971eb7 via a throwaway repo with a real broken worktree registration)."
+ },
+ {
+  "category": "MUTATION_TESTING_VALUE",
+  "evidence": "sub_agent_execution_results 3f971eb7 (TESTING, EXEC-TO-PLAN, PASS)",
+  "learning": "Re-verification used mutation testing (5 targeted mutations: cwd-guard revert, both stderr-fix reverts, husk constant collision, husk write-site swap) to prove the fix and its guarding assertions are load-bearing -- 5 kills, 0 survivors -- including confirming a `.not.toBe(EVENT_TYPE)` assertion was not redundant. This is strictly stronger evidence than \"tests pass\" because it tests whether the tests themselves would catch a regression.",
+  "applicability": "For any fix responding to a CRITICAL/silent-failure-class defect, require mutation testing (or an equivalent fault-injection check) as part of the re-verification pass before accepting the fix, not just a re-run of the existing suite."
+ },
+ {
+  "category": "STALE_TICKET_PREMISE",
+  "evidence": "Sibling ticket QF-20260904-652 (filed premise: schema migration needed), corrected during this SD's session window",
+  "learning": "A ticket's filing premise can go stale between filing and pickup. The same validation-agent pattern that caught the terminology collision in this SD independently caught a stale premise in a sibling ticket and de-escalated it back to a direct quick-fix after verification found the premise false.",
+  "applicability": "Any pickup of a ticket authored earlier in the session or by a different agent should re-verify its stated premise against current code/schema state before treating it as ground truth, particularly for schema-migration or scope-defining claims."
+ },
+ {
+  "category": "SCOPE_DISCIPLINE",
+  "evidence": "PRD scope notes; two items deferred (cadence-schedule restoration, closeHusk-based auto-removal)",
+  "learning": "Two adjacent improvements were identified during implementation but explicitly deferred rather than pulled into scope: cadence-schedule restoration (confirmed unsourced by any other ticket) and destructive auto-removal (a decision beyond this SD's detection+visibility mandate). A coordinator signal was sent for the unsourced item rather than leaving it silently unfiled.",
+  "applicability": "Detection-and-visibility SDs in this family should default to deferring destructive-action follow-ups as separate scope decisions, and route confirmed-unsourced adjacent gaps through a coordinator signal rather than silently absorbing or silently dropping them."
+ }
+]
+
+
+########## SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G ##########
+PRD by sd_key: none
+
+FULL SD_COMPLETION what_went_well: [
+ "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G executed 8 handoffs (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN)",
+ "PRD \"W6 child G: post-compaction role-seat re-read enforcement\" defined 4 FRs - all addressed",
+ "8/14 sub-agent validations passed (VALIDATION, Explore, DESIGN)"
+]
+
+FULL key_learnings: [
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G defined success metric: \"Implementation completeness\" with target 100% of scope items implemented.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Implementation completeness",
+    "target": "100% of scope items implemented"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G defined success metric: \"Test coverage\" with target ≥80% code coverage for new code.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Test coverage",
+    "target": "≥80% code coverage for new code"
+   }
+  ]
+ },
+ {
+  "category": "SUCCESS_METRICS_DEFINED",
+  "evidence": "SD success_metrics field",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G defined success metric: \"Zero regressions\" with target 0 existing tests broken.",
+  "applicability": "Ensure similar SDs define measurable success criteria",
+  "success_metrics": [
+   {
+    "actual": "0 regressions",
+    "metric": "Zero regressions",
+    "target": "0 existing tests broken"
+   }
+  ]
+ },
+ {
+  "category": "DATABASE_PATTERN",
+  "evidence": "All 2 DATABASE executions returned PASS",
+  "learning": "DATABASE passed consistently (2x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G demonstrates reliable DATABASE compliance pattern"
+ },
+ {
+  "category": "RISK_PATTERN",
+  "evidence": "All 2 RISK executions returned PASS",
+  "learning": "RISK passed consistently (2x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G demonstrates reliable RISK compliance pattern"
+ },
+ {
+  "category": "STORIES_PATTERN",
+  "evidence": "All 2 STORIES executions returned PASS",
+  "learning": "STORIES passed consistently (2x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G, indicating stable validation criteria met.",
+  "applicability": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G demonstrates reliable STORIES compliance pattern"
+ },
+ {
+  "category": "TESTING_VALIDATION",
+  "evidence": "Sub-agent execution chain: PASS → PASS → BLOCKED",
+  "learning": "TESTING initially blocked (1x) then passed (2x) for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G. Resolution required 3 iterations.",
+  "applicability": "When TESTING blocks, check previous resolution patterns from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G"
+ },
+ {
+  "category": "VALIDATION_GAP",
+  "evidence": "Ran: VALIDATION, Explore, DESIGN, DATABASE, RISK, STORIES, TESTING, SECURITY. Missing: REGRESSION",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G did not execute REGRESSION sub-agents. Consider if these validations apply to this SD type.",
+  "applicability": "Evaluate sub-agent coverage for SD type"
+ },
+ {
+  "category": "REQUIREMENTS_ANALYSIS",
+  "evidence": "PRD ID: PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G, Title: \"W6 child G: post-compaction role-seat re-read enforcement\"",
+  "learning": "PRD for \"W6 child G: enforce the post-compaction contract re-read at the next tick rather than the next handoff, so the three role seats stop being uncovered by construction\" specified 4 functional requirements, 1 marked high-priority.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G PRD structure for similar scope estimation"
+ },
+ {
+  "category": "FR_PATTERN",
+  "evidence": "FR-1 from PRD PRD-SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G",
+  "learning": "FR example from SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G: \"A new pure helper reads ~/.claude/flags/last-compaction.json (the ONE marker ...\" - this specificity level enabled clear acceptance criteria.",
+  "applicability": "Use similar FR detail level for measurable completion"
+ },
+ {
+  "category": "EXECUTION_TIMELINE",
+  "evidence": "First: LEAD-TO-PLAN at 2026-09-07, Last: PLAN-TO-LEAD",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G completed 8 handoffs (LEAD-TO-PLAN → PLAN-TO-EXEC → EXEC-TO-PLAN → PLAN-TO-LEAD) over 5 hours.",
+  "applicability": "Use 5h as reference for similar SD scope"
+ },
+ {
+  "category": "REWORK_PATTERN",
+  "evidence": "Handoff frequency analysis for SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G",
+  "learning": "SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G had repeated handoffs: LEAD-TO-PLAN(3x), EXEC-TO-PLAN(3x). This indicates iteration was needed to pass gates.",
+  "applicability": "Repeated handoffs suggest areas for upfront validation"
+ },
+ {
+  "category": "SD_SPECIFIC",
+  "evidence": "SD SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G completion metadata",
+  "learning": "\"W6 child G: enforce the post-compaction contract re-read at the next tick rather than the next handoff, so the three role seats stop being uncovered by construction\" implemented and validated through 14 sub-agent executions across 8 phase transitions.",
+  "applicability": "Reference SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-G patterns for similar future work",
+  "success_metrics": [
+   {
+    "actual": "N/A",
+    "metric": "Implementation completeness",
+    "target": "100% of scope items implemented"
+   },
+   {
+    "actual": "N/A",
+    "metric": "Test coverage",
+    "target": "≥80% code coverage for new code"
+   },
+   {
+    "actual": "0 regressions",
+    "metric": "Zero regressions",
+    "target": "0 existing tests broken"
+   },
+   {
+    "actual": "N/A",
+    "metric": "Issue recurrence",
+    "target": "0 recurrences after fix deployed"
+   }
+  ]
+ }
+]
