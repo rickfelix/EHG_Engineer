@@ -1,0 +1,10 @@
+import pg from 'pg'; import dotenv from 'dotenv'; dotenv.config();
+const c = new pg.Client({ connectionString: process.env.SUPABASE_POOLER_URL || process.env.SUPABASE_DB_URL, ssl:{rejectUnauthorized:false} });
+await c.connect();
+const ID='ab9b70a1-18f0-4191-bc04-26b48859029e';
+const r = await c.query(`SELECT metadata, detailed_analysis FROM sub_agent_execution_results WHERE id=$1`,[ID]);
+const md=r.rows[0].metadata||{};
+console.log('metadata keys:', Object.keys(md).join(', '));
+console.log('has md.findings:', Array.isArray(md.findings), md.findings?.length);
+console.log('detailed_analysis type:', typeof r.rows[0].detailed_analysis);
+await c.end();

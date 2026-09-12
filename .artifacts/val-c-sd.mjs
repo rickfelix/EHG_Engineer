@@ -1,0 +1,14 @@
+import pg from 'pg'; import dotenv from 'dotenv'; dotenv.config();
+const c = new pg.Client({ connectionString: process.env.SUPABASE_POOLER_URL || process.env.SUPABASE_DB_URL, ssl:{rejectUnauthorized:false} });
+await c.connect();
+const cols = await c.query(`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='strategic_directives_v2' AND column_name ~ 'key|legacy|sd_id|^id$|scope|description' ORDER BY column_name`);
+console.log('SD id-ish/scope cols:', cols.rows.map(r=>r.column_name).join(', '));
+const kids = await c.query(`SELECT id, sd_key, title, status, current_phase FROM strategic_directives_v2 WHERE parent_sd_id='f651ec94-852d-4727-8146-5d39cd00c476' ORDER BY sd_key`);
+console.log('\n=== SIBLING CHILDREN (parent f651ec94) ===');
+kids.rows.forEach(r=>console.log(` ${r.sd_key} | ${r.status}/${r.current_phase} | ${String(r.title).slice(0,100)}`));
+const me = await c.query(`SELECT id, sd_key, title, status, current_phase, scope, description FROM strategic_directives_v2 WHERE id='30a5f9e6-fa6c-47d2-abfc-5639745010f3'`);
+const m = me.rows[0];
+console.log(`\n=== CHILD C (${m.sd_key}) status=${m.status} phase=${m.current_phase} ===`);
+console.log('SCOPE:', String(m.scope||'(null)').slice(0,1200));
+console.log('\nDESCRIPTION:', String(m.description||'(null)').slice(0,2000));
+await c.end();

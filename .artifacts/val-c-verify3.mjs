@@ -1,0 +1,15 @@
+import pg from 'pg'; import dotenv from 'dotenv'; dotenv.config();
+const c = new pg.Client({ connectionString: process.env.SUPABASE_POOLER_URL || process.env.SUPABASE_DB_URL, ssl:{rejectUnauthorized:false} });
+await c.connect();
+const cols = await c.query(`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='sub_agent_execution_results' ORDER BY ordinal_position`);
+console.log('COLUMNS:', cols.rows.map(r=>r.column_name).join(', '));
+const r = await c.query(`SELECT * FROM sub_agent_execution_results WHERE sd_id='30a5f9e6-fa6c-47d2-abfc-5639745010f3' ORDER BY created_at DESC LIMIT 1`);
+const row = r.rows[0];
+console.log('\n--- KEY FIELDS ---');
+for (const k of ['id','sub_agent_code','verdict','phase','status','confidence','created_at','sd_id']) console.log(` ${k}:`, row[k]);
+const md = row.metadata || {};
+console.log('\n--- metadata (gate-relevant) ---');
+for (const k of ['repo_path','executed_from_cwd','repo_resolved','phase','validation_gate','duplicate_check','near_sibling_qf','claims_confirmed','claims_refuted']) console.log(` ${k}:`, JSON.stringify(md[k]));
+console.log('\n findings count:', Array.isArray(row.findings)?row.findings.length:(md.findings?.length ?? 'n/a'));
+console.log(' recommendations count:', Array.isArray(row.recommendations)?row.recommendations.length:'n/a');
+await c.end();

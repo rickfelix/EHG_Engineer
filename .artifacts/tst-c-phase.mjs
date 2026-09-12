@@ -1,0 +1,14 @@
+import pg from 'pg';
+import dotenv from 'dotenv';
+dotenv.config();
+const c = new pg.Client({ connectionString: process.env.SUPABASE_POOLER_URL || process.env.SUPABASE_DB_URL, ssl:{rejectUnauthorized:false} });
+await c.connect();
+const s = await c.query(`SELECT id, sd_key, target_application FROM strategic_directives_v2 WHERE sd_key=$1 OR id::text=$1`, ['SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-C']);
+console.log('=== SD ===', JSON.stringify(s.rows[0]));
+const p = await c.query(`SELECT phase, count(*) FROM sub_agent_execution_results WHERE phase ILIKE '%PLAN%' GROUP BY phase ORDER BY 2 DESC LIMIT 12`);
+console.log('=== phase tokens in use (PLAN-ish) ===');
+for (const r of p.rows) console.log(' ', r.phase, r.count);
+const e = await c.query(`SELECT sub_agent_code, phase, verdict, created_at FROM sub_agent_execution_results WHERE sd_id=$1 ORDER BY created_at DESC LIMIT 15`, [s.rows[0].id]);
+console.log('=== existing evidence for this SD ===');
+for (const r of e.rows) console.log(' ', r.sub_agent_code, '|', r.phase, '|', r.verdict, '|', r.created_at.toISOString());
+await c.end();
