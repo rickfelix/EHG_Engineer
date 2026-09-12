@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-12](#2026-09-12)
+  - [Bugfix](#bugfix)
 - [2026-09-11](#2026-09-11)
   - [Bugfix](#bugfix)
   - [Infrastructure](#infrastructure)
@@ -195,6 +197,15 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-12
+
+### Bugfix
+
+- **CHILD_SCOPE_COVERAGE was structurally unpassable for any orchestrator SD carrying the auto-generated 3-FR coordination template, scoring 33/100 and blocking PLAN-TO-LEAD** - SD-LEO-FIX-CHILD-SCOPE-COVERAGE-001 (escalated from QF-20260911-793, PR #8703)
+  - `generateParentPRD()` in `scripts/modules/parent-orchestrator-handler.js` emits 3 hard-coded coordination-only FR titles ("Child SD Orchestration", "Work Decomposition Structure", "Progress Tracking") that no child SD ever phrases in its own scope, so the gate's keyword-overlap check could never cover them. The 3 titles are now a shared, exported constant (`COORDINATION_ONLY_FR_TITLES`); `extract-deliverables-from-prd.js` threads a `metadata.coordination_only` flag onto the persisted deliverable row only when BOTH the FR sets the flag AND the whole PRD's own `metadata.generation_method` matches the one legitimate auto-generator — closing a spoof where any PRD author could exempt a real requirement by reusing one of the 3 reserved titles.
+  - `child-scope-coverage.js` excludes matching deliverables from the coverage denominator entirely (never scored, never counted as uncovered) and auto-passes when every parent deliverable is template-only; the parent-deliverables query was also widened to project `metadata` (a missing column projection had made an earlier fix attempt a silent no-op). Escalated from a quick-fix because the change touches `**/gates/**`, a QF-sensitive path.
+  - A one-time backfill (`scripts/one-off/backfill-coordination-only-child-scope-coverage-001.mjs`) tagged 30 pre-existing rows across 10 orchestrator SDs that predated the fix and would otherwise stay unfixed under `extractAndPopulateDeliverables`'s `skipIfExists` default.
 
 ## 2026-09-11
 
