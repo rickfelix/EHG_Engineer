@@ -87,7 +87,7 @@ describe('SNOOZE-3: staging discipline', () => {
     // "@approved-by: <PENDING ...>"; the ceremony replaces it with the chairman's address
     // (2026-09-12 ceremony d, chairman SMS "A apply now"). Either form is the staged shape;
     // a file with NO @approved-by line at all is the defect this test guards.
-    expect(sql).toMatch(/@approved-by: (<PENDING|[^s<>@]+@[^s<>@]+)/);
+    expect(sql).toMatch(/@approved-by: (<PENDING|[A-Za-z0-9._-]+@[A-Za-z0-9.-]+)/);
   });
 
   it('ships a DOWN file restoring the pre-change definition (no snoozed_until exclusion in the actual view body)', () => {
