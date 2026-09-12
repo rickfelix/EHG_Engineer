@@ -90,7 +90,9 @@
     "content": "// SEEDED DEFECT: raw session_coordination insert bypassing insertCoordinationRow().\nexport async function send(supabase, payload) {\n  const { error } = await supabase.from('session_coordination').insert({\n    message_type: 'INFO',\n    payload\n  });\n  return error;\n}\n"
    }
   ],
-  "env": { "CI": "" },
+  "env": {
+   "CI": ""
+  },
   "note": "QF-20260905-934: env.CI is forced empty for THIS fixture trial only (safeSpecEnv does not block it -- CI is not in UNSAFE_ENV_RE). The scratch dir runTrial() builds is `git init`'d with a staged index and NO commit, so candidateFilesDiff()'s `git diff origin/main...HEAD` always throws here regardless of origin -- there is no HEAD yet. Under an inherited CI=true (this harness itself runs in CI), that throw now hits this control's own CI-fail-closed branch (added by this same QF) instead of the pre-existing local-dev advisory fallback the seed fixture relies on to ever reach detection. Forcing CI='' for the trial restores that fallback path -- it does not touch the real production workflow's env, which is untouched and still fails loud on a genuinely unresolvable base.",
   "observability_proof": {
    "input": "The file-path list from candidateFilesDiff()'s four git calls (diff vs origin/main...HEAD, --cached, working-tree, and `git ls-files --others`) under scripts/** and lib/**, or candidateFilesAll()'s recursive walk of those same two directories in --all/degraded mode; each matched file's on-disk source text is then run through ESLint's Linter().verify() against the no-raw-session-coordination-insert and no-echoed-session-coordination-target rules. process.env.CI and process.env.SESSION_COORD_LINT_BASE also gate behavior: CI==='true' fails the run loud on an unresolvable diff base, otherwise it degrades to the --all advisory scan.",
@@ -983,6 +985,27 @@
   "observability_proof": {
    "input": "The same per-file source text eva-logger-required-lint.mjs consumes (candidateFilesAll + classifyFile) -- this census reuses that classifier rather than re-implementing it.",
    "seen": "Live run via direct node execution against this repo's real lib/eva/ tree (not a temp-dir fixture), 2026-09-12: `node scripts/audit/eva-logging-census.mjs` reported 646 files scanned, 605 (93.7%) with zero instrumentation -- matching the lint's own --all sweep exactly, confirming the shared classifier produces one consistent count."
+  }
+ },
+ {
+  "name": "claim-md-claude-sessions-column-lint",
+  "script": "scripts/lint/claim-md-claude-sessions-column-lint.mjs",
+  "rootFlag": "--root",
+  "extraArgs": [],
+  "note": "SD-LEO-FIX-CLAUDE-COMMANDS-CLAIM-001 / QF-20260912-810. TESTED IN DEFAULT MODE, DELIBERATELY, mirroring fleet-liveness-select-lint's own precedent -- .github/workflows/claim-md-claude-sessions-column-lint.yml runs this with --enforce but under continue-on-error: true, so the ruled question is whether it DETECTS at merge time, not whether default mode alone blocks; --enforce with a real hit does exit 1 (verified manually), but the seed trial here intentionally exercises the same argv shape CI actually runs to measure what the CI job really observes.",
+  "fixtures": [
+   {
+    "path": ".claude/commands/seeded-claim-defect.md",
+    "content": "# seeded defect\n```bash\nnode -e \"\nsupabase.from('claude_sessions').select('session_id, sd_id, heartbeat_at').eq('status', 'active');\n\"\n```\n"
+   }
+  ],
+  "detectTokens": [
+   "seeded-claim-defect",
+   "sd_id"
+  ],
+  "observability_proof": {
+   "input": "Every column name argument passed to .select()/.update()/.upsert()/.insert()/.eq() chained directly off .from('claude_sessions'|'v_active_sessions') inside any .claude/commands/*.md file -- the exact runtime shape of the real defect this control exists to catch.",
+   "seen": "Real positive: pre-fix .claude/commands/claim.md (commit 795a2c486ed^, i.e. the file as it existed before SD-LEO-FIX-CLAUDE-COMMANDS-CLAIM-001's first fix commit) contains exactly this defect -- claude_sessions.sd_id referenced 3 times (status/release subcommands, lines ~41/119/168 pre-fix) -- a nonexistent column whose resulting Postgrest error was silently discarded, read as 'no active claim' while a real claim was live. This is the production defect this SD fixes, not a synthetic-only fixture; a TESTING sub-agent independently re-confirmed the pre-fix/post-fix differential live (evidence row 7eb0551a-f2be-4755-badf-e87feeb4e082)."
   }
  }
 ]

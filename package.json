@@ -125,6 +125,7 @@
     "lint:env-flags": "node scripts/lint/process-env-feature-flag-lint.mjs",
     "lint:fleet-liveness-select": "node scripts/lint/fleet-liveness-select-lint.mjs",
     "lint:swallowed-query-error": "node scripts/lint/swallowed-query-error-lint.mjs",
+    "lint:claim-md-columns": "node scripts/lint/claim-md-claude-sessions-column-lint.mjs",
     "lint:alter-defaults": "node scripts/lint/alter-default-override-lint.mjs",
     "lint:venture-artifacts": "node scripts/lint/venture-artifacts-write-lint.mjs",
     "lint:realtime-teardown": "node scripts/lint/realtime-subscribe-teardown-recursion-lint.mjs",
