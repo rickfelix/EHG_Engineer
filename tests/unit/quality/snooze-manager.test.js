@@ -18,6 +18,7 @@ function makeQueryBuilder(table) {
     update: (payload) => { state.op = 'update'; state.payload = payload; return builder; },
     eq: (col, val) => { state.filters.push(['eq', col, val]); return builder; },
     lt: (col, val) => { state.filters.push(['lt', col, val]); return builder; },
+    gt: (col, val) => { state.filters.push(['gt', col, val]); return builder; },
     in: (col, vals) => { state.filters.push(['in', col, vals]); return builder; },
     order: () => builder,
     single: () => finish().then((r) => ({ ...r, data: (r.data && r.data[0]) || null })),
@@ -31,6 +32,7 @@ function makeQueryBuilder(table) {
         return row[col] === val;
       }
       if (kind === 'lt') return row[col] != null && row[col] < val;
+      if (kind === 'gt') return row[col] != null && row[col] > val;
       if (kind === 'in') return vals_includes(col, val, row);
       return true;
     });
@@ -162,5 +164,11 @@ describe('getSnoozedItems', () => {
 
     const items = await getSnoozedItems({ userId: 'u1' });
     expect(items.map((i) => i.id)).toEqual(['mine']);
+  });
+
+  it('EXEC-TESTING regression (evidence 7e94571a): a woken row (snoozed_until cleared, metadata.snooze.active still stale-true) never appears', async () => {
+    seed('woken1', { status: 'new', snoozed_until: null, metadata: { snooze: { active: true, snoozed_by: 'u1' } } });
+    const items = await getSnoozedItems();
+    expect(items.map((i) => i.id)).toEqual([]);
   });
 });
