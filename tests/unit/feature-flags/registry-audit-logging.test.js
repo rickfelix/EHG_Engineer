@@ -110,4 +110,32 @@ describe('transitionLifecycleState audit citation', () => {
     expect(insertCalls[0].new_state.actor_type).toBe('chairman');
     expect(insertCalls[0]).not.toHaveProperty('environment');
   });
+
+  // SECURITY finding S13: the passing test above deliberately used risk_tier:'low' to route
+  // around the approval-requirement branch, but nothing asserted that branch actually still
+  // enforces for a HIGH-risk flag. This closes that gap.
+  it('throws for a HIGH-risk flag transitioning to enabled with no approved approval on record', async () => {
+    const currentFlag = {
+      flag_key: 'SOME_HIGH_RISK_FLAG',
+      lifecycle_state: 'disabled',
+      risk_tier: 'high',
+      is_enabled: false,
+    };
+    fromImpl = (table) => {
+      if (table === 'leo_feature_flags') {
+        return makeBuilder(() => ({ data: currentFlag, error: null }));
+      }
+      if (table === 'leo_feature_flag_approvals') {
+        // No approved row on record -- .single() reports not-found.
+        return makeBuilder(() => ({ data: null, error: { code: 'PGRST116', message: 'no rows' } }));
+      }
+      throw new Error(`unexpected table ${table}`);
+    };
+
+    await expect(
+      registry.transitionLifecycleState('SOME_HIGH_RISK_FLAG', 'enabled', { reason: 'no approval cited', actorId: 'attacker', actorType: 'system' })
+    ).rejects.toThrow(/requires 2 approval/);
+
+    expect(insertCalls).toHaveLength(0); // no audit row for a rejected transition
+  });
 });

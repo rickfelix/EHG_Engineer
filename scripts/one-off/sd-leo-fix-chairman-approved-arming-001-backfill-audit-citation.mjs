@@ -23,7 +23,13 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.en
 
 const DECISION_CITATION = 'chairman_decision:6cb60a30-93d4-49a3-83b4-8e1ba1d49dd2';
 const RATIFICATION_CITATION = 'chairman_ratification:b75ddfff-ea06-495d-a507-b887f1623eed';
-const EVENT_AT = '2026-09-12T21:29:10.500000+00:00'; // just after the live trigger-written rows
+// SECURITY finding S10: the original run of this script backdated `created_at` to the live
+// apply's own timestamp, but the marker explaining that was buried inside the JSONB payload --
+// invisible to any ordering/latest-row query, which would read a row from 21:29Z as if it were
+// freshly written today. Fixed: the row's own created_at is left to its real insertion time; the
+// historical event's actual timestamp is instead recorded in new_state.original_event_at, a
+// queryable top-level JSONB key rather than an implicit row-position claim.
+const ORIGINAL_EVENT_AT = '2026-09-12T21:29:10.500000+00:00'; // the live trigger-written rows' timestamp
 
 const ENTRIES = [
   {
@@ -53,15 +59,21 @@ async function backfillOne({ flag_key, action, note }) {
     throw new Error(`Flag '${flag_key}' not found: ${flagErr?.message}`);
   }
 
-  // Idempotency: never insert a second citation row for the same flag+event.
-  const { data: existing } = await supabase
+  // Idempotency (SECURITY finding S9 fix): the original check used .maybeSingle(), which on
+  // MORE than one existing match returns {data: null, error: PGRST116} -- the destructured
+  // `existing` reads as null (falsy), so the guard silently treated "2 rows already exist" the
+  // same as "0 rows exist" and inserted a THIRD. Use a plain array select and check its length,
+  // and treat a genuine query error as a hard stop rather than proceeding to insert.
+  const { data: existingRows, error: existingErr } = await supabase
     .from('leo_feature_flag_audit_log')
     .select('id')
     .eq('flag_key', flag_key)
-    .eq('changed_by', DECISION_CITATION)
-    .maybeSingle();
-  if (existing) {
-    console.log(`  ${flag_key}: citation row already present (id=${existing.id}), skipping`);
+    .eq('changed_by', DECISION_CITATION);
+  if (existingErr) {
+    throw new Error(`Idempotency check failed for '${flag_key}': ${existingErr.message}`);
+  }
+  if (existingRows && existingRows.length > 0) {
+    console.log(`  ${flag_key}: citation row(s) already present (${existingRows.length}), skipping`);
     return;
   }
 
@@ -69,9 +81,8 @@ async function backfillOne({ flag_key, action, note }) {
     flag_key,
     action,
     previous_state: { backfill_note: 'original state prior to the live 2026-09-12 apply not separately captured; see leo_feature_flags.created_at/updated_at history' },
-    new_state: { ...flag, backfill_reason: note, cited_decision: DECISION_CITATION, cited_ratification: RATIFICATION_CITATION, backfilled_by: 'SD-LEO-FIX-CHAIRMAN-APPROVED-ARMING-001' },
+    new_state: { ...flag, backfill_reason: note, cited_decision: DECISION_CITATION, cited_ratification: RATIFICATION_CITATION, backfilled_by: 'SD-LEO-FIX-CHAIRMAN-APPROVED-ARMING-001', original_event_at: ORIGINAL_EVENT_AT },
     changed_by: DECISION_CITATION,
-    created_at: EVENT_AT,
   }).select().single();
 
   if (error) {
