@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-12T04:14:28.989Z",
-  "git_commit": "b1b30aa9",
+  "generated_at": "2026-09-12T09:14:02.025Z",
+  "git_commit": "b817ccbf",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -173,11 +173,11 @@
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 27826,
-      "bytes": 27940,
-      "estimated_tokens": 6957,
-      "content_hash": "dc9049328aa66b0f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-FIX-CHILD-SCOPE-COVERAGE-001\\CLAUDE_MICHAEL.md"
+      "chars": 27824,
+      "bytes": 27938,
+      "estimated_tokens": 6956,
+      "content_hash": "38c17203846cd44e",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260911-848\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
       "type": "full",
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "e0d110ce005a92bf",
+    "global": "d608d80afe18f5bb",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -537,7 +537,7 @@
       "655": "59137a758bb13a65",
       "656": "d2ccb43f1edf9602",
       "657": "11c9181c9e30ef9c",
-      "658": "928b521a1df3a67e",
+      "658": "280015818a4d8d86",
       "659": "f07759022446ffb1",
       "660": "61acc95edefef269",
       "661": "5a43f70cb1e2438d",
