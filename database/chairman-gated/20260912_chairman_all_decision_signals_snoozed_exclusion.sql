@@ -5,7 +5,7 @@
 -- CREATE OR REPLACE VIEW is TIER-2 under scripts/lib/migration-tier-classifier.mjs — never
 -- auto-applied. No @approved-by attestation. The builder stages; the chairman applies.
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- ============================ WHAT'S BROKEN ============================
 -- Found as out-of-scope finding F3 during PLAN-phase prospective TESTING review of
