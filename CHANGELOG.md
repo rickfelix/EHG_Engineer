@@ -4,6 +4,7 @@
 ## Table of Contents
 
 - [2026-09-12](#2026-09-12)
+  - [Bugfix](#bugfix-5)
   - [Infrastructure](#infrastructure-12)
 - [2026-09-11](#2026-09-11)
   - [Bugfix](#bugfix)
@@ -199,6 +200,12 @@
   - [EHG (Venture App)](#ehg-venture-app)
 
 ## 2026-09-12
+
+### Bugfix
+
+- **Retired a dead broadcast sentinel that let 8 fleet-coordination writers report success while no reader ever acted on the message** - SD-LEO-FIX-DISPATCH-CJS-ACCEPTS-001 (escalated from QF-20260911-753, PR #8726)
+  - `lib/coordinator/dispatch.cjs` accepted a bare `'broadcast'` `target_session` as a valid sentinel, but a live measurement found 0 of 91 historical rows on that value were ever acknowledged by any reader across all history — writers believed their message was delivered while it landed in a silent sink. Removed `'broadcast'` from `SENTINEL_TARGETS`; any future write to it now fails loudly with `DISPATCH_TARGET_INVALID` instead of silently succeeding.
+  - Retargeted every writer that depended on the retired sentinel to the `broadcast-coordinator` sentinel (which the `/coordinator start` flow does drain) or, for `lib/npm-install-lock.cjs` (whose own matching contract never used `target_session` at all), to a safe non-sentinel literal satisfying the table's `valid_target` CHECK constraint. Two independent adversarial-review passes, plus a third round after CI itself caught a mechanical line-number regression in a companion census test, found and fixed a total of 6 missed writers and one constraint-violating fix across the effort before the change was judged clean and merged.
 
 ### Infrastructure
 
