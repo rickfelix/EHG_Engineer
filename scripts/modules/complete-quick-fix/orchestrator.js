@@ -861,6 +861,10 @@ export async function completeQuickFix(qfId, options = {}) {
     testsPass,
     uatVerified,
     testsVerifiedRecently: true,
+    // QF-20260911-021: a guard may decline to run but must never report a verdict it did
+    // not take. --skip-tests means testsPass is a trusted default/override, not a measured
+    // result this run — thread that so Check 3 can report it truthfully.
+    testsSkipped: Boolean(options.skipTestRun),
     // QF-20260911-755: the self-verifier's Check 3 must not report an e2e run that never
     // executed as "verified".
     e2eNotRunnable: Boolean(e2eTestResult?.notRunnable),
