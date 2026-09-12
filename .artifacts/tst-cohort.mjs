@@ -1,0 +1,10 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv'; dotenv.config();
+const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const base = () => s.from('ventures').select('*',{count:'exact',head:true});
+console.log('total ventures:', (await base()).count);
+console.log('is_demo=true:', (await base().eq('is_demo',true)).count);
+console.log('is_demo=false:', (await base().eq('is_demo',false)).count);
+console.log('launch_mode=live (any):', (await base().eq('launch_mode','live')).count);
+console.log('non-demo & stage>=24:', (await base().eq('is_demo',false).gte('current_lifecycle_stage',24)).count);
+console.log('non-demo & stage>=24 & live:', (await base().eq('is_demo',false).gte('current_lifecycle_stage',24).eq('launch_mode','live')).count);

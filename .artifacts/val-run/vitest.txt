@@ -1,0 +1,26 @@
+
+ RUN  v4.1.4 C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001
+
+[vitest][db-tier] SKIPPED at runtime — no designated non-production target (reason: no_designated_target, target ref: dedlbzhpgkmetvhbkyzq). Suites resolve and their hooks may run, but ALL network is refused (DB_TIER_BLOCKED) and every test reports skipped. Set VITEST_DB_ALLOW_REF=<project-ref> to authorize a designated non-production ref. Never name production.
+[demand-gate] live floor computation failed: capacity read failed — falling back to static floor
+[demand-gate] live floor computation failed: sync boom — falling back to static floor
+[demand-gate] live floor computation failed: computeBeltVerdict(): idleNow must be a finite number, got null — falling back to static floor
+[demand-gate] withheld cost NOT recorded for test-engine: supabase.from is not a function
+[demand-gate] withheld cost NOT recorded for e: supabase.from is not a function
+[demand-gate] gauge read failed for e: gauge unavailable — withholding
+[FR-1 INVENTORY] 6 self-gating guard(s) with NO production caller supplying their gated input:
+    - enforceSweepBudget (scripts/solomon-advisory.cjs:319) needs 'spent' — permissive means: withinBudget:true — the per-sweep cost ceiling does not apply
+    - createRegistryNarrowedTrustGate (lib/ship/auto-merge.mjs:73) needs 'registry' — permissive means: the trust gate cannot REVOKE auto-merge for a mis-tagged platform repo
+    - runPreShipGate (lib/daily-review/artifact-preship-gate.js:27) needs 'getForecast' — permissive means: the pre-ship artifact check passes without a forecast
+    - enforceGuardrail (lib/eva/guardrail-enforcement-engine.js:45) needs 'guardrails' — permissive means: no guardrail is enforced
+    - auditSourcingGateConflict (lib/governance/adam-contract-audit.js:39) needs 'gates' — permissive means: a sourcing-gate conflict goes unreported
+    - capabilityGapTerm (lib/adam/rationale-bar.js:302) needs 'capability' — permissive means: the capability-gap term contributes nothing to the rationale bar
+[demand-gate] gauge read failed for e: dep query failed — withholding
+[demand-gate] decision NOT recorded for refill-auto-promote: boom
+[demand-gate] gauge read failed for freeze-test: gauge exploded — withholding
+
+ Test Files  134 passed | 2 skipped (136)
+      Tests  2062 passed | 20 skipped (2082)
+   Start at  14:21:04
+   Duration  8.71s (transform 20.06s, setup 7.29s, import 26.34s, tests 41.34s, environment 11ms)
+

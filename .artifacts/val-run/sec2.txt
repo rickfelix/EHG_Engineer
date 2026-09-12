@@ -1,0 +1,155 @@
+
+########## ROW 3ed447ec-de8c-4798-9fdc-5a0c814623a5 | verdict: CONDITIONAL_PASS | conf: [33m90[39m | phase: EXEC | cwd: C:\Users\rickf\Projects\_EHG\EHG_Engineer\.worktrees\SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 | repo: C:/Users/rickf/Projects/_EHG/EHG_Engineer
+SUMMARY: EXEC SECURITY review of the go-live outreach gate. CONDITIONAL_PASS: shipped runtime posture is fail-closed and correct on the primary safety property (0/171 ventures authorized; sole adapter/Resend choke points wired; 158/158 tests green), and both reviewee-reported known findings are independently CONFIRMED. 2 HIGH findings, both confined to the two staged-not-applied chairman-gated migrations and therefore BLOCKING for the FR-7 apply ceremony rather than for EXEC-TO-PLAN: (SEC-H1) execution_mode is NOT NULL with no default but ZERO writers set it, so applying FR-4 makes every venture_channel_publish_ledger INSERT fail 23502 and disables autonomous publishing plus the propose-and-approve chairman queue -- a defect the transactional DDL dry-run structurally could not catch; (SEC-H2) the DB trigger matches overrides on consumed_at IS NOT NULL, inverting the app-layer one-shot into a standing bypass for the whole undo_deadline TTL, against exactly the direct-INSERT threat the trigger exists to stop. 5 MEDIUM: the mode field mixes two vocabularies so the no-credentials dry-run is labelled live (now test-pinned) and is kept out of real-send accounting only by an accidental live-vs-real token mismatch; the dedup early-return emits mode real ahead of the gate on a false invariant (content-generator.js is a second, ungated campaign_content writer); the chairman override is structurally unusable on the email path (key mismatch plus double-consume of the one-shot across two stacked gates) while still burning the override and polluting the override-rate metric; venture-honesty-audit.js is a second discriminator reader never taught execution_mode; the SECURITY DEFINER trigger sets search_path public before pg_catalog. No ungated path to a real external recipient was found.
+CRITICAL_ISSUES: [
+ {
+  "id": "SEC-H1",
+  "issue": "FR-4 migration will hard-break the ledger writer on apply. database/chairman-gated/20260912_venture_channel_publish_ledger_execution_mode.sql declares execution_mode TEXT NOT NULL with NO DEFAULT (deliberate, per its own header: 'a future writer that omits the column entirely must fail the INSERT outright'). MEASURED: repo-wide grep shows ZERO writers set execution_mode. Both production INSERTs into venture_channel_publish_ledger -- lib/marketing/autonomy-gate.js:346-357 (autonomous 'accepted') and :402-411 (propose 'pending') -- omit the column. The instant the chairman applies this migration, every ledger INSERT returns 23502 not_null_violation, so checkPublishAuthorization() returns AUTONOMOUS_LEDGER_WRITE_FAILED (fail-closed) / 'propose-record write failed' and BOTH autonomous publishing and the propose-and-approve chairman queue stop working. The 'future writer' the header guards against is today's writer. Fails CLOSED (no unauthorized send), so this is an availability/correctness defect, not an outreach bypass -- but it lands as latent breakage at the FR-7 ceremony.",
+  "evidence": "grep execution_mode across lib/ scripts/ src/ api/ => only autonomy-gate.js READS it (evaluateGraduation, lines 484/491/509); no writer anywhere. Live DB confirms the column is absent (42703). The _dry_run.mjs proof checks column existence, NOT NULL, backfill and the CHECK constraint (via UPDATE ... SET execution_mode='bogus') but NEVER attempts an application-shaped INSERT, so a transactional DDL dry-run structurally cannot catch this.",
+  "severity": "HIGH",
+  "recommendation": "Before the FR-7 apply ceremony, set execution_mode on both INSERT sites in lib/marketing/autonomy-gate.js (both are reachable only after outreach.authorized===true, so the correct literal is 'live'), land that code change FIRST, then apply the migration. Do NOT resolve this by adding a DEFAULT 'live' -- the header's rejection of a silent default is correct. Add an app-shaped INSERT (venture_id/channel_type/content_ref/correlation_id/decision/decision_by/decision_at, no execution_mode) to the dry-run proof so this class of writer/schema coupling defect is caught by the proof rather than by review."
+ },
+ {
+  "id": "SEC-H2",
+  "issue": "DB trigger's chairman-override arm is INVERTED relative to the application layer, turning a one-shot into a standing TTL-long bypass. database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger.sql looks for an override with `consumed_at IS NOT NULL AND undo_deadline > now()`. The application layer (hasActiveOverride, lib/governance/stage-gate-predicate.js) defines an ACTIVE override as `consumed_at IS NULL` and CLAIMS it atomically. The trigger's choice is internally coherent with the in-process ordering (the JS gate consumes, then the ledger INSERT happens), but its consequence is that once ANY override is consumed, the trigger accepts EVERY subsequent INSERT for that (venture_id, channel_type:content_ref) pair until undo_deadline expires. That is precisely the threat model the trigger's own header claims to close ('a direct/manual insert cannot silently write an outbound-send ledger row'): a direct INSERT can be replayed arbitrarily against one already-spent override. The header's claim that it 'mirrors assertOutreachAuthorized()'s positive shape exactly' is false for the override arm.",
+  "evidence": "Trigger SQL override predicate vs lib/governance/stage-gate-predicate.js hasActiveOverride() (.is('consumed_at', null) on both the claim UPDATE and the shadow SELECT). LATENT, not live: chairman_decisions.override_key confirmed ABSENT in the live schema (42703, verified this review), the trigger migration is unapplied, and there are 0 rows with decision_type='stage_gate_override'.",
+  "severity": "HIGH",
+  "recommendation": "Fix before the ceremony arms it. Either (a) drop the override arm from the trigger entirely -- defense-in-depth is strongest when the last line has NO escape hatch, and the app layer already owns the chairman touchpoint; or (b) bound it to a single use by matching on a per-attempt token (e.g. correlation_id) rather than a TTL window. Option (a) is preferred and removes the whole undefined_column dependency from this file."
+ }
+]
+WARNINGS: [
+ {
+  "id": "SEC-M1",
+  "issue": "The `mode` field carries three tokens drawn from two different vocabularies, and the no-credentials dry-run is labelled 'live'. assertOutreachAuthorized() declares a 'live'|'mock' contract where 'live' means AUTHORIZED FOR REAL OUTREACH. publisher/index.js instead emits 'real' to mean ACTUALLY DISPATCHED. Because every authorized:true return from assertOutreachAuthorized() carries mode:'live' and every authorized:false carries mode:'mock', `mode` is fully determined by `authorized` and an allowed-but-mock path DOES NOT EXIST -- so autonomy-gate.js:300's comment ('mode:mock is threaded through the allow path so the caller knows never to invoke a real adapter') and publisher/index.js:124's comment ('mode is authCheck.mode, NOT a hardcoded mock') both describe an unreachable state. The live consequence: the no-credentials dry-run at publisher/index.js:118-131 returns mode:'live' for a send that never happened, and tests/unit/marketing/publisher.test.js:361 now PINS that. The only thing stopping content-pipeline.js / owned-audience-content-loop.js from crediting that dry-run as a real send is that they test `=== 'real'`, a token from the other vocabulary.",
+  "severity": "MEDIUM",
+  "recommendation": "Split the two frames: keep 'live'|'mock' for AUTHORIZATION and introduce a separate, distinctly-named field (e.g. dispatch:'dispatched'|'dry_run'|'refused') for WHAT ACTUALLY HAPPENED. At minimum, stop returning 'live' from the dry-run branch -- a value meaning 'authorized for real outreach' must never label a send that did not occur."
+ },
+ {
+  "id": "SEC-M2",
+  "issue": "The dedup early-return returns mode:'real' BEFORE the outreach gate runs, on a justification that is factually wrong. publisher/index.js:41-53 queries campaign_content by idempotency_key and, on a hit, returns {success:true, mode:'real', deduplicated:true} -- ahead of the checkPublishAuthorization() call at :62. Its comment asserts 'campaign_content is only ever upserted on the real adapter-dispatch success path below'. MEASURED FALSE: lib/marketing/content-generator.js:81-86 also inserts campaign_content rows, at CONTENT-CREATION time, with an idempotency_key and no gate of any kind. The path is not currently exploitable only because the two key formats differ by accident -- publisher uses Math.floor(Date.now()/1000) (10 digits) and content-generator uses Date.now() (13 digits), so they can never collide.",
+  "severity": "MEDIUM",
+  "recommendation": "Move checkPublishAuthorization() ABOVE the dedup check (it is cheap, and a dedup hit must never be treated as implying authorization), and correct the comment to name content-generator.js as the second writer. If anyone ever normalises those two key formats -- they look like they were intended to match -- a merely-GENERATED piece of content would start returning a 'real' publish credit for a below-go-live venture with zero gate evaluation, feeding totalPublished / recordSpend() / status='posted'."
+ },
+ {
+  "id": "SEC-M3",
+  "issue": "The chairman override escape hatch is structurally unusable on the email path, for two independent reasons beyond the already-known missing override_key column, and it burns the one-shot while authorizing nothing. (1) KEY MISMATCH: processStep() passes actorId = enrollment.campaign_id (bare UUID, email-campaigns.js:190) while sendEmail() derives actorId = `campaign:${tags.campaign}` (email-campaigns.js:63) from the tags processStep itself sets at :203 -- two different override_keys for the same logical send. (2) DOUBLE-CONSUME: even with matching keys, assertOutreachAuthorized() forces armed:true, so hasActiveOverride() runs with shouldConsume=true at BOTH stacked gates; processStep's call atomically claims the one-shot, and sendEmail's subsequent lookup finds consumed_at set and refuses. Net effect of a chairman override on the email path: zero sends, one spent override, one spurious increment to countRecentOverrides() / the FR-4 weekly override-rate metric. Direction is fail-safe (refusal), but the documented escape hatch does not work and the metric is polluted.",
+  "severity": "MEDIUM",
+  "recommendation": "Use one override_key vocabulary across both layers, and consume the one-shot at exactly one gate (pass a shouldConsume=false / already-authorized signal from processStep down to sendEmail, or have processStep call sendEmail through an internal path that skips the second claim). Separately: processStep at email-campaigns.js:206 maps a refusal to {action:'failed', error} -- conflating a GATE REFUSAL with a transport failure. sendEmail already returns refused/refusalReason and its only in-repo caller never reads them; surface them as action:'suppressed'."
+ },
+ {
+  "id": "SEC-M4",
+  "issue": "The FR-4 discriminator has a second reader that was not updated. lib/marketing/venture-honesty-audit.js:125-130 selects 'channel_type, decision, outcome, created_at' from venture_channel_publish_ledger and reports audit.sends.total. evaluateGraduation() was correctly taught to exclude execution_mode='mock' rows; the honesty audit -- the instrument whose entire job is reporting whether a venture really contacted real humans -- still cannot tell a mock row from a real one and will count mock sends toward its totals. Forward-looking (no mock rows can exist yet) but asymmetric with the reader that WAS fixed.",
+  "severity": "MEDIUM",
+  "recommendation": "Add execution_mode to the honesty-audit select with the same defensive undefined_column fallback used in evaluateGraduation(), and report mock and live send counts separately rather than as one total."
+ },
+ {
+  "id": "SEC-M5",
+  "issue": "SECURITY DEFINER function sets search_path with public FIRST: `SET search_path = public, pg_catalog` (trigger migration). pg_catalog is normally searched implicitly BEFORE the path, but that rule applies only when pg_catalog is NOT named; naming it explicitly in second position means public-schema objects shadow catalog ones inside a definer-rights function. That is the classic SECURITY DEFINER escalation shape, and this function reads ventures and chairman_decisions and calls now(). Also, no REVOKE EXECUTE ... FROM PUBLIC accompanies the CREATE FUNCTION.",
+  "severity": "MEDIUM",
+  "recommendation": "Change to `SET search_path = pg_catalog, public` (or `SET search_path = ''` with fully-qualified public.ventures / public.chairman_decisions). Note the function does not actually NEED SECURITY DEFINER to be fail-closed: under INVOKER rights an RLS-hidden venture row yields NOT FOUND, which the function already turns into OUTBOUND_GATE_REJECTED. Consider dropping SECURITY DEFINER, or add REVOKE EXECUTE ON FUNCTION ... FROM PUBLIC as cheap hardening (direct-call risk is low for a trigger function, which plpgsql refuses to run outside trigger context)."
+ },
+ {
+  "id": "SEC-L1",
+  "issue": "App and DB predicates diverge on a NULL is_demo. assertOutreachAuthorized() tests `is_demo === true` (so NULL PASSES that arm); the trigger tests `is_demo IS NOT FALSE` (so NULL REJECTS). The application layer -- the primary enforcement point -- is the more permissive of the two. MEASURED: 0 of 171 live ventures have a NULL is_demo (or NULL launch_mode), so this is unexploitable today.",
+  "severity": "LOW",
+  "recommendation": "Align the app arm to the DB's shape (`venture.is_demo !== false`) so the mirrored predicates are genuinely identical, and confirm ventures.is_demo carries a NOT NULL constraint."
+ },
+ {
+  "id": "SEC-L2",
+  "issue": "FR-5 scoped 5 mirror sites (PRD: publisher/index.js, processStep, sendEmail, venture-consent.js, the DB trigger); 4 shipped. lib/marketing/venture-consent.js is unmodified on this branch (only its test file changed) and contains no reference to assertOutreachAuthorized/checkStageGate/launch_mode/is_demo/current_lifecycle_stage. Defensible -- resolveSendPermission() is read-only and performs no send, and the only writer (recordConsentEvent) records INBOUND opt-in/opt-out, which is not outreach -- but it is a scope deviation from the PRD that PLAN should adjudicate rather than inherit silently. Note processStep() calls resolveSendPermission() BEFORE the outreach gate; since that call writes nothing, the PRD AC 'zero consent-event writes' still holds.",
+  "severity": "LOW",
+  "recommendation": "Either wire venture-consent.js or record an explicit PRD amendment stating why a read-only consent resolver needs no outreach gate."
+ },
+ {
+  "id": "SEC-L3",
+  "issue": "The DB trigger gates ledger INSERTs, not sends -- it is weaker than 'last-line defense' implies. In checkPublishAuthorization(), a channel in propose_and_approve state with a pre-existing decision='accepted' row returns allowed:true and performs NO INSERT (autonomy-gate.js:388-390), so the trigger never fires for that publish. Only the autonomous branch and the first propose write rows.",
+  "severity": "LOW",
+  "recommendation": "State the limit plainly in the migration header so the DB layer is not over-credited at LEAD. A true DB-level send gate would have to sit on whatever table records a dispatch (campaign_content / marketing_attribution), not on the approval ledger."
+ },
+ {
+  "id": "SEC-L4",
+  "issue": "Two of six outreach refusal reasons produce no audit trail. checkStageGate() rule (a) (no_venture_id) and rule (c) (is_demo) return BEFORE writeAuditRow(), so assertOutreachAuthorized() refusals with reason NO_VENTURE_ID or IS_DEMO leave zero audit_log evidence. For a gate whose entire purpose is a provable 'no real outreach below go-live' property, two refusal classes are forensically invisible.",
+  "severity": "LOW",
+  "recommendation": "Have assertOutreachAuthorized() write its own audit_log row on every refusal (event_type e.g. 'outreach_gate_check'), independent of checkStageGate's SD/QF-gating instrumentation."
+ },
+ {
+  "id": "SEC-L5",
+  "issue": "Override reachability is narrower than documented. hasActiveOverride() is only consulted inside checkStageGate rule (e), so a chairman override can rescue ONLY a stage/launch_mode block. Refusals for unresolvable venture (rule d), is_demo (rule c), no venture id (rule a) and status!=='active' (evaluated only in assertOutreachAuthorized, after checkStageGate has already returned PASS with reason null) are unoverridable. This is the conservative direction and is not a defect -- but assertOutreachAuthorized()'s docstring says a genuine override 'authorizes regardless of the raw snapshot', which overstates it.",
+  "severity": "INFO",
+  "recommendation": "Correct the docstring to state which refusal classes the override can and cannot clear."
+ }
+]
+RECOMMENDATIONS: [
+ "BLOCKING for the FR-7 chairman apply ceremony: fix SEC-H1 (write execution_mode at both autonomy-gate.js INSERT sites and land that code BEFORE the migration) and SEC-H2 (drop or single-use-bound the trigger override arm). Both artifacts are staged-not-applied, so both are cheap to fix now and expensive after.",
+ "Not blocking for EXEC-TO-PLAN: the shipped runtime posture is fail-closed and correct on the primary safety property. 0 of 171 live ventures satisfy the authorization predicate, both choke points are wired, and 158/158 unit tests pass across the 9 touched suites.",
+ "Re-run the FR-4 dry-run proof with an application-shaped INSERT added so this class of writer/schema coupling defect is caught by the proof rather than by review.",
+ "Treat SEC-M1 (the mode vocabulary collision) as the highest-value non-blocking fix: it is the one finding where a plausible future cleanup silently reopens the laundering vector this SD exists to close."
+]
+CONDITIONS: [
+ "BEFORE the FR-7 chairman apply ceremony for 20260912_venture_channel_publish_ledger_execution_mode.sql: set execution_mode on BOTH venture_channel_publish_ledger INSERT sites in lib/marketing/autonomy-gate.js (:346-357 autonomous, :402-411 propose) and land that code change FIRST. Applying the NOT NULL / no-DEFAULT column against the current writers fails every ledger INSERT with 23502 (SEC-H1).",
+ "BEFORE the FR-7 chairman apply ceremony for 20260912_venture_channel_publish_ledger_outbound_gate_trigger.sql: remove the override arm, or rebind it to a single-use per-attempt token. As written (consumed_at IS NOT NULL AND undo_deadline > now()) one spent override licenses unlimited direct INSERTs for the whole TTL (SEC-H2).",
+ "BEFORE that same trigger apply: change SET search_path = public, pg_catalog to pg_catalog, public (or the empty path with fully-qualified relations) on the SECURITY DEFINER function (SEC-M5).",
+ "Add an application-shaped INSERT (no execution_mode) to 20260912_venture_channel_publish_ledger_execution_mode_dry_run.mjs and re-run the proof, so the dry-run evidence actually covers the failure mode SEC-H1 describes.",
+ "PLAN to adjudicate the FR-5 scope deviation: 4 of the 5 PRD-scoped mirror sites shipped; lib/marketing/venture-consent.js is unwired (SEC-L2). Either wire it or amend the PRD."
+]
+DETAILED_ANALYSIS: null
+
+########## ROW 9b8602a9-76bb-4b2c-b36f-01f4625b720c | verdict: CONDITIONAL_PASS | conf: [33m92[39m | phase: EXEC | cwd: C:\Users\rickf\Projects\_EHG\EHG_Engineer\.worktrees\SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 | repo: C:/Users/rickf/Projects/_EHG/EHG_Engineer
+SUMMARY: Re-verified SEC-H2/M1/M2/M3/M4 against the current code, the live DB and a self-run test suite: all five are genuinely RESOLVED. The SEC-M2 reorder and the SEC-M3 gate removal open no unauthorized-send path; both new failure modes they can produce fail CLOSED. One MEDIUM residual remains on the already-landed SEC-H1 fix (process-lifetime negative cache vs the NOT NULL column), which should be closed before the chairman apply ceremony.
+CRITICAL_ISSUES: []
+WARNINGS: [
+ {
+  "id": "SEC-H1-R",
+  "issue": "SEC-H1 residual: the execution-mode probe's negative cache has NO invalidation path, so the FR-4 migration's deliberate NOT-NULL trap fires against this system's OWN writers across the ceremony. lib/marketing/ledger-execution-mode-probe.js caches executionModeExists=false for the PROCESS LIFETIME once it sees 42703/PGRST204 (no TTL, no reset outside __resetExecutionModeProbeForTests). execution_mode is confirmed ABSENT live today, so any process that performs a ledger write before the FR-7 ceremony pins that cache to false. The FR-4 column is NOT NULL with no default BY DESIGN. Therefore any such process still alive after the chairman applies the migration keeps omitting the column and every subsequent INSERT fails 23502 - i.e. exactly SEC-H1's original symptom (AUTONOMOUS_LEDGER_WRITE_FAILED fail-closed on the autonomous path, 'propose-record write failed' on the propose path), reintroduced through the mirror-image direction the fix did not cover. Freshly started processes are unaffected; the exposure is the ceremony window.",
+  "evidence": "MEASURED transactionally (rolled back): applied the FR-4 UP body in-txn, then issued the probe-degraded payload (autonomy-gate.js INSERT shape minus execution_mode) => 23502 \"null value in column execution_mode violates not-null constraint\"; the stamped variant succeeded. Live PostgREST probe returns 42703 for execution_mode today, confirming the cache pins to false in production now.",
+  "severity": "MEDIUM",
+  "recommendation": "Do NOT weaken the migration (its no-default choice is correct and well-reasoned). Fix on the probe side: invalidate the negative cache on a write error that proves the column now exists - treat 23502 mentioning execution_mode as \"re-probe and retry once\" - and/or give the negative cache a short TTL (e.g. 60s) instead of process-lifetime. Alternatively the ceremony runbook must require restarting marketing-writer processes immediately after apply.",
+  "fail_safe_direction": "FAIL-CLOSED (denies publishes; never authorizes an unauthorized send). Availability/correctness defect, not an outreach bypass."
+ },
+ {
+  "id": "SEC-M2-R",
+  "issue": "SEC-M2 reorder regression (this answers the 'extra ledger rows on a dedup-hit replay' question directly): NO extra rows can be written - UNIQUE(correlation_id) is live and prevents them - but that same constraint converts the replay into a hard fail-closed DENIAL instead. publish() passes correlationId=idempotencyKey; on the autonomous tier checkPublishAuthorization() now runs FIRST and INSERTs a ledger row keyed on that exact correlation_id. A campaign_content dedup HIT requires a prior publish in the SAME wall-clock second (the key embeds Math.floor(Date.now()/1000)), which is precisely the case where the correlation_id already exists => 23505 => AUTONOMOUS_LEDGER_WRITE_FAILED => {success:false, blockedBy:'autonomy-gate'}, where pre-reorder the same call returned {success:true, deduplicated:true}. Fail-closed and narrow, so not a security hole; recorded for accuracy.",
+  "evidence": "pg_constraint: venture_channel_publish_ledger_correlation_id_key = UNIQUE (correlation_id), confirmed live; a duplicate-correlation_id INSERT reproduced 23505 inside a rolled-back transaction.",
+  "severity": "LOW",
+  "recommendation": "Optional: treat 23505 on the autonomous ledger insert as \"this attempt is already recorded\" (re-select the existing row by correlation_id and proceed) rather than as a fail-closed write failure."
+ },
+ {
+  "id": "SEC-M2-N1",
+  "issue": "Premise-accuracy note on the SEC-M2 rationale (the FIX is still correct; the stated exploit path is not reachable as written). The new code comment and the commit message justify the reorder by saying campaign_content is also written ungated by content-generator.js. content-generator.js:82-87 does write it ungated, BUT its key format is ventureId:contentId:platform:Date.now() (MILLISECONDS) while publisher/index.js builds ventureId:contentId:platform:Math.floor(Date.now()/1000) (SECONDS) - the two can never be equal, so a content-generator row can never produce a dedup hit in publish(). Separately this shows publish()'s dedup is near-dead in general: because the key embeds the current second, any retry in a later second misses the dedup and RE-DISPATCHES for real. Auth-before-dedup remains the right order regardless.",
+  "evidence": "lib/marketing/content-generator.js:82-87 vs the idempotencyKey construction in lib/marketing/publisher/index.js.",
+  "severity": "LOW",
+  "recommendation": "Separate ticket: make the idempotency key time-independent (venture:content:platform, or a campaign-scoped nonce) so duplicate REAL dispatches are actually prevented, and align content-generator.js to the same format."
+ },
+ {
+  "id": "SEC-M1-N1",
+  "issue": "Cosmetic consequence of the SEC-M1 rename, verified non-breaking: both callers gate on mode === 'real' (content-pipeline.js:140, owned-audience-content-loop.js:173), so dropping mode from the deny/dry-run paths is correctly falsy and nothing credits a non-send. owned-audience-content-loop.js:174 now renders not_real_mode:undefined where it previously carried the authorization token.",
+  "severity": "INFO",
+  "recommendation": "Surface authMode in that reason string so the operator-facing reason keeps the detail."
+ }
+]
+RECOMMENDATIONS: [
+ "SEC-H2, SEC-M1, SEC-M2, SEC-M3 and SEC-M4 are all independently VERIFIED RESOLVED against the current code - none is cosmetic, none introduces a new variant of its own bug.",
+ "NON-BLOCKING for the build, but SEC-H1-R should be closed (or explicitly handled in the ceremony runbook) BEFORE the FR-7 chairman apply, because the apply itself is the trigger.",
+ "No unauthorized-outreach path was found in this pass: every new failure mode located fails CLOSED."
+]
+CONDITIONS: [
+ "SEC-H1-R (MEDIUM, fail-closed): close the execution-mode probe negative-cache invalidation gap, OR record an explicit ceremony-runbook step restarting every marketing-writer process immediately after the FR-4 migration apply. The apply itself is the trigger, so this must be settled before the FR-7 chairman ceremony, not after.",
+ "SEC-M2-R (LOW, fail-closed) and SEC-M2-N1 (LOW): accept as known, or ticket separately. Neither blocks this build; the idempotency-key time-dependence in SEC-M2-N1 is a pre-existing defect this SD did not introduce."
+]
+DETAILED_ANALYSIS: SEC-H2 RESOLVED: the trigger function contains no chairman_decisions lookup at all (grep over the UP file returns only prose in the header), no SECURITY DEFINER, and SET search_path = pg_catalog, public. The predicate is the pure positive mirror of assertOutreachAuthorized (is_demo=false AND status=active AND stage>=24 AND launch_mode=live), fail-closed on NOT FOUND. I re-ran the dry-run against the live DB myself: PASS, including the new regression control proving a chairman_decisions row for the same venture does NOT bypass the trigger. All rolled back.
+
+SEC-M1 RESOLVED: mode now appears exactly once as an assignment in publisher/index.js - mode:'real' on the post-adapter.publish() return (line 207). The auth-deny path (line 63) and the credential-missing dry-run (line 144) both carry authCheck.mode as authMode. No 'live'/'mock' authorization token can reach the dispatch field on any path.
+
+SEC-M2 RESOLVED: checkPublishAuthorization() is now the first substantive call in publish() (line ~52), ahead of the campaign_content dedup SELECT (line ~68); the dedup early-return is {success:true, postId, deduplicated:true} with no mode claim.
+
+SEC-M3 RESOLVED: assertOutreachAuthorized appears exactly once in lib/marketing/ai/email-campaigns.js - inside sendEmail() (line 67). processStep() no longer calls it, so both the actorId mismatch and the one-shot override double-consume are gone. A refusal maps to {action:"suppressed", reason:"stage_gate", detail} (line 209), distinct from the transport {action:"failed"} (line 211).
+
+SEC-M3 GAP SCAN (requested): between the fresh consent re-read (resolveSendPermission) and the sendEmail() call, processStep() performs ONLY in-memory work - const step = steps[stepIndex] and the A/B html pick. No DB write, no external call, no consequential side effect now runs ungated. The campaign_enrollments advance happens strictly AFTER a successful send, and a gate refusal returns before it. Removing processStep()s own gate call opens no gap; sendEmail() still independently refuses a direct caller that bypasses processStep() entirely.
+
+SEC-M4 RESOLVED: buildHonestyAudit() selects execution_mode and falls back to the pre-existing column list on 42703 (or a message matching /execution_mode/), mirroring evaluateGraduation(). When available it reports live/mock separately with execution_mode_known:true; when absent it reports execution_mode_known:false AND pushes an explicit gap rather than a confident total. The execution_mode !== "mock" counts-as-live rule cannot misreport NULLs, because the FR-4 migration backfills every pre-existing row to live before setting NOT NULL.
+
+PART 2 autonomy_state ordering: no read/write ordering problem exists. checkPublishAuthorization() only READS venture_channel_autonomy; the only writer is evaluateGraduation(), which is not on publish()s path. Moving the auth call earlier changes no autonomy_state sequencing.
+
+PART 2 propose-tier reorder: benign. A dedup hit in the propose_and_approve tier implies a prior successful dispatch, which implies an accepted ledger row exists, so the auth call returns allowed and the dedup return is reached unchanged. A dedup MISS behaves exactly as it did before the reorder.
+
+PART 2 new issues found: SEC-H1-R (MEDIUM, fail-closed, ceremony-window), SEC-M2-R (LOW, fail-closed), SEC-M2-N1 (LOW, premise/idempotency accuracy), SEC-M1-N1 (INFO, message cosmetics). No HIGH or CRITICAL. No path was found by which any of the five fixes permits an unauthorized real send.

@@ -1,0 +1,11 @@
+import dotenv from 'dotenv';
+dotenv.config({ quiet: true });
+import { resolveSubAgentRepo, toCanonicalRepoPath } from '../lib/sub-agents/resolve-repo.js';
+const r = await resolveSubAgentRepo({ subAgentCode: 'VALIDATION', sdId: 'SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001', targetApplication: 'EHG_Engineer' });
+const canon = toCanonicalRepoPath(r.repoPath);
+console.log('raw      :', r.repoPath);
+console.log('canonical:', canon);
+console.log('expected :', 'C:/Users/rickf/Projects/_EHG/EHG_Engineer');
+console.log('COMPLIANT:', canon === 'C:/Users/rickf/Projects/_EHG/EHG_Engineer');
+console.log('cwd      :', process.cwd());
+console.log('cwd_leak :', canon === process.cwd());

@@ -1,109 +1,109 @@
-import { storeSubAgentResults } from '../lib/sub-agent-executor/index.js';
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../lib/sub-agents/resolve-repo.js';
-import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
-const supabase = createSupabaseServiceClient();
-const SD_KEY = 'SD-LEO-INFRA-VENTURE-JOURNEY-UAT-001';
-const SD_UUID = '7b8be04e-1f2b-431c-b33d-4574013a94e5';
-const CODE = 'VALIDATION';
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const SD_ID = '4520716b-0603-46b5-bf7e-19fe4271fe3b';
 
 const results = {
   verdict: 'CONDITIONAL_PASS',
-  confidence: 88,
-  summary:
-    'LEAD-TO-PLAN approved with 3 mandatory PLAN corrections. Premise INDEPENDENTLY VERIFIED (both FR-5 bugs real; dead-UAT premise corroborated: uat_test_runs holds 1 row total). No duplicate SD across full in-flight population (41 non-terminal) or 2792 SDs since 2026-05-01. sd_type=infrastructure CORRECT. BUT FR-0/FR-2 rest on a wrong premise about which code exists: lib/eva/journey-walk-driver.js is a THIN MARKETLENS WRAPPER over the already-generic lib/apa/browser-executor.js (shipped by APA Child C), and it is local-serve-only so it CANNOT execute FR-0 against a deployed URL. Building "generalize the driver" would re-implement shipped APA infrastructure. Also found a 3rd phantom-column bug FR-5 does not name: lib/uat/result-recorder.js writes 11 columns absent from uat_test_runs, so the toolkit FR-2 wires in cannot record a run.',
-  critical_issues: [],
-  recommendations: [
-    'FR-2 RETARGET (highest value): consume lib/apa/browser-executor.js runJourneyWalk(page, persona, STEPS, EXECUTORS, {baseUrl}) directly instead of "generalizing lib/eva/journey-walk-driver.js". Proof it is a wrapper: journey-walk-driver.js:25-28 imports genericExecuteJourneyStep/genericRunJourneyWalk from ../apa/browser-executor.js; :211-213 and :231-233 are pure pass-throughs; its own docstring :220-226 says "Delegates to lib/apa/browser-executor.js generic runJourneyWalk". The generic engine is ALREADY parameterized by (steps[], executors{}) - exactly the shape FR-1 metadata.journey_steps would supply. Corollary: FR-2 deliverable "remove the @wire-check-exempt marker" (journey-walk-driver.js:18-22) becomes MOOT - if FR-2 uses the generic engine, the MarketLens wrapper stays an unwired wrapper and its exemption remains valid.',
-    'FR-0 INFEASIBLE AS WORDED - retarget before EXEC: "run the existing journey walker against https://altifyai.rickfelix2000.workers.dev/" cannot be done with journey-walk-driver.js, which is local-serve-only (MARKETLENS_SERVE_CONFIG port 3001 + startLocalMarketLensServer, :33-40). The deployed-URL path that already exists is lib/apa/live-instance-acquisition.mjs:55 acquireLiveInstance(url) (real Playwright, SSRF-guarded :26-40). FR-0 is therefore achievable with ZERO new library code: acquireLiveInstance(altifyUrl) + browser-executor runJourneyWalk with a hand-declared 5-step executor map. Recommend PLAN re-estimate FR-0 downward accordingly.',
-    'NEW BUG for FR-5 (measured, not in the SD text): the UAT writer half is as dead as the reader half. lib/uat/result-recorder.js:70-84 startSession INSERTs executed_by, commit_sha, build_version, scenario_snapshot, total, passed, failed, skipped, defects_found, quick_fixes_created and :402-406 completeSession UPDATEs quality_gate - ALL 11 are absent from live uat_test_runs (probed individually; each returns "column does not exist"). So result-recorder.js throws on first call and CANNOT record a run. FR-2 states result-recorder "writes uat_test_runs" as settled fact; it does not. Either fold this into FR-5 (same phantom-column defect class as overall_result) or PLAN must add a column-reconciliation FR. Live columns are: total_tests, passed_tests, failed_tests, skipped_tests, pass_rate, status, run_id, suite_id, sd_id, prd_id, environment, browser, device_type, viewport_width/height, started_at, completed_at, duration_ms, triggered_by, trigger_source, machine_info, test_config, created_at, metadata.',
-    'FR-3 COUNT ERROR: scope says "add a SECOND WAIT condition" - prerequisite-check.js ALREADY returns two WAIT verdicts (buildWaitResult at :235 incomplete children, and :263 un-authored planned children). The new one is the THIRD. Cosmetic, but worth fixing in an SD whose thesis is "measure, do not assume". FR-3 should reuse lib/handoff/wait-verdict.js buildWaitResult({score,max_score,wait_reason,issues,warnings,remediation,details}) - already imported at prerequisite-check.js:12, so zero new verdict plumbing.',
-    'FR-1 SCHEMA CORRECTION: wireframe_screens is NOT a table and never was - see tombstone migration database/migrations/20260520_add_surface_columns_to_wireframe_screens.sql:7-12 ("public.wireframe_screens NEVER EXISTED... stored inside venture_artifacts JSONB"). Both wireframe_screens and blueprint_user_journey are artifact_type VALUES on venture_artifacts. Producer: lib/eva/stage-templates/stage-15.js:238; canonical screen normalizer: lib/eva/stage-templates/stage-15-screens.js:47-54 buildWireframeScreensPayload -> {screens:[{screen_id,screen_name,description,deviceType,page_type,surface}],screenCount,ia_sitemap}. A design SSOT already exists and already names UAT as a declared consumer: docs/design/user-journey-artifact-schema.md. FR-1 should conform to that schema rather than invent a journey_steps shape (confirmed: zero occurrences of journey_steps repo-wide today).',
-    'DECLARE THE APA BOUNDARY before PLAN: SD-LEO-INFRA-AUTOMATED-PRODUCT-ASSESSMENT-001 (orchestrator, draft/PLAN_VERIFICATION) is the same problem statement one level up - "the verdict engine scores CLAIMS vs a rubric, never RUNS the app". Children A-D are COMPLETED (A sandbox harness, B assertion library, C browser executor, D persona coverage). Child E (draft/LEAD, feature) is "UI/UX Judgment + FINDINGS GATE ... findings-to-fix routing + behavioral_verdicts + gate" - adjacent to this SD FR-3 (a gate) and FR-4 (findings emission). NOT a duplicate: Child E judges UI/UX QUALITY (Fable-tier rubric), this SD gates journey REACHABILITY (did the deployed journey work at all). But PLAN must state that boundary explicitly, and should read docs/design/apa-automated-product-assessment-design.md (the APA SSOT) so FR-3/FR-4 do not build a second, competing findings-gate.',
-    'FR-4 REUSE: lib/apa/standing-assessment-round.mjs ALREADY re-probes deployed ventures on a schedule - it lists live URLs from venture_deployments (status=routed, :69-97), runs the generic runJourneyWalk with GENERIC_JOURNEY_STEPS (:238-244), persists to apa_standing_assessments (:281-290), and is REGISTERED LIVE in lib/eva/eva-master-scheduler.js:483-488 as round apa_standing. PLAN should decide deliberately whether FR-4 is a new Stage-20 sub-step or an extension of this existing round. The declared emission path does exist as claimed: collectNonRepoFindings at lib/eva/quality-findings/db-sourced-findings.js:256, imported by stage-20-code-quality.js:37; FindingShape contract at lib/eva/quality-findings/finding-shape.js:65-75. Note stage-20 has NO dynamic sub-step registry - new checks are hand-added to the Promise.all array at stage-20-code-quality.js:740-752 plus CHECK_TYPES :224-227 and the IMPLEMENTED/DEFERRED category lists :237-244.',
-    'FR-2 FREEBIE: lib/uat/selector-drift-recovery.js recoverFromDrift is ALREADY composed into lib/apa/browser-executor.js:28 via createResilientPage/withDriftRecovery (:67-111). If FR-2 consumes the generic engine, drift resilience comes for free - one of the five lib/uat modules FR-2 lists is already wired.'
-  ],
+  confidence: 90,
   metadata: {
-    validation_gate: 'GATE 1 - LEAD Pre-Approval',
-    phase_validated: 'LEAD',
-    independent_of_prior_findings: true,
-
-    q1_duplicate_or_conflict: {
-      answer: 'NO duplicate SD. Material ADJACENCY to the APA program requiring an explicit boundary statement.',
-      method: 'Paginated FULL non-terminal population (41 SDs, no cap) + FULL population created >=2026-05-01 (2792 SDs, paginated), keyword-filtered IN MEMORY. First attempt used per-term .limit(60) which measured the cap not the population (results truncated at 2026-01 for an SD created 2026-08) and was discarded and redone.',
-      in_flight_population: 41,
-      recent_population_since_2026_05_01: 2792,
-      exact_duplicate_found: false,
-      adjacent_sds: [
-        { sd: 'SD-LEO-INFRA-AUTOMATED-PRODUCT-ASSESSMENT-001', status: 'draft/PLAN_VERIFICATION', relation: 'Same problem statement one level up (runtime behavioral gate vs claims-only verdict engine). Children A-D COMPLETED = the runtime infra FR-2 proposes to build. Child E (draft/LEAD) owns "Findings Gate" = adjacent to FR-3/FR-4. NOT duplicate (Child E judges UI/UX quality; this SD gates journey reachability) but boundary MUST be declared.' },
-        { sd: 'SD-LEO-INFRA-QUALITY-GATE-TYPE-001', status: 'active/EXEC', relation: 'Shares the "keying a gate by sd_type alone is wrong" theme; different gate (AI quality thresholds vs PLAN-TO-LEAD prerequisite-check). FR-3 independently reaches the same conclusion (key on metadata flag, not sd_type). No file conflict.' },
-        { sd: 'SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001', status: 'completed', relation: 'Authored the 2 existing WAIT conditions FR-3 extends. Extension, not duplication.' },
-        { sd: 'SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001', status: 'completed', relation: 'Generalized the WAIT pattern to 3 more gates; produced lib/handoff/wait-verdict.js buildWaitResult that FR-3 should reuse.' },
-        { sd: 'SD-UAT-* family (GEN/REC/DB/VALID/PLATFORM, Jan 2026)', status: 'completed', relation: 'BUILT the lib/uat toolkit FR-2 wires in. Confirms the leverage-existing framing; also the source of the phantom-column drift found below.' },
-        { sd: 'SD-LEO-INFRA-STAGE-QUALITY-ANALYZER-001 (+FR-B/FR-E)', status: 'completed', relation: 'Built the collectNonRepoFindings/FindingShape emission path FR-4 declares it will reuse. Reuse confirmed available.' }
-      ]
+    review_type: 'PLAN-phase VERIFY: independent PRD-fidelity check of FR-1..FR-7 against the shipped code, plus independent re-confirmation that the SEC-H1/H1-R/H2/M1/M2/M3/M4/M5 fixes described in sub_agent_execution_results 3ed447ec + 9b8602a9 and in the PRD correction addenda match current code.',
+    prd_id: 'PRD-SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001',
+    branch: 'feat/SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001',
+    head_commit: '8aba9146aef',
+    prior_security_rows: ['3ed447ec-de8c-4798-9fdc-5a0c814623a5 (EXEC, CONDITIONAL_PASS 90)', '9b8602a9-76bb-4b2c-b36f-01f4625b720c (EXEC, CONDITIONAL_PASS 92)'],
+    test_evidence: 'SELF-RUN (not trusted from any handoff narrative): npx vitest run tests/unit/governance tests/unit/marketing tests/unit/email-campaigns-db.test.js lib/creative/asset-view-gate.test.js tests/integration/marketlens-owned-audience-loop.test.js => 134 files passed / 2 skipped, 2062 tests passed / 20 skipped, exit 0.',
+    fr_fidelity: {
+      'FR-1': 'PARTIAL BY DESIGN. leo_feature_flags row STAGE_GATE_PREDICATE_ARMED confirmed present (created 2026-09-12T15:47:29Z) with is_enabled=false. AC1 met; AC3 (after arming the probe returns true) is unsatisfiable until the FR-7 ceremony flips it. Correct sequencing, but FR-1 is STAGED, not complete.',
+      'FR-2': 'DELIVERED AS DESCRIBED. lib/governance/stage-gate-predicate.js:391 assertOutreachAuthorized() is a genuine POSITIVE predicate: it forces armed:true unconditionally, and evaluates is_demo/status/current_lifecycle_stage/launch_mode off checkStageGate()s new venture snapshot field -- it never reads result.blocked or result.verdict. Verified by reading the function body, not the docstring. The complementary launch_mode AND-condition on checkStageGate rule (e) is also present (~line 310).',
+      'FR-3': 'DELIVERED, AND the AC the PRD still marks STILL PENDING is in fact now SHIPPED. autonomy-gate.js:326 calls assertOutreachAuthorized() before any autonomy_state/ledger logic. publisher/index.js: auth-deny returns authMode (line 63), credential-missing dry-run returns authMode and deliberately OMITS mode (~line 144), real adapter-dispatch returns mode=real (~line 207) -- exactly the SEC-M1 split. SEC-M2 confirmed: checkPublishAuthorization() now precedes the campaign_content dedup SELECT and the dedup early-return carries no mode claim. Consumers verified: content-pipeline.js:140 gates totalPublished on pubResult.success && pubResult.mode === real; owned-audience-content-loop.js:173 gates status=posted on !result?.success || result.mode !== real.',
+      'FR-4': 'CODE DELIVERED; DB HALF STAGED-NOT-APPLIED. Verified live: venture_channel_publish_ledger.execution_mode does NOT exist (42703). Migration present with NOT NULL / no DEFAULT / CHECK IN (live,mock) and a backfill step. SEC-H1 fix confirmed at BOTH writer sites (autonomy-gate.js:376 autonomous, :431 propose) via insertLedgerRowSelfHealing(..., outreach.mode) -- reachable only after authorized===true, so the stamp is always live there. SEC-H1-R self-heal confirmed: isExecutionModeNotNullViolation() (23502 + /execution_mode/) triggers invalidateExecutionModeProbeCache() then a single re-probed retry, guarded by Object.keys(stamp).length === 0 so an unrelated insert failure is never retried. evaluateGraduation() (:509-534) selects execution_mode with a 42703 fallback and breaks the streak on the first execution_mode===mock row. SEC-M4 confirmed: venture-honesty-audit.js:136-170 selects execution_mode with the same fallback and reports sends.live / sends.mock / execution_mode_known, with an explicit gap entry when absent; renderHonestyAudit() surfaces the split (:218-221).',
+      'FR-5': '4 OF 5 MIRROR SITES SHIPPED. sendEmail() now hard-requires ventureId (throws) and independently calls assertOutreachAuthorized() before Resend (email-campaigns.js:63-76). SEC-M3 confirmed: assertOutreachAuthorized appears EXACTLY ONCE in that file (inside sendEmail) -- processStep()s duplicate call is gone, killing both the actorId key mismatch and the one-shot override double-consume; processStep now returns action=suppressed/reason=stage_gate on a refusal, distinct from action=failed. SEC-H2 confirmed FIXED in the trigger SQL: the override arm is GONE (no consumed_at reference in the predicate), SECURITY DEFINER removed, SET search_path = pg_catalog, public (SEC-M5). GAPS: (a) lib/marketing/venture-consent.js is genuinely UNMODIFIED on this branch (absent from git diff --stat main...HEAD; 0 matches for assertOutreachAuthorized/checkStageGate/launch_mode/is_demo) so AC2 is UNMET; (b) the DB trigger is STAGED-NOT-APPLIED, so AC3 is not true of the live system yet.',
+      'FR-6': 'DELIVERED, with a substantively STRONGER discriminator than the stale AC text. tests/unit/governance/stage-gate-predicate-paired-controls.test.js:158-215 adds 5 controls: AltifyAI-shape (S23/simulated) REFUSED, ApexNiche-shape (S21/simulated) REFUSED, S25/live POSITIVE, is_demo=true scope control REFUSED, and a DISCRIMINATOR control asserting checkStageGate().blocked===true AND outreach.authorized===false together -- it fails on purpose if a future refactor swaps the discriminator back. Zero-side-effect coverage for AC1 exists but is SPREAD ACROSS suites rather than consolidated: email-campaigns-db.test.js:336-337 proves a direct sendEmail() bypass is refused with sendSpy not called; publisher.test.js asserts blockedBy=autonomy-gate.',
+      'FR-7': 'GOVERNANCE ARTIFACTS CONFIRMED PRESENT. AC2: SD-LEO-INFRA-DEMAND-ENGINE-PART-001 exists in strategic_directives_v2 (status=draft, created 2026-09-12T15:31:39Z), and its body cites SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 as prerequisite AND the execution_mode/mock discriminator as a dependency -- both halves of the AC verified by string match on the row, not on the narrative. AC3: SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E (status=deferred) release condition now names BOTH FAIL-001 (Part A) and PART-001 (Part B, dependent on Part A). AC1 (the HIGH_CONSEQUENCE flag waiver) is not yet due -- both flags remain is_enabled=true and STAGE_GATE_PREDICATE_ARMED is still false, so the arming flip it gates has not executed.'
     },
-
-    q2_sd_type_correct: {
-      answer: 'YES - infrastructure is correct.',
-      rationale: 'All touched surfaces are harness/engine code with no customer-facing UI: scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js (gate), scripts/hooks/stop-subagent-enforcement/type-aware-validator.js (hook), lib/eva/*, lib/uat/*, lib/apa/*. target_application=EHG_Engineer. Not an orchestrator (no children, no parent_sd_id).',
-      dogfooding_note: 'Transparency flag, NOT an objection: infrastructure is in EXEMPT_TYPES (lib/utils/sd-type-validation.js:334), so this SD - which repairs dead UAT enforcement - is itself UAT-exempt. This is self-consistent with its own declared OUT OF SCOPE ("a per-SD UAT gate on infrastructure SDs is type-exempt by design") and is defensible: it ships gate/hook code, not a clickable surface. FR-5 deliberately fixture-proves that infrastructure REMAINS exempt, so the exemption is an asserted invariant rather than an unexamined convenience.',
-      decomposition_note: 'sd_type is correct, but 5 FRs spanning a falsifier run, a metadata emitter, a library rewire, a handoff gate, a stage sub-step and a hook bugfix will not fit the <=100 LOC PR target. PLAN should consider decomposition or a documented multi-PR sequence. This is a sizing observation, not a type objection.'
-    },
-
-    q3_reuse_opportunities: {
-      answer: 'YES - substantial. Two of five FRs should shrink materially.',
-      items: [
-        'lib/apa/browser-executor.js - ALREADY-GENERIC runJourneyWalk/executeJourneyStep parameterized by (steps[], executors{}). Supersedes FR-2 "generalize journey-walk-driver.js" (that file is a pass-through wrapper: :25-28, :211-213, :231-233).',
-        'lib/apa/live-instance-acquisition.mjs:55 acquireLiveInstance(url) - deployed-URL Playwright, SSRF-guarded. This is the FR-0 path; journey-walk-driver.js physically cannot reach a deployed URL.',
-        'lib/apa/standing-assessment-round.mjs - already walks live deployed ventures on a registered scheduler round (eva-master-scheduler.js:483-488), persists to apa_standing_assessments. Candidate host for FR-4.',
-        'lib/handoff/wait-verdict.js buildWaitResult - already imported at the exact file FR-3 edits (prerequisite-check.js:12, used :235 and :263). Zero new verdict plumbing.',
-        'lib/eva/quality-findings/db-sourced-findings.js:256 collectNonRepoFindings + finding-shape.js:65-75 FindingShape - FR-4 emission path exists as claimed.',
-        'lib/uat/selector-drift-recovery.js recoverFromDrift - ALREADY composed into browser-executor.js:28; free if FR-2 uses the generic engine.',
-        'uat_test_runs.pass_rate + .status - the live replacements for the phantom overall_result in FR-5.',
-        'venture_artifacts artifact_type=wireframe_screens / blueprint_user_journey + stage-15-screens.js:47-54 buildWireframeScreensPayload + docs/design/user-journey-artifact-schema.md - FR-1 source data and an existing schema SSOT that already names UAT as a consumer.'
-      ]
-    },
-
-    q4_blocking_concerns: {
-      answer: 'NONE BLOCKING for LEAD-TO-PLAN. 3 mandatory PLAN-phase corrections.',
-      rationale: 'LEAD-TO-PLAN approves strategic intent. The intent, the measured premise and the chairman ruling are sound and independently re-verified here. The defects found are in HOW two FRs propose to build, which is exactly what PLAN exists to resolve - so they are carried as binding corrections rather than a rejection.',
-      mandatory_plan_corrections: [
-        'C1 - Retarget FR-2 onto lib/apa/browser-executor.js (do not re-generalize a wrapper over an already-generic engine).',
-        'C2 - Retarget FR-0 onto acquireLiveInstance (journey-walk-driver.js cannot reach a deployed URL at all).',
-        'C3 - Fold the 11 phantom columns in lib/uat/result-recorder.js into FR-5, or add a reconciliation FR - otherwise FR-2 wires in a recorder that throws.'
-      ],
-      non_blocking_corrections: [
-        'FR-3 says "SECOND" WAIT condition; it is the THIRD (prerequisite-check.js:235, :263 already WAIT).',
-        'FR-1 must read venture_artifacts, not a wireframe_screens table (never existed).',
-        'Declare the APA Child E boundary so FR-3/FR-4 do not build a competing findings-gate.',
-        'FR-2 deliverable "remove @wire-check-exempt" likely becomes moot under C1.'
-      ]
-    },
-
-    premise_verification: {
-      fr5_bug1_phantom_column: 'CONFIRMED. type-aware-validator.js:37 selects "id, status, overall_result"; :43 reads r.overall_result. Probed live: uat_test_runs.overall_result does not exist.',
-      fr5_bug2_dead_comparison: 'CONFIRMED. type-aware-validator.js:28 calls getUATRequirement(sd.sd_type) with NO options; lib/utils/sd-type-validation.js:326+ returns an OBJECT ({status,uatRequired,uatExempt,reason,acceptsAutomatedEvidence}) unless options.returnLegacy is set. So :34 uatRequirement === "REQUIRED" is always false. The live-correct read is uatRequirement.status === "REQUIRED" or .uatRequired.',
-      fr3_exempt_types_premise: 'CONFIRMED. lib/utils/sd-type-validation.js:334 EXEMPT_TYPES includes "orchestrator" (and "infrastructure"), so a type-keyed gate would exempt parent orchestrators and gate nothing. FR-3 keying on a metadata flag instead is correct.',
-      dead_uat_enforcement: 'INDEPENDENTLY CORROBORATED. uat_test_runs contains exactly 1 row in total across the whole table.',
-      journey_steps_greenfield: 'CONFIRMED. Zero occurrences of journey_steps repo-wide (only an unrelated uppercase JOURNEY_STEPS constant of MarketLens step names at lib/eva/persona-generator.js:24).'
-    },
-
-    evidence_method: 'Independent re-derivation. Did not rely on strategic_directives_v2.metadata.testing_agent_lead_findings or the prior Explore pass; every claim above was re-measured against the live DB (column probes, full-population SD sweeps) or cited to file:line read in this worktree.'
+    security_fix_reconfirmation: 'INDEPENDENTLY RE-READ, not taken on narrative: SEC-H1 (both insert sites stamp), SEC-H1-R (cache invalidation + single guarded retry), SEC-H2 (override arm removed from trigger), SEC-M1 (mode/authMode vocabulary split), SEC-M2 (auth-before-dedup, no mode on dedup return), SEC-M3 (single email chokepoint + suppressed/failed split), SEC-M4 (honesty-audit live/mock split), SEC-M5 (no SECURITY DEFINER, pg_catalog-first search_path) -- ALL 8 match the current code. Unfixed and correctly left as accepted LOW/INFO: SEC-L1 (app is_demo === true vs trigger is_demo IS NOT FALSE -- the app is the more permissive on NULL; 0/171 live ventures have NULL is_demo), SEC-L4 (NO_VENTURE_ID and IS_DEMO refusals still return before writeAuditRow, so two refusal classes leave no audit trail), SEC-L5 (the assertOutreachAuthorized docstring still says an override authorizes regardless of the raw snapshot, which overstates its real reach -- it can only clear a rule-(e) stage/launch_mode block).',
+    duplicate_check: 'No duplicate implementation found. assertOutreachAuthorized() is a genuinely new symbol (single definition at stage-gate-predicate.js:391); the pre-existing checkStageGate/shouldEnforceBlock pair is retained with unchanged SD/QF-gating semantics rather than forked or reimplemented, and the new predicate reuses checkStageGates single ventures query via its additive venture snapshot field instead of issuing a second read.'
   },
-  execution_time_ms: 0
+  critical_issues: [],
+  warnings: [
+    {
+      id: 'VAL-1',
+      severity: 'MEDIUM',
+      issue: 'FR-5 ships 4 of the 5 mirror sites its own requirement line enumerates. lib/marketing/venture-consent.js is unmodified (verified against git diff --stat main...HEAD and a zero-match grep for assertOutreachAuthorized/checkStageGate/launch_mode/is_demo), so acceptance criterion "venture-consent.js resolveSendPermission() denies for a below-go-live venture" is UNMET. The FR description argues the omission is correct; the requirement line and the AC were never amended to agree with it, so the PRD is internally self-contradictory on its own face. SECURITY raised this as SEC-L2 and explicitly deferred it to PLAN to adjudicate rather than inherit silently.',
+      evidence: 'git diff --stat main...HEAD lists tests/unit/marketing/venture-consent.test.js but NOT lib/marketing/venture-consent.js. grep -c for the four gating tokens in lib/marketing/venture-consent.js returns 0.',
+      recommendation: 'ADJUDICATED BY PLAN: ACCEPT the deviation on its merits -- resolveSendPermission() performs no send and writes nothing (recordConsentEvent records INBOUND opt-in/opt-out, which is not outreach), and its only caller processStep() routes the actual send through sendEmail()s independent gate, so the PRD AC "zero consent-event writes" still holds. Amend the FR-5 requirement line from 5 mirror sites to 4 and mark AC2 as withdrawn-with-rationale, so LEAD-FINAL is not asked to approve a requirement whose own AC the code does not meet.'
+    },
+    {
+      id: 'VAL-2',
+      severity: 'MEDIUM',
+      issue: 'FR-5 AC4 -- "sovereign-alert.js remains ungated; a test documents this as an intentional exclusion, not an oversight" -- is UNMET. No test written by this SD documents that exclusion. The only in-repo mention is tests/unit/outbound-sink-conformance.test.js:89/156, which pre-dates this SD and exempts sovereign-alert.js for an unrelated reason (sends via raw fetch to api.resend.com and imports nothing; structurally invisible to import-graph traversal). An exclusion justified for import-graph reasons is not the same artifact as an exclusion justified for go-live-gate reasons, and a future reader reconciling the two will not find the second one.',
+      evidence: 'grep -rn "sovereign" across tests/ lib/governance/ lib/marketing/ returns only the two pre-existing outbound-sink-conformance.test.js lines; neither references the stage gate, go-live, or this SD.',
+      recommendation: 'Add one assertion (or a named skip carrying a rationale string citing this SD) to the FR-6 control file recording that sovereign-alert.js is deliberately outside the outreach gate because it is chairman/operator emergency alerting, not customer outreach. Cheap, and it is the difference between a documented exclusion and an undocumented one.'
+    },
+    {
+      id: 'VAL-3',
+      severity: 'MEDIUM',
+      issue: 'Three acceptance criteria are STALE relative to the shipped-and-corrected design, so reading the AC list alone gives a false fidelity verdict in both directions. (1) FR-3 AC3 still says the credential-dry-run path returns mode:authCheck.mode (propagated, not hardcoded) -- the SEC-M1 fix deliberately does the OPPOSITE (omits mode, carries authMode), so the code correctly CONTRADICTS this AC. (2) FR-3 AC4 still carries the STILL PENDING marker although both consumers now gate on mode===real. (3) FR-6 AC2 still says the negative test must assert shouldEnforceBlock()===true, while the shipped tests assert assertOutreachAuthorized().authorized per the amended requirement line -- and the AC as written is no longer even satisfiable through the intended path, since shouldEnforceBlock() reads result.armed, which tracks the STAGE_GATE_PREDICATE_ARMED flag that FR-1 deliberately leaves false.',
+      evidence: 'PRD functional_requirements read directly from product_requirements_v2; compared against publisher/index.js:~144, content-pipeline.js:140, owned-audience-content-loop.js:173, and stage-gate-predicate-paired-controls.test.js:158-215.',
+      recommendation: 'Amend the three AC strings to match the corrections already written into the description fields before LEAD-FINAL. The descriptions are correct and well-reasoned; only the AC list lags, and the AC list is what a gate reads.'
+    },
+    {
+      id: 'VAL-4',
+      severity: 'MEDIUM',
+      issue: 'Two acceptance criteria assert properties of the LIVE system that are true only of staged SQL. FR-4 AC2 (structurally impossible for a dry-run/mock send to be recorded as shipped_clean) and FR-5 AC3 (a DB trigger on the outbound ledger rejects inserts independent of application-layer gating) both depend on chairman-gated migrations that are confirmed NOT APPLIED. Today the enforcement is purely application-layer; the structural, DB-independent guarantee does not exist yet.',
+      evidence: 'Live PostgREST probe: venture_channel_publish_ledger.execution_mode => 42703 column does not exist. Both migrations sit unapplied under database/chairman-gated/.',
+      recommendation: 'Do not let LEAD-FINAL credit FR-4 AC2 or FR-5 AC3 as met on the strength of the staged files. Either gate SD completion on the chairman apply ceremony, or restate both ACs as migration authored / dry-run proven / apply deferred to the FR-7 ceremony, so the completion record does not over-claim a DB-level guarantee the database does not have.'
+    },
+    {
+      id: 'VAL-5',
+      severity: 'LOW',
+      issue: 'FR-1 is staged rather than complete and should not be reported as delivered without that qualifier: the flag row exists but is_enabled=false, so AC3 (after arming, the same probe returns true) cannot be evidenced. This is the correct sequencing per FR-7, not a defect -- but FR-1 and FR-7 AC1 are now a single coupled obligation that survives this SDs completion, and the shipped enforcement path deliberately does not depend on the flag (assertOutreachAuthorized forces armed:true), which means arming it changes checkStageGate call sites, NOT the outreach gate this SD built.',
+      evidence: 'leo_feature_flags: STAGE_GATE_PREDICATE_ARMED is_enabled=false; HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED and LEO_HIGH_CONSEQUENCE_GATES_ENABLED both still is_enabled=true with the atomic-graduation obligation undischarged.',
+      recommendation: 'State plainly at LEAD-FINAL that the outreach gate is LIVE today independent of the flag, and that the flag flip is a separate, still-owed obligation carrying FR-7 AC1s waiver requirement -- otherwise a later reader will assume an unarmed flag means an unenforced gate.'
+    }
+  ],
+  recommendations: [
+    'PRD FIDELITY: all seven FRs are genuinely implemented as their (amended) description fields describe. Every claim in the handoff summary was verified against the code independently; none was accepted on narrative. No FR was found to be fabricated, stubbed, or wired to a dead call site.',
+    'The single substantive scope deviation is FR-5s venture-consent.js mirror site (VAL-1). PLAN adjudicates it ACCEPTED on the merits, conditional on amending the requirement/AC text so the PRD stops asserting a 5th site that does not exist.',
+    'All 8 SECURITY-identified defects (SEC-H1, H1-R, H2, M1, M2, M3, M4, M5) were re-read in the current code and every fix matches its description. The remaining SEC-L1/L4/L5 items are correctly accepted as non-blocking LOW/INFO.',
+    'Highest-value cheap fix before LEAD-FINAL: the three stale ACs (VAL-3). A gate reads the AC list, not the description addenda, so a correct implementation currently reads as an AC violation on FR-3 AC3 and as incomplete on FR-3 AC4.'
+  ],
+  detailed_analysis: [
+    'METHOD: read all 7 FR description fields in full from product_requirements_v2; read the two SECURITY evidence rows in full; then verified each claim against the working tree by reading the implementing code directly (not by grepping for the claims own keywords), probed the live DB for the two chairman-gated schema objects, and self-ran the full touched-suite regression. Where a description asserted a behavior, the assertion was checked at the code path that would actually execute, not at the comment describing it.',
+    'TEST STATE (self-run, exit 0): 134 files passed / 2 skipped, 2062 tests passed / 20 skipped. Matches the 2062 figure in the FR-4 addendum. The 2 skipped files and 20 skipped tests are the db-tier runtime skip (no designated non-production target), which is pre-existing environment policy and unrelated to this SD.',
+    'THE CORE SAFETY PROPERTY HOLDS AND IS GENUINELY NEW: before this SD, the only outreach gating was checkStageGate() plus shouldEnforceBlock(), and shouldEnforceBlock() returns !!(result.armed && result.blocked) with the arming flag absent -- inert at every call site. assertOutreachAuthorized() forces armed:true unconditionally, so the new gate is live TODAY, with the flag still false. That is the substantive delivery of this SD, and it is real.',
+    'INDEPENDENT NEGATIVE CHECK ON FR-2: I specifically verified that assertOutreachAuthorized() does not read result.blocked or result.verdict anywhere -- it reads only result.reason (for the chairman_override branch) and result.venture. This matters because reading .blocked would reintroduce checkStageGates OUT_OF_SCOPE pass-through for is_demo and for a null venture, the exact inversion FR-2 exists to correct. The FR-6 DISCRIMINATOR control pins this against future refactors.',
+    'RESIDUAL RISK CONCENTRATION: every unmet AC (VAL-1 through VAL-4) sits either in PRD prose or in the two unapplied migrations. None sits in the running enforcement path. The application-layer gate is fail-closed on all six refusal reasons, and 0 of 171 live ventures satisfy the positive predicate, so there is no window in which this build permits a real send that the prior build refused.'
+  ].join('\n\n'),
+  summary: 'PLAN-phase PRD-fidelity VERIFY: all 7 FRs are genuinely implemented as their amended descriptions state, verified by reading the executing code path rather than the handoff narrative, with a self-run 2062-test green suite. All 8 SECURITY fixes (SEC-H1/H1-R/H2/M1/M2/M3/M4/M5) match the current code. CONDITIONAL_PASS on four documentation/scope defects, none of which sits in the running enforcement path: FR-5 ships 4 of its 5 enumerated mirror sites (venture-consent.js genuinely unwired -- accepted on the merits, PRD text must be amended), FR-5 AC4s sovereign-alert exclusion test does not exist, three ACs (FR-3 AC3/AC4, FR-6 AC2) are stale and now contradict the correct shipped code, and two ACs (FR-4 AC2, FR-5 AC3) assert live-system guarantees that depend on chairman-gated migrations confirmed unapplied.'
 };
 
 const resolution = await resolveSubAgentRepo({
-  sdId: SD_UUID,
-  targetApplication: 'EHG_Engineer',
-  subAgentCode: CODE,
-  supabase,
+  sdId: SD_ID, targetApplication: 'EHG_Engineer', subAgentCode: 'VALIDATION',
+  probeExistsRelative: 'lib/governance/stage-gate-predicate.js', supabase: sb
 });
 applySubAgentRepoVerdict(results, resolution);
 
-const stored = await storeSubAgentResults(CODE, SD_UUID, { code: CODE }, results, {
-  sdKey: SD_KEY,
-  phase: 'LEAD',
-});
-console.log('\nSTORED OK. id=', stored?.id || JSON.stringify(stored).slice(0, 300));
+const { data, error } = await sb.from('sub_agent_execution_results').insert({
+  sd_id: SD_ID, sub_agent_code: 'VALIDATION', sub_agent_name: 'Principal Systems Analyst',
+  phase: 'PLAN_VERIFICATION', verdict: results.verdict, confidence: results.confidence,
+  critical_issues: results.critical_issues, warnings: results.warnings,
+  recommendations: results.recommendations, detailed_analysis: results.detailed_analysis,
+  summary: results.summary, metadata: results.metadata,
+  conditions: [
+    'VAL-1 (MEDIUM): amend the FR-5 requirement line from 5 mirror sites to 4 and mark AC2 (venture-consent.js) withdrawn-with-rationale. PLAN adjudicates the deviation ACCEPTED on the merits; the condition is on the PRD text, not the code.',
+    'VAL-3 (MEDIUM): correct the three stale acceptance criteria (FR-3 AC3 now contradicted by the SEC-M1 mode/authMode split; FR-3 AC4 still marked STILL PENDING though both consumers gate on mode===real; FR-6 AC2 still naming shouldEnforceBlock, which the deliberately-false arming flag makes unsatisfiable). A gate reads the AC list, not the description addenda.',
+    'VAL-4 (MEDIUM): do not credit FR-4 AC2 or FR-5 AC3 as met at LEAD-FINAL on the strength of staged SQL -- execution_mode is confirmed absent live (42703) and the outbound-gate trigger is unapplied. Either gate completion on the chairman apply ceremony or restate both ACs as apply-deferred.',
+    'VAL-2 (MEDIUM, cheap): add the missing sovereign-alert.js intentional-exclusion assertion to the FR-6 control file; the only existing mention exempts it for an unrelated import-graph reason predating this SD.'
+  ],
+  justification: 'CONDITIONAL rather than PASS solely because four acceptance criteria are unmet or stale and one enumerated mirror site was not built -- all four defects sit in PRD prose or in chairman-gated migrations that are confirmed unapplied, and none sits in the running enforcement path. On the substance the SD delivers: assertOutreachAuthorized() is a genuinely new, live, fail-closed positive predicate that does not depend on the still-false arming flag; both publish consumers gate on mode===real; the email path has a single correct chokepoint; and all 8 SECURITY findings were independently re-read in the current code with every fix matching its description. Verdict is based on reading the executing code path and a self-run 2062-test suite, not on the EXEC-TO-PLAN narrative.',
+  executed_from_cwd: process.cwd(), source: 'validation-agent-subagent'
+}).select('id, verdict, confidence, phase, created_at').single();
+
+if (error) { console.error('INSERT FAILED:', error.message); process.exit(1); }
+console.log('EVIDENCE ROW:', JSON.stringify(data, null, 1));
+console.log('metadata.repo_path =', results.metadata.repo_path, '| repo_resolved =', results.metadata.repo_resolved, '| probe_exists =', results.metadata.probe_exists);
+console.log('executed_from_cwd =', results.metadata.executed_from_cwd);

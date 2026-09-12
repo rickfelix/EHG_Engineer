@@ -1,0 +1,94 @@
+COLS: id, sd_id, sub_agent_code, sub_agent_name, verdict, confidence, critical_issues, warnings, recommendations, detailed_analysis, execution_time, metadata, created_at, updated_at, risk_assessment_id, validation_mode, justification, conditions, retro_contribution, invocation_id, summary, raw_output, source, phase, executed_from_cwd
+
+
+########## ROW 3ed447ec-de8c-4798-9fdc-5a0c814623a5 | agent: SECURITY | verdict: CONDITIONAL_PASS | phase: EXEC | created: 2026-09-12T17:36:08.188635+00:00
+--- results/findings ---
+null
+--- metadata ---
+{
+  "branch": "feat/SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001",
+  "repo_path": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+  "review_type": "EXEC-phase SECURITY review, pre EXEC-TO-PLAN handoff",
+  "probe_exists": true,
+  "repo_resolved": true,
+  "test_evidence": "158/158 passing across 9 suites: tests/unit/governance/stage-gate-predicate.test.js, stage-gate-predicate-paired-controls.test.js, tests/unit/marketing/{autonomy-gate,publisher,honesty-invariants,content-pipeline-budget,owned-audience-content-loop,venture-consent}.test.js, tests/unit/email-campaigns-db.test.js. Negative coverage confirmed present for the launch_mode=simulated refusal (autonomy-gate.test.js:340) and for the is_demo refusal (:358).",
+  "files_reviewed": [
+    "lib/governance/stage-gate-predicate.js",
+    "lib/marketing/autonomy-gate.js",
+    "lib/marketing/publisher/index.js",
+    "lib/marketing/content-pipeline.js",
+    "lib/marketing/owned-audience-content-loop.js",
+    "lib/marketing/ai/email-campaigns.js",
+    "lib/marketing/content-generator.js (bypass-surface trace)",
+    "lib/marketing/venture-honesty-audit.js (discriminator-reader trace)",
+    "lib/marketing/venture-consent.js (FR-5 scope check)",
+    "lib/fleet/browser-actuation-guards.js (choke-point delegate)",
+    "lib/support/intake-pipeline.js (choke-point delegate)",
+    "scripts/canary/run-adapter-liveness-probe.mjs (publish() caller)",
+    "database/chairman-gated/20260912_venture_channel_publish_ledger_execution_mode.sql (+_DOWN, +_dry_run.mjs)",
+    "database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger.sql (+_DOWN)"
+  ],
+  "live_db_probes": "ventures (171 rows, launch_mode/is_demo distribution), venture_channel_publish_ledger.execution_mode (absent, 42703), chairman_decisions.override_key (absent, 42703). Read-only; no writes performed by this review outside the evidence row itself.",
+  "registry_source": "db",
+  "commits_reviewed": 7,
+  "executed_from_cwd": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001",
+  "verified_user_claims": {
+    "claim_b_zero_live_ventures": "CONFIRMED independently. 171 ventures, launch_mode distribution {simulated: 171}, 0 with is_demo NULL, 0 with launch_mode NULL. App predicate authorizes 0; trigger predicate authorizes 0. Fail-closed posture, not a live gap. Characterization is accurate.",
+    "claim_a_override_key_dead_by_construction": "CONFIRMED independently. Live probe of chairman_decisions.override_key returns 42703 undefined_column. Both the JS path (hasActiveOverride catches the error and returns false) and the SQL path (EXCEPTION WHEN undefined_column OR undefined_table => v_has_override := FALSE) fail SAFE toward no-override. Characterization is accurate. CAVEAT: see SEC-H2 -- the SQL override arm, once override_key lands, does not fail safe in the same DIRECTION as the JS arm."
+  },
+  "bypass_surface_traced": "Enumerated every reachable path to a real external send. adapter.publish(): XAdapter/BlueskyAdapter are constructed in exactly one place (publisher/index.js:154) -- no other instantiation site repo-wide; publish() has 3 importers (content-pipeline.js, marketing/index.js re-export, scripts/canary/run-adapter-liveness-probe.mjs), all of which traverse checkPublishAuthorization(). Resend: lib/marketing/ai/email-campaigns.js sendViaResend() is reachable only from sendEmail(), which now requires ventureId and gates independently. lib/notifications/resend-adapter.js is a SEPARATE, chairman/operator-facing transport (fleet alerts, SMS bridge, canary) with no customer-outreach caller in lib/marketing -- correctly out of this gate scope. No ungated path to a real external recipient was found.",
+  "fail_safe_direction_analysis": "Asked specifically whether the undefined_column defaults are safe in EVERY direction. Three were checked. (1) hasActiveOverride undefined_column => false => no override => MORE restrictive: SAFE. (2) trigger EXCEPTION undefined_column => v_has_override := FALSE => rejection stands => MORE restrictive: SAFE. (3) evaluateGraduation undefined_column => executionModeAvailable=false => mock rows are NOT excluded from the graduation streak => LESS restrictive: this fallback is fail-OPEN, and it is the branch running in production today. Currently inert (no row can carry execution_mode, and recordPublishOutcome() has zero production callers so no row can leave outcome=unknown), but the direction is worth stating rather than assuming. The in-loop break on a mock row (rather than continue) is the correct conservative choice -- it truncates the streak instead of letting older real rows count past a mock one.",
+  "privilege_escalation_via_discriminator": "No escalation vector found in the shipped code: nothing writes execution_mode, so the discriminator cannot currently be set adversarially, and the graduation reader treats an unset/absent value as non-mock only in the fallback branch described above. The residual risks are SEC-M4 (a second discriminator reader that was never taught the column) and SEC-H1 (the NOT NULL column with no writer). Post-migration, the NOT NULL + CHECK(live|mock) pair with no DEFAULT is the right shape and closes the silent-live-minting vector the header describes."
+}
+
+
+########## ROW 9b8602a9-76bb-4b2c-b36f-01f4625b720c | agent: SECURITY | verdict: CONDITIONAL_PASS | phase: EXEC | created: 2026-09-12T18:10:38.416247+00:00
+--- results/findings ---
+null
+--- metadata ---
+{
+  "branch": "feat/SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 (PR #8777)",
+  "repo_path": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+  "review_type": "targeted re-verification of SEC-H2/M1/M2/M3/M4 fixes + independent regression scan of the SEC-M2 reordering and SEC-M3 gate removal",
+  "prior_review": "3ed447ec-de8c-4798-9fdc-5a0c814623a5 (CONDITIONAL_PASS, 90)",
+  "probe_exists": true,
+  "repo_resolved": true,
+  "test_evidence": "self-run (not trusted from the commit message): npx vitest run tests/unit/marketing tests/unit/email-campaigns-db.test.js tests/unit/governance lib/creative/asset-view-gate.test.js => 134 files passed / 1 skipped, 2060 tests passed / 12 skipped",
+  "files_reviewed": [
+    "database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger.sql",
+    "database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger_dry_run.mjs",
+    "database/chairman-gated/20260912_venture_channel_publish_ledger_execution_mode.sql",
+    "lib/marketing/publisher/index.js",
+    "lib/marketing/autonomy-gate.js",
+    "lib/marketing/ledger-execution-mode-probe.js",
+    "lib/marketing/ai/email-campaigns.js",
+    "lib/marketing/venture-honesty-audit.js",
+    "lib/marketing/content-generator.js",
+    "lib/marketing/content-pipeline.js",
+    "lib/marketing/owned-audience-content-loop.js"
+  ],
+  "live_db_probes": [
+    "ran the FR-5 trigger dry-run against the live DB: PASS (positive/negative/unresolvable controls + the SEC-H2 chairman_decisions no-bypass regression control all true; ROLLBACK, nothing persisted)",
+    "pg_constraint on venture_channel_publish_ledger: UNIQUE (correlation_id) CONFIRMED LIVE",
+    "PostgREST probe: execution_mode does NOT exist in the live schema (42703) - FR-4 migration still unapplied, so the execution-mode probe caches absent=false in production right now",
+    "transactional rolled-back proof: after applying the FR-4 UP body in-txn, an INSERT omitting execution_mode fails 23502 not_null_violation; the same INSERT stamped execution_mode=live succeeds"
+  ],
+  "registry_source": "db",
+  "commits_reviewed": [
+    "0e1bd49b864 (H2/M1/M2/M3/M4)",
+    "prior commit adding lib/marketing/ledger-execution-mode-probe.js (H1)"
+  ],
+  "executed_from_cwd": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001",
+  "not_reflagged_per_scope": [
+    "SEC-L1..L5",
+    "SEC-M5",
+    "INFO"
+  ],
+  "findings_verified_resolved": [
+    "SEC-H2",
+    "SEC-M1",
+    "SEC-M2",
+    "SEC-M3",
+    "SEC-M4"
+  ]
+}

@@ -1,0 +1,10 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: vs } = await sb.from('ventures').select('id,name,is_demo,current_lifecycle_stage,launch_mode,status').in('id',['6f7d4afa-a83d-4dbd-9937-8a36ce5ac26f','74f0b6a9-6c66-4102-9cd2-fd0b7dddc13f','6dfa21c7-eb6c-4d6d-9ea2-fa7bf48b21ae']);
+console.log('=== owners of the 3 existing ledger rows ===');
+for (const v of (vs||[])) console.log(` ${v.name} | is_demo=${v.is_demo} | S${v.current_lifecycle_stage} | ${v.status}`);
+const { data: fb } = await sb.from('feedback').select('id,title,category,status,created_at').or('title.ilike.%stage gate%,title.ilike.%dry-run%,title.ilike.%dry run%,title.ilike.%publish ledger%,description.ilike.%STAGE_GATE_PREDICATE_ARMED%').limit(20);
+console.log('\n=== feedback rows (title/description match) ===', (fb||[]).length);
+for (const r of (fb||[])) console.log(` - ${r.id?.slice(0,8)} [${r.category}/${r.status}] ${r.title}`);

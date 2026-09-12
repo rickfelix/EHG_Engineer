@@ -1,0 +1,10 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ quiet: true });
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: rows } = await sb.from('sub_agent_execution_results').select('*').eq('sd_id','4520716b-0603-46b5-bf7e-19fe4271fe3b').order('created_at');
+console.log('=== evidence rows for SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 ===');
+for (const r of rows||[]) console.log(` ${r.created_at} | ${r.sub_agent_code.padEnd(11)} | ${r.verdict} | phase=${r.phase} | ${r.id}`);
+const { data: comp, error } = await sb.from('v_sub_agent_repo_compliance').select('*').eq('id','2e1253ec-32fb-4c8f-8b9c-7f2c47b1b93d').maybeSingle();
+console.log('\n=== compliance view for the new VALIDATION row ===', error?.message||'');
+if (comp) console.log(JSON.stringify({compliance_status: comp.compliance_status, metadata_repo_path: comp.metadata_repo_path, expected_repo_path: comp.expected_repo_path}, null, 1));

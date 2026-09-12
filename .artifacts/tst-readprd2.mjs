@@ -1,0 +1,12 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await s.from('product_requirements_v2').select('*').eq('id','PRD-SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001').single();
+console.log('=== FUNCTIONAL_REQUIREMENTS ===\n', JSON.stringify(data.functional_requirements, null, 2));
+console.log('\n=== NFR ===\n', JSON.stringify(data.non_functional_requirements, null, 2));
+console.log('\n=== smoke_test_cmd ===', data.smoke_test_cmd);
+console.log('=== activation_test_id ===', data.activation_test_id);
+console.log('\n=== RISKS ===\n', JSON.stringify(data.risks, null, 2));
+console.log('\n=== plan_checklist ===\n', JSON.stringify(data.plan_checklist, null, 2));
+console.log('\n=== exec_checklist ===\n', JSON.stringify(data.exec_checklist, null, 2));

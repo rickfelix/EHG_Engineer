@@ -1,0 +1,20 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data, error } = await sb.from('sub_agent_execution_results').select('*').eq('id','70225ea9-1a74-4e4e-8cdc-23d346ae98d1').single();
+if (error) { console.log('ERR', error.message); process.exit(1); }
+console.log('COLUMNS:', Object.keys(data).join(', '));
+console.log('\nid            :', data.id);
+console.log('sub_agent_code:', data.sub_agent_code);
+console.log('phase         :', data.phase);
+console.log('verdict       :', data.verdict);
+console.log('sd_id         :', data.sd_id);
+console.log('created_at    :', data.created_at);
+console.log('repo_path     :', data.metadata?.repo_path);
+console.log('executed_from :', data.metadata?.executed_from_cwd);
+console.log('test_execution:', JSON.stringify(data.metadata?.test_execution));
+console.log('runner_files  :', JSON.stringify((data.metadata?.evidence_provenance?.runner_files||[]).map(f=>f.file+' sha='+f.sha256.slice(0,16))));
+console.log('conditions    :', (data.conditions||data.metadata?.conditions||[]).length, 'entries');
+const { data: gate } = await sb.from('sub_agent_execution_results').select('id,verdict,created_at').eq('sd_id', data.sd_id).eq('sub_agent_code','TESTING').eq('phase','EXEC').order('created_at',{ascending:false}).limit(3);
+console.log('\nGATE QUERY (sd_id+TESTING+EXEC):', JSON.stringify(gate,null,1));
