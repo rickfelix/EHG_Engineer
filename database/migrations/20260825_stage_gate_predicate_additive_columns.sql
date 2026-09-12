@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- 20260825_stage_gate_predicate_additive_columns.sql
 -- SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 (FR-4, FR-5)
 --
