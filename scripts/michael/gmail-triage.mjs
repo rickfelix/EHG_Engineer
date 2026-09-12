@@ -33,7 +33,7 @@ import { createMichaelClient, parseArgs, readRows, writeRows, refusal, emit } fr
 import { runFeeder, exitCodeFor, gracefulExit } from '../../lib/michael/feeder.mjs';
 import { assertHostVenue } from '../../lib/integrations/google/chairman-oauth.js';
 import { listThreads, getThreadMeta, listLabels, modifyThread, THREADS_MAX_RESULTS, FORBIDDEN_LABELS } from '../../lib/michael/gmail-client.mjs';
-import { matchGmailRule } from '../../lib/michael/rules-match.mjs';
+import { matchGmailRule, sortByPriority } from '../../lib/michael/rules-match.mjs';
 import { resolveConstant } from '../../lib/michael/constants.mjs';
 
 export const FEEDER = 'gmail-triage';
@@ -193,9 +193,13 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
         if (!w.ok) return { status: 'failed', counts: { ...counts, error_code: w.refusal, phase: 'labels' } };
       }
 
-      // 2. rules (active, domain gmail, row order)
+      // 2. rules (active, domain gmail, created_at order as the base case)
       const rules = await readRows(sb, 'michael_rules', (q) => q.eq('domain', 'gmail').eq('status', 'active').order('created_at', { ascending: true }), { select: 'rule_key,rule_json,auto_apply,auto_apply_verb' });
       if (rules.error) return { status: 'failed', counts: { ...counts, error_code: 'READ_FAILED', phase: 'rules' } };
+      // QF-20260908-964: precedence is now a declared property (rule_json.priority), not merely
+      // whichever rule happened to be (re-)encoded first. Stable sort: rules without a declared
+      // priority keep their created_at-ascending relative order unchanged.
+      rules.rows = sortByPriority(rules.rows);
 
       // 3. threads: fresh inbox minus keep_in_inbox labels, plus the older-than-a-day sweep
       const ids = new Set();
