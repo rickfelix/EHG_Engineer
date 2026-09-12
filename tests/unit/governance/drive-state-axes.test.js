@@ -44,6 +44,7 @@ function applyingFake(tables, capture = {}) {
           return q;
         },
         gte: (col, val) => { capture.gte = { col, val }; rows = rows.filter((r) => String(r[col] ?? '') >= String(val)); return q; },
+        is: (col, val) => { capture.is = { col, val }; rows = rows.filter((r) => (val === null ? r[col] == null : r[col] === val)); return q; },
         not: (col, op, val) => { capture.not = { col, op, val }; if (op === 'is' && val === null) rows = rows.filter((r) => r[col] != null); return q; },
         contains: (col, obj) => {
           capture.contains = { col, obj };
@@ -208,6 +209,22 @@ describe('AXIS 5 fleet_health — WIRING (what a discriminator test cannot catch
     expect(asc.data[0].k).toBe('a');
     expect(desc.data[0].k).toBe('c');
     expect(asc.data[0].k).not.toBe(desc.data[0].k);
+  });
+});
+
+describe('AXIS 5 fleet_health — released seats excluded from the population (QF-20260912-784)', () => {
+  it('four released idle specimens (real shape: status=idle, released_at set, frozen heartbeat) never reach stuck[] -- classify() is CLEAR, not STALLED', async () => {
+    const releasedSpecimens = ['3a8f51c1', 'fa09a46d', '838c05dd', 'c098153d'].map((id, i) => ({
+      session_id: id, status: 'idle', released_at: minsAgo(8690 - i), loop_state: 'idle',
+      last_tool_at: minsAgo(8690 - i), metadata: {}
+    }));
+    const liveSeat = { session_id: 'live-worker', status: 'active', released_at: null, last_tool_at: minsAgo(0), metadata: {} };
+    const state = await fleetAxis.fetch(applyingFake({ claude_sessions: [...releasedSpecimens, liveSeat] }), { now: NOW });
+    expect(state.scanned).toBe(1);
+    expect(state.stuck).toHaveLength(0);
+    const verdict = fleetAxis.classify(state, NOW);
+    expect(verdict.state).toBe(STATE.CLEAR);
+    expect(verdict.stalled).toBe(0);
   });
 });
 
