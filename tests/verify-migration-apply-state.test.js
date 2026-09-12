@@ -282,6 +282,72 @@ describe('CEREMONY_PENDING classification (chairman-gated)', () => {
   });
 });
 
+// QF-20260912-533: object existence alone is not proof of apply for database/chairman-gated/ --
+// the chairman apply ceremony is the only legitimate applier and every ceremony writes a
+// schema_migrations_applied success row, so a chairman-gated file classifying APPLIED on object
+// existence but carrying no ledger row is a REPLACE-shaped false pass (SD-LEO-INFRA-FEEDBACK-
+// LIFECYCLE-UPDATE-ALLOWLIST-001's live specimen: PR #8707 LEAD-FINAL CHAIRMAN_APPLY_VERIFICATION
+// PASS while the live trigger still had no ledger row and the header stayed PENDING).
+describe('CEREMONY_PENDING requires a ledger row for a chairman-gated APPLIED file (QF-20260912-533)', () => {
+  const NOW = new Date('2026-08-11T00:00:00Z');
+  const GATED_FILE = 'database/chairman-gated/20260807_gated.sql';
+
+  it('a gated fixture whose objects all exist but has NO ledger row reads CEREMONY_PENDING (queried, zero rows)', () => {
+    const ff = [{ file: GATED_FILE, ...extractDdlFacts('CREATE TABLE gated (x int);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['table:gated', 'column:gated.x']);
+    const [row] = classifyFiles([GATED_FILE], expected, perFile, live, NOW, new Map(), new Set());
+    expect(row.status).toBe('CEREMONY_PENDING');
+    expect(row.age_days).toBe(4);
+  });
+
+  it('the SAME fixture with a success ledger row for this file reads APPLIED', () => {
+    const ff = [{ file: GATED_FILE, ...extractDdlFacts('CREATE TABLE gated (x int);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['table:gated', 'column:gated.x']);
+    const appliedLedgerPaths = new Set([GATED_FILE]);
+    const [row] = classifyFiles([GATED_FILE], expected, perFile, live, NOW, new Map(), appliedLedgerPaths);
+    expect(row.status).toBe('APPLIED');
+    expect(row.age_days).toBeUndefined();
+  });
+
+  it('a ledger row for a DIFFERENT file does not satisfy this file\'s requirement', () => {
+    const ff = [{ file: GATED_FILE, ...extractDdlFacts('CREATE TABLE gated (x int);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['table:gated', 'column:gated.x']);
+    const appliedLedgerPaths = new Set(['database/chairman-gated/20260101_other.sql']);
+    const [row] = classifyFiles([GATED_FILE], expected, perFile, live, NOW, new Map(), appliedLedgerPaths);
+    expect(row.status).toBe('CEREMONY_PENDING');
+  });
+
+  it('a non-gated fixture with the identical all-exist shape is unaffected (never demoted, ledger check is chairman-gated-only)', () => {
+    const ff = [{ file: '20260807_plain.sql', ...extractDdlFacts('CREATE TABLE plain (x int);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['table:plain', 'column:plain.x']);
+    const [row] = classifyFiles(['20260807_plain.sql'], expected, perFile, live, NOW, new Map(), new Set());
+    expect(row.status).toBe('APPLIED');
+  });
+
+  it('appliedLedgerPaths defaulting to null (the ledger query itself was unavailable) never demotes -- fail-open, byte-identical to pre-fix behavior', () => {
+    const ff = [{ file: GATED_FILE, ...extractDdlFacts('CREATE TABLE gated (x int);') }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['table:gated', 'column:gated.x']);
+    const [row] = classifyFiles([GATED_FILE], expected, perFile, live, NOW);
+    expect(row.status).toBe('APPLIED');
+  });
+
+  it('BODY_MISMATCH stays BODY_MISMATCH even with an empty ledger Set -- never relabeled CEREMONY_PENDING (its objects ARE live)', () => {
+    const sql = 'CREATE OR REPLACE FUNCTION fn_stale() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN \'new\'; END $$;';
+    const gatedFn = 'database/chairman-gated/20260907_gated_fn.sql';
+    const ff = [{ file: gatedFn, ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['function:fn_stale']);
+    const liveFunctionBodies = new Map([['fn_stale', "BEGIN RETURN 'old'; END"]]);
+    const [row] = classifyFiles([gatedFn], expected, perFile, live, NOW, liveFunctionBodies, new Set());
+    expect(row.status).toBe('BODY_MISMATCH');
+  });
+});
+
 describe('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 — function body-aware classification', () => {
   it('TS-3a: extracts a bare $$ ... $$ body', () => {
     const bodies = extractFunctionBodies(
