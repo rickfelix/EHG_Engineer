@@ -300,6 +300,27 @@ export async function resolveFacts(supabase, { windowDays = WINDOW_DAYS, nowMs =
     facts.resolvedOverAskFingerprints = []; // fail-soft: no exclusion, but never a fabricated pass
   }
 
+  // QF-20260908-140 (b): the SAME resolved-exclusion mechanism, wired for dispatch_boundary. 30
+  // fail verdicts covered only 10 distinct matched sentences since 2026-07-25 -- the probe re-filed
+  // the same stored advisory body every run for the life of the lookup window. probeDispatchBoundary
+  // now excludes any match fingerprint already carrying a remediation_ref on a prior ledger row.
+  try {
+    const dispatchResolvedRows = await fetchAllPaginated(() => supabase
+      .from('adam_adherence_ledger')
+      .select('id, detail, remediation_ref, created_at')
+      .eq('probe', 'dispatch_boundary')
+      .not('remediation_ref', 'is', null)
+      .gte('created_at', windowStart(Math.max(windowDays, 30), nowMs))
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+    const dispatchResolvedFps = new Set();
+    for (const row of dispatchResolvedRows) {
+      for (const fp of parseFingerprintsTail(row && row.detail)) dispatchResolvedFps.add(fp);
+    }
+    facts.resolvedDispatchFingerprints = [...dispatchResolvedFps];
+  } catch {
+    facts.resolvedDispatchFingerprints = []; // fail-soft: no exclusion, but never a fabricated pass
+  }
+
   // P8 pm-board (current snapshot): every currently-open (not done/cancelled) child-tier task in
   // Adam's PM board. tier='child' ONLY — parent.status is never auto-rolled-up anywhere in the
   // shipped ledger code, so a parent-tier read would false-fail on parents whose children all
