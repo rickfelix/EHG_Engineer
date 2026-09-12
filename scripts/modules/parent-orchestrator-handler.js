@@ -1,6 +1,18 @@
 #!/usr/bin/env node
 import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
 
+// QF-20260911-793: single source of truth for the 3 coordination-only FR titles emitted
+// below. CHILD_SCOPE_COVERAGE (scripts/modules/handoff/executors/plan-to-lead/gates/
+// child-scope-coverage.js) excludes deliverables from its coverage denominator only when
+// BOTH metadata.coordination_only AND an exact name match against its own
+// COORDINATION_TEMPLATE_NAMES Set hold. That gate's test suite pins its Set against THIS
+// array (not a re-typed copy) so the two files cannot silently drift apart.
+export const COORDINATION_ONLY_FR_TITLES = Object.freeze([
+  'Child SD Orchestration',
+  'Work Decomposition Structure',
+  'Progress Tracking'
+]);
+
 /**
  * ParentOrchestratorHandler - Intelligent handling for parent Strategic Directives
  *
@@ -163,7 +175,7 @@ export class ParentOrchestratorHandler {
       functional_requirements: [
         {
           id: 'FR-ORCHESTRATE-001',
-          title: 'Child SD Orchestration',
+          title: COORDINATION_ONLY_FR_TITLES[0],
           description: `Coordinate execution of ${children.length} child SDs in proper sequence`,
           priority: 'critical',
           // QF-20260911-793: coordinator-only work no child would ever phrase in its own scope —
@@ -177,7 +189,7 @@ export class ParentOrchestratorHandler {
         },
         {
           id: 'FR-DECOMPOSE-001',
-          title: 'Work Decomposition Structure',
+          title: COORDINATION_ONLY_FR_TITLES[1],
           description: 'Maintain proper parent-child hierarchy with clear scope boundaries per child',
           priority: 'high',
           coordination_only: true,
@@ -189,7 +201,7 @@ export class ParentOrchestratorHandler {
         },
         {
           id: 'FR-PROGRESS-001',
-          title: 'Progress Tracking',
+          title: COORDINATION_ONLY_FR_TITLES[2],
           description: 'Track overall initiative progress based on child SD completion',
           priority: 'high',
           coordination_only: true,

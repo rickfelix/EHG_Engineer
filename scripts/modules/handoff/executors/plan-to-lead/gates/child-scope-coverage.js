@@ -24,7 +24,7 @@ const GATE_NAME = 'CHILD_SCOPE_COVERAGE';
 // add-prd-to-database.js, or an LLM-authored PRD), so an unnamespaced flag could silently exempt a
 // real deliverable from coverage scoring. Requiring BOTH the flag AND an exact name match against
 // this known, narrow set keeps the exclusion pinned to what this file itself generates.
-const COORDINATION_TEMPLATE_NAMES = new Set([
+export const COORDINATION_TEMPLATE_NAMES = new Set([
   'Child SD Orchestration',
   'Work Decomposition Structure',
   'Progress Tracking'

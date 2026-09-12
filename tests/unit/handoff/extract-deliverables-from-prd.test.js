@@ -2,7 +2,7 @@
 // pushed unconditionally, shadowing real functional_requirements: deliverables.length became
 // non-zero from boilerplate checklist items alone, so the FR-extraction branch never ran.
 // Reproduced live on SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-C/D (4 real FRs, 0 or generic rows).
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { extractAndPopulateDeliverables } from '../../../scripts/modules/handoff/extract-deliverables-from-prd.js';
 
 const SD_ID = 'sd-test-id';
@@ -107,5 +107,37 @@ describe('extractAndPopulateDeliverables (QF-20260905-843)', () => {
 
     expect(result.success).toBe(false);
     expect(result.message).toBe('Database insert failed: column "foo" does not exist');
+  });
+});
+
+describe('extractAndPopulateDeliverables (QF-20260911-793 coordination_only threading)', () => {
+  // TESTING sub-agent finding (row ffebbfb1): the writer half of the coordination_only chain
+  // -- parent-orchestrator-handler.js sets req.coordination_only, this function is supposed to
+  // thread it into the persisted row's metadata -- had NO direct test. The consumer gate
+  // (child-scope-coverage.test.js) hand-constructs mock rows that already carry the flag, so it
+  // never exercises this file's own write path. Deleting the `metadata:` line here would leave
+  // all other tests green while the production exclusion silently no-ops -- exactly the defect
+  // class this SD exists to fix. These two tests close that gap.
+  it('an FR with coordination_only:true produces a deliverable row carrying metadata.coordination_only:true', async () => {
+    const supabase = makeSupabase();
+    const frs = [{ id: 'FR-ORCHESTRATE-001', title: 'Child SD Orchestration', coordination_only: true }];
+    const prd = { exec_checklist: DEFAULT_CHECKLIST, functional_requirements: frs };
+
+    const result = await extractAndPopulateDeliverables(SD_ID, prd, supabase, { silent: true, skipIfExists: true });
+
+    expect(result.success).toBe(true);
+    expect(result.deliverables[0].metadata).toEqual({ coordination_only: true });
+  });
+
+  it('an FR with no coordination_only key produces a deliverable row with metadata: {} (no accidental flag leakage)', async () => {
+    const supabase = makeSupabase();
+    const prd = { exec_checklist: DEFAULT_CHECKLIST, functional_requirements: FOUR_FRS };
+
+    const result = await extractAndPopulateDeliverables(SD_ID, prd, supabase, { silent: true, skipIfExists: true });
+
+    expect(result.success).toBe(true);
+    for (const d of result.deliverables) {
+      expect(d.metadata).toEqual({});
+    }
   });
 });

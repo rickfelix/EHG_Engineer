@@ -3,7 +3,8 @@
  * (SD-LEO-INFRA-WIDEN-SWALLOWED-QUERY-001 FR-2).
  */
 import { describe, it, expect } from 'vitest';
-import { createChildScopeCoverageGate } from './child-scope-coverage.js';
+import { createChildScopeCoverageGate, COORDINATION_TEMPLATE_NAMES } from './child-scope-coverage.js';
+import { COORDINATION_ONLY_FR_TITLES } from '../../../../parent-orchestrator-handler.js';
 import { createQueuedSupabaseMock } from '../../../../../../tests/factories/queued-supabase-mock.js';
 
 /**
@@ -126,6 +127,14 @@ describe('CHILD_SCOPE_COVERAGE queries', () => {
     expect(result.details.parentDeliverables).toBe(1);
     expect(result.details.templateExcluded).toBe(0);
     expect(result.passed).toBe(false);
+  });
+
+  it('QF-20260911-793: COORDINATION_TEMPLATE_NAMES stays pinned to parent-orchestrator-handler.js\'s COORDINATION_ONLY_FR_TITLES (one source of truth, not two independently-typed literals)', () => {
+    expect(COORDINATION_ONLY_FR_TITLES.length).toBe(3);
+    for (const title of COORDINATION_ONLY_FR_TITLES) {
+      expect(COORDINATION_TEMPLATE_NAMES.has(title)).toBe(true);
+    }
+    expect(COORDINATION_TEMPLATE_NAMES.size).toBe(COORDINATION_ONLY_FR_TITLES.length);
   });
 
   it('FR-2: fails closed (passed:false) when the children query is broken', async () => {
