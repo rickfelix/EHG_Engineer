@@ -4,6 +4,13 @@
  * Pure cores tested directly; IO via a table-aware supabase mock (no live DB).
  */
 import { describe, it, expect, vi } from 'vitest';
+// QF-20260912-394 (FR-4): decouple from insertCoordinationRow's own DB-dependent target
+// validation (claude_sessions liveness etc.) — this test only cares that
+// escalateCarrierFiltered calls it with the right target/payload, or degrades on a throw.
+vi.mock('../../../lib/coordinator/dispatch.cjs', () => ({
+  insertCoordinationRow: vi.fn(async () => ({ data: [{ id: 'row1' }], error: null })),
+}));
+import { insertCoordinationRow } from '../../../lib/coordinator/dispatch.cjs';
 import {
   SWEEP_PROCESS_KEY, EMAIL_ESCALATED_PREFIX,
   ensureSweepSchedule, witnessSweepFired,
@@ -16,7 +23,7 @@ const NOW = Date.parse('2026-07-20T12:00:00Z');
 const iso = (msAgo) => new Date(NOW - msAgo).toISOString();
 
 /** Table-aware supabase mock: per-table select rows + recorded upserts/updates. */
-function makeMock({ obligations = [], selectError = null, registryError = null, insertError = null, stampError = null, stampZeroRows = false } = {}) {
+function makeMock({ obligations = [], selectError = null, registryError = null, insertError = null, stampError = null, stampZeroRows = false, heldSendRow = null, heldSendError = null } = {}) {
   // QF-20260816-173: selectError may be a bare string (message-only, no .code — an
   // operational fault with no PostgREST error code) or a full {code, message} object
   // (e.g. {code: 'PGRST205', ...} for a genuine table-absent signature).
@@ -45,9 +52,16 @@ function makeMock({ obligations = [], selectError = null, registryError = null, 
       // before upserting, so armed_at is written once and then AGES instead of being reset on
       // every in-window tick. data:null models "no prior row" (first registration); registryError
       // still surfaces so the existing failure-path assertions keep exercising a real error.
-      maybeSingle: async () => (registryError
-        ? { data: null, error: { message: registryError } }
-        : { data: null, error: null }),
+      maybeSingle: async () => {
+        if (table === 'chairman_held_sends') {
+          return heldSendError
+            ? { data: null, error: { message: heldSendError } }
+            : { data: heldSendRow, error: null };
+        }
+        return registryError
+          ? { data: null, error: { message: registryError } }
+          : { data: null, error: null };
+      },
       then: (res, rej) => finish().then(res, rej),
     };
     function finishThenable() { return { then: (res, rej) => finish().then(res, rej), select: () => finishThenable() }; }
@@ -242,6 +256,50 @@ describe('FR-3 / TS-3: carrier-filter email-fallback escalation', () => {
     const res2 = await escalateCarrierFiltered(m2.supabase, { sendEmail: send2, logger: quiet });
     expect(res2.escalated).toBe(0);
     expect(send2).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260912-394 (FR-4): a carrier-filtered row with a resolvable decision_id also notifies the originating seat via insertCoordinationRow', async () => {
+    insertCoordinationRow.mockClear();
+    const row = { id: 'ob-notify', last_error: 'Twilio 30007', status: 'undelivered', body: 'decision packet', decision_id: 'dec-1' };
+    const m = makeMock({ obligations: [row], heldSendRow: { metadata: { originator_session_id: 'adam-session-abc' } } });
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(async () => ({ success: true })), logger: quiet });
+    expect(res.escalated).toBe(1);
+    expect(insertCoordinationRow).toHaveBeenCalledOnce();
+    const [, calledRow] = insertCoordinationRow.mock.calls[0];
+    expect(calledRow.target_session).toBe('adam-session-abc');
+    expect(calledRow.message_type).toBe('INFO');
+    expect(calledRow.payload.kind).toBe('sms_carrier_filtered_alert');
+    expect(calledRow.payload.body).toMatch(/dec-1/);
+  });
+
+  it('QF-20260912-394 (FR-4): no decision_id on the row — never queries chairman_held_sends, never notifies', async () => {
+    insertCoordinationRow.mockClear();
+    const row = { id: 'ob-nodecid', last_error: 'Twilio 30007', status: 'undelivered', body: 'x' };
+    const m = makeMock({ obligations: [row] });
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(async () => ({ success: true })), logger: quiet });
+    expect(res.escalated).toBe(1);
+    expect(insertCoordinationRow).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260912-394 (FR-4): decision_id present but no matching held-send row (or no originator_session_id) — never notifies, never breaks the email-fallback stamp', async () => {
+    insertCoordinationRow.mockClear();
+    const row = { id: 'ob-noheld', last_error: 'Twilio 30007', status: 'undelivered', body: 'x', decision_id: 'dec-2' };
+    const m = makeMock({ obligations: [row], heldSendRow: null });
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(async () => ({ success: true })), logger: quiet });
+    expect(res.escalated).toBe(1); // email-fallback stamp still lands
+    expect(insertCoordinationRow).not.toHaveBeenCalled();
+  });
+
+  it('QF-20260912-394 (FR-4): a refused/failed notification (insertCoordinationRow throws) degrades to a warning — never reverts the email-fallback stamp', async () => {
+    insertCoordinationRow.mockClear();
+    insertCoordinationRow.mockRejectedValueOnce(Object.assign(new Error('target session unknown'), { code: 'DISPATCH_TARGET_UNKNOWN' }));
+    const row = { id: 'ob-refused', last_error: 'Twilio 30007', status: 'undelivered', body: 'x', decision_id: 'dec-3' };
+    const m = makeMock({ obligations: [row], heldSendRow: { metadata: { originator_session_id: 'dead-session' } } });
+    const warn = vi.fn();
+    const res = await escalateCarrierFiltered(m.supabase, { sendEmail: vi.fn(async () => ({ success: true })), logger: { warn } });
+    expect(res.escalated).toBe(1); // email-fallback stamp still lands despite the notification failure
+    expect(warn).toHaveBeenCalled();
+    expect(warn.mock.calls.some((c) => /originator notification failed/.test(c[0]))).toBe(true);
   });
 
   it('non-carrier-filter failures never trigger email escalation', async () => {
