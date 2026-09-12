@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-11T21:03:23.416Z",
-  "git_commit": "bf7c91ee",
+  "generated_at": "2026-09-12T03:13:24.409Z",
+  "git_commit": "054999e4",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -93,27 +93,27 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 88277,
-      "bytes": 89171,
-      "estimated_tokens": 22070,
-      "content_hash": "82d074b014015aed",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM.md"
+      "chars": 90787,
+      "bytes": 91683,
+      "estimated_tokens": 22697,
+      "content_hash": "298fea9496df9662",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260911d\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 27195,
-      "bytes": 27467,
+      "chars": 27196,
+      "bytes": 27468,
       "estimated_tokens": 6799,
-      "content_hash": "dfeb831334ee8127",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_MANUAL.md"
+      "content_hash": "dde68749056ac620",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260911d\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 95085,
-      "bytes": 95426,
+      "chars": 95086,
+      "bytes": 95427,
       "estimated_tokens": 23772,
-      "content_hash": "f9dde4b902c1ac80",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\CLAUDE_ADAM_PROVENANCE.md"
+      "content_hash": "49172a8a7b563667",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260911d\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "ab13cf5291cb1cee",
+    "global": "25983bc4bfd9cf7e",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -507,7 +507,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "514e19a8f547df2c",
+      "601": "91acf09bcd60f51c",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "f5d0c5029c6a3524",
