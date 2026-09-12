@@ -812,6 +812,48 @@ describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', (
     expect(sb._tables.sms_outbound_obligations[0].status).toBe('failed');
   });
 
+  it('QF-20260912-394: a TERMINAL carrier-filter code (30007) marks failed IMMEDIATELY, even well under the attempt cap — never resends the identical body', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-carrier', sent_at: ago(20 * MIN), delivered_at: null })] });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'undelivered', errorCode: '30007', errorMessage: 'Carrier violation' }));
+    const provider = { ...okProvider(), checkMessageStatus };
+    const alert = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN, alert });
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(provider.send).not.toHaveBeenCalled(); // never re-armed/resent despite attempts=0 << cap
+    expect(summary.alerted).toBe(1);
+    expect(summary.sentTimedOut).toBe(0);
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('failed');
+    expect(row.last_error).toContain('30007');
+    expect(row.last_error).toContain('Carrier violation');
+  });
+
+  it('QF-20260912-394: a non-terminal provider error code still re-arms under the cap (unchanged control flow), but the real code/message is stamped as last_error instead of the generic reason', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-transient', sent_at: ago(20 * MIN), delivered_at: null })] });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'undelivered', errorCode: '30005', errorMessage: 'Unknown destination handset' }));
+    const provider = { ...okProvider(), checkMessageStatus };
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    expect(summary.sentTimedOut).toBe(1);
+    expect(provider.send).toHaveBeenCalledTimes(1); // re-armed then re-sent, same as pre-existing behavior
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('sent');
+    expect(row.last_error).toContain('30005');
+    expect(row.last_error).toContain('Unknown destination handset');
+  });
+
+  it('QF-20260912-394: at the attempt cap, a non-terminal provider error still alerts with the real code/message, not the generic reason string', async () => {
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 3, provider_message_id: 'SM-transient-cap', sent_at: ago(30 * MIN), delivered_at: null })] });
+    const checkMessageStatus = vi.fn(async () => ({ status: 'undelivered', errorCode: '30005', errorMessage: 'Unknown destination handset' }));
+    const provider = { ...okProvider(), checkMessageStatus };
+    const alert = vi.fn();
+    const summary = await reconcileOutboundSms(sb, { provider, maxAttempts: 3, sentDeliveryTimeoutMs: 15 * MIN, alert });
+    expect(summary.alerted).toBe(1);
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).toBe('failed');
+    expect(row.last_error).toContain('30005');
+    expect(row.last_error).not.toBe('ALERTED: sent_no_delivery_callback_provider_confirmed');
+  });
+
   it('FR-2: provider CONFIRMS delivered — stamps delivered_at directly, never re-owed/re-sent', async () => {
     const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-late-deliver', sent_at: ago(20 * MIN), delivered_at: null })] });
     const checkMessageStatus = vi.fn(async () => ({ status: 'delivered' }));
