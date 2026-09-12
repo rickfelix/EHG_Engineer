@@ -99,3 +99,28 @@ describe('QF-20260725-821: the reaper honors the marker at BOTH protection point
     expect(guardAt).toBeLessThan(classifyAt);
   });
 });
+
+describe('QF-20260903-092: protected branches never scan, so they must never report a measured-looking zero', () => {
+  const src = fs.readFileSync(
+    path.join(process.cwd(), 'scripts', 'worktree-reaper.mjs'),
+    'utf-8',
+  );
+
+  it('the cursor_worktree_protected branch reports null (undetermined), not 0', () => {
+    const at = src.indexOf("reason: 'cursor_worktree_protected'");
+    expect(at).toBeGreaterThan(-1);
+    const nearby = src.slice(at, at + 300);
+    expect(nearby).toMatch(/dirtyCount: null, unpushedCount: null/);
+  });
+
+  it('the reap_protected_marker branch reports null (undetermined), not 0', () => {
+    const at = src.indexOf("reason: 'reap_protected_marker'");
+    expect(at).toBeGreaterThan(-1);
+    const nearby = src.slice(at, at + 300);
+    expect(nearby).toMatch(/dirtyCount: null, unpushedCount: null/);
+  });
+
+  it('neither protected branch hardcodes a dirty/unpushed 0 any more', () => {
+    expect(src).not.toMatch(/dirtyCount: 0, unpushedCount: 0/);
+  });
+});

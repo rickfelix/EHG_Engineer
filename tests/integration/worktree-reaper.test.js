@@ -18,6 +18,7 @@ import {
   parseArgs,
   stageForCategories,
   buildRecord,
+  humanTableRow,
   preserveUntrackedFiles,
   runPhantomOnlyMode,
   loadClaimMap,
@@ -123,6 +124,41 @@ describe('buildRecord', () => {
     expect(rec.unpushed_commit_count).toBe(0);
     expect(rec.age_days).toBe(30);
     expect(rec.verdict).toBe('stage2_remove');
+  });
+
+  // QF-20260903-092: a never-scanned tree (cursor/reap-protected) must report undetermined
+  // (null), never a fabricated 0 -- the field is a removal-safety input a human may read.
+  it('accepts null dirty/unpushed counts for a tree that was never scanned', () => {
+    const rec = buildRecord({
+      schema_version: '1.0',
+      wt: { path: '/repo/.worktrees/protected-X', branch: 'feat/protected' },
+      categories: [],
+      verdict: 'keep',
+      reason: 'reap_protected_marker',
+      claim_status: 'n/a',
+      dirtyCount: null,
+      unpushedCount: null,
+      ageDays: null,
+      preserveCount: 0,
+      shipStatus: 'protected',
+      evidence: {},
+    });
+    expect(rec.dirty_file_count).toBeNull();
+    expect(rec.unpushed_commit_count).toBeNull();
+    expect(rec.dirty_file_count).not.toBe(0);
+  });
+});
+
+describe('humanTableRow', () => {
+  it('renders a measured dirty/unpushed count as a number', () => {
+    const row = humanTableRow({ wtPath: '/x/SD-A', branch: 'feat/a', categories: [], dirtyCount: 2, unpushedCount: 1, ageDays: 3, verdict: 'keep', preserveCount: 0 });
+    expect(row).toMatch(/\b2\b.*\b1\b/);
+  });
+
+  it('renders a null (undetermined) dirty/unpushed count as "?", never the literal string "null"', () => {
+    const row = humanTableRow({ wtPath: '/x/SD-B', branch: 'feat/b', categories: [], dirtyCount: null, unpushedCount: null, ageDays: null, verdict: 'keep:protected', preserveCount: 0 });
+    expect(row).not.toMatch(/null/);
+    expect(row).toMatch(/\?/);
   });
 });
 
