@@ -1198,14 +1198,18 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
     expect(withoutAction.body).toMatch(/no further tool activity.*Notification event/);
   });
 
-  // Stub db supporting exactly the two query shapes checkStuckPermissionWaits issues:
-  //   session_coordination: .select().eq().gte().order() -> { data: waitRows }
-  //   claude_sessions:      .select().in()                -> { data: sessionRows }
-  function makeStuckWaitDb({ waitRows = [], sessionRows = [] } = {}) {
+  // Stub db supporting exactly the three query shapes checkStuckPermissionWaits issues:
+  //   session_coordination: .select().eq().gte().order().limit() -> { data: waitRows }
+  //   retention_archive (QF-20260911-078): .select().eq().gte().order().limit() -> { data: archiveRows }
+  //   claude_sessions:      .select().in()                         -> { data: sessionRows }
+  function makeStuckWaitDb({ waitRows = [], archiveRows = [], sessionRows = [] } = {}) {
     return {
       from(table) {
         if (table === 'session_coordination') {
           return { select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: waitRows, error: null }) }) }) }) }) };
+        }
+        if (table === 'retention_archive') {
+          return { select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: archiveRows, error: null }) }) }) }) }) };
         }
         if (table === 'claude_sessions') {
           return { select: () => ({ in: () => ({ limit: async () => ({ data: sessionRows, error: null }) }) }) };
@@ -1297,6 +1301,63 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
     ]);
     expect(otherArm).toHaveBeenCalledTimes(1);
     expect(failed.map((f) => f.name)).toEqual(['stuck-permission-wait-pager']);
+    errSpy.mockRestore();
+  });
+
+  // QF-20260911-078: cleanup_expired_coordination archives a Notification-wait row well inside
+  // this 4h window (measured live: every one of this category's rows currently on file is in
+  // the archive, zero live) -- a live-only read false-zeroed every stuck seat.
+  it('pages a seat whose permission-wait row exists ONLY in retention_archive (the measured live case)', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [],
+      archiveRows: [{ row_data: { payload: { kind: 'notification_permission_wait', session_id: 'sess-arch' }, created_at: minutesAgo(16) } }],
+      sessionRows: [{ session_id: 'sess-arch', last_tool_at: minutesAgo(16) }],
+    });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    expect(sendChairmanSMSFn.mock.calls[0][0].body).toMatch(/sess-arch/);
+  });
+
+  it('ignores an archived row of a DIFFERENT kind (e.g. the split-off notification_idle_prompt)', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [],
+      archiveRows: [{ row_data: { payload: { kind: 'notification_idle_prompt', session_id: 'sess-idle' }, created_at: minutesAgo(16) } }],
+      sessionRows: [{ session_id: 'sess-idle', last_tool_at: minutesAgo(16) }],
+    });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled();
+  });
+
+  it('per session, uses whichever of the live/archived rows is NEWEST', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-both' }, created_at: minutesAgo(45) }],
+      archiveRows: [{ row_data: { payload: { kind: 'notification_permission_wait', session_id: 'sess-both' }, created_at: minutesAgo(16) } }],
+      sessionRows: [{ session_id: 'sess-both', last_tool_at: minutesAgo(16) }],
+    });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    // The newer (archived, 16min) row alerts; the older (live, 45min) row would already be past
+    // its single alertable tick and silent -- so a call here proves the newer row won.
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failing archive read is fail-open (never suppresses the live-row alert)', async () => {
+    const liveRows = [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-live' }, created_at: minutesAgo(16) }];
+    const db = {
+      from(table) {
+        if (table === 'session_coordination') return { select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: liveRows, error: null }) }) }) }) }) };
+        if (table === 'retention_archive') return { select: () => ({ eq: () => ({ gte: () => ({ order: () => ({ limit: async () => ({ data: null, error: { message: 'archive down' } }) }) }) }) }) };
+        if (table === 'claude_sessions') return { select: () => ({ in: () => ({ limit: async () => ({ data: [{ session_id: 'sess-live', last_tool_at: minutesAgo(16) }], error: null }) }) }) };
+        throw new Error(`unexpected table: ${table}`);
+      },
+    };
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('archive unreadable'));
     errSpy.mockRestore();
   });
 });

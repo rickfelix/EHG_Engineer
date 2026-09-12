@@ -43,9 +43,27 @@ describe('DRAIN_SETS.coordinator includes self_escalation and notification_permi
   // Generalizes past the two named kinds: every kind a known coordinator-addressed emitter
   // stamps must be in the drain set, so a future addition here is caught the same way.
   it('every kind stamped by a known coordinator-addressed emitter is in DRAIN_SETS.coordinator', () => {
-    const knownCoordinatorAddressedKinds = ['self_escalation', 'notification_permission_wait'];
+    const knownCoordinatorAddressedKinds = [
+      'self_escalation',
+      'notification_permission_wait',
+      // QF-20260911-078: notification_permission_wait was split by notification_type into
+      // three kinds — the two new ones are addressed to role=coordinator exactly like the
+      // original and must carry the same registration.
+      'notification_idle_prompt',
+      'notification_usage_limit_reset',
+    ];
     for (const kind of knownCoordinatorAddressedKinds) {
       expect(DRAIN_SETS.coordinator, `expected ${kind} to be in DRAIN_SETS.coordinator`).toContain(kind);
     }
+  });
+
+  // Grounds the two new kinds against the real emitter's exact literals (classifyNotificationKind),
+  // mirroring the self_escalation literal-pin test above.
+  it('the two new kind literals match what classifyNotificationKind actually stamps', () => {
+    const { classifyNotificationKind } = require('../../../lib/hooks/notification-permission-wait-core.cjs');
+    expect(classifyNotificationKind('idle_prompt')).toBe('notification_idle_prompt');
+    expect(classifyNotificationKind('quota_auto_resume_fired')).toBe('notification_usage_limit_reset');
+    expect(DRAIN_SETS.coordinator).toContain(classifyNotificationKind('idle_prompt'));
+    expect(DRAIN_SETS.coordinator).toContain(classifyNotificationKind('quota_auto_resume_fired'));
   });
 });
