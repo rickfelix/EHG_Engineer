@@ -95,8 +95,20 @@ export async function reconcileSeats(supabase, deps = {}) {
   } = deps;
 
   const seats = await loadSeats();
-  const results = [];
-  for (const s of seats) results.push(await classify(supabase, s, deps));
+  // QF-20260911-969: classifySeat awaits a MIN_ACTIVITY_SAMPLE_GAP_MS (10min) two-sample gap per
+  // seat. A sequential for-loop therefore takes seats.length x 10min of WALL TIME to finish (the
+  // measured "0 bytes after 25 minutes" was ~2.5 seats into a sequential queue, not a hang). Each
+  // seat's sample is independent, so running them concurrently bounds the whole sweep to ~10min
+  // regardless of fleet size.
+  const gapMin = Math.round(MIN_ACTIVITY_SAMPLE_GAP_MS / 60000);
+  onLog(`classifying ${seats.length} active seat(s) in parallel (~${gapMin}min wall time, not ${seats.length}x that)`);
+  const results = await Promise.all(
+    seats.map(async (s) => {
+      const r = await classify(supabase, s, deps);
+      onLog(`seat ${s.session_id} classified: dead=${r.dead}`);
+      return r;
+    }),
+  );
 
   const dead = results.filter((r) => r.dead);
   onLog(`examined ${results.length} active seat(s); ${dead.length} classify DEAD on both legs`);

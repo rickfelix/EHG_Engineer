@@ -100,3 +100,29 @@ describe('FR5-SEAT: report-only unless BOTH gates are open', () => {
     expect(isSeatReconcileEnabled(ON)).toBe(true);
   });
 });
+
+describe('FR5-SEAT / QF-20260911-969: seats classify concurrently, not sequentially', () => {
+  // classifySeat awaits a MIN_ACTIVITY_SAMPLE_GAP_MS gap per seat (real: 10min). A sequential
+  // for-loop over N seats takes N x that wall time; this asserts the sweep instead bounds to
+  // ~one gap regardless of seat count, by tracking peak concurrent in-flight classifications.
+  it('runs classify() for every seat concurrently (peak concurrency > 1)', async () => {
+    const seats = [1, 2, 3].map((n) => ({ session_id: `s${n}`, pid: n }));
+    let inFlight = 0;
+    let peak = 0;
+    const classify = async (_sb, s) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 20));
+      inFlight -= 1;
+      return { session_id: s.session_id, dead: false, legA: false, legB: false, why: '' };
+    };
+
+    const start = Date.now();
+    const r = await reconcileSeats({}, { env: ON, write: false, loadSeats: async () => seats, classify, onLog: () => {} });
+    const elapsedMs = Date.now() - start;
+
+    expect(peak).toBeGreaterThan(1); // proves concurrent, not one-at-a-time
+    expect(elapsedMs).toBeLessThan(20 * seats.length); // far below the sequential N x 20ms bound
+    expect(r.examined).toBe(3);
+  });
+});
