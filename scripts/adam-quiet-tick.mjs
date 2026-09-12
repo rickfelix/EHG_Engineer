@@ -284,21 +284,43 @@ export async function readCriticalPathParents(sb) {
 // hand — the chairman found ten sitting 6-12 days stale before the seat did. This is a HARD
 // line (act-on-flagged-lines contract), not informational: silence on a manual child must be
 // impossible. Fail-soft: any read error degrades to n=0, never aborts the tick.
+// QF-20260911-888: checkBoardStale is the first UNGUARDED probe run right after the PM-board
+// stall-alert pass in main()'s tick order — the exact point where five consecutive quiet-tick
+// runs hung past a 150s external timeout on 2026-09-11 (post-quota-freeze DB burst; the likely
+// class is an unbounded select or a lock wait, not a data-volume issue, since fetchAllPaginated
+// already paginates). A wall-clock budget lets a hung query name itself instead of eating the
+// whole tick; the timeout folds into this function's existing fail-soft catch (same shape as
+// any other query error), so main() is unaffected and the tick's later probes still run.
+const CHECK_BOARD_STALE_TIMEOUT_MS = 20_000;
+
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`PROBE_TIMEOUT:${label} exceeded ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 export async function checkBoardStale(sb) {
+  const startedAt = Date.now();
   try {
-    const rows = await fetchAllPaginated(() => sb
+    const rows = await withTimeout(fetchAllPaginated(() => sb
       .from(TASK_LEDGER_TABLE)
       .select('id, title, updated_at, status, tier, source_kind, risk')
       .eq('tier', 'child')
       .eq('source_kind', 'manual')
       .in('status', ['open', 'in_progress', 'blocked'])
-      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+      .order('id', { ascending: true })), CHECK_BOARD_STALE_TIMEOUT_MS, 'checkBoardStale'); // unique tiebreaker (FR-6)
+    if (process.argv.includes('--verbose')) console.error(`QUIET_TICK_PROBE_ELAPSED=checkBoardStale ms=${Date.now() - startedAt}`);
     const items = rows.filter((r) => isManualChildStale(r)).map((r) => {
       const meta = parseManualChildMeta(r.risk) || {};
       return { id: r.id, title: r.title, owner: meta.owner || '(unassigned)', review_by: meta.review_by || '(none)', updated_at: r.updated_at };
     });
     return { count: items.length, items };
   } catch (e) {
+    if (e && e.message && e.message.startsWith('PROBE_TIMEOUT:')) {
+      console.log(`[QUIET_TICK_PROBE_TIMEOUT=checkBoardStale] ms=${Date.now() - startedAt}`);
+    }
     return { count: 0, items: [], error: e && e.message };
   }
 }
