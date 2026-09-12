@@ -143,9 +143,20 @@ export function formatBody(facts = {}) {
     // A free-text verdict is exactly the hole this function exists to close.
     throw new Error(`formatBody(): verdict must be one of ${VERDICTS.join(', ')} — got ${JSON.stringify(verdict)}`);
   }
+  // QF-20260911-111: a guard may decline to run but must never report a number, or a
+  // non-number, it did not take. UNKNOWN is a real VERDICTS member (an unmeasured leg is
+  // SAID rather than defaulted), but printing it as "capacity UNKNOWN" reads as a reading —
+  // the chairman cannot tell a measured verdict from a missing measurement wearing one. A
+  // fixed, closed-set sentence names the gap in plain words instead of the bare enum token.
+  const capacityPart = verdict === 'UNKNOWN' ? 'capacity not measured this run' : `capacity ${verdict}`;
+  // Number(x.toFixed(1)): a chairman-facing SMS must never carry an unrounded IEEE float
+  // (3.1666666666666665/6, measured live 2026-09-11 14:11Z) — rounded to one decimal. The
+  // round-trip through Number() drops a trailing ".0" for the common whole-number case
+  // (4/6, not 4.0/6) while still capping genuinely fractional scores at one decimal.
+  const displayScore = Number(score.toFixed(1));
   const parts = [
-    `Drive ${score}/${possible}`,
-    `capacity ${verdict}`,
+    `Drive ${displayScore}/${possible}`,
+    capacityPart,
     unavailableLegs > 0 ? `${unavailableLegs} leg(s) unmeasured` : null,
     unownedBlockers > 0 ? `${unownedBlockers} unowned blocker(s)` : null,
   ].filter(Boolean);
