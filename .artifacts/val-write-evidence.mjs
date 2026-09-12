@@ -1,109 +1,88 @@
-import { storeSubAgentResults } from '../lib/sub-agent-executor/index.js';
+import { storeSubAgentResults } from '../lib/sub-agent-executor/results-storage.js';
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../lib/sub-agents/resolve-repo.js';
-import { createSupabaseServiceClient } from '../lib/supabase-client.js';
 
-const supabase = createSupabaseServiceClient();
-const SD_KEY = 'SD-LEO-INFRA-VENTURE-JOURNEY-UAT-001';
-const SD_UUID = '7b8be04e-1f2b-431c-b33d-4574013a94e5';
-const CODE = 'VALIDATION';
+const SD = 'SD-LEO-INFRA-AUDIT-ACTOR-THREADING-001';
 
 const results = {
   verdict: 'CONDITIONAL_PASS',
-  confidence: 88,
+  confidence_score: 92,
+  execution_time_ms: 0,
   summary:
-    'LEAD-TO-PLAN approved with 3 mandatory PLAN corrections. Premise INDEPENDENTLY VERIFIED (both FR-5 bugs real; dead-UAT premise corroborated: uat_test_runs holds 1 row total). No duplicate SD across full in-flight population (41 non-terminal) or 2792 SDs since 2026-05-01. sd_type=infrastructure CORRECT. BUT FR-0/FR-2 rest on a wrong premise about which code exists: lib/eva/journey-walk-driver.js is a THIN MARKETLENS WRAPPER over the already-generic lib/apa/browser-executor.js (shipped by APA Child C), and it is local-serve-only so it CANNOT execute FR-0 against a deployed URL. Building "generalize the driver" would re-implement shipped APA infrastructure. Also found a 3rd phantom-column bug FR-5 does not name: lib/uat/result-recorder.js writes 11 columns absent from uat_test_runs, so the toolkit FR-2 wires in cannot record a run.',
-  critical_issues: [],
+    'VALIDATION (LEAD, GATE 1): premise independently CONFIRMED and stronger than stated; NO duplicate SD/QF; ' +
+    'handoff_actor_policy determination CONFIRMED (not a substitute). CONDITIONAL on 1 hard GATE-1 block ' +
+    '(0 backlog items), 3 scope-target corrections (2 named files are no-op/incomplete edit targets), and ' +
+    '1 unproven capability (request.headers) that must be settled by a PLAN spike before EXEC commits to it.',
+  findings: [
+    { id: 'GATE1-BACKLOG-ZERO', severity: 'critical', type: 'blocker',
+      note: 'sd_backlog_map has 0 rows for this SD (queried by BOTH uuid 2d4e7fea-d8db-447e-a75e-0a8ad201f6c4 AND sd_key); user_stories 0; product_requirements_v2 0. GATE 1 requires >=1 backlog item and the require_backlog_for_active constraint blocks status=active. Must add >=1 backlog item before LEAD-TO-PLAN.' },
+    { id: 'SCOPE-TARGET-1-SHIM', severity: 'critical', type: 'scope_correction',
+      note: 'Scope item 1 names lib/supabase-connection.js, which is a 21-line PURE RE-EXPORT SHIM (lines 11-21 re-export from ../scripts/lib/supabase-connection.js). createDatabaseClient is implemented at scripts/lib/supabase-connection.js:226 (single new pg.Client, no pool, no SET on connect -- confirmed). Editing the named file would be a NO-OP.' },
+    { id: 'SCOPE-TARGET-2-TWO-FACTORIES', severity: 'critical', type: 'scope_correction',
+      note: 'There are TWO shared service-client factories, not one. (a) lib/supabase-client.js createSupabaseServiceClient(options) -- sync, wraps withSchemaDriftDetection, 468 importing files. (b) scripts/lib/supabase-connection.js:388 createSupabaseServiceClient(projectKey, options) -- async, DIFFERENT signature, re-exported through lib/supabase-connection.js, 542 importing files. Scope item 2 names only (a); (b) is equally shared and would remain unthreaded. (b) also spreads options.clientOptions last, letting a caller clobber global.headers.' },
+    { id: 'SCOPE-TARGET-3-TWO-RETURN-PATHS', severity: 'high', type: 'scope_correction',
+      note: 'Inside lib/supabase-client.js, createSupabaseServiceClient has TWO return paths: a plain createClient(), and a fetchTimeoutMs branch returning createClient(..., { global: { fetch: boundedFetch } }). A header added to only one path silently misses the other; global must be merged, not replaced.' },
+    { id: 'GUC-MECHANISM-PROVEN', severity: 'info', type: 'capability_proven',
+      note: 'MEASURED, not reasoned: on a live createDatabaseClient pg client, SET app.actor=... reads back via current_setting (value returned); SET LOCAL app.actor inside BEGIN reads back inside the txn and is correctly EMPTY after COMMIT. Both mechanisms viable.' },
+    { id: 'POOLER-SESSION-GUC-RISK', severity: 'medium', type: 'design_risk',
+      note: 'createDatabaseClient accepts options.connectionString and QF-20260513-258 documents CI passing a pooler URL. Configured POOLER_URL is port 5432 (SESSION mode) so a session-level SET survives TODAY, but a transaction-mode (6543) pooler would silently DROP a bare SET-on-connect -- the fix would read as wired and no-op. Prefer SET LOCAL per mutating transaction, or add an AC asserting the GUC is readable at trigger time on the pooled path.' },
+    { id: 'REQUEST-HEADERS-UNPROVEN', severity: 'high', type: 'unproven_premise',
+      note: 'ZERO functions in the live DB reference request.headers (enumerated pg_get_functiondef across public). Enumerated all 22 no-arg current_setting functions: every one is a trigger or returns boolean, so NO PostgREST-callable read path exists to observe request.headers without creating a new object. Scope item 3 fallback 2 is therefore an UNTESTED capability. If Supabase PostgREST does not surface x-actor-session in request.headers, the entire PostgREST half (scope item 2 + that fallback) is dead on arrival while still reading as shipped. Require an empirical spike in PLAN before EXEC commits.' },
+    { id: 'REUSE-CANONICAL-ACTOR-RESOLVER', severity: 'high', type: 'duplicate_mechanism_risk',
+      note: 'Do NOT hand-roll process.env.CLAUDE_SESSION_ID || <tag>. A canonical resolver already exists: lib/claim/claim-identity.js (documented precedence: CLAUDE_SESSION_ID env, race-free, source=env -> shared pointer fallback), plus lib/resolve-own-session.cjs/.js and lib/session-identity-sot.js. 20+ inline CLAUDE_SESSION_ID||fallback copies already exist across lib/. PRECEDENT: QF-20260904-344 (COMPLETED 2026-09-05) fixed this SAME created_by-attribution defect class for quick_fixes using CLAUDE_SESSION_ID + the role tag. Reuse that pattern; inventing a 4th bespoke resolver repeats the divergence class the handoff_actor_policy SSOT migration existed to END.' },
+    { id: 'CEREMONY-SEQUENCING', severity: 'medium', type: 'completion_criteria',
+      note: 'trg_sd_mutation_audit is LIVE (pg_trigger tgenabled=O) so mis-attribution CONTINUES until the new chairman-gated migration is APPLIED. chairman-gated = a ceremony a worker seat cannot self-apply, and an @approved-by header is a ceremony MARKER not apply state. Completion criteria must claim only code + staged migration + _DOWN + tests landed, NOT that attribution is fixed at merge.' },
+    { id: 'NO-DUPLICATE-SD', severity: 'info', type: 'duplicate_check',
+      note: 'Searched strategic_directives_v2 title/description/scope across 9 terms (actor, app.actor, audit, attribution, created_by, session_user, mutation_audit, provenance, identity). Exactly ONE SD matches app.actor: this SD. Repo-wide grep: the only other app.actor references are the trigger itself and scripts/one-off/store-explore-evidence-sd-canonical-001.mjs (evidence of the COMPLETED prior investigation). quick_fixes: no duplicate (nearest is QF-20260904-344, different table, COMPLETED). No in-flight SD touches the client factories. NOT a duplicate.' },
+    { id: 'NO-COLLISION-CANONICAL-001', severity: 'info', type: 'collision_check',
+      note: 'SD-LEO-INFRA-STRATEGIC-DIRECTIVES-CANONICAL-001 is status=completed (2026-08-23), so its Explore evidence is a CLOSED prior investigation, not a competing in-flight SD. No collision.' },
+    { id: 'HANDOFF-ACTOR-POLICY-NOT-A-SUBSTITUTE', severity: 'info', type: 'determination_confirmed',
+      note: 'LEAD determination CONFIRMED, with a STRONGER reason than LEAD gave. handoff_actor_policy(p_created_by text) RETURNS TABLE(may_create bool, skips_claim_check bool) is declared IMMUTABLE and is a pure function of its input: it CONSUMES created_by, it cannot PRODUCE one, and an IMMUTABLE function is structurally barred from reading session state (current_setting) at all. Its registry is a fixed 6-row VALUES list of SYSTEM literals (UNIFIED-HANDOFF-SYSTEM, SYSTEM_MIGRATION, ADMIN_OVERRIDE, ORCHESTRATOR_AUTO_COMPLETE, PCVP_EMERGENCY_BYPASS, ORCHESTRATOR-GUARDIAN); an arbitrary session UUID returns (false,false), so reused as an identity mechanism it would REJECT every real session. Different table (sd_phase_handoffs BEFORE INSERT authorization vs audit_log AFTER UPDATE attribution) and different question (may this actor act? vs who acted?). NOT a substitute.' },
+    { id: 'PREMISE-CONFIRMED-STRONGER', severity: 'info', type: 'premise_verified',
+      note: 'Independently MEASURED on the live DB (2026-09-12): trg_sd_mutation_audit live on strategic_directives_v2 (tgenabled=O); log_sd_mutation_audit is the ONLY live function reading app.actor; session_user=postgres with app_actor=NULL on the direct-pg path; over the last 48h the trigger authored 310 rows across 4 event types with EXACTLY 2 distinct created_by values (authenticator=282, postgres=28). Repo-wide: ZERO set_config(app.actor) call sites; ZERO x-actor-session header senders. Premise is confirmed and LARGER than the 14-row/25-minute incident cited.' }
+  ],
   recommendations: [
-    'FR-2 RETARGET (highest value): consume lib/apa/browser-executor.js runJourneyWalk(page, persona, STEPS, EXECUTORS, {baseUrl}) directly instead of "generalizing lib/eva/journey-walk-driver.js". Proof it is a wrapper: journey-walk-driver.js:25-28 imports genericExecuteJourneyStep/genericRunJourneyWalk from ../apa/browser-executor.js; :211-213 and :231-233 are pure pass-throughs; its own docstring :220-226 says "Delegates to lib/apa/browser-executor.js generic runJourneyWalk". The generic engine is ALREADY parameterized by (steps[], executors{}) - exactly the shape FR-1 metadata.journey_steps would supply. Corollary: FR-2 deliverable "remove the @wire-check-exempt marker" (journey-walk-driver.js:18-22) becomes MOOT - if FR-2 uses the generic engine, the MarketLens wrapper stays an unwired wrapper and its exemption remains valid.',
-    'FR-0 INFEASIBLE AS WORDED - retarget before EXEC: "run the existing journey walker against https://altifyai.rickfelix2000.workers.dev/" cannot be done with journey-walk-driver.js, which is local-serve-only (MARKETLENS_SERVE_CONFIG port 3001 + startLocalMarketLensServer, :33-40). The deployed-URL path that already exists is lib/apa/live-instance-acquisition.mjs:55 acquireLiveInstance(url) (real Playwright, SSRF-guarded :26-40). FR-0 is therefore achievable with ZERO new library code: acquireLiveInstance(altifyUrl) + browser-executor runJourneyWalk with a hand-declared 5-step executor map. Recommend PLAN re-estimate FR-0 downward accordingly.',
-    'NEW BUG for FR-5 (measured, not in the SD text): the UAT writer half is as dead as the reader half. lib/uat/result-recorder.js:70-84 startSession INSERTs executed_by, commit_sha, build_version, scenario_snapshot, total, passed, failed, skipped, defects_found, quick_fixes_created and :402-406 completeSession UPDATEs quality_gate - ALL 11 are absent from live uat_test_runs (probed individually; each returns "column does not exist"). So result-recorder.js throws on first call and CANNOT record a run. FR-2 states result-recorder "writes uat_test_runs" as settled fact; it does not. Either fold this into FR-5 (same phantom-column defect class as overall_result) or PLAN must add a column-reconciliation FR. Live columns are: total_tests, passed_tests, failed_tests, skipped_tests, pass_rate, status, run_id, suite_id, sd_id, prd_id, environment, browser, device_type, viewport_width/height, started_at, completed_at, duration_ms, triggered_by, trigger_source, machine_info, test_config, created_at, metadata.',
-    'FR-3 COUNT ERROR: scope says "add a SECOND WAIT condition" - prerequisite-check.js ALREADY returns two WAIT verdicts (buildWaitResult at :235 incomplete children, and :263 un-authored planned children). The new one is the THIRD. Cosmetic, but worth fixing in an SD whose thesis is "measure, do not assume". FR-3 should reuse lib/handoff/wait-verdict.js buildWaitResult({score,max_score,wait_reason,issues,warnings,remediation,details}) - already imported at prerequisite-check.js:12, so zero new verdict plumbing.',
-    'FR-1 SCHEMA CORRECTION: wireframe_screens is NOT a table and never was - see tombstone migration database/migrations/20260520_add_surface_columns_to_wireframe_screens.sql:7-12 ("public.wireframe_screens NEVER EXISTED... stored inside venture_artifacts JSONB"). Both wireframe_screens and blueprint_user_journey are artifact_type VALUES on venture_artifacts. Producer: lib/eva/stage-templates/stage-15.js:238; canonical screen normalizer: lib/eva/stage-templates/stage-15-screens.js:47-54 buildWireframeScreensPayload -> {screens:[{screen_id,screen_name,description,deviceType,page_type,surface}],screenCount,ia_sitemap}. A design SSOT already exists and already names UAT as a declared consumer: docs/design/user-journey-artifact-schema.md. FR-1 should conform to that schema rather than invent a journey_steps shape (confirmed: zero occurrences of journey_steps repo-wide today).',
-    'DECLARE THE APA BOUNDARY before PLAN: SD-LEO-INFRA-AUTOMATED-PRODUCT-ASSESSMENT-001 (orchestrator, draft/PLAN_VERIFICATION) is the same problem statement one level up - "the verdict engine scores CLAIMS vs a rubric, never RUNS the app". Children A-D are COMPLETED (A sandbox harness, B assertion library, C browser executor, D persona coverage). Child E (draft/LEAD, feature) is "UI/UX Judgment + FINDINGS GATE ... findings-to-fix routing + behavioral_verdicts + gate" - adjacent to this SD FR-3 (a gate) and FR-4 (findings emission). NOT a duplicate: Child E judges UI/UX QUALITY (Fable-tier rubric), this SD gates journey REACHABILITY (did the deployed journey work at all). But PLAN must state that boundary explicitly, and should read docs/design/apa-automated-product-assessment-design.md (the APA SSOT) so FR-3/FR-4 do not build a second, competing findings-gate.',
-    'FR-4 REUSE: lib/apa/standing-assessment-round.mjs ALREADY re-probes deployed ventures on a schedule - it lists live URLs from venture_deployments (status=routed, :69-97), runs the generic runJourneyWalk with GENERIC_JOURNEY_STEPS (:238-244), persists to apa_standing_assessments (:281-290), and is REGISTERED LIVE in lib/eva/eva-master-scheduler.js:483-488 as round apa_standing. PLAN should decide deliberately whether FR-4 is a new Stage-20 sub-step or an extension of this existing round. The declared emission path does exist as claimed: collectNonRepoFindings at lib/eva/quality-findings/db-sourced-findings.js:256, imported by stage-20-code-quality.js:37; FindingShape contract at lib/eva/quality-findings/finding-shape.js:65-75. Note stage-20 has NO dynamic sub-step registry - new checks are hand-added to the Promise.all array at stage-20-code-quality.js:740-752 plus CHECK_TYPES :224-227 and the IMPLEMENTED/DEFERRED category lists :237-244.',
-    'FR-2 FREEBIE: lib/uat/selector-drift-recovery.js recoverFromDrift is ALREADY composed into lib/apa/browser-executor.js:28 via createResilientPage/withDriftRecovery (:67-111). If FR-2 consumes the generic engine, drift resilience comes for free - one of the five lib/uat modules FR-2 lists is already wired.'
+    'BLOCKING: add >=1 sd_backlog_map item before LEAD-TO-PLAN (GATE 1 + require_backlog_for_active).',
+    'Retarget scope item 1 to scripts/lib/supabase-connection.js:226 (the real createDatabaseClient); lib/supabase-connection.js is a re-export shim.',
+    'Extend scope item 2 to BOTH service-client factories (lib/supabase-client.js AND scripts/lib/supabase-connection.js:388) and to BOTH return paths inside the former; merge into global rather than replacing it.',
+    'Add a PLAN-phase spike AC that empirically proves Supabase PostgREST surfaces x-actor-session in current_setting(request.headers) BEFORE EXEC builds on it; if it does not, the PostgREST half needs a different carrier (e.g. an RPC arg or a pre-request hook).',
+    'Resolve the actor value through the existing canonical resolver (lib/claim/claim-identity.js / lib/session-identity-sot.js) following the QF-20260904-344 precedent, not a new inline fallback.',
+    'Use SET LOCAL inside the mutating transaction (proven) rather than a bare SET on connect, so a transaction-mode pooler cannot silently void the fix.',
+    'Word completion criteria as code+staged-migration+tests landed; attribution is only fixed once the chairman-gated ceremony applies the migration.'
   ],
   metadata: {
-    validation_gate: 'GATE 1 - LEAD Pre-Approval',
-    phase_validated: 'LEAD',
-    independent_of_prior_findings: true,
-
-    q1_duplicate_or_conflict: {
-      answer: 'NO duplicate SD. Material ADJACENCY to the APA program requiring an explicit boundary statement.',
-      method: 'Paginated FULL non-terminal population (41 SDs, no cap) + FULL population created >=2026-05-01 (2792 SDs, paginated), keyword-filtered IN MEMORY. First attempt used per-term .limit(60) which measured the cap not the population (results truncated at 2026-01 for an SD created 2026-08) and was discarded and redone.',
-      in_flight_population: 41,
-      recent_population_since_2026_05_01: 2792,
-      exact_duplicate_found: false,
-      adjacent_sds: [
-        { sd: 'SD-LEO-INFRA-AUTOMATED-PRODUCT-ASSESSMENT-001', status: 'draft/PLAN_VERIFICATION', relation: 'Same problem statement one level up (runtime behavioral gate vs claims-only verdict engine). Children A-D COMPLETED = the runtime infra FR-2 proposes to build. Child E (draft/LEAD) owns "Findings Gate" = adjacent to FR-3/FR-4. NOT duplicate (Child E judges UI/UX quality; this SD gates journey reachability) but boundary MUST be declared.' },
-        { sd: 'SD-LEO-INFRA-QUALITY-GATE-TYPE-001', status: 'active/EXEC', relation: 'Shares the "keying a gate by sd_type alone is wrong" theme; different gate (AI quality thresholds vs PLAN-TO-LEAD prerequisite-check). FR-3 independently reaches the same conclusion (key on metadata flag, not sd_type). No file conflict.' },
-        { sd: 'SD-LEO-INFRA-ORCH-PARENT-LIFECYCLE-001', status: 'completed', relation: 'Authored the 2 existing WAIT conditions FR-3 extends. Extension, not duplication.' },
-        { sd: 'SD-LEO-INFRA-EXTEND-WAIT-VERDICT-001', status: 'completed', relation: 'Generalized the WAIT pattern to 3 more gates; produced lib/handoff/wait-verdict.js buildWaitResult that FR-3 should reuse.' },
-        { sd: 'SD-UAT-* family (GEN/REC/DB/VALID/PLATFORM, Jan 2026)', status: 'completed', relation: 'BUILT the lib/uat toolkit FR-2 wires in. Confirms the leverage-existing framing; also the source of the phantom-column drift found below.' },
-        { sd: 'SD-LEO-INFRA-STAGE-QUALITY-ANALYZER-001 (+FR-B/FR-E)', status: 'completed', relation: 'Built the collectNonRepoFindings/FindingShape emission path FR-4 declares it will reuse. Reuse confirmed available.' }
-      ]
-    },
-
-    q2_sd_type_correct: {
-      answer: 'YES - infrastructure is correct.',
-      rationale: 'All touched surfaces are harness/engine code with no customer-facing UI: scripts/modules/handoff/executors/plan-to-lead/gates/prerequisite-check.js (gate), scripts/hooks/stop-subagent-enforcement/type-aware-validator.js (hook), lib/eva/*, lib/uat/*, lib/apa/*. target_application=EHG_Engineer. Not an orchestrator (no children, no parent_sd_id).',
-      dogfooding_note: 'Transparency flag, NOT an objection: infrastructure is in EXEMPT_TYPES (lib/utils/sd-type-validation.js:334), so this SD - which repairs dead UAT enforcement - is itself UAT-exempt. This is self-consistent with its own declared OUT OF SCOPE ("a per-SD UAT gate on infrastructure SDs is type-exempt by design") and is defensible: it ships gate/hook code, not a clickable surface. FR-5 deliberately fixture-proves that infrastructure REMAINS exempt, so the exemption is an asserted invariant rather than an unexamined convenience.',
-      decomposition_note: 'sd_type is correct, but 5 FRs spanning a falsifier run, a metadata emitter, a library rewire, a handoff gate, a stage sub-step and a hook bugfix will not fit the <=100 LOC PR target. PLAN should consider decomposition or a documented multi-PR sequence. This is a sizing observation, not a type objection.'
-    },
-
-    q3_reuse_opportunities: {
-      answer: 'YES - substantial. Two of five FRs should shrink materially.',
-      items: [
-        'lib/apa/browser-executor.js - ALREADY-GENERIC runJourneyWalk/executeJourneyStep parameterized by (steps[], executors{}). Supersedes FR-2 "generalize journey-walk-driver.js" (that file is a pass-through wrapper: :25-28, :211-213, :231-233).',
-        'lib/apa/live-instance-acquisition.mjs:55 acquireLiveInstance(url) - deployed-URL Playwright, SSRF-guarded. This is the FR-0 path; journey-walk-driver.js physically cannot reach a deployed URL.',
-        'lib/apa/standing-assessment-round.mjs - already walks live deployed ventures on a registered scheduler round (eva-master-scheduler.js:483-488), persists to apa_standing_assessments. Candidate host for FR-4.',
-        'lib/handoff/wait-verdict.js buildWaitResult - already imported at the exact file FR-3 edits (prerequisite-check.js:12, used :235 and :263). Zero new verdict plumbing.',
-        'lib/eva/quality-findings/db-sourced-findings.js:256 collectNonRepoFindings + finding-shape.js:65-75 FindingShape - FR-4 emission path exists as claimed.',
-        'lib/uat/selector-drift-recovery.js recoverFromDrift - ALREADY composed into browser-executor.js:28; free if FR-2 uses the generic engine.',
-        'uat_test_runs.pass_rate + .status - the live replacements for the phantom overall_result in FR-5.',
-        'venture_artifacts artifact_type=wireframe_screens / blueprint_user_journey + stage-15-screens.js:47-54 buildWireframeScreensPayload + docs/design/user-journey-artifact-schema.md - FR-1 source data and an existing schema SSOT that already names UAT as a consumer.'
-      ]
-    },
-
-    q4_blocking_concerns: {
-      answer: 'NONE BLOCKING for LEAD-TO-PLAN. 3 mandatory PLAN-phase corrections.',
-      rationale: 'LEAD-TO-PLAN approves strategic intent. The intent, the measured premise and the chairman ruling are sound and independently re-verified here. The defects found are in HOW two FRs propose to build, which is exactly what PLAN exists to resolve - so they are carried as binding corrections rather than a rejection.',
-      mandatory_plan_corrections: [
-        'C1 - Retarget FR-2 onto lib/apa/browser-executor.js (do not re-generalize a wrapper over an already-generic engine).',
-        'C2 - Retarget FR-0 onto acquireLiveInstance (journey-walk-driver.js cannot reach a deployed URL at all).',
-        'C3 - Fold the 11 phantom columns in lib/uat/result-recorder.js into FR-5, or add a reconciliation FR - otherwise FR-2 wires in a recorder that throws.'
-      ],
-      non_blocking_corrections: [
-        'FR-3 says "SECOND" WAIT condition; it is the THIRD (prerequisite-check.js:235, :263 already WAIT).',
-        'FR-1 must read venture_artifacts, not a wireframe_screens table (never existed).',
-        'Declare the APA Child E boundary so FR-3/FR-4 do not build a competing findings-gate.',
-        'FR-2 deliverable "remove @wire-check-exempt" likely becomes moot under C1.'
-      ]
-    },
-
-    premise_verification: {
-      fr5_bug1_phantom_column: 'CONFIRMED. type-aware-validator.js:37 selects "id, status, overall_result"; :43 reads r.overall_result. Probed live: uat_test_runs.overall_result does not exist.',
-      fr5_bug2_dead_comparison: 'CONFIRMED. type-aware-validator.js:28 calls getUATRequirement(sd.sd_type) with NO options; lib/utils/sd-type-validation.js:326+ returns an OBJECT ({status,uatRequired,uatExempt,reason,acceptsAutomatedEvidence}) unless options.returnLegacy is set. So :34 uatRequirement === "REQUIRED" is always false. The live-correct read is uatRequirement.status === "REQUIRED" or .uatRequired.',
-      fr3_exempt_types_premise: 'CONFIRMED. lib/utils/sd-type-validation.js:334 EXEMPT_TYPES includes "orchestrator" (and "infrastructure"), so a type-keyed gate would exempt parent orchestrators and gate nothing. FR-3 keying on a metadata flag instead is correct.',
-      dead_uat_enforcement: 'INDEPENDENTLY CORROBORATED. uat_test_runs contains exactly 1 row in total across the whole table.',
-      journey_steps_greenfield: 'CONFIRMED. Zero occurrences of journey_steps repo-wide (only an unrelated uppercase JOURNEY_STEPS constant of MarketLens step names at lib/eva/persona-generator.js:24).'
-    },
-
-    evidence_method: 'Independent re-derivation. Did not rely on strategic_directives_v2.metadata.testing_agent_lead_findings or the prior Explore pass; every claim above was re-measured against the live DB (column probes, full-population SD sweeps) or cited to file:line read in this worktree.'
-  },
-  execution_time_ms: 0
+    gate: 'GATE_1_LEAD_PRE_APPROVAL',
+    phase: 'LEAD',
+    session_id: process.env.CLAUDE_SESSION_ID || null,
+    probe_method: 'live pg via createDatabaseClient(engineer): pg_trigger/pg_proc/pg_get_functiondef enumeration, audit_log 48h created_by cardinality, SET + SET LOCAL GUC round-trip; supabase-js service reads of strategic_directives_v2/sd_backlog_map/user_stories/product_requirements_v2/quick_fixes; repo-wide grep for set_config/app.actor/x-actor-session; import-census of both client factories',
+    duplicate_sds_found: 0,
+    duplicate_qfs_found: 0,
+    backlog_items: 0,
+    app_actor_set_config_call_sites: 0,
+    live_funcs_reading_app_actor: 1,
+    live_funcs_reading_request_headers: 0,
+    trigger_created_by_distinct_values_48h: 2,
+    trigger_rows_48h: 310,
+    service_client_factories_found: 2,
+    blockers: ['GATE1-BACKLOG-ZERO'],
+    must_fix_before_prd: ['SCOPE-TARGET-1-SHIM', 'SCOPE-TARGET-2-TWO-FACTORIES', 'REQUEST-HEADERS-UNPROVEN']
+  }
 };
 
+import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+const supabase = createSupabaseServiceClient();
+const { data: sdRow } = await supabase.from('strategic_directives_v2')
+  .select('target_application').eq('sd_key', SD).maybeSingle();
 const resolution = await resolveSubAgentRepo({
-  sdId: SD_UUID,
-  targetApplication: 'EHG_Engineer',
-  subAgentCode: CODE,
+  sdId: SD,
+  targetApplication: sdRow?.target_application || null,
+  subAgentCode: 'VALIDATION',
+  fallback: 'EHG_Engineer',
+  probeExistsRelative: 'lib/supabase-client.js',
   supabase,
 });
-applySubAgentRepoVerdict(results, resolution);
+console.log('RESOLUTION:', JSON.stringify(resolution));
+applySubAgentRepoVerdict(results, resolution, { severity: 'HIGH' });
 
-const stored = await storeSubAgentResults(CODE, SD_UUID, { code: CODE }, results, {
-  sdKey: SD_KEY,
-  phase: 'LEAD',
-});
-console.log('\nSTORED OK. id=', stored?.id || JSON.stringify(stored).slice(0, 300));
+const stored = await storeSubAgentResults('VALIDATION', SD, { name: 'Principal Systems Analyst' }, results, { sdKey: SD });
+console.log('\nSTORED:', JSON.stringify(stored)?.slice(0, 600));
+console.log('FINAL VERDICT:', results.verdict, '| repo_resolved:', results.metadata.repo_resolved, '| repo_path:', results.metadata.repo_path);
