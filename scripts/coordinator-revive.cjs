@@ -17,8 +17,9 @@
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 // SD-LEO-INFRA-COORDINATOR-DISPATCH-TARGET-001: validated dispatch guard
-// (the SPAWN_REQUEST broadcast below uses the 'broadcast' sentinel, which the
-// guard short-circuits — exercising the sentinel-allowlist path).
+// (the SPAWN_REQUEST broadcast below uses the 'broadcast-coordinator' sentinel, which the
+// guard short-circuits — exercising the sentinel-allowlist path. QF-20260911-753: retargeted
+// from bare 'broadcast', retired — 0/91 rows ever acknowledged, all-time).
 const { insertCoordinationRow } = require('../lib/coordinator/dispatch.cjs');
 const { liveActiveSessionsView } = require('../lib/fleet/live-fleet-sessions.cjs');
 
@@ -136,8 +137,14 @@ async function insertSpawnRequest(supabase, callsign, requestedBySessionId) {
 
   // Broadcast SPAWN_REQUEST on session_coordination (best-effort — broadcast failure
   // does NOT undo the row insert; the row is the canonical contract surface).
+  // QF-20260911-753 round 2 (adversarial-review catch, agent ae8b829c): this call was missed
+  // in both earlier rounds -- bare 'broadcast' is retired (0/91 rows ever acknowledged,
+  // all-time) and dispatch.cjs now throws DISPATCH_TARGET_INVALID for it, which this call's
+  // own .catch() below silently swallowed, permanently breaking the SPAWN_REQUEST broadcast
+  // for every /coordinator revive call with zero test coverage to catch it (the row insert
+  // into worker_spawn_requests above still succeeded, so main()'s success log was misleading).
   await insertCoordinationRow(supabase, {
-    target_session: 'broadcast',
+    target_session: 'broadcast-coordinator',
     message_type: 'SPAWN_REQUEST',
     subject: `Spawn request: ${callsign}`,
     body: `Coordinator requests revival of callsign ${callsign}. Spawn-execution layer (external watchdog/notification/cron) should consume worker_spawn_requests row id=${data.id}.`,
