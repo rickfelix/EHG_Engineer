@@ -223,6 +223,28 @@ describe('resolveAndVerifyClassifierDenial', () => {
     expect(sb._feedbackUpdates[0].id).toBe('fb-related');
   });
 
+  it('SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001-F: surfaces a rejected feedback update instead of silently reporting success', async () => {
+    classifyMock.mockResolvedValue({ files: [{ file: 'x.sql', status: 'APPLIED' }], error: null });
+    const sb = makeFakeSupabase({
+      decisions: [{ brief_data: { context: { kind: 'migration_apply_wait', file: 'x.sql', sd_key: 'SD-TEST-010', command: 'node scripts/apply-migration.js x.sql' } } }],
+      feedbackRows: [{ id: 'fb-1', description: 'x.sql was never applied to the live database', metadata: { source_sd: 'SD-TEST-010' } }],
+    });
+    // Force the update to fail (e.g. a rejected trigger) instead of the fake's default success.
+    const realFeedbackFrom = sb.from.bind(sb);
+    sb.from = (table) => {
+      const api = realFeedbackFrom(table);
+      if (table === 'feedback') {
+        api.update = (patch) => ({ eq: (col, val) => { sb._feedbackUpdates.push({ patch, id: val }); return Promise.resolve({ data: null, error: { message: 'rejected: content column changed' } }); } });
+      }
+      return api;
+    };
+    const result = await resolveAndVerifyClassifierDenial(sb, { decisionId: 'd1', action: 'approve' });
+    expect(result.closed).toBe(0);
+    expect(result.updateErrors).toHaveLength(1);
+    expect(result.updateErrors[0].id).toBe('fb-1');
+    expect(result.updateErrors[0].error).toMatch(/rejected/);
+  });
+
   it('has no verifier for classifier_denied_command (non-migration) kinds — never falsely closes', async () => {
     const sb = makeFakeSupabase({
       decisions: [{ brief_data: { context: { kind: 'classifier_denied_command', sd_key: 'SD-TEST-007', command: 'schtasks /Create ...' } } }],
