@@ -7969,6 +7969,11 @@
   "match": "'sd_key, status, current_phase, updated_at'",
   "note": ".limit(STRANDED_CANDIDATE_LIMIT=5) with deterministic .order(updated_at ASC) — oldest-stranded recovery window, bounded by design (recoverStrandedFinal)"
  },
+ "scripts/worker-checkin.cjs:1164": {
+  "classification": "bounded-by-design",
+  "match": "id, sd_key, status, current_phase, updated_at, metadata, sd_type, target_application, parent_sd_id",
+  "note": "QF-20260911-529: same site as :991/:1003 above (recoverStrandedFinal's stranded-candidate scan), re-flagged because the diff-lint keys on the .select( line's own trimmed text and this line's column list has grown twice since (metadata for FR-1/FR-2, now `id` for the QF-20260911-529 sd_phase_handoffs lookup) -- .limit(STRANDED_CANDIDATE_LIMIT=5) with deterministic .order(updated_at ASC) is unchanged, still a 5-row bounded-by-design window."
+ },
  "scripts/worktree-reaper.mjs:1091": {
   "classification": "bounded-by-design",
   "match": "select('name, local_path')",

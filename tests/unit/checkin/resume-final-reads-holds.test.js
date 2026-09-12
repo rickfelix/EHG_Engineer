@@ -26,16 +26,26 @@ const OLD = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // safely past 
  * resolution, claim stamp) does not need individual stubbing — only the two things under assertion
  * are pinned: which rows the scan returns, and which sd_key reaches claim_sd.
  */
-function fakeSb({ stranded = [], claimed = [] }) {
+// QF-20260911-529: `handoffs` maps sd_id -> [sd_phase_handoffs row(s)], read via the same chain
+// shape (`.eq('sd_id', X).order(...).limit(1)`) recoverStrandedFinal's newestHandoffWaitingGates
+// now issues. Keyed per-row (not a flat array) so a test can mix a WAITING candidate with an
+// eligible one in the same stranded set.
+function fakeSb({ stranded = [], claimed = [], handoffs = {} }) {
   const payloads = { strategic_directives_v2: stranded };
   const make = (table) => {
+    let lastEqSdId;
     const b = {
-      select: () => b, eq: () => b, is: () => b, lt: () => b, gt: () => b,
+      select: () => b,
+      eq: (col, val) => { if (table === 'sd_phase_handoffs' && col === 'sd_id') lastEqSdId = val; return b; },
+      is: () => b, lt: () => b, gt: () => b,
       order: () => b, limit: () => b, in: () => b, neq: () => b, not: () => b,
       maybeSingle: async () => ({ data: null, error: null }),
       single: async () => ({ data: null, error: null }),
       update: () => b, insert: () => b, upsert: () => b,
-      then: (res) => res({ data: payloads[table] ?? [], error: null }),
+      then: (res) => {
+        if (table === 'sd_phase_handoffs') return res({ data: handoffs[lastEqSdId] ?? [], error: null });
+        return res({ data: payloads[table] ?? [], error: null });
+      },
     };
     return b;
   };
@@ -267,6 +277,79 @@ describe('describeSoftHolds', () => {
     expect(describeSoftHolds({ metadata: { hold_b: { reason: 'via reason' } } })[0]).toMatch(/via reason/);
     // No recognised field: still surfaced rather than dropped — an unreadable hold is still a hold.
     expect(describeSoftHolds({ metadata: { hold_c: { odd: 1 } } })[0]).toMatch(/odd/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// QF-20260911-529 — A LIVE WAIT VERDICT MEANS "WAITING", NOT "STRANDED".
+//
+// THE DEFECT. resume_final's stranded predicate reads only strategic_directives_v2
+// (status=pending_approval, current_phase=LEAD_FINAL/PLAN_VERIFICATION) and never the newest
+// sd_phase_handoffs row. A chairman-gated migration produces a real WAIT verdict there
+// (validation_details.waiting_gates=['CHAIRMAN_APPLY_VERIFICATION'], per HandoffRecorder.js) —
+// legitimate and re-checkable once the chairman applies the migration, not stranded. Blind to
+// that, resume_final adopted, sd-start'd, re-ran LEAD-FINAL-APPROVAL, hit the same WAIT, and
+// released — every single check-in (the SD-LEO-FIX-GOVERNANCE-AUDIT-LOG-001 / handoff a58a8946
+// shape this suite models).
+describe('QF-20260911-529 — a stranded row WAITING on its newest handoff is skipped, not adopted', () => {
+  const { newestHandoffWaitingGates } = checkin;
+
+  it('newestHandoffWaitingGates reads validation_details.waiting_gates off the newest row', async () => {
+    const sb = fakeSb({ handoffs: { 'uuid-1': [{ validation_details: { wait: true, waiting_gates: ['CHAIRMAN_APPLY_VERIFICATION'] }, metadata: {} }] } });
+    expect(await newestHandoffWaitingGates(sb, 'uuid-1')).toEqual(['CHAIRMAN_APPLY_VERIFICATION']);
+  });
+
+  it('returns [] (fail-open) for a row with no handoffs, no id, or a query fault', async () => {
+    expect(await newestHandoffWaitingGates(fakeSb({}), 'uuid-none')).toEqual([]);
+    expect(await newestHandoffWaitingGates(fakeSb({}), undefined)).toEqual([]);
+    const throwing = { from: () => { throw new Error('boom'); } };
+    expect(await newestHandoffWaitingGates(throwing, 'uuid-1')).toEqual([]);
+  });
+
+  it('skips (does not claim) a stranded row whose newest handoff carries waiting_gates', async () => {
+    const claimed = [];
+    const waitingRow = { ...row('SD-WAITING-529'), id: 'uuid-wait' };
+    const sb = fakeSb({
+      stranded: [waitingRow],
+      claimed,
+      handoffs: { 'uuid-wait': [{ validation_details: { wait: true, waiting_gates: ['CHAIRMAN_APPLY_VERIFICATION'] } }] },
+    });
+    const base = {};
+    const r = await recoverStrandedFinal(sb, 'sess-1', base);
+    expect(claimed).not.toContain('SD-WAITING-529');
+    expect(r?.action).not.toBe('resume_final');
+    // Loud, and named as WAITING (not "fenced"/"stranded") — the operator-visible distinction
+    // the QF asked for.
+    expect(base.skipped_fenced).toEqual(expect.arrayContaining([expect.stringContaining('SD-WAITING-529')]));
+    expect(base.skipped_fenced.join(' ')).toMatch(/WAITING on gate\(s\) CHAIRMAN_APPLY_VERIFICATION/);
+  });
+
+  it('reaches and adopts an eligible row PAST a WAITING one', async () => {
+    const claimed = [];
+    const waitingRow = { ...row('SD-WAITING-529'), id: 'uuid-wait' };
+    const okRow = { ...row('SD-OK-530'), id: 'uuid-ok' };
+    const sb = fakeSb({
+      stranded: [waitingRow, okRow],
+      claimed,
+      handoffs: { 'uuid-wait': [{ validation_details: { waiting_gates: ['CHAIRMAN_APPLY_VERIFICATION'] } }] },
+    });
+    const r = await recoverStrandedFinal(sb, 'sess-1', {});
+    expect(r?.action).toBe('resume_final');
+    expect(r.sd).toBe('SD-OK-530');
+    expect(claimed).toEqual(['SD-OK-530']);
+  });
+
+  it('negative control: a row whose newest handoff has NO waiting_gates is still adopted (this is not a blanket new hold)', async () => {
+    const claimed = [];
+    const plainRow = { ...row('SD-PLAIN-531'), id: 'uuid-plain' };
+    const sb = fakeSb({
+      stranded: [plainRow],
+      claimed,
+      handoffs: { 'uuid-plain': [{ validation_details: { wait: false, waiting_gates: [] } }] },
+    });
+    const r = await recoverStrandedFinal(sb, 'sess-1', {});
+    expect(r?.action).toBe('resume_final');
+    expect(claimed).toEqual(['SD-PLAIN-531']);
   });
 });
 
