@@ -67,24 +67,57 @@ describe('shouldSkipForBackoff (FR-1: does not self-freeze)', () => {
   });
 });
 
-function makeSupabaseMock({ attemptCount = 0, lastAttemptAt = null, ventureMetadata = {} } = {}) {
+function makeSupabaseMock({ attemptCount = 0, lastAttemptAt = null, ventureMetadata = {}, residencyStart = null } = {}) {
   const updates = [];
+  const gteCalls = [];
   const api = {
     from: vi.fn((table) => {
+      if (table === 'venture_stage_transitions') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => ({
+                    maybeSingle: vi.fn(async () => ({
+                      data: residencyStart ? { created_at: residencyStart } : null,
+                      error: null,
+                    })),
+                  })),
+                })),
+              })),
+            })),
+          })),
+        };
+      }
       if (table === 'eva_stage_gate_attempts') {
         return {
           select: vi.fn((_cols, opts) => {
             if (opts?.head) {
-              return { eq: vi.fn(() => ({ eq: vi.fn(async () => ({ count: attemptCount, error: null })) })) };
+              return {
+                eq: vi.fn(() => ({
+                  eq: vi.fn(() => ({
+                    gte: vi.fn((_col, val) => {
+                      gteCalls.push(val);
+                      return Promise.resolve({ count: attemptCount, error: null });
+                    }),
+                  })),
+                })),
+              };
             }
             return {
               eq: vi.fn(() => ({
                 eq: vi.fn(() => ({
-                  order: vi.fn(() => ({
-                    limit: vi.fn(() => ({
-                      maybeSingle: vi.fn(async () => ({ data: lastAttemptAt ? { created_at: lastAttemptAt } : null, error: null })),
-                    })),
-                  })),
+                  gte: vi.fn((_col, val) => {
+                    gteCalls.push(val);
+                    return {
+                      order: vi.fn(() => ({
+                        limit: vi.fn(() => ({
+                          maybeSingle: vi.fn(async () => ({ data: lastAttemptAt ? { created_at: lastAttemptAt } : null, error: null })),
+                        })),
+                      })),
+                    };
+                  }),
                 })),
               })),
             };
@@ -107,14 +140,33 @@ function makeSupabaseMock({ attemptCount = 0, lastAttemptAt = null, ventureMetad
       throw new Error(`unexpected table ${table}`);
     }),
   };
-  return { api, updates };
+  return { api, updates, gteCalls };
 }
 
 describe('getGateAttemptState (TR-3: DB-sourced, not cached)', () => {
   it('returns the fresh count and latest timestamp from eva_stage_gate_attempts', async () => {
     const { api } = makeSupabaseMock({ attemptCount: 951, lastAttemptAt: '2026-08-24T20:48:18Z' });
     const state = await getGateAttemptState(api, { ventureId: 'v1', stageNumber: 21 });
-    expect(state).toEqual({ attemptCount: 951, lastAttemptAt: '2026-08-24T20:48:18Z' });
+    expect(state).toEqual({ attemptCount: 951, lastAttemptAt: '2026-08-24T20:48:18Z', residencyStart: null });
+  });
+});
+
+describe('getGateAttemptState (QF-20260913-712: residency-scoped counting)', () => {
+  it('scopes both the count and latest-attempt queries to rows at/after the latest transition INTO this stage -- a rollback/re-entry residency never inherits the prior residency\'s attempts', async () => {
+    // Mirrors the real AltifyAI incident: 24->23 rollback at 08-30T18:31:28Z, re-entered later --
+    // only attempts recorded at/after the re-entry should count, not the sixteen from before it.
+    const residencyStart = '2026-08-30T18:31:28Z';
+    const { api, gteCalls } = makeSupabaseMock({ attemptCount: 2, lastAttemptAt: '2026-09-13T10:22:22Z', residencyStart });
+    const state = await getGateAttemptState(api, { ventureId: 'v1', stageNumber: 24 });
+    expect(state).toEqual({ attemptCount: 2, lastAttemptAt: '2026-09-13T10:22:22Z', residencyStart });
+    expect(gteCalls).toEqual([residencyStart, residencyStart]);
+  });
+
+  it('falls back to counting every attempt ever recorded (today\'s behavior) when the venture has no transition row for this stage', async () => {
+    const { api, gteCalls } = makeSupabaseMock({ attemptCount: 5, lastAttemptAt: '2026-08-24T20:48:18Z', residencyStart: null });
+    const state = await getGateAttemptState(api, { ventureId: 'v1', stageNumber: 24 });
+    expect(state).toEqual({ attemptCount: 5, lastAttemptAt: '2026-08-24T20:48:18Z', residencyStart: null });
+    expect(gteCalls).toEqual(['1970-01-01T00:00:00.000Z', '1970-01-01T00:00:00.000Z']);
   });
 });
 
@@ -151,7 +203,7 @@ describe('checkGateRetryCeiling (FR-1/FR-2 integration)', () => {
   it('proceeds when below backoff start', async () => {
     const { api } = makeSupabaseMock({ attemptCount: 2 });
     const result = await checkGateRetryCeiling(api, { ventureId: 'v1', stageNumber: 21, logger: console });
-    expect(result).toEqual({ action: 'proceed', attemptCount: 2 });
+    expect(result).toEqual({ action: 'proceed', attemptCount: 2, residencyStart: null });
   });
 
   it('skips when past backoff start and within the wait window', async () => {

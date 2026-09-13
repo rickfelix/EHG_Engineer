@@ -82,7 +82,7 @@ function makeSupabase() {
     }
     const chain = {
       select: () => chain, eq: () => chain, neq: () => chain, in: () => chain,
-      gt: () => chain, lt: () => chain, order: () => chain, limit: () => chain,
+      gt: () => chain, lt: () => chain, gte: () => chain, order: () => chain, limit: () => chain,
       update: () => chain,
       insert: async () => ({ data: null, error: null }),
       upsert: async () => ({ data: null, error: null }),
@@ -201,7 +201,7 @@ describe('VENTURE_PARKED entry-point guard in _processVenture (2nd pass -- live 
       }
       const chain = {
         select: () => chain, eq: () => chain, neq: () => chain, in: () => chain,
-        gt: () => chain, lt: () => chain, order: () => chain, limit: () => chain,
+        gt: () => chain, lt: () => chain, gte: () => chain, order: () => chain, limit: () => chain,
         update: () => chain,
         insert: async () => ({ data: null, error: null }),
         upsert: async () => ({ data: null, error: null }),
