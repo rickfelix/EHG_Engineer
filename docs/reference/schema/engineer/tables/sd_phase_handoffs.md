@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 30,161
+**Generated**: 2026-09-13T06:31:02.341Z
+**Rows**: 38,653
 **RLS**: Enabled (6 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (28 total)
+## Columns (30 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -33,9 +33,9 @@
 | completeness_report | `text` | YES | - | Element 7: Completeness assessment |
 | metadata | `jsonb` | YES | `'{}'::jsonb` | - |
 | rejection_reason | `text` | YES | - | - |
-| created_at | `timestamp without time zone` | YES | `CURRENT_TIMESTAMP` | - |
-| accepted_at | `timestamp without time zone` | YES | - | - |
-| rejected_at | `timestamp without time zone` | YES | - | - |
+| created_at | `timestamp with time zone` | YES | `CURRENT_TIMESTAMP` | - |
+| accepted_at | `timestamp with time zone` | YES | - | - |
+| rejected_at | `timestamp with time zone` | YES | - | - |
 | created_by | `character varying(50)` | YES | `'LEO_AGENT'::character varying` | - |
 | template_id | `text` | YES | - | Optional handoff template reference for standardized handoffs. Allows handoff system to use predefined templates for consistency. |
 | validation_details | `jsonb` | YES | `'{}'::jsonb` | Detailed validation results from handoff verification including sub-agent outputs, gate checks, and quality metrics. |
@@ -46,6 +46,8 @@
 | resolution_notes | `text` | YES | - | - |
 | venture_id | `uuid` | YES | - | FK to ventures.id. Scopes this handoff to a specific venture. Should match the parent SD venture_id. |
 | scope_snapshot | `jsonb` | YES | - | - |
+| window_registered_at | `timestamp with time zone` | YES | - | SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D (FR-1/FR-2): stamped at INSERT time by HandoffRecorder.js on the row that opens the phase this handoff transitions INTO (to_phase) -- a genuine pre-registration point, since the row is created before any work in the new phase has occurred. Keyed by this row's own id, never by (sd_id, to_phase), which is non-unique across repeated phase cycles. Immutable once set (see phase_snapshot_window_freeze trigger below) -- satisfies the chairman-approved M1+M2 burn-lever amendment's requirement that a baseline window be declared before, not after, a phase starts. |
+| baseline_snapshot | `jsonb` | YES | - | SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D (FR-1/FR-2): the pre-registered baseline metrics snapshot paired with window_registered_at. Immutable once set (see phase_snapshot_window_freeze trigger below). |
 
 ## Constraints
 
@@ -159,6 +161,11 @@
 
 - **Timing**: BEFORE INSERT
 - **Action**: `EXECUTE FUNCTION enforce_handoff_system()`
+
+### phase_snapshot_window_freeze_trg
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION phase_snapshot_window_freeze()`
 
 ### trg_enforce_is_working_on_handoffs
 
