@@ -27,8 +27,14 @@ const FIXTURE_PATH = 'tests/unit/hygiene/clock-skew-fixture.test.js';
 const OFFSET_MS = 45 * 24 * 60 * 60 * 1000; // +45 days, matching FR-2's real sweep offset
 
 function runChildVitest(testPath, extraEnv) {
+  // SD-LEO-INFRA-CLOCK-SKEW-SWEEP-001 (EXEC-TO-PLAN TESTING finding): both clock vars must
+  // default to unset here, not inherited from this process's own env -- otherwise a parent
+  // process that happens to export either var leaks it into every child, inverting the
+  // negative-control cases (which need the var ABSENT unless a test explicitly sets it).
   const env = {
     ...process.env,
+    TEST_CLOCK_OFFSET_MS: '',
+    TEST_CLOCK_PIN_ISO: '',
     ...extraEnv,
     VITEST_DB_ALLOW_REF: '',
     CI: '1',

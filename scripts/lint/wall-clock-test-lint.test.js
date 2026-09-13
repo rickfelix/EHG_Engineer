@@ -29,8 +29,11 @@ describe('isViolation (pure)', () => {
     expect(isViolation("vi.mock('x', () => ({ resolveChairmanZone: vi.fn() }));")).toBe(false);
     expect(isViolation('const opts = { resolveChairmanZone: zoneStub, sender };')).toBe(false);
   });
-  it('the pragma always wins, even with a real unclosed violation present', () => {
-    expect(isViolation('// wall-clock-test-lint-disable-file\nawait reconcileOutboundSms(sb, {});')).toBe(false);
+  it('the pragma always wins when it carries a reason, even with a real violation present', () => {
+    expect(isViolation('// wall-clock-test-lint-disable-file: mocked via vi.mock in a sibling file\nawait reconcileOutboundSms(sb, {});')).toBe(false);
+  });
+  it('a bare pragma with no reason does NOT clear a violation (an unexplained opt-out is a bypass)', () => {
+    expect(isViolation('// wall-clock-test-lint-disable-file\nawait reconcileOutboundSms(sb, {});')).toBe(true);
   });
   it('a file with no entry-point reference at all is never a violation', () => {
     expect(isViolation('describe("unrelated", () => { it("x", () => expect(1).toBe(1)); });')).toBe(false);

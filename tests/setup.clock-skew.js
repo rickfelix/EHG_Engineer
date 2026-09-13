@@ -46,7 +46,7 @@ function parseOffsetMs(raw) {
 /** Fail-safe by construction, mirroring parseOffsetMs: an invalid/empty ISO string is "not set". */
 function parsePinMs(raw) {
   if (raw === undefined || raw === null || raw === '') return null;
-  const ms = Date.parse(raw);
+  const ms = RealDate.parse(raw);
   return Number.isFinite(ms) ? ms : null;
 }
 

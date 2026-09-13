@@ -27,7 +27,9 @@
  * sets the exit code. --all is a whole-tree census (diagnostic only, never the CI entry point) —
  * used to measure the tool's own real baseline population rather than assume a number.
  *
- * Escape hatch: a `wall-clock-test-lint-disable-file` comment anywhere in the file. Advisory-first
+ * Escape hatch: a `wall-clock-test-lint-disable-file: <reason>` comment anywhere in the file (a
+ * non-empty reason is required, mirroring hardened-runner.cjs's assertOptOutReasons contract — an
+ * opt-out without a reason is a silent bypass, not a ledger). Advisory-first
  * by design (SD-LEO-INFRA-CLOCK-SKEW-SWEEP-001 LEAD risk assessment): a static scan cannot see an
  * indirect mocking path, so day one ships as --diff (reported, not yet wired to a blocking CI
  * step) — promoting it to a required check is a separate, later decision.
@@ -53,7 +55,10 @@ import { fileURLToPath } from 'node:url';
 import { makeHardenedGitRunner, VALID_BASE_REF } from '../../lib/git/hardened-runner.cjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const PRAGMA = 'wall-clock-test-lint-disable-file';
+// SECURITY EXEC-TO-PLAN review (2363e6d7): requires a non-empty reason after the marker, mirroring
+// lib/git/hardened-runner.cjs's assertOptOutReasons contract ("an opt-out without a reason is a
+// silent bypass") rather than a bare boolean marker anyone could paste without explanation.
+const PRAGMA_RE = /wall-clock-test-lint-disable-file:\s*\S/;
 
 export const TIME_SENSITIVE_ENTRY_POINTS = Object.freeze([
   'reconcileOutboundSms',
@@ -78,7 +83,7 @@ const DIFF_MAX_BUFFER = 64 * 1024 * 1024;
  */
 export function isViolation(source) {
   const text = String(source || '');
-  if (text.includes(PRAGMA)) return false;
+  if (PRAGMA_RE.test(text)) return false;
   return ENTRY_POINT_RE.test(text) && !FAKE_CLOCK_TOKEN_RE.test(text);
 }
 
