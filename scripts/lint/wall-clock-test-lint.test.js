@@ -1,6 +1,13 @@
 // Unit pins for wall-clock-test-lint.mjs — SD-LEO-INFRA-CLOCK-SKEW-SWEEP-001 piece (d).
 // A test-hygiene tool shipping with zero tests is the same blind-guard class this SD exists to
 // close (prospective TESTING review, 2026-09-13) — this file is the required coverage.
+//
+// KNOWN LIMITATION (control-seed-test-lint FR-4 — this file itself matches CONTROL_GLOBS as a
+// new control): runDiffMode is exercised here only against an injected fake `run`/
+// `readCurrentFile`, never a real git repo. A regression in the REAL hardened-runner.cjs
+// invocation shape (argv order, stdio, maxBuffer) would not be caught by this suite — see
+// this SD's own metadata.real_callee_attestation, which declares that exact gap "none" (real
+// callee untested) rather than silently leaving it unstated.
 import { describe, it, expect } from 'vitest';
 import {
   isViolation, TIME_SENSITIVE_ENTRY_POINTS, parseRenameMap, runDiffMode,
