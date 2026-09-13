@@ -520,7 +520,13 @@ describe('createOrReusePendingDecision', () => {
     expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ attempt_number: 2 }));
   });
 
-  it('omits attempt_number from the insert when not provided (preserves the DB default for every other caller)', async () => {
+  // QF-20260913-466: this used to assert attempt_number was OMITTED (relying on the DB column
+  // default of 1) when no explicit attemptNumber was given. That was the root cause of
+  // DECISION_CREATE_FAILED forever once ANY prior attempt existed (e.g. cancelled) at the same
+  // (venture, stage, decision_type): every retry re-collided on the same hardcoded default. Now
+  // attempt_number is ALWAYS computed as max(existing)+1 (1 when none exist, matching the old
+  // default for a first-ever attempt) and always included explicitly.
+  it('computes attempt_number as max(existing)+1 when not explicitly provided (1 when no prior attempts)', async () => {
     const insertFn = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
@@ -538,7 +544,53 @@ describe('createOrReusePendingDecision', () => {
     await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 10, supabase, logger });
 
     const insertedRow = insertFn.mock.calls[0][0];
-    expect(insertedRow).not.toHaveProperty('attempt_number');
+    expect(insertedRow).toHaveProperty('attempt_number', 1);
+  });
+
+  // QF-20260913-466 (c): the exact scenario measured live for AltifyAI — a CANCELLED prior
+  // attempt at attempt_number 1 for this (venture, stage, decision_type) must not make the new
+  // insert collide; it must land at attempt_number 2.
+  //
+  // Keyed on the select() COLUMNS argument rather than call order/count: this function also
+  // makes several OTHER select() calls (fixture-venture check, health resolution) en route to the
+  // insert, each via .maybeSingle() and unrelated to attempt_number — asserting a raw call count
+  // would couple this test to that unrelated internal call graph. Only the 'attempt_number'
+  // column set gets the array-of-prior-attempts shape; everything else safely resolves to "not
+  // found" (matching each caller's own documented fail-open contract).
+  it('derives attempt_number 2 when a prior (e.g. cancelled) attempt_number 1 exists for the same venture/stage/type', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockImplementation((columns) => {
+          if (columns === 'attempt_number') {
+            // Array form (no .single()), matching real supabase-js's non-.single() shape.
+            return {
+              eq: vi.fn().mockReturnThis(),
+              then: (resolve) => resolve({ data: [{ attempt_number: 1 }], error: null }),
+            };
+          }
+          // Every other select() in the call graph (fixture check, health resolution, the
+          // existing-pending-decision pre-check): safely resolves to nothing found.
+          return {
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          };
+        }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 24, decisionType: 'stage_gate', supabase, logger,
+    });
+
+    const insertedRow = insertFn.mock.calls[0][0];
+    expect(insertedRow).toHaveProperty('attempt_number', 2);
   });
 
   // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (FR-2): the blocking flag (chairman-designated
