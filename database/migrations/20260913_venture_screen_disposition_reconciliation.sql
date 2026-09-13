@@ -1,11 +1,11 @@
 -- @approved-by: codestreetlabs@gmail.com
--- SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-2/FR-4 -- two new, isolated tables (no existing
--- production table altered, no existing data at risk) so this is a plain additive migration,
--- not chairman-gated. Deliberately NOT a new venture_artifacts.artifact_type value: that column
--- is governed by the live venture_artifacts_artifact_type_check CHECK constraint and its own CI
--- parity gate (tests/unit/eva/artifact-type-db-parity.test.js), which requires a chairman-gated
--- migration to widen -- these tables sidestep that dependency entirely (LEAD/PLAN-phase TESTING
--- sub-agent finding, PRD FR-4).
+-- SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-2/FR-3/FR-4 -- three new, isolated tables (no
+-- existing production table altered, no existing data at risk) so this is a plain additive
+-- migration, not chairman-gated. Deliberately NOT a new venture_artifacts.artifact_type value:
+-- that column is governed by the live venture_artifacts_artifact_type_check CHECK constraint and
+-- its own CI parity gate (tests/unit/eva/artifact-type-db-parity.test.js), which requires a
+-- chairman-gated migration to widen -- these tables sidestep that dependency entirely (LEAD/PLAN-
+-- phase TESTING sub-agent finding, PRD FR-4).
 
 -- FR-2: one disposition record per unreachable-screen finding. A screen can be COMPLETE
 -- (its disposition is a settled, present-tense fact -- e.g. retired) or OPEN (a commitment
@@ -91,4 +91,42 @@ CREATE POLICY "vsr_venture_access" ON venture_screen_reconciliation
     )
   );
 CREATE POLICY "vsr_service_role" ON venture_screen_reconciliation
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- FR-3: written-reason overrides for default capabilities with no ground-truth wiring
+-- signal (verifyCapabilityWired, lib/eva/utils/validate-venture-default-capabilities.js).
+-- A capability WITH a signal source may never be overridden -- this table exists only for
+-- the no-signal capabilities, and the reader enforces that distinction at read time, not
+-- this table's schema (a capability_id that later gains a signal source simply stops being
+-- consulted for its override; the row is left in place as history, never deleted).
+CREATE TABLE IF NOT EXISTS venture_capability_overrides (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  venture_id UUID NOT NULL REFERENCES ventures(id) ON DELETE CASCADE,
+  capability_id TEXT NOT NULL,
+  override_reason TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (venture_id, capability_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_venture_capability_overrides_venture ON venture_capability_overrides(venture_id);
+
+COMMENT ON TABLE venture_capability_overrides IS
+'SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-3: written-reason override for a default '
+'capability with no ground-truth wiring signal (verifyCapabilityWired). override_reason is '
+'validated via validateOverrideReason (validate-venture-default-capabilities.js) -- trimmed, '
+'fail-closed on empty/whitespace-only, the same rule already enforced at Stage-19 sprint-plan '
+'declaration time, reused here rather than re-implemented for the Stage-24 ground-truth check.';
+
+ALTER TABLE venture_capability_overrides ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "vco_venture_access" ON venture_capability_overrides
+  FOR SELECT TO authenticated
+  USING (
+    venture_id IN (
+      SELECT v.id FROM ventures v
+      WHERE v.company_id IN (SELECT company_id FROM user_company_access WHERE user_id = auth.uid())
+    )
+  );
+CREATE POLICY "vco_service_role" ON venture_capability_overrides
   FOR ALL TO service_role USING (true) WITH CHECK (true);
