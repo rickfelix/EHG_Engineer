@@ -197,4 +197,20 @@ describe('readStackScanConclusion', () => {
     expect(result.available).toBe(false);
     expect(result.reason).toMatch(/network down/);
   });
+
+  // PLAN-phase VALIDATION (V-3): this call is awaited inside the S24 choke-point, so
+  // it must carry a real time budget rather than hanging on a stalled third-party call.
+  it('passes an AbortSignal to fetchImpl and reports a distinct "timeout" reason on abort (never throws)', async () => {
+    const supabase = buildMockSupabase();
+    const fetchImpl = vi.fn((url, opts) => {
+      expect(opts.signal).toBeInstanceOf(AbortSignal);
+      const err = new Error('The operation was aborted');
+      err.name = 'TimeoutError';
+      return Promise.reject(err);
+    });
+    const result = await readStackScanConclusion({ supabase, ventureId: 'v1', token: 'fake-token', fetchImpl, logger: silentLogger });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result.available).toBe(false);
+    expect(result.reason).toBe('timeout');
+  });
 });
