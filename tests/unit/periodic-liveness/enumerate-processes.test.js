@@ -110,6 +110,15 @@ describe('discovery against the live repo (read-only)', () => {
     expect(all.some((p) => p.process_key === 'cron_script:index-jam-detector.mjs')).toBe(false);
     expect(all.some((p) => p.process_key === 'standard_loop:index-jam-detector')).toBe(true);
   });
+
+  // QF-20260913-812: same shape as the index-jam-detector pin above — batch-mint-sweep.mjs
+  // gained a STANDARD_LOOPS entry in this QF, so its cron_script:* shadow must stop being
+  // mechanically re-discovered too.
+  it('batch-mint-sweep.mjs is owned by its new STANDARD_LOOPS entry, not also discovered as cron_script:*', () => {
+    const all = discoverAllProcesses(repoRoot);
+    expect(all.some((p) => p.process_key === 'cron_script:batch-mint-sweep.mjs')).toBe(false);
+    expect(all.some((p) => p.process_key === 'standard_loop:batch-mint-sweep')).toBe(true);
+  });
 });
 
 describe('findOrphanedActiveCrons (QF-20260911-080 — registry says active, no invoker found)', () => {

@@ -13,11 +13,16 @@ import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 import { createRequire } from 'node:module';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { stampLastFired } from '../../lib/periodic-liveness/stamp-last-fired.js';
 import { scanRecentQfMintsForBatches } from '../../lib/fleet/batch-mint-detector.js';
 import {
   writeQfOracleHold, isOracleHeldQF, BOUNDED_WAIT_MS, QF_ORACLE_HOLD_PREFIX, isBoundedWaitElapsed,
   extractConsultRowIdFromQfCondition, lookupConsultRowRecord, findConsultReply, releaseQfOracleHold,
 } from '../../lib/fleet/hold-writer.js';
+
+// QF-20260913-812: matches standard_loop:batch-mint-sweep, the STANDARD_LOOPS key added in
+// scripts/coordinator-startup-check.mjs for this script.
+const PROCESS_KEY = 'standard_loop:batch-mint-sweep';
 
 const require = createRequire(import.meta.url);
 const { getActiveSolomonId } = require('../../lib/coordinator/solomon-identity.cjs');
@@ -220,6 +225,12 @@ async function main() {
     return { checked: 0, released: 0, failed: [] };
   });
   console.log(`[batch-mint-sweep] verdict-check: checked=${verdictResult.checked} released=${verdictResult.released} failed=${verdictResult.failed.length}`);
+
+  // Own liveness, so this sweep is not itself an unwatched loop (QF-20260913-812). Non-fatal,
+  // mirroring scripts/cron/index-jam-detector.mjs:18/:201 — a stamp failure must never block the
+  // (already-working) hold/release logic above.
+  try { await stampLastFired(supabase, PROCESS_KEY); }
+  catch (err) { console.error(`[batch-mint-sweep] stampLastFired failed (non-fatal): ${err.message}`); }
 
   if (result.failed.length) {
     console.error('[batch-mint-sweep] FAILED holds:', JSON.stringify(result.failed));
