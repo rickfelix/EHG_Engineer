@@ -25,11 +25,11 @@ import {
 const VALID_FEEDBACK_TYPES = ['issue', 'enhancement'];
 
 describe('GAUGE_REGISTRY shape', () => {
-  it('exports exactly 41 seed entries (30 prior + 11 Michael spec-§9 gauges, SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-G)', () => {
-    expect(GAUGE_REGISTRY).toHaveLength(41);
+  it('exports exactly 42 seed entries (30 prior + 11 Michael spec-§9 gauges + 1 experience-review-coverage, SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-D)', () => {
+    expect(GAUGE_REGISTRY).toHaveLength(42);
   });
 
-  it('29 entries are activated; the coordinator self-score-age entry plus the 11 Michael gauges ship as stubs (writers/detectors default-OFF)', () => {
+  it('30 entries are activated; the coordinator self-score-age entry plus the 11 Michael gauges ship as stubs (writers/detectors default-OFF)', () => {
     // QF-20260911-404: adam_self_score_age and solomon_self_score_age flipped enabled:true --
     // both writers verified live (174 and 84 rows respectively, most recent within hours, well
     // under the 48h staleness threshold). coordinator_self_score_age stays a stub: its writer's
@@ -39,7 +39,7 @@ describe('GAUGE_REGISTRY shape', () => {
     // scripts/lint/self-score-gauge-writer-lint.mjs).
     const live = GAUGE_REGISTRY.filter((e) => e.enabled === true);
     const stubs = GAUGE_REGISTRY.filter((e) => e.enabled === false);
-    expect(live).toHaveLength(29);
+    expect(live).toHaveLength(30);
     expect(stubs.map((e) => e.id).sort()).toEqual([
       'coordinator_self_score_age',
       'michael-account-independence', 'michael-brief-landed', 'michael-classifier-drift',
@@ -128,12 +128,13 @@ describe('selectEnabledEntries (TS-1/TS-2)', () => {
     // (writers verified live). coordinator_self_score_age stays a stub -- see that entry's own
     // comment in gauge-registry.js.
     const selected = selectEnabledEntries(GAUGE_REGISTRY);
-    expect(selected).toHaveLength(29);
+    expect(selected).toHaveLength(30);
     expect(selected.map((e) => e.id).sort()).toEqual([
       'adam-claimed-or-built-sd',
       'adam_self_score_age',
       'agent-tool-hook-liveness',
       'coordinator-sourced-sd',
+      'experience-review-coverage',
       'expired-premise-tags',
       'fw3-cmv-rejecter-fake-separation',
       'ghost-ceo',
