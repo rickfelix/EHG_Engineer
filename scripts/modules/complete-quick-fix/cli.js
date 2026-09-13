@@ -138,6 +138,10 @@ export function parseArguments(args) {
       'accept-compliance-warn': { type: 'boolean' },
       // SD-FDBK-ENH-COMPLETE-QUICK-FIX-001: granular low-confidence self-verify bypass. Requires reason.
       'accept-low-confidence': { type: 'boolean' },
+      // QF-20260912-758: instead of refusing completion outright when a database/ file this QF
+      // touched is not yet live, park the row (status=escalated, escalation_reason names the
+      // file + apply path) so it is visible and non-terminal rather than a hard CLI failure.
+      'park-until-applied': { type: 'boolean' },
       'help':               { type: 'boolean', short: 'h' }
     },
     allowPositionals: true,
@@ -246,6 +250,7 @@ export function parseArguments(args) {
     uatVerified:       values['uat-verified']     != null ? values['uat-verified'].toLowerCase().startsWith('y') : undefined,
     verificationNotes: values['verification-notes'],
     forceComplete:     values['force-complete']   || false,
+    parkUntilApplied:  values['park-until-applied'] || false,
     // QF-20260702-515: separate CI-wait bypass; only takes effect alongside forceComplete.
     skipCiWait:        values['skip-ci-wait']     || false,
     reason:            values['reason'],
@@ -335,6 +340,10 @@ Options:
                         (so completion works under --non-interactive). REQUIRES --reason. Does NOT
                         bypass verification blockers, the LOC cap, or compliance — narrower and safer
                         than --force-complete. Recorded in verification_notes.
+  --park-until-applied  When a database/ file this QF touched is not yet live (classified
+                        NOT_APPLIED/PARTIAL/BODY_MISMATCH/CEREMONY_PENDING), park the row
+                        (status=escalated, escalation_reason names the file + apply path)
+                        instead of refusing completion outright. No --reason required.
   --help, -h            Show this help
 
 Programmatic Verification:

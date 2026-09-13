@@ -640,7 +640,7 @@ export function foldLifecycle(fileFacts) {
 // ── Stage 4: bulk live resolution + classification ───────────────────────────
 
 /** One bulk query per object class — no N+1 over the ~1100-file corpus. */
-async function resolveLive(client, expected) {
+export async function resolveLive(client, expected) {
   const byClass = new Map();
   for (const { cls, name } of expected.values()) {
     if (!byClass.has(cls)) byClass.set(cls, new Set());
@@ -730,6 +730,57 @@ async function resolveLive(client, expected) {
     mark('constraint', rows, 'name');
   }
   return { live, liveFunctionBodies, liveTriggerDefs };
+}
+
+/**
+ * QF-20260912-758: classify a SMALL, EXPLICIT set of files (e.g. the database/ files a single
+ * PR touched) against the live DB, reusing the same fold/resolve/classify pipeline main() runs
+ * over the whole corpus -- never a shell-out, and never a re-implementation. Correct for an
+ * isolated new migration (no corpus-wide supersession to account for): the files are folded
+ * together so a same-PR create/drop pair still resolves correctly, then classified against live.
+ *
+ * FAILS OPEN at the infrastructure layer (no DB credential, unreadable file, DB unreachable) --
+ * `{ skipped: true, reason }` and an empty `results` array, never a thrown exception. A caller
+ * gating completion on this MUST treat `skipped` as "could not check", not as a pass or fail.
+ *
+ * @param {string[]} files repo-relative paths (e.g. 'database/chairman-gated/x.sql')
+ * @returns {Promise<{results: Array, skipped: boolean, reason?: string}>}
+ */
+export async function classifyMigrationFiles(files) {
+  if (!Array.isArray(files) || files.length === 0) return { results: [], skipped: true, reason: 'no_files' };
+  if (!hasAnyDbCredential()) return { results: [], skipped: true, reason: 'no_credential' };
+
+  const fileFacts = [];
+  for (const file of files) {
+    try {
+      fileFacts.push({ file, ...extractDdlFacts(readFileSync(resolveMigrationPath(file), 'utf8')) });
+    } catch (e) {
+      return { results: [], skipped: true, reason: `unreadable:${file}:${e.code || e.message}` };
+    }
+  }
+  const { expected, perFile, supersededBy } = foldLifecycle(fileFacts);
+
+  let client;
+  try {
+    const { createDatabaseClient } = await import('./lib/supabase-connection.js');
+    const connectionString = process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL || undefined;
+    client = await createDatabaseClient('ehg', connectionString ? { connectionString } : {});
+    const { live, liveFunctionBodies, liveTriggerDefs } = await resolveLive(client, expected);
+
+    let appliedLedgerPaths = null;
+    try {
+      const rows = await listApplied({ success: true, limit: 1000 });
+      appliedLedgerPaths = new Set(rows.map((r) => normalizeMigrationPath(r.migration_path)));
+    } catch { /* fail-open, mirrors main()'s own convention -- never demotes on ledger-query failure */ }
+
+    const ordered = orderMigrations(files);
+    const results = classifyFiles(ordered, expected, perFile, live, undefined, liveFunctionBodies, liveTriggerDefs, appliedLedgerPaths, supersededBy);
+    return { results, skipped: false };
+  } catch (e) {
+    return { results: [], skipped: true, reason: `db_unreachable:${e.message}` };
+  } finally {
+    try { await client?.end(); } catch { /* already closed */ }
+  }
 }
 
 /**
