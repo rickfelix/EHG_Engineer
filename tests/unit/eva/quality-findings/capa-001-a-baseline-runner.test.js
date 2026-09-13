@@ -11,7 +11,9 @@ import {
   VIEWPORTS,
   axeImpactToSeverity,
   buildAccessibilityFindings,
+  buildAccessibilityRunRecordedFinding,
   buildResponsiveFindings,
+  buildResponsiveCheckedFindings,
   buildLighthouseFindings,
   buildLighthouseFailureFinding,
   enforceSeverityCap,
@@ -97,6 +99,24 @@ describe('buildAccessibilityFindings — fixture-shaped axe violations', () => {
   });
 });
 
+describe('buildAccessibilityRunRecordedFinding — coverage marker (VALIDATION sub-agent finding, VERIFY phase)', () => {
+  it('always produces exactly one low-severity marker, so a clean scan is distinguishable from "never ran"', () => {
+    const f = withHash(buildAccessibilityRunRecordedFinding(VENTURE_ID, URL, 0));
+    expect(f.finding_category).toBe('accessibility');
+    expect(f.severity).toBe('low');
+    expect(f.finding_signature).toBe('accessibility:run-recorded');
+    expect(f.evidence_pointer.violation_count).toBe(0);
+    expect(validateFindingShape(f).valid).toBe(true);
+  });
+
+  it('finding_signature is stable regardless of violation_count — idempotent re-runs UPSERT, not accumulate', () => {
+    const f1 = withHash(buildAccessibilityRunRecordedFinding(VENTURE_ID, URL, 0));
+    const f2 = withHash(buildAccessibilityRunRecordedFinding(VENTURE_ID, URL, 3));
+    expect(f1.finding_hash).toBe(f2.finding_hash);
+    expect(f2.evidence_pointer.violation_count).toBe(3);
+  });
+});
+
 describe('buildResponsiveFindings — breakpoint overflow (FR-3)', () => {
   it('flags horizontal overflow > 1px at a breakpoint', () => {
     const results = [
@@ -132,6 +152,36 @@ describe('buildResponsiveFindings — breakpoint overflow (FR-3)', () => {
       MOBILE: { width: 375, height: 812 },
       TABLET: { width: 768, height: 1024 },
     });
+  });
+});
+
+describe('buildResponsiveCheckedFindings — coverage markers, one per breakpoint (VALIDATION sub-agent finding, VERIFY phase)', () => {
+  it('emits exactly one low-severity marker per breakpoint, each tagged with the breakpoint name (FR-3 acceptance criterion)', () => {
+    const results = [
+      { breakpoint: 'DESKTOP', viewport: VIEWPORTS.DESKTOP, scrollWidth: 1440, clientWidth: 1440 },
+      { breakpoint: 'MOBILE', viewport: VIEWPORTS.MOBILE, scrollWidth: 420, clientWidth: 375 },
+      { breakpoint: 'TABLET', viewport: VIEWPORTS.TABLET, scrollWidth: 768, clientWidth: 768 },
+    ];
+    const findings = buildResponsiveCheckedFindings(VENTURE_ID, URL, results).map(withHash);
+    expect(findings).toHaveLength(3);
+    expect(findings.map((f) => f.evidence_pointer.breakpoint)).toEqual(['DESKTOP', 'MOBILE', 'TABLET']);
+    for (const f of findings) {
+      expect(f.finding_category).toBe('responsive');
+      expect(f.severity).toBe('low');
+      expect(f.finding_signature).toBe(`responsive:${f.evidence_pointer.breakpoint}:checked`);
+      expect(validateFindingShape(f).valid).toBe(true);
+    }
+    // The overflowing MOBILE breakpoint still gets a low-severity coverage marker
+    // in addition to whatever buildResponsiveFindings separately flags as a defect.
+    expect(findings[1].evidence_pointer.horizontal_overflow_px).toBe(45);
+  });
+
+  it('finding_signature per breakpoint is stable across runs — idempotent UPSERT, not accumulation', () => {
+    const clean = [{ breakpoint: 'TABLET', viewport: VIEWPORTS.TABLET, scrollWidth: 768, clientWidth: 768 }];
+    const dirty = [{ breakpoint: 'TABLET', viewport: VIEWPORTS.TABLET, scrollWidth: 800, clientWidth: 768 }];
+    const f1 = withHash(buildResponsiveCheckedFindings(VENTURE_ID, URL, clean)[0]);
+    const f2 = withHash(buildResponsiveCheckedFindings(VENTURE_ID, URL, dirty)[0]);
+    expect(f1.finding_hash).toBe(f2.finding_hash);
   });
 });
 

@@ -125,6 +125,39 @@ export function buildAccessibilityFindings(ventureId, url, violations) {
   });
 }
 
+// VALIDATION sub-agent finding (VERIFY phase, BLOCKER): FR-1/FR-3 only ever
+// emit a finding on defect, so a clean scan and a scan that never ran are
+// byte-identical in venture_quality_findings -- no row anywhere records that
+// accessibility was actually checked, or names any of the 3 breakpoints
+// (FR-3's own acceptance criterion requires findings "tagged with the
+// breakpoint name"). Mirrors the run-recorded marker FR-2 already emits.
+export function buildAccessibilityRunRecordedFinding(ventureId, url, violationCount) {
+  return {
+    venture_id: ventureId,
+    stage_number: STAGE_NUMBER,
+    finding_category: 'accessibility',
+    severity: 'low',
+    finding_signature: 'accessibility:run-recorded',
+    evidence_pointer: { url, violation_count: violationCount },
+  };
+}
+
+export function buildResponsiveCheckedFindings(ventureId, url, breakpointResults) {
+  return breakpointResults.map(({ breakpoint, viewport, scrollWidth, clientWidth }) => ({
+    venture_id: ventureId,
+    stage_number: STAGE_NUMBER,
+    finding_category: 'responsive',
+    severity: 'low',
+    finding_signature: `responsive:${breakpoint}:checked`,
+    evidence_pointer: {
+      breakpoint,
+      viewport,
+      horizontal_overflow_px: scrollWidth - clientWidth,
+      url,
+    },
+  }));
+}
+
 export function buildResponsiveFindings(ventureId, url, breakpointResults) {
   const findings = [];
   for (const { breakpoint, viewport, scrollWidth, clientWidth } of breakpointResults) {
@@ -283,6 +316,7 @@ async function runAccessibilityAndResponsiveChecks(page, ventureId, url) {
 
   const axeResults = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   const accessibilityFindings = buildAccessibilityFindings(ventureId, url, axeResults.violations);
+  const accessibilityRunRecorded = buildAccessibilityRunRecordedFinding(ventureId, url, axeResults.violations.length);
 
   const breakpointResults = [];
   for (const [breakpoint, viewport] of Object.entries(VIEWPORTS)) {
@@ -296,8 +330,12 @@ async function runAccessibilityAndResponsiveChecks(page, ventureId, url) {
     breakpointResults.push({ breakpoint, viewport, ...overflow });
   }
   const responsiveFindings = buildResponsiveFindings(ventureId, url, breakpointResults);
+  const responsiveCheckedFindings = buildResponsiveCheckedFindings(ventureId, url, breakpointResults);
 
-  return accessibilityFindings.concat(responsiveFindings);
+  return accessibilityFindings
+    .concat([accessibilityRunRecorded])
+    .concat(responsiveFindings)
+    .concat(responsiveCheckedFindings);
 }
 
 // TESTING sub-agent finding (EXEC phase): the severity cap was enforced only
