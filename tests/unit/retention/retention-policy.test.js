@@ -15,7 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../');
 
 describe('policy registry (TS-1)', () => {
-  it('registers all 23 unbounded tables with the VERIFIED timestamp columns', () => {
+  it('registers all 24 unbounded tables with the VERIFIED timestamp columns', () => {
     const m = Object.fromEntries(RETENTION_POLICIES.map((p) => [p.table, p.timestampColumn]));
     expect(m).toEqual({
       workflow_trace_log: 'created_at',
@@ -118,6 +118,11 @@ describe('policy registry (TS-1)', () => {
       // let retention delete a seat's only LIVE checkpoint once it aged past 90 days (a real
       // defect a second SECURITY pass caught in this exact entry). See policies.js entry comment.
       role_seat_checkpoints: 'last_verified_at',
+      // SD-LEO-INFRA-DEMAND-ENGINE-PART-001 (operator-contract REAPER): mock_outreach_personas
+      // is synthetic test data authored only when a mock run is explicitly declared -- one-shot,
+      // never drained by a queue, with no cleanup path of its own. Keyed on created_at,
+      // DATABASE-stamped by the migration, never caller-supplied.
+      mock_outreach_personas: 'created_at',
     });
   });
 
