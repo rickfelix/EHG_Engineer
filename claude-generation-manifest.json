@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-13T22:37:46.284Z",
-  "git_commit": "674ece29",
+  "generated_at": "2026-09-13T23:23:59.654Z",
+  "git_commit": "34de5a92",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 109116,
-      "bytes": 110059,
-      "estimated_tokens": 27279,
-      "content_hash": "812296b348c8f6bb",
+      "chars": 110496,
+      "bytes": 111439,
+      "estimated_tokens": 27624,
+      "content_hash": "fe9fb90c578dd75f",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913d\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -173,10 +173,10 @@
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 31385,
-      "bytes": 31509,
-      "estimated_tokens": 7847,
-      "content_hash": "753b45263adb5582",
+      "chars": 32765,
+      "bytes": 32889,
+      "estimated_tokens": 8192,
+      "content_hash": "b1826ba9280ff52a",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913d\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
@@ -229,10 +229,10 @@
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
-      "chars": 17452,
-      "bytes": 17667,
-      "estimated_tokens": 4363,
-      "content_hash": "b3b5bf8f972123de",
+      "chars": 17438,
+      "bytes": 17701,
+      "estimated_tokens": 4360,
+      "content_hash": "b779e057bd39e9b9",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913d\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "459c2d66fc4e4624",
+    "global": "12c1f12d77ea8109",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -507,7 +507,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "f34c827a22d9e7bd",
+      "601": "96efb413e1af5ee8",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "d81499731e5ff5f7",
@@ -537,7 +537,7 @@
       "655": "59137a758bb13a65",
       "656": "d2ccb43f1edf9602",
       "657": "11c9181c9e30ef9c",
-      "658": "ca06fce1f5997808",
+      "658": "6e499431857707d4",
       "659": "f07759022446ffb1",
       "660": "61acc95edefef269",
       "661": "5a43f70cb1e2438d",
