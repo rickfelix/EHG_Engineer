@@ -31,6 +31,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { findUnknownFlags, formatUnknownFlagError } from '../lib/argv-guard.mjs';
+import { KNOWN_GENERATED_FILES } from './modules/claude-md-generator/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -49,6 +50,19 @@ const require = createRequire(import.meta.url);
 const { LOCK_TTL_MS } = require('../lib/npm-install-lock.cjs');
 const NPM_INSTALL_TIMEOUT_MS = Math.max(30_000, LOCK_TTL_MS - 20_000);
 export { LOCK_TTL_MS, NPM_INSTALL_TIMEOUT_MS };
+
+// QF-20260912-811: detects header-only (safe-to-discard) generator dirt blocking the ff.
+export const GENERATED_MANIFEST_FILE = 'claude-generation-manifest.json';
+const HEADER_LINE_RE = /^[+-](<!-- file_content_hash:|<!-- generated_at:|<!-- git_commit:|<!-- db_snapshot_hash:|\*\*Generated\*\*:|Generated from database)/;
+export function isHeaderOnlyDiff(diffText) {
+  const lines = (diffText || '').split('\n')
+    .filter((l) => (l.startsWith('+') || l.startsWith('-')) && !l.startsWith('+++') && !l.startsWith('---'));
+  return lines.length === 0 || lines.every((l) => HEADER_LINE_RE.test(l));
+}
+export function isAllGeneratorOwned(dirtyFiles, knownGeneratedFiles = KNOWN_GENERATED_FILES) {
+  const owned = new Set([...knownGeneratedFiles, GENERATED_MANIFEST_FILE]);
+  return dirtyFiles.length > 0 && dirtyFiles.every((f) => owned.has(f));
+}
 
 // ─── Seam-injectable defaults ────────────────────────────────────────────────
 
@@ -393,6 +407,27 @@ export async function safeRootResync(opts = {}) {
       writePointerFileFn,
     });
     return { ok: true, synced: false, cleaned: false, skipped: 'already_current', restore };
+  }
+
+  // ── STEP 3.5: discard header-only generator dirt before the ff (QF-20260912-811) ──
+  if (behind > 0) {
+    try {
+      const { stdout: porcelain } = await exec(['status', '--porcelain']);
+      const dirtyTracked = (porcelain || '').split('\n').filter((l) => /^ ?M /.test(l)).map((l) => l.slice(3).trim()).filter(Boolean);
+      if (isAllGeneratorOwned(dirtyTracked)) {
+        const claudeFiles = dirtyTracked.filter((f) => f !== GENERATED_MANIFEST_FILE);
+        const diffs = await Promise.all(claudeFiles.map((f) => exec(['diff', 'origin/main', '--', f])));
+        if (diffs.every((d) => isHeaderOnlyDiff(d.stdout))) {
+          await exec(['checkout', '--', ...dirtyTracked]);
+          process.stdout.write(`[safe-root-resync] discarded header-only generator dirt (${dirtyTracked.length} files)\n`);
+        } else {
+          process.stderr.write('[safe-root-resync] generated files carry DB changes not on main: regenerate in a worktree and PR\n');
+          return { ok: false, conflict: true, behind, message: 'generated files carry DB changes not on main' };
+        }
+      }
+    } catch (e) {
+      process.stderr.write(`[safe-root-resync] generator-dirt check skipped (non-fatal): ${e && e.message || e}\n`);
+    }
   }
 
   // ── STEP 4: ff-only merge ─────────────────────────────────────────────────

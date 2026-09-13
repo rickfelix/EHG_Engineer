@@ -44,6 +44,19 @@ export function detectConflictedState(baseDir) {
   return (markered.length || unmerged.length) ? { markered, unmerged } : null;
 }
 
+// QF-20260912-811: main worktree's git-dir and git-common-dir are the SAME path (`.git`);
+// a linked worktree's git-dir is `.git/worktrees/<name>` while common-dir stays shared.
+// Fail-open (false) on any git error, matching detectConflictedState above.
+export function isMainWorktree(baseDir) {
+  try {
+    const gitDir = execSync('git rev-parse --git-dir', { cwd: baseDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    const commonDir = execSync('git rev-parse --git-common-dir', { cwd: baseDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return path.resolve(baseDir, gitDir) === path.resolve(baseDir, commonDir);
+  } catch {
+    return false;
+  }
+}
+
 // SD-LEO-INFRA-PROTOCOL-PUBLICATION-PIPELINE-001 (FR-4): parse --only <FILE[,FILE...]>
 // into a validated file list. Unknown names fail loud listing valid targets. Exported
 // (pure) for unit tests. Returns null when no --only flag is present (full regen).
@@ -94,6 +107,14 @@ if (import.meta.url === `file:///${normalizedArgv}`) {
   async function main() {
     const baseDir = path.join(__dirname, '..');
     const mappingPath = path.join(__dirname, 'section-file-mapping.json');
+
+    // QF-20260912-811: refuse to write at the main worktree unless explicitly overridden.
+    if (!process.argv.includes('--allow-root') && isMainWorktree(baseDir)) {
+      console.error('Refusing to regenerate at the main worktree — this dirties the shared root and blocks every session\'s fast-forward resync.');
+      console.error('Regenerate in a worktree instead: git worktree add .worktrees/adhoc/<name> -b <branch> origin/main; node scripts/generate-claude-md-from-db.js; commit the generated files by name.');
+      console.error('Pass --allow-root to override (sanctioned root-run ceremonies only).');
+      process.exit(1);
+    }
 
     // QF-20260705-104 (seam 2): refuse to regenerate over a conflicted working tree.
     const conflict = detectConflictedState(baseDir);

@@ -8,7 +8,7 @@
 
 import path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import { safeRootResync, NPM_INSTALL_TIMEOUT_MS, LOCK_TTL_MS } from '../../../scripts/safe-root-resync.mjs';
+import { safeRootResync, NPM_INSTALL_TIMEOUT_MS, LOCK_TTL_MS, isHeaderOnlyDiff, isAllGeneratorOwned, GENERATED_MANIFEST_FILE } from '../../../scripts/safe-root-resync.mjs';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -685,5 +685,125 @@ describe('TS-6: npm-install timeout stays inside the lock TTL', () => {
     // The default repair install must finish (and release) before another waiting
     // session can expire our lock at TTL — so the timeout must be strictly under it.
     expect(NPM_INSTALL_TIMEOUT_MS).toBeLessThan(LOCK_TTL_MS);
+  });
+});
+
+// ─── QF-20260912-811: header-only generator dirt discard ────────────────────
+
+describe('QF-20260912-811: isHeaderOnlyDiff / isAllGeneratorOwned (pure)', () => {
+  it('a diff touching only the file_content_hash comment and the Generated line is header-only', () => {
+    const diff = [
+      '-<!-- file_content_hash: aaa -->',
+      '+<!-- file_content_hash: bbb -->',
+      '-**Generated**: 2026-09-12 1:00:00 AM',
+      '+**Generated**: 2026-09-13 1:00:00 AM',
+    ].join('\n');
+    expect(isHeaderOnlyDiff(diff)).toBe(true);
+  });
+
+  it('an empty diff is header-only (vacuously)', () => {
+    expect(isHeaderOnlyDiff('')).toBe(true);
+  });
+
+  it('a diff with one real content line is NOT header-only', () => {
+    const diff = [
+      '-<!-- file_content_hash: aaa -->',
+      '+<!-- file_content_hash: bbb -->',
+      '-Some protocol rule text.',
+      '+Some CHANGED protocol rule text.',
+    ].join('\n');
+    expect(isHeaderOnlyDiff(diff)).toBe(false);
+  });
+
+  it('+++ / --- file-header lines are never mistaken for content lines', () => {
+    const diff = [
+      '--- a/CLAUDE_CORE.md',
+      '+++ b/CLAUDE_CORE.md',
+      '-**Generated**: old',
+      '+**Generated**: new',
+    ].join('\n');
+    expect(isHeaderOnlyDiff(diff)).toBe(true);
+  });
+
+  it('isAllGeneratorOwned is true only when every dirty file is a known generated file or the manifest', () => {
+    expect(isAllGeneratorOwned(['CLAUDE.md', 'CLAUDE_CORE.md', GENERATED_MANIFEST_FILE], ['CLAUDE.md', 'CLAUDE_CORE.md'])).toBe(true);
+    expect(isAllGeneratorOwned(['CLAUDE.md', 'scripts/unrelated.js'], ['CLAUDE.md'])).toBe(false);
+    expect(isAllGeneratorOwned([], ['CLAUDE.md'])).toBe(false); // never true on an empty set
+  });
+});
+
+describe('QF-20260912-811: safeRootResync discards header-only generator dirt before the ff', () => {
+  it('discards exactly the generator-owned dirty files and proceeds to a successful merge', async () => {
+    const CWD = SHARED_ROOT;
+    const execSpy = makeExecSpy([
+      { args_match: ['rev-list', '--count', 'HEAD..origin/main'], stdout: '3\n' },
+      { args_match: ['status', '--porcelain'], stdout: ' M CLAUDE.md\n M claude-generation-manifest.json\n' },
+      { args_match: ['diff', 'origin/main', '--', 'CLAUDE.md'], stdout: '-**Generated**: old\n+**Generated**: new\n' },
+      { args_match: ['merge', '--ff-only', 'origin/main', '--quiet'], stdout: '' },
+    ]);
+
+    const result = await safeRootResync({
+      exec: execSpy,
+      fs: makeFsSharedRoot(CWD),
+      cwd: CWD,
+      supabase: null,
+      ...noopRestoreSeams,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.synced).toBe(true);
+    const checkoutCall = execSpy.calls.find((a) => a[0] === 'checkout');
+    expect(checkoutCall).toBeDefined();
+    expect(checkoutCall).toContain('CLAUDE.md');
+    expect(checkoutCall).toContain('claude-generation-manifest.json');
+    // checkout must run BEFORE the merge attempt
+    const checkoutIdx = execSpy.calls.findIndex((a) => a[0] === 'checkout');
+    const mergeIdx = execSpy.calls.findIndex((a) => a[0] === 'merge');
+    expect(checkoutIdx).toBeLessThan(mergeIdx);
+  });
+
+  it('aborts with a specific message (not a generic git error) when the generated files carry real content changes', async () => {
+    const CWD = SHARED_ROOT;
+    const execSpy = makeExecSpy([
+      { args_match: ['rev-list', '--count', 'HEAD..origin/main'], stdout: '3\n' },
+      { args_match: ['status', '--porcelain'], stdout: ' M CLAUDE.md\n' },
+      { args_match: ['diff', 'origin/main', '--', 'CLAUDE.md'], stdout: '-old protocol text\n+new protocol text\n' },
+    ]);
+
+    const result = await safeRootResync({
+      exec: execSpy,
+      fs: makeFsSharedRoot(CWD),
+      cwd: CWD,
+      supabase: null,
+      ...noopRestoreSeams,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.conflict).toBe(true);
+    expect(result.message).toContain('generated files carry DB changes not on main');
+    // Never discards content-carrying dirt, and never even attempts the merge.
+    expect(execSpy.calls.find((a) => a[0] === 'checkout')).toBeUndefined();
+    expect(execSpy.calls.find((a) => a[0] === 'merge')).toBeUndefined();
+  });
+
+  it('leaves an unrelated dirty file alone (not generator-owned) and proceeds to the normal merge unchanged', async () => {
+    const CWD = SHARED_ROOT;
+    const execSpy = makeExecSpy([
+      { args_match: ['rev-list', '--count', 'HEAD..origin/main'], stdout: '3\n' },
+      { args_match: ['status', '--porcelain'], stdout: ' M scripts/unrelated-file.js\n' },
+      { args_match: ['merge', '--ff-only', 'origin/main', '--quiet'], stdout: '' },
+    ]);
+
+    const result = await safeRootResync({
+      exec: execSpy,
+      fs: makeFsSharedRoot(CWD),
+      cwd: CWD,
+      supabase: null,
+      ...noopRestoreSeams,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.synced).toBe(true);
+    expect(execSpy.calls.find((a) => a[0] === 'checkout')).toBeUndefined();
   });
 });
