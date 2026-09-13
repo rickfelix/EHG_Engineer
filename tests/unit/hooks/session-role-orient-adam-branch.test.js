@@ -324,8 +324,10 @@ describe('FR-1 — the drive_reports read names only columns that exist', () => 
     const requested = [];
     const out = await hook.fetchDriveReport(async (qs) => {
       requested.push(qs);
-      // The shape sibling -B's aggregate actually writes.
-      return [{ id: 'rep-42', drive_score: { score: { value: 5 }, possible: 8, capacity_verdict: 'TIGHT', unavailable_legs: [{ leg: 'leg4' }] } }];
+      // The shape sibling -B's aggregate actually writes. QF-20260912-397: the verdict lives on
+      // measured_legs[leg='leg4_capacity'].verdict — there never was a top-level
+      // `capacity_verdict` field on the real aggregate output.
+      return [{ id: 'rep-42', drive_score: { score: { value: 5 }, possible: 8, measured_legs: [{ leg: 'leg4_capacity', verdict: 'TIGHT' }], unavailable_legs: [{ leg: 'leg4' }] } }];
     });
     expect(out).toEqual({ id: 'rep-42', headline: 'Drive 5/8 | capacity TIGHT | 1 leg(s) unmeasured' });
     // Closed vocabulary only: numbers and enum members. No upstream free text is even reachable,

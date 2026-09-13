@@ -201,6 +201,25 @@ describe('aggregate — PER-001: a citation names one table, so it may carry onl
   });
 });
 
+describe('aggregate — QF-20260912-397: leg4\'s verdict is carried into measured_legs', () => {
+  // scoreLeg4() puts `verdict` on the TOP-LEVEL leg object (sibling of `points`), not inside the
+  // points citation — this mirrors that real shape rather than adding a new fixture parameter to
+  // the `points`-only `leg()` helper above.
+  const legWithVerdict = (name, points, verdict) => ({ ...leg(name, points), verdict });
+
+  it('carries verdict through to the matching measured_legs entry when the leg provides one', () => {
+    const r = aggregateScore({ legs: [legWithVerdict('leg4_capacity', 2, 'TIGHT')] });
+    const byLeg = Object.fromEntries(r.measured_legs.map((m) => [m.leg, m]));
+    expect(byLeg.leg4_capacity.verdict).toBe('TIGHT');
+  });
+
+  it('leaves verdict ABSENT (not null/undefined-as-own-property) on a leg that never had one', () => {
+    const r = aggregateScore({ legs: [leg('leg1_landed', 2)] });
+    const byLeg = Object.fromEntries(r.measured_legs.map((m) => [m.leg, m]));
+    expect(Object.hasOwn(byLeg.leg1_landed, 'verdict')).toBe(false);
+  });
+});
+
 describe('aggregate — chairman decision latency sits beside the score, ungraded', () => {
   it('is reported but NEVER added to the total', () => {
     const withLatency = aggregateScore({ legs: [leg('a', 2)], decisionLatency: { median_hours: 40 } });

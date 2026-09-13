@@ -139,6 +139,42 @@ describe('R5-4: the scrub is asserted by EFFECT, so unwiring it is detectable', 
   });
 });
 
+describe('QF-20260912-397: a git failure with empty stderr is diagnosable, not a bare trailing colon', () => {
+  // A signal-killed or timed-out child (spawnSync sets status:null, signal:'SIGTERM' and/or its
+  // own structural .error e.g. ETIMEDOUT) often has NO stderr at all. The prior message was
+  // built from stderr alone, so this case rendered as literally "git ... failed: " with nothing
+  // after the colon — leg1's git-log failures surfaced with no diagnostic content whatsoever.
+  it('a signal-killed process with empty stderr names the exit/signal, not just an empty suffix', () => {
+    const run = makeScrubbedGitRunner(REPO, {
+      spawnSync: () => ({ status: null, signal: 'SIGTERM', stdout: '', stderr: '', error: undefined }),
+    });
+    let thrown;
+    try { run(['log']); } catch (e) { thrown = e; }
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown.message.startsWith('git log failed: '), 'the prefix stays byte-identical').toBe(true);
+    expect(thrown.message).not.toBe('git log failed: ');
+    expect(thrown.message).toMatch(/signal SIGTERM/);
+    expect(thrown.message).toMatch(/exit null/);
+  });
+
+  it('a structural spawn error (e.g. ETIMEDOUT) is named even when stderr is empty', () => {
+    const run = makeScrubbedGitRunner(REPO, {
+      spawnSync: () => ({ status: 1, signal: null, stdout: '', stderr: '', error: { code: 'ETIMEDOUT' } }),
+    });
+    expect(() => run(['fetch'])).toThrow(/spawn error: ETIMEDOUT/);
+  });
+
+  it('a normal non-zero exit WITH stderr keeps that stderr as the primary content, enriched not replaced', () => {
+    const run = makeScrubbedGitRunner(REPO, {
+      spawnSync: () => ({ status: 128, signal: null, stdout: '', stderr: 'fatal: not a git repository', error: undefined }),
+    });
+    let thrown;
+    try { run(['status']); } catch (e) { thrown = e; }
+    expect(thrown.message).toContain('fatal: not a git repository');
+    expect(thrown.message).toMatch(/exit 128/);
+  });
+});
+
 describe('R5-4: BOTH production call sites go through the factory', () => {
   // STRUCTURAL, and labelled as such. The effect tests above prove the factory is sound; they
   // cannot prove a call site still USES it, and neither production runner can be driven here

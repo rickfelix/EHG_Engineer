@@ -35,6 +35,15 @@ describe('leg4 — capacity verdict', () => {
     expect(r.verdict_row_id).toBe('row-1');
   });
 
+  // QF-20260912-397: the verdict was computed (line 91) but never included on the return object,
+  // so every downstream consumer (aggregate.js, drive-report-sms.mjs) read it as absent and the
+  // chairman-facing SMS always rendered "capacity not measured this run" regardless of the truth.
+  it.each(VERDICTS)('[QF-20260912-397] %s is exposed on the returned object, not only persisted', (v) => {
+    const { persist } = persister();
+    const r = scoreLeg4({ computeVerdict: forecast(v), persist });
+    expect(r.verdict).toBe(v);
+  });
+
   it('[FR-2] does NOT cite input rows — absence is the requirement, not an omission', () => {
     // Citing beltDepth's rows would hand an auditor the raw material and make them re-derive the
     // verdict. The ruling: a citation proves where you looked, not the inference.
