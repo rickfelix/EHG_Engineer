@@ -227,6 +227,21 @@ function resolveDecisionRequested({ informational, decision } = {}) {
 }
 
 /**
+ * QF-20260912-514 (FIX SHAPE a): every send/request that reaches buildAdvisoryPayload is
+ * oracle-bound (payload.oracle=true, set unconditionally there). A refusal on a missing
+ * --framing-class would be circular (Solomon design read 4f7b3f89: the CLI cannot tell a
+ * finding from a status line except by the class the sender declares) -- warn and continue.
+ * Pure, exported so the argv-adjacent WARN condition is testable without crossing main()'s
+ * unexported argv boundary (same rationale as bodyFromArgv/sendBodyFromArgv above).
+ * @param {string|null} framingClassArg
+ * @returns {string|null} the warn line, or null when the send is stamped
+ */
+function framingUnstampedWarning(framingClassArg) {
+  if (framingClassArg) return null;
+  return 'WARN: [FRAMING_CLASS_UNSTAMPED] --framing-class was not supplied on this oracle-bound send -- the drain will record it as an unclassified framing (fail-closed to comms-quality review, never a chairman decision).';
+}
+
+/**
  * SD-LEO-INFRA-ROLE-BASED-COMMS-ROUTING-PROTOCOL-001-B: pure target-resolution decision for the
  * new direct Solomon->Adam lane — mirrors scripts/adam-advisory.cjs's resolveAdamAdvisoryTarget.
  * `--to adam` + the flag ON routes DIRECT to the live Adam session (or the broadcast-adam fallback
@@ -1377,6 +1392,8 @@ async function main() {
     if (e && e.code === 'BODY_TOO_LONG') { console.error('ERROR:', e.message); process.exit(2); }
     throw e;
   }
+  const unstampedWarning = framingUnstampedWarning(framingClassArg);
+  if (unstampedWarning) console.warn(unstampedWarning);
   const subject = `[SOLOMON_ORACLE] ${payload.body.slice(0, 80)}`;
   const expiresAt = advisoryExpiresAt(Date.now());
 
@@ -1564,6 +1581,7 @@ module.exports = {
   // existing assertion called buildAdvisoryPayload with named args and never crossed argv.
   bodyFromArgv, sendBodyFromArgv, VALUE_FLAGS, BOOL_FLAGS, STATUS_VALUE_FLAGS,
   resolveDecisionRequested, // SD-ALTIFYAI-LEO-FIX-SOLOMON-ADVICE-LEDGER-001 FR-1
+  framingUnstampedWarning, // QF-20260912-514 FIX SHAPE (a)
   checkRatificationCaptureMiss, // SD-LEO-INFRA-SOLOMON-RATIFICATION-CAPTURE-001-A FR-5
   VERDICT_VALUES, // FIX 1 (QF-20260905-746)
 };

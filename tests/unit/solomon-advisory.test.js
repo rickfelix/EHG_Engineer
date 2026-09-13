@@ -106,6 +106,17 @@ describe('SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-B: buildAdvisoryPayload — fram
     expect(error.status).toBe(2);
     expect(error.stderr).toMatch(/--framing-class must be one of instrument, pick/);
   });
+
+  // QF-20260912-514 (FIX SHAPE a/e): a missing --framing-class WARNs and continues (never a
+  // refusal — Solomon design read 4f7b3f89: a scoped refusal is circular). Extracted as a pure
+  // predicate (framingUnstampedWarning) rather than asserted via a spawned CLI process, since a
+  // real send() flow reaches live target-resolution/DB calls this test must never trigger.
+  it('QF-20260912-514: framingUnstampedWarning warns exactly once when --framing-class is absent, silent when stamped', () => {
+    expect(m.framingUnstampedWarning(null)).toMatch(/FRAMING_CLASS_UNSTAMPED/);
+    expect(m.framingUnstampedWarning(undefined)).toMatch(/FRAMING_CLASS_UNSTAMPED/);
+    expect(m.framingUnstampedWarning('pick')).toBeNull();
+    expect(m.framingUnstampedWarning('instrument')).toBeNull();
+  });
 });
 
 // FIX 1 (QF-20260905-746): payload.verdict is the structured signal
