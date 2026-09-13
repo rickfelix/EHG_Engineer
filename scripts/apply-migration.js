@@ -6,6 +6,21 @@
  *   node scripts/apply-migration.js <path>                  # dry-run (no DB writes)
  *   node scripts/apply-migration.js <path> --prod-deploy    # live apply (requires 3-factor guards)
  *   node scripts/apply-migration.js --issue-token           # issue a single-use 1h prod-deploy token
+ *   node scripts/apply-migration.js --issue-token --token-out[=<path>]
+ *                                                            # write the token to a file instead of
+ *                                                            # stdout (QF-20260913-521): both this and
+ *                                                            # the apply below are bare `node scripts/`
+ *                                                            # invocations, so an auto-mode worker seat's
+ *                                                            # allow rule matches without an export/
+ *                                                            # env-prefix/$() keystroke the classifier
+ *                                                            # would otherwise deny. Path defaults under
+ *                                                            # os.tmpdir() -- never inside the repo.
+ *   node scripts/apply-migration.js <path> --prod-deploy --token-file=<path>
+ *                                                            # read the token from a file (written by
+ *                                                            # --token-out above) instead of the
+ *                                                            # MIGRATION_APPLY_TOKEN env var. The file
+ *                                                            # is unlinked once the token check has run,
+ *                                                            # whether it passed or not.
  *
  * Outcome markers (stdout, one per run):
  *   [MIGRATION_APPLY_DRY_RUN]
@@ -33,6 +48,7 @@
 import 'dotenv/config';
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -183,7 +199,32 @@ async function readAuditLatestForPath(client, migrationPath) {
   return r.rows[0] || null;
 }
 
-async function issueTokenMode() {
+// QF-20260913-521: --token-out's default location. Never inside the repo (mirrors the
+// .artifacts-is-untracked-not-ignored constraint the FIX SHAPE calls out) -- a relative value is
+// resolved against os.tmpdir(), not the CLI's cwd, which may be the repo root.
+export function resolveTokenOutPath(tokenOutArg) {
+  if (!tokenOutArg || tokenOutArg === true) {
+    return path.join(os.tmpdir(), `migration-apply-token-${crypto.randomBytes(8).toString('hex')}`);
+  }
+  return path.isAbsolute(tokenOutArg) ? tokenOutArg : path.join(os.tmpdir(), tokenOutArg);
+}
+
+// QF-20260913-521: --token-file takes precedence over the MIGRATION_APPLY_TOKEN env var when
+// both are absent it degrades cleanly to undefined). Never logs the value.
+export function resolveTokenValue(tokenFilePath, envValue) {
+  if (tokenFilePath) return fs.readFileSync(tokenFilePath, 'utf8').trim();
+  return envValue;
+}
+
+// QF-20260913-521 FIX SHAPE (b): single-use — called once the token check has run (consumed or
+// rejected), regardless of outcome, so a token file is never left behind for reuse. No-op when no
+// file was used (env-var path).
+export function consumeTokenFile(tokenFilePath) {
+  if (!tokenFilePath) return;
+  try { fs.unlinkSync(tokenFilePath); } catch { /* already gone or never created — fine */ }
+}
+
+async function issueTokenMode(args) {
   const tokenValue = generateTokenValue();
   const tokenHashHex = hashToken(tokenValue);
   const client = await createDatabaseClient('engineer', { verify: false });
@@ -200,6 +241,14 @@ async function issueTokenMode() {
     throw e;
   } finally {
     await client.end();
+  }
+  const wantsTokenOut = args?.flags?.has('token-out') || args?.values?.['token-out'];
+  if (wantsTokenOut) {
+    const outPath = resolveTokenOutPath(args.values['token-out']);
+    fs.writeFileSync(outPath, tokenValue, { mode: 0o600 });
+    process.stdout.write(`MIGRATION_APPLY_TOKEN_FILE=${outPath}\n`);
+    process.stderr.write(`[MIGRATION_APPLY_TOKEN_ISSUED] 1h TTL, single-use. Re-run with --prod-deploy --token-file=${outPath}\n`);
+    return 0;
   }
   process.stdout.write(`MIGRATION_APPLY_TOKEN=${tokenValue}\n`);
   process.stderr.write('[MIGRATION_APPLY_TOKEN_ISSUED] 1h TTL, single-use. Set MIGRATION_APPLY_TOKEN env var and re-run with --prod-deploy.\n');
@@ -302,22 +351,25 @@ async function applyMode({ args, repoRoot }) {
   // Delegated path = SCOPED (additive + governed data-row only), fail-closed, kill-switch-gated,
   // token-authenticated (SEC-H1). The chairman path (validateProdDeployGuards) is UNCHANGED and
   // remains the only path for non-delegated / non-delegatable changes.
+  const tokenFilePath = args.values['token-file'];
+  const tokenValue = resolveTokenValue(tokenFilePath, process.env.MIGRATION_APPLY_TOKEN);
   const isDelegated = extractDelegatedBy(sql) !== null;
   const guards = isDelegated
     ? await validateDelegatedApplyGuards({
         flagPresent: prodDeploy,
-        tokenEnv: process.env.MIGRATION_APPLY_TOKEN,
+        tokenEnv: tokenValue,
         sqlContent: sql,
         client: auditClient,
         env: process.env,
       })
     : await validateProdDeployGuards({
         flagPresent: prodDeploy,
-        tokenEnv: process.env.MIGRATION_APPLY_TOKEN,
+        tokenEnv: tokenValue,
         sqlContent: sql,
         gitUserEmail: gitUserEmail(),
         client: auditClient,
       });
+  consumeTokenFile(tokenFilePath);
   if (!guards.ok) {
     emitMarker(`[MIGRATION_APPLY_PROD_FAIL_GUARDS=${guards.factor}]`);
     process.stderr.write(`Guard rejection: ${guards.reason}\n`);
@@ -465,13 +517,13 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.flags.has('help') || (args.positional.length === 0 && !args.flags.has('issue-token'))) {
     process.stderr.write(
-      'Usage: node scripts/apply-migration.js <migration-path> [--prod-deploy] [--allow-any-path] [--split-statements] [--no-tx --i-know]\n' +
-      '       node scripts/apply-migration.js --issue-token\n'
+      'Usage: node scripts/apply-migration.js <migration-path> [--prod-deploy] [--allow-any-path] [--split-statements] [--no-tx --i-know] [--token-file=<path>]\n' +
+      '       node scripts/apply-migration.js --issue-token [--token-out[=<path>]]\n'
     );
     return args.flags.has('help') ? 0 : 1;
   }
   const repoRoot = await findRepoRoot();
-  if (args.flags.has('issue-token')) return issueTokenMode();
+  if (args.flags.has('issue-token')) return issueTokenMode(args);
   return applyMode({ args, repoRoot });
 }
 
