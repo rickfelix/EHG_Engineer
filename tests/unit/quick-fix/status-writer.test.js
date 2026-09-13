@@ -11,15 +11,24 @@ const QF_ID = 'qf-fixture-1';
 const silentLog = { log() {}, warn() {}, error() {} };
 
 /** Stub supabase: one row's state lives in `rowState` (mutated by a successful update). */
-function stubSupabase({ initialStatus = 'open', initialReason = null, initialCompletedAt = null, updateResult = 'success', notFound = false, lookupError = null } = {}) {
+function stubSupabase({ initialStatus = 'open', initialReason = null, initialCompletedAt = null, updateResult = 'success', notFound = false, lookupError = null, boardSelectError = null } = {}) {
   const rowState = { status: initialStatus, escalation_reason: initialReason, completed_at: initialCompletedAt };
   const updateCalls = [];
+  // QF-20260911-447: closeSourcedChild's read is the ONLY caller of .not() on this stub — its
+  // shape (select('id').eq(...).eq(...).not(...)) unambiguously disambiguates it from the
+  // quick_fixes read/update chain above, so real (not mocked) wiring is verifiable directly.
+  const boardCalls = [];
   const sb = {
     from() {
       const chain = {
         _eqs: [],
         select() { return chain; },
         eq(col, val) { chain._eqs.push([col, val]); return chain; },
+        not(col, op, val) {
+          boardCalls.push({ eqs: [...chain._eqs], not: [col, op, val] });
+          if (boardSelectError) return Promise.resolve({ data: null, error: boardSelectError });
+          return Promise.resolve({ data: [], error: null }); // no matching rows -> closeSourcedChild no-ops
+        },
         maybeSingle() {
           // SELECT branch (no update payload recorded on this chain)
           if (!chain._updatePayload) {
@@ -43,7 +52,7 @@ function stubSupabase({ initialStatus = 'open', initialReason = null, initialCom
       return chain;
     },
   };
-  return { sb, updateCalls, rowState };
+  return { sb, updateCalls, rowState, boardCalls };
 }
 
 describe('setQuickFixStatus — TS-1: refuses escalated without escalated_to_sd_id', () => {
@@ -295,5 +304,38 @@ describe('transitionRequiresDisposition (pure helper)', () => {
   it('QF-20260904-757: still false entering a non-closed/cancelled status from a non-escalated origin', () => {
     expect(transitionRequiresDisposition('in_progress', 'open')).toBe(false);
     expect(transitionRequiresDisposition('in_progress', 'completed')).toBe(false);
+  });
+});
+
+describe('setQuickFixStatus — QF-20260911-447: close-at-source board hygiene', () => {
+  it('reaches closeSourcedChild(supabase, qfId, "completed") on a transition to completed — verified by its real (unmocked) read against sourceRef', async () => {
+    const { sb, boardCalls } = stubSupabase({ initialStatus: 'open' });
+    const result = await setQuickFixStatus(sb, QF_ID, { status: 'completed' }, { logger: silentLog });
+    expect(result.status).toBe('completed');
+    expect(boardCalls).toHaveLength(1);
+    expect(boardCalls[0].eqs).toEqual([['source_kind', 'sourced_sd'], ['source_ref', QF_ID]]);
+  });
+
+  it('reaches closeSourcedChild(supabase, qfId, "cancelled") on a disposed cancellation', async () => {
+    const { sb, boardCalls } = stubSupabase({ initialStatus: 'open' });
+    await setQuickFixStatus(sb, QF_ID, {
+      status: 'cancelled', disposition_reason_code: 'duplicate', disposed_by: 'test', disposed_at: new Date().toISOString(),
+    }, { logger: silentLog });
+    expect(boardCalls).toHaveLength(1);
+    expect(boardCalls[0].eqs).toEqual([['source_kind', 'sourced_sd'], ['source_ref', QF_ID]]);
+  });
+
+  it('does NOT reach closeSourcedChild on a non-terminal transition', async () => {
+    const { sb, boardCalls } = stubSupabase({ initialStatus: 'escalated' });
+    await setQuickFixStatus(sb, QF_ID, {
+      status: 'open', disposition_reason_code: 'requeued_needs_sd_no_link', disposed_by: 'test', disposed_at: new Date().toISOString(),
+    }, { logger: silentLog });
+    expect(boardCalls).toHaveLength(0);
+  });
+
+  it('a closeSourcedChild failure never masks the already-successful QF status write', async () => {
+    const { sb } = stubSupabase({ initialStatus: 'open', boardSelectError: { message: 'board write boom' } });
+    const result = await setQuickFixStatus(sb, QF_ID, { status: 'completed' }, { logger: silentLog });
+    expect(result.status).toBe('completed');
   });
 });
