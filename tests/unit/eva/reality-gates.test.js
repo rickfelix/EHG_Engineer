@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createHash } from 'crypto';
 import {
   evaluateRealityGate,
   getBoundaryConfig,
@@ -317,6 +318,65 @@ describe('RealityGates', () => {
       });
       expect(result.status).toBe('PASS');
     });
+
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-5): machine-provenance grading, advisory by
+    // default -- a real finding lands in provenance_warnings, never blocks (VENTURE_ARTIFACT_
+    // PROVENANCE_MODE defaults to 'advisory'), and a pre-cutover legacy row is graded leniently.
+    describe('machine provenance (advisory by default)', () => {
+      it('records ARTIFACT_PROVENANCE_ABSENT in provenance_warnings for a post-cutover artifact with no stamp, without blocking', async () => {
+        const artifacts = [
+          {
+            artifact_type: 'truth_problem_statement', quality_score: 0.8, is_current: true,
+            created_at: '2026-09-14T00:00:00Z', metadata: null,
+          },
+          { artifact_type: 'truth_target_market_analysis', quality_score: 0.7, is_current: true, created_at: '2026-09-14T00:00:00Z' },
+          { artifact_type: 'truth_value_proposition', quality_score: 0.9, is_current: true, created_at: '2026-09-14T00:00:00Z' },
+        ];
+        const result = await evaluateRealityGate({
+          ventureId: 'v1', fromStage: 5, toStage: 6,
+          supabase: createMockDb(artifacts, [BOUNDARY_5_6_ROW]),
+          logger: silentLogger,
+        });
+        expect(result.status).toBe('PASS');
+        expect(result.passed).toBe(true);
+        expect(result.reasons).toHaveLength(0);
+        expect(result.provenance_warnings.length).toBeGreaterThan(0);
+        expect(result.provenance_warnings.every(w => w.code === REASON_CODES.ARTIFACT_PROVENANCE_ABSENT)).toBe(true);
+      });
+
+      it('does not record a provenance warning for a pre-cutover legacy artifact (graded leniently)', async () => {
+        const artifacts = [
+          { artifact_type: 'truth_problem_statement', quality_score: 0.8, is_current: true, created_at: '2026-01-01T00:00:00Z', metadata: null },
+          { artifact_type: 'truth_target_market_analysis', quality_score: 0.7, is_current: true, created_at: '2026-01-01T00:00:00Z' },
+          { artifact_type: 'truth_value_proposition', quality_score: 0.9, is_current: true, created_at: '2026-01-01T00:00:00Z' },
+        ];
+        const result = await evaluateRealityGate({
+          ventureId: 'v1', fromStage: 5, toStage: 6,
+          supabase: createMockDb(artifacts, [BOUNDARY_5_6_ROW]),
+          logger: silentLogger,
+        });
+        expect(result.status).toBe('PASS');
+        expect(result.provenance_warnings).toHaveLength(0);
+      });
+
+      it('does not record a provenance warning for a post-cutover artifact carrying a genuine, verifiable stamp', async () => {
+        const artifacts = [
+          {
+            artifact_type: 'truth_problem_statement', quality_score: 0.8, is_current: true,
+            created_at: '2026-09-14T00:00:00Z', content: 'the content',
+            metadata: { machine_provenance: { producer: 'stage-05', run_id: 'r1', hash_source: 'content', content_hash: createHash('sha256').update('the content').digest('hex') } },
+          },
+          { artifact_type: 'truth_target_market_analysis', quality_score: 0.7, is_current: true, created_at: '2026-01-01T00:00:00Z' },
+          { artifact_type: 'truth_value_proposition', quality_score: 0.9, is_current: true, created_at: '2026-01-01T00:00:00Z' },
+        ];
+        const result = await evaluateRealityGate({
+          ventureId: 'v1', fromStage: 5, toStage: 6,
+          supabase: createMockDb(artifacts, [BOUNDARY_5_6_ROW]),
+          logger: silentLogger,
+        });
+        expect(result.provenance_warnings).toHaveLength(0);
+      });
+    });
   });
 
   describe('_internal.parseSelfReportedVerdict (QF-20260830-613)', () => {
@@ -539,7 +599,9 @@ describe('RealityGates', () => {
       // designated boundary must be LOUD, distinct from a genuine DB_ERROR).
       // QF-20260830-613: +ARTIFACT_UNSATISFIED (present + quality-clearing artifact whose
       // own content self-reports an unsatisfied applies/satisfied verdict).
-      expect(Object.keys(REASON_CODES)).toHaveLength(8);
+      // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G: +ARTIFACT_PROVENANCE_ABSENT (a required
+      // artifact present but lacking a verifiable machine_provenance stamp, post-cutover).
+      expect(Object.keys(REASON_CODES)).toHaveLength(9);
     });
   });
 

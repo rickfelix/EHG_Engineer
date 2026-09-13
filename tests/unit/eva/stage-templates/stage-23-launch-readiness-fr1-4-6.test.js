@@ -28,6 +28,7 @@ import {
   REQUIRED_CATEGORIES,
   ADVISORY_CATEGORIES,
   UPSTREAM_REQUIREMENTS,
+  preflightUpstream,
 } from '../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js';
 import { getAnalysisStep } from '../../../../lib/eva/stage-templates/analysis-steps/index.js';
 import { ARTIFACT_TYPES } from '../../../../lib/eva/artifact-types.js';
@@ -41,7 +42,7 @@ const REPO_ROOT = resolve(__dirname, '../../../../');
 // INFRA-STAGE-LAUNCH-READINESS-001 FR-1) supplies each present type's real
 // artifact_data payload, keyed by artifact_type -- preflightUpstream now reads
 // this column directly instead of a CROSS_STAGE_DEPS-derived stageNData param.
-function buildMockSupabase({ presentTypes = [], artifactData = {}, emitSpy, legalDocsPresent = false } = {}) {
+function buildMockSupabase({ presentTypes = [], artifactData = {}, emitSpy, legalDocsPresent = false, rowExtras = {} } = {}) {
   return {
     from(table) {
       if (table === 'venture_artifacts') {
@@ -53,11 +54,14 @@ function buildMockSupabase({ presentTypes = [], artifactData = {}, emitSpy, lega
                 return {
                   limit() {
                     return Promise.resolve({
+                      // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-5): rowExtras[type] lets a
+                      // test supply metadata/content/created_at for provenance-grading coverage.
                       data: presentTypes.map(t => ({
                         lifecycle_stage: 23,
                         artifact_type: t,
                         is_current: true,
                         artifact_data: artifactData[t] ?? null,
+                        ...(rowExtras[t] || {}),
                       })),
                       error: null,
                     });
@@ -296,6 +300,28 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
         expect(Array.isArray(req.anyOf)).toBe(true);
         expect(req.anyOf.length).toBeGreaterThanOrEqual(1);
       }
+    });
+  });
+
+  describe('preflightUpstream machine provenance (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G, FR-5, advisory-only)', () => {
+    it('records a present, unprovenanced, post-cutover artifact in provenanceWarnings without affecting ok/missing', async () => {
+      const oneType = UPSTREAM_REQUIREMENTS[0].anyOf[0];
+      const supabase = buildMockSupabase({
+        presentTypes: [oneType],
+        rowExtras: { [oneType]: { metadata: null, created_at: '2026-09-14T00:00:00Z' } },
+      });
+      const result = await preflightUpstream({ supabase, ventureId: 'v1', requirements: [UPSTREAM_REQUIREMENTS[0]], logger: { warn() {} } });
+      expect(result.provenanceWarnings).toContain(oneType);
+    });
+
+    it('does not record a provenance warning for a pre-cutover legacy artifact', async () => {
+      const oneType = UPSTREAM_REQUIREMENTS[0].anyOf[0];
+      const supabase = buildMockSupabase({
+        presentTypes: [oneType],
+        rowExtras: { [oneType]: { metadata: null, created_at: '2026-01-01T00:00:00Z' } },
+      });
+      const result = await preflightUpstream({ supabase, ventureId: 'v1', requirements: [UPSTREAM_REQUIREMENTS[0]], logger: { warn() {} } });
+      expect(result.provenanceWarnings).toEqual([]);
     });
   });
 
