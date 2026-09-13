@@ -807,7 +807,10 @@ describe('QF-20260913-573: detectWrongTreeEvidence / isAncestorOrEqual — pure 
   // (exit 1), unlike the existing suite's fake 'deadbeef...' shas (exit 128, "not a valid
   // commit name" — genuinely UNKNOWN ancestry, not "not an ancestor").
   const EMPTY_TREE = execFileSync('git', ['hash-object', '-t', 'tree', '/dev/null'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
-  const WRONG_TREE_SHA = execFileSync('git', ['commit-tree', EMPTY_TREE, '-m', 'QF-20260913-573 disconnected test commit'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  // -c user.email/-c user.name: CI runners have no global git identity configured (confirmed
+  // live — PR #8907's own CI run failed with "Author identity unknown"), so commit-tree needs
+  // an explicit, ephemeral identity rather than relying on the ambient repo/global config.
+  const WRONG_TREE_SHA = execFileSync('git', ['-c', 'user.email=qf-test@example.com', '-c', 'user.name=QF Test Fixture', 'commit-tree', EMPTY_TREE, '-m', 'QF-20260913-573 disconnected test commit'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
   const norm = s => String(s || '').toUpperCase().replace(/-AGENT$/, '').replace(/-+/g, '_');
 
   it('isAncestorOrEqual: true when candidate equals head (no git call needed)', () => {
@@ -865,7 +868,9 @@ describe('QF-20260913-573: detectWrongTreeEvidence / isAncestorOrEqual — pure 
 describe('QF-20260913-573: validateSubagentEvidence — wrong-tree evidence integration', () => {
   const REAL_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
   const EMPTY_TREE = execFileSync('git', ['hash-object', '-t', 'tree', '/dev/null'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
-  const WRONG_TREE_SHA = execFileSync('git', ['commit-tree', EMPTY_TREE, '-m', 'QF-20260913-573 disconnected test commit (integration)'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  // -c user.email/-c user.name: CI runners have no global git identity configured — see the
+  // sibling describe block's identical fix above (PR #8907's own CI run failure).
+  const WRONG_TREE_SHA = execFileSync('git', ['-c', 'user.email=qf-test@example.com', '-c', 'user.name=QF Test Fixture', 'commit-tree', EMPTY_TREE, '-m', 'QF-20260913-573 disconnected test commit (integration)'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
 
   beforeEach(() => {
     delete process.env.LEO_DISABLE_SUBAGENT_EVIDENCE_GATE;
