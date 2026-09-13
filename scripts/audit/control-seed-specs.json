@@ -1007,5 +1007,21 @@
    "input": "Every column name argument passed to .select()/.update()/.upsert()/.insert()/.eq() chained directly off .from('claude_sessions'|'v_active_sessions') inside any .claude/commands/*.md file -- the exact runtime shape of the real defect this control exists to catch.",
    "seen": "Real positive: pre-fix .claude/commands/claim.md (commit 795a2c486ed^, i.e. the file as it existed before SD-LEO-FIX-CLAUDE-COMMANDS-CLAIM-001's first fix commit) contains exactly this defect -- claude_sessions.sd_id referenced 3 times (status/release subcommands, lines ~41/119/168 pre-fix) -- a nonexistent column whose resulting Postgrest error was silently discarded, read as 'no active claim' while a real claim was live. This is the production defect this SD fixes, not a synthetic-only fixture; a TESTING sub-agent independently re-confirmed the pre-fix/post-fix differential live (evidence row 7eb0551a-f2be-4755-badf-e87feeb4e082)."
   }
+ },
+ {
+  "name": "summary-column-derivation-lint",
+  "script": "scripts/lint/summary-column-derivation-lint.mjs",
+  "rootFlag": "--root",
+  "fixtures": [
+   {
+    "path": "database/migrations/20260913000000_seeded_summary_column.sql",
+    "content": "-- SEEDED DEFECT: an undereived boolean summary column (predicate a) -- no GENERATED\n-- expression, name not in the baseline exemption list.\nALTER TABLE seeded_widgets ADD COLUMN seeded_widget_passed boolean NOT NULL DEFAULT false;\n"
+   }
+  ],
+  "note": "SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001 FR-1/FR-2. Seeds predicate (a) (the original ask: an undereived boolean *_passed column) since it is the simplest unambiguous fixture; predicates (b)/(c) share the same scan-and-report code path and are exercised directly by tests/unit/lint/summary-column-derivation-lint.test.js (17 unit tests covering all 3 predicates plus the baseline exemption and the UPDATE-SET-only scoping fix for predicate (b)). No detectTokens needed -- the fixture file name (20260913000000_seeded_summary_column.sql) is printed verbatim in the lint's own console output when it fires, satisfying the filename-match detection path.",
+  "observability_proof": {
+   "input": "database/migrations/**/*.sql file content, recursively (not just the top level -- SECURITY finding, evidence 62384ee7, closed by walking the tree instead of a flat readdirSync): ADD COLUMN clauses for predicate (a), UPDATE ... SET clauses containing jsonb_set/jsonb_build_object for predicate (b), ADD COLUMN ... REFERENCES clauses for predicate (c).",
+   "seen": "Real positive observed against the live migration corpus during this SD's own EXEC phase (2026-09-13): predicate (b) found a genuine unpaired summary-key write at database/migrations/20260817_set_venture_pbn_verdict_stage_zero.sql:92 (UPDATE ventures SET metadata = ... || jsonb_build_object('pbn_verdict', ...) with no paired CREATE TRIGGER in the same file) -- confirmed via node scripts/lint/summary-column-derivation-lint.mjs exiting 1 with exactly this file/finding, independently re-verified by 3 separate sub-agent review passes (TESTING evidence cf40b474, REGRESSION evidence 0bd8ecb9, VALIDATION evidence 18b5d248)."
+  }
  }
 ]

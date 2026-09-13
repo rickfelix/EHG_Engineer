@@ -32,6 +32,16 @@
  * not auto-applied, and go through their own chairman apply-ceremony review; widening this
  * lint to cover them is a deliberate future decision, not an oversight.
  *
+ * KNOWN LIMITATION (predicate a): `ADD COLUMN` matching requires the literal COLUMN keyword
+ * and the `boolean` type spelling -- `ADD x_passed bool` (the type alias, omitting COLUMN,
+ * both valid PostgreSQL) is NOT detected. Checked live: 0 occurrences of either evasion shape
+ * across the 1516-file corpus today, so this is a real, named gap, not a live false negative.
+ * KNOWN LIMITATION (predicate c): only the inline `REFERENCES` form is detected; a
+ * `ADD CONSTRAINT ... FOREIGN KEY ... REFERENCES` issued as a separate statement from the
+ * `ADD COLUMN` is not matched, since the two statements are never joined back together.
+ * Checked live: 21 `ADD CONSTRAINT ... FOREIGN KEY` statements exist in the corpus today,
+ * none targeting a summary-shaped column name -- a real, named gap, not a live false negative.
+ *
  * Usage:
  *   node scripts/lint/summary-column-derivation-lint.mjs [--json] [--root <dir>]
  *   npm run lint:summary-column-derivation
