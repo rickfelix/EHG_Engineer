@@ -91,6 +91,6 @@ describe('QF-20260912-961 (part b) — phantom-in_progress quick_fixes detector'
 
   it('floors the candidate window at one sweep interval so a claim landing moments ago is never raced', () => {
     expect(SOURCE).toMatch(/QF_SWEEP_INTERVAL_MS\s*=\s*5\s*\*\s*60_000/);
-    expect(SOURCE).toMatch(/\.lt\(\s*['"]updated_at['"]\s*,\s*qfCutoffIso\s*\)/);
+    expect(SOURCE).toMatch(/\.lt\(\s*['"]started_at['"]\s*,\s*qfCutoffIso\s*\)/);
   });
 });

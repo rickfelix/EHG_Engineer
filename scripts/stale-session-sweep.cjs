@@ -3091,18 +3091,21 @@ async function main() {
   // releaseWorkItemOnSessionEnd() helper the CLAIM_BOUNDARY_PROBE site below already uses —
   // never a second hand-rolled copy of the reopen predicate (FR-1's whole point; pinned by
   // stale-session-sweep-workitem-handback.test.js). A row carrying a pr_url or commit_sha is
-  // reported, not reopened (the helper's own qf_untouched verdict). The updated_at floor (one
-  // sweep interval) avoids racing a claim that landed moments ago.
+  // reported, not reopened (the helper's own qf_untouched verdict). quick_fixes has no
+  // generic updated_at column — started_at is stamped fresh on every claim transition into
+  // in_progress (lib/quick-fix-claim.mjs), so it is the correct proxy for "how long has this
+  // row sat in the orphaned shape"; the one-sweep-interval floor avoids racing a claim that
+  // landed moments ago.
   const QF_SWEEP_INTERVAL_MS = 5 * 60_000;
   let phantomInProgressQfs = [];
   try {
     const qfCutoffIso = new Date(now.getTime() - QF_SWEEP_INTERVAL_MS).toISOString();
     phantomInProgressQfs = await fapPaginate(() => supabase
       .from('quick_fixes')
-      .select('id, pr_url, commit_sha, updated_at')
+      .select('id, pr_url, commit_sha, started_at')
       .eq('status', 'in_progress')
       .is('claiming_session_id', null)
-      .lt('updated_at', qfCutoffIso)
+      .lt('started_at', qfCutoffIso)
       .order('id', { ascending: true })); // unique tiebreaker (FR-6)
   } catch { phantomInProgressQfs = []; } // prior behavior: read error ignored
 
