@@ -27,6 +27,7 @@ function chainable(result) {
     select: () => node,
     eq: () => node,
     neq: () => node,
+    not: () => node,
     order: () => node,
     limit: () => node,
     insert: () => node,
@@ -133,7 +134,7 @@ describe('evaluateGraduation crack-gate precondition (FR-5)', () => {
           return { insert: vi.fn((row) => { calls.systemEventsInsert.push(row); return Promise.resolve({ error: null }); }) };
         }
         if (table === 'venture_channel_publish_ledger') {
-          return { select: () => ({ eq: () => ({ eq: () => ({ neq: () => ({ order: () => ({ limit: () => Promise.resolve({ data: Array.from({ length: 5 }, () => ({ decision: 'accepted', outcome: 'shipped_clean' })), error: null }) }) }) }) }) }) };
+          return { select: () => ({ eq: () => ({ eq: () => ({ not: () => ({ order: () => ({ limit: () => Promise.resolve({ data: Array.from({ length: 5 }, () => ({ decision: 'accepted', outcome: 'shipped_clean' })), error: null }) }) }) }) }) }) };
         }
         if (table === 'venture_demand_verdicts') {
           return { select: () => ({ eq: () => ({ eq: () => ({ order: () => ({ limit: () => ({ maybeSingle: () => Promise.resolve({ data: { verdict: 'PASS', citation: 'fixture', computed_at: '2026-08-09T00:00:00Z' }, error: null }) }) }) }) }) }) };

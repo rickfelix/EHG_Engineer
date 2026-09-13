@@ -39,6 +39,14 @@ function makeSupabase({ recentRows = [], selectError = null, updateError = null,
     select: vi.fn(() => ledgerChain),
     eq: vi.fn(() => ledgerChain),
     neq: vi.fn(() => ledgerChain),
+    // SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001 FR-6: evaluateGraduation's candidate
+    // query switched from .neq('outcome','unknown') to
+    // .not('outcome','in','(unknown,unmeasurable)') so a newly-introduced
+    // 'unmeasurable' row is excluded from the streak window exactly like 'unknown'
+    // already was. This is a pass-through like the other chain methods (recentRows is
+    // pre-filtered by the test itself) -- it exists so existing tests don't crash on
+    // .not() being undefined, not to independently verify filtering.
+    not: vi.fn(() => ledgerChain),
     order: vi.fn(() => ledgerChain),
     limit: vi.fn(() => Promise.resolve({ data: recentRows, error: selectError })),
     update: vi.fn(() => ledgerChain),
@@ -153,6 +161,7 @@ describe('evaluateGraduation', () => {
       select: vi.fn(function () { return this; }),
       eq: vi.fn(function () { return this; }),
       neq: vi.fn(function () { return this; }),
+      not: vi.fn(function () { return this; }),
       order: vi.fn(function () { return this; }),
       limit: vi.fn(() => {
         callCount += 1;
@@ -218,6 +227,172 @@ describe('recordPublishOutcome', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('No ledger entry found');
+  });
+
+  // SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001 FR-6 / TS-10 (Blocker 2): the SQL CHECK
+  // widen alone is not enough -- recordPublishOutcome's own JS allowlist must accept
+  // 'unmeasurable' too, or the first real call throws before ever reaching the DB.
+  it("accepts 'unmeasurable' without throwing (FR-6, TS-10)", async () => {
+    const supabase = makeSupabase({ recentRows: [] });
+    const result = await recordPublishOutcome({ supabase, correlationId: 'corr-1', outcome: 'unmeasurable' });
+    expect(result.success).toBe(true);
+  });
+
+  // SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001 FR-4/TR-9 / TS-12 (new gap found by
+  // re-verification): widening the JS allowlist opens a pre-migration window where an
+  // 'unmeasurable' write reaches the DB and gets rejected with 23514 before the SQL
+  // migration lands. That must be classified explicitly, never treated as a generic
+  // failure and never silently absorbed into a "successful" classification upstream.
+  it("classifies a 23514 (check_violation) on an 'unmeasurable' write as expected-pre-migration (TS-12)", async () => {
+    const supabase = makeSupabase({ updateError: { code: '23514', message: 'new row for relation "venture_channel_publish_ledger" violates check constraint' } });
+    const result = await recordPublishOutcome({ supabase, correlationId: 'corr-1', outcome: 'unmeasurable' });
+    expect(result.success).toBe(false);
+    expect(result.reason).toBe('expected-pre-migration');
+  });
+
+  it('a genuine (non-23514) DB error on an unmeasurable write is NOT classified expected-pre-migration', async () => {
+    const supabase = makeSupabase({ updateError: { code: '08006', message: 'connection failure' } });
+    const result = await recordPublishOutcome({ supabase, correlationId: 'corr-1', outcome: 'unmeasurable' });
+    expect(result.success).toBe(false);
+    expect(result.reason).toBeUndefined();
+  });
+});
+
+/**
+ * SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001 FR-5/FR-6 (TS-9, mode-isolation): unlike
+ * makeSupabase's ledgerChain (a pass-through -- .eq()/.not() return the same static
+ * recentRows regardless of arguments, so it cannot discriminate pre-fix from post-fix
+ * behavior, per the TESTING re-verification finding), this fake actually filters by
+ * outcome and execution_mode, so these tests prove real behavior, not merely that a
+ * mock was called.
+ */
+function makeFilteringLedgerSupabase(rows, { autonomyUpsert } = {}) {
+  return {
+    from: vi.fn((table) => {
+      if (table !== 'venture_channel_publish_ledger') {
+        // venture_demand_verdicts (no PASS row -> demandValidated stays false, matching
+        // the streak-only assertions these tests make) and venture_channel_autonomy
+        // (the graduation write) both need a fully chainable stub, not just .upsert().
+        const stub = {
+          select: () => stub,
+          eq: () => stub,
+          order: () => stub,
+          limit: () => stub,
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          upsert: table === 'venture_channel_autonomy' && autonomyUpsert ? autonomyUpsert : () => Promise.resolve({ error: null })
+        };
+        return stub;
+      }
+      const filters = { venture_id: null, channel_type: null, execution_mode: null, outcomeNotIn: null };
+      const chain = {
+        select: vi.fn(() => chain),
+        eq: vi.fn((field, value) => { filters[field] = value; return chain; }),
+        not: vi.fn((field, _op, list) => {
+          if (field === 'outcome') filters.outcomeNotIn = list.replace(/[()]/g, '').split(',');
+          return chain;
+        }),
+        order: vi.fn(() => chain),
+        limit: vi.fn((n) => {
+          const filtered = rows.filter(r =>
+            (filters.venture_id === null || r.venture_id === filters.venture_id) &&
+            (filters.channel_type === null || r.channel_type === filters.channel_type) &&
+            (filters.execution_mode === null || r.execution_mode === filters.execution_mode) &&
+            (filters.outcomeNotIn === null || !filters.outcomeNotIn.includes(r.outcome))
+          ).slice(0, n);
+          return Promise.resolve({ data: filtered, error: null });
+        })
+      };
+      return chain;
+    })
+  };
+}
+
+describe('evaluateGraduation — outcome-domain widen regression (FR-6, TS-9)', () => {
+  it("an 'unmeasurable' row is excluded from the streak window exactly like 'unknown' -- neither a clean win nor a streak-breaker", async () => {
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'unmeasurable', execution_mode: 'live', created_at: '2026-09-12T00:00:03Z' },
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live', created_at: '2026-09-12T00:00:02Z' },
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const withUnmeasurable = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows), ventureId: 'v-1', channelType: 'x', requiredStreak: 5, mode: 'live' });
+
+    // Same fixture with the unmeasurable row simply absent -- must yield an identical streak.
+    const rowsWithoutUnmeasurable = rows.filter(r => r.outcome !== 'unmeasurable');
+    const withoutUnmeasurable = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rowsWithoutUnmeasurable), ventureId: 'v-1', channelType: 'x', requiredStreak: 5, mode: 'live' });
+
+    expect(withUnmeasurable.cleanStreak).toBe(withoutUnmeasurable.cleanStreak);
+    expect(withUnmeasurable.autonomyState).toBe(withoutUnmeasurable.autonomyState);
+  });
+
+  it('mode isolation: a live-mode call never counts a mock-mode row (FR-5)', async () => {
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock', created_at: '2026-09-12T00:00:02Z' },
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const liveResult = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows), ventureId: 'v-1', channelType: 'x', requiredStreak: 5, mode: 'live' });
+    // Only the one live-mode row is visible to a live-mode call -- the mock-mode row
+    // (despite being newer / first in the fixture) never contributes to or breaks the streak.
+    expect(liveResult.cleanStreak).toBe(1);
+  });
+
+  // SECURITY finding SEC-2: venture_channel_autonomy has NO execution_mode dimension.
+  // A mode='mock' call's candidate window is filtered to mock-only rows, so the loop's
+  // own mode-break fires on the first row -- streakEarned is ALWAYS false for mode='mock'.
+  // Before this fix, that unconditionally wrote 'propose_and_approve' onto the channel's
+  // REAL autonomy row, demoting a possibly live-graduated channel based solely on a mock
+  // outcome. A mock-mode evaluation must never touch venture_channel_autonomy at all.
+  it("a mode='mock' evaluation never writes to venture_channel_autonomy in either direction (SEC-2)", async () => {
+    const autonomyUpsert = vi.fn(() => Promise.resolve({ error: null }));
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const result = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows, { autonomyUpsert }), ventureId: 'v-1', channelType: 'x', requiredStreak: 5, mode: 'mock' });
+
+    expect(autonomyUpsert).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.autonomyState).toBeNull();
+  });
+
+  // TESTING finding (EXEC phase, HIGH): the original `mode === 'mock'` guard alone was
+  // fail-OPEN for every other value. recordPublishOutcome passes `mode: data.execution_mode`
+  // straight through -- a real ledger row whose execution_mode column is NULL (never
+  // stamped) produces mode===null here, which must be treated as "not confirmed live" and
+  // must ALSO skip the venture_channel_autonomy write, exactly like mode==='mock'.
+  it('a mode=null evaluation (a real row whose execution_mode was never stamped) also never writes to venture_channel_autonomy (SEC-2 fail-open fix)', async () => {
+    const autonomyUpsert = vi.fn(() => Promise.resolve({ error: null }));
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const result = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows, { autonomyUpsert }), ventureId: 'v-1', channelType: 'x', requiredStreak: 5, mode: null });
+
+    expect(autonomyUpsert).not.toHaveBeenCalled();
+    expect(result.autonomyState).toBeNull();
+  });
+
+  it("an unexpected mode value (e.g. 'dry_run') also never writes to venture_channel_autonomy -- only mode==='live' or an omitted mode key may proceed", async () => {
+    const autonomyUpsert = vi.fn(() => Promise.resolve({ error: null }));
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const result = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows, { autonomyUpsert }), ventureId: 'v-1', channelType: 'x', requiredStreak: 5, mode: 'dry_run' });
+
+    expect(autonomyUpsert).not.toHaveBeenCalled();
+    expect(result.autonomyState).toBeNull();
+  });
+
+  // Backward compatibility (REGRESSION concern): a caller that omits `mode` entirely --
+  // the calling convention every pre-existing test in this file (and any future caller
+  // unaware of mode) uses -- must be COMPLETELY UNAFFECTED and still write, exactly as it
+  // did before this SD existed.
+  it('a caller that omits mode entirely still writes venture_channel_autonomy (backward compatible with legacy/direct callers)', async () => {
+    const autonomyUpsert = vi.fn(() => Promise.resolve({ error: null }));
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const result = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows, { autonomyUpsert }), ventureId: 'v-1', channelType: 'x', requiredStreak: 5 });
+
+    expect(autonomyUpsert).toHaveBeenCalledTimes(1);
+    expect(result.autonomyState).not.toBeNull();
   });
 });
 

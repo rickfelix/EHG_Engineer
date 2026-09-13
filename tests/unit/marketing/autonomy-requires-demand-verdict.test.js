@@ -39,7 +39,7 @@ function fakeSupabase({ ledgerRows = [], passRow = null, verdictError = null }) 
     from(table) {
       if (table === 'venture_channel_publish_ledger') {
         const b = { then: (res, rej) => Promise.resolve({ data: ledgerRows, error: null }).then(res, rej) };
-        for (const m of ['select', 'eq', 'neq', 'order', 'limit']) b[m] = () => b;
+        for (const m of ['select', 'eq', 'neq', 'not', 'order', 'limit']) b[m] = () => b;
         return b;
       }
       if (table === 'venture_demand_verdicts') {
