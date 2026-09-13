@@ -5,8 +5,10 @@
 
 - [2026-09-13](#2026-09-13)
   - [Infrastructure](#infrastructure)
+  - [Bugfix](#bugfix-13)
 - [2026-09-12](#2026-09-12)
   - [Infrastructure](#infrastructure-12)
+  - [Bugfix](#bugfix)
   - [Security](#security-2)
   - [Documentation](#documentation)
 - [2026-09-11](#2026-09-11)
@@ -218,6 +220,13 @@
   - `lib/marketing/mock-graduation-transcript.js` calls the REAL `evaluateGraduation()` (`lib/marketing/autonomy-gate.js`) rather than a parallel mock-only implementation — proving the safety boundary end-to-end: a genuinely mock-stamped row can never earn a graduation streak or touch the real `venture_channel_autonomy` row (confirmed via a real unit test; the PRD's FR-7 literal wording that a mock run "earns" a 5-streak graduation conflicts with this verified-correct safety property and was escalated via `/signal spec-conflict` rather than silently declared done — US-007 shipped undone pending a ruling).
   - All three modules are `@wire-check-exempt` foundation libraries: no orchestrating runner exists yet to invoke them in production (only tests exercise them today), same status as the `lib/eva/lifecycle/` and `lib/comms/adam-outbound/rubric-engine/` foundation-library exemptions — wired when the mock-run orchestrating SD lands.
   - Also ships `mock_outreach_personas`'s REAPER entry in `lib/retention/policies.js` (OPERATOR_CONTRACT gate requirement); `armed_cadence` is waived (`scripts/one-off/demand-engine-part-001-operator-contract-waiver.mjs`) since personas are authored once, synchronously, with no backlog for a periodic sweep to drain.
+### Bugfix
+
+- **Closed AltifyAI's stage-23 UAT acceptance fence with real control-pack evidence, replacing a planned canary waiver with a genuinely-evaluated control** - SD-LEO-FIX-ALTIFYAI-STAGE-WALK-001 (PR #8837)
+  - `checkUatRobustnessGate` (`lib/eva/uat-robustness-gate.js`) — the mechanism the stage-23 acceptance fence actually reads — could never be satisfied: the existing rerun script never passed `stageNumber` to `runVentureJourneyWalk`, so `uat_test_runs.metadata.stage_number` stayed `null` on every run, and the walk's own control-pack evidence covered only 1 of 4 required controls. Fixed by threading `stageNumber:23` and assembling real `fence_two_sidedness` + `live_deployment_binding` evidence (ported Clerk-based UAT session-token minting, `lib/apa/altifyai-uat-session-token.mjs`; live GitHub Actions/nonce round-trip derivation, `lib/apa/stage23-control-pack-builder.mjs`).
+  - `canary_mutation_control` was originally planned as an explicit waiver, but a coordinator ruling (relaying an independent verdict) determined the control is a mutation test of the walker itself, not a product decision — built instead as a real, deterministic, expected-FAIL runner step (`lib/apa/altifyai-canary-step.mjs`) via a new `deps.canaryStep` seam in `lib/apa/journey-walk-orchestrator.js`, run outside the main walk's pass-rate bookkeeping.
+  - Also fixed a related bug in the same shared orchestrator: `deps.controlPackEvidence`'s fallback was a full-object replace rather than a merge, which would have silently zeroed out the `minimum_assertion_manifest` control for any caller supplying a partial evidence pack.
+  - 22 new unit tests, 3 updated, 0 regressions across the wider apa/uat/eva suite (630 files, 8113 tests).
 
 ## 2026-09-12
 
@@ -270,6 +279,13 @@
   - The 20260907 `feedback_no_update` trigger rejects every UPDATE unconditionally, on a premise SD-LEO-INFRA-AUDIT-FIX-FEEDBACK-001's census falsified: 41 live `.update()` call sites write lifecycle columns (status, resolution tracking, triage, assignment, promotion, dedup counters), all broken since the trigger applied 2026-09-08. Per chairman decision `ba4055b7` (option A, carried by Adam), `database/chairman-gated/20260912_feedback_no_update_lifecycle_allowlist.sql` (+ `_DOWN` sibling) replaces the trigger's unconditional body with a `WHEN` clause guarding content columns only (title, description, category, etc.) -- lifecycle columns become freely updatable again. `feedback_freeze()`, `feedback_no_delete_trg`, and `feedback_no_truncate_trg` are untouched; never an in-place edit of the applied 20260907 file.
   - Column classification is evidence-grounded: `database/schema-reference-snapshot.json` cross-referenced against an exhaustive repo-wide grep of every `.from('feedback').update()` call site, not guessed from column names. A 15-case migration-shape unit test (`tests/unit/migrations/feedback-no-update-lifecycle-allowlist-migration-shape.test.js`) pins the direction (content columns guarded, lifecycle columns excluded) so a future "simplification" can't silently invert it.
   - Two genuinely separate defects surfaced by the census, filed rather than folded in: `QF-20260912-316` (`burst-detector.js` mutates `feedback.title`, genuine content, silently broken since 09-08) and `QF-20260912-253` (3 call sites write 6 columns that don't exist on the table at all). A third, more structural finding -- `scripts/verify-migration-apply-state.mjs`'s trigger check is name-existence-only with no content/WHEN-clause comparison, so a migration that *redefines* an existing trigger can be falsely reported APPLIED -- is filed as `QF-20260912-708`; this SD's own `CHAIRMAN_APPLY_VERIFICATION` gate result should not be read as proof the live trigger has actually changed. Apply remains strictly the chairman's 3c ceremony (`@approved-by` still `<PENDING>`).
+
+### Bugfix
+
+- **Closed two /learn-sourced retrospective patterns: invisible EVA subscriber-error failures and an alphabetical severity sort** - SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-148 (PR #8833)
+  - `publishVisionEvent`'s (`lib/eva/event-bus/vision-events.js`) subscriber-error catch blocks only `console.error`'d a handler's sync throw or async rejection, with no structured error event or alerting hook -- invisible in production without active log monitoring (PAT-LES-77572983b741, 4 occurrences). Now routes subscriber failures through the module's existing hook-observer bridge via a new `SUBSCRIBER_ERROR_EVENT` signal; the default `governanceObserver` (`lib/eva/event-bus/index.js`) logs it at error level, distinct from its routine per-publish log.
+  - `getVisionGapInsights` (`scripts/modules/claude-md-generator/db-queries.js`) sorted severity via PostgREST's `.order('severity', {ascending: true})`, which sorts the raw string column alphabetically -- placing `low` ahead of `medium` (PAT-LES-b991f4c09c40, 2 occurrences). PostgREST's `.order()` cannot express a CASE-based rank, so the fix overfetches an unordered, capped batch and ranks it client-side.
+  - Also adopted `lib/logger.js`'s `createLogger` in both touched files (was bare `console.*`), satisfying `SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-145`'s `eva-logger-required-lint` CI gate rather than adding a lint-ignore pragma.
 
 ### Security
 
