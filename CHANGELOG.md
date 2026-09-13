@@ -239,6 +239,11 @@
   - Fixed with a second, independent, additive evidence query (reusing the existing classification helpers so the two paths can never diverge) and removed the early return that skipped auto-resolve on an empty low-score population. No schema change, no change to the gap-generation or write paths.
   - Of the SD's original 4 bundled `/learn` patterns, 2 were deferred with documented reasoning rather than forced into an unbounded fix: one described open-ended dashboard UI work with a mismatched vision-dimension label (V07 vs. V08), the other (a retrospective-quality gate score) had no single traceable root cause across 20+ unrelated sites.
 
+- **Fixed the clock-skew Unit Tier sweep reporting a clean pass on a run that never completed** - SD-LEO-FIX-SECOND-WALL-CLOCK-001 (PR #8862, escalated from QF-20260912-364)
+  - `.github/workflows/unit-tier-clock-skew.yml`'s report step was guarded by `if: failure()`, which never matches a CANCELLED job outcome — exactly how all four real runs of this workflow had ended (the `timeout-minutes` ceiling firing). The sweep had filed zero harness_backlog rows in its life, silently reading as a clean pass every time, including the night it would have caught the 09-12 sms-outbound-reconcile time-bomb a month early.
+  - Fixed: the report step now runs `if: always()`, threading the real job outcome through a new `SKEW_RUN_OUTCOME` env var. `scripts/clock-skew-report-failures.mjs` gained `isIncompleteOutcome()`/`reportIncompleteSweep()`, which file a distinct "sweep did not complete" row for a cancelled/incomplete run instead of the existing per-file FAIL-line path (unchanged for a genuinely completed run).
+  - Scoped at LEAD to this CI-reporting-blindness half only (75% scope reduction from the coordinator's original 5-piece rewrite); measuring the actual timeout overrun, an absolute clock pin, and a wall-clock-test lint tool are each deferred to a follow-up ticket.
+
 ## 2026-09-12
 
 ### Infrastructure
