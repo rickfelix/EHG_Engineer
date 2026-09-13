@@ -45,6 +45,25 @@ describe('FR-2/TR-2: captureLedgerRow — fail-open ledger capture', () => {
     expect(upsertArgs.decision_requested).toBe(false);
   });
 
+  it('QF-20260912-681: an informational send (decisionRequested:false) writes decision=deferred, not the pending default', async () => {
+    // 'not_requested' is not a legal value of solomon_advice_outcome_ledger_decision_check
+    // (pending/accepted/rejected/partial/deferred/superseded, confirmed live) -- 'deferred' is the
+    // nearest existing value that does not falsely claim a judgment was rendered. Without this, every
+    // informational send still lands at the DB's own 'pending' default and re-manufactures the exact
+    // permanent-FAIL rows lib/solomon/conduct-probes.js's new decision_requested filter excludes.
+    let upsertArgs = null;
+    const sb = { from: () => ({ upsert: (row) => { upsertArgs = row; return Promise.resolve({ error: null }); } }) };
+    await m.captureLedgerRow(sb, { correlationId: 'corr-deferred', body: 'x', decisionRequested: false });
+    expect(upsertArgs.decision).toBe('deferred');
+  });
+
+  it('QF-20260912-681: a real decision request (decisionRequested omitted/true) never sets `decision` — the DB default (pending) still applies', async () => {
+    let upsertArgs = null;
+    const sb = { from: () => ({ upsert: (row) => { upsertArgs = row; return Promise.resolve({ error: null }); } }) };
+    await m.captureLedgerRow(sb, { correlationId: 'corr-real', body: 'x' });
+    expect(upsertArgs).not.toHaveProperty('decision');
+  });
+
   it('TS-2: is fail-open — a thrown/errored write never propagates', async () => {
     const throwing = { from: () => ({ upsert: () => { throw new Error('boom'); } }) };
     const errored = { from: () => ({ upsert: () => Promise.resolve({ error: { message: 'db down' } }) }) };
