@@ -12,6 +12,7 @@ import {
   gradeVentureArtifactProvenance,
   hasVentureArtifactProvenance,
   buildMachineProvenance,
+  verifyLaunchUatReportLink,
   VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT,
 } from '../../../lib/eva/venture-artifact-provenance.js';
 
@@ -80,5 +81,46 @@ describe('hasVentureArtifactProvenance()', () => {
   it('is a pass/fail convenience wrapper around gradeVentureArtifactProvenance()', () => {
     expect(hasVentureArtifactProvenance({ created_at: PRE_CUTOVER })).toBe(true);
     expect(hasVentureArtifactProvenance({ created_at: POST_CUTOVER, metadata: null })).toBe(false);
+  });
+});
+
+describe('verifyLaunchUatReportLink() (FR-6)', () => {
+  function mockSupabase(uatTestRunRow) {
+    return {
+      from: () => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: () => Promise.resolve({ data: uatTestRunRow, error: null }),
+          }),
+        }),
+      }),
+    };
+  }
+
+  it('reports linked:false with no runId when the artifact carries no stamp', async () => {
+    const result = await verifyLaunchUatReportLink(mockSupabase(null), { metadata: null });
+    expect(result.linked).toBe(false);
+    expect(result.runId).toBeNull();
+  });
+
+  it('reports linked:true when the stamped run_id resolves to a real uat_test_runs row', async () => {
+    const artifactRow = { metadata: { machine_provenance: { run_id: 'run-123' } } };
+    const result = await verifyLaunchUatReportLink(mockSupabase({ id: 'run-123' }), artifactRow);
+    expect(result.linked).toBe(true);
+    expect(result.runId).toBe('run-123');
+  });
+
+  it('reports linked:false when the stamped run_id resolves to no uat_test_runs row (a fabricated or stale link)', async () => {
+    const artifactRow = { metadata: { machine_provenance: { run_id: 'run-nonexistent' } } };
+    const result = await verifyLaunchUatReportLink(mockSupabase(null), artifactRow);
+    expect(result.linked).toBe(false);
+    expect(result.reason).toMatch(/no uat_test_runs row found/);
+  });
+
+  it('falls back to metadata.uat_test_run_id when machine_provenance.run_id is absent', async () => {
+    const artifactRow = { metadata: { uat_test_run_id: 'run-456' } };
+    const result = await verifyLaunchUatReportLink(mockSupabase({ id: 'run-456' }), artifactRow);
+    expect(result.linked).toBe(true);
+    expect(result.runId).toBe('run-456');
   });
 });
