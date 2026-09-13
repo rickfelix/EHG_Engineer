@@ -1,0 +1,220 @@
+{
+  "executive_summary": "Complete the writer half of payload.urgency='interrupt': add a validated, discoverable stamp path at the shared dispatch chokepoint, fix a stale doc pointer, and close the reader/writer shape gap QF-20260912-269's merged reader left open.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Add a shared urgency-levels constant and a validated urgency pass-through in lib/coordinator/dispatch.cjs's insertCoordinationRow/dispatchToWorker so a caller can mark payload.urgency='interrupt' through a named, discoverable option instead of ad hoc payload construction.",
+      "description": "VALIDATION (sub_agent_execution_results 39101e4d) confirmed 0 of 1755 live session_coordination rows carry payload.urgency NOT NULL because no writer exists anywhere in scripts/ or lib/ (excl. archive/). Explore (705eca19) located the shared chokepoint at lib/coordinator/dispatch.cjs:1453 (insertCoordinationRow) and :1905 (dispatchToWorker), and the structural precedent this fix was modeled on: lib/sd/amend-sd.js:291-310's fence_notice payload construction. Add a new lib/coordinator/urgency-levels.cjs exporting URGENCY_LEVELS = ['interrupt'] plus an isKnownUrgency(value) helper, and thread an optional opts.urgency through dispatchToWorker/insertCoordinationRow that sets row.payload.urgency when provided (a caller may also set payload.urgency directly, since payload is unrestricted JSONB — this FR makes the path named and validated, not newly possible).",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "dispatchToWorker(supabase, row, { urgency: 'interrupt' }) results in a persisted row whose payload.urgency === 'interrupt'",
+        "Calling dispatchToWorker/insertCoordinationRow with no urgency option produces a row byte-identical to pre-change behavior (no new required fields, no default injected)",
+        "An unrecognized urgency value (not in URGENCY_LEVELS) is still passed through unmodified onto payload.urgency and logs one warning line via the existing logger convention, matching coordination-inbox.cjs's own fail-open style for its urgentRows fetch"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Fix the stale documentation pointer at scripts/hooks/coordination-inbox.cjs:842-843 and add a real 'Urgency escalation (payload.urgency)' subsection to docs/protocol/coordinator-adam-comms.md that cross-references the full spec already written at docs/reference/fleet-coordination.md:173-194.",
+      "description": "The in-code comment claims the urgency class is 'documented in docs/protocol/coordinator-adam-comms.md beside fence_notice', but that file has zero occurrences of 'urgency' or 'fence_notice' (VALIDATION 39101e4d, corroborated independently by Explore 705eca19). The real section lives only in docs/reference/fleet-coordination.md:173-194. Explore identified two candidate insertion points in coordinator-adam-comms.md: the 'Receipt contract — ALL directive kinds' section (lines 115-162) and the 'Optional, validated typed --kind at send' section (lines 368-393). Insert a short subsection near the Receipt contract section (the natural home, since it already covers how directive-kind rows are received) that names payload.urgency='interrupt', the new dispatchToWorker({ urgency: 'interrupt' }) option from FR-1, and links to fleet-coordination.md for the full reader-side behavior. Update the coordination-inbox.cjs comment to name the correct file.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "grep -c 'urgency' docs/protocol/coordinator-adam-comms.md returns >= 1 after this SD ships",
+        "The code comment at scripts/hooks/coordination-inbox.cjs (formerly lines 842-843) names a file that actually contains the word 'urgency'",
+        "The new subsection cross-references docs/reference/fleet-coordination.md rather than duplicating its content verbatim"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Add a test proving the writer (FR-1) and the already-merged reader (coordination-inbox.cjs's mergePriorityExempt / classifyToolActiveLaneBlind) agree on payload shape end-to-end, closing the 'readers-without-writer' / zero-yield-by-construction gap VALIDATION flagged as its sole HIGH finding.",
+      "description": "The 4 existing reader-side tests (tests/unit/coordination-inbox-priority-exempt.test.js, tests/unit/coordination-inbox-lane-blind-nudge.test.js) are pure-function tests fed a hand-built urgentRows array; none exercises a row actually produced by the writer. Add a unit test that builds a row via the FR-1 dispatchToWorker urgency option (with a stubbed Supabase client, no live DB call) and feeds its resulting payload into the existing pure reader functions, asserting it is recognized as an urgent row.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "A new test constructs a row through the FR-1 writer path (not a hand-typed literal) and asserts classifyToolActiveLaneBlind(row, { cutMinutes: 2 }).blind === true when the row is old enough",
+        "The same test asserts mergePriorityExempt correctly places a writer-produced urgent row ahead of the oldest-five batch",
+        "The test requires no live Supabase connection (stubbed/mocked client only), consistent with this repo's DB-tier integration constraint"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Preserve and document, without modification, the already-merged reader-side mechanism delivered by QF-20260912-269 (PR #8889): the uncapped urgentRows fetch, the red URGENT label, and the cutMinutes:2 lane-blind nudge in scripts/hooks/coordination-inbox.cjs.",
+      "description": "VALIDATION confirmed all four target files (scripts/hooks/coordination-inbox.cjs, the two new test files, docs/reference/fleet-coordination.md) are byte-identical to origin/main and that `npx vitest run` on the two test files reports 2 files / 41 tests passed. This FR carries no new code; it exists so this PRD's acceptance criteria and EXEC-phase regression checks explicitly assert against the delivered baseline rather than silently assuming it.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "scripts/hooks/coordination-inbox.cjs, tests/unit/coordination-inbox-priority-exempt.test.js, tests/unit/coordination-inbox-lane-blind-nudge.test.js, and docs/reference/fleet-coordination.md remain byte-identical to origin/main except for the FR-2 comment-pointer fix",
+        "`npx vitest run tests/unit/coordination-inbox-priority-exempt.test.js tests/unit/coordination-inbox-lane-blind-nudge.test.js` continues to report 0 failures after this SD's changes land"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Explicitly disposition the SD's optional fix-shape limb (e) — a UserPromptSubmit read of interrupt rows — as DEFERRED for this SD rather than letting it lapse silently.",
+      "description": "The originating ticket marked limb (e) 'optional, measured at PLAN'. PLAN's disposition: DEFERRED. coordination-inbox.cjs's existing PostToolUse poll (CHECK_INTERVAL_MS = 15 seconds) already surfaces an interrupt row within one cycle for any tool-active session; a second UserPromptSubmit hook path would be redundant without a demonstrated gap (e.g., a session quiet on tool calls long enough that no PostToolUse fires between an interrupt row landing and the next prompt). No code is added for this FR.",
+      "priority": "LOW",
+      "acceptance_criteria": [
+        "The SD record and this PRD explicitly state limb (e) is deferred, with the reason recorded, rather than being silently dropped",
+        "If a future incident demonstrates a real gap, it is filed as a new, separately-scoped QF/SD rather than reopening this one"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "The urgency validation/pass-through in dispatch.cjs must fail-open: an unrecognized value is logged and still written, never thrown, and never blocks the insert.",
+      "rationale": "dispatch.cjs's insertCoordinationRow is the single chokepoint for every coordinator send across the fleet (fleet-dashboard.cjs, capped-pool-broadcast.cjs, amend-sd.js). A throwing validation here has fleet-wide blast radius; the existing urgentRows reader fetch in coordination-inbox.cjs already uses a try/catch fail-open pattern for the same reason, so this change matches established convention."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "The recognized urgency values must live in one shared, importable constant (lib/coordinator/urgency-levels.cjs), not be re-typed as a string literal at each call site.",
+      "rationale": "The existing topic field is free-form and has already drifted (coordinator-capacity-forecast.mjs uses topic:'source_work', this SD's ticket uses topic:'ruling', with no shared enum). A single exported constant prevents the same drift from recurring for urgency and gives FR-2's documentation and FR-3's tests one source of truth to reference."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "No new database column or migration. payload.urgency continues to live inside the existing session_coordination.payload JSONB column.",
+      "rationale": "The reader side (already merged) reads payload->>urgency directly with no schema change; the writer side must not introduce asymmetry by requiring a migration the reader never needed. Confirmed session_coordination's live schema already supports arbitrary JSONB keys with no CHECK constraint on payload shape."
+    }
+  ],
+  "system_architecture": {
+    "overview": "This SD completes the writer half of the payload.urgency='interrupt' mechanism whose reader half (scripts/hooks/coordination-inbox.cjs) already merged via QF-20260912-269/PR#8889. It adds a named, validated way for a coordinator-authored ruling to set payload.urgency at the existing dispatch chokepoint (lib/coordinator/dispatch.cjs), and repairs a stale documentation cross-reference discovered during LEAD-TO-PLAN validation.",
+    "components": [
+      {
+        "name": "urgency-levels constant",
+        "responsibility": "Single source of truth for recognized urgency values ('interrupt' initially); consumed by the writer for validation/warning and referenced by tests and documentation.",
+        "technology": "CommonJS module (lib/coordinator/urgency-levels.cjs)"
+      },
+      {
+        "name": "dispatch.cjs writer extension",
+        "responsibility": "Accept an optional urgency signal at the insertCoordinationRow/dispatchToWorker chokepoint, validate it against the shared constant (fail-open on unrecognized values), and ensure it lands in the persisted payload.urgency.",
+        "technology": "Node.js (lib/coordinator/dispatch.cjs)"
+      },
+      {
+        "name": "coordinator-adam-comms.md documentation",
+        "responsibility": "Discoverable, accurate authoring-time reference telling a coordinator session how to mark a ruling as interrupt-worthy, cross-referencing the full reader-side spec.",
+        "technology": "Markdown"
+      }
+    ],
+    "data_flow": "A coordinator session decides a ruling reverses in-flight work, then calls dispatchToWorker(supabase, row, { urgency: 'interrupt' }) (FR-1). The row lands in session_coordination with payload.urgency='interrupt'. The already-merged reader in coordination-inbox.cjs fetches urgentRows uncapped (gated on payload->>urgency='interrupt'), merges them ahead of the oldest-five batch via mergePriorityExempt, prints a red URGENT label, and the lane-blind nudge fires at cutMinutes:2 naming the row's subject.",
+    "integration_points": [
+      "lib/coordinator/dispatch.cjs (insertCoordinationRow/dispatchToWorker)",
+      "scripts/hooks/coordination-inbox.cjs (already-merged reader, unmodified except the FR-2 comment fix)",
+      "docs/protocol/coordinator-adam-comms.md",
+      "docs/reference/fleet-coordination.md"
+    ]
+  },
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "dispatchToWorker called with opts.urgency='interrupt' stamps payload.urgency on the inserted row",
+      "test_type": "unit",
+      "given": "A stubbed Supabase client and a valid row/opts object with opts.urgency='interrupt'",
+      "when": "dispatchToWorker(supabase, row, opts) is invoked",
+      "then": "The row object passed to supabase.from('session_coordination').insert(...) has payload.urgency === 'interrupt'"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "dispatchToWorker called with no urgency option is byte-identical to pre-change behavior",
+      "test_type": "unit",
+      "given": "A stubbed Supabase client and a valid row/opts object with no urgency key at all",
+      "when": "dispatchToWorker(supabase, row, opts) is invoked",
+      "then": "The inserted row's payload has no urgency key added, and every other field matches the pre-FR-1 output exactly (regression pin)"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "An unrecognized urgency value is passed through and logged, never thrown",
+      "test_type": "unit",
+      "given": "opts.urgency = 'not-a-real-level'",
+      "when": "dispatchToWorker(supabase, row, opts) is invoked",
+      "then": "No exception is thrown, payload.urgency === 'not-a-real-level' on the inserted row, and exactly one warning is logged via the existing logger convention"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "The shared urgency-levels constant correctly classifies known and unknown values",
+      "test_type": "unit",
+      "given": "isKnownUrgency('interrupt'), isKnownUrgency('bogus'), isKnownUrgency(null), isKnownUrgency('')",
+      "when": "Each is evaluated",
+      "then": "Returns true only for 'interrupt'; false for 'bogus', null, and '' — no exception for any input type"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "A row produced by the FR-1 writer path is correctly recognized by the already-merged reader's pure functions",
+      "test_type": "integration",
+      "given": "A row constructed via the FR-1 dispatchToWorker urgency option (stubbed Supabase, no live DB call), aged 3 minutes past creation",
+      "when": "The row is fed into coordination-inbox.cjs's classifyToolActiveLaneBlind(row, { cutMinutes: 2 }) and mergePriorityExempt",
+      "then": "classifyToolActiveLaneBlind reports blind:true (3 min > 2 min cut) and mergePriorityExempt places the row ahead of a hand-built oldest-five batch — proving writer and reader payload shapes agree without requiring a live production ruling to be authored first"
+    }
+  ],
+  "acceptance_criteria": [
+    "Calling dispatchToWorker(supabase, row, { urgency: 'interrupt' }) results in a row whose payload.urgency === 'interrupt', verified by TS-1",
+    "Every pre-existing caller of dispatchToWorker/insertCoordinationRow (fleet-dashboard.cjs, capped-pool-broadcast.cjs, lib/sd/amend-sd.js) continues to produce byte-identical rows with zero regressions in their existing test suites",
+    "docs/protocol/coordinator-adam-comms.md contains a real 'Urgency escalation' subsection (grep -c 'urgency' >= 1) and the coordination-inbox.cjs code comment names a file that actually documents the mechanism",
+    "TS-5's integration-shaped unit test demonstrates the writer (FR-1) and the already-merged reader agree on payload shape, closing VALIDATION's HIGH finding without requiring a live production ruling",
+    "`npx vitest run` across the coordination-inbox.cjs and dispatch.cjs test files reports 0 failures, including the 41 pre-existing tests VALIDATION confirmed passing plus all TS-1 through TS-5"
+  ],
+  "risks": [
+    {
+      "risk": "A future caller sets payload.urgency to a plausible-but-wrong string (e.g. 'urgent' instead of 'interrupt') and is silently ignored by the reader, recreating the same consumer-without-matching-writer gap in a new shape.",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "The shared urgency-levels constant (TR-2) plus a mandatory warning log (FR-1's TS-3) surfaces any unrecognized value at write time rather than leaving it silently unread.",
+      "rollback_plan": "No data-destructive rollback needed: unrecognized values are passed through, never dropped, so a future fix to the constant (adding the correct value) makes historical rows retroactively meaningful with no backfill."
+    },
+    {
+      "risk": "Adding validation/logging to the hot dispatchToWorker/insertCoordinationRow chokepoint (used by every coordinator send path across the fleet) regresses an unrelated caller.",
+      "probability": "LOW",
+      "impact": "HIGH",
+      "mitigation": "The change is purely additive (a new optional opts.urgency parameter); it never executes unless the field is present, and TS-2 pins byte-identical output for every caller that omits it.",
+      "rollback_plan": "Revert the isolated diff to lib/coordinator/dispatch.cjs and lib/coordinator/urgency-levels.cjs (~15-20 LOC total); no other file's runtime behavior depends on this change."
+    },
+    {
+      "risk": "The FR-2 doc-pointer fix is misread by a future auditor as evidence the reader implementation itself changed, when only a comment and a doc file moved.",
+      "probability": "LOW",
+      "impact": "LOW",
+      "mitigation": "Keep the FR-2 diff isolated to the comment string and the markdown file; call out explicitly in the PR description and in FR-4's acceptance criteria that coordination-inbox.cjs's functional code is unchanged.",
+      "rollback_plan": "Revert the single-line comment edit and the markdown addition; no functional code is touched."
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      {
+        "phase": "Phase 1: Writer + validation",
+        "description": "Add lib/coordinator/urgency-levels.cjs and wire the optional urgency option through insertCoordinationRow/dispatchToWorker in lib/coordinator/dispatch.cjs.",
+        "deliverables": ["lib/coordinator/urgency-levels.cjs", "lib/coordinator/dispatch.cjs urgency option", "TS-1/TS-2/TS-3/TS-4 unit tests"]
+      },
+      {
+        "phase": "Phase 2: Documentation repair",
+        "description": "Fix the stale pointer in scripts/hooks/coordination-inbox.cjs and add the real cross-referencing subsection to docs/protocol/coordinator-adam-comms.md.",
+        "deliverables": ["Updated code comment", "New 'Urgency escalation' subsection in coordinator-adam-comms.md"]
+      },
+      {
+        "phase": "Phase 3: Shape-agreement verification",
+        "description": "Add the integration-shaped unit test proving the writer and the already-merged reader agree, then run the full relevant test suite to confirm zero regressions.",
+        "deliverables": ["TS-5 test", "Full vitest run evidence (coordination-inbox.cjs + dispatch.cjs test files)"]
+      }
+    ],
+    "technical_decisions": [
+      "Reuse the existing dispatchToWorker/insertCoordinationRow chokepoint rather than building a new CLI: Explore's research (705eca19) found no single dedicated 'ruling' CLI exists today — the one historical topic='ruling' row was ad hoc, not from a purpose-built helper — so any future caller (script or ad hoc) benefits from validation living at the shared chokepoint rather than in a new, single-purpose tool.",
+      "Do not attempt automatic detection of 'reverses in-flight work': Explore confirmed no existing classifier fits (payload.message_kind's CORRECTION_KINDS is about correcting prior messages, not build-direction reversal) and building a new one is disproportionate risk/scope for this fix. The caller (coordinator judgment) supplies the flag explicitly, matching the originating ticket's own text: 'the coordinator decides at authoring time.'"
+    ]
+  },
+  "exploration_summary": {
+    "files_read": [
+      "scripts/hooks/coordination-inbox.cjs",
+      "lib/fleet/worker-status.cjs",
+      "lib/coordinator/dispatch.cjs",
+      "lib/sd/amend-sd.js",
+      "lib/coordinator/message-kinds.cjs",
+      "docs/protocol/coordinator-adam-comms.md",
+      "docs/reference/fleet-coordination.md",
+      "tests/unit/coordination-inbox-priority-exempt.test.js",
+      "tests/unit/coordination-inbox-lane-blind-nudge.test.js"
+    ],
+    "patterns_identified": [
+      "The reader-side fail-open try/catch pattern for optional/uncapped fetches (urgentRows, priorityRows) should be mirrored on the writer side for validation warnings.",
+      "fence_notice is the only pre-existing precedent for a payload discriminator with both a real writer (lib/sd/amend-sd.js) and a real reader (coordination-inbox.cjs's PRIORITY_EXEMPT_DIRECTIVE_KINDS) — the new urgency mechanism should reach the same writer+reader completeness.",
+      "Free-form string fields (topic, message_kind) drift without a shared enum; urgency should not repeat that mistake."
+    ],
+    "key_decisions": [
+      "Scope this SD to the writer + docs + shape-agreement test only, since the reader is already merged and verified (QF-20260912-269/PR#8889) — re-touching the reader risks an unnecessary regression on 41 passing tests.",
+      "Defer fix-shape limb (e) (UserPromptSubmit read) explicitly rather than implement or silently drop it, per FR-5."
+    ],
+    "exploration_date": "2026-09-13"
+  }
+}

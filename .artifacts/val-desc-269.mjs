@@ -1,0 +1,11 @@
+import { createClient } from '@supabase/supabase-js';
+const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await s.from('strategic_directives_v2').select('title,description,metadata').eq('sd_key','SD-LEO-FIX-COORDINATOR-RULING-REVERSES-001').maybeSingle();
+console.log('=== FULL TITLE ==='); console.log(data.title);
+console.log('=== DESCRIPTION TAIL (fix shape) ===');
+const d = data.description||''; const i = d.indexOf('FIX SHAPE');
+console.log(i>=0 ? d.slice(i) : d.slice(-2500));
+console.log('=== qf_origin_body tail ===');
+const b = data.metadata?.qf_origin_body || ''; const j = b.indexOf('FIX SHAPE');
+console.log(j>=0 ? b.slice(j) : b.slice(-1500));
+console.log('=== source_qf_id:', data.metadata?.source_qf_id, '| escalated_from_qf:', data.metadata?.escalated_from_qf);
