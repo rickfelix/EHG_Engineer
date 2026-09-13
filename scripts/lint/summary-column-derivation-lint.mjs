@@ -7,7 +7,7 @@
  * column) to the 3 shapes that actually caused a summary-vs-detail drift incident:
  *
  *  (a) BOOLEAN  — a new *_evaluated/*_passed/*_verified column with no GENERATED
- *      expression on the same clause. Exempts the 7 real, pre-existing baseline
+ *      expression on the same clause. Exempts the real, pre-existing baseline
  *      column NAMES (measured live across the schema; several exist on multiple
  *      tables under the same name, so the exemption is name-based, not a single
  *      table.column pair) — see BASELINE_BOOLEAN_COLUMNS below.
@@ -46,17 +46,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const MIGRATIONS_DIR = path.join(REPO_ROOT, 'database', 'migrations');
 
-// Measured live (2026-09-13) across the whole schema via information_schema.columns:
-// several of these names exist on MULTIPLE tables (e.g. validation_passed on 6),
-// so the baseline exemption is by column NAME, not a single (table, column) pair.
-// LEAD-phase VALIDATION corrected an earlier 14-name grep hit down to these 7 --
-// the other 3 were PL/pgSQL local variables, not live columns.
+// Re-measured live (2026-09-13, PLAN_VERIFICATION phase, VALIDATION finding F-1) against
+// information_schema.columns joined to information_schema.tables (BASE TABLE only, matching
+// the shape a real ADD COLUMN targets -- a *_evaluated/*_passed/*_verified column on a VIEW
+// cannot be independently ADDed the way this predicate cares about). The earlier LEAD-phase
+// 7-name list contained 2 PHANTOM names (subagent_verified, test_passed -- neither exists as a
+// live column anywhere in the schema, silently exempting nothing) and MISSED 5 real live names
+// (all_gates_passed, check_passed, const_002_passed, gates_passed, tests_passed -- note
+// tests_passed, plural, is the real column; test_passed, singular, is the phantom it was
+// confused with). Several names exist on MULTIPLE tables (e.g. validation_passed on 6), so the
+// baseline exemption is by column NAME, not a single (table, column) pair. This is a live
+// schema, so this list is a point-in-time measurement, not a permanent invariant -- a future
+// re-measurement finding further drift is expected, not a regression.
 export const BASELINE_BOOLEAN_COLUMNS = new Set([
+  'all_gates_passed',
+  'check_passed',
   'conformance_passed',
+  'const_002_passed',
   'content_lint_passed',
   'gate_passed',
-  'subagent_verified',
-  'test_passed',
+  'gates_passed',
+  'primitives_passed',
+  'tests_passed',
   'uat_verified',
   'validation_passed',
 ]);
@@ -254,7 +265,7 @@ function main() {
     console.log('─'.repeat(72));
     if (failingFiles.length) {
       console.log(`\n❌ ${failingFiles.length} migration(s) with undereived summary column(s).`);
-      console.log('   Add a GENERATED expression, pair the jsonb key write with a CREATE TRIGGER in the same file, or use the existing baseline exemption if this is one of the 7 known pre-existing columns.');
+      console.log('   Add a GENERATED expression, pair the jsonb key write with a CREATE TRIGGER in the same file, or use the existing baseline exemption if this is one of the known pre-existing columns.');
     } else {
       console.log('\n✅ No undereived summary columns found.');
     }

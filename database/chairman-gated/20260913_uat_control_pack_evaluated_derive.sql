@@ -154,13 +154,18 @@ BEGIN
     RAISE EXCEPTION 'FR-3 VERIFY FAILED: function derive_uat_control_pack_evaluated does not exist';
   END IF;
 
+  -- TR-3 / TS-6 (VALIDATION, evidence 18b5d248, F-5): existence alone is not liveness -- a
+  -- DISABLED trigger still has a pg_trigger row, so an existence-only check passes on exactly
+  -- the scenario TR-3's "trigger-liveness assertion" exists to catch. tgenabled='D' is disabled;
+  -- 'O'/'A'/'R' (origin/always/replica) are all enabled for a normal session.
   SELECT EXISTS (
     SELECT 1 FROM pg_trigger
      WHERE tgname = 'trg_uat_control_pack_evaluated_derive'
        AND tgrelid = 'public.uat_test_runs'::regclass
+       AND tgenabled != 'D'
   ) INTO v_trigger_exists;
   IF NOT v_trigger_exists THEN
-    RAISE EXCEPTION 'FR-3 VERIFY FAILED: trigger trg_uat_control_pack_evaluated_derive does not exist';
+    RAISE EXCEPTION 'FR-3 VERIFY FAILED: trigger trg_uat_control_pack_evaluated_derive does not exist or is disabled';
   END IF;
 END;
 $verify$;

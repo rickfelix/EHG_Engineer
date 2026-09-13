@@ -172,6 +172,22 @@ export async function runDryRun(client) {
     const preDownSnapshotCaptured = Number(preDownSnapshotCount.rows[0].count) > 0;
     log.push(`TR-2 (fixed): pre-derivation snapshot captured by the UP file itself, before CREATE TRIGGER (${preDownSnapshotCount.rows[0].count} rows): ${preDownSnapshotCaptured}`);
 
+    // TS-6/TR-3 (VALIDATION, evidence 18b5d248, F-5): existence alone is not liveness -- a
+    // DISABLED trigger still has a pg_trigger row. Confirm the UP file's corrected verify
+    // predicate (tgenabled != 'D') actually distinguishes disabled-but-present from live.
+    await client.query(`ALTER TABLE uat_test_runs DISABLE TRIGGER trg_uat_control_pack_evaluated_derive`);
+    const disabledCheck = await client.query(`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_trigger
+         WHERE tgname = 'trg_uat_control_pack_evaluated_derive'
+           AND tgrelid = 'public.uat_test_runs'::regclass
+           AND tgenabled != 'D'
+      ) AS enabled_and_exists
+    `);
+    const ts6Pass = disabledCheck.rows[0].enabled_and_exists === false;
+    log.push(`TS-6 (disabled-trigger detection: tgenabled != 'D' correctly reports false when the trigger is disabled, not just present): ${ts6Pass}`);
+    await client.query(`ALTER TABLE uat_test_runs ENABLE TRIGGER trg_uat_control_pack_evaluated_derive`);
+
     await client.query(downSql);
     log.push('DOWN applied without error (drops trigger + function only; snapshot was already captured at UP time, per the corrected TR-2 timing)');
 
@@ -180,7 +196,7 @@ export async function runDryRun(client) {
     const bothGone = fnAfterDown.rows.length === 0 && triggerAfterDown.rows.length === 0;
     log.push(`Function + trigger both gone after DOWN: ${bothGone}`);
 
-    const allPass = ts1Pass && ts2Pass && ts2fPass && ts2dPass && ts2gPass && ts2hPass && ts1.ok && ts2jPass && ts2kPass && ts2cPass && bothGone && preDownSnapshotCaptured && hasLockTimeout;
+    const allPass = ts1Pass && ts2Pass && ts2fPass && ts2dPass && ts2gPass && ts2hPass && ts1.ok && ts2jPass && ts2kPass && ts2cPass && ts6Pass && bothGone && preDownSnapshotCaptured && hasLockTimeout;
     return { pass: allPass, log };
   } finally {
     await client.query('ROLLBACK');
