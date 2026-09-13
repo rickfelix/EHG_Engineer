@@ -98,10 +98,20 @@ describe('reserveWorkItem / reserveSd — honestly-named alias, same behavior fo
 });
 
 describe('self-claim-qf.cjs threads ctx.reservations + tierCtx into selfClaimQuickFix', () => {
+  // SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-3): self-claim-qf.cjs now calls getMyClaims(sb,
+  // sessionId) before anything else -- a bare `{}` sb (no .from) makes that call fail-closed
+  // (a read error must never let self-claim proceed silently), so selfClaimQuickFix would never
+  // be reached at all. This minimal stub answers both of getMyClaims' queries with "no claims
+  // held", which is what these tests intend (they exist to verify argument threading, not the
+  // new guard), so selfClaimQuickFix is reached exactly as before.
+  const noClaimsSb = () => ({
+    from: () => ({ select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) }),
+  });
+
   it('passes reservations and worker_tier_rank as the 5th argument', async () => {
     const selfClaimQuickFix = vi.fn().mockResolvedValue(null);
     const ctx = {
-      sb: {},
+      sb: noClaimsSb(),
       sessionId: 'session-A',
       base: { ok: true },
       helpers: { selfClaimQuickFix },
@@ -119,7 +129,7 @@ describe('self-claim-qf.cjs threads ctx.reservations + tierCtx into selfClaimQui
 
   it('degrades to undefined reservations/worker_tier_rank when neither ctx field is present (byte-identical no-op shape)', async () => {
     const selfClaimQuickFix = vi.fn().mockResolvedValue(null);
-    const ctx = { sb: {}, sessionId: 'session-A', base: {}, helpers: { selfClaimQuickFix } };
+    const ctx = { sb: noClaimsSb(), sessionId: 'session-A', base: {}, helpers: { selfClaimQuickFix } };
     await selfClaimQfStep.run(ctx);
     const args = selfClaimQuickFix.mock.calls[0];
     expect(args[4]).toEqual({ reservations: undefined, worker_tier_rank: undefined });
