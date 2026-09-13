@@ -800,6 +800,146 @@ describe('detectStaleEvidence / resolveCurrentHeadSha — pure functions (_inter
   });
 });
 
+describe('QF-20260913-573: detectWrongTreeEvidence / isAncestorOrEqual — pure functions (_internals)', () => {
+  const REAL_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  // A real, valid, DISCONNECTED commit object (no parent, empty tree) — shares zero history
+  // with HEAD, so `git merge-base --is-ancestor` gives a clean, definitive "not an ancestor"
+  // (exit 1), unlike the existing suite's fake 'deadbeef...' shas (exit 128, "not a valid
+  // commit name" — genuinely UNKNOWN ancestry, not "not an ancestor").
+  const EMPTY_TREE = execFileSync('git', ['hash-object', '-t', 'tree', '/dev/null'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  // -c user.email/-c user.name: CI runners have no global git identity configured (confirmed
+  // live — PR #8907's own CI run failed with "Author identity unknown"), so commit-tree needs
+  // an explicit, ephemeral identity rather than relying on the ambient repo/global config.
+  const WRONG_TREE_SHA = execFileSync('git', ['-c', 'user.email=qf-test@example.com', '-c', 'user.name=QF Test Fixture', 'commit-tree', EMPTY_TREE, '-m', 'QF-20260913-573 disconnected test commit'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  const norm = s => String(s || '').toUpperCase().replace(/-AGENT$/, '').replace(/-+/g, '_');
+
+  it('isAncestorOrEqual: true when candidate equals head (no git call needed)', () => {
+    expect(_internals.isAncestorOrEqual(REAL_HEAD, REAL_HEAD, process.cwd())).toBe(true);
+  });
+
+  it('isAncestorOrEqual: true when candidate is a real ancestor of head', () => {
+    const parent = execFileSync('git', ['rev-parse', 'HEAD~1'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+    expect(_internals.isAncestorOrEqual(parent, REAL_HEAD, process.cwd())).toBe(true);
+  });
+
+  it('isAncestorOrEqual: false (definitive) when candidate is a real, disconnected, non-ancestor commit', () => {
+    expect(_internals.isAncestorOrEqual(WRONG_TREE_SHA, REAL_HEAD, process.cwd())).toBe(false);
+  });
+
+  it('isAncestorOrEqual: null (unknown, never false) for a fake/nonexistent sha — a git failure must never be coerced into "not an ancestor"', () => {
+    expect(_internals.isAncestorOrEqual('deadbeef00000000000000000000000000000000', REAL_HEAD, process.cwd())).toBeNull();
+  });
+
+  it('isAncestorOrEqual: null for missing arguments, never throws', () => {
+    expect(_internals.isAncestorOrEqual(null, REAL_HEAD, process.cwd())).toBeNull();
+    expect(_internals.isAncestorOrEqual(REAL_HEAD, null, process.cwd())).toBeNull();
+    expect(_internals.isAncestorOrEqual(REAL_HEAD, REAL_HEAD, null)).toBeNull();
+  });
+
+  it('detectWrongTreeEvidence flags a row evaluated against a real, disconnected, non-ancestor commit', () => {
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: WRONG_TREE_SHA }]]);
+    const wrongTree = _internals.detectWrongTreeEvidence(latestByCode, ['TESTING'], { worktree_path: process.cwd() }, norm);
+    expect(wrongTree).toEqual([{ agent: 'TESTING', evaluated_commit_sha: WRONG_TREE_SHA, current_head_sha: REAL_HEAD }]);
+  });
+
+  it('detectWrongTreeEvidence does NOT flag a matching evaluated_commit_sha', () => {
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: REAL_HEAD }]]);
+    expect(_internals.detectWrongTreeEvidence(latestByCode, ['TESTING'], { worktree_path: process.cwd() }, norm)).toEqual([]);
+  });
+
+  it('detectWrongTreeEvidence does NOT flag a genuinely stale-but-same-branch ancestor sha', () => {
+    const parent = execFileSync('git', ['rev-parse', 'HEAD~1'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: parent }]]);
+    expect(_internals.detectWrongTreeEvidence(latestByCode, ['TESTING'], { worktree_path: process.cwd() }, norm)).toEqual([]);
+  });
+
+  it('detectWrongTreeEvidence does NOT flag an unresolvable/fake sha — unknown ancestry is never treated as wrong-tree (matches the existing suite\'s deadbeef fixtures)', () => {
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: 'deadbeef00000000000000000000000000000000' }]]);
+    expect(_internals.detectWrongTreeEvidence(latestByCode, ['TESTING'], { worktree_path: process.cwd() }, norm)).toEqual([]);
+  });
+
+  it('detectWrongTreeEvidence is a no-op when worktree_path or current HEAD cannot be resolved', () => {
+    const latestByCode = new Map([['TESTING', { evaluated_commit_sha: WRONG_TREE_SHA }]]);
+    expect(_internals.detectWrongTreeEvidence(latestByCode, ['TESTING'], {}, norm)).toEqual([]);
+    expect(_internals.detectWrongTreeEvidence(latestByCode, ['TESTING'], { worktree_path: 'C:/not/a/repo/xyz' }, norm)).toEqual([]);
+  });
+});
+
+describe('QF-20260913-573: validateSubagentEvidence — wrong-tree evidence integration', () => {
+  const REAL_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  const EMPTY_TREE = execFileSync('git', ['hash-object', '-t', 'tree', '/dev/null'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+  // -c user.email/-c user.name: CI runners have no global git identity configured — see the
+  // sibling describe block's identical fix above (PR #8907's own CI run failure).
+  const WRONG_TREE_SHA = execFileSync('git', ['-c', 'user.email=qf-test@example.com', '-c', 'user.name=QF Test Fixture', 'commit-tree', EMPTY_TREE, '-m', 'QF-20260913-573 disconnected test commit (integration)'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+
+  beforeEach(() => {
+    delete process.env.LEO_DISABLE_SUBAGENT_EVIDENCE_GATE;
+    delete process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK;
+  });
+  afterEach(() => {
+    delete process.env.LEO_DISABLE_SUBAGENT_EVIDENCE_GATE;
+    delete process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK;
+  });
+
+  it('EXEC-TO-PLAN: a TESTING row measured on a disconnected tree FAILS the gate (not merely a warning)', async () => {
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [
+        { sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: WRONG_TREE_SHA },
+        { sub_agent_code: 'SECURITY', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: REAL_HEAD },
+      ]
+    });
+    const ctx = { sd: { ...makeSD(), worktree_path: process.cwd() }, handoffType: 'EXEC-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(false);
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_WRONG_TREE');
+    expect(result.issues.some(i => /SUBAGENT_EVIDENCE_WRONG_TREE/.test(i) && /TESTING/.test(i))).toBe(true);
+  });
+
+  it('LEO_DISABLE_STALE_EVIDENCE_CHECK=1 does NOT suppress the wrong-tree FAIL (only the staleness advisory is suppressible)', async () => {
+    process.env.LEO_DISABLE_STALE_EVIDENCE_CHECK = '1';
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [
+        { sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: WRONG_TREE_SHA },
+        { sub_agent_code: 'SECURITY', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: REAL_HEAD },
+      ]
+    });
+    const ctx = { sd: { ...makeSD(), worktree_path: process.cwd() }, handoffType: 'EXEC-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(false);
+    expect(result.details.reason).toBe('SUBAGENT_EVIDENCE_WRONG_TREE');
+  });
+
+  it('LEAD-TO-PLAN: a wrong-tree sha is NOT flagged (scope guard — same as detectStaleEvidence, mismatch is normal pre-EXEC)', async () => {
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [
+        { sub_agent_code: 'VALIDATION', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: WRONG_TREE_SHA },
+        { sub_agent_code: 'Explore', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: WRONG_TREE_SHA },
+      ]
+    });
+    const ctx = { sd: { ...makeSD(), worktree_path: process.cwd() }, handoffType: 'LEAD-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true);
+  });
+
+  it('a genuinely stale-but-same-branch sha still only WARNS, never fails (unaffected by this QF)', async () => {
+    const parent = execFileSync('git', ['rev-parse', 'HEAD~1'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
+    const supabase = makeSupabase({
+      phaseStart: PHASE_START_ISO,
+      evidenceRows: [
+        { sub_agent_code: 'TESTING', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: parent },
+        { sub_agent_code: 'SECURITY', created_at: '2026-04-24T21:00:00Z', verdict: 'PASS', evaluated_commit_sha: REAL_HEAD },
+      ]
+    });
+    const ctx = { sd: { ...makeSD(), worktree_path: process.cwd() }, handoffType: 'EXEC-TO-PLAN' };
+    const result = await validateSubagentEvidence(ctx, supabase);
+    expect(result.passed).toBe(true);
+    expect(result.details.reason).not.toBe('SUBAGENT_EVIDENCE_WRONG_TREE');
+  });
+});
+
 describe('validateSubagentEvidence — FR-3 stale-evidence integration', () => {
   const REAL_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: process.cwd(), encoding: 'utf8' }).trim();
   const STALE_SHA = 'deadbeef00000000000000000000000000000000';
