@@ -129,7 +129,17 @@ function loadConfigExemptions() {
       }
       try {
         const escaped = script.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        compiled.push(new RegExp(`\\bscripts[/\\\\]${escaped}\\b`));
+        // QF-20260912-197: every config entry registered before this QF lived directly under
+        // scripts/ (adam-quiet-tick.mjs, adam-startup-check.mjs, sms-relay-drain.cjs,
+        // sms-status-relay-drain.cjs) so the anchor never needed to tolerate a subdirectory.
+        // index-jam-detector.mjs is the first registrant that actually lives at
+        // scripts/cron/index-jam-detector.mjs -- the prior single-segment anchor
+        // (\bscripts[/\\]<name>\b) cannot match that path at all (no "scripts/<name>"
+        // substring exists), which would have silently left the entry inert. The optional
+        // `(?:[\w.-]+[/\\])*` segment tolerates any depth of subdirectory while the basename
+        // itself is still matched exactly (TICK_ENTRY_RE already forbids '/' in `script`, so
+        // one entry can still only ever exempt one physical basename).
+        compiled.push(new RegExp(`\\bscripts[/\\\\](?:[\\w.-]+[/\\\\])*${escaped}\\b`));
       } catch {
         // A single uncompilable entry is skipped — never approximated into a wider pattern.
       }
