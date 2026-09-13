@@ -23,6 +23,13 @@
  *
  * USAGE:
  *   node scripts/one-off/rerun-stage23-walk-control-pack-001.mjs
+ *   node scripts/one-off/rerun-stage23-walk-control-pack-001.mjs --sd-key <SD-KEY>
+ *
+ * --sd-key overrides which strategic_directives_v2 row the walk is attributed to and stamped
+ * on (defaults to ELEVEN_001_KEY). Coordinator finding (2026-09-13, fence clause 6/6): the
+ * chairman's picture and lib/eva/parent-completion.mjs both read the SPRINT orchestrator's own
+ * metadata.journey_walk_result, not ELEVEN-001's -- a run stamped only on ELEVEN-001 is
+ * invisible to that reader even though the walk itself is identical either way.
  */
 import 'dotenv/config';
 import { execSync } from 'node:child_process';
@@ -44,6 +51,11 @@ const ELEVEN_001_KEY = 'SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-ELEVEN-001';
 const BASE_URL = 'https://altifyai.rickfelix2000.workers.dev';
 const STAGE_NUMBER = 23;
 const OVERALL_TIMEOUT_MS = 5 * 60 * 1000;
+
+function arg(name, fallback) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
+}
 
 function withTimeout(promise, ms, label) {
   let timer;
@@ -119,14 +131,15 @@ async function assembleControlPack(supabase) {
 
 async function main() {
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const targetSdKey = arg('--sd-key', ELEVEN_001_KEY);
 
-  const { data: eleven001, error: fetchErr } = await supabase
+  const { data: targetSd, error: fetchErr } = await supabase
     .from('strategic_directives_v2')
     .select('id, sd_key, metadata')
-    .eq('sd_key', ELEVEN_001_KEY)
+    .eq('sd_key', targetSdKey)
     .single();
-  if (fetchErr || !eleven001) {
-    console.error('::error::could not fetch SD-ALTIFYAI-LEO-FEAT-STAGE-BUILD-ELEVEN-001:', fetchErr?.message);
+  if (fetchErr || !targetSd) {
+    console.error(`::error::could not fetch ${targetSdKey}:`, fetchErr?.message);
     process.exitCode = 1;
     return;
   }
@@ -158,7 +171,7 @@ async function main() {
   try {
     result = await withTimeout(
       runVentureJourneyWalk({
-        sdId: eleven001.id,
+        sdId: targetSd.id,
         ventureId: ALTIFYAI_VENTURE_ID,
         stageNumber: STAGE_NUMBER,
         ventureKey: 'ALTIFYAI',
@@ -182,7 +195,7 @@ async function main() {
   console.log('Walk result:', JSON.stringify(result, null, 2));
 
   const stampedRunId = result.testRunId ?? null;
-  const { merged, error: mergeError } = await mergeMetadataKeys(ELEVEN_001_KEY, {
+  const { merged, error: mergeError } = await mergeMetadataKeys(targetSdKey, {
     stage23_walk_run_id: stampedRunId,
     stage23_walk_control_pack_note: {
       recorded_by: 'scripts/one-off/rerun-stage23-walk-control-pack-001.mjs',
@@ -198,7 +211,7 @@ async function main() {
     return;
   }
 
-  console.log(`✅ Recorded run id ${stampedRunId} (status=${result.status}, passRate=${result.passRate}) on ${ELEVEN_001_KEY}.metadata.stage23_walk_run_id`);
+  console.log(`✅ Recorded run id ${stampedRunId} (status=${result.status}, passRate=${result.passRate}) on ${targetSdKey}.metadata.stage23_walk_run_id`);
 }
 
 if (isMainModule(import.meta.url)) {
