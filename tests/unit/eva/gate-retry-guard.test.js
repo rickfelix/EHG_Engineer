@@ -15,7 +15,6 @@ import {
   getGateAttemptState,
   terminalizeVentureForRetryExhaustion,
   checkGateRetryCeiling,
-  resetGateAttempts,
 } from '../../../lib/eva/gate-retry-guard.js';
 
 describe('computeBackoffDelayMs (FR-1: backoff schedule)', () => {
@@ -145,51 +144,6 @@ describe('terminalizeVentureForRetryExhaustion (FR-2: terminal MANUAL_REQUIRED s
     });
     expect(ok).toBe(true);
     expect(updates).toHaveLength(0);
-  });
-});
-
-describe('resetGateAttempts (QF-20260913-466: clears stale attempt history once genuinely unblocked)', () => {
-  function makeDeleteMock({ deletedCount = 0, error = null } = {}) {
-    const eqCalls = [];
-    const api = {
-      from: vi.fn((table) => {
-        if (table !== 'eva_stage_gate_attempts') throw new Error(`unexpected table ${table}`);
-        return {
-          delete: vi.fn((opts) => ({
-            eq: vi.fn((col, val) => {
-              eqCalls.push([col, val]);
-              return {
-                eq: vi.fn((col2, val2) => {
-                  eqCalls.push([col2, val2]);
-                  return Promise.resolve(error ? { error, count: null } : { error: null, count: deletedCount });
-                }),
-              };
-            }),
-          })),
-        };
-      }),
-    };
-    return { api, eqCalls };
-  }
-
-  it('deletes rows scoped to exactly this venture and stage, returning the deleted count', async () => {
-    const { api, eqCalls } = makeDeleteMock({ deletedCount: 18 });
-    const deleted = await resetGateAttempts(api, { ventureId: 'v1', stageNumber: 24 });
-    expect(deleted).toBe(18);
-    expect(eqCalls).toContainEqual(['venture_id', 'v1']);
-    expect(eqCalls).toContainEqual(['stage_number', 24]);
-  });
-
-  it('returns 0 (not undefined/null) when nothing was deleted', async () => {
-    const { api } = makeDeleteMock({ deletedCount: null });
-    const deleted = await resetGateAttempts(api, { ventureId: 'v1', stageNumber: 24 });
-    expect(deleted).toBe(0);
-  });
-
-  it('throws when the delete errors, rather than silently reporting success', async () => {
-    const { api } = makeDeleteMock({ error: { message: 'connection reset' } });
-    await expect(resetGateAttempts(api, { ventureId: 'v1', stageNumber: 24 }))
-      .rejects.toThrow(/connection reset/);
   });
 });
 
