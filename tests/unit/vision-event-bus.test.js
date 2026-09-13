@@ -13,6 +13,9 @@ import {
   clearVisionSubscribers,
   getSubscriberCount,
   VISION_EVENTS,
+  SUBSCRIBER_ERROR_EVENT,
+  registerHookObserver,
+  clearHookObservers,
 } from '../../lib/eva/event-bus/vision-events.js';
 import {
   registerVisionScoredHandlers,
@@ -80,7 +83,10 @@ describe('publishVisionEvent + subscribeVisionEvent', () => {
   });
 
   it('catches and logs subscriber errors without throwing', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-148: publishVisionEvent now logs subscriber errors via
+    // lib/logger.js's createLogger (writes structured JSON to process.stderr), not bare
+    // console.error, per the eva-logger-required-lint standard -- spy on stderr instead.
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     subscribeVisionEvent(VISION_EVENTS.SCORED, async () => {
       throw new Error('subscriber exploded');
     });
@@ -88,12 +94,12 @@ describe('publishVisionEvent + subscribeVisionEvent', () => {
     // publishVisionEvent must not throw
     expect(() => publishVisionEvent(VISION_EVENTS.SCORED, {})).not.toThrow();
     await new Promise(r => setTimeout(r, 10));
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('subscriber exploded'));
-    consoleSpy.mockRestore();
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('subscriber exploded'));
+    stderrSpy.mockRestore();
   });
 
   it('second subscriber executes even if first subscriber throws', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const executed = [];
     subscribeVisionEvent(VISION_EVENTS.SCORED, async () => { throw new Error('sub1 fail'); });
     subscribeVisionEvent(VISION_EVENTS.SCORED, async () => { executed.push('sub2'); });
@@ -101,7 +107,7 @@ describe('publishVisionEvent + subscribeVisionEvent', () => {
     publishVisionEvent(VISION_EVENTS.SCORED, {});
     await new Promise(r => setTimeout(r, 20));
     expect(executed).toContain('sub2');
-    consoleSpy.mockRestore();
+    stderrSpy.mockRestore();
   });
 
   it('clearVisionSubscribers removes all listeners', async () => {
@@ -111,6 +117,82 @@ describe('publishVisionEvent + subscribeVisionEvent', () => {
     publishVisionEvent(VISION_EVENTS.SCORED, {});
     await new Promise(r => setTimeout(r, 10));
     expect(calls).toHaveLength(0);
+  });
+});
+
+// ─── PAT-LES-77572983b741: structured subscriber-error signal ──────────────
+
+describe('publishVisionEvent — SUBSCRIBER_ERROR_EVENT hook-observer notification', () => {
+  beforeEach(() => {
+    clearVisionSubscribers();
+    clearHookObservers();
+  });
+  afterEach(() => {
+    clearVisionSubscribers();
+    clearHookObservers();
+  });
+
+  it('notifies a registered hook observer with a structured error payload when a subscriber throws synchronously', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const observed = [];
+    registerHookObserver((eventType, payload) => observed.push({ eventType, payload }));
+    subscribeVisionEvent(VISION_EVENTS.SCORED, function explodingHandler() {
+      throw new Error('sync boom');
+    });
+
+    publishVisionEvent(VISION_EVENTS.SCORED, { sdKey: 'SD-ERR-001' });
+    await new Promise((r) => setTimeout(r, 10));
+
+    const errorSignal = observed.find((o) => o.eventType === SUBSCRIBER_ERROR_EVENT);
+    expect(errorSignal).toBeDefined();
+    expect(errorSignal.payload.originalEventType).toBe(VISION_EVENTS.SCORED);
+    expect(errorSignal.payload.handlerName).toBe('explodingHandler');
+    expect(errorSignal.payload.error.message).toBe('sync boom');
+    expect(errorSignal.payload.payload).toEqual({ sdKey: 'SD-ERR-001' });
+    consoleSpy.mockRestore();
+  });
+
+  it('notifies a registered hook observer with a structured error payload when a subscriber rejects asynchronously', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const observed = [];
+    registerHookObserver((eventType, payload) => observed.push({ eventType, payload }));
+    subscribeVisionEvent(VISION_EVENTS.SCORED, async function asyncExplodingHandler() {
+      throw new Error('async boom');
+    });
+
+    publishVisionEvent(VISION_EVENTS.SCORED, { sdKey: 'SD-ERR-002' });
+    await new Promise((r) => setTimeout(r, 20));
+
+    const errorSignal = observed.find((o) => o.eventType === SUBSCRIBER_ERROR_EVENT);
+    expect(errorSignal).toBeDefined();
+    expect(errorSignal.payload.handlerName).toBe('asyncExplodingHandler');
+    expect(errorSignal.payload.error.message).toBe('async boom');
+    consoleSpy.mockRestore();
+  });
+
+  it('does not notify hook observers when no subscriber throws (only the routine publish signal fires)', async () => {
+    const observed = [];
+    registerHookObserver((eventType) => observed.push(eventType));
+    subscribeVisionEvent(VISION_EVENTS.SCORED, async () => {});
+
+    publishVisionEvent(VISION_EVENTS.SCORED, {});
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(observed).not.toContain(SUBSCRIBER_ERROR_EVENT);
+  });
+
+  it('an observer that itself throws while handling the error signal is caught, never cascades', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    registerHookObserver(() => {
+      throw new Error('observer also exploded');
+    });
+    subscribeVisionEvent(VISION_EVENTS.SCORED, function explodingHandler() {
+      throw new Error('sync boom');
+    });
+
+    expect(() => publishVisionEvent(VISION_EVENTS.SCORED, {})).not.toThrow();
+    await new Promise((r) => setTimeout(r, 10));
+    consoleSpy.mockRestore();
   });
 });
 

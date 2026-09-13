@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-13](#2026-09-13)
+  - [Infrastructure](#infrastructure)
 - [2026-09-12](#2026-09-12)
   - [Infrastructure](#infrastructure-12)
   - [Security](#security-2)
@@ -199,6 +201,16 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-13
+
+### Infrastructure
+
+- **Fed the previously-dead autonomy graduation ladder with a scheduled publish-outcome observer, root-causing the join defect that made it unreachable** - SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001 (PR #8822)
+  - `recordPublishOutcome()`/`evaluateGraduation()` (`lib/marketing/autonomy-gate.js`, shipped by `SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-C`) had zero production callers, so no venture/channel could ever graduate to `autonomous` or demote back to `propose_and_approve` regardless of real post outcomes. Root cause: `publisher/index.js`'s `publish()` rebuilt a fresh `idempotencyKey` every call and used it to key both the authorization check's `correlationId` and the `campaign_content` dedup/upsert, so on an approval-gated retry the ledger-to-content join this SD depends on was unreachable. Fixed with `dispatchKey = authCheck.correlationId || idempotencyKey`.
+  - New scheduled step `scripts/cron/publish-outcome-observer.mjs` (30-min cadence) sweeps `outcome='unknown'` ledger rows and classifies each via a real X/Bluesky lookup (`lib/marketing/observer/observe-outcome.js`) — never self-reported by `publish()` itself. Both adapters were hardened to recognize their platform's actual not-found response shape (X: HTTP 200 with an `errors[]` array, not a 404; Bluesky: HTTP 400 + `RecordNotFound`, not a plain 404) rather than asserting existence from HTTP-ok alone. A fixed 24h observation window keeps a join-miss `'unknown'` (retried) instead of a premature terminal `'unmeasurable'`, since the human-paced approval-to-publish retry can lag by hours.
+  - `evaluateGraduation` is now `execution_mode`-scoped so a mock-mode outcome can never graduate or demote a venture/channel's real autonomy state — closing a fail-open gap in the guard's own first fix attempt (`null`/`undefined`/`'dry_run'` all slipped through before the fix was tightened to `mode !== undefined && mode !== 'live'`).
+  - See `docs/design/venture-demand-distribution-engine.md` §5 Child C and `docs/06_deployment/publish-outcome-observer-runbook.md` for the full architecture and operational detail.
 
 ## 2026-09-12
 
