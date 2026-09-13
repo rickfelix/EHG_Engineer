@@ -11,7 +11,8 @@ import crypto from 'crypto';
 import { createRequire } from 'node:module';
 
 import { CLAUDEMDGeneratorV3, KNOWN_GENERATED_FILES, verifyFileContentHash } from '../../scripts/modules/claude-md-generator/index.js';
-import { parseOnlyFlag, parseRefreshLessonsFlag, detectConflictedState } from '../../scripts/generate-claude-md-from-db.js';
+import { parseOnlyFlag, parseRefreshLessonsFlag, detectConflictedState, isMainWorktree } from '../../scripts/generate-claude-md-from-db.js';
+import { execFileSync } from 'child_process';
 
 const require = createRequire(import.meta.url);
 const { evaluatePublicationInvariants, evaluateContentUniqueness, escapeForCiLog } = require('../../scripts/protocol-publication-audit.cjs');
@@ -351,6 +352,48 @@ describe('QF-20260705-104: detectConflictedState (generator entry guard, seam 2)
       fs.writeFileSync(path.join(dir, 'CLAUDE.md'), '# clean, no markers\n');
       expect(() => detectConflictedState(dir)).not.toThrow();
       expect(detectConflictedState(dir)).toBeNull();
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('QF-20260912-811: isMainWorktree (regen main-worktree refusal guard)', () => {
+  it('the main repo directory is a main worktree', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'main-wt-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: dir });
+      execFileSync('git', ['config', 'user.email', 'x@x.com'], { cwd: dir });
+      execFileSync('git', ['config', 'user.name', 'x'], { cwd: dir });
+      fs.writeFileSync(path.join(dir, 'f.txt'), 'x');
+      execFileSync('git', ['add', '.'], { cwd: dir });
+      execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: dir });
+      expect(isMainWorktree(dir)).toBe(true);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  it('a linked worktree is NOT a main worktree', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'main-wt-'));
+    const wtDir = path.join(dir, 'wt');
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: dir });
+      execFileSync('git', ['config', 'user.email', 'x@x.com'], { cwd: dir });
+      execFileSync('git', ['config', 'user.name', 'x'], { cwd: dir });
+      fs.writeFileSync(path.join(dir, 'f.txt'), 'x');
+      execFileSync('git', ['add', '.'], { cwd: dir });
+      execFileSync('git', ['commit', '-q', '-m', 'init'], { cwd: dir });
+      execFileSync('git', ['worktree', 'add', wtDir, '-b', 'wt-branch'], { cwd: dir });
+      expect(isMainWorktree(wtDir)).toBe(false);
+      expect(isMainWorktree(dir)).toBe(true);
+    } finally {
+      try { execFileSync('git', ['worktree', 'remove', '--force', wtDir], { cwd: dir }); } catch { /* best-effort */ }
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('fails open (false) on a non-git directory rather than throwing', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'non-git-'));
+    try {
+      expect(() => isMainWorktree(dir)).not.toThrow();
+      expect(isMainWorktree(dir)).toBe(false);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
