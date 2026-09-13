@@ -1532,7 +1532,75 @@ async function pendingDirectedAssignmentBlocksAdoption(sb, sdKey) {
   }
 }
 
+// SD-LEO-INFRA-CLAIM-PARENT-CHILD-001 (FR-2): terminal SD statuses that make a released
+// parent's re-adoption safe. Deliberately the SAME set the PRD's own success_metrics cite
+// ('completed'/'cancelled'/'archived') -- a child still mid-flight (in_progress/active/draft)
+// must NOT trigger re-adoption of its parent.
+const TERMINAL_SD_STATUSES_FOR_PARENT_READOPT = ['completed', 'cancelled', 'archived'];
+
+/**
+ * SD-LEO-INFRA-CLAIM-PARENT-CHILD-001 (FR-2): once the chairman-gated migration
+ * (database/chairman-gated/20260913_claim_sd_parent_child_single_pointer.sql) ships, claim_sd's
+ * claim-switch eviction symmetrically releases a parent SD a session was holding when it claims
+ * one of that parent's children -- logging a CLAIM_SWITCH_EVICTED_CLEARED session_lifecycle_events
+ * row with metadata {evicted_sd_key: <parent>, new_sd_id: <child>}. This re-claims that parent for
+ * the SAME session, via the normal tryClaim()/claim_sd path (never a bespoke UPDATE, preserving
+ * single-claim-per-session atomicity — TR-3), once the child has reached a terminal status and the
+ * parent is still unclaimed. Re-verifies evicted_sd_key is genuinely childKey's parent_sd_id (not
+ * just any prior claim-switch) before acting, so an unrelated "abandoned SD-A for SD-B" switch is
+ * never mistaken for a parent release.
+ *
+ * Fails open (any error -> null -> caller falls through to normal orphan/idle/self-claim
+ * handling). Inert until the migration above is actually applied: until then claim_sd's
+ * parent-exclusion guard means no CLAIM_SWITCH_EVICTED_CLEARED event ever names a parent, so this
+ * never matches — same staged-not-live posture as the SQL half of this SD.
+ */
+async function reAdoptReleasedParent(sb, sessionId, base) {
+  try {
+    const { data: events } = await sb
+      .from('session_lifecycle_events')
+      .select('metadata, created_at')
+      .eq('event_type', 'CLAIM_SWITCH_EVICTED_CLEARED')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    for (const ev of (events || [])) {
+      const parentKey = ev?.metadata?.evicted_sd_key;
+      const childKey = ev?.metadata?.new_sd_id;
+      if (!parentKey || !childKey || parentKey.startsWith('QF-') || childKey.startsWith('QF-')) continue;
+      const { data: child } = await sb
+        .from('strategic_directives_v2')
+        .select('sd_key, parent_sd_id, status')
+        .eq('sd_key', childKey)
+        .maybeSingle();
+      if (!child || child.parent_sd_id !== parentKey) continue; // not actually a parent release
+      if (!TERMINAL_SD_STATUSES_FOR_PARENT_READOPT.includes(child.status)) continue; // child still in flight
+      const { data: parent } = await sb
+        .from('strategic_directives_v2')
+        .select('sd_key, claiming_session_id, status')
+        .eq('sd_key', parentKey)
+        .maybeSingle();
+      if (!parent || parent.claiming_session_id) continue; // already re-claimed by someone (or us)
+      if (TERMINAL_SD_STATUSES_FOR_PARENT_READOPT.includes(parent.status)) continue; // parent itself finished meanwhile
+      const claimed = await tryClaim(sb, parentKey, sessionId);
+      if (claimed.ok) {
+        return {
+          ...base,
+          action: 'resume_orphan',
+          sd: parentKey,
+          message: `Re-adopted orchestrator parent ${parentKey} — released when this session claimed its child ${childKey}, which has since reached terminal status '${child.status}'. Re-attach + continue: node scripts/sd-start.js ${parentKey} (re-attaches the existing worktree), then resume from its live phase.`,
+        };
+      }
+    }
+  } catch { /* fail-open -> caller continues to normal orphan/idle/self-claim handling */ }
+  return null;
+}
+
 async function adoptOrphanInProgress(sb, sessionId, base, tierCtx = {}) {
+  // SD-LEO-INFRA-CLAIM-PARENT-CHILD-001 (FR-2): a specific, certain signal (this session's own
+  // claim-switch eviction history) takes priority over the general oldest-orphan scan below.
+  const readopted = await reAdoptReleasedParent(sb, sessionId, base);
+  if (readopted) return readopted;
   try {
     const cutoffIso = new Date(Date.now() - ORPHAN_MIN_AGE_MS).toISOString();
     const { data: orphans } = await sb
@@ -2226,7 +2294,7 @@ async function main() {
 // top (imports are referenced directly — never re-derived).
 const CHECKIN_HELPERS = { ws, tryClaim, stampDirectedAssignment, ackMessage, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, classifyDispatchIneligibility, coordinatorReservation, isSeatBusyOnDirectedWork, registerRollCall, rehydrateCallsign, selfClearQuarantine, mergeCheckinModelEffort, recoverStrandedFinal, describeSoftHolds, adoptOrphanInProgress, isSelfClaimDisabled, isGlobalStandDownActive, isBuildForbiddenSession, ensureActiveBaseline, isCriticalQfJumpEligible, tryClaimDraftCandidate, baselinedCandidateEligible, isSdInFlight, selfClaimQuickFix, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, surfaceCoordinatorMessages, fetchOutstandingSignals, formatOutstandingWarning, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, sortByDispatchRank, resolveWorkerTierRank, isTieringActive, fetchLowerTierBacklogData, ladderTopRank, seatCapabilityIsVerified, fetchFableWindowActive, claimableForTier, claimableForRepo, getCommsActivitySignals, computeAdaptiveCadence, antiWinddownDirective, ASSIGNMENT_RECENCY_WINDOW_MS, TERMINAL_CLAIM_ERRORS, QF_CANDIDATE_LIMIT, SELF_CLAIM_CANDIDATE_LIMIT, DEFAULT_IDLE_WAKEUP_SECONDS };
 
-module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, isClaimableWithVerify, getQfPickerVerdict, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, newestHandoffWaitingGates, describeSoftHolds, adoptOrphanInProgress, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs, carryFencedRefusals };
+module.exports = { ADOPTABLE_ORPHAN_STATUSES, CHECKIN_HELPERS, stampDirectedAssignment, extractSdFromAssignment, extractDirectedSd, isInformationalNudge, tryClaim, registerRollCall, ackMessage, isCoordinatorPush, surfaceCoordinatorMessages, rehydrateCallsign, runCheckin, resolveCheckin, assignFleetIdentityAtCheckin, selfClaimQuickFix, isAutoStartableQF, isClaimableWithVerify, getQfPickerVerdict, sortQfCandidatesBySeverity, QF_SEVERITY_RANK, isCriticalQfJumpEligible, CRITICAL_QF_JUMP_GRACE_MS, fetchDraftCandidates, fetchNewestDraftCandidates, fetchFleetCriticalCandidates, fetchRankedCandidates, tryClaimDraftCandidate, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, newestHandoffWaitingGates, describeSoftHolds, adoptOrphanInProgress, reAdoptReleasedParent, TERMINAL_SD_STATUSES_FOR_PARENT_READOPT, pendingDirectedAssignmentBlocksAdoption, isSelfClaimDisabled, isQuarantined, isParked, selfClearQuarantine, isGlobalStandDownActive, isSdInFlight, isForeignSessionLive, foreignClaimantBlocksSteal, selfHealStaleClaim, findOwnSdClaim, healOwnClaimPointer, confirmRowGone, orderByRankMap, orderByFleetCriticalThenRank, sortByDispatchRank, DISPATCH_RANK_TTL_MS, PRIORITY_RANK, SD_KEY_RE, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS, antiWinddownDirective, mergeCheckinModelEffort, parseCheckinArgs, carryFencedRefusals };
 
 if (require.main === module) {
   main().catch(err => {

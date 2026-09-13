@@ -30,7 +30,11 @@ const SD_DRIFT = 'SD-DEMO-RACE-002';
 const SD_FORCE_AUTH = 'SD-DEMO-RACE-003';
 const SD_FORCE_UNAUTH = 'SD-DEMO-RACE-004';
 const SD_AUTO_STALE = 'SD-DEMO-RACE-005';
-const ALL_TEST_SDS = [SD_RACE, SD_DRIFT, SD_FORCE_AUTH, SD_FORCE_UNAUTH, SD_AUTO_STALE];
+// SD-LEO-INFRA-CLAIM-PARENT-CHILD-001 (FR-4): a parent/child pair for the single-pointer
+// claim-switch tests. SD_PARENT has no parent of its own; SD_CHILD's parent_sd_id = SD_PARENT.
+const SD_PARENT = 'SD-DEMO-RACE-006';
+const SD_CHILD = 'SD-DEMO-RACE-007';
+const ALL_TEST_SDS = [SD_RACE, SD_DRIFT, SD_FORCE_AUTH, SD_FORCE_UNAUTH, SD_AUTO_STALE, SD_PARENT, SD_CHILD];
 
 const SESS_A = 'test-session-A-claim-cross-table';
 const SESS_B = 'test-session-B-claim-cross-table';
@@ -147,6 +151,13 @@ describe.skipIf(!HAS_REAL_DB)('claim_sd cross-table consistency (SD-LEO-INFRA-CL
   beforeAll(async () => {
     for (const s of ALL_TEST_SESSIONS) await ensureTestSession(s);
     for (const sd of ALL_TEST_SDS) await ensureTestSD(sd);
+    // SD-LEO-INFRA-CLAIM-PARENT-CHILD-001 (FR-4): wire SD_CHILD's parent_sd_id after the generic
+    // upsert above (ensureTestSD never sets it, and every other sandbox SD must stay parentless).
+    const { error } = await supabase
+      .from('strategic_directives_v2')
+      .update({ parent_sd_id: SD_PARENT })
+      .eq('sd_key', SD_CHILD);
+    if (error) throw new Error(`wire SD_CHILD.parent_sd_id failed: ${error.message}`);
   }, 30000);
 
   afterAll(async () => {
@@ -325,4 +336,84 @@ describe.skipIf(!HAS_REAL_DB)('claim_sd cross-table consistency (SD-LEO-INFRA-CL
     expect(data.success).toBe(true);
     expect(data.takeover).toBe(false);
   }, 10000);
+
+  // SD-LEO-INFRA-CLAIM-PARENT-CHILD-001 (FR-4/TS-1/TS-2/TS-3): single-pointer claim-switch for a
+  // parent/child pair. Asserts the POST-FIX behavior of the staged, chairman-gated migration
+  // (database/chairman-gated/20260913_claim_sd_parent_child_single_pointer.sql) -- these tests are
+  // expected to be RED against the live claim_sd until that migration is applied at the chairman
+  // ceremony, and GREEN immediately after. That is the correct, documented state for a staged fix,
+  // not a flake: see this SD's success_metrics and the CHAIRMAN_APPLY_VERIFICATION WAIT verdict at
+  // LEAD-FINAL.
+  it('PARENT-CHILD TS-1: claiming a child while holding the parent releases the parent\'s claiming_session_id', async () => {
+    await clearSessionClaim(SESS_A);
+    await clearSDClaim(SD_PARENT);
+    await clearSDClaim(SD_CHILD);
+    await setSessionHeartbeat(SESS_A, 0);
+
+    const parentClaim = await callClaimSd({ sd: SD_PARENT, session: SESS_A });
+    expect(parentClaim.success).toBe(true);
+
+    const childClaim = await callClaimSd({ sd: SD_CHILD, session: SESS_A });
+    expect(childClaim.success).toBe(true);
+
+    // The child is held by SESS_A...
+    const { data: childRow } = await supabase
+      .from('strategic_directives_v2')
+      .select('claiming_session_id')
+      .eq('sd_key', SD_CHILD)
+      .single();
+    expect(childRow.claiming_session_id).toBe(SESS_A);
+
+    // ...and the parent's claiming_session_id is released (single pointer, no exception).
+    const { data: parentRow } = await supabase
+      .from('strategic_directives_v2')
+      .select('claiming_session_id')
+      .eq('sd_key', SD_PARENT)
+      .single();
+    expect(parentRow.claiming_session_id).toBeNull();
+
+    // The session-side mirror agrees: exactly one SD (the child).
+    const { data: sessRow } = await supabase
+      .from('claude_sessions')
+      .select('sd_key')
+      .eq('session_id', SESS_A)
+      .single();
+    expect(sessRow.sd_key).toBe(SD_CHILD);
+  }, 20000);
+
+  it('PARENT-CHILD TS-2: claim_sd result no longer asserts parent_preserved=true', async () => {
+    await clearSessionClaim(SESS_A);
+    await clearSDClaim(SD_PARENT);
+    await clearSDClaim(SD_CHILD);
+    await setSessionHeartbeat(SESS_A, 0);
+
+    await callClaimSd({ sd: SD_PARENT, session: SESS_A });
+    const childClaim = await callClaimSd({ sd: SD_CHILD, session: SESS_A });
+
+    expect(childClaim.success).toBe(true);
+    expect(childClaim.parent_preserved).toBe(false);
+  }, 15000);
+
+  it('PARENT-CHILD TS-3: the claim-switch audit event fires for an evicted parent, naming both keys', async () => {
+    await clearSessionClaim(SESS_A);
+    await clearSDClaim(SD_PARENT);
+    await clearSDClaim(SD_CHILD);
+    await setSessionHeartbeat(SESS_A, 0);
+
+    await callClaimSd({ sd: SD_PARENT, session: SESS_A });
+    await callClaimSd({ sd: SD_CHILD, session: SESS_A });
+
+    // getLatestEvent filters by metadata.sd_key, which CLAIM_SWITCH_EVICTED_CLEARED does not set --
+    // query directly instead.
+    const { data: events } = await supabase
+      .from('session_lifecycle_events')
+      .select('event_type, metadata')
+      .eq('session_id', SESS_A)
+      .eq('event_type', 'CLAIM_SWITCH_EVICTED_CLEARED')
+      .order('created_at', { ascending: false })
+      .limit(1);
+    expect(events).toHaveLength(1);
+    expect(events[0].metadata.evicted_sd_key).toBe(SD_PARENT);
+    expect(events[0].metadata.new_sd_id).toBe(SD_CHILD);
+  }, 15000);
 });
