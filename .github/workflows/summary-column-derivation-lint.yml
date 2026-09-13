@@ -1,0 +1,38 @@
+name: Summary Column Derivation Lint
+
+# SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001 FR-1/FR-2
+# Flags a new summary column (boolean *_evaluated/*_passed/*_verified, or a
+# summary-shaped jsonb key) introduced without an accompanying derivation
+# (GENERATED expression or a paired CREATE TRIGGER in the same migration).
+# Also flags (advisory-only, never fails) a new foreign-key column with a
+# summary-shaped name for manual review.
+#
+# ADVISORY-FIRST: the lint step is `continue-on-error: true`, matching the
+# precedent set by alter-default-override-lint.yml (SD-LEO-INFRA-LINT-ALTER-SET-001).
+# The script's own predicate (b) (jsonb key) currently fires on 4 pre-existing
+# migrations that shipped before this lint existed -- continue-on-error keeps
+# those from turning an unrelated PR red on day one. Flip to blocking once
+# those 4 are triaged (paired with a trigger, or explicitly exempted).
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/**/*.sql'
+      - 'scripts/lint/summary-column-derivation-lint.mjs'
+      - '.github/workflows/summary-column-derivation-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  summary-column-derivation-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect undereived summary columns (advisory)
+        continue-on-error: true
+        run: node scripts/lint/summary-column-derivation-lint.mjs
