@@ -307,8 +307,13 @@ async function computeActivationEvidenceVerdict(supabase, sd) {
   console.log(`   Activation-evidence mode: ${mode} (cutoff ${ACTIVATION_EVIDENCE_BLOCK_CUTOFF}; entered LEAD-FINAL ${leadFinalEnteredAt === undefined ? 'lookup-failed' : (leadFinalEnteredAt ? leadFinalEnteredAt.toISOString() : 'first time now')})`);
   const headline = `Machinery-class deliverable (${finalState.machineryKind}) has no ACTIVATED evidence and no ARMED registration (G3 Definition-of-Done amendment).`;
   const remediation = 'Record a scope_completion_chain evidence row (evidence_kind=real_event, runtime_observed_at set) once a real event is processed, OR register a periodic_process_registry row (liveness_source_ref.sd_key) with a named activation trigger if real events cannot occur yet.';
+  // QF-20260913-876: a genuinely misclassified SD had no readable exit besides the global
+  // ACTIVATION_EVIDENCE_MODE rollout switch, which flips behavior fleet-wide -- not a per-SD
+  // remedy. Naming the row-level override here is the exit itself, not documentation for one
+  // this specific gate needs to know about separately.
+  const overrideRemediation = 'If this classification is wrong, set metadata.machinery_class_override = { kind: null, reason, set_by, set_at } on the row (see lib/machinery-class/classify.js) rather than hand-writing evidence on a false premise.';
   if (mode === 'block') {
-    return { passed: false, issues: [headline, remediation], warnings: [], details: { ...finalState, mode, cutoff: ACTIVATION_EVIDENCE_BLOCK_CUTOFF } };
+    return { passed: false, issues: [headline, remediation, overrideRemediation], warnings: [], details: { ...finalState, mode, cutoff: ACTIVATION_EVIDENCE_BLOCK_CUTOFF } };
   }
   return { passed: true, issues: [], warnings: [`[ADVISORY] ${headline} ${remediation} Blocking default applies to LEAD-FINAL entrants after ${ACTIVATION_EVIDENCE_BLOCK_CUTOFF}.`], details: { ...finalState, mode, cutoff: ACTIVATION_EVIDENCE_BLOCK_CUTOFF } };
 }
