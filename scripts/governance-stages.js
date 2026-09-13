@@ -16,36 +16,41 @@ dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// Hard gate stages — must match CHAIRMAN_GATES.BLOCKING in stage-execution-worker.js
-const HARD_GATE_STAGES = new Set([3, 5, 10, 22, 23, 24]);
+// Hard gate stages — the live venture_stages.gate_type='kill' set (SD-LEO-INFRA-VENTURE-
+// QUALITY-CAPA-001-H FR-6: this table was entirely fictional vs. the live 27-stage pipeline,
+// live-verified against venture_stages directly rather than the stale in-file comment's claimed
+// cross-reference, which itself no longer resolves to anything in stage-execution-worker.js).
+const HARD_GATE_STAGES = new Set([3, 5, 13, 24]);
 
-// Pipeline stage definitions (25 stages)
+// Pipeline stage definitions — matches the live venture_stages table (27 stages).
 const PIPELINE_STAGES = [
-  { num: 1, name: 'Ideation' },
-  { num: 2, name: 'Research' },
-  { num: 3, name: 'Validation' },
-  { num: 4, name: 'Market Analysis' },
-  { num: 5, name: 'Business Model' },
-  { num: 6, name: 'Competitor Analysis' },
-  { num: 7, name: 'MVP Definition' },
-  { num: 8, name: 'Technical Assessment' },
-  { num: 9, name: 'Financial Modeling' },
-  { num: 10, name: 'Team Formation' },
-  { num: 11, name: 'Prototype' },
-  { num: 12, name: 'User Testing' },
-  { num: 13, name: 'Pivot/Persevere' },
-  { num: 14, name: 'Go-to-Market' },
-  { num: 15, name: 'Launch Prep' },
-  { num: 16, name: 'Soft Launch' },
-  { num: 17, name: 'Metrics Review' },
-  { num: 18, name: 'Scale Planning' },
-  { num: 19, name: 'Funding Strategy' },
-  { num: 20, name: 'Partnership' },
-  { num: 21, name: 'Growth Phase' },
-  { num: 22, name: 'Optimization' },
-  { num: 23, name: 'Expansion' },
-  { num: 24, name: 'Maturity' },
-  { num: 25, name: 'Exit Strategy' },
+  { num: 1, name: 'Draft Idea' },
+  { num: 2, name: 'AI Review' },
+  { num: 3, name: 'Comprehensive Validation' },
+  { num: 4, name: 'Competitive Intelligence' },
+  { num: 5, name: 'Profitability Forecasting' },
+  { num: 6, name: 'Risk Evaluation' },
+  { num: 7, name: 'Revenue Architecture' },
+  { num: 8, name: 'Business Model Canvas' },
+  { num: 9, name: 'Exit Strategy' },
+  { num: 10, name: 'Customer & Brand Foundation' },
+  { num: 11, name: 'Naming & Visual Identity' },
+  { num: 12, name: 'GTM & Sales Strategy' },
+  { num: 13, name: 'Product Roadmap' },
+  { num: 14, name: 'Technical Architecture' },
+  { num: 15, name: 'Design Studio' },
+  { num: 16, name: 'Financial Projections' },
+  { num: 17, name: 'Blueprint Review' },
+  { num: 18, name: 'Marketing Copy Studio' },
+  { num: 19, name: 'Sprint Planning' },
+  { num: 20, name: 'Code Quality Gate' },
+  { num: 21, name: 'Distribution Setup' },
+  { num: 22, name: 'Visual Assets' },
+  { num: 23, name: 'Dedicated Venture UAT' },
+  { num: 24, name: 'Launch Readiness' },
+  { num: 25, name: 'Go Live & Announce' },
+  { num: 26, name: 'Post-Launch Review' },
+  { num: 27, name: 'Growth Playbook' },
 ].map(s => ({ ...s, hardGate: HARD_GATE_STAGES.has(s.num) }));
 
 async function getConfig() {

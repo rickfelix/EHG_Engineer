@@ -272,7 +272,7 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
       expect(row.event_type).toBe('custom');
       expect(row.event_data.subtype).toBe('stage_skipped');
       expect(row.event_data.reason).toBe('upstream_missing');
-      expect(row.event_data.stage_number).toBe(23);
+      expect(row.event_data.stage_number).toBe(24);
       expect(row.event_data.sd_origin).toBe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001');
     });
 

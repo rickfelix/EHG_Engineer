@@ -1,9 +1,9 @@
 ---
 category: architecture
 status: approved
-version: 1.2.0
-author: SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001 (+ SD-LEO-INFRA-STAGE-WRITER-CHOKE-001, SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B, 2026-08-25 additions)
-last_updated: 2026-08-25
+version: 1.3.0
+author: SD-LEO-INFRA-STAGE-ADVANCEMENT-ARTIFACT-001 (+ SD-LEO-INFRA-STAGE-WRITER-CHOKE-001, SD-LEO-INFRA-DEDICATED-VENTURE-UAT-001-B, 2026-08-25 additions; SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H, 2026-09-13 addition)
+last_updated: 2026-09-13
 tags: [stage-advancement, artifact-gate, governance, census, canonical-writer]
 ---
 
@@ -361,3 +361,36 @@ cited provenance, never a fabricated approval).
 `scripts/lint/stage-advancement-chokepoint-allowlist.json` updated to add this file (same
 disposition class as the 2026-08-25 and 2026-08-29 entries above: a staged, chairman-gated file
 re-emitting already-censused RPC bodies via `CREATE OR REPLACE`).
+
+## Post-census addition (2026-09-13) — SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-7, C5.2)
+
+**Live-reconfirms, rather than re-builds, the 2026-08-25 canonical-writer trigger above** (this SD's
+own TR-1 forbids new stage-advancement machinery). The 2026-08-25 section above described the
+migration as "staged, chairman-gated ... production application remains a separate, later,
+human-run step" — that framing is now stale for this specific migration: direct live introspection
+this session (`pg_trigger`/`pg_proc` against `SUPABASE_POOLER_URL`, not file-inference) confirms
+`aaa_enforce_canonical_stage_write` and `zzz_enforce_canonical_stage_write_final` are LIVE,
+`tgenabled='O'`, bound to `enforce_canonical_stage_write()` on `public.ventures` in production
+today — the chairman-verbal-ceremony application step already happened since 2026-08-25.
+
+**Behavioral proof, not just presence**: a BEGIN/ROLLBACK-safe 3-way discriminator (zero persistent
+writes) confirms the trigger is a genuine 3-way discriminator, not merely present:
+
+1. Unstamped write of a genuinely-changing `current_lifecycle_stage` value → rejected, `SVCW1`,
+   "missing canonical-writer stamp on protected-column write".
+2. Stamped with a value absent from `ventures_canonical_writer_policy()` → ALSO rejected, `SVCW1`,
+   but the distinct message "stamp value not present in canonical-writer registry" (proves the
+   registry lookup runs, not just a NULL check on the column).
+3. Stamped with a registered identity (`stage-execution-worker.js`) → NOT rejected by this trigger
+   (may still be intercepted by the separate, unrelated `enforce_stage_advancement_artifact_gate`
+   trigger, error code `23514` — a different invariant, and an acceptable outcome here).
+
+Committed as `scripts/verify-canonical-stage-write-trigger.mjs` (re-runnable on demand). It is
+**not** wired into any CI workflow: `tests/setup.unit.js`'s `unitTierNetworkFence` structurally
+refuses the raw `pg.Client` connection this proof requires in the `unit` vitest project, and the
+`db` vitest project (which already carries `tests/ddl/ventures-canonical-writer-choke-ddl.db.test.js`
+for this same trigger, but against an ephemeral stubbed schema, not the live deployed one) is
+currently measured dead in CI — `SKIPPED at runtime` with `0 executed / 0 passed`, exit code 0 —
+pending a separate, out-of-scope fix to that tier's CI wiring. The script mirrors the established
+`scripts/rdap-live-network-smoke.mjs` precedent for this exact class of gap: a genuinely-live
+check vitest cannot run today, committed as a standalone script rather than a vacuous test.
