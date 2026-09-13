@@ -1,0 +1,48 @@
+name: "Gauge-finding disposition sweep (cron)"
+
+# QF-20260913-254: scripts/gauge-findings/disposition-sweep.mjs (QF-20260911-425) had ZERO
+# invokers -- no STANDARD_LOOPS entry, no cron, no GHA workflow -- since it shipped, so the
+# designed drain for invariant_gauge_finding feedback never ran (5687 outstanding rows measured
+# 2026-09-13). This is the GHA backup leg alongside the STANDARD_LOOPS session-armed entry
+# (scripts/coordinator-startup-check.mjs key 'gauge-finding-disposition-sweep'), mirroring
+# batch-mint-sweep-cron.yml's shape.
+
+on:
+  schedule:
+    # Hourly -- right for the fixed ~29-fingerprint gauge set this sweep groups by, not the
+    # outstanding row count.
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  gauge-finding-disposition-sweep:
+    name: Gauge-finding disposition sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run gauge-finding disposition sweep
+        run: node scripts/gauge-findings/disposition-sweep.mjs --apply

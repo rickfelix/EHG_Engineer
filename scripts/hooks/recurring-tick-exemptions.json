@@ -35,6 +35,10 @@
     {
       "script": "batch-mint-sweep.mjs",
       "reason": "QF-20260913-812 — coordinator STANDARD_LOOPS entry 'batch-mint-sweep', */10 cadence (same as its GHA leg), idempotent exit-0 by design (re-running holds only ids not already oracle-held, per the script's own header) — every healthy run on a quiet window is byte-identical, the same 3x-same-target shape QF-197 tripped for index-jam-detector. Compensating control wired in the same change: the script calls stampLastFired('standard_loop:batch-mint-sweep') on every successful tick, so the periodic-liveness watcher lane covers its health."
+    },
+    {
+      "script": "disposition-sweep.mjs",
+      "reason": "QF-20260913-254 — coordinator STANDARD_LOOPS entry 'gauge-finding-disposition-sweep', hourly cadence (same as its GHA leg), idempotent exit-0 by design (upserts one row per fingerprint via the canonical acceptDisposition writer; re-running on a quiet window writes the same fingerprint set) — the same 3x-same-target shape QF-197 tripped for index-jam-detector. Compensating control wired in the same change: the script calls stampLastFired('standard_loop:gauge-finding-disposition-sweep') on every successful tick, so the periodic-liveness watcher lane covers its health."
     }
   ]
 }
