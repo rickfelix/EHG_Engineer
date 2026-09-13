@@ -1,8 +1,8 @@
-<!-- file_content_hash: 06f2f2a4b4b835c2 -->
+<!-- file_content_hash: a101790364a2d3a0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-12 12:14:29 AM
+**Generated**: 2026-09-13 9:29:54 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -122,6 +122,8 @@ The coordinator operates under the canonical crew-comms routing protocol: `docs/
 
 **2026-09-11 addition (QF-20260911-080):** `drain-inventory` was registered (daily, `0 10 * * *`, GHA-backed via `.github/workflows/drain-inventory-cron.yml`) to invoke `scripts/drain-inventory.mjs` -- its `periodic_process_registry` row (`standard_loop:drain-inventory`, `currently_expected_active=true`) had NO invoker anywhere (not in STANDARD_LOOPS, no workflow, no scheduled task) for months; every `last_fired_at` stamp was a hand run. The script also gained its own `dotenv/config` preload, which every sibling cron `.mjs` already self-loads but this one did not. Total loop count 37 -> 38, gha_backed count 16 -> 17.
 
+**2026-09-12 reversal (QF-20260912-894, measured 06:5xZ at the Adam seat, coordinator finding 40c4813c):** the 2026-08-22 ruling's own reversal condition triggered for 4 of the 7 dropped loops — every measured gap exceeded 2x the declared GHA cadence: `gauge-runner` (2.3-4.9x), `fleet-retro` (4-9x), `relay-drop-gauge` (7-20x), `unranked-gauge` (8-18x). Their `session_arm` flipped back to `true` (session-armed again, `REVERSED_ON_QF894` in `coordinator-startup-check.mjs`), each entry tagged with this QF. `sweep`, `row-growth`, and `feedback-sla` stayed GHA-only — their measured cadence met their declared schedule. QF-894's own description also named `singleton-relaunch` as a 5th loop to re-arm, but that premise does not hold against current main: the 2026-08-30 retirement above already removed it from `STANDARD_LOOPS` entirely for an unrelated reason (no consumer, false escalations), so there is no `session_arm` field left on that entry to flip — it was NOT re-added here.
+
 ## Triangulation Audit — coordinator duties (answerer every cycle, resolver on rotation)
 
 **The Triangulation Audit is a standing coordinator duty, not an optional exercise.** Chairman-ratified 2026-08-30 (verbatim "adopt"; relayed by Adam, design authored by Solomon). The coordinator participates in EVERY cycle as an ANSWERER, and RESOLVES on rotation.
@@ -183,6 +185,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-12*
+*Generated from database: 2026-09-13*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

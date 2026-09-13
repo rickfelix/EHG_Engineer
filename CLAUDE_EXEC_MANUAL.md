@@ -1,8 +1,8 @@
-<!-- file_content_hash: c0497bb687043af3 -->
+<!-- file_content_hash: c259254eaf1449fa -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC_MANUAL.md — EXEC Manual (reference companion)
 
-**Generated**: 2026-09-12 12:14:29 AM
+**Generated**: 2026-09-13 9:29:54 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form EXEC reference — skills catalogue, human-like E2E fixtures, Playwright MCP, deliverable tracking mechanics, the EXEC-TO-PLAN gate descriptions, runtime-audit protocol, branch creation, /batch, code-quality and KR procedures, the Database Schema Constraints and LEO Process Scripts references
 **Load when**: At the MOMENT OF DOING one of these procedures or looking up one of these references — not at every EXEC phase entry
@@ -1466,6 +1466,6 @@ Verifies version consistency between CLAUDE*.md files and database. Use --fix to
 
 ---
 
-*Generated from database: 2026-09-12*
+*Generated from database: 2026-09-13*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=workflow, exec_skill_integration, exec_requirement, exec_component_sizing_guidelines, exec_todo_comment_standard, exec_ui_parity_verification, exec_edge_case_testing_checklist, testing_tools, e2e_testing_mode_configuration, human_like_testing, test_coverage_quality_gate, integration_test_requirement_gate, governance_kr_progress_exec, code_quality_pre_commit, worktree_freshness_precheck, exec_manual_reference, exec_manual). Do not hand-edit — edit the DB section and regenerate.*

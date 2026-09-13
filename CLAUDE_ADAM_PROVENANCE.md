@@ -1,8 +1,8 @@
-<!-- file_content_hash: 49172a8a7b563667 -->
+<!-- file_content_hash: 7497a16771c34d1b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM_PROVENANCE.md — Adam Provenance (dated rationale)
 
-**Generated**: 2026-09-12 11:13:24 PM
+**Generated**: 2026-09-13 9:29:54 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — dated chairman verbals, live witnesses, superseded cadences
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -608,6 +608,6 @@ These are RULES, not procedure. The field shapes and step-by-step live in the co
 
 ---
 
-*Generated from database: 2026-09-12*
+*Generated from database: 2026-09-13*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_provenance). Do not hand-edit — edit the DB section and regenerate.*
