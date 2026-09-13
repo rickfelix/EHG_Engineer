@@ -34,6 +34,9 @@ import {
   isMigrationCommittedToGit,
   recordDelegatedApply,
   DELEGATION_APPROVAL_BASIS,
+  resolveTokenOutPath,
+  resolveTokenValue,
+  consumeTokenFile,
 } from '../../scripts/apply-migration.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -147,6 +150,83 @@ describe('CLI dry-run end-to-end (smoke; FR-1)', () => {
     expect(res.status).toBe(0);
     expect(res.stderr).toMatch(/Usage:/);
   }, 20000);
+});
+
+// QF-20260913-521 — token transport via file, so both --issue-token and --prod-deploy keystrokes
+// stay bare `node scripts/` commands (the value never enters a command line via export/env-prefix/$()).
+describe('resolveTokenOutPath (QF-20260913-521)', () => {
+  it('defaults to a path under os.tmpdir() with no arg', () => {
+    const p = resolveTokenOutPath(undefined);
+    expect(path.dirname(p)).toBe(os.tmpdir());
+    expect(path.basename(p)).toMatch(/^migration-apply-token-[0-9a-f]{16}$/);
+  });
+
+  it('resolves a relative arg against os.tmpdir(), never the CLI cwd (repo root)', () => {
+    const p = resolveTokenOutPath('my-token-file');
+    expect(p).toBe(path.join(os.tmpdir(), 'my-token-file'));
+  });
+
+  it('passes an absolute arg through unchanged', () => {
+    const abs = path.join(os.tmpdir(), 'already-absolute-token');
+    expect(resolveTokenOutPath(abs)).toBe(abs);
+  });
+
+  // Adversarial review finding (CRITICAL): path.join(os.tmpdir(), arg) normalizes '..' segments,
+  // so a relative arg could otherwise escape os.tmpdir() entirely and land at an arbitrary path.
+  it('rejects a relative arg that escapes os.tmpdir() via ../ segments', () => {
+    expect(() => resolveTokenOutPath('../../etc/somewhere')).toThrow(/escapes os\.tmpdir\(\)/);
+  });
+
+  it('accepts a relative arg with a nested subdirectory that stays under os.tmpdir()', () => {
+    const p = resolveTokenOutPath('sub/dir/token');
+    expect(p).toBe(path.join(os.tmpdir(), 'sub', 'dir', 'token'));
+  });
+
+  it('two calls with no arg never collide (random suffix)', () => {
+    expect(resolveTokenOutPath(undefined)).not.toBe(resolveTokenOutPath(undefined));
+  });
+});
+
+describe('resolveTokenValue / consumeTokenFile (QF-20260913-521)', () => {
+  it('reads and trims the token-file value, ignoring the env value', () => {
+    const file = path.join(os.tmpdir(), `qf-521-token-${Date.now()}`);
+    fs.writeFileSync(file, 'the-token-value\n');
+    expect(resolveTokenValue(file, 'env-value-should-be-ignored')).toBe('the-token-value');
+    fs.unlinkSync(file);
+  });
+
+  it('falls back to the env value when no token-file is given', () => {
+    expect(resolveTokenValue(undefined, 'env-value')).toBe('env-value');
+    expect(resolveTokenValue('', 'env-value')).toBe('env-value');
+  });
+
+  it('never surfaces the token value on stdout or stderr while reading it', () => {
+    const file = path.join(os.tmpdir(), `qf-521-token-silent-${Date.now()}`);
+    fs.writeFileSync(file, 'super-secret-token');
+    const outSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const value = resolveTokenValue(file, undefined);
+    expect(value).toBe('super-secret-token');
+    for (const call of [...outSpy.mock.calls, ...errSpy.mock.calls]) {
+      expect(String(call[0])).not.toContain('super-secret-token');
+    }
+    outSpy.mockRestore();
+    errSpy.mockRestore();
+    fs.unlinkSync(file);
+  });
+
+  it('consumeTokenFile removes the file after use', () => {
+    const file = path.join(os.tmpdir(), `qf-521-consume-${Date.now()}`);
+    fs.writeFileSync(file, 'value');
+    expect(fs.existsSync(file)).toBe(true);
+    consumeTokenFile(file);
+    expect(fs.existsSync(file)).toBe(false);
+  });
+
+  it('consumeTokenFile is a no-op (never throws) when no path was given or the file is already gone', () => {
+    expect(() => consumeTokenFile(undefined)).not.toThrow();
+    expect(() => consumeTokenFile(path.join(os.tmpdir(), 'never-existed-qf-521'))).not.toThrow();
+  });
 });
 
 // SD-LEO-INFRA-CREATE-MISSING-ADAM-001 — FR-2, FR-7: recordDelegatedApply loud-fail + fail-soft.
