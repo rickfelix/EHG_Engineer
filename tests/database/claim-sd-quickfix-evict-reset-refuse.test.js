@@ -44,7 +44,6 @@ const HAS_REAL_DB = process.env.SUPABASE_URL
 
 const RUN_SUFFIX = `${process.pid}-${Date.now().toString(36)}`;
 const SESSION = `test-evict-reset-refuse-${RUN_SUFFIX}`;
-const OTHER_SESSION = `test-evict-reset-refuse-peer-${RUN_SUFFIX}`;
 
 let migrationApplied = false;
 let evictedQfId = null;

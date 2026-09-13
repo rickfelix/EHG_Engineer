@@ -23,7 +23,7 @@ function makeFrom(sessRow) {
   return vi.fn((table) => {
     if (table !== 'claude_sessions') throw new Error(`unexpected table: ${table}`);
     return {
-      select: (cols) => ({
+      select: () => ({
         eq: () => ({ maybeSingle: async () => ({ data: sessRow, error: null }) }),
       }),
     };
