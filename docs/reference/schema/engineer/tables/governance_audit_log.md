@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 510,143
+**Generated**: 2026-09-13T06:31:02.341Z
+**Rows**: 645,120
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -80,6 +80,18 @@
 
 - **Roles**: {service_role}
 - **Using**: `true`
+
+## Triggers
+
+### governance_audit_log_no_delete_trg
+
+- **Timing**: BEFORE DELETE
+- **Action**: `EXECUTE FUNCTION governance_audit_log_no_delete()`
+
+### governance_audit_log_no_update
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION governance_audit_log_freeze()`
 
 ---
 

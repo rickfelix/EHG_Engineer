@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 6,895
+**Generated**: 2026-09-13T06:31:02.341Z
+**Rows**: 9,796
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (83 total)
+## Columns (84 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -102,6 +102,7 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 | learning_extracted_at | `timestamp with time zone` | YES | - | Timestamp when patterns were extracted. NULL = not yet processed. |
 | future_enhancements | `jsonb` | YES | `'[]'::jsonb` | Array of future enhancement opportunities identified during SD implementation. |
 | orphaned_sd_id | `text` | YES | - | - |
+| retro_write_token | `text` | YES | - | - |
 
 ## Constraints
 
@@ -316,6 +317,16 @@ Constraint added to prevent SD-KNOWLEDGE-001 Issue #4. |
 
 - **Timing**: BEFORE UPDATE
 - **Action**: `EXECUTE FUNCTION auto_validate_retrospective_quality()`
+
+### zzz_retrospectives_published_guard
+
+- **Timing**: BEFORE INSERT
+- **Action**: `EXECUTE FUNCTION enforce_retrospectives_published_guard()`
+
+### zzz_retrospectives_published_guard
+
+- **Timing**: BEFORE UPDATE
+- **Action**: `EXECUTE FUNCTION enforce_retrospectives_published_guard()`
 
 ## Usage Examples
 
