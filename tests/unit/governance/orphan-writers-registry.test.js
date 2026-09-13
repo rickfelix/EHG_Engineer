@@ -130,7 +130,15 @@ describe('orphan-writers-registry: known-orphan count baseline (QF-20260831-821)
   // The feedback-sla-categories entry was also reclassified wired-but-blind -> writer-with-no-reader
   // (ruling 18f04802 item 2) — a re-type, not a new row, so it does not add to this count.
   // QF-20260906-590 added one entry (role-seat-liveness-hostname-pid-not-selected): 34 -> 35.
-  const PINNED_TOTAL_ENTRIES = 35;
+  // QF-20260913-811: 35 -> 42. Seven new entries for the eight detectors Adam's first
+  // session-armed drain-inventory run (22976f55, 2026-09-13 14:31Z) reported FAILING: six
+  // writer-with-no-reader (relay-drop, wind-down-survey, quick-fixes-stranded,
+  // worktree-reaper-refusals, adam-adherence-drift, adam-adherence-ledger) plus one
+  // wired-but-blind (invariant-gauge-finding). The eighth named detector, feedback-sla-breach,
+  // was deliberately NOT re-declared -- it was already represented by the pre-existing
+  // feedback-sla-categories entry (refs_drain_descriptor: 'feedback-sla-breach'), so adding a
+  // second row for it would duplicate one specimen's count rather than add a new one (FR-6).
+  const PINNED_TOTAL_ENTRIES = 42;
 
   it('total entry count matches the pinned baseline -- update PINNED_TOTAL_ENTRIES with a reason if this genuinely changed', () => {
     expect(ORPHAN_ENTRIES.length).toBe(PINNED_TOTAL_ENTRIES);
@@ -317,6 +325,60 @@ describe('orphan-writers-registry: QF-20260904-116 specimen mechanism mapping (S
   it('detector-with-no-sink\'s sole specimen is retained as RESOLVED taxonomy proof (fixed since sourcing)', () => {
     const sink = ORPHAN_ENTRIES.find((e) => e.id === 'stale-session-sweep-conflicts-console-only');
     expect(sink.predicate.description).toMatch(/RESOLVED/);
+  });
+});
+
+describe('orphan-writers-registry: QF-20260913-811 (Adam drain-inventory run 22976f55, 2026-09-13 14:31Z)', () => {
+  const NEW_WRITER_WITH_NO_READER_IDS = [
+    'relay-drop',
+    'wind-down-survey',
+    'quick-fixes-stranded',
+    'worktree-reaper-refusals',
+    'adam-adherence-drift',
+    'adam-adherence-ledger',
+  ];
+
+  it('the six NO_CONSUMER/NO_CLOSING_PATH detectors each resolve and classify reader:NONE', () => {
+    for (const id of NEW_WRITER_WITH_NO_READER_IDS) {
+      const entry = ORPHAN_ENTRIES.find((e) => e.id === id);
+      expect(entry, `missing registry entry for "${id}"`).toBeTruthy();
+      expect(entry.entry_type).toBe('writer-with-no-reader');
+      expect(getReaderClassification(entry)).toBe('reader:NONE');
+      // Each references DRAIN_DESCRIPTORS by id (FR-6) rather than re-declaring writer/reader/predicate.
+      expect(entry.refs_drain_descriptor).toBe(id);
+      expect(DRAIN_DESCRIPTORS[entry.refs_drain_descriptor]).toBeTruthy();
+    }
+  });
+
+  it('invariant-gauge-finding resolves and classifies wired-but-blind (a real closing path exists, unexercised)', () => {
+    const entry = ORPHAN_ENTRIES.find((e) => e.id === 'invariant-gauge-finding');
+    expect(entry).toBeTruthy();
+    expect(entry.entry_type).toBe('wired-but-blind');
+    expect(getReaderClassification(entry)).toBe('wired-but-blind');
+    expect(entry.refs_drain_descriptor).toBe('invariant-gauge-finding');
+    expect(DRAIN_DESCRIPTORS['invariant-gauge-finding'].consumer).toBeTruthy();
+  });
+
+  it('feedback-sla-breach is NOT re-declared: the pre-existing feedback-sla-categories entry already represents it (reader:NONE), matching the QF\'s own eight-detector acceptance count (seven reader:NONE, one wired-but-blind)', () => {
+    const dup = ORPHAN_ENTRIES.filter((e) => e.refs_drain_descriptor === 'feedback-sla-breach');
+    expect(dup).toHaveLength(1);
+    expect(dup[0].id).toBe('feedback-sla-categories');
+    expect(getReaderClassification(dup[0])).toBe('reader:NONE');
+
+    // The full eight-detector set the QF named: 7 reader:NONE + 1 wired-but-blind.
+    const eightDetectorRefs = [...NEW_WRITER_WITH_NO_READER_IDS, 'invariant-gauge-finding', 'feedback-sla-breach'];
+    const classifications = eightDetectorRefs.map((ref) => {
+      const entry = ORPHAN_ENTRIES.find((e) => e.refs_drain_descriptor === ref);
+      return getReaderClassification(entry);
+    });
+    expect(classifications.filter((c) => c === 'reader:NONE')).toHaveLength(7);
+    expect(classifications.filter((c) => c === 'wired-but-blind')).toHaveLength(1);
+  });
+
+  it('scripts/orphan-writers-count.mjs\'s weekly known-orphan count picks up all seven new rows (all pass validateAllEntries)', () => {
+    const v = validateAllEntries(ORPHAN_ENTRIES);
+    expect(v.valid).toBe(true);
+    expect(v.invalidEntries).toEqual([]);
   });
 });
 
