@@ -3,14 +3,16 @@
 **Category**: Reference
 **Status**: Approved
 **Version**: 1.0.0
-**Author**: SD-LEO-INFRA-BIND-OBSERVE-ONLY-001
-**Last Updated**: 2026-08-17
+**Author**: SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-D added the 6th candidate)
+**Last Updated**: 2026-09-13
 **Tags**: exit-gates, observe-only, venture-stack, eva-lifecycle
 
 ## What it is
 
-A read-only report tool that tells a LEAD reviewer whether any of the 5 observe-only
-exit-gate strings — or the symmetric `VENTURE_STACK` compliance check — has accumulated
+A read-only report tool that tells a LEAD reviewer whether any of the 6 observe-only
+exit-gate strings (5 original: Stage 19/24; plus Stage 15's `design fidelity reviewed`,
+added by SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-D) — or the symmetric `VENTURE_STACK`
+compliance check — has accumulated
 enough clean observation data to be safely flipped to binding (enforcing). It **flips
 nothing itself**: the actual bind (moving a string from
 `venture_stages.metadata.gates.exit_observe` to `gates.exit`, or adding

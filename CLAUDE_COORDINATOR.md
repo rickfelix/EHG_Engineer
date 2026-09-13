@@ -1,8 +1,8 @@
-<!-- file_content_hash: 061c1b2710b593d4 -->
+<!-- file_content_hash: 8fc50acc4b1e5456 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-13 2:24:10 PM
+**Generated**: 2026-09-13 3:34:27 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -93,6 +93,11 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 - **SEQUENCING CORRECTION: AltifyAI is test cargo, the factory is the object under test (ratification 4730357d)** — coordinator share: CLAUDE_COORDINATOR_PROVENANCE.md
 - **VENTURE QUALITY REVIEW PROGRAMME D1, D2, D3, D5 agreed; D4 open (ratification 0afc86e4)** — coordinator share: CLAUDE_COORDINATOR_PROVENANCE.md
 - **ONE CHAIRMAN APPROVAL MAY COVER MORE THAN ONE GATE (ratification 8e316210)** — coordinator share: CLAUDE_COORDINATOR_PROVENANCE.md
+
+
+- **FINISH THE WEEK ON MODELS THAT DO NOT DRAW THE CAPPED BUCKET (ratification 83222acf)** — see PROVENANCE § 83222acf.
+- **BUILD THE MEMORY NOW, THE INTELLIGENCE LATER: A MINIMAL VERSIONED DEMAND CAPTURE CONTRACT FROM VENTURE ONE (ratification bb2175d2)** — see PROVENANCE § bb2175d2.
+- **EVERY CAPTURE POINTER NAMES AN IMMUTABLE OR VERSIONED RECORD; VALUES ARE NOT COPIED BY DEFAULT (ratification df3186e6)** — see PROVENANCE § df3186e6.
 
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped
