@@ -589,11 +589,18 @@ export function extractDdlFacts(sql) {
  *   expected: Map<'cls:name', { cls, name, file }>      — created, not subsequently dropped
  *   droppedLater: [{ cls, name, createdIn, droppedIn }] — legitimate retirements (transparency)
  *   perFile: Map<file, { creates, drops }>
+ *   supersededBy: Map<file, Set<file>>                  — QF-20260913-673: files that later
+ *     re-created (not dropped) one of this file's objects; classifyFiles() inherits from these.
  */
 export function foldLifecycle(fileFacts) {
   const expected = new Map();
   const droppedLater = [];
   const perFile = new Map();
+  // QF-20260913-673: file -> Set<file> that LATER re-created one of this file's objects with
+  // no intervening drop (a same-date "rebuild the function body" pair is the common shape).
+  // Drop-then-gone-forever is NOT supersession (tracked by droppedLater instead, below) --
+  // only a direct re-CREATE of the same key counts.
+  const supersededBy = new Map();
   for (const { file, creates, drops } of fileFacts) {
     perFile.set(file, { creates, drops });
     for (const d of drops) {
@@ -618,10 +625,16 @@ export function foldLifecycle(fileFacts) {
       }
     }
     for (const c of creates) {
-      expected.set(`${c.cls}:${c.name}`, { ...c, file });
+      const key = `${c.cls}:${c.name}`;
+      const prior = expected.get(key);
+      if (prior && prior.file !== file) {
+        if (!supersededBy.has(prior.file)) supersededBy.set(prior.file, new Set());
+        supersededBy.get(prior.file).add(file);
+      }
+      expected.set(key, { ...c, file });
     }
   }
-  return { expected, droppedLater, perFile };
+  return { expected, droppedLater, perFile, supersededBy };
 }
 
 // ── Stage 4: bulk live resolution + classification ───────────────────────────
@@ -733,6 +746,9 @@ function daysSinceToken(token, now) {
   return Math.max(0, Math.round((nowUtc - tokenUtc) / 86400000));
 }
 
+// QF-20260913-673: worst-wins ranking for inheriting a superseding file's status. Higher = worse.
+const STATUS_SEVERITY = { APPLIED: 0, PARTIAL: 1, NOT_APPLIED: 2, CEREMONY_PENDING: 3, BODY_MISMATCH: 4 };
+
 /**
  * Per-file classification from its SURVIVING expected objects (drop-aware).
  *
@@ -740,17 +756,22 @@ function daysSinceToken(token, now) {
  * (TR-2) so age_days is deterministic under test — classifyFiles itself never calls
  * Date.now()/new Date() unconditionally.
  */
-export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date(), liveFunctionBodies = new Map(), liveTriggerDefs = new Map(), appliedLedgerPaths = null) {
+export function classifyFiles(orderedFiles, expected, perFile, live, now = new Date(), liveFunctionBodies = new Map(), liveTriggerDefs = new Map(), appliedLedgerPaths = null, supersededBy = new Map()) {
   const survivingByFile = new Map();
   for (const { cls, name, file } of expected.values()) {
     if (!survivingByFile.has(file)) survivingByFile.set(file, []);
     survivingByFile.get(file).push({ cls, name });
   }
-  return orderedFiles.map((file) => {
+  const results = orderedFiles.map((file) => {
     const facts = perFile.get(file) || { creates: [], drops: [] };
     const surviving = survivingByFile.get(file) || [];
     if (!facts.creates.length) return { file, status: 'NO_DDL', missing: [], objects: 0 };
-    if (!surviving.length) return { file, status: 'APPLIED', missing: [], objects: 0, note: 'all objects superseded by later migrations' };
+    // QF-20260913-673: an empty surviving set means every object THIS file created was either
+    // dropped-for-good (no successor — defaulted to APPLIED below) or re-created by a LATER file
+    // with no intervening drop (a successor DOES exist) — in the latter case this file must
+    // inherit that successor's real apply state, not a blanket APPLIED on object existence it
+    // never owns. Resolved below, after every file's own status is known.
+    if (!surviving.length) return { file, status: '__SUPERSEDED_PENDING__', missing: [], objects: 0 };
     // QF-20260728-983: when THIS file's own CREATE TABLE is itself missing, its body columns are
     // unreachable by construction and the table-level miss already covers them — per-column noise
     // adds nothing. Scoped to tables THIS file declares as missing, so a column is never hidden by
@@ -832,6 +853,28 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
     }
     return result;
   });
+  // QF-20260913-673: resolve __SUPERSEDED_PENDING__ entries in REVERSE file order, so a chain of
+  // supersessions (rare, but possible) resolves each hop against an already-finalized successor.
+  // A file with no successor at all (dropped-for-good, never re-created) keeps the pre-fix
+  // default: APPLIED, nothing to inherit.
+  const byFile = new Map(results.map((r) => [r.file, r]));
+  for (let i = results.length - 1; i >= 0; i--) {
+    const r = results[i];
+    if (r.status !== '__SUPERSEDED_PENDING__') continue;
+    const successors = [...(supersededBy.get(r.file) || [])];
+    if (!successors.length) {
+      r.status = 'APPLIED';
+      r.note = 'all objects superseded by later migrations';
+      continue;
+    }
+    const worst = successors.reduce((acc, f) => {
+      const s = byFile.get(f)?.status;
+      return (STATUS_SEVERITY[s] ?? 0) > (STATUS_SEVERITY[acc] ?? 0) ? s : acc;
+    }, 'APPLIED');
+    r.status = worst;
+    r.note = `superseded by ${successors.join(', ')} which is ${worst}`;
+  }
+  return results;
 }
 
 /**
@@ -953,7 +996,7 @@ async function main() {
     console.log(`[${OUTCOME.MISCONFIG}]`);
     return 2;
   }
-  const { expected, droppedLater, perFile } = foldLifecycle(fileFacts);
+  const { expected, droppedLater, perFile, supersededBy } = foldLifecycle(fileFacts);
 
   // ── Disposition ledger (FR-6) — loaded BEFORE the DB try, deliberately ──────
   //
@@ -1042,7 +1085,7 @@ async function main() {
     try { await client?.end(); } catch { /* already closed */ }
   }
 
-  const results = classifyFiles(forward, expected, perFile, live, undefined, liveFunctionBodies, liveTriggerDefs, appliedLedgerPaths);
+  const results = classifyFiles(forward, expected, perFile, live, undefined, liveFunctionBodies, liveTriggerDefs, appliedLedgerPaths, supersededBy);
   const { summary, gaps, bodyMismatches } = summarizeResults(results, {
     scanned: forward.length, excludedDown: down.length, droppedLater: droppedLater.length,
   });

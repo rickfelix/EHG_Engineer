@@ -349,6 +349,88 @@ describe('CEREMONY_PENDING requires a ledger row for a chairman-gated APPLIED fi
   });
 });
 
+// QF-20260913-673: a file whose every object is re-created (not dropped) by a LATER file must
+// inherit that successor's REAL apply state instead of a blanket APPLIED on object existence it
+// no longer owns -- the exact false pass CHAIRMAN_APPLY_VERIFICATION hit on SD-LEO-INFRA-FIX-
+// CLAIM-EVICTION-001: a bare-basename file whose claim_sd it never applied sorted BEFORE the
+// chairman-gated successor that actually owns the live function body.
+describe('supersession inherits the successor\'s real apply state (QF-20260913-673)', () => {
+  const NOW = new Date('2026-09-13T00:00:00Z');
+
+  it('THE DEFECT: a re-created-not-dropped object inherits NOT_APPLIED from its successor, never a blanket APPLIED', () => {
+    const ff = [
+      { file: 'a_old.sql', ...extractDdlFacts('CREATE TABLE widget (id int);') },
+      { file: 'b_newer.sql', ...extractDdlFacts('CREATE TABLE widget (id int, extra text);') },
+    ];
+    const { expected, perFile, supersededBy } = foldLifecycle(ff);
+    const res = classifyFiles(['a_old.sql', 'b_newer.sql'], expected, perFile, new Set(), NOW, new Map(), new Map(), null, supersededBy);
+    expect(res.find((r) => r.file === 'a_old.sql').status).toBe('NOT_APPLIED');
+    expect(res.find((r) => r.file === 'a_old.sql').note).toMatch(/superseded by b_newer\.sql which is NOT_APPLIED/);
+    expect(res.find((r) => r.file === 'b_newer.sql').status).toBe('NOT_APPLIED');
+  });
+
+  it('inherits BODY_MISMATCH from a successor whose function body drifted from live -- the SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 false-pass shape', () => {
+    const sqlOld = "CREATE OR REPLACE FUNCTION claim_sd() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN 'old'; END $$;";
+    const sqlNew = "CREATE OR REPLACE FUNCTION claim_sd() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN 'new'; END $$;";
+    const ff = [
+      { file: '20260913_claim_sd_first.sql', ...extractDdlFacts(sqlOld) },
+      { file: 'database/chairman-gated/20260913_claim_sd_second.sql', ...extractDdlFacts(sqlNew) },
+    ];
+    const { expected, perFile, supersededBy } = foldLifecycle(ff);
+    const live = new Set(['function:claim_sd']);
+    // Live body matches NEITHER file's declared body exactly -- it's the pre-ceremony baseline.
+    const liveFunctionBodies = new Map([['claim_sd', "BEGIN RETURN 'baseline'; END"]]);
+    const res = classifyFiles(
+      ['20260913_claim_sd_first.sql', 'database/chairman-gated/20260913_claim_sd_second.sql'],
+      expected, perFile, live, NOW, liveFunctionBodies, new Map(), new Set(), supersededBy
+    );
+    expect(res.find((r) => r.file.endsWith('_second.sql')).status).toBe('BODY_MISMATCH');
+    expect(res.find((r) => r.file.endsWith('_first.sql')).status).toBe('BODY_MISMATCH');
+    expect(res.find((r) => r.file.endsWith('_first.sql')).note).toMatch(/BODY_MISMATCH/);
+  });
+
+  it('inherits CEREMONY_PENDING when the successor is an unledgered chairman-gated file', () => {
+    const sql = 'CREATE TABLE claim_lock (id int);';
+    const ff = [
+      { file: '20260913_claim_lock_first.sql', ...extractDdlFacts(sql) },
+      { file: 'database/chairman-gated/20260913_claim_lock_second.sql', ...extractDdlFacts(sql) },
+    ];
+    const { expected, perFile, supersededBy } = foldLifecycle(ff);
+    const res = classifyFiles(
+      ['20260913_claim_lock_first.sql', 'database/chairman-gated/20260913_claim_lock_second.sql'],
+      expected, perFile, new Set(['table:claim_lock', 'column:claim_lock.id']), NOW, new Map(), new Map(), new Set(), supersededBy
+    );
+    expect(res.find((r) => r.file.endsWith('_second.sql')).status).toBe('CEREMONY_PENDING');
+    expect(res.find((r) => r.file.endsWith('_first.sql')).status).toBe('CEREMONY_PENDING');
+    expect(res.find((r) => r.file.endsWith('_first.sql')).note).toMatch(/CEREMONY_PENDING/);
+  });
+
+  it('REGRESSION: a dropped-for-good object (no successor CREATE) still classifies a blanket APPLIED, unchanged from pre-fix behavior', () => {
+    const ff = [
+      { file: 'old.sql', ...extractDdlFacts('CREATE TABLE gone (i int);') },
+      { file: 'newer.sql', ...extractDdlFacts('DROP TABLE gone; CREATE TABLE kept (i int);') },
+    ];
+    const { expected, perFile, supersededBy } = foldLifecycle(ff);
+    const res = classifyFiles(['old.sql', 'newer.sql'], expected, perFile, new Set(['table:kept']), NOW, new Map(), new Map(), null, supersededBy);
+    const row = res.find((r) => r.file === 'old.sql');
+    expect(row.status).toBe('APPLIED');
+    expect(row.note).toBe('all objects superseded by later migrations');
+  });
+
+  it('worst-wins: a file superseded across TWO later files inherits the more severe of the two statuses', () => {
+    const ff = [
+      { file: 'root.sql', ...extractDdlFacts('CREATE TABLE x (a int); CREATE TABLE y (a int);') },
+      { file: 'mid.sql', ...extractDdlFacts('CREATE TABLE x (a int);') }, // x re-created, applied live
+      { file: 'late.sql', ...extractDdlFacts('CREATE TABLE y (a int);') }, // y re-created, NOT applied live
+    ];
+    const { expected, perFile, supersededBy } = foldLifecycle(ff);
+    const res = classifyFiles(['root.sql', 'mid.sql', 'late.sql'], expected, perFile, new Set(['table:x', 'column:x.a']), NOW, new Map(), new Map(), null, supersededBy);
+    expect(res.find((r) => r.file === 'mid.sql').status).toBe('APPLIED');
+    expect(res.find((r) => r.file === 'late.sql').status).toBe('NOT_APPLIED');
+    expect(res.find((r) => r.file === 'root.sql').status).toBe('NOT_APPLIED');
+  });
+});
+
 describe('SD-LEO-INFRA-VERIFY-MIGRATION-APPLY-001 — function body-aware classification', () => {
   it('TS-3a: extracts a bare $$ ... $$ body', () => {
     const bodies = extractFunctionBodies(
