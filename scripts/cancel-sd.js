@@ -19,6 +19,7 @@
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
+import { closeSourcedChild } from '../lib/adam/task-ledger.js';
 import { execFileSync } from 'node:child_process';
 import dotenv from 'dotenv';
 import { createRequire } from 'node:module';
@@ -351,6 +352,14 @@ async function cancelSD(sd, reason, { exiting = false } = {}) {
     process.exit(1);
   }
   console.log(`✓ SD ${sd.sd_key} cancelled (status=cancelled, current_phase=CANCELLED)`);
+
+  // QF-20260911-447: close-at-source board hygiene. Fail-soft — the SD is already cancelled;
+  // a failed board-closer write must not mask that.
+  try {
+    await closeSourcedChild(supabase, sd.sd_key || sd.id, 'cancelled');
+  } catch (e) {
+    console.warn(`⚠️  closeSourcedChild failed: ${e.message}`);
+  }
 
   // QF-20260525-211 (A1): write an audit_log row so cancellations are visible to the audit
   // stream. Previously the reason landed ONLY in the cancellation_reason column, which

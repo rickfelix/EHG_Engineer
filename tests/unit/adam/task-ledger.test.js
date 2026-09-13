@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  createOrUpsertNode, setStatus, setBlocker,
+  createOrUpsertNode, setStatus, setBlocker, closeSourcedChild,
   rollupParentStatus, bubbleBlockers, sumTokenCost, syncParentRollupStatus,
   STATUSES, TIERS, SOURCE_KINDS,
   encodeManualChildMeta, parseManualChildMeta, isManualChildStale, MANUAL_CHILD_REVIEW_WINDOW_DAYS,
@@ -369,5 +369,84 @@ describe('syncParentRollupStatus (QF-20260912-408) — children-first, no oversi
     expect(result).toMatchObject({ checked: 0, updated: 0, errors: [] });
     // No children exist at all -> the function returns before ever querying parents by id.
     expect(calls.some((c) => c.in.some(([col]) => col === 'id'))).toBe(false);
+  });
+});
+
+/** In-memory adam_task_ledger stub for closeSourcedChild: select(...).eq().eq().not() then update(...).in(). */
+function makeCloseSourcedChildSupabase(rows) {
+  const ledger = rows.map((r) => ({ ...r }));
+  function from(table) {
+    if (table !== 'adam_task_ledger') throw new Error(`unexpected table: ${table}`);
+    return {
+      select() {
+        const filters = [];
+        const builder = {
+          eq(col, val) { filters.push((r) => r[col] === val); return builder; },
+          not(col, _op, val) {
+            const excluded = new Set(val.replace(/^\(|\)$/g, '').split(','));
+            const matched = ledger.filter((r) => filters.every((f) => f(r)) && !excluded.has(r[col]));
+            return {
+              maybeSingle: () => Promise.resolve({ data: matched.length ? { id: matched[0].id } : null, error: null }),
+            };
+          },
+        };
+        return builder;
+      },
+      update(patch) {
+        return {
+          eq(col, val) {
+            for (const r of ledger) if (r[col] === val) Object.assign(r, patch);
+            return Promise.resolve({ error: null });
+          },
+        };
+      },
+    };
+  }
+  return { from, _ledger: ledger };
+}
+
+describe('QF-20260911-447: closeSourcedChild — close-at-source board hygiene', () => {
+  it('closes the OPEN sourced_sd child bound to sourceRef, stamping the terminal status + a timestamp into blocker', async () => {
+    const sb = makeCloseSourcedChildSupabase([
+      { id: 'c1', source_kind: 'sourced_sd', source_ref: 'QF-1', status: 'open' },
+      { id: 'c2', source_kind: 'sourced_sd', source_ref: 'QF-9', status: 'in_progress' }, // unrelated ref, untouched
+    ]);
+    const result = await closeSourcedChild(sb, 'QF-1', 'completed');
+    expect(result).toEqual({ closed: 1 });
+    expect(sb._ledger[0].status).toBe('done');
+    expect(sb._ledger[0].blocker).toMatch(/^CLOSED AT SOURCE: QF-1 completed \d{4}-\d{2}-\d{2}T/);
+    expect(sb._ledger[1].status).toBe('in_progress'); // unrelated source_ref left alone
+  });
+
+  it('is idempotent — a second call for the same sourceRef closes nothing further', async () => {
+    const sb = makeCloseSourcedChildSupabase([
+      { id: 'c1', source_kind: 'sourced_sd', source_ref: 'QF-2', status: 'open' },
+    ]);
+    await closeSourcedChild(sb, 'QF-2', 'completed');
+    const second = await closeSourcedChild(sb, 'QF-2', 'completed');
+    expect(second).toEqual({ closed: 0 });
+  });
+
+  it('never touches a manual child sharing the same source_ref text', async () => {
+    const sb = makeCloseSourcedChildSupabase([
+      { id: 'c1', source_kind: 'sourced_sd', source_ref: 'QF-3', status: 'open' },
+      { id: 'm1', source_kind: 'manual', source_ref: 'QF-3', status: 'open' },
+    ]);
+    await closeSourcedChild(sb, 'QF-3', 'completed');
+    expect(sb._ledger.find((r) => r.id === 'm1').status).toBe('open');
+  });
+
+  it('leaves an already-cancelled child alone (excluded from the match, same as done)', async () => {
+    const sb = makeCloseSourcedChildSupabase([
+      { id: 'c1', source_kind: 'sourced_sd', source_ref: 'QF-4', status: 'cancelled' },
+    ]);
+    const result = await closeSourcedChild(sb, 'QF-4', 'completed');
+    expect(result).toEqual({ closed: 0 });
+    expect(sb._ledger[0].status).toBe('cancelled');
+  });
+
+  it('rejects a missing sourceRef (fail-loud)', async () => {
+    const sb = makeCloseSourcedChildSupabase([]);
+    await expect(closeSourcedChild(sb, '', 'completed')).rejects.toThrow(/sourceRef/);
   });
 });

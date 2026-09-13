@@ -15,6 +15,7 @@ import { runPreflightRetroCheck } from '../../retro-filters.js';
 import { CANONICAL_WRITER_STAMP } from '../../lib/canonical-writer-stamp.js';
 import { deriveBypassAwareRecordFields, buildPersistedBypassMetadata } from '../../../../../lib/handoff/bypass-stamp.js';
 import { runPostWriteStage, POST_WRITE_STAGE_TIMEOUT_EXIT_CODE } from '../../../../../lib/completion/post-write-stage.js';
+import { closeSourcedChild } from '../../../../../lib/adam/task-ledger.js';
 
 /**
  * Project the orchestrator's per-gate results into a compact, queryable shape for persistence
@@ -865,6 +866,13 @@ export class LeadFinalApprovalExecutor extends BaseExecutor {
     // Effort-tier experiment FR-1 (SD-MAN-INFRA-EFFORT-TIER-EXPERIMENT-001): fail-soft execution-context stamp.
     await stampExecutionContext(this.supabase, sd.id, completedBySession);
     console.log('   ✅ Completion timestamp recorded');
+
+    // QF-20260911-447: close-at-source board hygiene. Fail-soft — never blocks the approval.
+    try {
+      await closeSourcedChild(this.supabase, sd.sd_key || sd.id, 'completed');
+    } catch (e) {
+      console.warn(`   ⚠️  closeSourcedChild failed: ${e.message}`);
+    }
 
     try {
       const outcomeResult = await recordSdCompleted({

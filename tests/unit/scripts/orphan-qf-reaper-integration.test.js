@@ -141,7 +141,10 @@ describe('orphan-qf-reaper main() integration (FR-4)', () => {
     supabaseInstance = makeSupabaseMock({
       firstQuery: [{ id: 'QF-20260508-001', status: 'open', pr_url: 'https://github.com/x/y/pull/123', started_at: '2026-05-08T00:00:00Z', claiming_session_id: 'sess' }],
       secondQuery: [],
-      updateResult: { data: { id: 'QF-20260508-001', status: 'completed' }, error: null },
+      // QF-20260911-447: this canned response was stale -- 'completed' predates QF-20260807-745's
+      // fix to a non-terminal 'in_progress' witness (already asserted below at payload.status),
+      // and nothing previously consumed the returned status to notice the mismatch.
+      updateResult: { data: { id: 'QF-20260508-001', status: 'in_progress' }, error: null },
     });
 
     execSyncMock.mockImplementation((cmd) => {
@@ -185,7 +188,8 @@ describe('orphan-qf-reaper main() integration (FR-4)', () => {
     supabaseInstance = makeSupabaseMock({
       firstQuery: [],
       secondQuery: [{ id: 'QF-20260508-002', status: 'open', started_at: '2026-05-08T00:00:00Z', claiming_session_id: 'sess' }],
-      updateResult: { data: { id: 'QF-20260508-002', status: 'completed' }, error: null },
+      // QF-20260911-447: same stale-canned-response fix as TS-1 above.
+      updateResult: { data: { id: 'QF-20260508-002', status: 'in_progress' }, error: null },
     });
 
     execSyncMock.mockImplementation((cmd) => {
