@@ -82,6 +82,23 @@ test('QF-20260905-680: heartbeat-sms prompt names the fixed ET slots and ratific
   assert.match(heartbeat.prompt, /OVERDUE BACKSTOP ONLY/);
 });
 
+// QF-20260912-275: the chairman revoked the "send the decision/alert email instead" fallback
+// (chairman verbal 2026-09-12 13:4xZ, ratification 4590381f, encoded in CLAUDE_ADAM.md 5g/c3) --
+// SMS is now the channel for everything including alerts, email only as a backup/overflow. The
+// prompt is CODE (re-emitted every /adam startup and CronCreate re-arm), so the doc-side encode
+// alone would silently keep re-arming the revoked instruction until this spec text changed too.
+test('QF-20260912-275: heartbeat-sms prompt names SMS as the channel for alerts, email only as backup/overflow, never the old email-first fallback', () => {
+  const heartbeat = ADAM_LOOPS.find((l) => l.key === 'heartbeat-sms');
+  assert.ok(heartbeat, 'heartbeat-sms loop exists');
+  assert.match(heartbeat.prompt, /4590381f/);
+  assert.match(heartbeat.prompt, /adam-chairman-sms\.mjs --kind decision_question/);
+  assert.match(heartbeat.prompt, /NOT as heartbeat_status/i);
+  assert.match(heartbeat.prompt, /channel for everything including alerts/i);
+  assert.match(heartbeat.prompt, /only if the SMS send itself is refused/i);
+  // the revoked instruction (email as the FIRST resort for an actual problem) must be gone
+  assert.doesNotMatch(heartbeat.prompt, /send the decision\/alert email instead \(node scripts\/adam-decision-email\.mjs\) rather than this heartbeat/);
+});
+
 // SD-LEO-INFRA-ADAM-MACHINERY-CONSUMER-001 (FR2): the consumer-side invariant for the loop
 // registry — every DURABLE contract-named duty in CLAUDE_ADAM.md must exist in ADAM_LOOPS, or
 // it silently dies every Adam session (the belt-countdown failure mode).
