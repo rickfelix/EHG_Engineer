@@ -45,7 +45,7 @@ import { runComplianceWithRefinement } from './compliance-loop.js';
 import { prompt, displayCompletionSummary } from './cli.js';
 import { resolveFeedback, parseAndExpandFeedbackFooters } from '../../../lib/governance/resolve-feedback.js';
 import { recordSdCompleted, recordQfCompleted } from '../../../lib/learning/outcome-tracker.js';
-import { isUnlinkedTierThreeCompletion } from '../../../lib/quick-fix/status-writer.cjs';
+import { shouldRefuseUnlinkedTierThreeCompletion } from '../../../lib/quick-fix/status-writer.cjs';
 import { checkResolverFreshness, logResolverFreshnessBanner } from '../../../lib/governance/check-resolver-freshness.js';
 import { execSync } from 'child_process';
 import { applyCompletionReadbackGate, ClaimMalformedError } from '../../../lib/checkers/completion-readback-gate.mjs';
@@ -1083,7 +1083,13 @@ export async function completeQuickFix(qfId, options = {}) {
   // BOTH link fields (escalated_to_sd_id OR resolution_sd_id), fired only when this function is
   // already committed to a 'completed' transition, so it inherently never fires on an open row
   // (AC-9) and never affects a Tier-3 QF that IS linked via either field (AC-10).
-  if (isUnlinkedTierThreeCompletion(qf)) {
+  //
+  // QF-20260912-739: this refusal fired even when mergeWitness (computed just above, self-derived
+  // from the QF's OWN qf/<QF-ID> branch) had already confirmed the fix is a MERGED PR reachable
+  // from origin/main -- refusing already-landed work manufactures a duplicate SD for work that's
+  // done (QF-20260905-476 -> SD-LEO-FIX-CLASSIFY-QUICK-FIX-001). A verified merge witness means
+  // this completion is recording already-landed work, not escalating unfinished work.
+  if (shouldRefuseUnlinkedTierThreeCompletion(qf, mergeWitness)) {
     console.log('\u274c Cannot complete Tier-3 quick-fix with no linked SD (escalated_to_sd_id and resolution_sd_id are both null).');
     console.log('   Tier-3 work requires escalation to a full SD before completion -- link one first:');
     console.log('     node scripts/leo-create-sd.js --from-qf ' + qfId);
