@@ -233,6 +233,12 @@
   - Also fixed a related bug in the same shared orchestrator: `deps.controlPackEvidence`'s fallback was a full-object replace rather than a merge, which would have silently zeroed out the `minimum_assertion_manifest` control for any caller supplying a partial evidence pack.
   - 22 new unit tests, 3 updated, 0 regressions across the wider apa/uat/eva suite (630 files, 8113 tests).
 
+- **Fixed a vision-pattern auto-resolve blind spot where a healthy dimension score could never clear a stale "gap" pattern** - SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-149 (PR #8850)
+  - `syncVisionScoresToPatterns()` (`scripts/eva/vision-to-patterns.js`) sourced both gap-generation candidates and auto-resolve improvement evidence from the same `.lt('total_score', 70)` query, so a healthy dimension score living inside an SD whose overall `total_score` was >= 70 was invisible to auto-resolve — confirmed live: A05 (`event_bus_integration`) scored 85/100 with zero gaps, yet its pattern still reported a persistent "avg score 63" gap.
+  - A sharper form of the same bug also skipped the entire auto-resolve pass whenever zero SDs currently scored below 70 — exactly when the most positive evidence exists.
+  - Fixed with a second, independent, additive evidence query (reusing the existing classification helpers so the two paths can never diverge) and removed the early return that skipped auto-resolve on an empty low-score population. No schema change, no change to the gap-generation or write paths.
+  - Of the SD's original 4 bundled `/learn` patterns, 2 were deferred with documented reasoning rather than forced into an unbounded fix: one described open-ended dashboard UI work with a mismatched vision-dimension label (V07 vs. V08), the other (a retrospective-quality gate score) had no single traceable root cause across 20+ unrelated sites.
+
 ## 2026-09-12
 
 ### Infrastructure
