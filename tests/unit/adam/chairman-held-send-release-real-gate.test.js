@@ -99,7 +99,14 @@ function makeFakeSupabase({ claimSucceeds = true } = {}) {
       if (table === 'chairman_decisions') {
         return {
           select() {
-            const builder = { eq() { return builder; }, maybeSingle: async () => ({ data: { brief_data: {} }, error: null }) };
+            // QF-20260913-013: getChairmanDecisionStatus's own read terminates in .limit(1), not
+            // .maybeSingle() -- absent here (empty array) so this file's pre-existing "not testing
+            // the staging bookkeeping" fixture stays decided=null (a no-op for the new FIX a check).
+            const builder = {
+              eq() { return builder; },
+              maybeSingle: async () => ({ data: { brief_data: {} }, error: null }),
+              limit: async () => ({ data: [], error: null }),
+            };
             return builder;
           },
           update(vals) {
