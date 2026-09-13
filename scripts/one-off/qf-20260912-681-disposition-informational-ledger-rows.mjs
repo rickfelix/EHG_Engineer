@@ -6,27 +6,14 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 /**
- * QF-20260912-681 fix shape (c): one disposition pass over the legacy informational rows.
- *
- * These rows carry decision='pending' AND decision_requested=false -- informational sends
- * (captureLedgerRow) that were never asking for a judgment, admitted by the DB's own DEFAULT
- * before this QF's fix (b) started writing 'deferred' for exactly this case. Left at 'pending',
- * they are structurally un-closeable (nobody was ever asked to decide) and keep contributing to
- * lib/solomon/conduct-probes.js's permanent-FAIL count for as long as they sit there -- the
- * count-side fix (a) excludes them from the query going forward, but does not retroactively
- * relabel the rows themselves, so they would otherwise remain 'pending' forever in the ledger's
- * own historical record.
- *
- * Scope: EVERY row matching decision='pending' AND decision_requested=false at run time -- not
- * limited to the QF's own snapshot count (18, measured 2026-09-12), which has since grown to 88
- * (measured live 2026-09-13, this session) because captureLedgerRow kept admitting new
- * informational sends at the 'pending' default until fix (b) landed in this same PR. The
- * category is identical regardless of when the row was created, so the disposition pass
- * generalizes to "all such rows as of now" rather than a fixed historical count.
- *
- * Leaves every decision_requested=true row untouched, including the honest 16(+)-row backlog
- * carried under ratification 1726f11d -- those still need a real decision from a recipient-side
- * decision writer, not a bulk relabel.
+ * QF-20260912-681 fix shape (c): disposition every legacy informational row (decision='pending',
+ * decision_requested=false) to decision='deferred'. These were admitted at the DB's own 'pending'
+ * default before fix (b) started writing 'deferred' for this case; left at 'pending' they are
+ * structurally un-closeable and keep contributing to conduct-probes.js's stale-count. Scope is
+ * "every matching row as of run time" (88 measured live 2026-09-13), not the QF's original
+ * snapshot count (18), since fix (b) only stops NEW rows -- it doesn't relabel existing ones.
+ * Leaves every decision_requested=true row untouched (the honest backlog under ratification
+ * 1726f11d still needs a real decision, not a bulk relabel).
  */
 async function main() {
   const { data: before, error: readErr } = await supabase
@@ -35,7 +22,7 @@ async function main() {
     .eq('decision', 'pending')
     .eq('decision_requested', false);
   if (readErr) { console.error('READ FAILED:', readErr.message); process.exit(1); }
-  console.log(`Found ${before.length} row(s) to disposition (decision=pending, decision_requested=false).`);
+  console.log(`Found ${before.length} row(s) to disposition.`);
   if (before.length === 0) { console.log('Nothing to do.'); return; }
 
   const { data: updated, error: updateErr } = await supabase
@@ -45,7 +32,7 @@ async function main() {
     .eq('decision_requested', false)
     .select('id');
   if (updateErr) { console.error('UPDATE FAILED:', updateErr.message); process.exit(1); }
-  console.log(`Dispositioned ${updated.length} row(s): decision 'pending' -> 'deferred' (informational send, no decision was ever requested -- QF-20260912-681).`);
+  console.log(`Dispositioned ${updated.length} row(s): pending -> deferred (informational send, QF-20260912-681).`);
 }
 
 if (isMainModule(import.meta.url)) {
