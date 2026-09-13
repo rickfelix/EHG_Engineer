@@ -113,9 +113,12 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
     throw new Error(`Failed to query eva_vision_scores: ${e.message}`);
   }
 
-  if (!scores || scores.length === 0) {
-    return { synced: 0, skipped: 0, errors: 0, resolved: 0, excluded: 0, unscored: 0, couldNotVerify: 0 };
-  }
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-149: this used to return immediately here, which
+  // ALSO skipped the auto-resolve pass below whenever nothing currently scores below 70 —
+  // an even sharper case of this SD's root bug (no low scores at all is a GOOD outcome, and
+  // is exactly when a stale pattern most needs the chance to auto-resolve). `scores` is
+  // coalesced to [] and everything below already tolerates an empty array.
+  scores = scores || [];
 
   let synced = 0;
   let skipped = 0;
@@ -337,6 +340,67 @@ export async function syncVisionScoresToPatterns(supabase, options = {}) {
         errors++;
       } else {
         synced++;
+      }
+    }
+  }
+
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-149: the loop above only ever sees rows from the
+  // `.lt('total_score', 70)` query, so a healthy dimension score living inside an SD whose
+  // OVERALL total_score is >= 70 was NEVER eligible to land in improvedPatternIds -- a
+  // pattern could sit "active" forever even after a fresh, good measurement, because that
+  // measurement's containing SD scored well overall and was excluded from consideration
+  // entirely. This second, independent query looks at ALL recent scores (no total_score
+  // filter) for the SOLE purpose of supplying additional improvement evidence; it applies
+  // the exact same per-row/per-key classification as the loop above (identifyRubric,
+  // dimScoreOf, LATENCY_KEYS, SD_TYPE_EXEMPT_DIMENSIONS) so the two paths can never
+  // classify the same row differently. It does not touch dimAggregates or the write path.
+  let extraEvidenceScores;
+  try {
+    extraEvidenceScores = await fetchAllPaginated(() => supabase
+      .from('eva_vision_scores')
+      .select('id, sd_id, dimension_scores, rubric_snapshot, scored_at')
+      .gte('scored_at', since)
+      .order('scored_at', { ascending: false })
+      .order('id', { ascending: true }));
+  } catch { extraEvidenceScores = []; } // advisory only — never fail the sync over this
+
+  // sdTypeMap above was only populated for the low-total-score query's SD ids. Extend it so
+  // an exempt-type SD appearing ONLY in this wider query is still correctly exempted.
+  const extraSdIds = [...new Set((extraEvidenceScores || []).map(s => s.sd_id).filter(id => id && !(id in sdTypeMap)))];
+  if (extraSdIds.length > 0) {
+    const { data: extraSdRows } = await supabase
+      .from('strategic_directives_v2')
+      .select('id, sd_type')
+      .in('id', extraSdIds);
+    if (extraSdRows) {
+      for (const row of extraSdRows) sdTypeMap[row.id] = row.sd_type;
+    }
+  }
+
+  for (const scoreRecord of (extraEvidenceScores || [])) {
+    if (!scoreRecord.dimension_scores || typeof scoreRecord.dimension_scores !== 'object') continue;
+    const dimEntries = Object.entries(scoreRecord.dimension_scores);
+    if (dimEntries.length === 0) continue;
+
+    const rubric = identifyRubric(scoreRecord.dimension_scores);
+    if (rubric === 'eva-5dim-v1') continue; // whole-row exclusion, same as the main loop
+
+    const sdType = sdTypeMap[scoreRecord.sd_id];
+    const exemptDims = sdType && SD_TYPE_EXEMPT_DIMENSIONS[sdType];
+
+    for (const [dimId, dim] of dimEntries) {
+      if (LATENCY_KEYS.has(dimId)) continue; // per-key exclusion, same as the main loop
+
+      const dimScore = dimScoreOf(dim);
+      if (dimScore === null || !Number.isFinite(dimScore)) continue;
+
+      if (exemptDims) {
+        const dimPrefix = dimId.replace(/[^A-Z0-9]/gi, '').substring(0, 3);
+        if (exemptDims.has(dimPrefix)) continue;
+      }
+
+      if (dimScore >= SCORE_THRESHOLD) {
+        improvedPatternIds.add(buildPatternId(dimId));
       }
     }
   }
