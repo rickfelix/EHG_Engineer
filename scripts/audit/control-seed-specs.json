@@ -1044,5 +1044,20 @@
    "input": "tests/quarantine-manifest.json's quarantined[] array length (vs the committed BASELINE_COUNT=150 literal) and each entry's review_by field compared against the wall-clock date, joined against tests/quarantine-retriage-verdicts.json by exact file-path string equality.",
    "seen": "Real positive observed live against the actual repo manifest on 2026-09-13 (this SD's own EXEC phase, before any verdicts were recorded): node scripts/lint/quarantine-retire-check.mjs against the live 150-entry manifest reported Baseline 150/150 (no growth) and 132 overdue entries across 15 reason_class cohorts (review_by already past for most pre-existing entries once backfilled), writing 15 real harness_backlog feedback rows (one per reason_class, confirmed via a follow-up SELECT) and correctly deduping on a second run (0 additional rows)."
   }
+ },
+ {
+  "name": "venture-gate-fence-consistency",
+  "script": "scripts/audit/venture-gate-fence-consistency.mjs",
+  "seedTest": "tests/unit/audit/venture-gate-fence-consistency.test.js",
+  "neuter": {
+   "find": "const FENCE_KEY_RE = /^fence_status_\\d{4}_\\d{2}_\\d{2}$/;",
+   "replace": "const FENCE_KEY_RE = /$IMPOSSIBLE_NEVER_MATCHES^/;",
+   "why": "Breaks the fence-key regex so Object.keys(metadata).find(...) can never match any key, forcing fenceKey to stay undefined for every input -- findFenceVerdictContradiction() then always returns null regardless of a genuinely CLEARED fence paired with a stale NOT_MET verdict. The committed test's first assertion ('flags the real specimen shape (fence CLEARED, verdict NOT_MET)') asserts hit is not null and fails once neutered, proving the fixture is load-bearing, not vacuous."
+  },
+  "note": "QF-20260912-366 fix (c). DB-querying script (strategic_directives_v2.metadata via fetchAllPaginated), not repo-scannable -- no --root/cwd scoping concept fits, so seedTest follows the adam-completion-claim-reader-probe precedent: it points at the committed unit test exercising the pure findFenceVerdictContradiction() function directly (no DB required for the test).",
+  "observability_proof": {
+   "input": "strategic_directives_v2.metadata (all rows, paginated via fetchAllPaginated to avoid PostgREST's 1000-row cap), scanned for any key matching /^fence_status_\\d{4}_\\d{2}_\\d{2}$/ whose .state === 'CLEARED' alongside metadata.venture_gate_last_verdict === 'NOT_MET'.",
+   "seen": "Real positive observed 2026-09-13 running node scripts/audit/venture-gate-fence-consistency.mjs against the live DB: flagged SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 (fence_status_2026_08_17 CLEARED, venture_gate_last_verdict still NOT_MET from the stale 2026-07-28 measurement) -- exactly the specimen shape this QF was filed against, and the reason remeasureVentureFlagshipGate() exists as a governed re-measure writer."
+  }
  }
 ]
