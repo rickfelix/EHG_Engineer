@@ -2,7 +2,7 @@
  * SD-LEO-FEAT-VENTURE-DOMAIN-AVAILABILITY-001 — adapter invariants.
  * All I/O injected: no network, no real timers.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   toLabel, generatePermutations, createRateBudget, checkDomainAvailability,
   checkCandidateAvailability, MAX_PERMUTATIONS, DEFAULT_TLDS,
@@ -10,6 +10,7 @@ import {
 import {
   availabilityScore, addAvailabilityCriterion, domainVerdictFor, tldStatusesFor,
   buildDomainShortlist, assessCandidateAvailability, resolveAvailabilityChecker,
+  detectDeadRdapRung,
 } from '../../../lib/venture-domains/stage-integration.js';
 
 const fetchWithStatus = (status) => async () => ({ status });
@@ -52,7 +53,23 @@ describe('checkDomainAvailability — honest verdict mapping', () => {
       expect(r.checked_at).toBe('2026-07-10T00:00:00.000Z');
     }
   });
+
+  it('QF-20260912-463: sends a descriptive user-agent on the RDAP request (rdap.org 403s the undici default)', async () => {
+    let seenHeaders;
+    const spyFetch = async (_url, init) => { seenHeaders = init?.headers; return { status: 404 }; };
+    await checkDomainAvailability('x.com', { fetch: spyFetch, now: NOW });
+    expect(seenHeaders?.['user-agent']).toBeTruthy();
+    expect(seenHeaders['user-agent']).not.toBe('node');
+    expect(seenHeaders.accept).toBe('application/rdap+json');
+  });
 });
+
+// NOTE: no in-suite "live" network test here. tests/setup.unit.js's unitTierNetworkFence
+// structurally refuses every non-loopback fetch for the 'unit' vitest project (the ONLY
+// project whose include globs match this file) -- a test placed here would ALWAYS
+// self-skip via checkDomainAvailability's own fetch-failure catch, never once asserting
+// anything for real. The genuine live-network check lives outside vitest entirely:
+// scripts/rdap-live-network-smoke.mjs.
 
 describe('rate budget', () => {
   it('caps lookups and marks the tail unknown(budget_exhausted)', async () => {
@@ -133,5 +150,56 @@ describe('activation seam', () => {
     expect(byCandidate.get('A').results).toHaveLength(1);
     expect(byCandidate.get('B').results).toEqual([]);
     expect(byCandidate.get('B').error).toContain('boom');
+  });
+});
+
+describe('detectDeadRdapRung (QF-20260912-463: dead rung visibility)', () => {
+  const mkResult = (verdict, reason) => ({ domain: 'x.com', verdict, reason, checked_at: 'T' });
+
+  it('flags a run where every result is unknown with the SAME rdap_status_* reason', () => {
+    const byCandidate = new Map([
+      ['A', { results: [mkResult('unknown', 'rdap_status_403'), mkResult('unknown', 'rdap_status_403')] }],
+      ['B', { results: [mkResult('unknown', 'rdap_status_403')] }],
+    ]);
+    expect(detectDeadRdapRung(byCandidate)).toBe('403');
+  });
+
+  it('does not flag when results are mixed (some taken/available, or differing reasons)', () => {
+    expect(detectDeadRdapRung(new Map([
+      ['A', { results: [mkResult('unknown', 'rdap_status_403'), mkResult('taken')] }],
+    ]))).toBeNull();
+    expect(detectDeadRdapRung(new Map([
+      ['A', { results: [mkResult('unknown', 'rdap_status_403')] }],
+      ['B', { results: [mkResult('unknown', 'rdap_status_429')] }],
+    ]))).toBeNull();
+    expect(detectDeadRdapRung(new Map([
+      ['A', { results: [mkResult('unknown', 'budget_exhausted')] }],
+    ]))).toBeNull();
+    expect(detectDeadRdapRung(new Map())).toBeNull();
+  });
+
+  it('assessCandidateAvailability warns exactly once when a run is dead-rung-shaped', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await assessCandidateAvailability(['A'], async (n) => ({
+        candidate: n, results: [mkResult('unknown', 'rdap_status_403')], best: null,
+      }));
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(warnSpy.mock.calls[0][0]).toContain('rdap_status_403');
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('assessCandidateAvailability does NOT warn on a healthy mixed-verdict run', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await assessCandidateAvailability(['A'], async (n) => ({
+        candidate: n, results: [mkResult('available'), mkResult('taken')], best: null,
+      }));
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
