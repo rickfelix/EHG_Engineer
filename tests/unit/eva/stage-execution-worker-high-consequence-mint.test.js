@@ -84,7 +84,7 @@ function makeSupabase() {
     }
     const chain = {
       select: () => chain, eq: () => chain, neq: () => chain, in: () => chain,
-      gt: () => chain, lt: () => chain, order: () => chain, limit: () => chain,
+      gt: () => chain, lt: () => chain, gte: () => chain, order: () => chain, limit: () => chain,
       update: () => chain,
       insert: async () => ({ data: null, error: null }),
       upsert: async () => ({ data: null, error: null }),

@@ -69,14 +69,16 @@ function makeSupabase(attemptState) {
       return {
         select: (_cols, opts) => {
           if (opts?.head) {
-            return { eq: () => ({ eq: async () => ({ count: attemptState.attemptCount, error: null }) }) };
+            return { eq: () => ({ eq: () => ({ gte: async () => ({ count: attemptState.attemptCount, error: null }) }) }) };
           }
           return {
             eq: () => ({
               eq: () => ({
-                order: () => ({
-                  limit: () => ({
-                    maybeSingle: async () => ({ data: attemptState.lastAttemptAt ? { created_at: attemptState.lastAttemptAt } : null, error: null }),
+                gte: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({ data: attemptState.lastAttemptAt ? { created_at: attemptState.lastAttemptAt } : null, error: null }),
+                    }),
                   }),
                 }),
               }),
