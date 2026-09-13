@@ -1,0 +1,13 @@
+import dotenv from 'dotenv'; dotenv.config();
+import { createClient } from '@supabase/supabase-js';
+const sb = createClient(process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await sb.from('sub_agent_execution_results').select('*').eq('id','53e36ed7-cf1e-41d2-b785-4365dbebb375').maybeSingle();
+const m = data.metadata||{};
+console.log('error   :', JSON.stringify(m.error));
+console.log('message :', JSON.stringify(m.message));
+console.log('mode    :', JSON.stringify(m.mode), ' original_verdict:', JSON.stringify(m.original_verdict));
+console.log('metrics :', JSON.stringify(m.metrics));
+console.log('_findings_had_keys:', JSON.stringify(m._findings_had_keys), '_findings_stripped:', JSON.stringify(m._findings_stripped));
+console.log('findings:', JSON.stringify(m.findings).slice(0,700));
+console.log('critical_issues:', JSON.stringify(data.critical_issues).slice(0,400));
+console.log('warnings:', JSON.stringify(data.warnings).slice(0,700));
