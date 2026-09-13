@@ -267,6 +267,13 @@ describe('Description/scope inheritance (QF-20260729-534 option C)', () => {
     expect(h.createSDArgs.description).toBe(exact);
   });
 
+  // strategic_directives_v2.title is varchar(500) -- title truncation itself (truncateTitle(),
+  // SD_TITLE_MAX_CHARS) is covered by tests/unit/leo-create-sd-from-qf-title-length.test.js
+  // (QF-20260912-186), including the end-to-end createFromQF path. This session independently
+  // found and fixed the same defect while escalating QF-20260912-959 (a different QF, same root
+  // cause); merged onto main's already-shipped, dedicated-test-covered version rather than
+  // duplicating it here.
+
   it('preserves the full, untruncated original in metadata.qf_origin_body regardless of length', async () => {
     const long = 'z'.repeat(21693);
     h.cfg = {

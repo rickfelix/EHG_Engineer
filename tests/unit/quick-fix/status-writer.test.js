@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { setQuickFixStatus, isNeedsSdRow, isUnlinkedTierThreeCompletion, transitionRequiresDisposition } = require('../../../lib/quick-fix/status-writer.cjs');
+const { setQuickFixStatus, isNeedsSdRow, isUnlinkedTierThreeCompletion, shouldRefuseUnlinkedTierThreeCompletion, transitionRequiresDisposition } = require('../../../lib/quick-fix/status-writer.cjs');
 
 const QF_ID = 'qf-fixture-1';
 const silentLog = { log() {}, warn() {}, error() {} };
@@ -244,6 +244,26 @@ describe('isUnlinkedTierThreeCompletion — SD-LEO-ORCH-CAPA-RECORD-TRUTH-002-B 
   it('false for a null/undefined row', () => {
     expect(isUnlinkedTierThreeCompletion(null)).toBe(false);
     expect(isUnlinkedTierThreeCompletion(undefined)).toBe(false);
+  });
+});
+
+describe('shouldRefuseUnlinkedTierThreeCompletion — QF-20260912-739', () => {
+  const unlinkedTier3 = { routing_tier: 3, escalated_to_sd_id: null, resolution_sd_id: null };
+
+  it('true for an unlinked Tier-3 row with no merge witness at all', () => {
+    expect(shouldRefuseUnlinkedTierThreeCompletion(unlinkedTier3, undefined)).toBe(true);
+  });
+
+  it('true for an unlinked Tier-3 row whose merge witness is unverified (no PR, or unmerged)', () => {
+    expect(shouldRefuseUnlinkedTierThreeCompletion(unlinkedTier3, { verified: false })).toBe(true);
+  });
+
+  it('false for an unlinked Tier-3 row whose own branch is a VERIFIED merged PR reachable from origin/main — the QF-20260905-476 reproduction', () => {
+    expect(shouldRefuseUnlinkedTierThreeCompletion(unlinkedTier3, { verified: true, prUrl: 'https://github.com/x/y/pull/8808' })).toBe(false);
+  });
+
+  it('false when the row is already linked, regardless of merge witness (unchanged AC-10 behavior)', () => {
+    expect(shouldRefuseUnlinkedTierThreeCompletion({ routing_tier: 3, escalated_to_sd_id: 'sd-1', resolution_sd_id: null }, { verified: false })).toBe(false);
   });
 });
 

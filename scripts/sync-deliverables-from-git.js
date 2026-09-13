@@ -18,15 +18,16 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 
-import { resolveRepoPath } from '../lib/repo-paths.js';
 import { runHardenedGit } from '../lib/git/hardened-runner.cjs';
 import { anchoredKeyPattern, LANDED_LOG_MAX_BUFFER_BYTES } from '../lib/drive-loop/score/leg1-landed-alocal.js';
+import { computeReposForSD } from '../lib/sub-agents/repo-target-resolver.js';
+import { isMainModule } from '../lib/utils/is-main-module.js';
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const EHG_ROOT = resolveRepoPath('ehg');
 
 dotenv.config();
 
@@ -206,22 +207,47 @@ function matchFileToDeliverable(filePath, deliverables) {
 }
 
 /**
+ * Which repo(s) to scan for this sync. An explicit --repo-path always wins outright (a single,
+ * deliberate override); otherwise derive from the SD's own target_application /
+ * metadata.target_repos via computeReposForSD — the same rule PR_MERGE_VERIFICATION already uses
+ * at LEAD-FINAL (lib/sub-agents/repo-target-resolver.js). QF-20260912-095: this script previously
+ * hardcoded a single EHG checkout regardless of which repo the SD actually targeted, so an
+ * EHG_Engineer-targeted SD was scanned in the wrong repository and silently reported zero commits.
+ */
+function resolveSyncRepos(sd, explicitRepoPath) {
+  if (explicitRepoPath) return [{ githubRepo: null, localPath: explicitRepoPath }];
+  return computeReposForSD(sd);
+}
+
+/**
  * Sync deliverables from git history
  */
 async function syncDeliverables(sdId, options = {}) {
-  const { repoPath = EHG_ROOT, silent = false } = options;
+  const { repoPath: explicitRepoPath, silent = false } = options;
 
   // QF-20260705-859: callers pass either an sd_key or a UUID, but sd_phase_handoffs /
   // sd_scope_deliverables store the UUID while git branches carry the sd_key. The raw
   // arg previously went straight into .eq('sd_id', ...) — an sd_key matched zero rows
   // and the script reported a vacuous "All deliverables already completed".
   const { resolveSdInput } = await import('./lib/sd-id-resolver.js');
-  const { sdId: sdUuid, sdKey } = await resolveSdInput(sdId, supabase);
+  const { sdId: sdUuid, sdKey, sd } = await resolveSdInput(sdId, supabase);
+
+  const repos = resolveSyncRepos(sd, explicitRepoPath);
+
+  // QF-20260912-095 (fix shape b): a repo this host cannot reach is a named failure, never the
+  // vacuous "No commits found" a missing checkout used to report as success (QF-20260705-859 /
+  // QF-20260903-950 precedent for this script measuring nothing while reporting success).
+  const unreachable = repos.filter((r) => !existsSync(r.localPath));
+  if (unreachable.length > 0) {
+    const msg = `repo path(s) unreachable on this host: ${unreachable.map((r) => `${r.githubRepo || 'repo'} -> ${r.localPath}`).join(', ')}`;
+    if (!silent) console.log(`   ❌ ${msg}`);
+    return { success: false, error: msg };
+  }
 
   if (!silent) {
     console.log('\n📊 Sync Deliverables from Git');
     console.log(`   SD: ${sdKey} (${sdUuid})`);
-    console.log(`   Repository: ${repoPath}`);
+    console.log(`   Repositories: ${repos.map((r) => r.localPath).join(', ')}`);
     console.log('='.repeat(60));
   }
 
@@ -259,12 +285,15 @@ async function syncDeliverables(sdId, options = {}) {
 
   if (!silent) console.log(`   📦 Found ${deliverables.length} pending deliverables`);
 
-  // Parse git commits (branches are named feat/<sd_key>, never feat/<uuid>). getGitCommits now
-  // THROWS on a genuine git failure (QF-20260903-950 defect 2) -- a crash must be reported as a
-  // failure, never folded into the same "0 commits" success path a real empty result takes.
-  let commits;
+  // Parse git commits (branches are named feat/<sd_key>, never feat/<uuid>) from EVERY resolved
+  // repo — a cross-repo SD's commits can land in either checkout. getGitCommits now THROWS on a
+  // genuine git failure (QF-20260903-950 defect 2) -- a crash must be reported as a failure, never
+  // folded into the same "0 commits" success path a real empty result takes.
+  let commits = [];
   try {
-    commits = getGitCommits(sdKey, repoPath);
+    for (const repo of repos) {
+      commits = commits.concat(getGitCommits(sdKey, repo.localPath));
+    }
   } catch (error) {
     if (!silent) console.log(`   ❌ Could not read git history: ${error.message}`);
     return { success: false, error: error.message };
@@ -393,7 +422,8 @@ async function main() {
 Usage: node scripts/sync-deliverables-from-git.js <SD-ID> [options]
 
 Options:
-  --repo-path <path>  Path to git repository (default: ../ehg relative to EHG_Engineer)
+  --repo-path <path>  Explicit override; repo(s) to scan otherwise derive from the SD's own
+                      target_application / metadata.target_repos (computeReposForSD)
   --help              Show this help message
 
 Example:
@@ -404,14 +434,19 @@ Example:
 
   const sdId = args[0];
   const repoPathIdx = args.indexOf('--repo-path');
-  const repoPath = repoPathIdx !== -1 ? args[repoPathIdx + 1] : EHG_ROOT;
+  const repoPath = repoPathIdx !== -1 ? args[repoPathIdx + 1] : undefined;
 
-  await syncDeliverables(sdId, { repoPath });
+  const result = await syncDeliverables(sdId, { repoPath });
+  if (!result?.success) process.exitCode = 1;
 }
 
-main().catch(error => {
-  console.error('❌ Error:', error.message);
-  process.exit(1);
-});
+// QF-20260912-095: guarded so importing this module (e.g. from a unit test) never triggers the
+// CLI's own process.exit() — the file previously ran main() unconditionally on import.
+if (isMainModule(import.meta.url)) {
+  main().catch(error => {
+    console.error('❌ Error:', error.message);
+    process.exit(1);
+  });
+}
 
-export { syncDeliverables, matchFileToDeliverable, inferTypeFromPath };
+export { syncDeliverables, matchFileToDeliverable, inferTypeFromPath, resolveSyncRepos };
