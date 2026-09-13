@@ -27,6 +27,10 @@
     {
       "script": "sms-status-relay-drain.cjs",
       "reason": "SD-LEO-INFRA-SMS-DELIVERY-STATUS-001 FR-6 — same */5 coordinator cadence duty as sms-relay-drain.cjs (its status-callback sibling), idempotent fail-soft exit-0. Compensating control wired from day one (not retrofitted): the script calls stampLastFired('standard_loop:sms-status-relay-drain') on every successful tick, so the periodic-liveness watcher lane covers it."
+    },
+    {
+      "script": "index-jam-detector.mjs",
+      "reason": "QF-20260912-197 — coordinator STANDARD_LOOPS observational detector, */2 cadence (scripts/coordinator-startup-check.mjs key 'index-jam-detector'), idempotent exit-0 by design (strictly read-only; never opens/writes/removes the index lock it observes) — every healthy run is byte-identical, which is exactly what tripped the 3x-same-target guard after three healthy firings. Compensating control confirmed already wired (not retrofitted): scripts/cron/index-jam-detector.mjs calls stampLastFired('standard_loop:index-jam-detector') on every successful tick, so the periodic-liveness watcher lane covers its health."
     }
   ]
 }

@@ -290,6 +290,37 @@ describe('TS-7 — R5: no-SD-claim session can reset via the session-scoped mark
   });
 });
 
+describe('QF-20260912-197 — config-registered scripts.json exemption (recurring-tick-exemptions.json)', () => {
+  let tmpDir;
+  beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-fp-')); process.env.LEO_RETRY_STATE_DIR = tmpDir; });
+  afterEach(() => { delete process.env.LEO_RETRY_STATE_DIR; fs.rmSync(tmpDir, { recursive: true, force: true }); });
+
+  // index-jam-detector.mjs is registered in scripts/hooks/recurring-tick-exemptions.json (not
+  // the builtin EXEMPT_PATTERNS) — three identical healthy invocations within 10 minutes must
+  // never reach attempts >= 3, matching the STANDARD_LOOPS */2 cadence (coordinator-startup-
+  // check.mjs) that previously false-blocked at the third firing.
+  it('three identical invocations of a config-registered script within 10 minutes never reach attempts >= 3', async () => {
+    const { recordAndCount, isExempt } = loadFresh();
+    const cmd = 'node scripts/cron/index-jam-detector.mjs --repo "C:/repo"';
+    expect(isExempt(cmd)).toBe(true);
+    for (let i = 0; i < 3; i++) {
+      const r = await recordAndCount('sess-config-exempt', null, 'Bash', { command: cmd }, NO_RCA);
+      expect(r.attempts).toBe(0);
+    }
+  });
+
+  it('an UNregistered script with the same cadence shape still accumulates (config exemption is per-script, not per-cadence)', async () => {
+    const { recordAndCount } = loadFresh();
+    const cmd = 'node scripts/cron/not-registered-detector.mjs --repo "C:/repo"';
+    const counts = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await recordAndCount('sess-config-not-exempt', null, 'Bash', { command: cmd }, NO_RCA);
+      counts.push(r.attempts);
+    }
+    expect(counts).toEqual([1, 2, 3]);
+  });
+});
+
 describe('Control 3 — progress fingerprint drives progressStalled', () => {
   let tmpDir;
   beforeEach(() => { tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rca-fp-')); process.env.LEO_RETRY_STATE_DIR = tmpDir; });
