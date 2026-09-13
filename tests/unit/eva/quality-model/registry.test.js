@@ -105,23 +105,28 @@ describe('TS-9: CI predicate runs clean against the REAL shipped registry', () =
     expect(result.blocking.pass).toBe(true);
   });
 
-  it('limb 2 (advisory) never fails the run, even when findings are present', () => {
+  it('limb 2 (advisory) reports every unwired dimension, never fails the run -- ADVERSARIAL REVIEW FIX (PR #8931, HIGH): every waiver in the real registry has review_by:null (no real revisit date exists yet), so isWaiverActive correctly treats none of them as suppressing, and all 19 dimensions with a missing producer/reader surface honestly', () => {
     const result = evaluateQualityModelPredicate({
       generatedCategoryIds: FINDING_CATEGORIES,
       dimensions: QUALITY_MODEL_DIMENSIONS,
     });
-    // Every stub/incomplete dimension in the real registry ships with an active
-    // (dated, unexpired) waiver, so today's advisory report is clean -- proving the
-    // waiver mechanism itself works end-to-end against the real data, not just fixtures.
-    expect(result.advisory.findings).toEqual([]);
+    expect(result.advisory.findings.length).toBe(19);
+    // feedback_widget_present/error_capture_wired/accessibility DO have both a producer
+    // and a reader -- their waivers cover a DIFFERENT gap (DB-constraint rejection /
+    // producer-overlap ambiguity), so they correctly never appear here.
+    expect(result.advisory.findings.some((f) => f.id === 'feedback_widget_present')).toBe(false);
+    expect(result.advisory.findings.some((f) => f.id === 'accessibility')).toBe(false);
+    // A representative stub row (no producer, no reader, waiver present but review_by:null)
+    // surfaces exactly as 'missing: both'.
+    expect(result.advisory.findings).toContainEqual({ id: 'public_route_protection', missing: 'both' });
+    // Advisory findings never fail the overall predicate.
     expect(result.pass).toBe(true);
   });
 
-  it('a dimension with no producer/reader and NO waiver would surface in limb 2 (mechanism check via a targeted fixture)', () => {
+  it('a dimension with no producer/reader and NO waiver at all surfaces identically to one with a null-review_by waiver', () => {
     const stub = getDimension('public_route_protection');
     expect(stub.producer).toBeNull();
     expect(stub.reader_or_gate).toBeNull();
-    // Simulate the pre-waiver state to prove the finding mechanism itself is live.
     const unwaived = { ...stub, waiver: null };
     const result = evaluateQualityModelPredicate({ generatedCategoryIds: [], dimensions: [unwaived] });
     expect(result.advisory.findings).toEqual([{ id: 'public_route_protection', missing: 'both' }]);

@@ -26,10 +26,14 @@ describe('TS-2: limb 1 (blocking) — category->dimension mapping', () => {
 });
 
 describe('TS-3: limb 2 (advisory) — producer+reader-or-waiver', () => {
-  it('reports a dimension with neither reader nor waiver, does not throw/block', () => {
+  it('reports a dimension with a producer but no reader as missing:"reader" (never mislabeled "producer")', () => {
     const dimensions = [{ id: 'x', producer: 'a.js#fn', reader_or_gate: null, waiver: null }];
-    const result = checkProducerReaderOrWaiver(dimensions);
-    expect(result.findings).toEqual([{ id: 'x', missing: 'reader' }]);
+    expect(checkProducerReaderOrWaiver(dimensions).findings).toEqual([{ id: 'x', missing: 'reader' }]);
+  });
+
+  it('reports a dimension with a reader but no producer as missing:"producer" (never mislabeled "reader") -- adversarial review finding (PR #8931, MEDIUM): the missing:producer branch was previously unasserted by value', () => {
+    const dimensions = [{ id: 'x', producer: null, reader_or_gate: 'b.js#gate', waiver: null }];
+    expect(checkProducerReaderOrWaiver(dimensions).findings).toEqual([{ id: 'x', missing: 'producer' }]);
   });
 
   it('a fully-wired dimension produces no finding', () => {
@@ -70,13 +74,22 @@ describe('TS-8: waiver round-trip — the shape a waiver is written with is the 
     expect(checkProducerReaderOrWaiver(dimensions, now).findings).toEqual([{ id: 'x', missing: 'both' }]);
   });
 
-  it('a waiver with review_by:null never expires (open-ended, still requires dated_at)', () => {
+  it('a waiver with review_by:null does NOT suppress the finding -- ADVERSARIAL REVIEW FIX (PR #8931, HIGH): an absent review_by must not become an open-ended, permanently-silent waiver', () => {
     const dimensions = [{
       id: 'x', producer: null, reader_or_gate: null,
       waiver: { reason: 'stub', dated_at: '2026-09-01', review_by: null },
     }];
-    expect(isWaiverActive(dimensions[0].waiver, now)).toBe(true);
-    expect(checkProducerReaderOrWaiver(dimensions, now).findings).toEqual([]);
+    expect(isWaiverActive(dimensions[0].waiver, now)).toBe(false);
+    expect(checkProducerReaderOrWaiver(dimensions, now).findings).toEqual([{ id: 'x', missing: 'both' }]);
+  });
+
+  it('a malformed review_by (unparseable date) does NOT suppress the finding -- fails closed to visibility, not open', () => {
+    const dimensions = [{
+      id: 'x', producer: null, reader_or_gate: null,
+      waiver: { reason: 'stub', dated_at: '2026-09-01', review_by: 'not-a-date' },
+    }];
+    expect(isWaiverActive(dimensions[0].waiver, now)).toBe(false);
+    expect(checkProducerReaderOrWaiver(dimensions, now).findings).toEqual([{ id: 'x', missing: 'both' }]);
   });
 });
 
