@@ -482,6 +482,29 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     expect(newest.status).toBe('sent');
   });
 
+  it('QF-20260913-013: two heartbeat_status notices for DIFFERENT decisions never collapse into each other (only a SAME-decision duplicate does)', async () => {
+    // MEASURED incident shape: a lost-decision notice for decision A previously voided a
+    // lost-decision notice for decision B as "superseded by newest" purely because both rows
+    // shared kind=heartbeat_status -- the chairman never saw B's notice at all. Grouping the
+    // collapse pool by (kind, decision_id) instead of bare kind fixes this while a genuine
+    // same-decision duplicate (e.g. a retried sweep pass) still collapses as before.
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [
+      owedRow({ id: 'ob-notice-A', kind: 'heartbeat_status', decision_id: 'dec-A', created_at: ago(2 * MIN) }),
+      owedRow({ id: 'ob-notice-B', kind: 'heartbeat_status', decision_id: 'dec-B', created_at: ago(1 * MIN) }),
+      owedRow({ id: 'ob-notice-A-dup', kind: 'heartbeat_status', decision_id: 'dec-A', created_at: ago(30 * 1000) }),
+    ] });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider });
+    expect(summary.collapsed).toBe(1); // only ob-notice-A collapses to its own newer dup
+    const a = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-notice-A');
+    const aDup = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-notice-A-dup');
+    const b = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-notice-B');
+    expect(a.status).toBe('canceled');
+    expect(a.last_error).toBe('voided_superseded_by:ob-notice-A-dup');
+    expect(aDup.status).toBe('sent');
+    expect(b.status).toBe('sent'); // B survives -- never collapsed against A's group
+  });
+
   it('FR-2 guard: two FRESH (non-stale) decision_question obligations sharing a kind are NEVER collapsed against each other', async () => {
     // Regression guard for a bug caught during self-review: checking staleness BEFORE the
     // decision-kind guard let a FRESH decision_question row reach the same-kind collapse pool

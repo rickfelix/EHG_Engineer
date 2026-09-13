@@ -3,7 +3,7 @@
  * Pure-logic tests for the uptime probe's threshold state machine (no network/DB).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { checkReachability, computeNextProbeState, CONSTANTS, ensureDeploymentRows, runVentureUptimeProbe } from '../../../lib/ops/venture-uptime-probe.js';
+import { checkReachability, computeNextProbeState, CONSTANTS, ensureDeploymentRows, runVentureUptimeProbe, getLatestProbeStatus } from '../../../lib/ops/venture-uptime-probe.js';
 
 describe('computeNextProbeState (pure state machine)', () => {
   it('starts at 0 consecutive failures on a first successful check with no prior state', () => {
@@ -158,5 +158,77 @@ describe('ensureDeploymentRows / runVentureUptimeProbe (adversarial-review fix: 
     expect(rows).toHaveLength(1);
     expect(rows[0].sha).toBeTruthy();
     expect(['planned', 'deployed_no_traffic', 'routed', 'failed', 'rolled_back']).toContain(rows[0].status);
+  });
+});
+
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-F (C4.3, FR-4/TS-3): getLatestProbeStatus
+// aggregates across possibly-multiple venture_deployments rows per venture -- it is
+// NOT a .single() lookup.
+function makeDeploymentsSupabase(rows) {
+  return {
+    from(table) {
+      if (table !== 'venture_deployments') throw new Error(`unexpected table ${table}`);
+      return {
+        select() { return this; },
+        eq() { return this; },
+        limit() { return Promise.resolve({ data: rows, error: null }); },
+      };
+    },
+  };
+}
+
+describe('getLatestProbeStatus', () => {
+  it('returns null when the venture has no deployment rows', async () => {
+    const supabase = makeDeploymentsSupabase([]);
+    expect(await getLatestProbeStatus(supabase, 'v1')).toBeNull();
+  });
+
+  it('returns null when the only row has no metadata.probe yet (freshly seeded, never probed)', async () => {
+    const supabase = makeDeploymentsSupabase([{ url: 'https://a', metadata: {} }]);
+    expect(await getLatestProbeStatus(supabase, 'v1')).toBeNull();
+  });
+
+  it('returns the single row\'s probe state when only one row carries probe data', async () => {
+    const supabase = makeDeploymentsSupabase([
+      { url: 'https://a', metadata: { probe: { reachable: true, status_code: 200, last_checked_at: '2026-09-13T10:00:00Z', consecutive_failures: 0, surfaced: false, last_error: null } } },
+    ]);
+    const result = await getLatestProbeStatus(supabase, 'v1');
+    expect(result).toMatchObject({ url: 'https://a', reachable: true, status_code: 200 });
+  });
+
+  it('picks the most-recently-checked row when a venture has multiple deployment rows', async () => {
+    const supabase = makeDeploymentsSupabase([
+      { url: 'https://old', metadata: { probe: { reachable: false, status_code: null, last_checked_at: '2026-09-01T00:00:00Z', consecutive_failures: 3, surfaced: true, last_error: 'timeout' } } },
+      { url: 'https://new', metadata: { probe: { reachable: true, status_code: 200, last_checked_at: '2026-09-13T10:00:00Z', consecutive_failures: 0, surfaced: false, last_error: null } } },
+    ]);
+    const result = await getLatestProbeStatus(supabase, 'v1');
+    expect(result.url).toBe('https://new');
+    expect(result.reachable).toBe(true);
+  });
+
+  it('never throws and ignores rows with a null/malformed last_checked_at rather than letting it win the comparison', async () => {
+    const supabase = makeDeploymentsSupabase([
+      { url: 'https://malformed', metadata: { probe: { reachable: true, status_code: 200, last_checked_at: 'not-a-date', consecutive_failures: 0, surfaced: false, last_error: null } } },
+      { url: 'https://real', metadata: { probe: { reachable: false, status_code: 503, last_checked_at: '2026-09-13T10:00:00Z', consecutive_failures: 2, surfaced: true, last_error: 'service unavailable' } } },
+    ]);
+    const result = await getLatestProbeStatus(supabase, 'v1');
+    expect(result.url).toBe('https://real');
+  });
+
+  it('never throws when metadata.probe.last_checked_at is entirely absent on every row', async () => {
+    const supabase = makeDeploymentsSupabase([
+      { url: 'https://a', metadata: { probe: { reachable: true, status_code: 200 } } },
+    ]);
+    await expect(getLatestProbeStatus(supabase, 'v1')).resolves.not.toBeNull();
+  });
+
+  it('returns null when the underlying query errors', async () => {
+    const supabase = { from: () => ({ select() { return this; }, eq() { return this; }, limit() { return Promise.resolve({ data: null, error: { message: 'boom' } }); } }) };
+    expect(await getLatestProbeStatus(supabase, 'v1')).toBeNull();
+  });
+
+  it('returns null without querying when ventureId is missing', async () => {
+    const supabase = { from: () => { throw new Error('should not be called'); } };
+    expect(await getLatestProbeStatus(supabase, null)).toBeNull();
   });
 });

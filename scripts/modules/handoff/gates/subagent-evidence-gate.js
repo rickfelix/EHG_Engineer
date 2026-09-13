@@ -358,6 +358,58 @@ function detectStaleEvidence(latestByCode, required, sd, norm) {
 }
 
 /**
+ * True if `candidateSha` is `headSha` or a git ancestor of it. Uses `git merge-base
+ * --is-ancestor`, whose EXIT CODE is the answer (0=yes, 1=no) — no output to parse. Bounded
+ * 5s, matching every other git call in this file. Returns null (UNKNOWN, never false) on any
+ * git failure other than a clean "not an ancestor" exit — an unresolvable answer must never be
+ * coerced into "not an ancestor", which would turn a git hiccup into a false FAIL below.
+ */
+function isAncestorOrEqual(candidateSha, headSha, repoPath) {
+  if (!candidateSha || !headSha || !repoPath) return null;
+  if (candidateSha === headSha) return true;
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', candidateSha, headSha], { cwd: repoPath, timeout: 5000 });
+    return true;
+  } catch (err) {
+    if (err && err.status === 1) return false; // definitive: not an ancestor
+    return null; // execFileSync throw with no clean exit status (ENOENT, timeout, bad sha) — unknown
+  }
+}
+
+/**
+ * Which required agents' latest evidence was measured against a commit that is NEITHER the
+ * current branch HEAD NOR an ancestor of it — a DIFFERENT TREE ENTIRELY, not merely stale.
+ * QF-20260913-573, root-caused from SD-LEO-FIX-COORDINATOR-RULING-REVERSES-001: a TESTING row
+ * invoked from the main repo root stamped main's HEAD as evaluated_commit_sha for a
+ * worktree-scoped SD, and the equality-only detectStaleEvidence check above could only ever
+ * WARN about it, identically to genuine same-branch staleness.
+ *
+ * This is ABSENT evidence (ratification 6c263823: no provenance means absent, not weak), not a
+ * suppressible staleness advisory — deliberately NEVER gated by staleEvidenceCheckDisabled() /
+ * LEO_DISABLE_STALE_EVIDENCE_CHECK, unlike detectStaleEvidence above.
+ *
+ * @returns {Array<{agent:string, evaluated_commit_sha:string, current_head_sha:string}>}
+ */
+function detectWrongTreeEvidence(latestByCode, required, sd, norm) {
+  const currentHeadSha = resolveCurrentHeadSha(sd);
+  const repoPath = sd?.worktree_path;
+  if (!currentHeadSha || !repoPath) return [];
+
+  const wrongTree = [];
+  for (const r of required) {
+    const row = latestByCode.get(norm(r));
+    const evaluatedSha = row?.evaluated_commit_sha;
+    if (!evaluatedSha || evaluatedSha === currentHeadSha) continue;
+    // null (unknown ancestry, e.g. a git failure) must never fail-closed here — only a
+    // DEFINITIVE "not an ancestor" (false) counts as wrong-tree.
+    if (isAncestorOrEqual(evaluatedSha, currentHeadSha, repoPath) === false) {
+      wrongTree.push({ agent: r, evaluated_commit_sha: evaluatedSha, current_head_sha: currentHeadSha });
+    }
+  }
+  return wrongTree;
+}
+
+/**
  * Write a non-blocking audit_log row documenting the bypass.
  */
 async function writeKillSwitchAudit(db, sdUuid, handoffType) {
@@ -654,6 +706,25 @@ export async function validateSubagentEvidence(ctx, supabase) {
         : { stale: [], warnings: [] };
       if (staleResult.stale.length > 0) {
         for (const w of staleResult.warnings) console.log(`   ⚠️  ${w}`);
+      }
+
+      // QF-20260913-573: wrong-tree evidence is a hard FAIL, never suppressed by
+      // staleEvidenceCheckDisabled() — a row measuring a different tree entirely is absent
+      // evidence, not a downgradeable staleness advisory. Same EXEC-TO-PLAN scoping as
+      // detectStaleEvidence (a commit-SHA mismatch pre-EXEC is the normal, expected state).
+      const wrongTree = handoffType === 'EXEC-TO-PLAN'
+        ? detectWrongTreeEvidence(latestByCode, required, ctx.sd, norm)
+        : [];
+      if (wrongTree.length > 0) {
+        const summary = wrongTree.map(w => `${w.agent} evaluated ${w.evaluated_commit_sha.slice(0, 12)} (HEAD is ${w.current_head_sha.slice(0, 12)})`).join('; ');
+        console.log(`   ❌ SUBAGENT_EVIDENCE_WRONG_TREE: ${summary}`);
+        return buildFailResult({
+          score: 0,
+          max_score: 100,
+          issues: [`SUBAGENT_EVIDENCE_WRONG_TREE: ${summary} — evaluated_commit_sha is not the branch HEAD or an ancestor of it`],
+          details: { reason: 'SUBAGENT_EVIDENCE_WRONG_TREE', wrong_tree: wrongTree, ...verdictDetails },
+          remediation: `Re-run ${wrongTree.map(w => w.agent).join(', ')} for SD ${sdKey} from inside the SD's own worktree (${ctx.sd?.worktree_path || 'no worktree registered'}), not the main repo root or an unrelated cwd.`
+        });
       }
 
       // SD-LEO-ORCH-CAPA-GATE-EVIDENCE-001-A: provenance-ABSENT is advisory by default (see
@@ -956,5 +1027,7 @@ export const _internals = {
   detectStaleEvidence,
   resolveCurrentHeadSha,
   staleEvidenceCheckDisabled,
-  resolveSubagentEvidenceProvenanceMode
+  resolveSubagentEvidenceProvenanceMode,
+  detectWrongTreeEvidence,
+  isAncestorOrEqual
 };

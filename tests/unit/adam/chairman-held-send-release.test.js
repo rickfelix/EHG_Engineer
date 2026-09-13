@@ -6,7 +6,10 @@
  * identity allowlist replacing the old "not the asker" denylist, S-3 single-query TOCTOU fix).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { decideRelease, isSolomonSession, resolveVerifiedAnswer, releaseHeldSend } from '../../../lib/adam/chairman-held-send-release.js';
+import {
+  decideRelease, isSolomonSession, resolveVerifiedAnswer, releaseHeldSend,
+  getChairmanDecisionStatus, closeSupersededHold, abandonExpiredConsultHold,
+} from '../../../lib/adam/chairman-held-send-release.js';
 
 function heldRow(overrides = {}) {
   return {
@@ -32,12 +35,24 @@ function heldRow(overrides = {}) {
  * undefined and the audit-write-failure path was structurally unreachable. `writes` records every
  * update call (vals + filters) so tests can assert exactly what was persisted.
  */
-function makeFakeSupabase({ answerRow = null, answerRows = null, claimSucceeds = true, releaseUpdateError = null, unclaimMatches = true, solomonSessionIds = [] } = {}) {
+function makeFakeSupabase({ answerRow = null, answerRows = null, claimSucceeds = true, releaseUpdateError = null, unclaimMatches = true, solomonSessionIds = [], decisionRow = null } = {}) {
   const writes = [];
   const rows = answerRows || (answerRow ? [answerRow] : []);
   return {
     writes,
     from(table) {
+      // QF-20260913-013 (FIX a): absent by default (decisionRow=null -> 0 rows, same "not found"
+      // shape getChairmanDecisionStatus treats as null/no-op) so every pre-existing test below,
+      // none of which cares about this new check, is unaffected unless it opts in via decisionRow.
+      if (table === 'chairman_decisions') {
+        return {
+          select: () => ({
+            eq: () => ({
+              limit: async () => ({ data: decisionRow ? [decisionRow] : [], error: null }),
+            }),
+          }),
+        };
+      }
       if (table === 'session_coordination') {
         return {
           select: () => ({
@@ -539,5 +554,117 @@ describe('releaseHeldSend — refusal cases + success', () => {
     const [message] = sendChairmanSMS.mock.calls[0];
     expect(Array.isArray(message.options)).toBe(true);
     expect(message.options).toEqual(['A: approve', 'B: reject']);
+  });
+});
+
+/**
+ * QF-20260913-013 -- MEASURED incident: two chairman_held_sends forks (98218e4d, 6c85a2c9) whose
+ * decisions were already approved through another channel sat `held` until their own 24h
+ * hold_expires_at, then abandonExpiredConsultHold told the chairman "never reached you" for a
+ * decision he had answered the day before. FIX a closes the hold quietly (no false notice) the
+ * moment chairman_decisions.status stops being 'pending' -- checked both in releaseHeldSend's own
+ * pre-release classification (every sweep pass, not just at expiry) and defensively inside
+ * abandonExpiredConsultHold itself.
+ */
+describe('getChairmanDecisionStatus (QF-20260913-013, FIX a)', () => {
+  it('returns null for a null/undefined decisionId (never queries)', async () => {
+    const supabase = { from: () => { throw new Error('must not query when decisionId is absent'); } };
+    expect(await getChairmanDecisionStatus(supabase, null)).toBeNull();
+    expect(await getChairmanDecisionStatus(supabase, undefined)).toBeNull();
+  });
+
+  it('returns {status, decidedAt, summary} for a found row', async () => {
+    const supabase = { from: () => ({ select: () => ({ eq: () => ({ limit: async () => ({ data: [{ status: 'approved', updated_at: '2026-09-12T16:04:24Z', summary: 'Apply the migration' }], error: null }) }) }) }) };
+    expect(await getChairmanDecisionStatus(supabase, 'dec-1')).toEqual({ status: 'approved', decidedAt: '2026-09-12T16:04:24Z', summary: 'Apply the migration' });
+  });
+
+  it('fails toward null (not "decided") on a query error or an absent row', async () => {
+    const erroring = { from: () => ({ select: () => ({ eq: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) };
+    const absent = { from: () => ({ select: () => ({ eq: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) };
+    expect(await getChairmanDecisionStatus(erroring, 'dec-1')).toBeNull();
+    expect(await getChairmanDecisionStatus(absent, 'dec-1')).toBeNull();
+  });
+});
+
+describe('closeSupersededHold (QF-20260913-013, FIX a)', () => {
+  it('closes the hold as abandoned, tags metadata.void_reason=superseded_by_decision, enqueues NO notice', async () => {
+    const supabase = makeFakeSupabase();
+    const outcome = await closeSupersededHold(supabase, heldRow(), { status: 'approved', decidedAt: '2026-09-12T16:04:24Z' });
+    expect(outcome).toEqual({ action: 'abandoned', reason: 'superseded_by_decision', heldSendId: 'held-1', noticeEnqueued: false });
+    const write = supabase.writes.find((w) => w.vals.status === 'abandoned');
+    expect(write).toBeTruthy();
+    expect(write.vals.metadata.void_reason).toBe('superseded_by_decision');
+    expect(write.vals.metadata.superseding_decision_status).toBe('approved');
+    expect(write.vals.metadata.superseding_decision_decided_at).toBe('2026-09-12T16:04:24Z');
+    expect(write.vals.last_error).toContain('QF-20260913-013');
+  });
+
+  it('a claim race (already claimed/no longer held) is reported as skip, not a false success', async () => {
+    const supabase = makeFakeSupabase({ claimSucceeds: false });
+    const outcome = await closeSupersededHold(supabase, heldRow(), { status: 'rejected', decidedAt: null });
+    expect(outcome).toEqual({ action: 'skip', reason: 'claim_failed_or_already_claimed', heldSendId: 'held-1' });
+  });
+});
+
+describe('releaseHeldSend -- decision-already-decided short-circuit (QF-20260913-013, FIX a)', () => {
+  it('MEASURED INCIDENT SHAPE: decision already approved -> closes quietly, NEVER resolves an answer or dispatches, NEVER enqueues the false "never reached you" notice', async () => {
+    const supabase = makeFakeSupabase({ decisionRow: { status: 'approved', updated_at: '2026-09-12T16:04:24Z', summary: 'Apply the migration' } });
+    const resolveVerifiedAnswerFn = vi.fn();
+    const sendChairmanSMS = vi.fn();
+    const enqueueChairmanSmsFn = vi.fn();
+    const outcome = await releaseHeldSend(supabase, heldRow(), {
+      resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS, enqueueChairmanSms: enqueueChairmanSmsFn,
+    });
+    expect(outcome).toEqual({ action: 'abandoned', reason: 'superseded_by_decision', heldSendId: 'held-1', noticeEnqueued: false });
+    expect(resolveVerifiedAnswerFn).not.toHaveBeenCalled();
+    expect(sendChairmanSMS).not.toHaveBeenCalled();
+    expect(enqueueChairmanSmsFn).not.toHaveBeenCalled();
+  });
+
+  it('rejected decisions close the same way as approved ones (any non-pending status supersedes)', async () => {
+    const supabase = makeFakeSupabase({ decisionRow: { status: 'rejected', updated_at: '2026-09-12T16:04:24Z' } });
+    const outcome = await releaseHeldSend(supabase, heldRow(), { resolveVerifiedAnswer: vi.fn(), sendChairmanSMS: vi.fn() });
+    expect(outcome).toMatchObject({ action: 'abandoned', reason: 'superseded_by_decision' });
+  });
+
+  it('DISCRIMINATES: a still-pending decision proceeds through the normal unanswered path (not vacuously closed)', async () => {
+    const supabase = makeFakeSupabase({ decisionRow: { status: 'pending', updated_at: null } });
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null }));
+    const outcome = await releaseHeldSend(supabase, heldRow(), { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS: vi.fn() });
+    expect(resolveVerifiedAnswerFn).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({ action: 'hold', reason: 'unanswered' });
+  });
+
+  it('a hold with no decision_id at all skips the new check entirely and proceeds as before', async () => {
+    const supabase = makeFakeSupabase();
+    const resolveVerifiedAnswerFn = vi.fn(async () => ({ found: false, isGenuineSolomon: false, answerRowId: null, verdict: null }));
+    const outcome = await releaseHeldSend(supabase, heldRow({ decision_id: null }), { resolveVerifiedAnswer: resolveVerifiedAnswerFn, sendChairmanSMS: vi.fn() });
+    expect(resolveVerifiedAnswerFn).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({ action: 'hold', reason: 'unanswered' });
+  });
+});
+
+describe('abandonExpiredConsultHold -- defense-in-depth decision check + subject naming (QF-20260913-013)', () => {
+  it('defense-in-depth: called directly on an already-decided hold, closes via closeSupersededHold WITHOUT the "never reached you" notice', async () => {
+    const supabase = makeFakeSupabase({ decisionRow: { status: 'approved', updated_at: '2026-09-12T16:04:24Z' } });
+    const enqueueChairmanSmsFn = vi.fn();
+    const outcome = await abandonExpiredConsultHold(supabase, heldRow({ hold_expires_at: '2026-01-01T00:00:00Z' }), { enqueueChairmanSms: enqueueChairmanSmsFn });
+    expect(outcome).toEqual({ action: 'abandoned', reason: 'superseded_by_decision', heldSendId: 'held-1', noticeEnqueued: false });
+    expect(enqueueChairmanSmsFn).not.toHaveBeenCalled();
+  });
+
+  it('FIX c: a genuinely lost decision names the DECISION\'s own subject (chairman_decisions.summary), not the held row\'s generic placeholder', async () => {
+    const supabase = makeFakeSupabase({ decisionRow: { status: 'pending', updated_at: null, summary: 'Apply the Aug 25 stage-gate migration' } });
+    const enqueueChairmanSmsFn = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-1' }));
+    await abandonExpiredConsultHold(supabase, heldRow({ subject: '[CHAIRMAN SMS]' }), { enqueueChairmanSms: enqueueChairmanSmsFn });
+    expect(enqueueChairmanSmsFn.mock.calls[0][1].body).toContain('Apply the Aug 25 stage-gate migration');
+    expect(enqueueChairmanSmsFn.mock.calls[0][1].body).not.toContain('[CHAIRMAN SMS]');
+  });
+
+  it('falls back to the held row\'s own subject when the decision has no summary (e.g. no decision_id at all)', async () => {
+    const supabase = makeFakeSupabase();
+    const enqueueChairmanSmsFn = vi.fn(async () => ({ enqueued: true, obligationId: 'ob-2' }));
+    await abandonExpiredConsultHold(supabase, heldRow({ decision_id: null, subject: 'Approve the deploy' }), { enqueueChairmanSms: enqueueChairmanSmsFn });
+    expect(enqueueChairmanSmsFn.mock.calls[0][1].body).toContain('Approve the deploy');
   });
 });

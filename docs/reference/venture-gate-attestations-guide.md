@@ -2,9 +2,9 @@
 
 **Category**: Reference
 **Status**: Approved
-**Version**: 1.3.0
-**Author**: SD-FDBK-FIX-VENTURE-CRACK-GATE-001, extended by SD-MAN-INFRA-VENTURE-CRACK-GATE-001, SD-LEO-INFRA-ARM-BINDING-EXIT-001
-**Last Updated**: 2026-08-18
+**Version**: 1.3.1
+**Author**: SD-FDBK-FIX-VENTURE-CRACK-GATE-001, extended by SD-MAN-INFRA-VENTURE-CRACK-GATE-001, SD-LEO-INFRA-ARM-BINDING-EXIT-001, SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-F
+**Last Updated**: 2026-09-13
 **Tags**: venture-lifecycle, governance, observe-only, pbn, chairman-review, account-prerequisites
 
 ## What this is
@@ -282,11 +282,15 @@ PLAN-time snapshot, for exactly this reason.
   disagree; a re-check at unpark never refreshes a stale nursery verdict) — `venture_pbn_status`
   reads around this robustly (including a dedicated `PBN_CONFLICT` state) but does not fix the
   underlying storage design.
-- **A known, separate landmine**: `lib/eva/stage-templates/analysis-steps/stage-17-blueprint-review.js`
-  writes a `chairman_decisions` auto-approval that currently silently no-ops (the table has no
-  `resolved_at` column, and the write's error is unbound). Adding that column later — an
-  innocuous-looking additive migration — would silently arm fleet-wide machine self-approval.
-  This SD does not touch that code path; it is logged separately as a harness bug. It is the
-  reason this SD's own attestations deliberately live in a new table, not in `chairman_decisions`.
+- **A now-closed landmine, documented for context**: `lib/eva/stage-templates/analysis-steps/
+  stage-17-blueprint-review.js` used to write a `chairman_decisions` auto-approval that silently
+  no-oped (the table has no `resolved_at` column, and the write's error was unbound) — an
+  innocuous-looking additive migration adding that column later would have silently armed
+  fleet-wide machine self-approval. SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-F (C4.1) removed the
+  write entirely and added a CI-enforced predicate
+  (`scripts/ci/no-self-approval-chairman-decisions.mjs`) that fails the build if any analysis
+  module reintroduces the same self-approval shape. This SD's own attestations still deliberately
+  live in a new table, not in `chairman_decisions` — that design choice was correct independent of
+  the landmine's later closure.
 - **An EHG-frontend dashboard card.** `target_application=EHG_Engineer` — this SD is backend/CLI
   only; a dashboard surface for the same data is a natural, separate follow-up.
