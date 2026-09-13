@@ -67,11 +67,14 @@ jobs:
           set -o pipefail
           npx vitest run --project unit 2>&1 | tee clock-skew-run.log
 
-      # Runs on failure only, and the job is otherwise allowed to report its real (red) status --
-      # "non-blocking" means no PR/push trigger, not a forced-green step. A red run here is the
-      # loud signal by design.
+      # QF-20260912-364: was `if: failure()`, which does NOT match a CANCELLED job (e.g. the
+      # timeout-minutes ceiling above firing) -- the exact way all four real runs of this sweep
+      # have ended. `if: always()` plus SKEW_RUN_OUTCOME lets the script itself distinguish a
+      # genuine failure (parse the log for FAIL lines) from a cancellation (file "did not
+      # complete" instead of silently reporting zero results as if it were a clean pass -- a
+      # guard may decline to run but must never report a number it did not take).
       - name: Report time-bombs to the harness backlog (one row per failing file)
-        if: failure()
+        if: always()
         env:
           # Scoped to this step only (SECURITY, EXEC-TO-PLAN finding SEC-2) -- only
           # log-harness-bug.js needs these; neither `npm ci` nor the vitest run step do.
@@ -79,4 +82,5 @@ jobs:
           # NEXT_PUBLIC_SUPABASE_URL) -- TR-5.
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SKEW_RUN_OUTCOME: ${{ steps.skew_run.outcome }}
         run: node scripts/clock-skew-report-failures.mjs clock-skew-run.log

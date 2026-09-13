@@ -3,7 +3,7 @@
  * an injectable `run` so it's testable without spawning a real child process.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { extractFailingFiles, reportFailures } from '../../../scripts/clock-skew-report-failures.mjs';
+import { extractFailingFiles, reportFailures, isIncompleteOutcome, reportIncompleteSweep } from '../../../scripts/clock-skew-report-failures.mjs';
 
 describe('extractFailingFiles', () => {
   it('extracts distinct file paths from FAIL lines, ignoring the test-name suffix', () => {
@@ -56,5 +56,48 @@ describe('reportFailures', () => {
     const reported = reportFailures(['a.test.js', 'b.test.js'], { run });
     expect(run).toHaveBeenCalledTimes(2);
     expect(reported).toEqual(['b.test.js']); // only the successful one is recorded as reported
+  });
+});
+
+// QF-20260912-364: the report step's `if: always()` needs the script to distinguish a genuine
+// failure (parse the log) from a run that never completed (report "did not complete" instead of
+// silently concluding "no FAIL lines, nothing to report" -- the four-runs-in-a-row silent-pass
+// this sweep shipped under the old `if: failure()` condition).
+describe('isIncompleteOutcome', () => {
+  it('is false for a clean success', () => {
+    expect(isIncompleteOutcome('success')).toBe(false);
+  });
+  it('is false for a genuine failure (the log is trustworthy, parse it)', () => {
+    expect(isIncompleteOutcome('failure')).toBe(false);
+  });
+  it('is true for a cancelled step (the timeout-minutes ceiling firing)', () => {
+    expect(isIncompleteOutcome('cancelled')).toBe(true);
+  });
+  it('is true for a skipped step', () => {
+    expect(isIncompleteOutcome('skipped')).toBe(true);
+  });
+  it('is false when no outcome was supplied at all (missing env var)', () => {
+    expect(isIncompleteOutcome(null)).toBe(false);
+    expect(isIncompleteOutcome(undefined)).toBe(false);
+    expect(isIncompleteOutcome('')).toBe(false);
+  });
+});
+
+describe('reportIncompleteSweep', () => {
+  it('invokes log-harness-bug.js with the outcome in the symptom text, no --file', () => {
+    const run = vi.fn();
+    const ok = reportIncompleteSweep('cancelled', { run });
+    expect(ok).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    const [cmd, args] = run.mock.calls[0];
+    expect(cmd).toBe('node');
+    expect(args).toEqual(expect.arrayContaining(['--severity', 'high']));
+    expect(args).not.toEqual(expect.arrayContaining(['--file']));
+    expect(args.some((a) => typeof a === 'string' && a.includes("outcome='cancelled'"))).toBe(true);
+  });
+
+  it('returns false (non-fatal) when the report call itself fails', () => {
+    const run = vi.fn(() => { throw new Error('network blip'); });
+    expect(reportIncompleteSweep('cancelled', { run })).toBe(false);
   });
 });
