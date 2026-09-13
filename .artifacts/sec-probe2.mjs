@@ -1,0 +1,10 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const {data:d,error:e} = await sb.from('chairman_decisions').select('*').eq('id','6cb60a30-93d4-49a3-83b4-8e1ba1d49dd2').maybeSingle();
+console.log('DECISION err=',e?.message);
+if(d) console.log(JSON.stringify({id:d.id,status:d.status,decision:d.decision,created_at:d.created_at,responded_at:d.responded_at,question:(d.question||'').slice(0,120)},null,1));
+const {data:a} = await sb.from('leo_feature_flag_approvals').select('*').limit(1);
+console.log('\nAPPROVALS COLUMNS:', a&&a[0]?Object.keys(a[0]).join(', '):'(none)');
+const {data:all} = await sb.from('leo_feature_flag_approvals').select('flag_key,transition_type,status,approvals_received,required_approvals,created_at');
+console.log('ALL APPROVAL ROWS:'); console.table(all||[]);
