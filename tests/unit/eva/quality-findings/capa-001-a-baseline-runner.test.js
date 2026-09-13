@@ -328,8 +328,17 @@ describe('validateDeploymentUrl — SSRF/trust-boundary guard (SECURITY sub-agen
     }
   });
 
+  it('rejects IPv4-mapped IPv6 loopback, IPv6 link-local/unique-local, and IPv4 carrier-grade NAT (/ship adversarial review, closed gaps)', () => {
+    for (const host of ['[::ffff:127.0.0.1]', '[fe80::1]', '[fd00::1]', '[fc00::1]', '100.64.0.1', '100.100.0.1']) {
+      expect(() => validateDeploymentUrl(`https://${host}/`), host).toThrow(/loopback\/private\/link-local/);
+    }
+  });
+
   it('does not reject a normal public IP or domain that merely starts with a similar-looking octet', () => {
     expect(() => validateDeploymentUrl('https://172.99.0.1/')).not.toThrow();
     expect(() => validateDeploymentUrl('https://1.2.3.4/')).not.toThrow();
+    // 100.63.x/100.128.x sit just outside the 100.64.0.0/10 CGNAT range.
+    expect(() => validateDeploymentUrl('https://100.63.0.1/')).not.toThrow();
+    expect(() => validateDeploymentUrl('https://100.128.0.1/')).not.toThrow();
   });
 });

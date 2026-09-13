@@ -65,7 +65,15 @@ export function parseArgs(argv) {
 // Reject anything that isn't a plausible public https URL before either.
 // Note: URL#hostname wraps IPv6 literals in brackets (new URL('https://[::1]/').hostname
 // === '[::1]'), so the loopback/private patterns below must match the bracketed form too.
-const PRIVATE_OR_LOOPBACK_HOST_RE = /^(localhost|127\.|0\.0\.0\.0|\[::1\]$|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/i;
+// Adversarial /ship review (WARNING): the original pattern only blocked the
+// exact literal '[::1]' for IPv6, missing the IPv4-mapped form ('[::ffff:
+// 127.0.0.1]'), link-local ('[fe80::...]'), unique-local ('[fc00::/7]'), and
+// IPv4 carrier-grade NAT (100.64.0.0/10) -- all of which reach internal/
+// loopback-equivalent targets. Closing these (host-string matching only; a
+// hostname that RESOLVES to one of these ranges at request time, i.e.
+// DNS-rebinding, cannot be closed by any string filter and is a known,
+// accepted residual -- see VALIDATION sub-agent finding, VERIFY phase).
+const PRIVATE_OR_LOOPBACK_HOST_RE = /^(localhost|127\.|0\.0\.0\.0|\[::1\]$|\[::ffff:|\[fe80:|\[f[cd][0-9a-f]{0,2}:|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/i;
 export function validateDeploymentUrl(rawUrl) {
   let parsed;
   try {
@@ -278,6 +286,13 @@ async function runLighthouseCheck(ventureId, url) {
   }
 
   try {
+    // Adversarial /ship review (WARNING): loadLighthouseThresholds() and
+    // buildLighthouseFindings() used to run OUTSIDE this catch -- an uncaught
+    // throw there (e.g. a missing/malformed lighthouserc.json) would propagate
+    // out of runLighthouseCheck() entirely and out of main() uncaught, losing
+    // the accessibility/responsive findings already collected earlier in the
+    // same run even though they succeeded. runLighthouseCheck() must never
+    // throw; every internal failure degrades to a collect-failed finding.
     let runnerResult;
     try {
       runnerResult = await lighthouse(url, {
@@ -294,8 +309,12 @@ async function runLighthouseCheck(ventureId, url) {
       return buildLighthouseFailureFinding(ventureId, url, runId, 'no-report', 'lighthouse() returned no lhr');
     }
 
-    const thresholds = loadLighthouseThresholds();
-    return buildLighthouseFindings(ventureId, url, runId, runnerResult.lhr, thresholds);
+    try {
+      const thresholds = loadLighthouseThresholds();
+      return buildLighthouseFindings(ventureId, url, runId, runnerResult.lhr, thresholds);
+    } catch (err) {
+      return buildLighthouseFailureFinding(ventureId, url, runId, 'threshold-eval-failed', err.message || err);
+    }
   } finally {
     // chrome-launcher's teardown can itself throw (the exact EPERM this fix
     // routes around) -- never let that discard a result already returned above.
