@@ -836,7 +836,30 @@ async function main() {
       replyToSignalRows = rs || [];
     } catch { /* fail-open: falls back to oldest-batch-only behavior (today's behavior) */ }
   }
-  const messages = mergePriorityExempt([...priorityRows, ...replyToSignalRows], oldestBatch || []);
+
+  // QF-20260912-269: a ruling that reverses in-flight work rides the same oldest-5 batch as
+  // every other coordinator_request row, so it can sit behind older unread rows for as long as
+  // those rows go unacked. payload.urgency='interrupt' (documented in
+  // docs/protocol/coordinator-adam-comms.md beside fence_notice) gets the SAME uncapped-fetch
+  // treatment as PRIORITY_EXEMPT_DIRECTIVE_KINDS — but keyed on a payload VALUE, not a kind
+  // membership list, since urgency is a per-message authoring decision, not a property of the
+  // kind itself. Separate query for the same reason priorityRows/replyToSignalRows are separate:
+  // the condition is a distinct JSONB check, not a kind-membership check.
+  let urgentRows = [];
+  if (!tableErr) {
+    try {
+      const { data: ur } = await supabase
+        .from('session_coordination')
+        .select(SELECT_COLS)
+        .eq('target_session', sessionId)
+        .is('read_at', null)
+        .eq('payload->>urgency', 'interrupt')
+        .order('created_at', { ascending: true })
+        .limit(5);
+      urgentRows = ur || [];
+    } catch { /* fail-open: falls back to oldest-batch-only behavior (today's behavior) */ }
+  }
+  const messages = mergePriorityExempt([...priorityRows, ...replyToSignalRows, ...urgentRows], oldestBatch || []);
 
   let emittedDirective = false;
 
@@ -884,9 +907,15 @@ async function main() {
       // FIRST-CLASS — relabel it (by payload.kind) so it never hides behind the generic 'INFO' banner.
       // Classification (deliver-not-consume) is already handled by the DIRECTIVE_KINDS branch in
       // classifyInboxMessage above (chairman_directive is in the imported allowlist). This is render-only.
+      // QF-20260912-269: a ruling carrying payload.urgency='interrupt' is rendered with a red
+      // URGENT label ahead of its normal type label — render-only, same pattern as the
+      // chairman_directive relabel above (which takes precedence: a chairman directive is
+      // already unmissable by construction).
       const typeLabelFinal = (msg.payload && msg.payload.kind === 'chairman_directive')
         ? '★ CHAIRMAN DIRECTIVE' + (msg.payload.directive_id ? ' ' + msg.payload.directive_id : '')
-        : typeLabel;
+        : (msg.payload && msg.payload.urgency === 'interrupt')
+          ? '\x1b[31mURGENT\x1b[0m ' + typeLabel
+          : typeLabel;
 
       // Handle SET_IDENTITY: write per-session identity file for statusline integration
       if (msg.message_type === 'SET_IDENTITY' && msg.payload) {
@@ -1013,12 +1042,25 @@ async function main() {
   // (already fetched above, no extra query) rather than gating on isIdle/messages.length, since
   // the whole point is a seat whose directive-class row CANNOT reach it via the paths those
   // gates protect. Rate-limited to once per 5 min per session.
+  // QF-20260912-269: an unread interrupt row (already fetched above, uncapped, regardless of
+  // its position in the oldest-5 batch) gets a 2-minute cut instead of 15, and the nudge names
+  // its subject instead of the generic "1 directive row unread" — a ruling that reverses
+  // in-flight work is worth losing rework time over minutes, not the general 15-minute grace.
   if (!tableErr) {
-    const oldestDirectiveRow = findOldestUnreadDirectiveRow(oldestBatch || []);
-    const { blind, ageMinutes } = classifyToolActiveLaneBlind(oldestDirectiveRow);
-    if (blind && shouldPrintLaneBlindNudge(sessionId)) {
-      console.log(`\x1b[31m1 directive row unread for ${ageMinutes} min — run /checkin\x1b[0m`);
-      markLaneBlindNudgePrinted(sessionId);
+    const oldestUrgentRow = urgentRows[0] || null; // already ordered oldest-first by the query
+    if (oldestUrgentRow) {
+      const { blind, ageMinutes } = classifyToolActiveLaneBlind(oldestUrgentRow, { cutMinutes: 2 });
+      if (blind && shouldPrintLaneBlindNudge(sessionId)) {
+        console.log(`\x1b[31mURGENT row unread for ${ageMinutes} min: ${oldestUrgentRow.subject} — run /checkin\x1b[0m`);
+        markLaneBlindNudgePrinted(sessionId);
+      }
+    } else {
+      const oldestDirectiveRow = findOldestUnreadDirectiveRow(oldestBatch || []);
+      const { blind, ageMinutes } = classifyToolActiveLaneBlind(oldestDirectiveRow);
+      if (blind && shouldPrintLaneBlindNudge(sessionId)) {
+        console.log(`\x1b[31m1 directive row unread for ${ageMinutes} min — run /checkin\x1b[0m`);
+        markLaneBlindNudgePrinted(sessionId);
+      }
     }
   }
 

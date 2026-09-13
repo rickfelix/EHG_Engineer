@@ -170,6 +170,29 @@ leaves the worker nameless (named by the next cron pass), never breaking check-i
 3. **Acknowledged** — set when worker acts on the message (or auto-ack for non-actionable types)
 4. **Expired** — sweep cleans up messages past `expires_at`
 
+### Urgency classes (`payload.urgency`)
+
+`scripts/hooks/coordination-inbox.cjs` (the worker's PostToolUse inbox hook) fetches the
+oldest 5 unread rows per session by default — a directive-class row can sit behind older
+unread rows until the batch reaches it. Two independent mechanisms exempt a row from that
+cap, keyed on different fields:
+
+- **By kind** — `PRIORITY_EXEMPT_DIRECTIVE_KINDS` (`lib/fleet/worker-status.cjs`), currently
+  `['fence_notice']`. A kind in this list is always fetched uncapped, regardless of its
+  position in the oldest-5 window. (This precedent is documented in code comments only —
+  `scripts/hooks/coordination-inbox.cjs`'s `PRIORITY_EXEMPT_DIRECTIVE_KINDS` usage and
+  `lib/fleet/worker-status.cjs`'s declaration — not previously written up here.)
+- **By value** — `payload.urgency = 'interrupt'` (QF-20260912-269), for a message whose kind
+  is NOT permanently priority-exempt but whose specific instance needs the same treatment —
+  e.g. a coordinator ruling (`payload.kind='coordinator_request'`, `payload.topic='ruling'`)
+  that reverses in-flight work. Any row can carry this key; the coordinator decides at
+  authoring time whether a given message is urgent enough to set it. An interrupt row:
+  - is fetched uncapped (same mechanism as a `PRIORITY_EXEMPT_DIRECTIVE_KINDS` kind), merged
+    ahead of the oldest-5 batch;
+  - renders with a red `URGENT` label ahead of its normal type label;
+  - drives the tool-active lane-blind nudge (see `classifyToolActiveLaneBlind`) at a 2-minute
+    cut instead of the default 15 minutes, naming the row's subject in the printed nudge.
+
 ## Coordinator Startup Flow
 
 When `/coordinator start` runs:

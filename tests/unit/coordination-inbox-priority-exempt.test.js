@@ -216,3 +216,32 @@ describe('the QF-20260904-748 acceptance scenario: a Solomon reply behind 5 olde
     expect(v.skip).toBe(false);
   });
 });
+
+describe('QF-20260912-269: payload.urgency=interrupt gets the same uncapped-fetch treatment as PRIORITY_EXEMPT_DIRECTIVE_KINDS', () => {
+  it('an interrupt row behind 6 older unread rows surfaces on the first run (mirrors the fence_notice starvation scenario)', () => {
+    // Mirrors "the actual starvation scenario" test above, but keyed on payload.urgency
+    // (a value, not a kind) rather than kind membership — a ruling reversing in-flight
+    // work can carry any coordinator_request-family kind.
+    const sixOlderRows = Array.from({ length: 6 }, (_, i) => ({ id: `old-${i}`, payload: { kind: 'coordinator_request' } }));
+    const urgentRuling = { id: 'ruling-urgent', payload: { kind: 'coordinator_request', topic: 'ruling', urgency: 'interrupt' } };
+    const merged = mergePriorityExempt([urgentRuling], sixOlderRows);
+    expect(merged[0].id).toBe('ruling-urgent');
+    expect(merged).toHaveLength(7);
+  });
+
+  it('a non-interrupt coordinator_request row behind 6 older unread rows is NOT surfaced early (existing oldest-5-cap behaviour, unchanged)', () => {
+    const sixOlderRows = Array.from({ length: 6 }, (_, i) => ({ id: `old-${i}`, payload: { kind: 'coordinator_request' } }));
+    // No priority rows fetched for this row (payload.urgency !== 'interrupt') — it would only
+    // reach `messages` once it ages into the oldest-5 window itself, same as before this QF.
+    const merged = mergePriorityExempt([], sixOlderRows);
+    expect(merged.map((r) => r.id)).toEqual(sixOlderRows.map((r) => r.id));
+  });
+
+  it('an interrupt row renders skip:false (classifyInboxMessage is unaffected by the new payload key — coordinator_request classification already applies)', () => {
+    const v = classifyInboxMessage(
+      { message_type: 'INFO', payload: { kind: 'coordinator_request', urgency: 'interrupt' } },
+      { twoWayOn: true, amAdam: false }
+    );
+    expect(v.skip).toBe(false);
+  });
+});
