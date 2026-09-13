@@ -5,7 +5,17 @@
 -- Live-verified that stage 15's metadata is currently EXACTLY {metrics,
 -- stage_timeout_ms} -- no gates key at all. A blind `UPDATE ... SET metadata = '{...}'`
 -- would silently destroy those two existing keys, so this migration uses jsonb_set
--- with create_missing=true to merge the new key in, leaving every other key untouched.
+-- to merge the new key in, leaving every other key untouched.
+--
+-- CORRECTED (first apply attempt was a silent no-op): jsonb_set's create_missing flag
+-- only creates the FINAL element of a path -- it does NOT create missing INTERMEDIATE
+-- path elements. Since metadata has no 'gates' key at all, jsonb_set(metadata,
+-- '{gates,exit_observe}', ..., true) cannot traverse into a non-existent 'gates'
+-- object and returns metadata UNCHANGED (confirmed live: the UPDATE reported 1 row
+-- affected via a touched updated_at, but metadata was byte-identical after). The fix
+-- sets the 'gates' key itself (the immediate, always-present child of metadata) to a
+-- freshly-built object, so create_missing=true applies to a path with no missing
+-- intermediate elements.
 --
 -- Observe-only: this writes to metadata.gates.exit_observe, never metadata.gates.exit
 -- (the binding array). No stage-15 exit gate becomes binding as a result of this
@@ -22,8 +32,12 @@ BEGIN;
 UPDATE venture_stages
 SET metadata = jsonb_set(
   metadata,
-  '{gates,exit_observe}',
-  COALESCE(metadata->'gates'->'exit_observe', '[]'::jsonb) || '["design fidelity reviewed"]'::jsonb,
+  '{gates}',
+  COALESCE(metadata->'gates', '{}'::jsonb)
+    || jsonb_build_object(
+         'exit_observe',
+         COALESCE(metadata->'gates'->'exit_observe', '[]'::jsonb) || '["design fidelity reviewed"]'::jsonb
+       ),
   true
 )
 WHERE stage_number = 15
