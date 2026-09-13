@@ -171,6 +171,17 @@ describe('resolveTokenOutPath (QF-20260913-521)', () => {
     expect(resolveTokenOutPath(abs)).toBe(abs);
   });
 
+  // Adversarial review finding (CRITICAL): path.join(os.tmpdir(), arg) normalizes '..' segments,
+  // so a relative arg could otherwise escape os.tmpdir() entirely and land at an arbitrary path.
+  it('rejects a relative arg that escapes os.tmpdir() via ../ segments', () => {
+    expect(() => resolveTokenOutPath('../../etc/somewhere')).toThrow(/escapes os\.tmpdir\(\)/);
+  });
+
+  it('accepts a relative arg with a nested subdirectory that stays under os.tmpdir()', () => {
+    const p = resolveTokenOutPath('sub/dir/token');
+    expect(p).toBe(path.join(os.tmpdir(), 'sub', 'dir', 'token'));
+  });
+
   it('two calls with no arg never collide (random suffix)', () => {
     expect(resolveTokenOutPath(undefined)).not.toBe(resolveTokenOutPath(undefined));
   });

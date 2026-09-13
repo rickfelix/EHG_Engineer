@@ -202,11 +202,22 @@ async function readAuditLatestForPath(client, migrationPath) {
 // QF-20260913-521: --token-out's default location. Never inside the repo (mirrors the
 // .artifacts-is-untracked-not-ignored constraint the FIX SHAPE calls out) -- a relative value is
 // resolved against os.tmpdir(), not the CLI's cwd, which may be the repo root.
+//
+// Adversarial review finding (CRITICAL): path.join(os.tmpdir(), tokenOutArg) NORMALIZES '..'
+// segments, so a relative arg like '../../some/other/file' escaped os.tmpdir() entirely despite
+// this function's own doc comment promising confinement. Reject any relative arg that resolves
+// outside os.tmpdir() rather than silently following it there.
 export function resolveTokenOutPath(tokenOutArg) {
   if (!tokenOutArg || tokenOutArg === true) {
     return path.join(os.tmpdir(), `migration-apply-token-${crypto.randomBytes(8).toString('hex')}`);
   }
-  return path.isAbsolute(tokenOutArg) ? tokenOutArg : path.join(os.tmpdir(), tokenOutArg);
+  if (path.isAbsolute(tokenOutArg)) return tokenOutArg;
+  const resolved = path.join(os.tmpdir(), tokenOutArg);
+  const rel = path.relative(os.tmpdir(), resolved);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error(`--token-out: relative path "${tokenOutArg}" escapes os.tmpdir() (resolves to ${resolved})`);
+  }
+  return resolved;
 }
 
 // QF-20260913-521: --token-file takes precedence over the MIGRATION_APPLY_TOKEN env var when
@@ -245,7 +256,12 @@ async function issueTokenMode(args) {
   const wantsTokenOut = args?.flags?.has('token-out') || args?.values?.['token-out'];
   if (wantsTokenOut) {
     const outPath = resolveTokenOutPath(args.values['token-out']);
-    fs.writeFileSync(outPath, tokenValue, { mode: 0o600 });
+    // Adversarial review finding (CRITICAL, part 2): { mode: 0o600 } only applies when the file is
+    // newly CREATED -- if outPath already names an existing file, a plain 'w' write keeps that
+    // file's existing (possibly weaker) permission bits while overwriting its content. flag:'wx'
+    // refuses to write at all when the path already exists, so the secret is never silently placed
+    // under a pre-existing, more permissive file.
+    fs.writeFileSync(outPath, tokenValue, { mode: 0o600, flag: 'wx' });
     process.stdout.write(`MIGRATION_APPLY_TOKEN_FILE=${outPath}\n`);
     process.stderr.write(`[MIGRATION_APPLY_TOKEN_ISSUED] 1h TTL, single-use. Re-run with --prod-deploy --token-file=${outPath}\n`);
     return 0;
@@ -354,22 +370,31 @@ async function applyMode({ args, repoRoot }) {
   const tokenFilePath = args.values['token-file'];
   const tokenValue = resolveTokenValue(tokenFilePath, process.env.MIGRATION_APPLY_TOKEN);
   const isDelegated = extractDelegatedBy(sql) !== null;
-  const guards = isDelegated
-    ? await validateDelegatedApplyGuards({
-        flagPresent: prodDeploy,
-        tokenEnv: tokenValue,
-        sqlContent: sql,
-        client: auditClient,
-        env: process.env,
-      })
-    : await validateProdDeployGuards({
-        flagPresent: prodDeploy,
-        tokenEnv: tokenValue,
-        sqlContent: sql,
-        gitUserEmail: gitUserEmail(),
-        client: auditClient,
-      });
-  consumeTokenFile(tokenFilePath);
+  // Adversarial review finding (WARNING): checkTokenFactor's `await client.query(...)` (inside both
+  // guard functions below) is unguarded -- a DB hiccup throws straight past a bare cleanup call,
+  // leaving the token file on disk despite this file's own "regardless of outcome" promise. A
+  // try/finally makes consumeTokenFile run even when the guard computation itself throws; the
+  // error still propagates afterward (existing top-level fatal-error behavior is unchanged).
+  let guards;
+  try {
+    guards = isDelegated
+      ? await validateDelegatedApplyGuards({
+          flagPresent: prodDeploy,
+          tokenEnv: tokenValue,
+          sqlContent: sql,
+          client: auditClient,
+          env: process.env,
+        })
+      : await validateProdDeployGuards({
+          flagPresent: prodDeploy,
+          tokenEnv: tokenValue,
+          sqlContent: sql,
+          gitUserEmail: gitUserEmail(),
+          client: auditClient,
+        });
+  } finally {
+    consumeTokenFile(tokenFilePath);
+  }
   if (!guards.ok) {
     emitMarker(`[MIGRATION_APPLY_PROD_FAIL_GUARDS=${guards.factor}]`);
     process.stderr.write(`Guard rejection: ${guards.reason}\n`);
