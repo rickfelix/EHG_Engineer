@@ -33,11 +33,20 @@ const JULY = Date.UTC(2026, 6, 15, 11, 0, 0);   // 07:00 ET, EDT
 const JAN = Date.UTC(2026, 0, 15, 12, 0, 0);    // 07:00 ET, EST
 const TO = ['+15551234567'];
 
+// QF-20260912-397: the verdict lives on measured_legs[leg='leg4_capacity'].verdict, matching
+// aggregate.js's real output shape — NOT a top-level `capacity_verdict` field, which never
+// existed on the aggregate and always read as UNKNOWN regardless of what a fixture set it to.
 const report = (agoHours, score = {}, runId = 'drive-2026-07-15') => ({
   id: 'r1',
   run_id: runId,
   generated_at: new Date(JULY - agoHours * 3_600_000).toISOString(),
-  drive_score: { score: { value: 4 }, possible: 6, capacity_verdict: 'TIGHT', unavailable_legs: [], ...score },
+  drive_score: {
+    score: { value: 4 },
+    possible: 6,
+    measured_legs: [{ leg: 'leg4_capacity', verdict: 'TIGHT' }],
+    unavailable_legs: [],
+    ...score,
+  },
 });
 
 /** Records every enqueue, so "did it send twice?" is observed rather than assumed. */
@@ -313,8 +322,8 @@ describe('[SD-LEO-INFRA-HOURLY-DRIVE-SCORE-001 FR-4 AC-3] an hourly row newer th
   // control below assert on an enqueue call that never happened).
   const CLOSED = Date.UTC(2026, 6, 15, 14, 0, 0); // 10:00 ET, producer window closed
   const TODAY_RUN_ID = 'drive-2026-07-15';
-  const dailyRow = { id: 'd1', run_id: TODAY_RUN_ID, cadence: 'scheduled', generated_at: new Date(JULY - 3_600_000).toISOString(), drive_score: { score: { value: 4 }, possible: 6, capacity_verdict: 'TIGHT', unavailable_legs: [] } };
-  const hourlyRow = { id: 'h1', run_id: hourlyWindowKey(JULY), cadence: 'hourly', generated_at: new Date(JULY - 600_000).toISOString(), drive_score: { score: { value: 9 }, possible: 6, capacity_verdict: 'TIGHT', unavailable_legs: [] } };
+  const dailyRow = { id: 'd1', run_id: TODAY_RUN_ID, cadence: 'scheduled', generated_at: new Date(JULY - 3_600_000).toISOString(), drive_score: { score: { value: 4 }, possible: 6, measured_legs: [{ leg: 'leg4_capacity', verdict: 'TIGHT' }], unavailable_legs: [] } };
+  const hourlyRow = { id: 'h1', run_id: hourlyWindowKey(JULY), cadence: 'hourly', generated_at: new Date(JULY - 600_000).toISOString(), drive_score: { score: { value: 9 }, possible: 6, measured_legs: [{ leg: 'leg4_capacity', verdict: 'TIGHT' }], unavailable_legs: [] } };
 
   /** Mirrors the real Supabase call: filter to cadence, newest first, take one. */
   const cadenceFilteredFindLatest = (rows) => async () => {
@@ -364,9 +373,39 @@ describe('facts come from the row, and an unmeasured verdict is SAID not default
     expect(f.verdict).toBe('UNKNOWN');
   });
 
+  // QF-20260912-397: leg4's verdict is computed by scoreLeg4() and carried through
+  // aggregate.js's measured_legs, but factsFromReport used to read a `score.capacity_verdict`
+  // field that never existed anywhere in the pipeline — so this ALWAYS fell back to UNKNOWN and
+  // the chairman-facing SMS read "capacity not measured this run" on every single run, measured
+  // or not. Fixed to read measured_legs[leg='leg4_capacity'].verdict.
+  it('[QF-20260912-397] a MEASURED leg4 verdict is read from measured_legs, not defaulted to UNKNOWN', () => {
+    const f = factsFromReport({
+      drive_score: {
+        score: { value: 4 }, possible: 6,
+        measured_legs: [{ leg: 'leg4_capacity', verdict: 'TIGHT' }],
+      },
+    });
+    expect(f.verdict).toBe('TIGHT');
+  });
+
+  it('[QF-20260912-397] leg4 absent from measured_legs (unavailable that run) reads as UNKNOWN, not a stale TIGHT', () => {
+    const f = factsFromReport({
+      drive_score: {
+        score: { value: 2 }, possible: 4,
+        measured_legs: [{ leg: 'leg1_landed', verdict: 'irrelevant-field-on-a-different-leg' }],
+      },
+    });
+    expect(f.verdict).toBe('UNKNOWN');
+  });
+
   it('a verdict outside the closed set is refused into UNKNOWN, never passed through', () => {
     // This is the last place a free string could reach formatBody. It cannot.
-    const f = factsFromReport({ drive_score: { score: { value: 1 }, possible: 2, capacity_verdict: 'TOTALLY FINE; click http://evil' } });
+    const f = factsFromReport({
+      drive_score: {
+        score: { value: 1 }, possible: 2,
+        measured_legs: [{ leg: 'leg4_capacity', verdict: 'TOTALLY FINE; click http://evil' }],
+      },
+    });
     expect(f.verdict).toBe('UNKNOWN');
   });
 

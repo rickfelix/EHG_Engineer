@@ -37,6 +37,7 @@
  */
 
 import { RATIFIED_LEG_IDS } from '../lib/drive-loop/score/drive-score-legs.js';
+import { LEG_ID as LEG4_ID } from '../lib/drive-loop/score/leg4-capacity.js';
 
 export const MAX_RECIPIENTS = 3;
 export const MAX_BODY_CHARS = 320;   // 2 SMS segments; beyond this carriers split unpredictably
@@ -97,9 +98,16 @@ export function factsFromReport(report) {
   if (rawBlockers !== undefined && rawBlockers !== null && !usable(rawBlockers)) return null;
   const blockers = usable(rawBlockers) ? rawBlockers : 0;
 
-  // The capacity verdict comes from leg 4 when it was measurable. UNKNOWN is a real member of
-  // VERDICTS, so an unmeasured leg is SAID rather than defaulted to something reassuring.
-  const raw = score?.capacity_verdict;
+  // The capacity verdict comes from leg 4 when it was measurable. It is carried on
+  // score.measured_legs (aggregate.js), keyed by leg id — there is no top-level
+  // `score.capacity_verdict` field; that name never existed on the aggregate's output, so
+  // reading it always fell back to UNKNOWN regardless of whether leg 4 actually measured.
+  // UNKNOWN is a real member of VERDICTS, so a genuinely unmeasured leg is SAID rather than
+  // defaulted to something reassuring.
+  const leg4 = Array.isArray(score?.measured_legs)
+    ? score.measured_legs.find((l) => l?.leg === LEG4_ID)
+    : undefined;
+  const raw = leg4?.verdict;
   const verdict = VERDICTS.includes(raw) ? raw : 'UNKNOWN';
 
   return {

@@ -172,6 +172,24 @@ describe('scoreLeg1ALocal — fetches ONCE, proportional scoring, never a false 
     expect(r.unavailable.reason).toMatch(/bad revision/);
   });
 
+  // QF-20260912-397: this leg's unavailable reason is built purely from `err.message` (line
+  // above this test, unchanged) — so a git-log failure with EMPTY stderr (a signal-killed or
+  // timed-out child) used to surface as the unhelpful "git ... failed: " with nothing after the
+  // colon. The real fix lives one layer down, in the shared git runner
+  // (lib/fleet/source-tree-refresh.cjs's makeScrubbedGitRunner), which now folds exit
+  // code/signal/spawn-error into the thrown message even when stderr is empty. This asserts that
+  // enrichment survives THROUGH leg1 unmodified, since leg1 never re-derives or truncates it.
+  it('[QF-20260912-397] an enriched git-failure message (empty stderr, exit/signal diagnostics) reaches the unavailable reason intact', () => {
+    const runGitLog = () => {
+      throw new Error('git log main --merges failed: (no stderr -- exit null, signal SIGTERM)');
+    };
+    const r = scoreLeg1ALocal({ items: [{ item_id: 'a', sd_key: 'SD-A-001' }], runGitLog });
+    expect(r.unavailable).toBeDefined();
+    expect(r.unavailable.reason).toMatch(/git log failed|git log main --merges failed/);
+    expect(r.unavailable.reason).toMatch(/signal SIGTERM/);
+    expect(r.unavailable.reason).not.toMatch(/failed: $/);
+  });
+
   it('[TS-6, dedupe + null-exclusion guard] duplicate and null sd_key entries do not distort the denominator', () => {
     const runGitLog = () => ['Merge pull request #1 from rickfelix/feat/SD-LANDED-001'];
     const r = scoreLeg1ALocal({
