@@ -1,0 +1,10 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await sb.from('sub_agent_execution_results').select('metadata').eq('id','1a24f0c5-8c38-488e-9504-1a9b6260ef4b').maybeSingle();
+const f = data.metadata.findings || [];
+console.log('findings persisted:', f.length);
+for (const x of f) console.log(`  ${String(x.id).padEnd(14)} ${String(x.severity).padEnd(7)} evidence=${(x.evidence||'').length} chars  status="${String(x.status).slice(0,60)}"`);
+console.log('live_measurements:', JSON.stringify(data.metadata.live_measurements));
+console.log('code_reread entries:', (data.metadata.code_reread||[]).length);

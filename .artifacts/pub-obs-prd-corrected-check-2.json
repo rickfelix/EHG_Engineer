@@ -1,0 +1,384 @@
+{
+  "executive_summary": "venture_channel_publish_ledger rows are written at publish time with outcome defaulted to 'unknown' and nothing ever updates them: recordPublishOutcome/evaluateGraduation (lib/marketing/autonomy-gate.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "observeOutcome core join + classification, with a durable dispatch-key fix in publisher/index.js",
+      "priority": "critical",
+      "description": "New lib/marketing/observer/observe-outcome.js exports observeOutcome({supabase, correlationId, mode}). It reads the venture_channel_publish_ledger row by correlation_id, then joins campaign_content on campaign_content.idempotency_key = ledger.correlation_id (both are the identical `${ventureId}:${content.id}:${platform}:<ts>` string built once in lib/marketing/publisher/index.js:39 and reused for both writes -- confirmed by direct read, no new correlation scheme). This recovers campaign_content.external_post_id and platform, which the ledger itself never stores. If the join yields no campaign_content row, or external_post_id is null (publish failed before a post existed), classify 'unmeasurable' rather than 'unknown' -- the artifact needed to ever measure this row does not exist and never will. Additionally, a literal `dry-run-*` sentinel value in campaign_content.external_post_id (emitted by both adapters in dry-run mode) must be rejected the same as a null external_post_id -- classify unmeasurable, never treat the sentinel as a real post id. campaign_content row existence alone does not prove a successful publish: the write is guarded by `if (result.success && campaignId)` in publisher/index.js, but campaign_content is ALSO written ungated by content-generator.js, so external_post_id must be checked non-null and non-sentinel, not row presence. CRITICAL FIX REQUIRED IN lib/marketing/publisher/index.js (confirmed root cause, not a workaround): publish() currently rebuilds a fresh timestamp-keyed idempotencyKey on every call and uses that SAME local variable both as the correlationId passed INTO checkPublishAuthorization and as the key for campaign_content's own dedup-check/upsert. checkPublishAuthorization's 'already accepted' branch (autonomy-gate.js:398-405) looks up the ledger row by (venture_id, channel_type, content_ref) and returns the STORED historical correlation_id from whenever that row was originally proposed/accepted -- which differs from the freshly-built key on any attempt after the first. THE FIX: after authCheck resolves with allowed:true, publisher/index.js must use `authCheck.correlationId` (never its own locally-rebuilt idempotencyKey) as the key for both the campaign_content dedup SELECT (:69-70) and the final upsert (:179-180). This makes campaign_content.idempotency_key durably equal to venture_channel_publish_ledger.correlation_id for a given decision regardless of how many propose/deny/approve attempts preceded the real dispatch -- the actual fix the observer's join depends on. The locally-built idempotencyKey remains the value SEEDED into checkPublishAuthorization's correlationId parameter for a brand-new (never-before-seen) propose, which is unaffected.",
+      "acceptance_criteria": [
+        "observeOutcome({correlationId}) for a ledger row with a matching campaign_content row returns the platform and external_post_id recovered via the idempotency_key join",
+        "observeOutcome for a ledger row with no matching campaign_content row (or a null external_post_id) returns outcome='unmeasurable', never 'unknown' and never a guess",
+        "A campaign_content row whose external_post_id is null or a literal dry-run-* sentinel classifies unmeasurable, never shipped_clean/reverted/caused_rework",
+        "publisher/index.js's campaign_content dedup-check and final upsert both key on authCheck.correlationId, never on the function-local freshly-built idempotencyKey, once authCheck has resolved",
+        "A real two-attempt approval-gated publish sequence (attempt 1 denied/pending, chairman approves, attempt 2 succeeds) yields a NON-NULL external_post_id when joined via observeOutcome -- proven by an integration test driving the actual publish()/checkPublishAuthorization() sequence, never a hand-seeded fixture that encodes the premise instead of testing it"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Bluesky adapter post-lookup",
+      "priority": "high",
+      "description": "lib/marketing/publisher/adapters/bluesky.js (currently only publish()/authenticate(), confirmed by direct read -- no lookup capability exists today) gains getPostRecord(postUri) using com.atproto.repo.getRecord (or app.bsky.feed.getPostThread for reply/engagement state), returning {exists, deletedOrErrored, raw}. Reused fetch/session pattern already in the file (:38, :74). Testability: add `options.fetchImpl` (default global fetch) to the BlueskyAdapter constructor, consistent with its existing options pattern -- gives tests a clean seam without a global.fetch stub.",
+      "acceptance_criteria": [
+        "A mocked 200 response with a valid record classifies exists=true",
+        "A mocked 404/tombstone response classifies deletedOrErrored=true",
+        "A mocked 500 or network-error response returns neither exists nor deletedOrErrored (FR-7 transient case), never thrown uncaught"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "X adapter post-lookup",
+      "priority": "high",
+      "description": "lib/marketing/publisher/adapters/x.js (currently only publish(), confirmed by direct read) gains getTweet(tweetId) using GET https://api.twitter.com/2/tweets/:id, returning {exists, deletedOrErrored, raw}. X API access is Basic-tier (15K reads/month budget) -- the scheduled step (FR-4) must batch/backoff rather than poll unboundedly, and treat 429 as a transient failure (stays unknown), never a terminal outcome. Testability: add `options.fetchImpl` (default global fetch) to the XAdapter constructor, same seam as Bluesky. Budget: X Basic-tier is 15K reads/month (TR-4) -- the scheduled step batches/backs off, never polls unboundedly.",
+      "acceptance_criteria": [
+        "A mocked 200 response with a valid tweet classifies exists=true",
+        "A mocked 404 response classifies deletedOrErrored=true",
+        "A mocked 429/500/network-error response returns neither exists nor deletedOrErrored (FR-7 transient case, stays unknown, never a terminal outcome)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Scheduled observer step (never called from publish())",
+      "priority": "critical",
+      "description": "New scripts/cron/publish-outcome-observer.mjs following this repo's established scheduled-job convention: parseArgs/main(argv,deps)/--once/--dry-run/Windows-safe gracefulExit, a matching .github/workflows/publish-outcome-observer-cron.yml (schedule: + workflow_dispatch), lib/machinery-class/armed-registration.js registerArmedMachinery, and lib/periodic-liveness/stamp-last-fired.js -- NOT the lib/eva/workers/ BaseWorker/WorkerScheduler setInterval pattern (wrong shape, does not survive process restarts). It selects ledger rows still outcome='unknown' whose created_at is inside a fixed observation window, calls observeOutcome per row, then calls recordPublishOutcome({correlationId, outcome, outcomeRef}) -- the ledger's own existing rule (autonomy-gate.js comment at :440-ish / confirmed by direct read) that recordPublishOutcome is never called from publish() itself. This scheduled step SUPERSEDES the still-owed inline recordPublishOutcome() call from the dependency SD (SD-LEO-INFRA-DEMAND-ENGINE-FAIL-001 shipped FR-3 known-incomplete: content-pipeline.js / owned-audience-content-loop.js still owe an inline call). That inline call must NOT be built -- it is the self-report anti-pattern the ledger docstring itself forbids, and building both would create two conflicting writers of the same row. VISIBILITY (Blocker 4): live measurement at PLAN time found venture_channel_publish_ledger has 3 rows, ALL decision='pending'/outcome='unknown', and campaign_content has 0 rows -- the observer's real-world join has nothing to act on yet. The scheduled step's main() must return/report rows_selected, rows_joined, and rows_unmeasurable counts in its summary object (repo convention: main(argv, deps) returns {exitCode, action, summary}) so a 0/0 run reads as 'ran, nothing to do' rather than silently looking wired when it is not.",
+      "acceptance_criteria": [
+        "Running the script twice against the same window is idempotent: the second run changes zero rows (keyed on correlation_id, matching the ledger's own UNIQUE(correlation_id) constraint)",
+        "The script never runs from inside publisher/index.js publish() -- verified by grep showing no import of the observer module in that file",
+        "main()'s returned summary includes rows_selected/rows_joined/rows_unmeasurable counters, asserted directly by the wiring test"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Mode-aware outcome recording -- net-new, not a reuse of an existing pattern",
+      "priority": "high",
+      "description": "VALIDATION (LEAD phase, sub-agent evidence 8057d0a8) measured that execution_mode is ALREADY APPLIED in the live schema (with mock_run_id; all 3 current ledger rows are execution_mode='live') -- the prior premise that this column was 'chairman-gated, not yet applied' is FALSE, and evaluateGraduation's existing 42703-fallback branch is now dead code (left in place, not removed by this SD -- out of scope to touch). The REAL gap validation found: recordPublishOutcome (lib/marketing/autonomy-gate.js:469) does a bare `.eq('correlation_id')` update with NO execution_mode filter at all -- a mock-mode outcome as written today WOULD silently overwrite a live row's outcome. This SD must ADD an execution_mode-scoped predicate to that update (match the row's own recorded execution_mode, never cross-write). evaluateGraduation (:497) is only partially mode-aware: it currently BREAKS the streak when it encounters a mock-mode row rather than filtering candidate rows by mode up front -- this SD replaces that behavior with an explicit mode filter on evaluateGraduation's SELECT (:509), so a mock-mode call only ever considers mock-mode rows and a live-mode call only ever considers live-mode rows. This is a design decision made explicitly here, not left ambiguous.",
+      "acceptance_criteria": [
+        "recordPublishOutcome's UPDATE includes an execution_mode predicate matching the row being recorded (net-new code this SD -- today's implementation has none)",
+        "evaluateGraduation's candidate-row SELECT filters by execution_mode up front; it no longer relies on breaking the streak when a mismatched-mode row is encountered",
+        "A mock-mode outcome recorded via the scheduled step never changes a live-mode row's outcome or clean_streak, verified directly (TS-3, TS-6)"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Widen the outcome domain safely: SQL CHECK, JS allowlist, AND the graduation streak-window query",
+      "priority": "high",
+      "description": "database/migrations/<date>_venture_channel_publish_ledger_outcome_unmeasurable.sql widens venture_channel_publish_ledger's outcome CHECK constraint from ('unknown','shipped_clean','reverted','caused_rework') to add 'unmeasurable', mirroring the sibling solomon_advice_outcome_ledger precedent (database/migrations/20260828_solomon_ledger_outcome_unmeasurable.sql) exactly: purely additive DROP+re-ADD of the same named constraint, no column added, no data rewritten. No 'rework' detector is invented -- direct reads of lib/marketing/ai/metrics-ingestor.js and lib/marketing/ai/variant-outcome-derivation.js confirmed neither reads or derives per-post rework/outcome state today (metrics-ingestor normalizes inbound aggregate engagement metrics; variant-outcome-derivation derives A/B success/failure from daily_rollups impression/conversion aggregates), so caused_rework is only ever set from an explicit, already-existing rework signal if one is later wired elsewhere -- this SD does not fabricate one. This SD does not remove or alter the existing 'caused_rework' CHECK value -- it remains a valid enum member -- but no code path in this SD produces it: caused_rework is explicitly declared UNREACHABLE this increment (no rework signal exists anywhere in the codebase, confirmed independently by both LEAD's direct read and VALIDATION's re-check of metrics-ingestor.js and variant-outcome-derivation.js). A future SD wires an actual rework signal before caused_rework is ever written by this pipeline. TWO ADDITIONAL FIXES REQUIRED, found by TESTING PLAN review (evidence 26462519), without which FR-6's own acceptance criterion passes green while the feature is broken: (1) recordPublishOutcome (autonomy-gate.js:470) hard-validates `['shipped_clean','reverted','caused_rework']` and THROWS on anything else -- widening only the SQL CHECK constraint means the FIRST call with outcome='unmeasurable' throws in JS before ever reaching the database. The JS allowlist must be widened to include 'unmeasurable' in the SAME change. (2) evaluateGraduation's streak-window query (autonomy-gate.js:509,523) uses `.neq('outcome','unknown')` to select candidate rows -- today 'unmeasurable' rows would newly ENTER that window (since they are not literally 'unknown'), where the loop's `else break` treats any non-shipped_clean row as a streak-breaker, silently demoting/resetting channels the moment an unmeasurable row appears. The query must exclude BOTH 'unknown' AND 'unmeasurable' from the streak window (e.g. `.not('outcome', 'in', '(unknown,unmeasurable)')`), so an unmeasurable row is invisible to the graduation safety valve exactly like an unknown row is today -- neither a clean win nor a streak-breaker.",
+      "acceptance_criteria": [
+        "The outcome CHECK constraint on venture_channel_publish_ledger accepts 'unmeasurable' after migration apply",
+        "No new heuristic 'rework' classifier is added by this SD; caused_rework is only ever produced by an existing, already-verified signal (none exists today, so it is not exercised by the new code path)",
+        "recordPublishOutcome accepts 'unmeasurable' without throwing (unit test, no live DB required)",
+        "Seeding an 'unmeasurable' row leaves clean_streak/autonomy_state identical to leaving that same row 'unknown' -- a direct regression test, since this is the graduation safety valve"
+      ]
+    },
+    {
+      "id": "FR-7",
+      "title": "Fixed observation window, never guess on an unreadable post",
+      "priority": "medium",
+      "description": "The observation window (config constant, default matching the SD's own success_metrics fixture expectations) bounds how long the scheduled step waits before finalizing an outcome for a row. If the window elapses and the platform lookup could not be completed (network/auth error, not a 404/deleted result), the row is left 'unknown' for the next run rather than coerced to any terminal outcome -- distinct from FR-1's 'unmeasurable' (permanently unobservable) case. A literal dry-run-* sentinel or null external_post_id is rejected immediately as unmeasurable (FR-1) BEFORE the fixed-window logic ever runs -- it is not a \"transient failure inside the window\" case.",
+      "acceptance_criteria": [
+        "A transient lookup failure inside the window leaves the row 'unknown', re-attempted on the next scheduled run",
+        "A row past the window with a confirmed-absent post is classified 'reverted', never left 'unknown' forever"
+      ]
+    },
+    {
+      "id": "FR-8",
+      "title": "Live-outcome proof is out of scope this increment; deliver and prove the mechanism in mock mode only",
+      "priority": "critical",
+      "description": "VALIDATION (LEAD phase) measured that AltifyAI -- the only venture this SD's spine names as its subject -- has ZERO rows across venture_channel_secrets, channel_budgets, venture_channel_publish_ledger, venture_channel_autonomy, and venture_demand_verdicts, AND is blocked by a recorded chairman ruling (ventures.metadata.outreach_ruling = BLOCKED, scope 'any outbound contact with a real human being', blocked_until 'S24 Launch Readiness PASS AND S25 Go Live PASS', with the 23->24 transition currently PARKED). Provisioning AltifyAI's channels and clearing that gate are both explicitly OUT OF SCOPE for this SD. As originally scoped, the SD's own success criteria and smoke-test step ('observe one AltifyAI post published in a prior run') had NO SUBJECT and could never be satisfied without either violating the outreach ruling's intent or silently assuming an interpretation of its scope that only the chairman can rule on. Per the chairman's own standing policy (2026-09-12: no real-customer outreach before go-live stage; mock first; Solomon plans the go-live sequencing), this SD resolves the question conservatively WITHOUT needing to escalate the interpretation: it proves the full mechanism (join, adapter lookups, mode-scoped recordPublishOutcome, evaluateGraduation invocation) end-to-end against a MOCK-mode fixture/test post it creates itself, and does not attempt to observe or act on any real AltifyAI (or other venture's) live post. A live-post-based proof remains a named, explicit external dependency on (a) AltifyAI provisioning and (b) the S24/S25 gate clearing -- tracked, not silently assumed, and not delivered by this SD.",
+      "acceptance_criteria": [
+        "evaluateGraduation runs at least once from a recorded MOCK-mode outcome produced by this SD's new scheduled path (replacing the SD-spine's original live-outcome criterion, which had no reachable subject)",
+        "No code path in this SD reads, writes, or otherwise acts on a real AltifyAI post or any other real, unprovisioned venture -- verified by the mock-mode fixture being self-contained test data, never a live query result",
+        "The live-outcome proof gap (AltifyAI provisioning + S24/S25 clearing) is recorded as a named external dependency in integration_operationalization, not silently dropped or assumed resolved"
+      ]
+    },
+    {
+      "id": "FR-9",
+      "title": "Bind 'channel portfolio' scope literally to {x, bluesky}",
+      "priority": "high",
+      "description": "VALIDATION measured that ventures.metadata.thesis.reached_how names SIX channel families (SEO/webmaster forums, Reddit, Slack/Discord, Facebook Groups, industry blogs, Twitter/LinkedIn), not the two this SD's spine assumed -- and Bluesky is not even among the six named families. Only two families (X/Twitter and, separately, Bluesky as an existing adapter) have any adapter in this codebase today. This SD binds its scope literally and exclusively to the publishable intersection: X and Bluesky. The other five reached_how families have zero adapter code and are explicitly OUT OF SCOPE -- to be covered by future, separate adapter SDs, never silently folded into this one's estimate.",
+      "acceptance_criteria": [
+        "Every reference to 'the AltifyAI thesis channel portfolio' or 'channel portfolio' elsewhere in this PRD and the SD spine is read as meaning exactly {x, bluesky} for delivery purposes",
+        "The five other reached_how families are named explicitly as out-of-scope in integration_operationalization.dependencies, not omitted"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Reuse, do not duplicate, existing patterns",
+      "description": "Scheduled-job shape from scripts/cron/*.mjs + .github/workflows/*-cron.yml + registerArmedMachinery + stamp-last-fired.js; execution_mode reads from ledger-execution-mode-probe.js's probe-and-degrade; idempotency/correlation join uses the exact string already built in publisher/index.js:39 -- no second correlation scheme."
+    },
+    {
+      "id": "TR-2",
+      "title": "Additive-only schema change",
+      "description": "FR-6's migration only widens an existing CHECK constraint (DROP + re-ADD, same constraint name). No new column, no NOT NULL change, no backfill of existing rows required for correctness (existing 'unknown' rows remain valid and are only reclassified on their next scheduled observation)."
+    },
+    {
+      "id": "TR-3",
+      "title": "Read-only platform access, no new send path",
+      "description": "Both adapter lookup methods (FR-2, FR-3) are read-only GETs against already-provisioned channel credentials -- no new stored secret, no new outbound send capability. SECURITY sub-agent reviews the observer's read scope at PLAN, matching the SD spine's stated security assessment."
+    },
+    {
+      "id": "TR-4",
+      "title": "X API Basic-tier read budget",
+      "description": "The scheduled step must operate within a 15K reads/month budget for X lookups -- batch reads, back off on 429, and never treat a rate-limit response as a terminal outcome."
+    },
+    {
+      "id": "TR-5",
+      "title": "No inline recordPublishOutcome call anywhere else",
+      "description": "This SD is the only writer of ledger outcomes going forward. The dependency SD's still-owed inline call (content-pipeline.js / owned-audience-content-loop.js) must not be built; this SD supersedes that residue."
+    },
+    {
+      "id": "TR-6",
+      "title": "publisher/index.js dispatch-key fix is the load-bearing change",
+      "description": "Nothing else in this SD can be verified against a real (non-hand-seeded) fixture until publisher/index.js uses authCheck.correlationId for the campaign_content dedup/upsert key (FR-1). Build and test this fix FIRST, before the observer module."
+    },
+    {
+      "id": "TR-7",
+      "title": "Adapter constructor DI seam",
+      "description": "Both BlueskyAdapter and XAdapter constructors gain an options.fetchImpl (default global fetch) parameter so unit tests inject a fake without a global.fetch stub -- consistent with the existing options/env-fallback pattern in both files."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "type": "integration",
+      "expected": "Driving the ACTUAL publish()/checkPublishAuthorization() sequence for a propose-and-approve channel (attempt 1: denied, writes a pending ledger row; simulate chairman approval; attempt 2: succeeds) yields, via observeOutcome, a NON-NULL external_post_id -- proving the join fires on the real fail-closed-default path, not just a hand-seeded fixture that assumes it",
+      "scenario": "Real two-attempt approval-gated publish yields a joinable post (Blocker 1)"
+    },
+    {
+      "id": "TS-2",
+      "type": "integration",
+      "expected": "Running the scheduled step twice against the same ledger rows changes zero rows on the second run",
+      "scenario": "Idempotent re-run"
+    },
+    {
+      "id": "TS-3",
+      "type": "integration",
+      "expected": "Injecting a mock-mode outcome updates only the mock-mode row (via recordPublishOutcome's new execution_mode predicate); evaluateGraduation's mode-scoped SELECT never returns that row for a live-mode call, so the live row's clean_streak and evaluateGraduation result are unaffected",
+      "scenario": "Mock-mode isolation"
+    },
+    {
+      "id": "TS-4",
+      "type": "unit",
+      "expected": "A ledger row with no joinable campaign_content row (or null external_post_id) is classified 'unmeasurable', never 'shipped_clean'/'reverted'/'caused_rework' and never left silently as 'unknown' forever -- additionally: given a real successful publish (via the same two-attempt sequence as TS-1), observeOutcome's unmeasurable classification count is 0 (a demonstrably-existing post must never classify unmeasurable; this specifically catches the case where FR-1's join silently fails and every row classifies unmeasurable, which would make TS-4 pass FOR THE WRONG REASON without this addition)",
+      "scenario": "Unmeasurable classification never guesses"
+    },
+    {
+      "id": "TS-5",
+      "type": "unit",
+      "expected": "A campaign_content row with external_post_id matching the literal dry-run-* sentinel pattern classifies unmeasurable, never shipped_clean",
+      "scenario": "Dry-run sentinel rejection"
+    },
+    {
+      "id": "TS-6",
+      "type": "unit",
+      "expected": "Two ledger rows with the same venture/channel but different execution_mode values: recording an outcome for the mock-mode row's correlation_id updates only that row; the live-mode row's outcome is untouched",
+      "scenario": "recordPublishOutcome's execution_mode predicate"
+    },
+    {
+      "id": "TS-7",
+      "type": "integration",
+      "expected": "Running the scheduled step end-to-end against a self-created mock-mode fixture causes evaluateGraduation to run successfully from a recorded mock outcome; no real AltifyAI (or other real venture) post is read, written, or otherwise touched by the test",
+      "scenario": "Mock-mode-only live proof (FR-8)"
+    },
+    {
+      "id": "TS-8",
+      "type": "unit",
+      "expected": "A mocked 500/network-error adapter lookup leaves the row 'unknown' (not reclassified), distinct from both the confirmed-absent (reverted) and no-artifact (unmeasurable) cases -- re-attempted on the next scheduled run",
+      "scenario": "FR-7's transient branch (the 'never guess' guarantee's third leg)"
+    },
+    {
+      "id": "TS-9",
+      "type": "unit",
+      "expected": "evaluateGraduation's clean_streak and autonomy_state are IDENTICAL whether a given row is 'unknown' or 'unmeasurable' -- neither value ever counts as a clean win or a streak-breaker",
+      "scenario": "'unmeasurable' does not regress the graduation safety valve (Blocker 3)"
+    },
+    {
+      "id": "TS-10",
+      "type": "unit",
+      "expected": "recordPublishOutcome({outcome:'unmeasurable', ...}) resolves normally; only genuinely invalid outcome strings still throw",
+      "scenario": "recordPublishOutcome accepts 'unmeasurable' without throwing (Blocker 2)"
+    },
+    {
+      "id": "TS-11",
+      "type": "unit",
+      "expected": "Running main() against a ledger with no joinable campaign_content rows returns a summary with rows_selected>0, rows_joined=0, rows_unmeasurable=rows_selected -- a 0-yield run is visible in the returned summary, not silent",
+      "scenario": "Scheduled step reports visibility counters on a zero-yield run (Blocker 4)"
+    }
+  ],
+  "acceptance_criteria": [
+    "observeOutcome exists, is called only by the scheduled step (never by publish()), and records shipped_clean, reverted, caused_rework, unmeasurable, or leaves unknown from the actual post state",
+    "recordPublishOutcome's update is scoped by execution_mode (net-new this SD) and evaluateGraduation's candidate SELECT filters by execution_mode up front: a mock outcome never touches a live row; live graduation is reachable only from live-mode outcomes",
+    "A live-capable observer implementation exists for exactly the publishable intersection {x, bluesky} (FR-9); the other five ventures.metadata.thesis.reached_how families have no adapter and are explicitly out of scope for this SD",
+    "evaluateGraduation has run at least once from a recorded MOCK-mode outcome produced by this new path (FR-8) -- a live-mode proof is a named external dependency (AltifyAI provisioning + S24/S25 gate clearing), not delivered by this SD",
+    "The outcome enum is widened to include 'unmeasurable' with no fabricated rework detector introduced",
+    "No code in this SD reads, writes, or otherwise acts on a real AltifyAI post or any other real, unprovisioned venture (FR-8)",
+    "The dependency SD's still-owed inline recordPublishOutcome call is not built anywhere; this SD's scheduled step is the only writer (TR-5)",
+    "publisher/index.js's campaign_content dedup/upsert keys on authCheck.correlationId, not a locally-rebuilt idempotency key (FR-1) -- proven by a real two-attempt approval-gated integration test, not a hand-seeded fixture",
+    "recordPublishOutcome accepts 'unmeasurable' in JS (not only the SQL CHECK), and evaluateGraduation's streak-window query excludes 'unmeasurable' exactly like 'unknown' (FR-6)",
+    "The scheduled step reports rows_selected/rows_joined/rows_unmeasurable so a zero-yield run is observable, not silently \"wired but dead\" (FR-4)"
+  ],
+  "risks": [
+    {
+      "risk": "Guessing an outcome when the platform lookup is ambiguous",
+      "severity": "medium",
+      "mitigation": "Fixed observation window (FR-7) plus a distinct 'unmeasurable' terminal state (FR-1/FR-6) for permanently-unobservable rows; transient failures stay 'unknown' for retry"
+    },
+    {
+      "risk": "A mock-mode outcome graduating a live channel",
+      "severity": "high",
+      "mitigation": "recordPublishOutcome's update is scoped by an execution_mode predicate (net-new this SD -- today's code has none); evaluateGraduation's candidate SELECT filters by execution_mode up front rather than relying on streak-break-on-mismatch behavior"
+    },
+    {
+      "risk": "Double-counting on scheduled step re-run",
+      "severity": "medium",
+      "mitigation": "Keyed on correlation_id (ledger's own UNIQUE constraint); FR-4/TS-2 verify idempotency directly"
+    },
+    {
+      "risk": "Adapter lookup rate limits or auth failures masking a real outcome as unmeasurable",
+      "severity": "medium",
+      "mitigation": "FR-7 distinguishes a transient lookup failure (stays 'unknown', retried) from a genuine absence-of-artifact case (only then 'unmeasurable')"
+    },
+    {
+      "risk": "AltifyAI has no live-provisioned rows and is blocked by a recorded outreach_ruling (BLOCKED until S24+S25 PASS, 23->24 currently PARKED)",
+      "severity": "high",
+      "mitigation": "This SD proves the mechanism in mock mode only (FR-8) and names live-post proof as an explicit external dependency, consistent with the chairman's standing mock-first / no-real-outreach-before-go-live policy -- avoids both a false completion claim and an unresolved outreach-ruling interpretation question"
+    },
+    {
+      "risk": "campaign_content rows are written ungated by content-generator.js, and both adapters emit literal dry-run-* sentinel postIds",
+      "severity": "medium",
+      "mitigation": "Row existence alone is never treated as proof of a successful publish; external_post_id must be non-null and non-sentinel before any classification proceeds (FR-1, TS-5)"
+    },
+    {
+      "risk": "The dependency SD's content-pipeline.js / owned-audience-content-loop.js still owe an inline recordPublishOutcome call (self-report anti-pattern the ledger docstring forbids)",
+      "severity": "medium",
+      "mitigation": "This SD explicitly supersedes that residue (TR-5); the inline call must not be built, avoiding two conflicting writers of the same ledger row"
+    },
+    {
+      "risk": "X API Basic-tier budget (15K reads/month) throttles the scheduled poll at scale",
+      "severity": "low",
+      "mitigation": "Batch reads and back off on 429 in the scheduled step (TR-4); a rate-limit response stays unknown, never a terminal outcome"
+    },
+    {
+      "risk": "The ledger-to-campaign_content join is dead by construction on the approval-gated (fail-closed default) path today, because publisher/index.js's per-call idempotencyKey and checkPublishAuthorization's returned correlationId diverge after the first attempt",
+      "severity": "critical",
+      "mitigation": "Root-cause fix in publisher/index.js: use authCheck.correlationId (not the local per-call key) for the campaign_content dedup/upsert (FR-1); proven via a real two-attempt integration test, never a fixture that assumes the premise it should be testing (TS-1)"
+    },
+    {
+      "risk": "Widening the outcome CHECK constraint alone (without the JS allowlist and the graduation streak-window fix) ships a feature that throws on first use and/or silently demotes channels",
+      "severity": "critical",
+      "mitigation": "FR-6 now explicitly requires all three changes together (SQL CHECK, JS allowlist, streak-window exclusion) with dedicated regression tests (TS-9, TS-10)"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/marketing/autonomy-gate.js evaluateGraduation / venture_channel_autonomy graduation ladder",
+      "SD-LEO-INFRA-DEMAND-ENGINE-PART-001 (mock observer plugs into the same observeOutcome interface)"
+    ],
+    "dependencies": [
+      "campaign_content (external_post_id, idempotency_key)",
+      "venture_channel_publish_ledger (correlation_id, outcome)",
+      "Bluesky and X channel credentials already provisioned for publishing",
+      "execution_mode column is CONFIRMED APPLIED in the live schema (not staged) -- no migration dependency here; recordPublishOutcome/evaluateGraduation are modified to actually use it (FR-5)",
+      "content-pipeline.js / owned-audience-content-loop.js's owed inline recordPublishOutcome call (dependency SD residue) -- SUPERSEDED by this SD, must not be built (TR-5)",
+      "AltifyAI provisioning (venture_channel_secrets, channel_budgets, venture_channel_autonomy rows) and the S24/S25 outreach-ruling gate clearing -- NAMED EXTERNAL DEPENDENCY for a live-mode proof; out of scope for this SD's own delivery (FR-8)",
+      "Five of six ventures.metadata.thesis.reached_how channel families (SEO/webmaster forums, Reddit, Slack/Discord, Facebook Groups, industry blogs) have no adapter -- out of scope, future adapter SDs (FR-9)",
+      "lib/marketing/publisher/index.js's dedup-check/upsert dispatch key -- load-bearing prerequisite fixed by this SD (FR-1), not a pre-existing correct pattern to merely reuse"
+    ],
+    "data_contracts": [
+      "venture_channel_publish_ledger.outcome CHECK constraint widened to add 'unmeasurable' (FR-6)",
+      "No other schema change",
+      "No removal of the existing 'caused_rework' enum value; it remains valid but is unexercised by any code path in this SD (FR-6)",
+      "Test file locations (repo convention, verified by TESTING PLAN review): tests/unit/marketing/observe-outcome.test.js; tests/unit/cron/publish-outcome-observer.test.js + tests/unit/cron/publish-outcome-observer-wiring.test.js (static wiring test, exemplar tests/unit/cron/venture-ops-actuals-wiring.test.js); tests/integration/publish-outcome-observer.test.js (npm run test:integration, model on tests/integration/marketlens-owned-audience-loop.test.js, insertGuarded with CLASSIFICATION.FIXTURE + is_demo:true, describeDb from tests/helpers/db-available.js). Use .test.js, not .test.mjs."
+    ],
+    "runtime_config": [
+      "Cron schedule for scripts/cron/publish-outcome-observer.mjs (env-configurable window/interval, default matching TS-1's fixture expectations)",
+      "X read-budget knob (reads/month cap, batch size, backoff) for the scheduled step (TR-4)"
+    ],
+    "observability_rollout": [
+      "registerArmedMachinery + stamp-last-fired.js give the scheduled step a liveness signal consistent with the rest of the cron fleet",
+      "evaluateGraduation's first live-mode graduation from a recorded outcome (success_metrics) is directly observable via the ledger/autonomy tables"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A new read-only observer module joins the publish ledger to campaign_content to recover real post ids, looks posts up via two new adapter methods, and feeds the existing (currently unreachable) mode-aware graduation path through a scheduled job -- never through publish() itself. recordPublishOutcome/evaluateGraduation are modified (not reused as-is) to add the execution_mode scoping validation found missing. A durable dispatch-key fix in publisher/index.js is the load-bearing prerequisite the observer join depends on -- build and test it first.",
+    "components": [
+      {
+        "name": "lib/marketing/observer/observe-outcome.js",
+        "change": "NEW: observeOutcome({supabase, correlationId, mode}) join + classify"
+      },
+      {
+        "name": "lib/marketing/publisher/adapters/bluesky.js",
+        "change": "MODIFIED: add getPostRecord(postUri) read-only lookup"
+      },
+      {
+        "name": "lib/marketing/publisher/adapters/x.js",
+        "change": "MODIFIED: add getTweet(tweetId) read-only lookup"
+      },
+      {
+        "name": "scripts/cron/publish-outcome-observer.mjs",
+        "change": "NEW: scheduled step, parseArgs/main(argv,deps)/--once/--dry-run"
+      },
+      {
+        "name": ".github/workflows/publish-outcome-observer-cron.yml",
+        "change": "NEW: schedule: + workflow_dispatch"
+      },
+      {
+        "name": "database/migrations/<date>_venture_channel_publish_ledger_outcome_unmeasurable.sql",
+        "change": "NEW: widen outcome CHECK constraint"
+      },
+      {
+        "name": "lib/marketing/autonomy-gate.js",
+        "change": "UNCHANGED (recordPublishOutcome/evaluateGraduation already mode-aware); gains its first real external caller"
+      },
+      {
+        "name": "lib/marketing/autonomy-gate.js",
+        "change": "MODIFIED: recordPublishOutcome's update gains an execution_mode predicate; evaluateGraduation's candidate SELECT is filtered by execution_mode (replacing streak-break-on-mismatch). The now-dead 42703 fallback branch is left in place, not removed (out of scope)."
+      },
+      {
+        "name": "lib/marketing/publisher/index.js",
+        "change": "MODIFIED (load-bearing): dedup-check and campaign_content upsert key on authCheck.correlationId instead of the function-local per-call idempotencyKey, so the ledger-to-campaign_content join is real on the approval-gated path (FR-1, root cause fix)."
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Build the join+classify core first against a fixture, then the two adapter lookups, then wire the scheduled job, then the additive migration, verifying idempotency and mode isolation before touching evaluateGraduation's real call path.",
+    "steps": [
+      "FIRST: fix publisher/index.js to use authCheck.correlationId for the campaign_content dedup/upsert key, and prove it with a real two-attempt approval-gated integration test (FR-1, TS-1) -- nothing downstream can be verified against reality until this lands",
+      "Implement observeOutcome's ledger-to-campaign_content join and unmeasurable/unknown classification against a fixture (FR-1, TS-1, TS-4)",
+      "Add Bluesky getPostRecord and X getTweet read-only lookups (FR-2, FR-3)",
+      "Wire observeOutcome's live-post-state branch through the two new adapter lookups",
+      "Build scripts/cron/publish-outcome-observer.mjs + workflow + armed-registration + stamp-last-fired, calling recordPublishOutcome per row (FR-4, TS-2)",
+      "Verify mode isolation end-to-end (FR-5, TS-3)",
+      "Write and apply the additive outcome-enum migration (FR-6)",
+      "Run evaluateGraduation from a real recorded live outcome and confirm graduation reachability",
+      "Add an execution_mode predicate to recordPublishOutcome's update and a mode filter to evaluateGraduation's candidate SELECT (FR-5)",
+      "Prove the full pipeline end-to-end against a self-created mock-mode fixture only; do not attempt any real AltifyAI (or other real venture) post this increment (FR-8)",
+      "Confirm the dependency SD's owed inline recordPublishOutcome call is not built anywhere (TR-5)",
+      "Widen recordPublishOutcome's JS allowlist and evaluateGraduation's streak-window query together with the SQL migration (FR-6, TS-9, TS-10)",
+      "Add rows_selected/rows_joined/rows_unmeasurable counters to the scheduled step's summary (FR-4, TS-11)",
+      "Add options.fetchImpl DI seam to both adapter constructors; rewrite adapter tests against mocked HTTP status, never live APIs (TR-7)"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run the scheduled observer step against a self-created mock-mode fixture post",
+      "expected_outcome": "The ledger row gains a non-unknown outcome and outcomeRef"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run it a second time immediately",
+      "expected_outcome": "Zero rows change (idempotent)"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Confirm evaluateGraduation ran from the recorded mock outcome and no live row changed",
+      "expected_outcome": "Mock-mode-only graduation proof, no real AltifyAI post touched"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001"
+  }
+}

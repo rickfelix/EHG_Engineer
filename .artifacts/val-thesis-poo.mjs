@@ -1,0 +1,14 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: v } = await sb.from('ventures').select('metadata').ilike('name','AltifyAI').maybeSingle();
+const md = v.metadata;
+console.log('=== thesis.reached_how ===');
+console.log(JSON.stringify(md.thesis?.reached_how, null, 1));
+console.log('\n=== thesis.demand_test_plan ===');
+console.log(JSON.stringify(md.thesis?.demand_test_plan, null, 1)?.slice(0,800));
+console.log('\n=== outreach_ruling ===');
+console.log(JSON.stringify(md.outreach_ruling, null, 1)?.slice(0,1200));
+console.log('\n=== gating_decision ===');
+console.log(JSON.stringify(md.gating_decision, null, 1)?.slice(0,600));

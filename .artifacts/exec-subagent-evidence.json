@@ -1,0 +1,829 @@
+[
+  {
+    "id": "643e2ab4-df27-4b71-bd08-aa37d900f763",
+    "sub_agent_code": "SECURITY",
+    "phase": "EXEC",
+    "verdict": "CONDITIONAL_PASS",
+    "summary": null,
+    "detailed_analysis": "{}",
+    "critical_issues": [],
+    "warnings": [
+      {
+        "issue": "RLS table census did not run: RLS table census unavailable: Could not find the function public.get_tables_without_rls without parameters in the schema cache",
+        "severity": "HIGH",
+        "recommendation": "An unrun census is not a clean census. Restore the authoritative catalog query before treating RLS posture as verified."
+      },
+      {
+        "issue": "59 SECURITY DEFINER function(s) run as a BYPASSRLS owner and are EXECUTE-able by anon or authenticated",
+        "severity": "CRITICAL",
+        "functions": [
+          "governance.register_cross_schema_fk(p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_on_delete text) owner=postgres anon=true authenticated=true",
+          "governance.rls_governance_read_policy() owner=postgres anon=true authenticated=true",
+          "governance.rls_portfolio_venture_policy(p_venture_id uuid) owner=postgres anon=true authenticated=true",
+          "governance.rls_runtime_policy(p_venture_id uuid) owner=postgres anon=true authenticated=true",
+          "governance.trigger_validate_portfolio_to_governance() owner=postgres anon=true authenticated=true",
+          "governance.trigger_validate_runtime_to_governance() owner=postgres anon=true authenticated=true",
+          "governance.trigger_validate_runtime_to_portfolio() owner=postgres anon=true authenticated=true",
+          "governance.trigger_validate_to_portfolio_ventures() owner=postgres anon=true authenticated=true",
+          "governance.validate_cross_schema_ref(p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_ref_value uuid) owner=postgres anon=true authenticated=true",
+          "governance.validate_cross_schema_ref_text(p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_ref_value text) owner=postgres anon=true authenticated=true",
+          "portfolio.current_venture() owner=postgres anon=true authenticated=true",
+          "portfolio.has_venture_access(p_venture_id uuid) owner=postgres anon=true authenticated=true",
+          "portfolio.kill_switch(p_venture_id uuid, p_reason text, p_user_id uuid) owner=postgres anon=true authenticated=true",
+          "portfolio.log_kill_switch_event() owner=postgres anon=true authenticated=true",
+          "portfolio.reactivate_venture(p_venture_id uuid, p_reason text, p_user_id uuid) owner=postgres anon=true authenticated=true",
+          "public.advance_venture_stage(p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_transition_type text, p_rollback_provenance text) owner=postgres anon=false authenticated=true",
+          "public.advance_venture_to_stage(p_venture_id uuid, p_target_stage integer, p_build_method text, p_repo_url text) owner=postgres anon=false authenticated=true",
+          "public.approve_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_approval_type approval_type_enum, p_stepup_token uuid) owner=postgres anon=false authenticated=true",
+          "public.bootstrap_venture_workflow(p_venture_id uuid) owner=postgres anon=false authenticated=true",
+          "public.can_auto_advance(p_stage_number integer) owner=postgres anon=false authenticated=true",
+          "public.check_feedback_duplicate(p_venture_id uuid, p_title text) owner=postgres anon=false authenticated=true",
+          "public.claim_sd(p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean, p_client_gate_version integer) owner=postgres anon=false authenticated=true",
+          "public.create_eva_conversation(p_user_id uuid, p_title text, p_metadata jsonb) owner=postgres anon=false authenticated=true",
+          "public.delete_venture(p_venture_id uuid) owner=postgres anon=false authenticated=true",
+          "public.eva_circuit_allows_request(p_venture_id text) owner=postgres anon=false authenticated=true",
+          "public.export_blueprint_review(p_venture_id uuid) owner=postgres anon=false authenticated=true",
+          "public.fn_advance_pipeline_stage(p_case_id uuid, p_from_stage text, p_to_stage text, p_provenance_event_id uuid, p_idempotency_key uuid) owner=postgres anon=true authenticated=true",
+          "public.fn_advance_venture_stage(p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_handoff_data jsonb, p_idempotency_key uuid) owner=postgres anon=false authenticated=true",
+          "public.fn_anon_ingress_prior_hour_count(p_source_type text) owner=postgres anon=true authenticated=true",
+          "public.fn_is_chairman() owner=postgres anon=true authenticated=true",
+          "public.fn_is_service_role() owner=postgres anon=false authenticated=true",
+          "public.fn_list_chairman_webauthn_credentials() owner=postgres anon=false authenticated=true",
+          "public.fn_relay_insert_sms_candidate(p_provider_message_id text, p_from_phone text, p_to_phone text, p_body_raw text, p_relay_secret text) owner=postgres anon=true authenticated=false",
+          "public.fn_relay_insert_sms_status(p_provider_message_id text, p_message_status text, p_relay_secret text) owner=postgres anon=true authenticated=false",
+          "public.fn_submit_error_capture(p_message text, p_stack_trace text, p_page_url text, p_severity text, p_metadata jsonb) owner=postgres anon=true authenticated=true",
+          "public.fn_submit_internal_feedback(p_title text, p_description text, p_type text, p_severity text, p_page_url text) owner=postgres anon=false authenticated=true",
+          "public.fn_submit_venture_error(p_venture_id uuid, p_ingest_secret text, p_error_hash text, p_message text, p_context jsonb) owner=postgres anon=true authenticated=false",
+          "public.fn_submit_venture_feedback(p_venture_id uuid, p_ingest_secret text, p_source_type text, p_severity text, p_category text, p_message text) owner=postgres anon=true authenticated=false",
+          "public.fn_submit_venture_usage_event(p_venture_id uuid, p_ingest_secret text, p_event_type text, p_event_name text, p_properties jsonb, p_occurred_at timestamp with time zone) owner=postgres anon=true authenticated=false",
+          "public.fn_submit_venture_user_feedback(p_venture_id uuid, p_ingest_secret text, p_feedback_type text, p_title text, p_description text) owner=postgres anon=true authenticated=false",
+          "public.fn_user_has_venture_access(venture_uuid uuid) owner=postgres anon=false authenticated=true",
+          "public.fn_write_kill_audit_trail(p_venture_id uuid, p_lifecycle_stage integer, p_rationale text, p_decided_by uuid, p_source text, p_decision_id uuid) owner=postgres anon=false authenticated=true",
+          "public.get_gate_decision_status(p_venture_id uuid, p_stage integer) owner=postgres anon=false authenticated=true",
+          "public.is_chairman_role() owner=postgres anon=true authenticated=true",
+          "public.is_leo_admin() owner=postgres anon=true authenticated=true",
+          "public.kill_venture(p_venture_id uuid, p_rationale text) owner=postgres anon=false authenticated=true",
+          "public.lhe_pending_migration_applied() owner=postgres anon=true authenticated=true",
+          "public.log_stage_advance_override(p_venture_id uuid, p_reason text, p_verdict_snapshot jsonb) owner=postgres anon=false authenticated=true",
+          "public.park_venture_decision(p_decision_id uuid, p_park_type text, p_reason text, p_decided_by text) owner=postgres anon=false authenticated=true",
+          "public.record_eva_failure(p_venture_id text, p_error_message text, p_error_context jsonb) owner=postgres anon=false authenticated=true",
+          "public.record_eva_success(p_venture_id text) owner=postgres anon=false authenticated=true",
+          "public.record_venture_error(p_venture_id uuid, p_error_hash text, p_message text, p_context jsonb) owner=postgres anon=true authenticated=true",
+          "public.reject_chairman_decision(p_decision_id uuid, p_rationale text, p_decided_by text, p_stepup_token uuid) owner=postgres anon=false authenticated=true",
+          "public.rescan_stage_20(p_venture_id uuid) owner=postgres anon=false authenticated=true",
+          "public.reset_eva_circuit(p_venture_id text, p_reset_by text) owner=postgres anon=false authenticated=true",
+          "public.set_global_auto_proceed(p_enabled boolean) owner=postgres anon=false authenticated=true",
+          "public.set_session_working_context(p_session_id text, p_wc jsonb) owner=postgres anon=true authenticated=true",
+          "public.set_stage_override(p_stage_number integer, p_auto_proceed boolean, p_reason text) owner=postgres anon=false authenticated=true",
+          "public.upsert_operator_cash_burn(p_cash_usd numeric, p_ai_burn_usd numeric, p_other_burn_usd numeric, p_revenue_usd numeric) owner=postgres anon=false authenticated=true"
+        ],
+        "recommendation": "Revoke EXECUTE from anon/authenticated, or re-own the function to a non-BYPASSRLS role. Note that pinning search_path does NOT mitigate this class."
+      }
+    ],
+    "recommendations": [],
+    "metadata": {
+      "mode": null,
+      "error": null,
+      "phase": "EXEC",
+      "stack": null,
+      "message": null,
+      "metrics": {},
+      "options": {
+        "phase": "EXEC",
+        "sdKey": "SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001",
+        "sdUUID": "a281d3a9-c69a-456c-b514-2de7790ea6a7",
+        "taskContract": {
+          "summary": "Contract 455a3ced-9261-4591-8660-947a3a63d36c: LEO_EXECUTOR → SECURITY | Execute Chief Security Architect analysis for SD S...",
+          "contract_id": "455a3ced-9261-4591-8660-947a3a63d36c"
+        },
+        "_injectedBrief": "--- Five-Point Brief ---\nSymptom: <describe what IS happening>\nLocation: <file/endpoint/table>\nFrequency: <pattern/timing>\nPrior Attempts: <what you already tried>\nDesired Outcome: <clear success criteria>\nContext: SD SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001 (EXEC phase)\n--- End Brief ---",
+        "inputArtifacts": [
+          "55c7aa5d-f128-415c-bbf9-5c1c96e47510"
+        ],
+        "target_application": "EHG_Engineer"
+      },
+      "routing": {
+        "sdPhase": "EXEC",
+        "timestamp": "2026-09-12T23:33:54.272Z",
+        "recommendedModel": "high"
+      },
+      "findings": {
+        "rls_policies": {
+          "error": "RLS table census unavailable: Could not find the function public.get_tables_without_rls without parameters in the schema cache",
+          "checked": false,
+          "tables_without_rls": null,
+          "unprotected_tables": []
+        },
+        "data_protection": {
+          "note": "All secrets should use environment variables (process.env or import.meta.env)",
+          "checked": true,
+          "exposed_secrets": 0,
+          "secret_locations": []
+        },
+        "definer_posture": {
+          "reason": null,
+          "functions": [
+            {
+              "args": "p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_on_delete text",
+              "name": "register_cross_schema_fk",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "rls_governance_read_policy",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid",
+              "name": "rls_portfolio_venture_policy",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid",
+              "name": "rls_runtime_policy",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "trigger_validate_portfolio_to_governance",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "trigger_validate_runtime_to_governance",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "trigger_validate_runtime_to_portfolio",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "trigger_validate_to_portfolio_ventures",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_ref_value uuid",
+              "name": "validate_cross_schema_ref",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_source_schema text, p_source_table text, p_source_column text, p_target_schema text, p_target_table text, p_target_column text, p_ref_value text",
+              "name": "validate_cross_schema_ref_text",
+              "owner": "postgres",
+              "schema": "governance",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "current_venture",
+              "owner": "postgres",
+              "schema": "portfolio",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid",
+              "name": "has_venture_access",
+              "owner": "postgres",
+              "schema": "portfolio",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_reason text, p_user_id uuid",
+              "name": "kill_switch",
+              "owner": "postgres",
+              "schema": "portfolio",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "log_kill_switch_event",
+              "owner": "postgres",
+              "schema": "portfolio",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_reason text, p_user_id uuid",
+              "name": "reactivate_venture",
+              "owner": "postgres",
+              "schema": "portfolio",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_transition_type text, p_rollback_provenance text",
+              "name": "advance_venture_stage",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_target_stage integer, p_build_method text, p_repo_url text",
+              "name": "advance_venture_to_stage",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_decision_id uuid, p_rationale text, p_decided_by text, p_approval_type approval_type_enum, p_stepup_token uuid",
+              "name": "approve_chairman_decision",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid",
+              "name": "bootstrap_venture_workflow",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_stage_number integer",
+              "name": "can_auto_advance",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_title text",
+              "name": "check_feedback_duplicate",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean, p_client_gate_version integer",
+              "name": "claim_sd",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_user_id uuid, p_title text, p_metadata jsonb",
+              "name": "create_eva_conversation",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid",
+              "name": "delete_venture",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id text",
+              "name": "eva_circuit_allows_request",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid",
+              "name": "export_blueprint_review",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_case_id uuid, p_from_stage text, p_to_stage text, p_provenance_event_id uuid, p_idempotency_key uuid",
+              "name": "fn_advance_pipeline_stage",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_from_stage integer, p_to_stage integer, p_handoff_data jsonb, p_idempotency_key uuid",
+              "name": "fn_advance_venture_stage",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_source_type text",
+              "name": "fn_anon_ingress_prior_hour_count",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "fn_is_chairman",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "fn_is_service_role",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "fn_list_chairman_webauthn_credentials",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_provider_message_id text, p_from_phone text, p_to_phone text, p_body_raw text, p_relay_secret text",
+              "name": "fn_relay_insert_sms_candidate",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": false
+            },
+            {
+              "args": "p_provider_message_id text, p_message_status text, p_relay_secret text",
+              "name": "fn_relay_insert_sms_status",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": false
+            },
+            {
+              "args": "p_message text, p_stack_trace text, p_page_url text, p_severity text, p_metadata jsonb",
+              "name": "fn_submit_error_capture",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_title text, p_description text, p_type text, p_severity text, p_page_url text",
+              "name": "fn_submit_internal_feedback",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_ingest_secret text, p_error_hash text, p_message text, p_context jsonb",
+              "name": "fn_submit_venture_error",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": false
+            },
+            {
+              "args": "p_venture_id uuid, p_ingest_secret text, p_source_type text, p_severity text, p_category text, p_message text",
+              "name": "fn_submit_venture_feedback",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": false
+            },
+            {
+              "args": "p_venture_id uuid, p_ingest_secret text, p_event_type text, p_event_name text, p_properties jsonb, p_occurred_at timestamp with time zone",
+              "name": "fn_submit_venture_usage_event",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": false
+            },
+            {
+              "args": "p_venture_id uuid, p_ingest_secret text, p_feedback_type text, p_title text, p_description text",
+              "name": "fn_submit_venture_user_feedback",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": false
+            },
+            {
+              "args": "venture_uuid uuid",
+              "name": "fn_user_has_venture_access",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_lifecycle_stage integer, p_rationale text, p_decided_by uuid, p_source text, p_decision_id uuid",
+              "name": "fn_write_kill_audit_trail",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_stage integer",
+              "name": "get_gate_decision_status",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "is_chairman_role",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "is_leo_admin",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_rationale text",
+              "name": "kill_venture",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "",
+              "name": "lhe_pending_migration_applied",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_reason text, p_verdict_snapshot jsonb",
+              "name": "log_stage_advance_override",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_decision_id uuid, p_park_type text, p_reason text, p_decided_by text",
+              "name": "park_venture_decision",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id text, p_error_message text, p_error_context jsonb",
+              "name": "record_eva_failure",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id text",
+              "name": "record_eva_success",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid, p_error_hash text, p_message text, p_context jsonb",
+              "name": "record_venture_error",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_decision_id uuid, p_rationale text, p_decided_by text, p_stepup_token uuid",
+              "name": "reject_chairman_decision",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id uuid",
+              "name": "rescan_stage_20",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_venture_id text, p_reset_by text",
+              "name": "reset_eva_circuit",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_enabled boolean",
+              "name": "set_global_auto_proceed",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_session_id text, p_wc jsonb",
+              "name": "set_session_working_context",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": true,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_stage_number integer, p_auto_proceed boolean, p_reason text",
+              "name": "set_stage_override",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            },
+            {
+              "args": "p_cash_usd numeric, p_ai_burn_usd numeric, p_other_burn_usd numeric, p_revenue_usd numeric",
+              "name": "upsert_operator_cash_burn",
+              "owner": "postgres",
+              "schema": "public",
+              "anon_execute": false,
+              "authenticated_execute": true
+            }
+          ],
+          "probe_ran": true,
+          "functions_at_risk": 59
+        },
+        "input_validation": {
+          "note": "HTML sanitization and parameterized queries required for security",
+          "checked": true,
+          "eval_usage": 0,
+          "dangerous_html": 0,
+          "vulnerabilities": 0,
+          "sql_concatenation": 0,
+          "vulnerability_details": []
+        },
+        "authorization_check": {
+          "note": "Public routes (login, signup, home) are expected to be unprotected. Manual verification recommended.",
+          "checked": true,
+          "total_routes": 0,
+          "protected_routes": 0,
+          "unprotected_routes": 0,
+          "unprotected_route_list": []
+        },
+        "authentication_check": {
+          "note": "Test files and comments excluded from analysis",
+          "issues": 0,
+          "checked": true,
+          "issue_details": [],
+          "plain_passwords": 0,
+          "localStorage_tokens": 0
+        }
+      },
+      "repo_path": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+      "session_id": "961a30d3-1a94-4f10-8b06-b48fa2306361",
+      "content_hash": "9f01f6974401a4e5c3a6753e5bd6b9f39d3b76b89ac3d9f7b61c3ed29598e2a3",
+      "repo_resolved": true,
+      "registry_source": "db",
+      "baseline_applied": false,
+      "original_verdict": "CONDITIONAL_PASS",
+      "executed_from_cwd": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001",
+      "sub_agent_version": "1.0.0",
+      "_findings_had_keys": [
+        "authentication_check",
+        "authorization_check",
+        "input_validation",
+        "data_protection",
+        "rls_policies",
+        "definer_posture"
+      ],
+      "_findings_stripped": true,
+      "hallucination_check": {
+        "score": 100,
+        "issues": [],
+        "passed": true,
+        "summary": "PASS (Score: 100/100) | Tables: 0/3 valid",
+        "warnings": [],
+        "code_snippets": {
+          "total": 0,
+          "valid": 0,
+          "invalid": [],
+          "skipped": 0
+        },
+        "levels_checked": [
+          "file_exists",
+          "symbol_exists",
+          "syntax_valid",
+          "table_exists"
+        ],
+        "file_references": {
+          "total": 0,
+          "valid": 0,
+          "invalid": [],
+          "branch_context": {
+            "branch": "feat/SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001",
+            "repoPath": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001"
+          }
+        },
+        "table_references": {
+          "total": 3,
+          "valid": 0,
+          "reason": "no_known_tables_loaded",
+          "unknown": [],
+          "tables_loaded": 0,
+          "validation_skipped": true
+        },
+        "symbol_references": {
+          "total": 0,
+          "valid": 0,
+          "invalid": []
+        }
+      },
+      "evaluated_commit_sha": "7224308b89364b6902d424463e92996df006abc1"
+    }
+  },
+  {
+    "id": "765a242e-5161-4190-a1fc-076d1efab821",
+    "sub_agent_code": "TESTING",
+    "phase": "EXEC",
+    "verdict": "CONDITIONAL_PASS",
+    "summary": null,
+    "detailed_analysis": "{\"sd_type\":\"infrastructure\",\"sd_type_source\":\"declared\",\"applicability_source\":\"declared_type\",\"skip_reason\":\"code-producing infrastructure SD with no resolvable scoped unit test — CONDITIONAL_PASS, not PASS\",\"changed_files\":[],\"applicability_rule\":\"policy_non_applicable_code_no_scoped_test\"}",
+    "critical_issues": [],
+    "warnings": [
+      "No scoped unit test resolvable for 0 changed file(s) on a code-producing infrastructure SD"
+    ],
+    "recommendations": [
+      {
+        "issue": "infrastructure SD changed code but no scoped unit test could be resolved",
+        "severity": "WARNING",
+        "recommendation": "Add a co-located *.test.js for the changed source files, or declare an explicit test command in the PRD."
+      }
+    ],
+    "metadata": {
+      "mode": null,
+      "error": null,
+      "phase": "EXEC",
+      "stack": null,
+      "message": null,
+      "metrics": {},
+      "options": {
+        "phase": "EXEC",
+        "sdKey": "SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001",
+        "sdUUID": "a281d3a9-c69a-456c-b514-2de7790ea6a7",
+        "taskContract": {
+          "summary": "Contract dae23d9f-73ae-4c89-bee1-63ed58f69959: LEO_EXECUTOR → TESTING | Execute QA Engineering Director analysis for SD SD...",
+          "contract_id": "dae23d9f-73ae-4c89-bee1-63ed58f69959"
+        },
+        "_injectedBrief": "--- Five-Point Brief ---\nSymptom: <describe what IS happening>\nLocation: <file/endpoint/table>\nFrequency: <pattern/timing>\nPrior Attempts: <what you already tried>\nDesired Outcome: <clear success criteria>\nContext: SD SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001 (EXEC phase)\n--- End Brief ---",
+        "inputArtifacts": [
+          "851789c7-d184-48f3-a4f1-00c1ed126851"
+        ],
+        "target_application": "EHG_Engineer"
+      },
+      "routing": {
+        "sdPhase": "EXEC",
+        "timestamp": "2026-09-12T23:34:23.710Z",
+        "recommendedModel": "high"
+      },
+      "findings": {
+        "phase4_evidence": {
+          "type": "schema_validation"
+        },
+        "phase1_preflight": {
+          "skipped": true
+        },
+        "phase3_execution": {
+          "reason": "no scoped unit test resolvable",
+          "skipped": true
+        },
+        "phase0_intelligence": {
+          "reason": "infrastructure SD - non-UI",
+          "skipped": true
+        },
+        "phase2_test_generation": {
+          "skipped": true
+        }
+      },
+      "measured": false,
+      "repo_path": "C:/Users/rickf/Projects/_EHG/EHG_Engineer",
+      "session_id": "961a30d3-1a94-4f10-8b06-b48fa2306361",
+      "content_hash": "4e26c0018114e52110ab8317a1b3fbe08849205bd1a3eb58e67599ec01e07ff8",
+      "repo_resolved": true,
+      "test_execution": {
+        "runner": null,
+        "source": null,
+        "found_files": 0,
+        "artifact_sha": null,
+        "tests_failed": 0,
+        "tests_passed": 0,
+        "artifact_path": null,
+        "tests_skipped": 0,
+        "tests_executed": 0,
+        "mapped_candidates": 0
+      },
+      "zero_ui_source": "declared_type",
+      "registry_source": "db",
+      "baseline_applied": null,
+      "original_verdict": "CONDITIONAL_PASS",
+      "executed_from_cwd": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001",
+      "sub_agent_version": "1.0.0",
+      "_findings_had_keys": [
+        "phase0_intelligence",
+        "phase1_preflight",
+        "phase2_test_generation",
+        "phase3_execution",
+        "phase4_evidence"
+      ],
+      "_findings_stripped": true,
+      "applicability_rule": "policy_non_applicable_code_no_scoped_test",
+      "hallucination_check": {
+        "score": 100,
+        "issues": [],
+        "passed": true,
+        "summary": "PASS (Score: 100/100)",
+        "warnings": [],
+        "code_snippets": {
+          "total": 0,
+          "valid": 0,
+          "invalid": [],
+          "skipped": 0
+        },
+        "levels_checked": [
+          "file_exists",
+          "symbol_exists",
+          "syntax_valid",
+          "table_exists"
+        ],
+        "file_references": {
+          "total": 0,
+          "valid": 0,
+          "invalid": [],
+          "branch_context": {
+            "branch": "feat/SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001",
+            "repoPath": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEO-INFRA-PUBLISH-OUTCOME-OBSERVER-001"
+          }
+        },
+        "table_references": {
+          "total": 0,
+          "valid": 0,
+          "reason": "no_known_tables_loaded",
+          "unknown": [],
+          "tables_loaded": 0,
+          "validation_skipped": true
+        },
+        "symbol_references": {
+          "total": 0,
+          "valid": 0,
+          "invalid": []
+        }
+      },
+      "evaluated_commit_sha": "7224308b89364b6902d424463e92996df006abc1"
+    }
+  }
+]
