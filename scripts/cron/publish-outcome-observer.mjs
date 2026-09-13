@@ -80,13 +80,23 @@ export async function ensureArmedRegistration(supabase, logger) {
  * production call site for both functions.
  */
 export async function sweepOnce(supabase, { limit = DEFAULT_ROW_LIMIT, observeOutcomeFn = observeOutcome, recordPublishOutcomeFn = recordPublishOutcome } = {}) {
-  const counters = { rows_selected: 0, rows_unmeasurable: 0, rows_written: 0, rows_write_failed: 0 };
+  // TESTING finding (EXEC phase, HIGH): rows_joined did not exist anywhere, and rows
+  // classifying 'unknown' were counted nowhere -- a sweep where every lookup failed
+  // transiently was indistinguishable from a healthy "nothing to do" run. rows_joined
+  // tracks observeOutcome's own `joined` flag (the ledger-to-campaign_content join
+  // succeeded, regardless of what happened after); rows_left_unknown tracks every row
+  // that hit the 'unknown' continue path (transient lookup, unresolvable credential, or a
+  // read error) so a stuck/never-progressing backlog is visible, not silent.
+  const counters = { rows_selected: 0, rows_joined: 0, rows_left_unknown: 0, rows_unmeasurable: 0, rows_written: 0, rows_write_failed: 0, rows_write_failed_expected_pre_migration: 0 };
 
   const { data: rows, error } = await supabase
     .from('venture_channel_publish_ledger')
     .select('correlation_id')
     .eq('outcome', 'unknown')
     .eq('decision', 'accepted')
+    // MEDIUM finding: oldest-first, so a backlog above `limit` doesn't starve the
+    // longest-waiting rows behind a constant stream of newer ones.
+    .order('created_at', { ascending: true })
     .limit(limit);
 
   if (error) {
@@ -98,9 +108,14 @@ export async function sweepOnce(supabase, { limit = DEFAULT_ROW_LIMIT, observeOu
   for (const row of rows || []) {
     const classification = await observeOutcomeFn({ supabase, correlationId: row.correlation_id });
 
+    if (classification.joined) {
+      counters.rows_joined += 1;
+    }
+
     if (classification.outcome === 'unknown') {
       // FR-7: transient or genuinely unresolved -- leave the row alone, re-attempted
-      // next run. Never a write, never counted as failed.
+      // next run. Never a write, never counted as failed, but now visibly tallied.
+      counters.rows_left_unknown += 1;
       continue;
     }
     if (classification.outcome === 'unmeasurable') {
@@ -116,10 +131,12 @@ export async function sweepOnce(supabase, { limit = DEFAULT_ROW_LIMIT, observeOu
 
     if (recorded.success) {
       counters.rows_written += 1;
-    } else {
+    } else if (recorded.reason === 'expected-pre-migration') {
       // TR-9: a 23514 on an 'unmeasurable' write means the SQL migration hasn't landed
-      // yet -- EXPECTED, never conflated with a genuine failure, and never silently
-      // absorbed into rows_unmeasurable (a classification-only count) as if it wrote.
+      // yet -- EXPECTED, reported SEPARATELY from a genuine failure per FR-4, never
+      // conflated with rows_unmeasurable (a classification-only count) as if it wrote.
+      counters.rows_write_failed_expected_pre_migration += 1;
+    } else {
       counters.rows_write_failed += 1;
     }
   }

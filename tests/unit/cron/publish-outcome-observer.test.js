@@ -163,6 +163,7 @@ function makeLedgerSelectSupabase(rows) {
       const chain = {
         select: vi.fn(() => chain),
         eq: vi.fn(() => chain),
+        order: vi.fn(() => chain),
         limit: vi.fn(() => Promise.resolve({ data: rows, error: null }))
       };
       return chain;
@@ -175,14 +176,16 @@ describe('sweepOnce', () => {
     const rows = [{ correlation_id: 'corr-1' }, { correlation_id: 'corr-2' }, { correlation_id: 'corr-3' }];
     const supabase = makeLedgerSelectSupabase(rows);
     const observeOutcomeFn = vi.fn()
-      .mockResolvedValueOnce({ outcome: 'shipped_clean', outcomeRef: 'p1' })
-      .mockResolvedValueOnce({ outcome: 'unmeasurable', outcomeRef: null })
-      .mockResolvedValueOnce({ outcome: 'unknown', outcomeRef: null });
+      .mockResolvedValueOnce({ outcome: 'shipped_clean', outcomeRef: 'p1', joined: true })
+      .mockResolvedValueOnce({ outcome: 'unmeasurable', outcomeRef: null, joined: false })
+      .mockResolvedValueOnce({ outcome: 'unknown', outcomeRef: null, joined: true });
     const recordPublishOutcomeFn = vi.fn().mockResolvedValue({ success: true });
 
     const counters = await sweepOnce(supabase, { observeOutcomeFn, recordPublishOutcomeFn });
 
     expect(counters.rows_selected).toBe(3);
+    expect(counters.rows_joined).toBe(2); // the shipped_clean and unknown rows joined; the unmeasurable one did not
+    expect(counters.rows_left_unknown).toBe(1);
     expect(counters.rows_unmeasurable).toBe(1);
     expect(counters.rows_written).toBe(2); // shipped_clean + unmeasurable both get written; the 'unknown' one is skipped
     expect(recordPublishOutcomeFn).toHaveBeenCalledTimes(2);
@@ -201,6 +204,7 @@ describe('sweepOnce', () => {
         const chain = {
           select: vi.fn(() => chain),
           eq: vi.fn(() => chain),
+          order: vi.fn(() => chain),
           limit: vi.fn(() => Promise.resolve({ data: remainingUnknownRows, error: null }))
         };
         return chain;
@@ -221,15 +225,30 @@ describe('sweepOnce', () => {
     expect(second.rows_written).toBe(0);
   });
 
-  it('a 23514 (expected-pre-migration) write failure counts in rows_write_failed, not rows_written (TS-12)', async () => {
+  // MEDIUM finding (EXEC phase): FR-4 requires an expected-pre-migration write failure be
+  // reported SEPARATELY from a genuine failure, not lumped into the same rows_write_failed
+  // counter (which the original cron-layer code did, discarding recorded.reason entirely).
+  it('a 23514 (expected-pre-migration) write failure counts in its own counter, distinct from a genuine failure (TS-12)', async () => {
     const supabase = makeLedgerSelectSupabase([{ correlation_id: 'corr-1' }]);
-    const observeOutcomeFn = vi.fn().mockResolvedValue({ outcome: 'unmeasurable', outcomeRef: null });
+    const observeOutcomeFn = vi.fn().mockResolvedValue({ outcome: 'unmeasurable', outcomeRef: null, joined: false });
     const recordPublishOutcomeFn = vi.fn().mockResolvedValue({ success: false, reason: 'expected-pre-migration' });
 
     const counters = await sweepOnce(supabase, { observeOutcomeFn, recordPublishOutcomeFn });
 
     expect(counters.rows_unmeasurable).toBe(1);
-    expect(counters.rows_write_failed).toBe(1);
+    expect(counters.rows_write_failed_expected_pre_migration).toBe(1);
+    expect(counters.rows_write_failed).toBe(0);
     expect(counters.rows_written).toBe(0);
+  });
+
+  it('a genuine (non-23514) write failure counts in rows_write_failed, not the expected-pre-migration counter', async () => {
+    const supabase = makeLedgerSelectSupabase([{ correlation_id: 'corr-1' }]);
+    const observeOutcomeFn = vi.fn().mockResolvedValue({ outcome: 'shipped_clean', outcomeRef: 'p1', joined: true });
+    const recordPublishOutcomeFn = vi.fn().mockResolvedValue({ success: false, error: 'connection failure' });
+
+    const counters = await sweepOnce(supabase, { observeOutcomeFn, recordPublishOutcomeFn });
+
+    expect(counters.rows_write_failed).toBe(1);
+    expect(counters.rows_write_failed_expected_pre_migration).toBe(0);
   });
 });

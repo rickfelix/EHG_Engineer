@@ -352,6 +352,48 @@ describe('evaluateGraduation — outcome-domain widen regression (FR-6, TS-9)', 
     expect(result.success).toBe(true);
     expect(result.autonomyState).toBeNull();
   });
+
+  // TESTING finding (EXEC phase, HIGH): the original `mode === 'mock'` guard alone was
+  // fail-OPEN for every other value. recordPublishOutcome passes `mode: data.execution_mode`
+  // straight through -- a real ledger row whose execution_mode column is NULL (never
+  // stamped) produces mode===null here, which must be treated as "not confirmed live" and
+  // must ALSO skip the venture_channel_autonomy write, exactly like mode==='mock'.
+  it('a mode=null evaluation (a real row whose execution_mode was never stamped) also never writes to venture_channel_autonomy (SEC-2 fail-open fix)', async () => {
+    const autonomyUpsert = vi.fn(() => Promise.resolve({ error: null }));
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const result = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows, { autonomyUpsert }), ventureId: 'v-1', channelType: 'x', requiredStreak: 5, mode: null });
+
+    expect(autonomyUpsert).not.toHaveBeenCalled();
+    expect(result.autonomyState).toBeNull();
+  });
+
+  it("an unexpected mode value (e.g. 'dry_run') also never writes to venture_channel_autonomy -- only mode==='live' or an omitted mode key may proceed", async () => {
+    const autonomyUpsert = vi.fn(() => Promise.resolve({ error: null }));
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'mock', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const result = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows, { autonomyUpsert }), ventureId: 'v-1', channelType: 'x', requiredStreak: 5, mode: 'dry_run' });
+
+    expect(autonomyUpsert).not.toHaveBeenCalled();
+    expect(result.autonomyState).toBeNull();
+  });
+
+  // Backward compatibility (REGRESSION concern): a caller that omits `mode` entirely --
+  // the calling convention every pre-existing test in this file (and any future caller
+  // unaware of mode) uses -- must be COMPLETELY UNAFFECTED and still write, exactly as it
+  // did before this SD existed.
+  it('a caller that omits mode entirely still writes venture_channel_autonomy (backward compatible with legacy/direct callers)', async () => {
+    const autonomyUpsert = vi.fn(() => Promise.resolve({ error: null }));
+    const rows = [
+      { venture_id: 'v-1', channel_type: 'x', decision: 'accepted', outcome: 'shipped_clean', execution_mode: 'live', created_at: '2026-09-12T00:00:01Z' },
+    ];
+    const result = await evaluateGraduation({ supabase: makeFilteringLedgerSupabase(rows, { autonomyUpsert }), ventureId: 'v-1', channelType: 'x', requiredStreak: 5 });
+
+    expect(autonomyUpsert).toHaveBeenCalledTimes(1);
+    expect(result.autonomyState).not.toBeNull();
+  });
 });
 
 describe('checkPublishAuthorization — dedup + FR-7 chairman_decisions routing', () => {

@@ -27,13 +27,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # SECURITY finding SEC-4 (EXEC phase, LOW, least privilege): this is a READ-ONLY job --
+    # getPostRecord sends no Authorization header at all, and authenticate() (which needs
+    # BLUESKY_HANDLE/BLUESKY_APP_PASSWORD, a credential that can POST) is never reached from
+    # the observer path. X_API_KEY is unused too (getTweet reads only accessToken). Exposing
+    # posting-capable credentials to a read-only job for nothing is unnecessary blast radius.
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      X_API_KEY: ${{ secrets.X_API_KEY }}
       X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-      BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
-      BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
 
     steps:
       - name: Checkout
