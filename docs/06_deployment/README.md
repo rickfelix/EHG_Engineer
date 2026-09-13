@@ -29,6 +29,7 @@ This directory contains production deployment guides and operational documentati
 - [IMPORTANT DATABASE DISTINCTION](important-database-distinction.md)
 - [Kochel Migration Phase A](kochel-migration-phase-a.md)
 - [PRODUCTION GO LIVE](production-go-live.md)
+- [Publish Outcome Observer Runbook](publish-outcome-observer-runbook.md)
 - [Stop Hook Operations](stop-hook-operations.md)
 - [Strategic Intake Pipeline V1](strategic-intake-pipeline-v1.md)
 - [SUPABASE EXECUTION GUIDE](supabase-execution-guide.md)
