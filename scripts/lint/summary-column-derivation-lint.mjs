@@ -184,9 +184,30 @@ export function findForeignKeySummaryColumns(src) {
 
 // ── Scanner ───────────────────────────────────────────────────────────────────
 
+/**
+ * Recursively list every .sql file under dir (relative paths, sorted). The CI
+ * workflow triggers on `database/migrations/**\/*.sql` (recursive) -- SECURITY
+ * (EXEC-phase review, evidence 62384ee7) found the scanner was non-recursive,
+ * silently missing database/migrations/rollback/ (a real, populated subdirectory)
+ * while still reporting a green check for any PR that touched only that path.
+ */
+function listSqlFilesRecursive(dir, base = dir) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return []; }
+  let out = [];
+  for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      out = out.concat(listSqlFilesRecursive(full, base));
+    } else if (e.name.endsWith('.sql')) {
+      out.push(path.relative(base, full));
+    }
+  }
+  return out;
+}
+
 export function scanMigrations(dir = MIGRATIONS_DIR) {
-  let files;
-  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort(); } catch { return []; }
+  const files = listSqlFilesRecursive(dir);
   const results = [];
   for (const f of files) {
     let src;

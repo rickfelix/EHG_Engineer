@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import {
   BASELINE_BOOLEAN_COLUMNS,
   findUndereivedBooleanColumns,
   findUnpairedJsonbSummaryKeys,
   findForeignKeySummaryColumns,
+  scanMigrations,
 } from '../../../scripts/lint/summary-column-derivation-lint.mjs';
 
 describe('summary-column-derivation-lint', () => {
@@ -88,6 +92,30 @@ describe('summary-column-derivation-lint', () => {
     it('ignores a summary-shaped column that is not a foreign key', () => {
       const sql = 'ALTER TABLE widgets ADD COLUMN gate_status text;';
       expect(findForeignKeySummaryColumns(sql)).toHaveLength(0);
+    });
+  });
+
+  describe('scanMigrations (recursive scan)', () => {
+    let tmpDir;
+
+    afterEach(() => {
+      if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    });
+
+    it('scans .sql files in subdirectories, not just the top level (SECURITY evidence 62384ee7)', () => {
+      // The CI workflow triggers on database/migrations/**/*.sql (recursive); an
+      // earlier version of the scanner used a non-recursive readdirSync, silently
+      // missing a real, populated subdirectory (database/migrations/rollback/)
+      // while still showing a green check for a PR touching only that path.
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'summary-lint-test-'));
+      fs.mkdirSync(path.join(tmpDir, 'rollback'));
+      fs.writeFileSync(
+        path.join(tmpDir, 'rollback', 'nested.sql'),
+        'ALTER TABLE widgets ADD COLUMN widget_passed boolean NOT NULL DEFAULT false;'
+      );
+      const results = scanMigrations(tmpDir);
+      expect(results.some((r) => r.file.includes('nested.sql'))).toBe(true);
     });
   });
 });

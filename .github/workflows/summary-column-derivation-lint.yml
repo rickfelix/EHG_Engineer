@@ -25,6 +25,13 @@ on:
       - 'scripts/lint/summary-column-derivation-lint.mjs'
       - '.github/workflows/summary-column-derivation-lint.yml'
 
+# SECURITY finding SEC-M1 (EXEC-phase review, evidence 62384ee7): the repo default
+# workflow token is contents:write with PR-approval rights. This job only reads and
+# runs a lint (never writes back to the repo or comments on the PR), so it needs no
+# more than read access -- explicit here rather than relying on the repo default.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
