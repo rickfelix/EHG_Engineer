@@ -1,9 +1,9 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-09-11T14:49:02.326Z -->
-<!-- git_commit: 96b905ec -->
+<!-- generated_at: 2026-09-13T14:02:15.807Z -->
+<!-- git_commit: 5a92ab66 -->
 <!-- db_snapshot_hash: 99a244a75eacde8a -->
-<!-- file_content_hash: 4f660346fa8b0b7b -->
+<!-- file_content_hash: f886ce9fb82fc8f4 -->
 
 # CLAUDE_DIGEST.md - LEO Protocol Router (Enforcement)
 
@@ -94,9 +94,17 @@ Skipping CLAUDE_CORE.md causes: unknown SD type requirements, missed gate thresh
 4. **USE PROCESS SCRIPTS** - ⚠️ Never bypass add-prd-to-database.js or handoff.js outside a documented emergency path ⚠️
 > Why: `handoff.js` and `add-prd-to-database.js` run the full gate pipeline and write canonical phase state to the DB. Bypassing them skips validation, leaves DB state inconsistent, and produces false-pass handoffs that corrupt downstream phases. Documented exceptions exist (`--bypass-validation --bypass-reason` on handoff.js — audit-logged with a 2000/day global cap and NO per-SD cap on the generic path (the oft-cited 3/SD + 10/day quota is the grill-convergence gate's purpose-built counter only — corrected per build-vs-run deep-dive D9, 2026-07-12); `EMERGENCY_PUSH` for push enforcement) — use them with a ticket reference in the reason field.
 5. **Small PRs** - ≤100 LOC target. Exceed only with documented justification (max 400 LOC) per tiered PR Size Guidelines.
-> Why: Large PRs fail review at higher rates, introduce more merge conflicts, and are harder to roll back. Retrospect
+…
+6. **Priority-first** - Use `npm run prio:top3` to justify work
+…
 
-*...truncated. Read full file for complete section.*
+…
+
+…
+
+…
+
+*Authority-selected digest — lower-priority prose elided. Read the full file for complete content.*
 
 ## Session Initialization - SD Selection
 
@@ -154,5 +162,5 @@ This command provides:
 
 ---
 
-*DIGEST generated: 2026-09-11 10:49:02 AM*
+*DIGEST generated: 2026-09-13 10:02:15 AM*
 *Protocol: 4.4.1*
