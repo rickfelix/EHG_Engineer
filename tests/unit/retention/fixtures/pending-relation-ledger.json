@@ -1,0 +1,19 @@
+{
+  "20990101_valid_deferred.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Fixture entry for QF-20260913-915 unit tests: a genuine, readable, non-expired deferral reason.",
+    "owner": "test-fixture",
+    "review_by": "2099-01-01T00:00:00.000Z"
+  },
+  "20990101_expired_deferred.sql": {
+    "disposition": "DEFERRED",
+    "reason": "Fixture entry for QF-20260913-915 unit tests: a lapsed deferral whose review date has passed.",
+    "owner": "test-fixture",
+    "review_by": "2020-01-01T00:00:00.000Z"
+  },
+  "20990101_retired.sql": {
+    "disposition": "RETIRED",
+    "reason": "Fixture entry for QF-20260913-915 unit tests: a RETIRED disposition, not DEFERRED.",
+    "owner": "test-fixture"
+  }
+}
