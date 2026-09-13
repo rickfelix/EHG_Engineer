@@ -1,0 +1,138 @@
+{
+  "executive_summary": "Escalated from QF-20260913-173 after the quick-fix completion gate refused to close it as a QF (the diff touches a database migration -- a structurally sensitive path forcing Tier-3/full-SD routing regardless of the underlying LOC count). The CODE ITSELF was already implemented, tested, and live-verified BEFORE the escalation forced this SD wrapper: lib/chairman/sms-bridge.js's handleInboundSmsReply previously reported outcome='no_match' for BOTH a genuine mismatch/noise reply AND a genuine chairman reply arriving after the only candidate decision had already been decided (status!=='pending') -- measured live: four consecutive verified-chairman-number SMS replies (2026-09-13 16:43Z-19:06Z) all logged no_match against decision a9eef96a-e19c-492c-ad37-09b2adacf252, which was already status='approved' and past its reply-token window. Nothing was actually lost (a human seat manually re-matched each reply from the outbound history and recorded a decision row citing the inbound id -- a real, currently-functioning compensating control), but a seat restart between reply and hand-match would drop an approval silently. Adds a third, distinct sms_inbound_log outcome, 'no_open_question', for exactly this terminal-candidate case; migrates the 9th CHECK-constraint value; keeps these rows visible via the existing PARK_OUTCOMES/ADAM_ROUTABLE_OUTCOMES mechanism (SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001, completed, confirmed non-duplicative -- this SD only extends its outcome list by one value). SCOPE CORRECTION: the original QF description named a SECOND limb (the Adam packet-composition path minting no reply token at all for some decisions). Traced to root cause during EXEC: lib/chairman/sms-bridge.js's enqueueChairmanSms + lib/chairman/sms-outbound-worker.js's reconcileOutboundSms form a completely separate, durable, session-death-resilient dispatch path that never integrates with lib/comms/adam-outbound/chairman-sms-gate/index.js's token-minting/chairman_notifications staging -- confirmed by reading every code path (releaseHeldSend and decision-scheduler/index.js BOTH correctly set type:'decision' and mint tokens via chairman-sms-gate; deferExpiredConsultHoldForAbsentOracle and any other enqueueChairmanSms caller bypass chairman-sms-gate entirely and can never mint a token). This is a cross-cutting, security-adjacent architectural gap spanning multiple files and every enqueueChairmanSms call site -- correctly out of scope here, filed separately as SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001 with the full root-cause trace so a future LEAD does not have to re-derive it.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Distinguish a terminal-candidate reply from genuine no_match (ALREADY IMPLEMENTED)",
+      "description": "lib/chairman/sms-bridge.js's handleInboundSmsReply, in its no-eligible-candidate branch, previously collapsed two different conditions into outcome='no_match': (a) the most-recent candidate decision is still 'pending' but its reply-token window has passed (already correctly labeled 'expired', unchanged), and (b) the most-recent candidate decision is TERMINAL (status !== 'pending', i.e. already answered/decided) -- previously ALSO labeled 'no_match', indistinguishable from a genuine mismatch or noise. Added a third branch: when the most-recent candidate is terminal, outcome='no_open_question'. This is a pure diagnostic-labeling refinement -- no change to which replies resolve vs. don't; a reply to a terminal decision was NEVER going to resolve either before or after this fix (fail-closed unchanged), only the RECORDED REASON for the refusal is now precise.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A reply whose only candidate decision has status!=='pending' (regardless of token state) logs outcome='no_open_question', not 'no_match' or 'expired'.",
+        "A reply whose only candidate decision is still 'pending' with an expired token continues to log 'expired' (unchanged).",
+        "A reply with genuinely zero candidate decisions, or a real content mismatch against a live pending candidate, continues to log 'no_match' (unchanged)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Migrate the outcome vocabulary and keep the new outcome visible (ALREADY IMPLEMENTED)",
+      "description": "database/migrations/20260913_sms_inbound_log_no_open_question.sql widens sms_inbound_log_outcome_check from 8 to 9 accepted values (additive-only). PARK_OUTCOMES and ADAM_ROUTABLE_OUTCOMES (lib/chairman/sms-bridge.js) both extended to include 'no_open_question', so drainSmsRelayStaging continues to park/route these rows for human/Adam review exactly as it already does for 'no_match' -- a genuine chairman reply to a closed question must never go silently dark.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The live sms_inbound_log_outcome_check constraint accepts 'no_open_question' (verified via a complete-row insert probe).",
+        "drainSmsRelayStaging parks (or Adam-routes) a row whose handleInboundSmsReply outcome was 'no_open_question', same as it already does for 'no_match'.",
+        "suspended/invalid_signature remain excluded from PARK_OUTCOMES/ADAM_ROUTABLE_OUTCOMES (unchanged -- those indicate a likely-spoofed/abusive sender, not a genuine unanswered chairman message)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Measure the historical blind spot (ALREADY IMPLEMENTED)",
+      "description": "A one-time live query counted sms_inbound_log rows with signature_valid=true AND outcome='no_match': 513 rows. These are NOT retroactively reclassified -- the original resolving context (which decision was the most-recent candidate at reply time, and its status/token state at that moment) is not reliably reconstructable after the fact from the row alone. The count itself is the deliverable: it makes the size of the historical blind spot a known, citable number rather than an unquantified concern.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "The count (513, measured 2026-09-13) is recorded in this SD's evidence/PR description, not silently dropped."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Additive-only, no behavior change to resolution outcomes",
+      "description": "This SD changes ONLY which diagnostic label a non-resolving reply receives. No reply that previously resolved (outcome='answered'/'undone') changes; no reply that previously failed to resolve starts resolving. The fix is confined to the failure-labeling branch of handleInboundSmsReply."
+    },
+    {
+      "id": "TR-2",
+      "title": "The Adam packet-composition token-minting gap is explicitly OUT OF SCOPE",
+      "description": "Filed as SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001 (root cause: enqueueChairmanSms + sms-outbound-worker.js's reconcileOutboundSms bypass chairman-sms-gate's token-minting entirely). Building a fix for that here would conflate a narrow, already-tested labeling fix with an unreviewed, cross-cutting change to the chairman's single-use-token authorization mechanism -- deliberately kept separate and Tier-3-scoped on its own."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Terminal candidate with a still-live-looking token",
+      "type": "unit",
+      "expected": "status='approved', sms_reply_token_expires_at in the future or past -> outcome='no_open_question' either way (status, not token state, is decisive once status!=='pending')."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Terminal candidate with no token at all (never SMS-eligible)",
+      "type": "unit",
+      "expected": "outcome='no_open_question', not 'no_match'."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "PARK_OUTCOMES/ADAM_ROUTABLE_OUTCOMES contract",
+      "type": "unit",
+      "expected": "Both arrays include 'no_open_question'; drainSmsRelayStaging parks/routes a no_open_question row identically to a no_match row."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "No regression to existing outcomes",
+      "type": "unit",
+      "expected": "Full tests/unit/chairman/ suite (714 tests pre-existing + 3 new) passes with zero failures."
+    }
+  ],
+  "acceptance_criteria": [
+    "A genuine chairman reply to an already-decided question is distinguishable in sms_inbound_log from a genuine mismatch/noise reply.",
+    "The new outcome is visible to the same review mechanisms (park/Adam-route) as every other unresolved outcome.",
+    "The historical blind-spot size is measured and recorded.",
+    "The token-minting gap named in the original QF is traced to root cause and filed separately, not folded into this fix."
+  ],
+  "risks": [
+    {
+      "risk": "A future caller might add a NEW outcome value without updating PARK_OUTCOMES/ADAM_ROUTABLE_OUTCOMES, repeating this class of silent-invisibility bug",
+      "mitigation": "Both arrays are module-level constants consumed via .includes() at every call site (drainSmsRelayStaging) -- no per-outcome special-casing exists to drift; the sms_inbound_log_outcome_check migration keeps the DB constraint as the single source of truth for valid values.",
+      "severity": "low"
+    },
+    {
+      "risk": "Escalating from QF to SD after the code was already written/tested/PR'd could create process confusion about which artifact (QF or SD) owns the PR",
+      "mitigation": "The QF's own status is now 'escalated' with escalated_to_sd_id pointing at this SD; the PR (#8919) and its commit are unchanged and already merged via auto-merge -- this SD's PRD documents the already-delivered state rather than re-implementing anything.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "drainSmsRelayStaging (lib/chairman/sms-bridge.js) -- parks/routes the new outcome via the existing PARK_OUTCOMES/ADAM_ROUTABLE_OUTCOMES mechanism",
+      "Adam's inbox/review tooling -- receives 'no_open_question' rows the same way it already receives 'no_match' rows"
+    ],
+    "dependencies": [
+      "SD-LEO-INFRA-CHAIRMAN-INBOUND-VISIBILITY-001 (completed) -- introduced PARK_OUTCOMES/ADAM_ROUTABLE_OUTCOMES, extended here",
+      "SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 -- introduced the expired/ambiguous outcomes this SD's fix sits alongside"
+    ],
+    "data_contracts": [
+      "database/migrations/20260913_sms_inbound_log_no_open_question.sql (applied and verified live)"
+    ],
+    "runtime_config": [
+      "none new"
+    ],
+    "observability_rollout": [
+      "Direct DB verification: a complete-row insert probe against sms_inbound_log confirms the new outcome value is accepted",
+      "The 513-row historical-blind-spot count is the rollout's own observability artifact"
+    ]
+  },
+  "system_architecture": {
+    "summary": "One new outcome value threaded through an existing outcome-classification branch, an existing outcome-vocabulary CHECK constraint, and two existing outcome-array constants -- no new mechanism.",
+    "components": [
+      { "name": "lib/chairman/sms-bridge.js#handleInboundSmsReply", "change": "add the no_open_question branch to the no-eligible-candidate diagnostic label" },
+      { "name": "lib/chairman/sms-bridge.js PARK_OUTCOMES/ADAM_ROUTABLE_OUTCOMES", "change": "extend both arrays by one value" },
+      { "name": "database/migrations/20260913_sms_inbound_log_no_open_question.sql", "change": "NEW -- widen the CHECK constraint" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Already fully implemented, tested, and merged (PR #8919) prior to this SD's creation -- this PRD formally records the delivered state after the QF-to-SD escalation the completion gate required.",
+    "steps": [
+      "Add the no_open_question branch to handleInboundSmsReply's diagnostic labeling.",
+      "Extend PARK_OUTCOMES/ADAM_ROUTABLE_OUTCOMES.",
+      "Write and apply the CHECK-constraint migration; verify live.",
+      "Add unit tests (2 new in sms-bridge.test.js, 1 new in sms-relay-park.test.js); update the PARK_OUTCOMES contract test's hardcoded expected array.",
+      "Measure the historical blind-spot count.",
+      "Trace and file the token-minting gap as a separate SD rather than expanding this fix's scope."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "npx vitest run tests/unit/chairman/", "expected_outcome": "All tests pass (714+ passed, 0 failed)" },
+    { "step_number": 2, "instruction": "Insert a complete sms_inbound_log row with outcome='no_open_question'", "expected_outcome": "Insert succeeds (CHECK constraint accepts the new value)" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-EVERY-CHAIRMAN-SMS-001"
+  }
+}
