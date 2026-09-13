@@ -57,6 +57,15 @@ ownership, and `claude_sessions.sd_key` to confirm nobody was mid-build.
   worker is mid-build before advertising an SD → session `sd_key` + `heartbeat_at`.
 - `lib/claim-validity-gate.js` — peer `sd_key` drift asks whether the peer has MOVED ON
   (a liveness question), while `claiming_session_id` decides whose claim it is.
+- `lib/checkin/steps/critical-qf-jump.cjs`, `merged-pool-self-claim.cjs`, `self-claim-qf.cjs`
+  — all three self-claim producer steps ask "does THIS session already own any claim?"
+  (an OWNERSHIP question) via `lib/claim/get-my-claims.cjs`'s `getMyClaims()`, the shared
+  both-kinds (SD+QF) `claiming_session_id` predicate — never `ctx.mySd`, a one-shot mirror
+  of a past decision (nulled at multiple points in the same check-in pipeline) that answers
+  neither surface reliably. Fixed by SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-3) after a
+  claim-switch race let a session self-claim a second item while its `ctx.mySd` snapshot
+  had already gone stale. Per the fail-closed rule above, a `getMyClaims()` read error skips
+  self-claim rather than proceeding on an unanswered ownership question.
 
 ## Known threshold divergence (out of scope for SD-FDBK-ENH-ROUTING-RECOMMENDATION-SURFACES-001)
 
