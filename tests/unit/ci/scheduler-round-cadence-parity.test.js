@@ -3,7 +3,7 @@
  * scripts/ci/scheduler-round-cadence-parity.mjs's pure parser.
  */
 import { describe, it, expect } from 'vitest';
-import { parseSchedulerRegistrations } from '../../../scripts/ci/scheduler-round-cadence-parity.mjs';
+import { parseSchedulerRegistrations, computeMismatches } from '../../../scripts/ci/scheduler-round-cadence-parity.mjs';
 
 describe('parseSchedulerRegistrations', () => {
   it('parses a registerJob call whose object literal contains a nested handler function (brace-balanced, not non-greedy)', () => {
@@ -32,7 +32,7 @@ describe('parseSchedulerRegistrations', () => {
   });
 
   it('parses a registerRound call and maps a known cadence string to seconds', () => {
-    const src = `this.registerRound('portfolio_review', { name: 'Portfolio Review', cadence: 'weekly' });`;
+    const src = 'this.registerRound(\'portfolio_review\', { name: \'Portfolio Review\', cadence: \'weekly\' });';
     const result = parseSchedulerRegistrations(src);
     expect(result.get('scheduler_round:portfolio_review')).toEqual({ seconds: 604800, source: 'registerRound', rawCadence: 'weekly' });
   });
@@ -48,7 +48,7 @@ describe('parseSchedulerRegistrations', () => {
   });
 
   it('returns seconds:null for an unmapped cadence string (e.g. frequent) rather than guessing', () => {
-    const src = `this.registerRound('sensemaking_disposition_monitor', { cadence: 'frequent' });`;
+    const src = 'this.registerRound(\'sensemaking_disposition_monitor\', { cadence: \'frequent\' });';
     const result = parseSchedulerRegistrations(src);
     expect(result.get('scheduler_round:sensemaking_disposition_monitor').seconds).toBeNull();
   });
@@ -56,5 +56,46 @@ describe('parseSchedulerRegistrations', () => {
   it('does not register anything for source with no matching calls', () => {
     const result = parseSchedulerRegistrations('// nothing here');
     expect(result.size).toBe(0);
+  });
+});
+
+describe('computeMismatches (QF-20260913-788)', () => {
+  const CORRECTED_SRC = `
+    this.registerJob({ name: 'okr-day28-hardstop', handler: async () => { return 1; }, cadenceDays: 1 });
+    this.registerRound('portfolio_review', { cadence: 'weekly' });
+    this.registerRound('stage_health', { cadence: 'monthly' });
+  `;
+
+  it('PASSes over the corrected fixture rows (registry now matches the fixed cadenceDays:1 + FR-4 corrections)', () => {
+    const registrations = parseSchedulerRegistrations(CORRECTED_SRC);
+    const rows = [
+      { process_key: 'scheduler_round:okr-day28-hardstop', expected_interval_seconds: 86400 }, // unchanged -- already correct
+      { process_key: 'scheduler_round:portfolio_review', expected_interval_seconds: 604800 }, // FR-4 correction landed
+      { process_key: 'scheduler_round:stage_health', expected_interval_seconds: 2592000 }, // FR-4 correction landed
+    ];
+    expect(computeMismatches(registrations, rows)).toMatchObject({ status: 'PASS', mismatches: [] });
+  });
+
+  it('FAILs on exactly the pre-fix declarations (the live specimen this QF measured)', () => {
+    const registrations = parseSchedulerRegistrations(CORRECTED_SRC);
+    const rows = [
+      { process_key: 'scheduler_round:okr-day28-hardstop', expected_interval_seconds: 2592000 },
+      { process_key: 'scheduler_round:portfolio_review', expected_interval_seconds: 86400 },
+      { process_key: 'scheduler_round:stage_health', expected_interval_seconds: 86400 },
+    ];
+    const result = computeMismatches(registrations, rows);
+    expect(result.status).toBe('FAIL');
+    expect(result.mismatches).toHaveLength(3);
+  });
+
+  it('excludes the self-heartbeat row from total_rows_checked and never flags it', () => {
+    const registrations = parseSchedulerRegistrations(CORRECTED_SRC);
+    const rows = [
+      { process_key: 'scheduler_round:__poll_loop__', expected_interval_seconds: 999 },
+      { process_key: 'scheduler_round:okr-day28-hardstop', expected_interval_seconds: 86400 },
+    ];
+    const result = computeMismatches(registrations, rows);
+    expect(result.total_rows_checked).toBe(1);
+    expect(result.status).toBe('PASS');
   });
 });

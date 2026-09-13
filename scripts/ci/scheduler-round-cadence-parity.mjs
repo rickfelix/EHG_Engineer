@@ -104,30 +104,19 @@ export function parseSchedulerRegistrations(src) {
   return out;
 }
 
-async function main() {
-  const src = readFileSync(SCHEDULER_PATH, 'utf8');
-  const registrations = parseSchedulerRegistrations(src);
-
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-  let rows;
-  try {
-    rows = await fetchAllPaginated(() =>
-      supabase
-        .from('periodic_process_registry')
-        .select('process_key, expected_interval_seconds')
-        .like('process_key', 'scheduler_round:%')
-    );
-  } catch (e) {
-    console.error(JSON.stringify({ status: 'error', error: e.message }));
-    process.exitCode = 1;
-    return;
-  }
-
+/**
+ * Pure comparison: registry rows vs. parsed source registrations. Extracted so both the CI
+ * entrypoint and the periodic-liveness watcher (QF-20260913-788, FIX SHAPE (c)) share one
+ * implementation, and so it is fixture-testable without a live DB.
+ * @param {Map<string, {seconds:number|null, source:string, rawCadence:string|number}>} registrations
+ * @param {Array<{process_key:string, expected_interval_seconds:number}>} rows
+ */
+export function computeMismatches(registrations, rows) {
   const mismatches = [];
   const unmappedCadence = [];
   const uncovered = [];
-  for (const row of rows || []) {
-    if (SELF_HEARTBEAT_KEYS.has(row.process_key)) continue;
+  const rowsChecked = (rows || []).filter((r) => !SELF_HEARTBEAT_KEYS.has(r.process_key));
+  for (const row of rowsChecked) {
     const reg = registrations.get(row.process_key);
     if (!reg) {
       uncovered.push(row.process_key); // a live registry row with no matching source registration -- worth knowing, not necessarily a failure
@@ -142,13 +131,39 @@ async function main() {
     }
   }
 
-  const result = {
+  return {
     status: mismatches.length === 0 ? 'PASS' : 'FAIL',
-    total_rows_checked: (rows || []).length - [...(rows || [])].filter((r) => SELF_HEARTBEAT_KEYS.has(r.process_key)).length,
+    total_rows_checked: rowsChecked.length,
     mismatches,
     unmapped_cadence_strings: unmappedCadence, // advisory: a cadence string this predicate cannot verify (no fixed-seconds mapping)
     uncovered_registry_rows: uncovered, // advisory: a registry row with no matching registerJob/registerRound source
   };
+}
+
+/**
+ * Runs the live check against a caller-supplied supabase client. Never throws for a query
+ * failure -- returns {status:'error', error} instead, matching the CLI's own error shape.
+ * @param {Object} supabase
+ */
+export async function checkCadenceParity(supabase) {
+  const src = readFileSync(SCHEDULER_PATH, 'utf8');
+  const registrations = parseSchedulerRegistrations(src);
+  try {
+    const rows = await fetchAllPaginated(() =>
+      supabase
+        .from('periodic_process_registry')
+        .select('process_key, expected_interval_seconds')
+        .like('process_key', 'scheduler_round:%')
+    );
+    return computeMismatches(registrations, rows);
+  } catch (e) {
+    return { status: 'error', error: e.message };
+  }
+}
+
+async function main() {
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const result = await checkCadenceParity(supabase);
   console.log(JSON.stringify(result, null, 2));
   process.exitCode = result.status === 'PASS' ? 0 : 1;
 }
