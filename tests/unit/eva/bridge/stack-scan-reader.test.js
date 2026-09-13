@@ -2,7 +2,7 @@
  * SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-6.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { resolveVentureGithubRepo, readStackScanConclusion, STACK_SCAN_WORKFLOW_FILE } from '../../../../lib/eva/bridge/stack-scan-reader.js';
+import { resolveVentureGithubRepo, readStackScanConclusion, isSafeRepoShorthand, STACK_SCAN_WORKFLOW_FILE } from '../../../../lib/eva/bridge/stack-scan-reader.js';
 
 const silentLogger = { info: () => {}, warn: () => {}, log: () => {}, error: () => {} };
 
@@ -14,6 +14,8 @@ function buildMockSupabase({ resourceIdentifier = 'rickfelix/altifyai', errorOnR
           select() {
             return {
               eq() { return this; },
+              order() { return this; },
+              limit() { return this; },
               maybeSingle: () => errorOnRead
                 ? Promise.resolve({ data: null, error: { message: 'boom' } })
                 : Promise.resolve({ data: resourceIdentifier ? { resource_identifier: resourceIdentifier } : null, error: null }),
@@ -22,6 +24,32 @@ function buildMockSupabase({ resourceIdentifier = 'rickfelix/altifyai', errorOnR
         };
       }
       throw new Error(`unexpected table ${table}`);
+    },
+  };
+}
+
+/**
+ * SEC-2: resolveVentureGithubRepo must filter to status='active' and deterministically
+ * pick the most recent row (order by created_at desc, limit 1) before maybeSingle() --
+ * mirrors the query shape at stage-20-code-quality.js:742-749. This spy asserts the
+ * chained calls happen, not just that a mocked result is returned.
+ */
+function buildSpySupabase({ resourceIdentifier = 'rickfelix/altifyai' } = {}) {
+  const calls = { eq: [], order: [], limit: [] };
+  return {
+    calls,
+    from(table) {
+      if (table !== 'venture_resources') throw new Error(`unexpected table ${table}`);
+      return {
+        select() {
+          return {
+            eq(field, value) { calls.eq.push([field, value]); return this; },
+            order(field, opts) { calls.order.push([field, opts]); return this; },
+            limit(n) { calls.limit.push(n); return this; },
+            maybeSingle: () => Promise.resolve({ data: { resource_identifier: resourceIdentifier }, error: null }),
+          };
+        },
+      };
     },
   };
 }
@@ -48,6 +76,50 @@ describe('resolveVentureGithubRepo', () => {
 
   it('does not throw when supabase or ventureId is missing', async () => {
     await expect(resolveVentureGithubRepo({ supabase: null, ventureId: 'v1' })).resolves.toEqual({ ok: false, reason: 'missing_supabase_or_ventureId' });
+  });
+
+  // SEC-1 (EXEC-phase SECURITY review, CONFIRMED via direct exploit reproduction):
+  // a resource_identifier crafted to embed a second path + query string used to be
+  // interpolated unvalidated into the GitHub API URL, redirecting the runs lookup to
+  // an attacker-chosen workflow file. Must now be rejected at the source.
+  it('SEC-1: rejects a resource_identifier crafted to redirect the GitHub API URL to another workflow', async () => {
+    const hostile = 'rickfelix/altifyai/actions/workflows/always-green.yml/runs?branch=main&status=completed&per_page=1&x=';
+    const supabase = buildMockSupabase({ resourceIdentifier: hostile });
+    const result = await resolveVentureGithubRepo({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result).toEqual({ ok: false, reason: 'unsafe_repo_identifier' });
+  });
+
+  it('SEC-2: filters to status=active and orders by created_at desc, limit 1, before maybeSingle', async () => {
+    const supabase = buildSpySupabase();
+    const result = await resolveVentureGithubRepo({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result).toEqual({ ok: true, repo: 'rickfelix/altifyai' });
+    expect(supabase.calls.eq).toContainEqual(['status', 'active']);
+    expect(supabase.calls.order).toContainEqual(['created_at', { ascending: false }]);
+    expect(supabase.calls.limit).toContain(1);
+  });
+});
+
+describe('isSafeRepoShorthand', () => {
+  it('accepts a well-formed owner/repo shorthand', () => {
+    expect(isSafeRepoShorthand('rickfelix/altifyai')).toBe(true);
+    expect(isSafeRepoShorthand('some-org/some_repo.name')).toBe(true);
+  });
+
+  it('rejects the SEC-1 exploit value (extra path segments + query string)', () => {
+    expect(isSafeRepoShorthand('rickfelix/altifyai/actions/workflows/always-green.yml/runs?branch=main&status=completed&per_page=1&x=')).toBe(false);
+  });
+
+  it('rejects non-string, empty, and overlong values', () => {
+    expect(isSafeRepoShorthand(null)).toBe(false);
+    expect(isSafeRepoShorthand(undefined)).toBe(false);
+    expect(isSafeRepoShorthand(42)).toBe(false);
+    expect(isSafeRepoShorthand('')).toBe(false);
+    expect(isSafeRepoShorthand('a/' + 'b'.repeat(200))).toBe(false);
+  });
+
+  it('rejects a bare repo name with no owner segment, and a full URL', () => {
+    expect(isSafeRepoShorthand('altifyai')).toBe(false);
+    expect(isSafeRepoShorthand('https://github.com/rickfelix/altifyai')).toBe(false);
   });
 });
 

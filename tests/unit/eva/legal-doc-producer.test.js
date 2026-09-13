@@ -189,6 +189,16 @@ describe('extractBareDomain', () => {
     expect(extractBareDomain(undefined)).toBeNull();
     expect(extractBareDomain('')).toBeNull();
   });
+
+  // SEC-3 (EXEC-phase SECURITY review): metadata.live_url is JSONB and can be a
+  // non-string truthy value; each of these used to coerce into a hostname-shaped
+  // garbage domain (e.g. 12345 -> "12345") instead of being rejected.
+  it('returns null for non-string truthy input (SEC-3: JSONB live_url can be non-string)', () => {
+    expect(extractBareDomain(12345)).toBeNull();
+    expect(extractBareDomain(true)).toBeNull();
+    expect(extractBareDomain(['altifyai.com'])).toBeNull();
+    expect(extractBareDomain({ url: 'altifyai.com' })).toBeNull();
+  });
 });
 
 describe('readVentureContext — SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-1: venture-level domain fallback', () => {
@@ -215,6 +225,16 @@ describe('readVentureContext — SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-1: v
   it('still reports COMPANY_DOMAIN missing when neither company.website nor metadata.live_url resolves', async () => {
     const supabase = makeSupabase({
       ventureRow: { ...VENTURE_ROW, metadata: {} },
+      companyRow: { ...COMPANY_ROW, website: null },
+    });
+    const result = await readVentureContext({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result.ok).toBe(false);
+    expect(result.missingFields).toContain('COMPANY_DOMAIN');
+  });
+
+  it('SEC-3: reports COMPANY_DOMAIN missing (never a garbage domain) when metadata.live_url is a non-string JSONB value', async () => {
+    const supabase = makeSupabase({
+      ventureRow: { ...VENTURE_ROW, metadata: { live_url: 12345 } },
       companyRow: { ...COMPANY_ROW, website: null },
     });
     const result = await readVentureContext({ supabase, ventureId: 'v1', logger: silentLogger });
