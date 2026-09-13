@@ -1,4 +1,4 @@
-<!-- file_content_hash: 42fb478c7b2c3de6 -->
+<!-- file_content_hash: dc65f9a6622a0101 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
@@ -80,6 +80,13 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 
 16. **ONE CHAIRMAN APPROVAL MAY COVER MORE THAN ONE GATE (ratification 8e316210)** — Chairman verbal at the Solomon terminal 2026-09-13 ~13:0xZ (relay 4f5de054): "I think I'm okay with one approval being more than just one gate approval." A single chairman approval MAY cover more than one gate (his own replies); automated approvals stay governed by the autonomy level. One-approval-per-gate (P4.2) is withdrawn as a rule; the record shape for a blanket approval is one decision row per gate carrying the same reply reference; revisit trigger: a second venture's blanket approval covering a kill gate, as an oversight finding.
 > Why: The 08-11 nine-gate blanket approval was a first-venture effect, not a defect class; a rule against it would re-ask the chairman per gate for no independence gain, while the decision-source tag already keeps a blanket approval legible on every row.
+
+
+17. **BUILD THE MEMORY NOW, THE INTELLIGENCE LATER: A MINIMAL VERSIONED DEMAND CAPTURE CONTRACT FROM VENTURE ONE (ratification bb2175d2)** — Chairman by verified SMS 2026-09-13 15:28Z, in part: "establish a minimal, versioned capture contract now, covering the audience, motives and value hypotheses, message and offer, channel, proof, live-versus-mock status, and actual outcomes, using existing evidence and event infrastructure wherever possible ... In short: build the memory now; build the intelligence gradually." Amends ratification 4730357d point 6: the cross-venture demand ANALYSIS stays deferred, the DATA FOUNDATION starts at venture one. Standing effect for every session: demand evidence is captured per venture as one versioned artifact over existing rows, with a reader consuming it at birth; no new stage, dashboard, agent or analytical system rides this ruling; outcomes are gauge-grade only and a mock run's outcomes are stored as mock and excluded from cross-venture reads.
+> Why: a self-improving portfolio needs comparable evidence from the first venture, and evidence that waits for volume is evidence nobody ever collects.
+
+18. **EVERY CAPTURE POINTER NAMES AN IMMUTABLE OR VERSIONED RECORD; VALUES ARE NOT COPIED BY DEFAULT (ratification df3186e6)** — Chairman by verified SMS 2026-09-13 15:48Z, verbatim: "Each pointer should identify an immutable or versioned record. If any source record can be overwritten, the pointer should include its version or hash, but the values should not be copied by default." Standing effect: every field of a capture contract points at a record rather than copying it; a pointer at an overwritable source carries that record's version or content hash; copying values is a deviation justified at the row.
+> Why: a pointer into mutable state silently rewrites history, and copying values by default builds a second source of truth that drifts from the first.
 
 
 ## AUTO-PROCEED Mode
@@ -215,4 +222,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-09-13 10:30:04 AM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-09-13 3:34:27 PM | Protocol: LEO 4.4.1 | Source: Database*
