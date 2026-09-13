@@ -160,7 +160,11 @@ export async function upsertConstraintRecord(supabase, record) {
 
   if (!existing) {
     const { error } = await supabase.from('leo_schema_constraints').insert(record);
-    return error ? { action: 'failed', error: error.message } : { action: 'inserted' };
+    // False positive: the lint's proximity heuristic misreads this function's own local
+    // {action, error} return shape (below) as insert() payload keys for leo_schema_constraints
+    // above; the actual insert payload is `record`, an opaque variable the lint correctly
+    // cannot (and does not need to) inspect.
+    return error ? { action: 'failed', error: error.message } : { action: 'inserted' }; // schema-lint-disable-line
   }
 
   // A row whose valid_values was hand-set to NULL is a documented decision (e.g.
