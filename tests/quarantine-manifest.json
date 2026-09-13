@@ -9,7 +9,8 @@
       "linked_ref": "feedback:8b36c8e3-bf51-4325-8f79-9ab31dc0c7fd",
       "quarantined_at": "2026-08-03T09:20:00.000Z",
       "quarantined_by": "0ab6a99c-3f30-4061-badc-304785aa8185",
-      "triage_note": "EMERGENCY coordinator quarantine — red main was blocking every PR carrying the required Unit Tier check. Passes 52/52 locally; failure is runner-network-dependent, not code. De-quarantine when the fetch is injectable/skippable under test (fixture repo) per the linked feedback's fix shape. [reason_class set to the registered \"timeout\" class; precise cause is network-dependent (git fetch --all in a unit test) per error_signature + linked feedback.]"
+      "triage_note": "EMERGENCY coordinator quarantine — red main was blocking every PR carrying the required Unit Tier check. Passes 52/52 locally; failure is runner-network-dependent, not code. De-quarantine when the fetch is injectable/skippable under test (fixture repo) per the linked feedback's fix shape. [reason_class set to the registered \"timeout\" class; precise cause is network-dependent (git fetch --all in a unit test) per error_signature + linked feedback.]",
+      "review_by": "2026-11-01T09:20:00.000Z"
     },
     {
       "file": "lib/__tests__/repo-paths-git-capable.test.js",
@@ -17,7 +18,8 @@
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.362Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.362Z"
     },
     {
       "file": "lib/eva/__tests__/lifecycle-terminal-orchestrator.test.js",
@@ -25,7 +27,8 @@
       "error_signature": "AssertionError: expected { handled: true, …(2) } to deeply equal { Object (handled, completed, ...) }",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "lib/feature-flags/feature-flags.test.js",
@@ -36,7 +39,8 @@
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "No test found in suite (registry load) — not a real timeout",
       "triaged_by": "SD-REFILL-00L29WFH",
-      "reclassified_note": "file loads but registers no runner-visible tests (empty/conditional suite) — not a load error. follow-up SD-REFILL-00CO4E8Q: restore/skip-annotate the suite or delete if obsolete."
+      "reclassified_note": "file loads but registers no runner-visible tests (empty/conditional suite) — not a load error. follow-up SD-REFILL-00CO4E8Q: restore/skip-annotate the suite or delete if obsolete.",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "lib/hooks/__tests__/session-id.test.js",
@@ -44,7 +48,8 @@
       "error_signature": "AssertionError: expected '00000000-0000-0000-0000-fff7000fffff' to be 'null' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "lib/security/encryption.test.js",
@@ -53,7 +58,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "module exists at a different extension (e.g. .js->.cjs rename); test import path is stale. follow-up SD-REFILL-00CO4E8Q: update the import extension and de-quarantine."
+      "reclassified_note": "module exists at a different extension (e.g. .js->.cjs rename); test import path is stale. follow-up SD-REFILL-00CO4E8Q: update the import extension and de-quarantine.",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "lib/utils/work-item-router.test.js",
@@ -62,7 +68,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "lib/worktree-rollback.test.js",
@@ -70,7 +77,8 @@
       "error_signature": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ '/p/wt', …(1) ]",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "packages/venture-agent/src/cli.test.js",
@@ -79,7 +87,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/__tests__/leo-create-sd-smoke-detector.test.js",
@@ -87,7 +96,8 @@
       "error_signature": "AssertionError: expected '#!/usr/bin/env node\\r\\n\\r\\n/**\\r\\n * …' to match /scope:\\s*scope\\s*\\|\\|\\s*null/",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/__tests__/sd-creation-roundtrip.test.js",
@@ -96,7 +106,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/hooks/__tests__/coordination-inbox.test.js",
@@ -104,7 +115,8 @@
       "error_signature": "AssertionError: expected '◇ injected env (0) from .env // tip: …' to be 'abc-from-stdin-123' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/hooks/__tests__/fr1-fr5-structural.test.js",
@@ -112,7 +124,8 @@
       "error_signature": "AssertionError: expected '#!/usr/bin/env node\\r\\n/**\\r\\n * sess…' to match /\\}\\s*else\\s*\\{[\\s\\S]{0,500}method:\\s*…/",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/hooks/__tests__/post-tool-clear-telemetry.test.js",
@@ -120,7 +133,8 @@
       "error_signature": "AssertionError: expected '00000000-0000-0000-0000-fff7000fffff' to be 'null' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/hooks/__tests__/pre-tool-enforce-inflight-default-on.test.js",
@@ -129,7 +143,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/hooks/__tests__/retry-state-manager-outcome-mix.test.js",
@@ -137,7 +152,8 @@
       "error_signature": "AssertionError: expected 'Edit:/x.js:439083f38956' to be 'Edit:/x.js' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/leo-create-sd.test.js",
@@ -146,7 +162,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/modules/handoff/executors/exec-to-plan/gates/test-coverage-quality.test.js",
@@ -154,7 +171,8 @@
       "error_signature": "AssertionError: expected 'short_circuit_no_ui_diff' to be 'short_circuit_backend_only' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/modules/handoff/executors/exec-to-plan/gates/user-story-coverage.test.js",
@@ -162,7 +180,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/modules/handoff/executors/lead-to-plan/gates/verifier-parity.test.js",
@@ -171,7 +190,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/modules/handoff/gates/dual-generation.test.js",
@@ -179,7 +199,8 @@
       "error_signature": "AssertionError: expected 'full' to be 'digest' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/modules/plan-parser.test.js",
@@ -188,7 +209,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/modules/prd/rewrite-loop.test.js",
@@ -197,7 +219,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/modules/sd-key-generator-coverage.test.js",
@@ -207,7 +230,8 @@
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "TypeError: path argument must be string — test harness/setup passes non-string path",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "scripts/twoway-roundtrip.test.js",
@@ -215,7 +239,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/capture-session-id-hook.test.js",
@@ -223,7 +248,8 @@
       "error_signature": "AssertionError: expected 3221226505 to be +0 // Object.is equality",
       "linked_ref": "SD-FDBK-INFRA-SWEEP-CLI-EXIT-001",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/ci/sibling-a-recursive-failure-lint.test.js",
@@ -233,7 +259,8 @@
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Lint guard correctly detecting recursive writer-consumer asymmetry (1 bypass) — fix the violation, do not silence",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/claude-md-generator/opus47-alignment.test.js",
@@ -241,7 +268,8 @@
       "error_signature": "AssertionError: expected '<!-- file_content_hash: 554e5acb03aef…' to contain 'docs/harness-backlog.md'",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/eva/operations.test.js",
@@ -249,7 +277,8 @@
       "error_signature": "AssertionError: expected \"vi.fn()\" to be called 6 times, but got 8 times",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/eva/pipeline-data.test.js",
@@ -257,7 +286,8 @@
       "error_signature": "AssertionError: expected [] to have a length of 1 but got +0",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/eva/s15-design-studio-reliability.test.js",
@@ -267,7 +297,8 @@
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "ENOENT: test fixture file absent",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/eva/s20-pause-controller.test.js",
@@ -275,7 +306,8 @@
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/eva/stage-zero/synthesis/attention-capital.test.js",
@@ -283,7 +315,8 @@
       "error_signature": "AssertionError: expected 0 to be greater than 0",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/eva/stage-zero/synthesis/mental-models.test.js",
@@ -291,7 +324,8 @@
       "error_signature": "AssertionError: expected 'model-2' to be 'model-3' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/feedback-build-prompt.test.js",
@@ -300,7 +334,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/playground-logic.test.js",
@@ -309,7 +344,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/programmatic/tool-loop.test.js",
@@ -317,7 +353,8 @@
       "error_signature": "AssertionError: expected 'Understood! I\\'m ready.\\n\\nHow can I …' to be '{\"result\": \"ok\"}' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/review-findings-logger.test.js",
@@ -326,7 +363,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/review-gate.test.js",
@@ -335,7 +373,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/review-risk-scorer.test.js",
@@ -344,7 +383,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/security/security-definer-remediation.test.js",
@@ -354,7 +394,8 @@
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "SQL: Could not find the function (DB not provisioned in test env)",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/sub-agents/qa-engineering-director-v2.test.js",
@@ -362,7 +403,8 @@
       "error_signature": "AssertionError: expected { verdict: 'ERROR', …(2) } to have property \"phases\"",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/subagent-workflow.test.js",
@@ -372,7 +414,8 @@
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Playwright test.describe() in unit tier — belongs in e2e project, exclude from unit",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/auto-validate-user-stories-draft.test.js",
@@ -381,7 +424,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/blocked-state-detector.test.js",
@@ -389,7 +433,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/brand-variants.validation.test.js",
@@ -397,7 +442,8 @@
       "error_signature": "AssertionError: expected [Function] to throw an error",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/claim-validity-gate.test.js",
@@ -405,7 +451,8 @@
       "error_signature": "AssertionError: promise resolved \"{ …(6) }\" instead of rejecting",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/cleanup/delete-venture-fully.test.js",
@@ -413,7 +460,8 @@
       "error_signature": "AssertionError: expected \"vi.fn()\" to be called 1 times, but got 0 times",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/coordinator-self-review-canonicalize.test.js",
@@ -421,7 +469,8 @@
       "error_signature": "AssertionError: expected undefined to be truthy",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/decision-filter-engine.test.js",
@@ -429,7 +478,8 @@
       "error_signature": "AssertionError: expected 'MEDIUM' to be 'HIGH' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/emit-feedback-bypass-static-guard.test.js",
@@ -439,7 +489,8 @@
       "quarantined_at": "2026-06-11T10:09:40.363Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Static guard correctly detecting emit-feedback bypass-site set drift vs OOS allowlist — reconcile the allowlist or fix the bypass",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/enforcement-npm-install-guard.test.js",
@@ -447,7 +498,8 @@
       "error_signature": "AssertionError: expected 3221226505 to be 2 // Object.is equality",
       "linked_ref": "SD-FDBK-INFRA-SWEEP-CLI-EXIT-001",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/enforcement-rca-tiered.test.js",
@@ -455,7 +507,8 @@
       "error_signature": "AssertionError: expected 3221226505 to be +0 // Object.is equality",
       "linked_ref": "SD-FDBK-INFRA-SWEEP-CLI-EXIT-001",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/eva-master-scheduler.test.js",
@@ -463,7 +516,8 @@
       "error_signature": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ { ventureId: 'v-1', …(1) }, …(1) ]",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/eva-orchestrator.test.js",
@@ -471,7 +525,8 @@
       "error_signature": "AssertionError: expected 'FAILED' to be 'COMPLETED' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/eva/brand-stage-wiring.test.js",
@@ -479,7 +534,8 @@
       "error_signature": "AssertionError: expected [] to have a length of 2 but got +0",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/eva/bridge/dependency-ordered-execution.test.js",
@@ -487,7 +543,8 @@
       "error_signature": "TypeError: Cannot read properties of undefined (reading 'dependencyContext')",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/eva/capacity-assignment-engine.test.js",
@@ -495,7 +552,8 @@
       "error_signature": "AssertionError: expected [ { sessionId: 's1', rank: 1, …(3) } ] to deeply equal []",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/eva/chairman-decision-allowlist.test.js",
@@ -503,7 +561,8 @@
       "error_signature": "AssertionError: expected true not to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.363Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.363Z"
     },
     {
       "file": "tests/unit/eva/chairman-governance.test.js",
@@ -511,7 +570,8 @@
       "error_signature": "AssertionError: expected 'escalate_notify' to be 'auto_approve_with_flag' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/chairman-intake-review.test.js",
@@ -519,7 +579,8 @@
       "error_signature": "AssertionError: expected '## Item 1 of 1: Test\\n\\n\\n**Descripti…' to contain 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…'",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/chairman-sla-enforcer.test.js",
@@ -527,7 +588,8 @@
       "error_signature": "AssertionError: expected undefined to be defined",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/concurrent-scoring.test.js",
@@ -535,7 +597,8 @@
       "error_signature": "AssertionError: expected 'handler-v1' to be 'handler-v2' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/dead-code-scanner.test.js",
@@ -543,7 +606,8 @@
       "error_signature": "AssertionError: expected 0 to be greater than 0",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/decision-filter-engine.test.js",
@@ -551,7 +615,8 @@
       "error_signature": "AssertionError: expected 'MEDIUM' to be 'HIGH' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/dfe-gate-escalation-router.test.js",
@@ -559,7 +624,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/exit-table-wiring.test.js",
@@ -569,7 +635,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "TypeError reading acq* of undefined — incomplete mock/stub for the wiring dependency",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/exit/separation-rehearsal.test.js",
@@ -577,7 +644,8 @@
       "error_signature": "AssertionError: expected undefined to be defined",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/experiments/calibration-report.test.js",
@@ -585,7 +653,8 @@
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/filter-calibration.test.js",
@@ -593,7 +662,8 @@
       "error_signature": "AssertionError: expected 2 to be 7 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/gate-failure-recovery.test.js",
@@ -601,7 +671,8 @@
       "error_signature": "AssertionError: expected 'non-critical' to be 'critical' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/okr-monthly-generator-acceptance-routing.test.js",
@@ -611,7 +682,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "No canonical L1 vision found (eva_vision_documents not seeded in test env)",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/orchestration-hub.test.js",
@@ -619,7 +691,8 @@
       "error_signature": "AssertionError: expected 20 to be 5 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/pipeline-runner/synthetic-venture-factory.test.js",
@@ -627,7 +700,8 @@
       "error_signature": "AssertionError: expected 'first_principles_rebuilder' to be 'marketplace' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/replit-reentry-adapter.test.js",
@@ -635,7 +709,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/seed-l1-vision-structure.test.js",
@@ -643,7 +718,8 @@
       "error_signature": "AssertionError: expected '---\\r' to be '# ExecHoldings Global (EHG) — Mission…' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/stage-execution-worker-health.test.js",
@@ -651,7 +727,8 @@
       "error_signature": "AssertionError: expected 200 to be 503 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/stage-execution-worker-resilience.test.js",
@@ -659,7 +736,8 @@
       "error_signature": "AssertionError: expected 120000 to be 300000 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/template-extractor.test.js",
@@ -667,7 +745,8 @@
       "error_signature": "AssertionError: expected null to be truthy",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/eva/translation-fidelity-gate.test.js",
@@ -675,7 +754,8 @@
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/event-router-trimodal.test.js",
@@ -683,7 +763,8 @@
       "error_signature": "AssertionError: expected 'EVENT' to be 'PRIORITY_QUEUE' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/factories/base-factory.test.js",
@@ -691,7 +772,8 @@
       "error_signature": "AssertionError: expected 'item-1' to be 'item-5' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/factories/directive-factory.test.js",
@@ -701,7 +783,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Could not find the phase column — phantom-column drift on strategic_directives_v2 insert",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/gap-014/escalation-threshold.test.js",
@@ -709,7 +792,8 @@
       "error_signature": "AssertionError: expected [] to have a length of 1 but got +0",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/gates/architectural-pattern-checklist.test.js",
@@ -717,7 +801,8 @@
       "error_signature": "AssertionError: expected 75 to be 100 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/gates/cross-child-integration-gate.test.js",
@@ -725,7 +810,8 @@
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/genesis/branch-lifecycle.test.js",
@@ -735,7 +821,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Cannot destructure data of intermediate value — mock chain returns undefined (same class as SD-REFILL-002XLOD1)",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/governance/canonical-helper-bypass-guard.test.js",
@@ -743,7 +830,8 @@
       "error_signature": "AssertionError: Found 13 unexempted bypass site(s) for table=feedback, helper=lib/governance/emit-feedback.js:",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/governance/chairman-escalation.test.js",
@@ -751,7 +839,8 @@
       "error_signature": "AssertionError: expected null to be false // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/governance/guardrail-intelligence-analyzer.test.js",
@@ -759,7 +848,8 @@
       "error_signature": "AssertionError: expected 'awareness-not-enforcement' to be 'enforcement' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/governance/manifesto-mode.test.js",
@@ -767,7 +857,8 @@
       "error_signature": "AssertionError: expected error to be instance of ManifestoActivationError",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/handoff/handoff-orchestrator.test.js",
@@ -775,7 +866,8 @@
       "error_signature": "AssertionError: expected \"vi.fn()\" to be called once, but got 0 times",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/helpers/database-helpers.test.js",
@@ -785,7 +877,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Could not find a column on test directive insert — phantom-column drift",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/integration-verification-gate.test.js",
@@ -793,7 +886,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/language-parsers.test.js",
@@ -801,7 +895,8 @@
       "error_signature": "AssertionError: expected [ …(2) ] to have a length of 1 but got 2",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/lead-final-approval-prereq-check.test.js",
@@ -809,7 +904,8 @@
       "error_signature": "AssertionError: expected 'DRAFT_SD_NOT_APPROVED' to be 'INVALID_STATUS' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/learn-pipeline-content-fallback.test.js",
@@ -817,7 +913,8 @@
       "error_signature": "AssertionError: expected [] to include 'PAT-CONTENT-ONLY'",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/lib/context-aware-sub-agent-selector.test.js",
@@ -827,7 +924,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Code under test calls process.exit(0) — needs injectable exit/guard",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/lib/error-pattern-library.test.js",
@@ -837,7 +935,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Code under test calls process.exit(0) — needs injectable exit/guard",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/lib/eva/chairman-decision-watcher-lookup.test.js",
@@ -845,7 +944,8 @@
       "error_signature": "AssertionError: expected 17 to be 15 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/lib/lead-enrich-template-conformance.test.js",
@@ -853,7 +953,8 @@
       "error_signature": "AssertionError: scripts/one-off/_lead-enrich-sd-fdbk-enh-cascade-trigger-3627-001.mjs fails FR-3 conformance: parseError=none | hasHelperImport=false | hasVerifyCall=false | exempt=false/missing-annot",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/lib/worktree-rmsync-junction-safety.test.js",
@@ -863,7 +964,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "Guard correctly detecting 2 worktree-related files using raw fs.rmSync({recursive:true}): scripts/hooks/concurrent-session-worktree.cjs + scripts/maintenance/sweep-worker-scratch.mjs — likely tied to the live node_modules junction-reap churn; FIX the 2 files, do not silence",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/marketing-ai-email-campaigns.test.js",
@@ -873,7 +975,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "enrollInCampaign requires ventureId — test omits required arg",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/mock/firewall.test.js",
@@ -881,7 +984,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/orchestrator-completeness-audit.test.js",
@@ -891,7 +995,8 @@
       "quarantined_at": "2026-06-11T10:09:40.364Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "expected +0 to be 2 — count assertion drifted from production",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/pre-tool-enforce-schema.test.js",
@@ -899,7 +1004,8 @@
       "error_signature": "AssertionError: expected '[pre-tool-enforce] RCA-TIERED-ENFORCE…' to contain 'schema-preflight'",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.364Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.364Z"
     },
     {
       "file": "tests/unit/preflight-autofix.test.js",
@@ -907,7 +1013,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/product-hunt-client.test.js",
@@ -915,7 +1022,8 @@
       "error_signature": "AssertionError: expected [ { name: 'ChatGPT', …(6) }, …(9) ] to have a length of 1 but got 10",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/protocol-file-read-cross-mode.test.js",
@@ -923,7 +1031,8 @@
       "error_signature": "AssertionError: expected 90 to be 100 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/protocol-policies/worktree-failure-classification.test.js",
@@ -931,7 +1040,8 @@
       "error_signature": "AssertionError: expected [ 'outside_repo', …(5) ] to deeply equal [ 'outside_repo', …(2) ]",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/rca-gate-validation.test.js",
@@ -939,7 +1049,8 @@
       "error_signature": "AssertionError: expected +0 to be 2 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/rca-learning-ingestion.test.js",
@@ -947,7 +1058,8 @@
       "error_signature": "AssertionError: expected 11 to be 15 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/reality-gates.test.js",
@@ -955,7 +1067,8 @@
       "error_signature": "AssertionError: expected false to be true // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/resolve-sd-workdir/worktree-atomicity.test.js",
@@ -964,7 +1077,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/risk-classifier/anti-bloat-system.test.js",
@@ -972,7 +1086,8 @@
       "error_signature": "AssertionError: expected 'view_not_available' to be 'view_not_exists' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/risk-classifier/risk-classifier.test.js",
@@ -980,7 +1095,8 @@
       "error_signature": "AssertionError: expected 'GOVERNED' to be 'IMMUTABLE' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/scripts/resolve-sd-workdir-substrate-gate.test.js",
@@ -988,7 +1104,8 @@
       "error_signature": "AssertionError: expected -1 to be greater than 0",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/sd-start-orch-routing-phase.test.js",
@@ -996,7 +1113,8 @@
       "error_signature": "AssertionError: expected 'verifyHandoffIntegrity(sdUuid) {\\r\\n …' to match /\\.eq\\(['\"]sd_key['\"]/",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/sd-workflow-templates.test.js",
@@ -1004,7 +1122,8 @@
       "error_signature": "AssertionError: expected 2 to be 4 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/semantic-search-client.test.js",
@@ -1012,7 +1131,8 @@
       "error_signature": "AssertionError: promise resolved \"{ totalEntities: +0, …(2) }\" instead of rejecting",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/semantic-validation-gates.test.js",
@@ -1020,7 +1140,8 @@
       "error_signature": "AssertionError: expected 90 to be 100 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/session-summary/secret-redactor.test.js",
@@ -1028,7 +1149,8 @@
       "error_signature": "AssertionError: expected 'createClerkClient({ secret_key=[REDAC…' to contain 'CLERK_SECRET_KEY_REDACTED'",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/session-writer/no-bypass.test.js",
@@ -1036,7 +1158,8 @@
       "error_signature": "AssertionError: Files writing raw to claude_sessions without going through lib/session-writer.cjs:",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/sub-agents/design-workflow-review.test.js",
@@ -1044,7 +1167,8 @@
       "error_signature": "AssertionError: expected [ Array(1) ] to have a length of 2 but got 1",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/transition-readiness-rejection.test.js",
@@ -1052,7 +1176,8 @@
       "error_signature": "AssertionError: expected true to be false // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/venture-ceo-handlers.test.js",
@@ -1060,7 +1185,8 @@
       "error_signature": "AssertionError: expected +0 to be 2 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/vision-event-bus.test.js",
@@ -1068,7 +1194,8 @@
       "error_signature": "AssertionError: expected 1 to be 2 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/vision-gap-004.test.js",
@@ -1076,7 +1203,8 @@
       "error_signature": "AssertionError: expected [ 'devils_advocate_challenge', …(8) ] to have a length of 8 but got 9",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/vision-portfolio-scorecard.test.js",
@@ -1086,7 +1214,8 @@
       "quarantined_at": "2026-06-11T10:09:40.365Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
       "triage_note": "expected false to be true (8 fails) — assertion drifted from loadVisionScores behavior (spot-verified live)",
-      "triaged_by": "SD-REFILL-00L29WFH"
+      "triaged_by": "SD-REFILL-00L29WFH",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/vision-score-dynamic-threshold.test.js",
@@ -1094,7 +1223,8 @@
       "error_signature": "AssertionError: expected 48 to be 32 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/vision-score-gate.test.js",
@@ -1102,7 +1232,8 @@
       "error_signature": "AssertionError: expected undefined to be 70 // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/wiring-validators/spec-code-drift.test.js",
@@ -1111,7 +1242,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/wiring-validators/vision-traceability.test.js",
@@ -1120,7 +1252,8 @@
       "linked_ref": "feedback:8405e651-8155-442e-ac19-69b3a537b50f",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
       "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
-      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane"
+      "reclassified_note": "valid under `node --test`; excluded from vitest (node:test suites are invisible to vitest); follow-up SD-REFILL-00CO4E8Q: convert to vitest or wire a node:test CI lane",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/wsjf-priority-fetcher.test.js",
@@ -1128,7 +1261,8 @@
       "error_signature": "AssertionError: expected '3' to be '1' // Object.is equality",
       "linked_ref": "feedback:65fce396-3dfb-4fda-b9d4-81417d7205f7",
       "quarantined_at": "2026-06-11T10:09:40.365Z",
-      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b"
+      "quarantined_by": "aa0de85c-9877-4cc1-b561-4f38b30e4a6b",
+      "review_by": "2026-09-09T10:09:40.365Z"
     },
     {
       "file": "tests/unit/protocol-file-read-gate.test.js",
@@ -1136,7 +1270,8 @@
       "error_signature": "should FALLBACK-PASS when required file is untracked but exists on disk (LEAD-TO-PLAN/PLAN-TO-EXEC/EXEC-TO-PLAN) — git-tracked-state sensitive; passes in isolation + in local full-suite, fails only under CI worker order",
       "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
       "quarantined_at": "2026-06-26T03:39:33.161Z",
-      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
+      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a",
+      "review_by": "2026-09-24T03:39:33.161Z"
     },
     {
       "file": "tests/unit/partial-read-detection/protocol-file-read-gate.test.js",
@@ -1144,7 +1279,8 @@
       "error_signature": "should handle session state missing new fields without crashing — passes locally (isolation + full-suite), fails only under CI worker order",
       "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
       "quarantined_at": "2026-06-26T03:39:33.161Z",
-      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
+      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a",
+      "review_by": "2026-09-24T03:39:33.161Z"
     },
     {
       "file": "tests/unit/partial-read-detection/protocol-file-tracker.test.js",
@@ -1152,7 +1288,8 @@
       "error_signature": "should handle full paths — passes locally, fails only under CI worker order",
       "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
       "quarantined_at": "2026-06-26T03:39:33.161Z",
-      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
+      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a",
+      "review_by": "2026-09-24T03:39:33.161Z"
     },
     {
       "file": "tests/phantom-column-fixes.test.js",
@@ -1160,7 +1297,8 @@
       "error_signature": "dfe-escalation-gate audit_log static-source assertion: expected src not to match /^s*gate_name:.*,$\n^s*sd_key:/m — passes on byte-identical source locally, fails only under CI worker order (NOT a real source regression)",
       "linked_ref": "sd:SD-LEO-INFRA-CI-BASELINE-ROT-FIX-001",
       "quarantined_at": "2026-06-26T03:39:33.161Z",
-      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a"
+      "quarantined_by": "66f7a564-636a-435c-ade1-68096b37389a",
+      "review_by": "2026-09-24T03:39:33.161Z"
     },
     {
       "file": "tests/unit/eva/stage-execution-worker.test.js",
@@ -1168,7 +1306,8 @@
       "error_signature": "AssertionError: expected 'vi.fn()' to be called with arguments: [ObjectContaining{...}] — processOneStage mock call signature changed; test expectations stale",
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T21:15:00.000Z"
     },
     {
       "file": "tests/unit/eva/stage-execution-worker-s19-surfacing.test.js",
@@ -1176,7 +1315,8 @@
       "error_signature": "AssertionError: expected [] to have a length of 1 but got +0 — _resolveVisionPendingDecision mock API changed; UPDATE filter no longer matches mock setup",
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T21:15:00.000Z"
     },
     {
       "file": "tests/unit/notifications/scheduler.test.js",
@@ -1184,7 +1324,8 @@
       "error_signature": "AssertionError: expected sendWeeklySummary error handler to reject but received unexpected resolve — scheduler error propagation contract changed",
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T21:15:00.000Z"
     },
     {
       "file": "tests/unit/resolve-sub-agent-repo.test.js",
@@ -1192,7 +1333,8 @@
       "error_signature": "AssertionError: expected '/home/runner/work/EHG_Engineer/EHG_Engineer/C:/Users/rickf/...' to be 'C:/Users/rickf/Projects/_EHG/EHG_Engineer' — test hardcodes Windows developer-machine path; toCanonicalRepoPath on Linux CI prepends CWD",
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T21:15:00.000Z"
     },
     {
       "file": "tests/unit/worktree-reaper-pools.test.js",
@@ -1200,7 +1342,8 @@
       "error_signature": "AssertionError: expected [...] to include 'c:/users/rickf/projects/_ehg/ehg_engineer' — resolveRegisteredPools test hardcodes Windows paths; fails on Linux CI where path normalisation differs",
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T21:15:00.000Z"
     },
     {
       "file": "tests/unit/worker-checkin-fleet-identity.test.js",
@@ -1208,7 +1351,8 @@
       "error_signature": "AssertionError: expected { callsign: 'Alpha', color: 'blue' } to deeply equal { callsign: 'Echo', color: 'cyan' } — callsign assignment scheme changed (tier-encoded Alpha/Echo), test fixture stale",
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T21:15:00.000Z"
     },
     {
       "file": "tests/unit/eva/stage-execution-worker-timing.test.js",
@@ -1216,7 +1360,8 @@
       "error_signature": "AssertionError: _syncStageWork uses result.startedAt when provided — timing sync function signature changed, test mock setup no longer matches call contract",
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T21:15:00.000Z"
     },
     {
       "file": "tests/unit/hooks/db-only-enforcement.test.js",
@@ -1224,7 +1369,8 @@
       "error_signature": "AssertionError: expected 'WORKTREE HYGIENE GUARD: Edit/Write blocked...' to contain 'DB-ONLY ENFORCEMENT' — enforcement hook error message wording changed, test still expects old string",
       "linked_ref": "sd:SD-LEO-INFRA-BASELINE-QUARANTINE-SWEEP-001",
       "quarantined_at": "2026-06-28T21:15:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T21:15:00.000Z"
     },
     {
       "file": "tests/unit/cleanup/master-reset-validation.test.js",
@@ -1232,7 +1378,8 @@
       "error_signature": "Error: connect ECONNREFUSED ::1:5432 — test imports pg and calls client.connect() unconditionally in beforeAll; unit-tier CI runner has no PostgreSQL database fixture",
       "linked_ref": "sd:SD-LEO-INFRA-CI-UNIT-TIER-INSTALL-CASCADE-001",
       "quarantined_at": "2026-06-28T22:30:00.000Z",
-      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e"
+      "quarantined_by": "4a712a71-88c5-4e2b-b26d-8829f036991e",
+      "review_by": "2026-09-26T22:30:00.000Z"
     },
     {
       "file": "tests/unit/worker-checkin-critical-qf-priority-jump.test.js",
@@ -1241,7 +1388,8 @@
       "linked_ref": "feedback:3ac708a6-b821-41d6-b39b-3d9558404c7b",
       "quarantined_at": "2026-07-08T01:00:00.000Z",
       "quarantined_by": "ccdd0c1c-19b0-481c-834c-082f2cd96776",
-      "triage_note": "Hardcoded fixture date (NOW=2026-07-05) rots as real wall-clock time advances past it: resolveCheckin()/isAutoStartableQF() use real Date.now() internally (no injectable clock), so once STALE_QF_DAYS has elapsed since the fixture date, isAutoStartableQF's staleness ceiling rejects the fixture QFs — breaking acceptance #1/#3 (idle instead of self_claimed_qf). Deterministic, not flaky; will not self-heal. This was the REQUIRED 'Run Unit Tier (quarantine-aware)' branch-protection check, blocking every PR fleet-wide until quarantined. Un-quarantine once resolveCheckin/isAutoStartableQF accept an injectable nowMs (or the fixture re-anchors to a mocked clock)."
+      "triage_note": "Hardcoded fixture date (NOW=2026-07-05) rots as real wall-clock time advances past it: resolveCheckin()/isAutoStartableQF() use real Date.now() internally (no injectable clock), so once STALE_QF_DAYS has elapsed since the fixture date, isAutoStartableQF's staleness ceiling rejects the fixture QFs — breaking acceptance #1/#3 (idle instead of self_claimed_qf). Deterministic, not flaky; will not self-heal. This was the REQUIRED 'Run Unit Tier (quarantine-aware)' branch-protection check, blocking every PR fleet-wide until quarantined. Un-quarantine once resolveCheckin/isAutoStartableQF accept an injectable nowMs (or the fixture re-anchors to a mocked clock).",
+      "review_by": "2026-10-06T01:00:00.000Z"
     },
     {
       "file": "tests/unit/agents/venture-state-machine-jit-check.test.js",
@@ -1250,7 +1398,8 @@
       "linked_ref": "feedback:16fe70aa-ecc9-439f-b050-7b8c930103bb",
       "quarantined_at": "2026-08-09T03:35:00.000Z",
       "quarantined_by": "cff8013c-93e3-41d2-bea1-f511c2189051",
-      "triage_note": "NEVER COLLECTED until SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3 narrowed SHARED_EXCLUDE '**/agents/**' (aimed at lib/agents/**, it also swallowed tests/unit/agents/**). Not a new regression — a pre-existing red that nothing could observe. Quarantined rather than re-excluded so it stays counted in the declared register and visible to the membership guard. De-quarantine by realigning the suite with the current VentureStateMachine API, or delete it if the behaviour it asserts is gone."
+      "triage_note": "NEVER COLLECTED until SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3 narrowed SHARED_EXCLUDE '**/agents/**' (aimed at lib/agents/**, it also swallowed tests/unit/agents/**). Not a new regression — a pre-existing red that nothing could observe. Quarantined rather than re-excluded so it stays counted in the declared register and visible to the membership guard. De-quarantine by realigning the suite with the current VentureStateMachine API, or delete it if the behaviour it asserts is gone.",
+      "review_by": "2026-11-07T03:35:00.000Z"
     },
     {
       "file": "tests/unit/agents/agent-registry.test.js",
@@ -1259,7 +1408,8 @@
       "linked_ref": "feedback:16fe70aa-ecc9-439f-b050-7b8c930103bb",
       "quarantined_at": "2026-08-09T03:35:00.000Z",
       "quarantined_by": "cff8013c-93e3-41d2-bea1-f511c2189051",
-      "triage_note": "NEVER COLLECTED until SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3, same cause as the sibling entry. reason_class set to the registered \"timeout\" class; the precise cause is an unmocked network call (TypeError: fetch failed) per error_signature. De-quarantine when the fetch is injected or mocked so the suite is genuinely a unit test."
+      "triage_note": "NEVER COLLECTED until SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3, same cause as the sibling entry. reason_class set to the registered \"timeout\" class; the precise cause is an unmocked network call (TypeError: fetch failed) per error_signature. De-quarantine when the fetch is injected or mocked so the suite is genuinely a unit test.",
+      "review_by": "2026-11-07T03:35:00.000Z"
     }
   ]
 }

@@ -831,6 +831,17 @@ async function captureLedgerRow(
     cost_captured: costCaptured,
     decision_requested: decisionRequested !== false,
   };
+  // QF-20260912-681: an informational send never asks for a decision, so admitting it at the
+  // column's own DEFAULT 'pending' manufactures an undecided row nobody was ever asked to close --
+  // exactly the rows lib/solomon/conduct-probes.js's admission-scope filter now excludes, but a new
+  // one is still written every time unless capture stops creating them too. 'not_requested' is not
+  // a legal decision value (solomon_advice_outcome_ledger_decision_check: pending/accepted/rejected/
+  // partial/deferred/superseded, confirmed live 2026-09-13) and adding it is a schema change out of
+  // this QF's scope; 'deferred' is the nearest existing value ("not yet decided", never a judgment
+  // rendered) and already has established usage for exactly this "no real disposition yet" shape.
+  if (decisionRequested === false) {
+    row.decision = 'deferred';
+  }
   try {
     const { error } = await supabase
       .from('solomon_advice_outcome_ledger') // schema-lint-disable-line — new table (this PR's migration), chairman-apply-gated, not yet in the live snapshot

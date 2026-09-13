@@ -38,6 +38,7 @@ import { gapAdjustedAgeMs } from '../lib/periodic-liveness/cron-gap.mjs';
 import { fetchScheduledRuns, latestRunPerWorkflow, classifyGhaCronRows, observedGapStats, medianRatioAlarm, shouldStampDecision, batchTimeRange, isBatchFresh } from '../lib/periodic-liveness/gha-run-resolver.mjs';
 import { stampFromGithubActionsRun, stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
 import { resolveGitHubRepo } from '../lib/repo-paths.js';
+import { checkCadenceParity } from './ci/scheduler-round-cadence-parity.mjs';
 // SD-LEO-ORCH-MICHAEL-ROLE-FORMALIZATION-002-A (FR-6): the windowed-expectation check reads the ET
 // wall-clock from the injectable `now` through the same helpers the chairman ET gates use.
 import { etLocalHour, etLocalMinute } from '../lib/time/chairman-et-wall-clock.js';
@@ -530,6 +531,20 @@ async function stampStateChangeAnchor(row, evaluation) {
 async function main({ includeFixtures = false } = {}) {
   const { data: rows, error } = await supabase.from('periodic_process_registry').select('*').neq('process_key', WATCHER_SELF_KEY);
   if (error) throw new Error(`registry query failed: ${error.message}`);
+
+  // QF-20260913-788, FIX SHAPE (c): scheduler-round-cadence-parity.mjs previously had no
+  // workflow/cron/hook entrypoint -- a misdeclared scheduler_round row could sit OVERDUE for
+  // weeks before anyone noticed. Runs once per watcher cycle; never blocks per-row evaluation.
+  try {
+    const parity = await checkCadenceParity(supabase);
+    if (parity.status === 'FAIL') {
+      console.error(`[periodic-liveness-watcher] scheduler-round-cadence-parity FAIL -- misdeclared scheduler_round row(s): ${JSON.stringify(parity.mismatches)}`);
+    } else if (parity.status === 'error') {
+      console.error(`[periodic-liveness-watcher] scheduler-round-cadence-parity check errored: ${parity.error}`);
+    }
+  } catch (e) {
+    console.error(`[periodic-liveness-watcher] scheduler-round-cadence-parity check threw: ${e?.message || e}`);
+  }
 
   // SD-LEO-INFRA-ONE-SYNTHETIC-ROW-001-B FR-4: drop e2e fixture residue before evaluating liveness.
   //

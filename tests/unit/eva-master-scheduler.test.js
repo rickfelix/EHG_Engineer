@@ -1859,3 +1859,54 @@ describe('SD-LEO-ORCH-ADAM-PLAN-KEEPER-001-B: _runDueJobs observe gate pin (FR-2
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('QF-20260913-788: okr-day28-hardstop cadenceDays regression', () => {
+  test('cadenceDays:1 job whose handler no-ops until day 28 fires on day 28 of the same month (injected clock)', async () => {
+    const mockSupabase = createMockSupabase();
+    const mockLogger = createMockLogger();
+    const scheduler = new EvaMasterScheduler({ supabase: mockSupabase, logger: mockLogger, config: {} });
+
+    let fired = false;
+    const handler = vi.fn(async () => {
+      if (new Date().getUTCDate() < 28) return { fired: false, reason: 'before-day-28' };
+      fired = true;
+      return { fired: true };
+    });
+    scheduler.registerJob({ name: 'day28-sim-job', handler, cadenceDays: 1 });
+
+    vi.useFakeTimers();
+    try {
+      for (let day = 1; day <= 28; day++) {
+        vi.setSystemTime(new Date(Date.UTC(2026, 8, day, 12, 0, 0)));
+        await scheduler._runDueJobs();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(fired).toBe(true);
+    expect(handler).toHaveBeenCalledTimes(28); // ran daily, not just once at month start
+  });
+
+  test('cadenceDays:30 anchored on an early-month no-op never reaches day 28 (regression pin on the historical bug)', async () => {
+    const mockSupabase = createMockSupabase();
+    const mockLogger = createMockLogger();
+    const scheduler = new EvaMasterScheduler({ supabase: mockSupabase, logger: mockLogger, config: {} });
+
+    const handler = vi.fn(async () =>
+      (new Date().getUTCDate() < 28 ? { fired: false, reason: 'before-day-28' } : { fired: true }));
+    scheduler.registerJob({ name: 'day28-bug-repro-job', handler, cadenceDays: 30 });
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-09-01T20:36:00Z'));
+      await scheduler._runDueJobs(); // no-op, but the old code still stamps lastRun
+      vi.setSystemTime(new Date('2026-09-28T12:00:00Z')); // 27 days later -- still inside cadenceDays:30
+      await scheduler._runDueJobs();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(handler).toHaveBeenCalledTimes(1); // the 09-28 call was cadence-skipped: day 28 unreachable
+  });
+});
