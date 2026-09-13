@@ -50,15 +50,19 @@ function buildMockSupabase({ presentTypes = [], artifactData = {}, emitSpy, lega
             return {
               eq() { return this; },
               in() {
-                return Promise.resolve({
-                  data: presentTypes.map(t => ({
-                    lifecycle_stage: 23,
-                    artifact_type: t,
-                    is_current: true,
-                    artifact_data: artifactData[t] ?? null,
-                  })),
-                  error: null,
-                });
+                return {
+                  limit() {
+                    return Promise.resolve({
+                      data: presentTypes.map(t => ({
+                        lifecycle_stage: 23,
+                        artifact_type: t,
+                        is_current: true,
+                        artifact_data: artifactData[t] ?? null,
+                      })),
+                      error: null,
+                    });
+                  },
+                };
               },
             };
           },

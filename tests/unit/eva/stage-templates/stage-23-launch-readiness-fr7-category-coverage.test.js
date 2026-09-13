@@ -21,10 +21,14 @@ function buildMockSupabase({ artifactData = {}, legalDocsPresent = false } = {})
             return {
               eq() { return this; },
               in() {
-                return Promise.resolve({
-                  data: presentTypes.map((t) => ({ lifecycle_stage: 23, artifact_type: t, is_current: true, artifact_data: artifactData[t] })),
-                  error: null,
-                });
+                return {
+                  limit() {
+                    return Promise.resolve({
+                      data: presentTypes.map((t) => ({ lifecycle_stage: 23, artifact_type: t, is_current: true, artifact_data: artifactData[t] })),
+                      error: null,
+                    });
+                  },
+                };
               },
             };
           },
