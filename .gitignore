@@ -78,6 +78,11 @@ test-results/
 coverage/
 supabase/.temp/
 
+# Lighthouse CI collect output (LHR JSON embeds full-page base64 screenshots +
+# every scanned request URL; scripts/eva/capa-001-a-baseline-runner.mjs always
+# cleans this up itself, but never let a crash-before-cleanup leave it trackable)
+.lighthouseci/
+
 # Generated LEO Protocol reports (can be regenerated with leo:summary)
 docs/summaries/compliance/
 

@@ -15,6 +15,7 @@ import {
   buildLighthouseFindings,
   buildLighthouseFailureFinding,
   enforceSeverityCap,
+  validateDeploymentUrl,
 } from '../../../../scripts/eva/capa-001-a-baseline-runner.mjs';
 import { validateFindingShape, computeFindingHash } from '../../../../lib/eva/quality-findings/finding-shape.js';
 
@@ -243,5 +244,42 @@ describe('enforceSeverityCap — runtime guard (TESTING sub-agent finding, EXEC 
 
   it('handles an empty findings array', () => {
     expect(enforceSeverityCap([])).toEqual([]);
+  });
+});
+
+describe('validateDeploymentUrl — SSRF/trust-boundary guard (SECURITY sub-agent finding SEC-2, EXEC phase)', () => {
+  it('accepts a plausible public https URL, normalized via URL#toString', () => {
+    expect(validateDeploymentUrl('https://altifyai.app')).toBe('https://altifyai.app/');
+  });
+
+  it('accepts a query string containing an ordinary "&" (a legal URL separator, not a shell metachar here)', () => {
+    expect(validateDeploymentUrl('https://altifyai.app/?utm_source=x&utm_medium=y')).toContain('utm_medium=y');
+  });
+
+  it('rejects a non-URL string', () => {
+    expect(() => validateDeploymentUrl('not a url')).toThrow(/not a valid URL/);
+  });
+
+  it('rejects http (non-https)', () => {
+    expect(() => validateDeploymentUrl('http://altifyai.app')).toThrow(/must be https/);
+  });
+
+  it('rejects file:// URLs (would leak local file content into evidence_pointer)', () => {
+    expect(() => validateDeploymentUrl('file:///etc/passwd')).toThrow(/must be https/);
+  });
+
+  it('rejects embedded credentials', () => {
+    expect(() => validateDeploymentUrl('https://user:pass@altifyai.app')).toThrow(/embedded credentials/);
+  });
+
+  it('rejects loopback/private/link-local hosts (cloud metadata, localhost, RFC1918)', () => {
+    for (const host of ['localhost', '127.0.0.1', '169.254.169.254', '10.0.0.5', '192.168.1.1', '172.16.0.1', '0.0.0.0', '[::1]']) {
+      expect(() => validateDeploymentUrl(`https://${host}/`), host).toThrow(/loopback\/private\/link-local/);
+    }
+  });
+
+  it('does not reject a normal public IP or domain that merely starts with a similar-looking octet', () => {
+    expect(() => validateDeploymentUrl('https://172.99.0.1/')).not.toThrow();
+    expect(() => validateDeploymentUrl('https://1.2.3.4/')).not.toThrow();
   });
 });

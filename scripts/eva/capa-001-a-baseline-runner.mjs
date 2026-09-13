@@ -32,6 +32,9 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
 import { writeFindingsBatch } from '../../lib/eva/quality-findings/writer.js';
 import { computeFindingHash } from '../../lib/eva/quality-findings/finding-shape.js';
 
@@ -58,6 +61,33 @@ export function parseArgs(argv) {
   return out;
 }
 
+// SECURITY sub-agent finding SEC-2 (EXEC phase): deployment_url is written by
+// the venture deploy/DNS-wiring pipelines from a cloud adapter's API response
+// or a constructed domain string -- neither write site validates it, and it
+// then reaches a real browser navigation and a Lighthouse subprocess run.
+// Reject anything that isn't a plausible public https URL before either.
+// Note: URL#hostname wraps IPv6 literals in brackets (new URL('https://[::1]/').hostname
+// === '[::1]'), so the loopback/private patterns below must match the bracketed form too.
+const PRIVATE_OR_LOOPBACK_HOST_RE = /^(localhost|127\.|0\.0\.0\.0|\[::1\]$|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/i;
+export function validateDeploymentUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error(`deployment_url is not a valid URL: ${JSON.stringify(rawUrl)}`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`deployment_url must be https, got: ${parsed.protocol}`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('deployment_url must not carry embedded credentials');
+  }
+  if (PRIVATE_OR_LOOPBACK_HOST_RE.test(parsed.hostname)) {
+    throw new Error(`deployment_url must not target a loopback/private/link-local host: ${parsed.hostname}`);
+  }
+  return parsed.toString();
+}
+
 async function resolveVenture(supabase, ventureArg) {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ventureArg);
   const query = supabase.from('ventures').select('id, name, deployment_url');
@@ -67,6 +97,7 @@ async function resolveVenture(supabase, ventureArg) {
   if (error) throw new Error(`ventures lookup failed: ${error.message}`);
   if (!data) throw new Error(`venture not found: ${ventureArg}`);
   if (!data.deployment_url) throw new Error(`venture ${data.name} has no deployment_url`);
+  data.deployment_url = validateDeploymentUrl(data.deployment_url);
   return data;
 }
 
@@ -192,26 +223,41 @@ async function runLighthouseCheck(ventureId, url) {
   rmSync(lhciDir, { recursive: true, force: true });
 
   try {
-    execFileSync(
-      'npx',
-      ['lhci', 'collect', `--url=${url}`, '--numberOfRuns=1'],
-      { cwd: REPO_ROOT, stdio: 'pipe', shell: process.platform === 'win32' }
-    );
-  } catch (err) {
-    return buildLighthouseFailureFinding(ventureId, url, runId, 'collect-failed', err.message || err);
+    try {
+      // SECURITY sub-agent finding SEC-1 (EXEC phase, BLOCKER): the prior
+      // `npx lhci ...` invocation used `shell: process.platform === 'win32'`,
+      // which on this fleet's win32 targets is always true -- shell:true
+      // concatenates argv instead of escaping it, so a deployment_url
+      // containing an ordinary `&` (a legal URL query separator) breaks the
+      // invocation, and a hostile one injects an arbitrary command. Spawn
+      // @lhci/cli's JS entry point directly with shell:false instead --
+      // args reach the child process as a real argv array, never a shell.
+      const lhciBin = require.resolve('@lhci/cli/src/cli.js');
+      execFileSync(
+        process.execPath,
+        [lhciBin, 'collect', `--url=${url}`, '--numberOfRuns=1'],
+        { cwd: REPO_ROOT, stdio: 'pipe', shell: false, timeout: 300_000, maxBuffer: 16 * 1024 * 1024 }
+      );
+    } catch (err) {
+      return buildLighthouseFailureFinding(ventureId, url, runId, 'collect-failed', err.message || err);
+    }
+
+    const reportFiles = existsSync(lhciDir) ? readdirSync(lhciDir).filter((f) => LHR_FILE_REGEX.test(f)) : [];
+    if (reportFiles.length === 0) {
+      return buildLighthouseFailureFinding(ventureId, url, runId, 'no-report', 'no lhr-*.json produced');
+    }
+
+    const lhr = JSON.parse(readFileSync(path.join(lhciDir, reportFiles[0]), 'utf8'));
+    const thresholds = loadLighthouseThresholds();
+    return buildLighthouseFindings(ventureId, url, runId, lhr, thresholds);
+  } finally {
+    // SECURITY sub-agent finding SEC-3: the old cleanup ran only on the
+    // success path, so a throw from readFileSync/JSON.parse/threshold-loading
+    // left .lighthouseci (LHR JSON embeds full-page base64 screenshots + every
+    // scanned network request URL) sitting untracked at the repo root. Always
+    // clean up, success or failure.
+    rmSync(lhciDir, { recursive: true, force: true });
   }
-
-  const reportFiles = existsSync(lhciDir) ? readdirSync(lhciDir).filter((f) => LHR_FILE_REGEX.test(f)) : [];
-  if (reportFiles.length === 0) {
-    return buildLighthouseFailureFinding(ventureId, url, runId, 'no-report', 'no lhr-*.json produced');
-  }
-
-  const lhr = JSON.parse(readFileSync(path.join(lhciDir, reportFiles[0]), 'utf8'));
-  const thresholds = loadLighthouseThresholds();
-  const findings = buildLighthouseFindings(ventureId, url, runId, lhr, thresholds);
-
-  rmSync(lhciDir, { recursive: true, force: true });
-  return findings;
 }
 
 async function runAccessibilityAndResponsiveChecks(page, ventureId, url) {
