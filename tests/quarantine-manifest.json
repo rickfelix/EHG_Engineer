@@ -1260,6 +1260,15 @@
       "quarantined_at": "2026-08-09T03:35:00.000Z",
       "quarantined_by": "cff8013c-93e3-41d2-bea1-f511c2189051",
       "triage_note": "NEVER COLLECTED until SD-LEO-INFRA-FLEET-WIDE-VITEST-001 FR-3, same cause as the sibling entry. reason_class set to the registered \"timeout\" class; the precise cause is an unmocked network call (TypeError: fetch failed) per error_signature. De-quarantine when the fetch is injected or mocked so the suite is genuinely a unit test."
+    },
+    {
+      "file": "tests/unit/chairman/sms-outbound-reconcile.test.js",
+      "reason_class": "assertion",
+      "error_signature": "AssertionError: expected \"vi.fn()\" to be called 1 times, but got 0 times // 'QF-20260912-394: a non-terminal provider error code still re-arms under the cap (unchanged control flow), but the real code/message is stamped as last_error instead of the generic reason' inside describe block 'sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', line 837 (expect(provider.send).toHaveBeenCalledTimes(1))",
+      "linked_ref": "QF-20260912-362",
+      "quarantined_at": "2026-09-13T00:00:00.000Z",
+      "quarantined_by": "81425e08-c5b5-4fde-bafc-f0b9d5e9c349",
+      "triage_note": "EMERGENCY coordinator-precedent quarantine — this pinned test fails deterministically on current origin/main independent of any in-flight branch, and Run Unit Tier is a required check, so it blocks auto-merge for every open PR. The test pins QF-20260912-394's re-arm fix shape; that QF shows status=escalated to SD-LEO-FIX-CHAIRMAN-DECISION-PACKET-001, which itself shows status=completed, yet this exact assertion still fails — either the completed SD's fix does not cover this re-arm path or a later change regressed it. QF-20260912-362 tracks the real fix. De-quarantine when provider.send is confirmed called exactly once for this re-arm path and the test passes again on main."
     }
   ]
 }
