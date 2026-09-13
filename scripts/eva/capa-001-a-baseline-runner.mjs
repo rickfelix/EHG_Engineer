@@ -10,8 +10,10 @@
  *     to Playwright's test-fixture context, so it isn't importable from a
  *     plain script -- this reuses the same AxeBuilder call and default WCAG
  *     tag set directly against a raw Playwright page instead).
- *   - performance: Lighthouse via `lhci collect`, reusing the repo-root
- *     lighthouserc.json thresholds as-is (no new budgets defined here).
+ *   - performance: Lighthouse (the `lighthouse` + `chrome-launcher` packages
+ *     directly, not the `lhci` CLI -- see runLighthouseCheck()'s comment),
+ *     reusing the repo-root lighthouserc.json thresholds as-is (no new
+ *     budgets defined here).
  *   - responsive: layout-break check at the 3 named breakpoints from
  *     lib/eva/stage-17/screenshot-generator.js VIEWPORTS (not exported there,
  *     so duplicated here -- see VIEWPORTS below).
@@ -28,20 +30,15 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { chromium } from 'playwright';
 import AxeBuilder from '@axe-core/playwright';
-import { execFileSync } from 'node:child_process';
-import { readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
 import { writeFindingsBatch } from '../../lib/eva/quality-findings/writer.js';
 import { computeFindingHash } from '../../lib/eva/quality-findings/finding-shape.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const STAGE_NUMBER = 20;
-const LHR_FILE_REGEX = /^lhr-\d+\.json$/;
 
 // Same 3 real breakpoints as lib/eva/stage-17/screenshot-generator.js
 // VIEWPORTS (AGNOSTIC there is a 4th key aliasing DESKTOP's dimensions, not
@@ -217,62 +214,63 @@ function loadLighthouseThresholds() {
   return JSON.parse(raw).ci.assert.assertions;
 }
 
-// VALIDATION sub-agent finding (VERIFY phase, first live run against
-// AltifyAI): on at least one Windows fleet machine, `lhci collect` reliably
-// fails with a non-zero exit even though the underlying Lighthouse audit
-// completes -- chrome-launcher's own post-run cleanup (`destroyTmp()`,
-// `rmSync` on its auto-generated Chrome profile dir under %TEMP%) throws
-// EPERM, and lighthouse/cli/run.js treats that as a hard failure, so no LHR
-// is ever saved to .lighthouseci for this runner to read. This is an
-// upstream chrome-launcher/Windows race (a known class of issue with
-// antivirus/real-time-scan temp-dir locks), not a defect in this script or
-// in the deployment_url/argv handling above -- confirmed reproducible (2/2)
-// running the exact same lhci invocation directly, independent of this
-// runner. The catch below already degrades this to a single low-severity
-// `collect-failed` finding with the real error captured, which is the
-// correct informational-only behavior either way; on an environment without
-// this Windows-specific chrome-launcher issue, the same code persists real
-// performance/best-practice scores per FR-2.
+// VALIDATION sub-agent finding VAL-3 (VERIFY phase, first live run against
+// AltifyAI): the original `npx lhci collect` invocation (fixed for SEC-1 to
+// spawn @lhci/cli's entry directly with shell:false) still discarded a
+// REAL, ALREADY-SAVED Lighthouse result on this machine. lighthouse/cli's
+// own run.js writes the LHR to disk, and only THEN calls chrome-launcher's
+// teardown -- which can throw EPERM on Windows (a chrome-launcher/Windows
+// temp-dir-cleanup race, unrelated to this SD). The lhci CLI wrapper treats
+// that post-save teardown throw as a hard failure and never hands the
+// already-written LHR back, so every run here silently produced a fake
+// "collect-failed" finding instead of the real (and materially over-budget:
+// LCP ~4-5s against the 3500ms threshold) performance result. Fixed by
+// calling lighthouse's Node API directly -- bypassing the lhci CLI
+// subprocess/exit-code layer entirely -- with chrome.kill() wrapped in its
+// own try/catch so a teardown throw can never discard a result already held
+// in memory. This also further improves on SEC-1: no subprocess, no argv,
+// nothing to inject at all.
 async function runLighthouseCheck(ventureId, url) {
   const runId = `capa-001-a-${Date.now()}`;
-  const lhciDir = path.join(REPO_ROOT, '.lighthouseci');
-  rmSync(lhciDir, { recursive: true, force: true });
+  const [{ default: lighthouse }, chromeLauncher] = await Promise.all([
+    import('lighthouse'),
+    import('chrome-launcher'),
+  ]);
+
+  let chrome;
+  try {
+    chrome = await chromeLauncher.launch({ chromeFlags: ['--headless=new', '--no-sandbox'] });
+  } catch (err) {
+    return buildLighthouseFailureFinding(ventureId, url, runId, 'chrome-launch-failed', err.message || err);
+  }
 
   try {
+    let runnerResult;
     try {
-      // SECURITY sub-agent finding SEC-1 (EXEC phase, BLOCKER): the prior
-      // `npx lhci ...` invocation used `shell: process.platform === 'win32'`,
-      // which on this fleet's win32 targets is always true -- shell:true
-      // concatenates argv instead of escaping it, so a deployment_url
-      // containing an ordinary `&` (a legal URL query separator) breaks the
-      // invocation, and a hostile one injects an arbitrary command. Spawn
-      // @lhci/cli's JS entry point directly with shell:false instead --
-      // args reach the child process as a real argv array, never a shell.
-      const lhciBin = require.resolve('@lhci/cli/src/cli.js');
-      execFileSync(
-        process.execPath,
-        [lhciBin, 'collect', `--url=${url}`, '--numberOfRuns=1'],
-        { cwd: REPO_ROOT, stdio: 'pipe', shell: false, timeout: 300_000, maxBuffer: 16 * 1024 * 1024 }
-      );
+      runnerResult = await lighthouse(url, {
+        logLevel: 'error',
+        output: 'json',
+        onlyCategories: ['performance', 'best-practices'],
+        port: chrome.port,
+      });
     } catch (err) {
       return buildLighthouseFailureFinding(ventureId, url, runId, 'collect-failed', err.message || err);
     }
 
-    const reportFiles = existsSync(lhciDir) ? readdirSync(lhciDir).filter((f) => LHR_FILE_REGEX.test(f)) : [];
-    if (reportFiles.length === 0) {
-      return buildLighthouseFailureFinding(ventureId, url, runId, 'no-report', 'no lhr-*.json produced');
+    if (!runnerResult?.lhr) {
+      return buildLighthouseFailureFinding(ventureId, url, runId, 'no-report', 'lighthouse() returned no lhr');
     }
 
-    const lhr = JSON.parse(readFileSync(path.join(lhciDir, reportFiles[0]), 'utf8'));
     const thresholds = loadLighthouseThresholds();
-    return buildLighthouseFindings(ventureId, url, runId, lhr, thresholds);
+    return buildLighthouseFindings(ventureId, url, runId, runnerResult.lhr, thresholds);
   } finally {
-    // SECURITY sub-agent finding SEC-3: the old cleanup ran only on the
-    // success path, so a throw from readFileSync/JSON.parse/threshold-loading
-    // left .lighthouseci (LHR JSON embeds full-page base64 screenshots + every
-    // scanned network request URL) sitting untracked at the repo root. Always
-    // clean up, success or failure.
-    rmSync(lhciDir, { recursive: true, force: true });
+    // chrome-launcher's teardown can itself throw (the exact EPERM this fix
+    // routes around) -- never let that discard a result already returned above.
+    try {
+      await chrome.kill();
+    } catch (err) {
+      console.error(`[capa-001-a-baseline] chrome.kill() failed (non-fatal): ${err.message || err}`);
+    }
   }
 }
 
