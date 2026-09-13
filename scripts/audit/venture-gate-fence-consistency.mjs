@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 /** QF-20260912-366 fix (c): flags any SD row carrying fence_status_YYYY_MM_DD.state='CLEARED'
- *  alongside a stale venture_gate_last_verdict='NOT_MET'. Read-only; reports, never writes. */
+ *  alongside a stale venture_gate_last_verdict='NOT_MET'. Read-only; reports, never writes.
+ *
+ * KNOWN LIMITATION: this does not compare the fence's cleared_at timestamp against
+ * venture_gate_last_checked_at, so a genuine re-measurement taken after the fence cleared
+ * whose verdict still legitimately reads NOT_MET would be flagged identically to a missed
+ * re-measure -- the two are indistinguishable from metadata shape alone. It also only
+ * detects this one direction (fence CLEARED + verdict NOT_MET); the mirror case -- a fence
+ * NOT cleared alongside a verdict of MET -- is out of scope, since that shape was never the
+ * specimen this QF was filed against. */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
