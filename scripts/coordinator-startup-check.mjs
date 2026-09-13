@@ -501,6 +501,15 @@ export const STANDARD_LOOPS = [
   // above) explicitly, per the detector's own no-cwd-fallback contract.
   { key: 'index-jam-detector', label: 'Shared-root git-index-jam detector (observational)', script: 'index-jam-detector.mjs', cron: '*/2 * * * *',
     prompt: `node scripts/cron/index-jam-detector.mjs --repo "${REPO_ROOT}"` },
+  // QF-20260913-812: batch-mint-sweep-cron.yml measured schedule-starved (scheduled GHA runs landing
+  // two to five hours apart against its own */10 cron for three days), so every bounded-wait
+  // batch-mint hold waited hours for release. Session-arming beside the GHA leg (kept as backup,
+  // gha_backed: true) closes that gap the same way QF-20260912-894 did for five other loops. The
+  // script basename lets enumerate-processes.mjs's coveredScripts exclusion (see its own header
+  // comment) stop double-discovering the cron_script:batch-mint-sweep.mjs row.
+  { key: 'batch-mint-sweep', label: 'Batch-mint detector sweep + bounded-wait release', script: 'batch-mint-sweep.mjs', cron: '*/10 * * * *',
+    gha_backed: true, session_arm: true,
+    prompt: 'node scripts/cron/batch-mint-sweep.mjs' },
   // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A (CAPA-5): scripts/safe-root-resync.mjs (npm run
   // resync:safe) had ZERO periodic_process_registry rows — scheduled nowhere, its own liveness
   // unwatched. Schedules ONLY the fetch+ff-merge half (scripts/cron/safe-root-resync-scheduled.mjs,
