@@ -84,6 +84,12 @@ describe('classifyToolActiveLaneBlind()', () => {
     const row = { created_at: new Date(NOW - 10 * 60000).toISOString() };
     expect(classifyToolActiveLaneBlind(row, { now: NOW, cutMinutes: 5 }).blind).toBe(true);
   });
+
+  it('QF-20260912-269: a 3-minute-old row fires the nudge under the interrupt cut (2 min) but not the default cut (15 min) — the caller in coordination-inbox.cjs\'s main() picks cutMinutes:2 only when urgentRows has an entry', () => {
+    const row = { created_at: new Date(NOW - 3 * 60000).toISOString(), subject: 'urgent ruling' };
+    expect(classifyToolActiveLaneBlind(row, { now: NOW, cutMinutes: 2 }).blind).toBe(true);
+    expect(classifyToolActiveLaneBlind(row, { now: NOW }).blind).toBe(false); // default 15-min cut, same row
+  });
 });
 
 describe('shouldPrintLaneBlindNudge() / markLaneBlindNudgePrinted() (rate limit)', () => {
