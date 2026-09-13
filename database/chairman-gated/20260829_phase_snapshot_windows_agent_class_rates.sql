@@ -1,4 +1,8 @@
 -- 20260829_phase_snapshot_windows_agent_class_rates.sql
+-- CHAIRMAN-APPROVED 2026-09-07 ~02:15Z: verbal at the Adam terminal, quote: "apply the phase
+-- snapshot rate columns migration." Scribed by Adam session bc762fa4 under the 3c ceremony;
+-- no executable content changed.
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-BURN-TELEMETRY-PER-001-D (FR-1, FR-2, FR-3, FR-4)
 --
 -- Phase-boundary snapshot mechanics: sd_phase_handoffs (36,560+ live rows, ~862/week) is
