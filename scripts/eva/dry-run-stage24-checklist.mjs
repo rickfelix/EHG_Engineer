@@ -41,9 +41,21 @@ export function withReadOnlyEventsGuard(supabase) {
   });
 }
 
+/**
+ * Escapes ilike wildcard characters (%, _) so a literal venture name is matched
+ * case-insensitively rather than as a pattern — security-agent EXEC-phase review
+ * (cbfb8391): an unescaped `--venture-name "%"` would silently bind to an
+ * arbitrary venture (no deterministic ordering existed either).
+ */
+export function escapeIlikeWildcards(value) {
+  return value.replace(/[%_]/g, (c) => `\\${c}`);
+}
+
 async function resolveVentureId({ supabase, ventureId, ventureName }) {
-  const query = supabase.from('ventures').select('id, name').limit(1);
-  const { data, error } = await (ventureId ? query.eq('id', ventureId) : query.ilike('name', ventureName)).maybeSingle();
+  const query = supabase.from('ventures').select('id, name').order('created_at', { ascending: true }).limit(1);
+  const { data, error } = await (
+    ventureId ? query.eq('id', ventureId) : query.ilike('name', escapeIlikeWildcards(ventureName))
+  ).maybeSingle();
   if (error) throw new Error(`venture lookup failed: ${error.message}`);
   if (!data) throw new Error(`no venture found matching ${ventureId ? `id '${ventureId}'` : `name '${ventureName}'`}`);
   return { id: data.id, name: data.name };

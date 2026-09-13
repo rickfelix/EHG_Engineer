@@ -2,7 +2,7 @@
  * SD-LEO-INFRA-STAGE-LAUNCH-READINESS-001 FR-7 AC#1.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { withReadOnlyEventsGuard } from '../../../scripts/eva/dry-run-stage24-checklist.mjs';
+import { withReadOnlyEventsGuard, escapeIlikeWildcards } from '../../../scripts/eva/dry-run-stage24-checklist.mjs';
 
 describe('withReadOnlyEventsGuard', () => {
   it('no-ops eva_orchestration_events.insert() without touching the real client', async () => {
@@ -43,5 +43,19 @@ describe('withReadOnlyEventsGuard', () => {
     const result = await guarded.rpc('some_function', { arg: 1 });
     expect(result).toEqual({ data: 42, error: null });
     expect(realClient.rpc).toHaveBeenCalledWith('some_function', { arg: 1 });
+  });
+});
+
+// security-agent EXEC-phase review (cbfb8391, LOW): --venture-name flowed unescaped
+// into .ilike(), so "%" or "_" would silently match an arbitrary venture.
+describe('escapeIlikeWildcards', () => {
+  it('escapes % and _ so they match literally, not as ilike wildcards', () => {
+    expect(escapeIlikeWildcards('%')).toBe('\\%');
+    expect(escapeIlikeWildcards('AltifyAI_2')).toBe('AltifyAI\\_2');
+    expect(escapeIlikeWildcards('100%_done')).toBe('100\\%\\_done');
+  });
+
+  it('leaves an ordinary name unchanged', () => {
+    expect(escapeIlikeWildcards('AltifyAI')).toBe('AltifyAI');
   });
 });
