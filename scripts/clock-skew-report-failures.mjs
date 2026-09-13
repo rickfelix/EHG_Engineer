@@ -44,11 +44,43 @@ export function reportFailures(files, { run = execFileSync } = {}) {
   return reported;
 }
 
+// QF-20260912-364: a non-file report (no real test file to attach --file to) for the case
+// where the sweep itself never produced a trustworthy result.
+export function reportIncompleteSweep(outcome, { run = execFileSync } = {}) {
+  try {
+    run('node', [
+      'scripts/log-harness-bug.js',
+      `Clock-skew Unit Tier sweep did not complete (step outcome='${outcome}') -- likely a timeout cancellation; zero results, NOT a clean pass`,
+      '--severity', 'high',
+    ], { stdio: 'inherit' });
+    return true;
+  } catch (err) {
+    console.error(`  ⚠ failed to log harness bug for incomplete sweep: ${err.message}`);
+    return false;
+  }
+}
+
+// QF-20260912-364: the step that ran vitest can end 'success', 'failure', 'cancelled', or
+// 'skipped' (GHA's own outcome vocabulary). Only 'failure' means "ran to completion with some
+// tests red" -- the shape extractFailingFiles/reportFailures exist for. Anything else that is
+// not a clean 'success' (a timeout-cancelled run, chiefly) produced NO trustworthy result, and
+// must be reported as such rather than read as "zero FAIL lines, so nothing to report" -- the
+// exact silent-pass this sweep shipped for four consecutive real runs.
+export function isIncompleteOutcome(outcome) {
+  return Boolean(outcome) && outcome !== 'success' && outcome !== 'failure';
+}
+
 async function main() {
   const logPath = process.argv[2];
   if (!logPath) {
     console.error('Usage: node scripts/clock-skew-report-failures.mjs <vitest-log-path>');
     process.exit(1);
+  }
+  const outcome = process.env.SKEW_RUN_OUTCOME || null;
+  if (isIncompleteOutcome(outcome)) {
+    console.log(`Sweep step outcome='${outcome}' (not success/failure) -- did not complete; reporting rather than staying silent.`);
+    reportIncompleteSweep(outcome);
+    return;
   }
   const log = readFileSync(logPath, 'utf8');
   const files = extractFailingFiles(log);
