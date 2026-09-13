@@ -122,6 +122,77 @@ describe('DNS wiring (FR-7 / TS-8)', () => {
   });
 });
 
+// ── DNS token resolution (SD-FDBK-ENH-COMPLETION-FLAG-HARNESS-001) ──────────
+// CLOUDFLARE_REGISTRAR_API_TOKEN measurably 403s "Authentication error" on
+// /zones/{id}/dns_records (the calls wireDomainDns() actually needs); a
+// separate CLOUDFLARE_DNS_API_TOKEN is preferred, with the registrar token
+// kept as a fallback for TR-5's original single-credential design. Probes
+// listRecords (not listZones) — listZones succeeds with either token and is
+// NOT the discriminator.
+
+describe('DNS token resolution (SD-FDBK-ENH-COMPLETION-FLAG-HARNESS-001)', () => {
+  function okFetch() {
+    return vi.fn(async () => ({ ok: true, json: async () => ({ success: true, result: [] }) }));
+  }
+
+  it('TS-1: both tokens set -> listRecords authenticates with the DNS token, not the registrar token', async () => {
+    const fetchImpl = okFetch();
+    const dns = createDnsAdapter(
+      { CLOUDFLARE_DNS_API_TOKEN: 'dns-tok', CLOUDFLARE_REGISTRAR_API_TOKEN: 'reg-tok', CLOUDFLARE_ACCOUNT_ID: 'a' },
+      { fetchImpl }
+    );
+    await dns.listRecords('zone-1');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchImpl.mock.calls[0];
+    expect(url).toContain('/dns_records');
+    expect(opts.headers.authorization).toBe('Bearer dns-tok');
+  });
+
+  it("TS-2: registrar-only fallback authenticates with the registrar token (preserves line 120's contract)", async () => {
+    const fetchImpl = okFetch();
+    const dns = createDnsAdapter({ CLOUDFLARE_REGISTRAR_API_TOKEN: 'reg-tok', CLOUDFLARE_ACCOUNT_ID: 'a' }, { fetchImpl });
+    expect(dns).not.toBeNull();
+    await dns.listRecords('zone-1');
+    expect(fetchImpl.mock.calls[0][1].headers.authorization).toBe('Bearer reg-tok');
+  });
+
+  it('G1: DNS-token-only (no registrar token) still activates and authenticates with the DNS token', async () => {
+    const fetchImpl = okFetch();
+    const dns = createDnsAdapter({ CLOUDFLARE_DNS_API_TOKEN: 'dns-tok', CLOUDFLARE_ACCOUNT_ID: 'a' }, { fetchImpl });
+    expect(dns).not.toBeNull();
+    await dns.listRecords('zone-1');
+    expect(fetchImpl.mock.calls[0][1].headers.authorization).toBe('Bearer dns-tok');
+  });
+
+  it('G2: the token guard and the accountId guard are independently enforced', () => {
+    expect(createDnsAdapter({ CLOUDFLARE_ACCOUNT_ID: 'a' }, { fetchImpl: vi.fn() })).toBeNull(); // token guard alone
+    expect(createDnsAdapter({ CLOUDFLARE_DNS_API_TOKEN: 't' }, { fetchImpl: vi.fn() })).toBeNull(); // accountId guard alone
+  });
+
+  it('G3: an empty-string DNS token falls back to the registrar token (|| semantics, not ??)', async () => {
+    const fetchImpl = okFetch();
+    const dns = createDnsAdapter(
+      { CLOUDFLARE_DNS_API_TOKEN: '', CLOUDFLARE_REGISTRAR_API_TOKEN: 'reg-tok', CLOUDFLARE_ACCOUNT_ID: 'a' },
+      { fetchImpl }
+    );
+    expect(dns).not.toBeNull();
+    await dns.listRecords('zone-1');
+    expect(fetchImpl.mock.calls[0][1].headers.authorization).toBe('Bearer reg-tok');
+  });
+
+  it("TS-6: createZone's 403 (missing zone.create permission) propagates uncaught through wireDomainDns, never silently masked", async () => {
+    const dns = {
+      listZones: vi.fn(async () => []), // no existing zone -> triggers createZone
+      createZone: vi.fn(async () => { throw new Error('dns POST /zones: Requires permission "com.cloudflare.api.account.zone.create"'); }),
+      listRecords: vi.fn(),
+      createRecord: vi.fn(),
+    };
+    await expect(wireDomainDns(dns, 'newventure.com', 'target.pages.dev')).rejects.toThrow(/zone\.create/);
+    expect(dns.listRecords).not.toHaveBeenCalled();
+    expect(dns.createRecord).not.toHaveBeenCalled();
+  });
+});
+
 // ── TS-9 deploy handoff ──────────────────────────────────────────────────────
 
 describe('deploy handoff (FR-8 / TS-9)', () => {
@@ -207,14 +278,29 @@ describe('single-touch E2E (FR-9 / TS-10)', () => {
     }
   });
 
+  it('redaction (SD-FDBK-ENH-COMPLETION-FLAG-HARNESS-001): DNS adapter errors never contain the DNS token either', async () => {
+    const dnsSecret = 'ANOTHER-DNS-SECRET-VALUE';
+    const fetchImpl = vi.fn(async () => ({ ok: false, status: 403, json: async () => ({ success: false, errors: [{ message: 'insufficient scope' }] }) }));
+    const dns = createDnsAdapter({ CLOUDFLARE_DNS_API_TOKEN: dnsSecret, CLOUDFLARE_ACCOUNT_ID: 'acct' }, { fetchImpl });
+    try { await dns.listZones('x.com'); expect.unreachable(); } catch (e) {
+      expect(String(e.message)).toMatch(/insufficient scope/);
+      expect(String(e.message)).not.toContain(dnsSecret);
+    }
+  });
+
   it('source secret-scan: no module logs or interpolates the token; env names appear only as reads', () => {
     const dir = join(repoRoot, 'lib', 'venture-acquisition');
     for (const file of readdirSync(dir)) {
       const src = readFileSync(join(dir, file), 'utf8');
       // Never log: no console.* in the acquisition modules at all (callers own I/O).
       expect(src, `${file} must not console.*`).not.toMatch(/console\./);
-      // The token is only ever READ from env — never assigned a literal.
-      expect(src, `${file} must not embed a token literal`).not.toMatch(/CLOUDFLARE_REGISTRAR_API_TOKEN\s*=/);
+      // The token is only ever READ from env — never assigned a literal. Quote-anchored
+      // (requires a quote right after `=`) so a `||`-fallback member-read expression, a
+      // destructuring default (`{ TOKEN = '' } = env`), or a JSDoc default never
+      // false-positives — only a real string-literal assignment trips this.
+      for (const name of ['CLOUDFLARE_REGISTRAR_API_TOKEN', 'CLOUDFLARE_DNS_API_TOKEN']) {
+        expect(src, `${file} must not embed a ${name} literal`).not.toMatch(new RegExp(`${name}\\s*=\\s*['"\`]`));
+      }
     }
   });
 });
