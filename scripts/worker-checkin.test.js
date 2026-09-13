@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-const { extractSdFromAssignment, runCheckin, isAutoStartableQF, getQfPickerVerdict, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
+const { extractSdFromAssignment, runCheckin, isAutoStartableQF, getQfPickerVerdict, draftDepsSatisfied, baselinedCandidateEligible, recoverStrandedFinal, adoptOrphanInProgress, reAdoptReleasedParent, isSdInFlight, DEFAULT_IDLE_WAKEUP_SECONDS, STALE_QF_DAYS } = require('./worker-checkin.cjs');
 
 describe('FR-2: extractSdFromAssignment', () => {
   it('prefers payload.sd_key', () => {
@@ -139,6 +139,12 @@ function makeStub(cfg) {
           r.session_id !== state.filters.neq_session_id &&
           r.is_alive === true);
         return Promise.resolve({ data: rows, error: null });
+      }
+      // SD-LEO-INFRA-CLAIM-PARENT-CHILD-001 (FR-2): reAdoptReleasedParent's own claim-switch
+      // history lookup.
+      if (table === 'session_lifecycle_events') {
+        if (cfg.evictionEventsThrow) return Promise.reject(new Error('session_lifecycle_events query failed'));
+        return Promise.resolve({ data: cfg.evictionEvents || [], error: null });
       }
       return Promise.resolve({ data: [], error: null });
     }
@@ -951,6 +957,95 @@ describe('ORPHAN-ADOPTION: adopt zero-claim in_progress SDs (resume_orphan)', ()
     const r = await runCheckin(sb, 'sess-1', noCoord);
     expect(r.action).toBe('resume_orphan');
     expect(r.callsign).toBe('Alpha'); // named at check-in, same response
+  });
+});
+
+// SD-LEO-INFRA-CLAIM-PARENT-CHILD-001 (FR-2): re-adopt a released orchestrator parent once its
+// child (the SD whose claim evicted it) reaches a terminal status. Unit-level, pure JS logic —
+// green regardless of whether the companion chairman-gated migration has been applied yet (that
+// migration is what makes claim_sd actually LOG a CLAIM_SWITCH_EVICTED_CLEARED event naming a
+// parent in production; these tests exercise the JS side of the contract directly).
+describe('FR-2: reAdoptReleasedParent (SD-LEO-INFRA-CLAIM-PARENT-CHILD-001)', () => {
+  const evictionEvent = (evicted_sd_key, new_sd_id, over = {}) => ({
+    metadata: { evicted_sd_key, new_sd_id, ...over },
+    created_at: new Date().toISOString(),
+  });
+
+  it('re-claims the parent once its child has reached a terminal status', async () => {
+    const sb = makeStub({
+      evictionEvents: [evictionEvent('SD-PARENT-001', 'SD-CHILD-001')],
+      sdRows: {
+        'SD-CHILD-001': { parent_sd_id: 'SD-PARENT-001', status: 'completed' },
+        'SD-PARENT-001': { claiming_session_id: null, status: 'in_progress' },
+      },
+      claimResults: { 'SD-PARENT-001': true },
+    });
+    const r = await reAdoptReleasedParent(sb, 'sess-1', { ok: true });
+    expect(r).not.toBeNull();
+    expect(r.action).toBe('resume_orphan');
+    expect(r.sd).toBe('SD-PARENT-001');
+    expect(r.message).toMatch(/sd-start\.js SD-PARENT-001/);
+  });
+
+  it('does NOT re-claim while the child is still in flight (non-terminal)', async () => {
+    const sb = makeStub({
+      evictionEvents: [evictionEvent('SD-PARENT-002', 'SD-CHILD-002')],
+      sdRows: {
+        'SD-CHILD-002': { parent_sd_id: 'SD-PARENT-002', status: 'in_progress' },
+        'SD-PARENT-002': { claiming_session_id: null, status: 'in_progress' },
+      },
+      claimResults: { 'SD-PARENT-002': true },
+    });
+    const r = await reAdoptReleasedParent(sb, 'sess-1', { ok: true });
+    expect(r).toBeNull();
+  });
+
+  it('does NOT re-claim a parent someone else (or this session) already re-claimed', async () => {
+    const sb = makeStub({
+      evictionEvents: [evictionEvent('SD-PARENT-003', 'SD-CHILD-003')],
+      sdRows: {
+        'SD-CHILD-003': { parent_sd_id: 'SD-PARENT-003', status: 'completed' },
+        'SD-PARENT-003': { claiming_session_id: 'sess-other', status: 'in_progress' },
+      },
+      claimResults: { 'SD-PARENT-003': true },
+    });
+    const r = await reAdoptReleasedParent(sb, 'sess-1', { ok: true });
+    expect(r).toBeNull();
+  });
+
+  it('does NOT re-claim when the evicted SD was not actually the child\'s parent (an unrelated claim-switch)', async () => {
+    const sb = makeStub({
+      evictionEvents: [evictionEvent('SD-UNRELATED-001', 'SD-CHILD-004')],
+      sdRows: {
+        // SD-CHILD-004's real parent is something else entirely — the eviction event names an
+        // unrelated SD the session had merely abandoned, not a parent.
+        'SD-CHILD-004': { parent_sd_id: 'SD-SOMETHING-ELSE', status: 'completed' },
+      },
+      claimResults: { 'SD-UNRELATED-001': true },
+    });
+    const r = await reAdoptReleasedParent(sb, 'sess-1', { ok: true });
+    expect(r).toBeNull();
+  });
+
+  it('skips a QF-shaped evicted key (this mechanism is SD-parent-only)', async () => {
+    const sb = makeStub({
+      evictionEvents: [evictionEvent('QF-20260913-001', 'SD-CHILD-005')],
+      sdRows: { 'SD-CHILD-005': { parent_sd_id: 'QF-20260913-001', status: 'completed' } },
+    });
+    const r = await reAdoptReleasedParent(sb, 'sess-1', { ok: true });
+    expect(r).toBeNull();
+  });
+
+  it('fails open (returns null, never throws) on a query error', async () => {
+    const sb = makeStub({ evictionEventsThrow: true });
+    const r = await reAdoptReleasedParent(sb, 'sess-1', { ok: true });
+    expect(r).toBeNull();
+  });
+
+  it('returns null (not a crash) when there is no claim-switch history at all', async () => {
+    const sb = makeStub({ evictionEvents: [] });
+    const r = await reAdoptReleasedParent(sb, 'sess-1', { ok: true });
+    expect(r).toBeNull();
   });
 });
 
