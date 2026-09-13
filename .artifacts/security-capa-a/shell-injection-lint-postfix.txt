@@ -1,0 +1,7 @@
+# runner: node scripts/lint/shell-injection-argv-lint.mjs --base=main
+# HEAD: 769fb4857c4a8b6e7290472458dbb578210b3dae
+# date: 2026-09-13T18:19:46Z
+---
+✅ shell-injection-argv-lint (diff): 1196 added line(s) scanned, 0 new violation(s), 0 pre-existing (reported, not blocking)
+---
+EXIT_CODE=0

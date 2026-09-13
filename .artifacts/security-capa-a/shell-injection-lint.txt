@@ -1,0 +1,9 @@
+# runner: node scripts/lint/shell-injection-argv-lint.mjs --base=main
+# cwd: /c/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A
+# date: 2026-09-13T18:01:52Z
+---
+  S2  scripts/eva/capa-001-a-baseline-runner.mjs:198  shell: <non-false> — the argv array is handed to a shell (a runtime value like process.platform still spawns a shell on the true branch); drop the option, gate it to a safe spawn, or record a reasoned allowlist entry
+      { cwd: REPO_ROOT, stdio: 'pipe', shell: process.platform === 'win32' }
+❌ shell-injection-argv-lint (diff): 906 added line(s) scanned, 1 new violation(s), 0 pre-existing (reported, not blocking)
+---
+EXIT_CODE=1

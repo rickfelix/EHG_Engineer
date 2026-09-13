@@ -11,12 +11,14 @@ import {
   validateFindingShape,
 } from '../../../../lib/eva/quality-findings/finding-shape.js';
 
-describe('FINDING_CATEGORIES (canonical 15)', () => {
-  it('enumerates exactly 15 categories: code review (5) + QA (2) + UAT (3) + Vision (2) + Experience (3)', () => {
+describe('FINDING_CATEGORIES (canonical 17)', () => {
+  it('enumerates exactly 17 categories: code review (5) + QA (2) + UAT (3) + Vision (2) + Experience (3) + Baseline (2)', () => {
     // SD-LEO-INFRA-STAGE-QUALITY-ANALYZER-FR-E-001 added the two Vision Compliance
     // categories (feedback_widget_present, error_capture_wired) on 2026-05-02.
     // SD-LEO-FEAT-STAGE-EXPERIENCE-DESIGN-001 added usability/accessibility/
     // journey_coherence on 2026-08-28 (WARN-capped pilot).
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A added performance/responsive on
+    // 2026-09-13 (WARN-capped, informational-only venture baseline).
     expect(FINDING_CATEGORIES).toEqual([
       'npm_audit', 'secrets', 'lint', 'test_suite',
       'unit_test', 'e2e_test',
@@ -24,8 +26,9 @@ describe('FINDING_CATEGORIES (canonical 15)', () => {
       'capability',
       'feedback_widget_present', 'error_capture_wired',
       'usability', 'accessibility', 'journey_coherence',
+      'performance', 'responsive',
     ]);
-    expect(FINDING_CATEGORIES.length).toBe(15);
+    expect(FINDING_CATEGORIES.length).toBe(17);
   });
 
   it('is frozen (immutable)', () => {
@@ -34,8 +37,8 @@ describe('FINDING_CATEGORIES (canonical 15)', () => {
 });
 
 describe('WARN_CAPPED_CATEGORIES', () => {
-  it('enumerates exactly the 3 experience categories, all present in FINDING_CATEGORIES', () => {
-    expect(WARN_CAPPED_CATEGORIES).toEqual(['usability', 'accessibility', 'journey_coherence']);
+  it('enumerates exactly the 5 experience+baseline categories, all present in FINDING_CATEGORIES', () => {
+    expect(WARN_CAPPED_CATEGORIES).toEqual(['usability', 'accessibility', 'journey_coherence', 'performance', 'responsive']);
     for (const cat of WARN_CAPPED_CATEGORIES) {
       expect(FINDING_CATEGORIES).toContain(cat);
     }
@@ -118,7 +121,7 @@ describe('validateFindingShape', () => {
     expect(r.errors[0]).toMatch(/severity must be one of/);
   });
 
-  it('accepts each of the 15 canonical categories', () => {
+  it('accepts each of the 17 canonical categories', () => {
     for (const cat of FINDING_CATEGORIES) {
       const r = validateFindingShape({ ...validFinding, finding_category: cat });
       expect(r.valid).toBe(true);
