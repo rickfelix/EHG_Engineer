@@ -182,13 +182,72 @@ describe('runVentureJourneyWalk() — full walk with a partial failure', () => {
     expect(controlPackEvidence.executedJourneys.map((e) => e.journeyId)).toEqual(['stp-1']);
   });
 
-  it('honors an injected deps.controlPackEvidence instead of auto-deriving one', async () => {
-    const injected = { manifest: [], executedJourneys: [], fenceEvidence: { canExerciseApp: true, exclusionPredicateDeclared: true, exclusionPredicateAssertedInVentureCi: true } };
+  it('MERGES an injected deps.controlPackEvidence over the auto-derived defaults (SD-LEO-FIX-ALTIFYAI-STAGE-WALK-001)', async () => {
+    // Injected fields win; fields the caller did NOT supply (manifest/executedJourneys/
+    // evidenceManifest, which depend on walkResult -- not computable before this call runs)
+    // still fall back to this module's own real-outcome-derived defaults. A caller supplying
+    // deps.controlPackEvidence for OTHER controls (fence/binding/waiver) has no way to
+    // pre-compute those three fields, so a full-object replace would silently zero out the
+    // minimum-assertion-manifest control -- this is the exact gap this SD closes.
+    const injected = { deploymentSha: 'live-venture-sha-not-this-worktrees', fenceEvidence: { canExerciseApp: true, exclusionPredicateDeclared: true, exclusionPredicateAssertedInVentureCi: true } };
     const { deps } = makeDeps({ controlPackEvidence: injected });
 
     await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
 
-    expect(deps.completeSession).toHaveBeenCalledWith('run-1', injected);
+    const [, controlPackEvidence] = deps.completeSession.mock.calls[0];
+    // Injected fields present verbatim (caller wins):
+    expect(controlPackEvidence.deploymentSha).toBe('live-venture-sha-not-this-worktrees');
+    expect(controlPackEvidence.fenceEvidence).toEqual(injected.fenceEvidence);
+    // Fields NOT supplied by the caller still fall back to the real, walk-derived defaults:
+    expect(controlPackEvidence.manifest.map((m) => m.journeyId)).toEqual(['stp-1', 'stp-2']);
+    expect(Array.isArray(controlPackEvidence.executedJourneys)).toBe(true);
+    expect(controlPackEvidence.evidenceManifest).toBeTruthy();
+  });
+
+  it('runs deps.canaryStep OUTSIDE the main walk and merges its outcome only into controlPackEvidence.journeyResults (SD-LEO-FIX-ALTIFYAI-STAGE-WALK-001)', async () => {
+    const canaryRun = vi.fn(async () => ({ journeyId: 'canary-mutation-control', status: 'FAIL', reason: 'deliberate mismatch' }));
+    const { deps } = makeDeps({
+      canaryStep: { journeyId: 'canary-mutation-control', run: canaryRun },
+    });
+
+    const result = await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    // Canary ran, but never entered the main walk's step loop or its bookkeeping:
+    expect(canaryRun).toHaveBeenCalledTimes(1);
+    expect(deps.recordResult).toHaveBeenCalledTimes(2); // only the 2 real STEPS, never the canary
+    expect(result.status).toBe('fail'); // driven solely by walkResult.completedAllSteps (stp-2 failed), not by the canary
+
+    const [, controlPackEvidence] = deps.completeSession.mock.calls[0];
+    expect(controlPackEvidence.canaryJourneyId).toBe('canary-mutation-control');
+    expect(controlPackEvidence.journeyResults).toEqual([
+      { journeyId: 'stp-1', status: 'PASS' },
+      { journeyId: 'stp-2', status: 'FAIL' },
+      { journeyId: 'canary-mutation-control', status: 'FAIL' },
+    ]);
+  });
+
+  it('omits canaryJourneyId/journeyResults entirely when deps.canaryStep is not supplied (zero regression for every existing caller)', async () => {
+    const { deps } = makeDeps();
+
+    await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    const [, controlPackEvidence] = deps.completeSession.mock.calls[0];
+    expect(controlPackEvidence.canaryJourneyId).toBeUndefined();
+    expect(controlPackEvidence.journeyResults).toBeUndefined();
+  });
+
+  it('lets a caller-supplied deps.controlPackEvidence.canaryJourneyId/journeyResults override the canaryStep-derived values', async () => {
+    const canaryRun = vi.fn(async () => ({ journeyId: 'canary-mutation-control', status: 'FAIL' }));
+    const overrideResults = [{ journeyId: 'stp-1', status: 'PASS' }, { journeyId: 'canary-mutation-control', status: 'FAIL' }];
+    const { deps } = makeDeps({
+      canaryStep: { journeyId: 'canary-mutation-control', run: canaryRun },
+      controlPackEvidence: { canaryJourneyId: 'canary-mutation-control', journeyResults: overrideResults },
+    });
+
+    await runVentureJourneyWalk({ sdId: 'sd-1', ventureKey: 'ALTIFYAI', baseUrl: 'http://fixture', journeySteps: STEPS, deps });
+
+    const [, controlPackEvidence] = deps.completeSession.mock.calls[0];
+    expect(controlPackEvidence.journeyResults).toEqual(overrideResults);
   });
 
   it('FR-4: threads a resolved commit_sha into startSession, via the injectable deps.resolveCommitSha override', async () => {
