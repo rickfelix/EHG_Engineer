@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-2/FR-4 -- two new, isolated tables (no existing
 -- production table altered, no existing data at risk) so this is a plain additive migration,
 -- not chairman-gated. Deliberately NOT a new venture_artifacts.artifact_type value: that column
