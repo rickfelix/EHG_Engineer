@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-09-07T14:53:55.640Z",
+ "generated_at": "2026-09-13T02:16:21.052Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 887,
- "view_count": 196,
- "check_count": 1575,
+ "table_count": 895,
+ "view_count": 197,
+ "check_count": 1601,
  "tables": {
   "_migration_metadata": [
    "key",
@@ -1327,7 +1327,8 @@
    "undo_deadline",
    "undone_at",
    "consumed_at",
-   "channel"
+   "channel",
+   "override_key"
   ],
   "chairman_directives": [
    "id",
@@ -1485,6 +1486,26 @@
    "source",
    "created_at",
    "updated_at"
+  ],
+  "chairman_ratification_verifications": [
+   "id",
+   "target_ratification_id",
+   "attempt_kind",
+   "outcome",
+   "encoded_at_persisted",
+   "pin_tier",
+   "commit_sha",
+   "target_file",
+   "file_sha256",
+   "marker_offset",
+   "attempted_encoded_ref",
+   "attempted_marker_text",
+   "marker_sha256",
+   "reason",
+   "producer",
+   "run_id",
+   "detail",
+   "verified_at"
   ],
   "chairman_ratifications": [
    "id",
@@ -2538,6 +2559,26 @@
    "created_at",
    "updated_at",
    "completed_at"
+  ],
+  "defect_class_specimens": [
+   "id",
+   "class_key",
+   "source_type",
+   "source_id",
+   "witnessed_at",
+   "classified_by",
+   "classified_at"
+  ],
+  "defect_classes": [
+   "class_key",
+   "family_description",
+   "memory_index_anchor",
+   "first_witnessed",
+   "verified_fix_date",
+   "fixing_sd_or_qf",
+   "classified_by",
+   "created_at",
+   "updated_at"
   ],
   "defect_taxonomy": [
    "id",
@@ -4406,7 +4447,13 @@
    "promoted_at",
    "promoted_by",
    "provenance_source",
-   "archived_at"
+   "archived_at",
+   "assigned_at",
+   "assignment_reason",
+   "priority_reasoning",
+   "burst_group_id",
+   "ignored_by_pattern_id",
+   "ignore_reason"
   ],
   "feedback_events": [
    "id",
@@ -6820,6 +6867,15 @@
    "created_at",
    "updated_at"
   ],
+  "michael_check_in_journal": [
+   "id",
+   "et_date",
+   "seq",
+   "entry_text",
+   "mood",
+   "created_at",
+   "updated_at"
+  ],
   "michael_closures": [
    "id",
    "closure_key",
@@ -6902,6 +6958,31 @@
    "created_at",
    "updated_at"
   ],
+  "michael_health_daily": [
+   "id",
+   "et_date",
+   "metrics",
+   "source",
+   "created_at",
+   "updated_at"
+  ],
+  "michael_oracle_alignment": [
+   "id",
+   "et_date",
+   "dimension_scores",
+   "notes",
+   "created_at",
+   "updated_at"
+  ],
+  "michael_oracle_history": [
+   "id",
+   "et_date",
+   "seq",
+   "content",
+   "tags",
+   "created_at",
+   "updated_at"
+  ],
   "michael_rules": [
    "id",
    "domain",
@@ -6954,6 +7035,15 @@
    "reasoning",
    "created_at",
    "updated_at"
+  ],
+  "mock_outreach_personas": [
+   "id",
+   "mock_run_id",
+   "venture_id",
+   "persona_template",
+   "display_name",
+   "attributes",
+   "created_at"
   ],
   "model_capability_reference": [
    "id",
@@ -8287,7 +8377,8 @@
    "verified_at",
    "duplicate_of_id",
    "factory_lane",
-   "metadata"
+   "metadata",
+   "venture_id"
   ],
   "raid_log": [
    "id",
@@ -8667,7 +8758,8 @@
    "metadata",
    "learning_extracted_at",
    "future_enhancements",
-   "orphaned_sd_id"
+   "orphaned_sd_id",
+   "retro_write_token"
   ],
   "retrospectives_audit": [
    "id",
@@ -12379,7 +12471,9 @@
    "outcome",
    "outcome_ref",
    "created_at",
-   "updated_at"
+   "updated_at",
+   "execution_mode",
+   "mock_run_id"
   ],
   "venture_channel_secrets": [
    "id",
@@ -15008,6 +15102,14 @@
    "debate_metadata",
    "verdict_metadata"
   ],
+  "v_defect_class_weekly_recurrence": [
+   "class_key",
+   "family_description",
+   "verified_fix_date",
+   "fixing_sd_or_qf",
+   "first_recurrence_at",
+   "recurrence_specimen_count"
+  ],
   "v_department_membership": [
    "department_id",
    "department_name",
@@ -16809,12 +16911,34 @@
   "chairman_notifications.chairman_notifications_status_check": "CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text, 'rate_limited'::text, 'deferred'::text])))",
   "chairman_overrides.chairman_overrides_outcome_check": "CHECK (((outcome IS NULL) OR (outcome = ANY (ARRAY['positive'::text, 'negative'::text, 'neutral'::text, 'pending'::text]))))",
   "chairman_preferences.chairman_preferences_value_type_check": "CHECK ((value_type = ANY (ARRAY['number'::text, 'string'::text, 'boolean'::text, 'object'::text, 'array'::text])))",
+  "chairman_ratification_verifications.chairman_ratification_verifications_attempt_kind_check": "CHECK ((attempt_kind = ANY (ARRAY['live_encode'::text, 'legacy_backfill_audit'::text])))",
+  "chairman_ratification_verifications.chairman_ratification_verifications_outcome_check": "CHECK ((outcome = ANY (ARRAY['verified'::text, 'marker_absent'::text, 'no_commit_pin'::text, 'unverifiable_infrastructure'::text, 'not_applicable'::text])))",
+  "chairman_ratification_verifications.chairman_ratification_verifications_pin_tier_check": "CHECK (((pin_tier IS NULL) OR (pin_tier = ANY (ARRAY['exact_commit_pin'::text, 'approximate_encoded_at_pin'::text, 'db_section_content'::text]))))",
+  "chairman_ratification_verifications.crv_attempted_encoded_ref_is_object": "CHECK ((jsonb_typeof(attempted_encoded_ref) = 'object'::text))",
+  "chairman_ratification_verifications.crv_attempted_marker_text_nonempty": "CHECK ((btrim(attempted_marker_text) <> ''::text))",
+  "chairman_ratification_verifications.crv_backfill_audits_encoded_rows_only": "CHECK (((attempt_kind <> 'legacy_backfill_audit'::text) OR (encoded_at_persisted = true)))",
+  "chairman_ratification_verifications.crv_commit_sha_shape": "CHECK (((commit_sha IS NULL) OR (commit_sha ~ '^[0-9a-f]{7,40}$'::text)))",
+  "chairman_ratification_verifications.crv_commit_sha_tier_agreement": "CHECK ((((pin_tier IS NULL) AND (commit_sha IS NULL)) OR ((pin_tier IS NOT NULL) AND ((pin_tier = 'db_section_content'::text) = (commit_sha IS NULL)))))",
+  "chairman_ratification_verifications.crv_detail_is_object": "CHECK ((jsonb_typeof(detail) = 'object'::text))",
+  "chairman_ratification_verifications.crv_file_sha256_shape": "CHECK (((file_sha256 IS NULL) OR (file_sha256 ~ '^[0-9a-f]{64}$'::text)))",
+  "chairman_ratification_verifications.crv_marker_absent_never_persisted": "CHECK (((attempt_kind <> 'live_encode'::text) OR (outcome <> 'marker_absent'::text) OR (encoded_at_persisted = false)))",
+  "chairman_ratification_verifications.crv_marker_offset_nonneg": "CHECK (((marker_offset IS NULL) OR (marker_offset >= 0)))",
+  "chairman_ratification_verifications.crv_marker_offset_requires_a_read": "CHECK (((marker_offset IS NULL) OR ((commit_sha IS NOT NULL) AND (target_file IS NOT NULL) AND (file_sha256 IS NOT NULL))))",
+  "chairman_ratification_verifications.crv_marker_sha256_shape": "CHECK ((marker_sha256 ~ '^[0-9a-f]{64}$'::text))",
+  "chairman_ratification_verifications.crv_no_commit_pin_is_tier3": "CHECK (((outcome <> 'no_commit_pin'::text) OR (pin_tier = 'db_section_content'::text)))",
+  "chairman_ratification_verifications.crv_no_commit_pin_never_persisted": "CHECK (((attempt_kind <> 'live_encode'::text) OR (outcome <> 'no_commit_pin'::text) OR (encoded_at_persisted = false)))",
+  "chairman_ratification_verifications.crv_nonverified_has_reason": "CHECK (((outcome = 'verified'::text) OR (btrim(COALESCE(reason, ''::text)) <> ''::text)))",
+  "chairman_ratification_verifications.crv_producer_shape": "CHECK (((btrim(producer) <> ''::text) AND (length(btrim(producer)) >= 8)))",
+  "chairman_ratification_verifications.crv_run_id_shape": "CHECK (((btrim(run_id) <> ''::text) AND (length(btrim(run_id)) >= 6)))",
+  "chairman_ratification_verifications.crv_target_file_is_repo_relative": "CHECK (((target_file IS NULL) OR ((btrim(target_file) <> ''::text) AND (target_file !~ '^([A-Za-z]:)?[\\\\/]'::text) AND (POSITION(('..'::text) IN (target_file)) = 0))))",
+  "chairman_ratification_verifications.crv_tier_null_only_for_uncheckable_outcomes": "CHECK (((pin_tier IS NOT NULL) OR (outcome = ANY (ARRAY['not_applicable'::text, 'unverifiable_infrastructure'::text]))))",
+  "chairman_ratification_verifications.crv_verified_requires_pin_evidence": "CHECK (((outcome <> 'verified'::text) OR ((commit_sha IS NOT NULL) AND (target_file IS NOT NULL) AND (file_sha256 IS NOT NULL) AND (marker_offset IS NOT NULL))))",
   "chairman_ratifications.cr_encoded_ref_shape": "CHECK (((encoded_ref IS NULL) OR (jsonb_typeof(encoded_ref) = 'object'::text)))",
   "chairman_ratifications.cr_encoding_state_consistent": "CHECK ((((encoded_at IS NULL) AND (encoded_ref IS NULL) AND (marker_text IS NULL)) OR ((encoded_at IS NOT NULL) AND (encoded_ref IS NOT NULL) AND (marker_text IS NOT NULL) AND (btrim(marker_text) <> ''::text))))",
   "chairman_ratifications.cr_quote_nonempty": "CHECK ((btrim(quote) <> ''::text))",
   "chairman_ratifications.cr_scribe_seat_nonempty": "CHECK ((btrim(scribe_seat) <> ''::text))",
   "chairman_ratifications.cr_source_shape": "CHECK (((btrim(source) <> ''::text) AND (length(btrim(source)) >= 5)))",
-  "chairman_ratifications.cr_target_contracts_valid": "CHECK (((cardinality(target_contracts) > 0) AND (target_contracts <@ ARRAY['adam'::text, 'coordinator'::text, 'solomon'::text, 'protocol'::text])))",
+  "chairman_ratifications.cr_target_contracts_valid": "CHECK (((cardinality(target_contracts) > 0) AND (target_contracts <@ ARRAY['adam'::text, 'coordinator'::text, 'solomon'::text, 'michael'::text, 'protocol'::text])))",
   "chairman_ratifications.cr_utterance_provenance_present": "CHECK (((uttered_at IS NOT NULL) AND (quote_hash IS NOT NULL) AND (transcript_ref IS NOT NULL))) NOT VALID",
   "chairman_settings.chairman_settings_capital_cap_check": "CHECK ((capital_cap > 0))",
   "chairman_settings.chairman_settings_exploit_ratio_check": "CHECK (((exploit_ratio >= 0) AND (exploit_ratio <= 100)))",
@@ -16938,6 +17062,7 @@
   "deep_research_results.deep_research_results_provider_check": "CHECK ((provider = ANY (ARRAY['gemini'::text, 'anthropic'::text, 'openai'::text, 'google'::text, 'ollama'::text])))",
   "deep_research_results.deep_research_results_status_check": "CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'completed'::text, 'failed'::text, 'timeout'::text])))",
   "deep_research_results.deep_research_results_trigger_source_check": "CHECK ((trigger_source = ANY (ARRAY['manual'::text, 'triangulation'::text, 'brainstorm'::text, 'vision'::text])))",
+  "defect_class_specimens.defect_class_specimens_source_type_check": "CHECK ((source_type = ANY (ARRAY['feedback'::text, 'quick_fix'::text, 'sd'::text])))",
   "defect_taxonomy.defect_taxonomy_prevention_stage_check": "CHECK ((prevention_stage = ANY (ARRAY['LEAD_PRE_APPROVAL'::text, 'PLAN_PRD'::text, 'EXEC_IMPL'::text, 'PLAN_VERIFY'::text, 'NEVER'::text])))",
   "department_agents.department_agents_role_in_department_check": "CHECK ((role_in_department = ANY (ARRAY['lead'::text, 'member'::text, 'advisor'::text])))",
   "design_quality_scores.design_quality_scores_accessibility_score_check": "CHECK (((accessibility_score >= 0) AND (accessibility_score <= 100)))",
@@ -16965,7 +17090,7 @@
   "door_routing_ledger.door_routing_ledger_door_check": "CHECK ((door = ANY (ARRAY['one_way'::text, 'two_way'::text])))",
   "drive_rank_snapshots.drive_rank_snapshots_rank_check": "CHECK (((rank >= 1) AND (rank <= 5)))",
   "drive_report_receipts.drive_report_receipts_lane_check": "CHECK ((lane = ANY (ARRAY['coordinator'::text, 'adam'::text, 'chairman_brief'::text])))",
-  "drive_reports.drive_reports_cadence_check": "CHECK ((cadence = ANY (ARRAY['scheduled'::text, 'on_demand'::text])))",
+  "drive_reports.drive_reports_cadence_check": "CHECK ((cadence = ANY (ARRAY['scheduled'::text, 'on_demand'::text, 'hourly'::text])))",
   "drive_state_verdicts.drive_state_verdicts_action_taken_check": "CHECK ((action_taken = ANY (ARRAY['NONE'::text, 'RECORDED'::text, 'UNVERIFIABLE'::text])))",
   "drive_state_verdicts.drive_state_verdicts_axis_check": "CHECK ((axis = ANY (ARRAY['chairman_decisions'::text, 'coordinator_performance'::text, 'roadmap_motion'::text, 'venture_stage_motion'::text, 'fleet_health'::text, 'learning_conversion'::text])))",
   "drive_state_verdicts.drive_state_verdicts_recorded_needs_citation": "CHECK (((action_taken <> 'RECORDED'::text) OR ((action_citation IS NOT NULL) AND (btrim(action_citation) <> ''::text))))",
@@ -17415,6 +17540,8 @@
   "michael_feeder_runs.michael_feeder_runs_counts_check": "CHECK ((jsonb_typeof(counts) = 'object'::text))",
   "michael_feeder_runs.michael_feeder_runs_status_check": "CHECK ((status = ANY (ARRAY['ok'::text, 'degraded'::text, 'failed'::text, 'skipped'::text, 'imported'::text])))",
   "michael_feeder_runs.michael_feeder_runs_venue_check": "CHECK ((venue = ANY (ARRAY['task_scheduler'::text, 'gha'::text, 'seat'::text])))",
+  "michael_health_daily.michael_health_daily_metrics_check": "CHECK ((jsonb_typeof(metrics) = 'object'::text))",
+  "michael_oracle_alignment.michael_oracle_alignment_dimension_scores_check": "CHECK ((jsonb_typeof(dimension_scores) = 'object'::text))",
   "michael_rules.michael_rules_auto_apply_verb_check": "CHECK ((auto_apply_verb = ANY (ARRAY['label'::text, 'archive'::text, 'reschedule'::text])))",
   "michael_rules.michael_rules_check": "CHECK (((auto_apply = false) OR ((auto_apply_verb IS NOT NULL) AND (auto_apply_since IS NOT NULL))))",
   "michael_rules.michael_rules_check1": "CHECK (((auto_apply = false) OR (((provenance -> 'verifier'::text) ->> 'subject_hash'::text) IS NOT NULL)))",
@@ -18069,6 +18196,7 @@
   "venture_capture_snapshots.venture_capture_snapshots_provenance_check": "CHECK ((provenance = ANY (ARRAY['unvalidated'::text, 'validated'::text])))",
   "venture_channel_autonomy.venture_channel_autonomy_autonomy_state_check": "CHECK ((autonomy_state = ANY (ARRAY['propose_and_approve'::text, 'autonomous'::text])))",
   "venture_channel_publish_ledger.venture_channel_publish_ledger_decision_check": "CHECK ((decision = ANY (ARRAY['pending'::text, 'accepted'::text, 'rejected'::text, 'partial'::text])))",
+  "venture_channel_publish_ledger.venture_channel_publish_ledger_execution_mode_check": "CHECK ((execution_mode = ANY (ARRAY['live'::text, 'mock'::text])))",
   "venture_channel_publish_ledger.venture_channel_publish_ledger_outcome_check": "CHECK ((outcome = ANY (ARRAY['unknown'::text, 'shipped_clean'::text, 'reverted'::text, 'caused_rework'::text])))",
   "venture_competitive_analysis.venture_competitive_analysis_threat_level_check": "CHECK ((threat_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'critical'::text])))",
   "venture_compliance.venture_compliance_check_type_check": "CHECK ((check_type = ANY (ARRAY['structure'::text, 'dependencies'::text, 'lint_config'::text, 'tailwind_config'::text, 'design_tokens'::text, 'supabase_config'::text, 'ci_cd'::text, 'full_audit'::text])))",
