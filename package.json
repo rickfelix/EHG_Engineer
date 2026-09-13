@@ -247,6 +247,7 @@
     "eva:distill-brainstorm": "node scripts/eva-distill-brainstorm.js",
     "eva:run": "node scripts/eva-run.js",
     "eva:stage": "node scripts/eva/run-stage.js",
+    "eva:stage24-dry-run": "node scripts/eva/dry-run-stage24-checklist.mjs",
     "eva:retire-pilot-ventures": "node scripts/eva/retire-pilot-ventures.mjs",
     "youtube:extract": "node scripts/eva/youtube-strategy-extract.js",
     "eva:heal": "node scripts/eva/vision-heal.js",

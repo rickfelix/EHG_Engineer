@@ -35,11 +35,16 @@ function makeQuery(result) {
 // isolation and are not about the legal category (SD-FDBK-FIX-BUILD-LEGAL-DOC-001
 // moved 'legal' from ADVISORY to REQUIRED; defaulting it to satisfied here keeps
 // this file's verdicts focused on the growth-category behavior it actually tests).
-function makeSupabase({ flagEnabled = false, presentTypes = [], legalDocsPresent = true } = {}) {
+function makeSupabase({ flagEnabled = false, presentTypes = [], artifactData = {}, legalDocsPresent = true } = {}) {
   return {
     from: vi.fn((t) => {
       if (t === 'leo_feature_flags') return makeQuery({ data: { is_enabled: flagEnabled }, error: null });
-      if (t === 'venture_artifacts') return makeQuery({ data: presentTypes.map((x) => ({ artifact_type: x, is_current: true })), error: null });
+      if (t === 'venture_artifacts') {
+        return makeQuery({
+          data: presentTypes.map((x) => ({ artifact_type: x, is_current: true, artifact_data: artifactData[x] ?? null })),
+          error: null,
+        });
+      }
       if (t === 'venture_legal_overrides') {
         return makeQuery({
           data: legalDocsPresent
@@ -58,11 +63,18 @@ function makeSupabase({ flagEnabled = false, presentTypes = [], legalDocsPresent
 
 // Base upstream that satisfies the (unchanged) preflight in both flag states.
 const BASE_PRESENT = ['code_quality_report', 'visual_social_graphics', 'distribution_channel_config'];
-// Params that pass the 3 baseline REQUIRED categories.
+// SD-LEO-INFRA-STAGE-LAUNCH-READINESS-001 FR-1: real artifact_data payloads keyed by
+// artifact_type, read by preflightUpstream's widened select -- replaces the old
+// stage20Data/stage21Data/stage22Data positional params (no longer read at runtime).
+// Scores the 3 baseline REQUIRED categories (code_quality/marketing_assets/
+// distribution_channels) as passing.
+const PASSING_ARTIFACT_DATA = {
+  code_quality_report: { verdict: 'PASS' },
+  visual_social_graphics: { total_socials: 5 },
+  distribution_channel_config: { deployed: true, status: 'deployed' },
+};
+// Params shared across tests; artifact_data is supplied separately via makeSupabase.
 const PASSING_PARAMS = {
-  stage20Data: { verdict: 'PASS' },
-  stage21Data: { total_assets: 5 },
-  stage22Data: { active_channels: 3 },
   ventureName: 'Acme',
   ventureId: 'v1',
   logger: silentLogger,
@@ -84,7 +96,7 @@ describe('readGrowthPlaybookRequiredFlag', () => {
 
 describe('FR-006 golden: default-OFF parity', () => {
   it('flag OFF keeps verdict READY, REQUIRED set baseline-identical, and growth cats ABSENT', async () => {
-    const supabase = makeSupabase({ flagEnabled: false, presentTypes: BASE_PRESENT });
+    const supabase = makeSupabase({ flagEnabled: false, presentTypes: BASE_PRESENT, artifactData: PASSING_ARTIFACT_DATA });
     const r = await analyzeStage23LaunchReadiness({ ...PASSING_PARAMS, supabase });
 
     expect(r.verdict).toBe('READY');
@@ -110,16 +122,20 @@ describe('FR-006 golden: default-OFF parity', () => {
     // readiness_pct. With 3 of 4 REQUIRED passing (incl. legal) + 2 ADVISORY and flag OFF, the
     // denominator must stay 6 (=> round(5/6*100)=83), proving the growth categories do not
     // touch the math.
-    const supabase = makeSupabase({ flagEnabled: false, presentTypes: BASE_PRESENT });
+    const supabase = makeSupabase({
+      flagEnabled: false,
+      presentTypes: BASE_PRESENT,
+      artifactData: { ...PASSING_ARTIFACT_DATA, distribution_channel_config: { deployed: false, status: 'deploy_ready_not_deployed' } },
+    });
     const r = await analyzeStage23LaunchReadiness({
-      ...PASSING_PARAMS, stage22Data: { active_channels: 0 }, supabase, // distribution_channels now pending
+      ...PASSING_PARAMS, supabase, // distribution_channels now pending
     });
     expect(r.total_categories).toBe(6);
     expect(r.readiness_pct).toBe(83); // (2 required pass + legal pass + 2 advisory)/6 — baseline denominator
   });
 
   it('deploy-order safety: flag OFF + no pre-launch playbook still yields READY (in-flight not blocked)', async () => {
-    const supabase = makeSupabase({ flagEnabled: false, presentTypes: BASE_PRESENT });
+    const supabase = makeSupabase({ flagEnabled: false, presentTypes: BASE_PRESENT, artifactData: PASSING_ARTIFACT_DATA });
     const r = await analyzeStage23LaunchReadiness({ ...PASSING_PARAMS, supabase });
     expect(r.verdict).toBe('READY');
   });
@@ -130,6 +146,7 @@ describe('FR-005 flag-ON enforcement', () => {
     const supabase = makeSupabase({
       flagEnabled: true,
       presentTypes: [...BASE_PRESENT, 'growth_playbook', 'distribution_ad_copy'],
+      artifactData: PASSING_ARTIFACT_DATA,
     });
     const r = await analyzeStage23LaunchReadiness({ ...PASSING_PARAMS, supabase });
 
@@ -142,7 +159,7 @@ describe('FR-005 flag-ON enforcement', () => {
   });
 
   it('flag ON + playbook ABSENT => growth_playbook REQUIRED & pending, verdict NOT_READY', async () => {
-    const supabase = makeSupabase({ flagEnabled: true, presentTypes: BASE_PRESENT }); // no growth_playbook / ad_copy
+    const supabase = makeSupabase({ flagEnabled: true, presentTypes: BASE_PRESENT, artifactData: PASSING_ARTIFACT_DATA }); // no growth_playbook / ad_copy
     const r = await analyzeStage23LaunchReadiness({ ...PASSING_PARAMS, supabase });
 
     const gp = r.checklist.find((c) => c.category === 'growth_playbook');

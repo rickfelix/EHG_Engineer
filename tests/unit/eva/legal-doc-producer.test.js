@@ -11,6 +11,7 @@ import {
   substituteMarkers,
   NOT_LEGAL_ADVICE_DISCLAIMER,
   REQUIRED_TEMPLATE_TYPES,
+  extractBareDomain,
 } from '../../../lib/eva/legal-doc-producer.js';
 
 const silentLogger = { info: () => {}, warn: () => {} };
@@ -151,6 +152,41 @@ describe('generateLegalDocsForVenture — TS-1 happy path', () => {
     for (const row of supabase._inserted) {
       expect(row.generated_content).not.toContain('https://'); // COMPANY_DOMAIN itself is also stripped
     }
+  });
+
+  // SD-LEO-INFRA-STAGE-LAUNCH-READINESS-001 / security-agent EXEC-phase review (cbfb8391):
+  // a website value carrying URL userinfo (credentials) must never leak into the persisted
+  // generated_content -- newly reachable now that FR-2 makes this producer run automatically
+  // per-venture instead of manual/CLI-only.
+  it('security fix: strips URL userinfo from a website value so no credentials leak into CONTACT_EMAIL', async () => {
+    const supabase = makeSupabase({ companyRow: { ...COMPANY_ROW, website: 'https://user:pw@evil.com/about' } });
+    const result = await generateLegalDocsForVenture({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result.ok).toBe(true);
+    const tosRow = supabase._inserted.find((r) => r.template_id === 'tpl-tos');
+    expect(tosRow.generated_content).toContain('legal@evil.com');
+    expect(tosRow.generated_content).not.toContain('user:pw');
+    expect(tosRow.generated_content).not.toContain('user:pw@evil.com');
+  });
+});
+
+describe('extractBareDomain', () => {
+  it('strips protocol and path from a full URL', () => {
+    expect(extractBareDomain('https://alttextcompliance.com/about')).toBe('alttextcompliance.com');
+  });
+
+  it('accepts a bare domain with no protocol', () => {
+    expect(extractBareDomain('alttextcompliance.com')).toBe('alttextcompliance.com');
+  });
+
+  it('strips URL userinfo (credentials) rather than persisting them', () => {
+    expect(extractBareDomain('https://user:pw@evil.com/about')).toBe('evil.com');
+    expect(extractBareDomain('https://user@evil.com')).toBe('evil.com');
+  });
+
+  it('returns null for null/undefined/empty input', () => {
+    expect(extractBareDomain(null)).toBeNull();
+    expect(extractBareDomain(undefined)).toBeNull();
+    expect(extractBareDomain('')).toBeNull();
   });
 });
 

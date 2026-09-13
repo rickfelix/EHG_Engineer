@@ -1,0 +1,57 @@
+[S23-LaunchReadiness] Aggregating readiness for AltifyAI
+{
+  "dry_run": true,
+  "venture_id": "50763b6a-1fad-4e1e-b2fc-296a1d66ebf9",
+  "venture_name": "AltifyAI",
+  "result": {
+    "checklist": [
+      {
+        "category": "code_quality",
+        "status": "warn",
+        "detail": "Warnings present but no critical issues",
+        "mode": "REQUIRED"
+      },
+      {
+        "category": "marketing_assets",
+        "status": "pass",
+        "detail": "8 assets generated (3 screenshots, 5 social graphics)",
+        "mode": "REQUIRED"
+      },
+      {
+        "category": "distribution_channels",
+        "status": "pending",
+        "detail": "Distribution channel not yet deployed (status: deploy_ready_not_deployed)",
+        "mode": "REQUIRED"
+      },
+      {
+        "category": "legal",
+        "status": "fail",
+        "detail": "Missing required legal documents: terms_of_service, privacy_policy",
+        "mode": "REQUIRED"
+      },
+      {
+        "category": "analytics",
+        "status": "advisory",
+        "detail": "Usage telemetry not yet wired: no usage events in the last 30 days",
+        "mode": "ADVISORY"
+      },
+      {
+        "category": "monitoring",
+        "status": "advisory",
+        "detail": "No automated producer; chairman attestation suffices",
+        "mode": "ADVISORY"
+      }
+    ],
+    "verdict": "HOLD",
+    "venture_name": "AltifyAI",
+    "pass_count": 1,
+    "fail_count": 1,
+    "advisory_count": 2,
+    "pending_count": 1,
+    "total_categories": 6,
+    "readiness_pct": 50,
+    "growth_playbook_required": false,
+    "launch_mode": "simulated",
+    "mode_evidence": null
+  }
+}

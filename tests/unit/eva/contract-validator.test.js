@@ -1,6 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { validateSchemaShape } from '../../../lib/eva/contract-validator.js';
+import { validateSchemaShape, validateContracts } from '../../../lib/eva/contract-validator.js';
 import { extractOutputSchema } from '../../../lib/eva/stage-templates/output-schema-extractor.js';
+import { CROSS_STAGE_DEPS } from '../../../lib/eva/contracts/stage-contracts.js';
+
+/** Minimal chainable Supabase stub: supports .from().select().eq().eq().in() (thenable,
+ * empty artifacts) and .from().insert() (thenable, no-op) -- exactly the two call shapes
+ * validateContracts() makes. */
+function makeMockSupabase() {
+  const selectChain = {
+    select: () => selectChain,
+    eq: () => selectChain,
+    in: () => Promise.resolve({ data: [], error: null }),
+  };
+  return {
+    from: () => ({
+      ...selectChain,
+      insert: () => Promise.resolve({ data: null, error: null }),
+    }),
+  };
+}
 
 describe('extractOutputSchema', () => {
   it('extracts non-derived fields from schema', () => {
@@ -162,5 +180,24 @@ describe('Stage template outputSchema integration', () => {
       expect(entry).toHaveProperty('type');
       expect(entry).toHaveProperty('required');
     }
+  });
+});
+
+// SD-LEO-INFRA-STAGE-LAUNCH-READINESS-001 FR-5/TS-5: contract-validator.js used to carry a
+// second, unexported, function-local CROSS_STAGE_DEPS copy (8 of 27 stages, no stage-24 entry,
+// silently falling back to [targetStage-1]) that disagreed with the canonical export in
+// stage-contracts.js for ~24 of 27 stages. It now imports the canonical map instead.
+describe('FR-5: CROSS_STAGE_DEPS agreement regression guard', () => {
+  it('validateContracts resolves requiredStages from the canonical CROSS_STAGE_DEPS for every stage 2-26', async () => {
+    for (let stage = 2; stage <= 26; stage++) {
+      const result = await validateContracts({ targetStage: stage, ventureId: 'test-venture', supabase: makeMockSupabase() });
+      const expected = CROSS_STAGE_DEPS[stage] || [stage - 1];
+      expect(result.requiredStages).toEqual(expected);
+    }
+  });
+
+  it('stage 24 resolves to the canonical [1,21,22,23], not the old local fallback [23]', async () => {
+    const result = await validateContracts({ targetStage: 24, ventureId: 'test-venture', supabase: makeMockSupabase() });
+    expect(result.requiredStages).toEqual([1, 21, 22, 23]);
   });
 });
