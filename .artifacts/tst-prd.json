@@ -1,0 +1,1041 @@
+[
+  {
+    "id": "PRD-SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001",
+    "directive_id": "SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001",
+    "title": "Product Requirements for SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001",
+    "version": "1.0",
+    "status": "approved",
+    "category": "technical",
+    "priority": "high",
+    "executive_summary": "Derive summary columns from their detail (trigger/generated) for the safe instances now, widen the CI lint to catch the actual defect shapes, and explicitly defer the one unsafe instance (SMS) pending a durable receipt design.",
+    "business_context": null,
+    "technical_context": null,
+    "functional_requirements": [
+      {
+        "id": "FR-1",
+        "priority": "HIGH",
+        "description": "LEAD-phase VALIDATION (evidence 09ac5c83) found the originally-scoped lint (boolean-column-only) is DISJOINT from all 3 motivating incidents: 2 are JSONB metadata keys, 1 is a cross-table-derived TEXT column -- none is a new top-level boolean. The lint's detection needs 3 predicates, not 1: (a) new boolean *_evaluated/*_passed/*_verified column without a GENERATED expression (original ask, baseline = 7 real live columns after excluding PL/pgSQL locals: conformance_passed, content_lint_passed, gate_passed, subagent_verified, test_passed, uat_verified, validation_passed); (b) a migration writing to a metadata/jsonb column that also introduces a NEW summary-shaped key name (heuristic: key name containing status/verdict/evaluated/passed/verified/cleared) without a paired trigger in the same migration; (c) a new column whose name matches a status/summary pattern deriving from another table (heuristic: a foreign key column present alongside a status-shaped column, flagged for manual review rather than auto-failed, since this predicate cannot be fully mechanical).",
+        "requirement": "Widen the proposed CI lint beyond new boolean *_evaluated/*_passed/*_verified columns to also flag a new JSONB-key summary field or a new cross-table-derived text/status column introduced without an accompanying derivation (generated expression or trigger)",
+        "acceptance_criteria": [
+          "A fixture migration adding an undereived boolean *_passed column fails the lint (unchanged from original ask)",
+          "A fixture migration adding a new jsonb summary-shaped key with no paired trigger in the same migration fails the lint",
+          "A fixture migration adding a GENERATED ALWAYS boolean column, or a migration whose CREATE TRIGGER derives a named jsonb key, passes the lint",
+          "The 7 real pre-existing boolean columns (not the originally-claimed 14, corrected per VALIDATION) are the asserted baseline -- the lint does not retroactively fail on them"
+        ]
+      },
+      {
+        "id": "FR-2",
+        "priority": "MEDIUM",
+        "description": "Scope item (4) mandates measuring the full extent at PRD. LEAD-phase VALIDATION already performed the live-data half: 7 real boolean *_passed/*_verified columns exist (not 14 -- 3 of the original grep hits were PL/pgSQL local variables, not columns), plus the 3 named non-boolean instances (2 jsonb keys, 1 cross-table text column). A fully exhaustive enumeration of every jsonb-key or cross-table-derived summary pair in the schema is not mechanically bounded (it requires semantic judgment about what counts as a 'summary', not a grep pattern) -- this FR records the corrected baseline and the boundary of what was actually measured, rather than promising a complete backfill census the lint (FR-1) cannot itself perform going forward.",
+        "requirement": "Document the true extent of the summary/detail-drift class from a live-data walk, not a static schema grep, and record why an exhaustive enumeration is infeasible",
+        "acceptance_criteria": [
+          "PRD/documentation records the corrected 7-column boolean baseline with each column's table and detail-column pairing (or lack thereof)",
+          "PRD/documentation explicitly states the jsonb-key/cross-table extent is bounded to the 3 known incidents, not schema-wide, and names why (no mechanical predicate exists for exhaustive detection)"
+        ]
+      },
+      {
+        "id": "FR-3",
+        "priority": "CRITICAL",
+        "description": "CORRECTED at PLAN (TESTING evidence 51dde124, BLOCKER-1/2/3; independently re-verified live by this session against uat_test_runs row 84d310e1). The original design derived from control_pack_failures IS NOT NULL AND jsonb_typeof(...) != 'null', which reintroduces the exact QF-20260830-666 bug class in SQL: control_pack_failures is documented by its own writer (lib/uat/result-recorder.js:613) as AMBIGUOUS -- null means EITHER 'evaluated, all passed' OR 'never evaluated', and a failures-based predicate cannot tell these apart. Live measurement of row 84d310e1 confirms this directly: control_pack_status shows 3 of 4 required controls 'not_attempted' and 1 'evaluated', control_pack_failures is null, and control_pack_evaluated is (correctly) false -- exactly the 'never evaluated' case a failures-based predicate would misread. The corrected source is control_pack_status: derive true only when ALL 4 required keys (fence_two_sidedness, canary_mutation_control, live_deployment_binding, minimum_assertion_manifest) are present with a value other than 'not_attempted', matching the existing correct application-layer logic in result-recorder.js:593/619 (controlPackStatus.allRequiredEvaluated) and lib/eva/uat-control-pack.js. The originally-claimed '23 of 24 rows drifted, needs backfill' was independently verified FALSE by both TESTING and a direct query in this session: those 23 rows are already CORRECTLY control_pack_evaluated=false under the control_pack_status predicate (incomplete control coverage, not drift) -- a backfill under the flawed predicate would have corrupted 23 correct rows. Because a single writer (result-recorder.js:606-622) sets control_pack_failures, control_pack_evaluated and control_pack_status atomically in ONE .update(), there is in fact NO live drift for this instance today; the trigger is a forward-looking guarantee against a future writer bypassing that atomic path, not a fix for existing data. control_pack_failures/control_pack_status are not columns -- the trigger reads NEW.metadata->'control_pack_status' (jsonb path) and, having no distinct column to scope a WHEN clause to, fires on every INSERT/UPDATE touching the metadata blob. uat_test_runs is COLD (26 rows, ~6/day, ZERO existing triggers on this table today) -- ship this instance first as the pilot, per RISK's sequencing recommendation.",
+        "requirement": "Derive uat_test_runs.metadata.control_pack_evaluated from control_pack_status (the per-control status map) via a BEFORE INSERT OR UPDATE trigger -- true only when all 4 required control keys are non-'not_attempted', mirroring lib/eva/uat-control-pack.js's existing application-layer allRequiredEvaluated logic -- never from control_pack_failures",
+        "acceptance_criteria": [
+          "Trigger sets metadata.control_pack_evaluated = true only when metadata.control_pack_status has ALL 4 required keys (fence_two_sidedness, canary_mutation_control, live_deployment_binding, minimum_assertion_manifest) present with a value other than 'not_attempted' -- mirroring lib/eva/uat-control-pack.js's allRequiredEvaluated logic; the trigger never reads control_pack_failures",
+          "A fixture row with control_pack_status matching live row 84d310e1's shape (3 of 4 controls 'not_attempted') derives control_pack_evaluated = false -- matching the existing live value, confirming this is correct behavior, not drift",
+          "A fixture row with all 4 required controls non-'not_attempted' AND control_pack_failures = jsonb null (a clean, fully-evaluated pass) derives control_pack_evaluated = true -- the false-negative the original control_pack_failures-based predicate would have introduced",
+          "Chairman-gated migration (database/chairman-gated/) + DOWN sibling; DOWN captures pre-derivation values before dropping the trigger; migration test script follows the SAVEPOINT-guarded, session_replication_role-toggling, always-ROLLBACK *_dry_run.mjs convention (e.g. database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger_dry_run.mjs)",
+          "NO backfill ships with this migration -- the 23 existing evaluated=false rows are already correct under the corrected predicate; the migration's header comment records this explicitly so a future reviewer does not re-attempt one"
+        ]
+      },
+      {
+        "id": "FR-4",
+        "priority": "HIGH",
+        "description": "Explore + VALIDATION evidence confirms this reader was ALREADY deliberately changed by QF-20260830-666 to key on the boolean control_pack_evaluated, not on absence-of-failures -- reverting it would undo a genuine, prior, evidenced fix. Once FR-3's trigger guarantees control_pack_evaluated is always in sync with control_pack_status (its corrected derivation source, per FR-3), the reader's existing boolean-keyed logic becomes SAFE BY CONSTRUCTION: the summary can no longer disagree with the detail, so keying on the summary is no longer a drift risk. This is the correct mechanism for this instance, not a scope violation of item (3) -- item (3)'s intent (readers must not be misled by a stale/wrong summary) is satisfied by making the summary un-stale-able, which is a stronger guarantee than redirecting the reader.",
+        "requirement": "No code change to lib/eva/uat-robustness-gate.js's reader -- document why FR-3's trigger makes scope item (3)'s original 'readers key on detail' ask unnecessary for this instance",
+        "acceptance_criteria": [
+          "lib/eva/uat-robustness-gate.js is unmodified by this SD",
+          "A new regression test asserts that after FR-3's trigger fires, control_pack_evaluated and control_pack_status can never independently disagree for any insert/update path exercised by the test",
+          "The PRD/retrospective records this as a deliberate mechanism choice, not an oversight, so a future reviewer does not re-flag it as unaddressed scope"
+        ]
+      },
+      {
+        "id": "FR-5",
+        "priority": "HIGH",
+        "description": "RISK evidence (594115a9) found fence_status_2026_08_17 exists on 3 SD rows (2 already status=completed), and the named 'detail' (venture_gate_last_verdict) is itself 46 days stale per that row's own park_reason, with a 3rd disagreeing source (venture_gate_attestations, verdict=PASS). This SD cannot unilaterally pick a canonical source -- that is a chairman-gated decision, consistent with every other instance already being staged as chairman-gated. Also: Explore/VALIDATION found NO live reader for this key anywhere in lib/ or scripts/ -- scope item (3)'s 'child-E fence reader' does not exist, so only the write-side trigger applies to this instance; no reader work is needed or possible here. CORRECTION (this session, independently verified against live data): PLAN-phase TESTING (evidence 51dde124, BLOCKER-4) claimed venture_gate_last_verdict is 'absent' from this row and that FR-5 is therefore 'zero-yield by construction'. Direct query shows this is FACTUALLY WRONG -- the key IS present on this exact row (value NOT_MET, checked_at 2026-07-28T23:44:24Z), byte-identical to the value on SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 (both evidently stamped by the same batch writer in one pass); the row's updated_at (2026-09-12T15:33:08Z) predates TESTING's own evidence timestamp (2026-09-13T01:30:05Z), ruling out a timing race -- this was a genuine measurement error, not stale data. FR-5 is NOT dead-by-construction. The real, still-valid concern is LEAD-phase RISK finding R3: the SD row's own park_reason admits this value is stale ('needs a governed re-measure writer, not a hand edit'), and a genuinely disagreeing 3rd source exists -- venture_gate_attestations id=3 (verdict=PASS, check_type=chairman_site_review, computed_at=2026-08-18, more recent), confirmed via its subject (AltifyAI) matching this SD's own park_reason narrative about the same venture. FR-5's design (defer the 3-way reconciliation to an explicit chairman decision at apply time, never auto-resolve it in code) was already the correct response to that genuine ambiguity and needs no redesign -- only this factual correction to the record.",
+        "requirement": "Stage (not auto-apply) a narrowly-scoped, chairman-gated trigger deriving the child-E fence_status_2026_08_17 summary from its canonical detail source, with the 3-way source ambiguity surfaced as an explicit chairman decision at apply time",
+        "acceptance_criteria": [
+          "Migration's trigger is scoped via an explicit sd_key allowlist (only SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E), never a pattern match on the key name -- confirmed by a test asserting the trigger does not fire for the 2 unrelated completed SDs that also carry this key",
+          "Migration header names the 3-way source ambiguity explicitly and requires the chairman to confirm the canonical source as part of the apply-ceremony sign-off (not silently defaulted)",
+          "Migration includes the mandatory SET lock_timeout = '3s' header (per database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql's documented ACCESS EXCLUSIVE hazard on this exact table) and is named to fire correctly relative to the >=8 existing triggers on strategic_directives_v2 (alphabetical order)",
+          "DOWN sibling captures the pre-derivation fence_status_2026_08_17 value before dropping the trigger",
+          "A fixture/regression check directly queries strategic_directives_v2.metadata for the allowlisted row and asserts venture_gate_last_verdict IS present before the migration is staged for apply -- turning TESTING's (now-corrected) zero-yield concern into an enforced precondition rather than an assumption"
+        ]
+      },
+      {
+        "id": "FR-6",
+        "priority": "MEDIUM",
+        "description": "RISK evidence (594115a9) found this is the highest-severity instance: sms_outbound_obligations is a live WORKER CLAIM QUEUE (not a passive record table), and a receipt-derived trigger risks overwriting an in-flight status=sending claim before any provider receipt exists, causing the worker's sweep to re-claim and re-send -- an unbounded resend loop against a real phone number, which would amplify rather than close the QF-394 class this SD exists to address. Additionally, no durable table exists to derive from today (sms_status_staging is a 0-row transient buffer), and a related migration (delivery_status_source) has sat unapplied for 19 days. Implementing this instance safely requires a NEW durable receipt-history table design and a trigger scoped to fire ONLY on transitions into terminal states (sent/delivered/failed), never on transient claim states (owed/sending) -- real design work beyond this SD's remaining budget. Part of the remedy (terminal carrier-error-code handling) already shipped via QF-20260912-394.",
+        "requirement": "Descope sms_outbound_obligations (instance 3) from this SD's implementation -- design constraints only, no migration, with an explicit follow-up recommendation",
+        "acceptance_criteria": [
+          "No migration or trigger for sms_outbound_obligations ships in this SD",
+          "A written design note (this PRD) records the terminal-states-only trigger constraint and the durable-receipt-table prerequisite for whoever picks up the follow-up",
+          "The retrospective/completion-flags capture explicitly flags this as a deliberately descoped instance, not a silently dropped one"
+        ]
+      }
+    ],
+    "non_functional_requirements": [],
+    "technical_requirements": [
+      {
+        "id": "TR-1",
+        "rationale": "CREATE TRIGGER takes an ACCESS EXCLUSIVE lock that blocks reads too; service_role/postgres have no lock_timeout by default, so an unguarded apply on a hot table can hang every worker session fleet-wide.",
+        "requirement": "Every chairman-gated migration in this SD that adds a trigger on a live table must include the SET lock_timeout mitigation documented in database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql, scaled to the target table's actual write volume"
+      },
+      {
+        "id": "TR-2",
+        "rationale": "A trigger's DROP reverses the schema but not the data it already overwrote -- a real rollback needs the pre-derivation state captured somewhere, or the DOWN migration is cosmetic.",
+        "requirement": "Every DOWN-sibling migration must capture pre-derivation values (a snapshot INSERT or equivalent) before dropping its trigger, not just DROP TRIGGER"
+      },
+      {
+        "id": "TR-3",
+        "rationale": "RISK found that anon-key writers to some of these tables are already silent no-ops, and triggers can be disabled via DISABLE TRIGGER -- a data-agreement-only test can pass with the trigger never having fired.",
+        "requirement": "The success metric 'zero rows disagree' must be paired with a trigger-liveness assertion (reading pg_trigger / information_schema.triggers), not only a data-agreement query"
+      },
+      {
+        "id": "TR-4",
+        "rationale": "This is the established, already-working pattern for proving a chairman-gated trigger's behavior against live-shaped data without committing a real mutation or requiring an exec_sql/execute_sql RPC (none is exposed in this project) -- reusing it is lower-risk than inventing a parallel one for this SD's two high-hazard trigger targets.",
+        "requirement": "Every migration in this SD uses the SAVEPOINT-guarded, session_replication_role-toggling, always-ROLLBACK *_dry_run.mjs proof-script convention (e.g. database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger_dry_run.mjs) as its migration test harness, rather than a new, unreviewed test mechanism"
+      },
+      {
+        "id": "TR-5",
+        "rationale": "The SD spine's '>=8 existing triggers' claim on strategic_directives_v2 undercounts the measured reality: 57 triggers exist (37 BEFORE, firing in alphabetical NAME order), a load-bearing fact for FR-5's trigger-naming choice. uat_test_runs (FR-3's target) has ZERO existing triggers today -- it is the first trigger ever added to that table, materially lower ordering risk than FR-5's target.",
+        "requirement": "Trigger-ordering claims must cite the measured live count, not the SD's original placeholder figure"
+      }
+    ],
+    "system_architecture": "{\"overview\":\"Three summary/detail column pairs get a governed derivation (trigger, sequenced by blast radius: cold table first) plus a CI lint widened to the actual defect shapes (boolean, jsonb-key, cross-table); the one instance where deriving is currently unsafe (a live worker claim queue with no durable detail source) is explicitly descoped with a documented design constraint for its own follow-up.\",\"components\":[{\"name\":\"database/chairman-gated/*_uat_control_pack_evaluated_derive.sql\",\"responsibility\":\"BEFORE trigger deriving uat_test_runs.metadata.control_pack_evaluated from control_pack_failures with the jsonb-null fix, plus a same-migration backfill\",\"technology\":\"PL/pgSQL trigger\"},{\"name\":\"database/chairman-gated/*_sd_fence_status_derive.sql\",\"responsibility\":\"sd_key-allowlisted trigger deriving strategic_directives_v2.metadata.fence_status_2026_08_17 for exactly one SD row, staged pending chairman's canonical-source confirmation\",\"technology\":\"PL/pgSQL trigger\"},{\"name\":\"scripts/lint/summary-column-derivation-lint.mjs\",\"responsibility\":\"CI lint widened to 3 predicates (boolean, jsonb-key, cross-table-derived), asserting the corrected 7-column baseline\",\"technology\":\"Node.js CI lint\"}],\"data_flow\":\"There is no distinct control_pack_status/control_pack_failures column to scope a WHEN clause to -- any INSERT/UPDATE touching the metadata jsonb blob on uat_test_runs fires a BEFORE trigger that recomputes control_pack_evaluated from control_pack_status in the SAME row/transaction before the write commits. Similarly, for the allowlisted strategic_directives_v2 row, any INSERT/UPDATE touching its metadata blob fires a BEFORE trigger recomputing the fence_status_2026_08_17.state sub-key from venture_gate_last_verdict via a two-level jsonb_set, preserving sibling provenance keys. In both cases summary and detail can never be observed out of sync by any reader once the trigger is live.\",\"integration_points\":[\"uat_test_runs\",\"strategic_directives_v2 (one allowlisted row)\",\"CI pipeline (new lint job)\"]}",
+    "data_model": {},
+    "api_specifications": [],
+    "ui_ux_requirements": [],
+    "implementation_approach": "{\"phases\":[{\"phase\":\"Phase 1\",\"description\":\"Widen and ship the CI lint (FR-1, FR-2) -- no migration dependency, lowest risk\",\"deliverables\":[\"scripts/lint/summary-column-derivation-lint.mjs\",\"baseline documentation\"]},{\"phase\":\"Phase 2\",\"description\":\"Ship the uat_test_runs pilot trigger + backfill (FR-3, FR-4) -- cold table, clear derivation\",\"deliverables\":[\"chairman-gated migration + DOWN\",\"regression test for reader safety\"]},{\"phase\":\"Phase 3\",\"description\":\"Stage (not apply) the strategic_directives_v2 fence-status trigger (FR-5) -- awaits chairman's canonical-source decision\",\"deliverables\":[\"chairman-gated migration + DOWN, sd_key-allowlisted\"]}],\"technical_decisions\":[\"Sequence by blast radius (cold table first, hot table staged-not-applied, worst-risk instance descoped) rather than the SD's original instance-numbering order\",\"Keep lib/eva/uat-robustness-gate.js unmodified -- make the summary un-stale-able instead of redirecting the reader, since the reader's existing logic was itself a deliberate prior fix\",\"Explicitly descope sms_outbound_obligations rather than force a design under time pressure that RISK found genuinely unsafe as currently designable\"]}",
+    "technology_stack": [],
+    "dependencies": [],
+    "test_scenarios": [
+      {
+        "id": "TS-1",
+        "then": "metadata.control_pack_evaluated reads true, set by the trigger, never by the INSERT statement itself",
+        "when": "The row is inserted",
+        "given": "A uat_test_runs INSERT with metadata.control_pack_status having all 4 required keys set to a real status",
+        "scenario": "Insert a uat_test_runs fixture with control_pack_status showing all 4 required controls non-'not_attempted' and confirm control_pack_evaluated derives to true without being written directly",
+        "test_type": "integration"
+      },
+      {
+        "id": "TS-2",
+        "then": "metadata.control_pack_evaluated derives to false -- confirms this is correct behavior (incomplete coverage), not drift needing a backfill",
+        "when": "The row is inserted",
+        "given": "A uat_test_runs row where metadata.control_pack_status has 3 of 4 required keys = 'not_attempted'",
+        "scenario": "Insert a uat_test_runs fixture matching live row 84d310e1's shape (3 of 4 controls 'not_attempted') and confirm control_pack_evaluated derives to false, matching the existing correct live value",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-2b",
+        "then": "metadata.control_pack_evaluated derives to true -- closes the false-negative the original control_pack_failures-based predicate would have introduced for this exact shape",
+        "when": "The row is inserted",
+        "given": "A uat_test_runs row that is fully evaluated with zero failures (control_pack_failures is the jsonb null literal)",
+        "scenario": "Insert a uat_test_runs fixture with all 4 required controls non-'not_attempted' AND control_pack_failures = JSON null (a clean, fully-evaluated pass) and confirm control_pack_evaluated derives to true, not false",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-2c",
+        "then": "metadata.control_pack_evaluated flips to true on the UPDATE, proving the trigger covers both INSERT and UPDATE paths",
+        "when": "The row is later UPDATEd so all 4 required keys become non-'not_attempted'",
+        "given": "A row inserted with control_pack_evaluated=false (incomplete coverage)",
+        "scenario": "Insert a uat_test_runs row with incomplete control_pack_status, then UPDATE it once all controls complete, and confirm the trigger re-fires on UPDATE (not only INSERT)",
+        "test_type": "integration"
+      },
+      {
+        "id": "TS-2d",
+        "then": "metadata.control_pack_evaluated derives to false (fails closed) rather than erroring or defaulting true",
+        "when": "The row is inserted",
+        "given": "A row inserted with metadata lacking the control_pack_status key entirely",
+        "scenario": "Insert a uat_test_runs row whose metadata has no control_pack_status key at all",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-2e",
+        "then": "The captured pre-derivation snapshot allows restoring the prior values -- DOWN is a real data rollback, not only DROP TRIGGER",
+        "when": "The DOWN migration runs",
+        "given": "Fixture rows whose control_pack_evaluated has been trigger-derived",
+        "scenario": "Apply the DOWN migration after the trigger has derived values on fixture rows and confirm pre-derivation values are restorable, per TR-2",
+        "test_type": "integration"
+      },
+      {
+        "id": "TS-3",
+        "then": "Only the allowlisted row's fence_status_2026_08_17 changes; the 2 other completed SDs' values are untouched",
+        "when": "venture_gate_last_verdict is updated on each row",
+        "given": "Prior to this trigger existing: 3 SD rows all carrying a fence_status_2026_08_17 key, only one of them SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E",
+        "scenario": "The fence_status trigger fires for the allowlisted SD row and does not fire for either of the 2 other completed SDs carrying the same key",
+        "test_type": "integration"
+      },
+      {
+        "id": "TS-3b",
+        "then": "The key is present (corrects TESTING's disproven BLOCKER-4 assumption; a future absence would now be caught, not assumed)",
+        "when": "The check queries for the venture_gate_last_verdict key",
+        "given": "SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E's current metadata",
+        "scenario": "A fixture/regression check confirms venture_gate_last_verdict is present in metadata on the allowlisted row before FR-5's migration is staged",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-3c",
+        "then": "Both FR-3 and FR-5 migrations pass; a fixture migration missing the header fails",
+        "when": "A migration-header assertion scans for the SET lock_timeout statement preceding the DDL",
+        "given": "This SD's migration files",
+        "scenario": "Each new migration's DDL block is preceded by SET lock_timeout='3s' (or tighter) before any CREATE TRIGGER/ALTER TABLE statement, per TR-1",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-4",
+        "then": "CI fails with a message naming the undereived key",
+        "when": "The lint runs against the fixture",
+        "given": "A fixture migration file writing a metadata jsonb key matching a summary-name heuristic, no CREATE TRIGGER in the same file",
+        "scenario": "The widened CI lint fails a fixture migration adding a new jsonb summary-shaped key with no paired trigger",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-5",
+        "then": "Both pass -- the baseline is asserted, not retroactively failed",
+        "when": "The lint runs",
+        "given": "A fixture migration with a GENERATED ALWAYS boolean column, plus the live migration history containing the 7 baseline columns",
+        "scenario": "The widened CI lint passes a fixture migration adding a GENERATED boolean column, and passes the 7 existing baseline boolean columns unchanged",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-5b",
+        "then": "CI surfaces a MANUAL REVIEW REQUIRED flag without blocking the PR outright, since predicate (c) cannot be fully mechanical",
+        "when": "The lint runs",
+        "given": "A fixture migration adding a foreign-key column whose name matches a status/summary pattern",
+        "scenario": "The widened CI lint flags (not auto-fails) a fixture migration adding a column that is both a foreign key and matches the status/summary naming heuristic, per FR-1 predicate (c)",
+        "test_type": "unit"
+      },
+      {
+        "id": "TS-6",
+        "then": "The check reports the trigger as disabled/not-firing, distinct from and in addition to any data-agreement query result -- then the transaction ROLLBACKs, so no disabled-trigger state or drifted row is ever committed to production",
+        "when": "The TR-3 liveness check runs (reading pg_trigger) inside the same guarded transaction",
+        "given": "Within a SAVEPOINT-guarded transaction that is always rolled back (per the *_dry_run.mjs convention): the uat_test_runs trigger is disabled via ALTER TABLE ... DISABLE TRIGGER, then a drifted row is inserted through an anon-key-equivalent path that silently no-ops on the derivation",
+        "scenario": "A trigger-liveness assertion catches a disabled trigger that a data-agreement query alone would miss",
+        "test_type": "integration"
+      },
+      {
+        "id": "TS-7",
+        "then": "No file targets sms_outbound_obligations, and pg_trigger shows zero triggers on the table post-SD -- FR-6's descope is verified at the mechanism level, not only by a migration-file grep (a file's presence is a ceremony marker, never proof of live schema state)",
+        "when": "Reviewed against database/chairman-gated/ (file-existence check) AND a live query of pg_trigger for the sms_outbound_obligations table (mechanism check)",
+        "given": "This SD's full migration set",
+        "scenario": "sms_outbound_obligations receives no migration and no live trigger from this SD",
+        "test_type": "unit"
+      }
+    ],
+    "acceptance_criteria": [
+      "uat_test_runs.control_pack_evaluated is derived by a chairman-gated trigger from control_pack_status (not control_pack_failures); no backfill ships since existing rows are already correct under the corrected predicate",
+      "strategic_directives_v2's fence_status trigger is staged (not applied) with an explicit sd_key allowlist and a chairman decision point for the 3-way canonical-source ambiguity",
+      "The CI lint is widened to the 3 real defect shapes (boolean/jsonb-key/cross-table) and asserts the corrected 7-column baseline",
+      "sms_outbound_obligations is explicitly, verifiably descoped with a documented design constraint for its own follow-up",
+      "lib/eva/uat-robustness-gate.js is unmodified, with the reconciliation reasoning recorded"
+    ],
+    "performance_requirements": {},
+    "plan_checklist": [
+      {
+        "text": "PRD created and saved",
+        "checked": true
+      },
+      {
+        "text": "SD requirements mapped to technical specs",
+        "checked": true
+      },
+      {
+        "text": "Technical architecture defined",
+        "checked": true
+      },
+      {
+        "text": "Implementation approach documented",
+        "checked": true
+      },
+      {
+        "text": "Test scenarios defined",
+        "checked": true
+      },
+      {
+        "text": "Acceptance criteria established",
+        "checked": true
+      },
+      {
+        "text": "Integration & operationalization documented",
+        "checked": true
+      },
+      {
+        "text": "Exploration summary documented",
+        "checked": true
+      },
+      {
+        "text": "Resource requirements estimated",
+        "checked": false
+      },
+      {
+        "text": "Timeline and milestones set",
+        "checked": false
+      },
+      {
+        "text": "Risk assessment completed",
+        "checked": true
+      }
+    ],
+    "exec_checklist": [
+      {
+        "text": "Development environment setup",
+        "checked": false
+      },
+      {
+        "text": "Core functionality implemented",
+        "checked": false
+      },
+      {
+        "text": "Unit tests written",
+        "checked": false
+      },
+      {
+        "text": "Integration tests completed",
+        "checked": false
+      },
+      {
+        "text": "Code review completed",
+        "checked": false
+      },
+      {
+        "text": "Documentation updated",
+        "checked": false
+      }
+    ],
+    "validation_checklist": [
+      {
+        "text": "All acceptance criteria met",
+        "checked": false
+      },
+      {
+        "text": "Performance requirements validated",
+        "checked": false
+      },
+      {
+        "text": "Security review completed",
+        "checked": false
+      },
+      {
+        "text": "User acceptance testing passed",
+        "checked": false
+      },
+      {
+        "text": "Deployment readiness confirmed",
+        "checked": false
+      }
+    ],
+    "progress": 82,
+    "phase": "planning",
+    "phase_progress": {},
+    "risks": [
+      {
+        "risk": "A trigger on strategic_directives_v2 (even sd_key-allowlisted) still takes the same ACCESS EXCLUSIVE lock class as any other trigger addition on this hot table",
+        "impact": "HIGH",
+        "mitigation": "Mandatory SET lock_timeout='3s' per TR-1; apply during a low-traffic window as part of the chairman apply ceremony, same as the precedent migration this SD's own risk evidence cites",
+        "probability": "LOW",
+        "rollback_plan": "DOWN sibling drops the trigger; TR-2 requires pre-derivation value capture so the fence_status can be restored if needed"
+      },
+      {
+        "risk": "The chairman, at apply time, may not have enough context to resolve the 3-way canonical-source ambiguity for venture_gate verdict, stalling FR-5's apply indefinitely",
+        "impact": "MEDIUM",
+        "mitigation": "FR-5's migration header documents all 3 candidate sources with their evidence (venture_gate_last_verdict's own staleness admission, venture_gate_attestations' disagreement) so the chairman has a self-contained decision packet, not a bare technical diff to review",
+        "probability": "MEDIUM",
+        "rollback_plan": "The migration simply stays unapplied (chairman-gated default state) until the decision is made -- no forced timeline"
+      },
+      {
+        "risk": "Descoping sms_outbound_obligations (FR-6) leaves the QF-394 defect class only 2/3 closed, and a future worker may re-attempt the SMS derivation without re-discovering the resend-loop risk this SD's RISK sub-agent found",
+        "impact": "HIGH",
+        "mitigation": "The descope is recorded as its own risk/completion-flag finding (not silently dropped), naming the exact hazard (trigger overwriting an in-flight status=sending claim) so a future SD inherits the finding rather than re-deriving it",
+        "probability": "MEDIUM",
+        "rollback_plan": "N/A -- no code shipped for this instance to roll back"
+      }
+    ],
+    "constraints": [],
+    "assumptions": [],
+    "stakeholders": [
+      {
+        "name": "Chairman (Solo Entrepreneur)",
+        "needs": [
+          "ROI visibility",
+          "Resource efficiency",
+          "Quick iteration",
+          "Strategic alignment"
+        ],
+        "persona_id": "chairman",
+        "pain_points": [
+          "Too much detail",
+          "Missing financial KPIs",
+          "Slow feedback loops"
+        ],
+        "success_criteria": [
+          "Clear ROI path",
+          "Minimal overhead",
+          "Measurable outcomes"
+        ]
+      },
+      {
+        "name": "EVA (AI Chief of Staff)",
+        "needs": [
+          "Clear orchestration APIs",
+          "Reliable automation",
+          "Observable state"
+        ],
+        "persona_id": "eva",
+        "pain_points": [
+          "Unclear agent boundaries",
+          "Missing context",
+          "Brittle integrations"
+        ],
+        "success_criteria": [
+          "Autonomous execution",
+          "Predictable behavior",
+          "Graceful degradation"
+        ]
+      },
+      {
+        "name": "DevOps Engineer",
+        "needs": [
+          "Reliable deployments",
+          "Clear monitoring",
+          "Fast rollback"
+        ],
+        "persona_id": "devops_engineer",
+        "pain_points": [
+          "Flaky pipelines",
+          "Missing logs",
+          "Configuration drift"
+        ],
+        "success_criteria": [
+          "Zero-downtime deploys",
+          "Full observability",
+          "Fast recovery"
+        ]
+      }
+    ],
+    "approved_by": null,
+    "approval_date": null,
+    "planned_start": null,
+    "planned_end": null,
+    "actual_start": null,
+    "actual_end": null,
+    "created_at": "2026-09-13T01:21:17.027315",
+    "updated_at": "2026-09-13T01:43:44.731971",
+    "created_by": "PLAN",
+    "updated_by": null,
+    "metadata": {
+      "created_via": "content_arg",
+      "validated_at": "2026-09-13T01:43:27.408Z",
+      "risk_analysis": {
+        "verdict": "PASS",
+        "warnings": [],
+        "conditions": null,
+        "confidence": 85,
+        "sd_context": "fbbf9a6d-e079-4c22-9189-88336aae9a16",
+        "executed_at": "2026-09-13T01:43:37.446Z",
+        "execution_id": "db902d93-59b2-4a97-9591-b17d8fa5d38a",
+        "generated_at": "2026-09-13T01:43:37.446Z",
+        "raw_analysis": null,
+        "justification": null,
+        "critical_issues": [
+          {
+            "issue": "Security-related: auth, role, security. Authentication/authorization changes",
+            "score": 9,
+            "domain": "Security",
+            "mitigation_required": true
+          },
+          {
+            "issue": "Database changes: migration, schema, table. Schema migration required. Modifying existing database structures",
+            "score": 10,
+            "domain": "Data Migration",
+            "mitigation_required": true
+          }
+        ],
+        "recommendations": [
+          {
+            "title": "Critical Risk Mitigation Required",
+            "priority": "CRITICAL",
+            "description": "2 critical risk(s) identified. Develop mitigation plan before proceeding to EXEC phase. Consider: additional research, proof of concept, architecture review."
+          },
+          {
+            "title": "Security Risk Management",
+            "priority": "HIGH",
+            "description": "High risk in security. Recommendations: Engage specialist sub-agent, add checkpoint validation, include fallback plan."
+          },
+          {
+            "title": "Data Migration Risk Management",
+            "priority": "HIGH",
+            "description": "High risk in data migration. Recommendations: Engage specialist sub-agent, add checkpoint validation, include fallback plan."
+          },
+          {
+            "title": "Security Review Required",
+            "priority": "HIGH",
+            "description": "Engage Chief Security Architect sub-agent for review. Validate: RLS policies, authentication flows, data exposure risks, input validation."
+          }
+        ],
+        "validation_mode": "prospective",
+        "sub_agent_version": "1.0.0"
+      },
+      "content_quality": {
+        "mode": "off",
+        "score": 84,
+        "passed": true,
+        "threshold": 70
+      },
+      "design_analysis": {
+        "sd_context": {
+          "id": "SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001",
+          "scope": "- (1) A schema rule: a summary column is DERIVED from its detail, never written independently. For each of the three live instances, land a chairman-gated migration that makes the summary a GENERATED ALWAYS column or a BEFORE INSERT OR UPDATE trigger (control_pack_evaluated := control_pack_failures IS NOT NULL; obligation status := from the newest provider receipt; child E fence status := from the gate verdict), with a DOWN sibling each, staged under database/chairman-gated/ for the apply ceremony.\n- (2) A migration lint (scripts/lint/) that fails CI on any new _evaluated, _passed or _verified boolean column in database/ without a derivation (generated expression or trigger) beside its detail column; the current fourteen are the asserted baseline (the R1 registry's retire-check shape: baseline asserted, silent growth fails).\n- (3) Readers key on the detail: the stage-23 acceptance predicate (lib/eva/uat-robustness-gate.js) reads control_pack_failures present-and-empty rather than the boolean; the held-send release sweep and the SMS worker read the provider receipt, not last_error text; the child-E fence readers read the verdict. Each reader change ships with a unit test that fixtures the drifted pair and asserts the detail wins.\n- (4) Measure first at PRD: walk the schema for the full extent (Solomon's count is grep-bounded, not a schema walk) and list every summary/detail pair with its writers.",
+          "title": "Summary columns derived from their detail: stop the summary-versus-detail drift that misled three gates in one day"
+        },
+        "generated_at": "2026-09-13T01:43:27.584Z",
+        "raw_analysis": "DESIGN Analysis Results:\nVerdict: CONDITIONAL_PASS\nConfidence: 60%\n\nRecommendations:\n  1. Validate infrastructure concerns: deployment, monitoring, rollback, CI/CD integration\n\nwarnings: [\n  {\n    \"severity\": \"HIGH\",\n    \"issue\": \"Sub-agent scanned an unresolved or empty repo (repo_resolved=true, probe_exists=false)\",\n    \"recommendation\": \"Verify the SD target_application resolves to the correct repo; an empty/wrong tree yields zero violations and must not pass as green\"\n  }\n]\n\ndetailed_analysis: {\n  \"sd_type\": \"infrastructure\",\n  \"sd_type_source\": \"declared\",\n  \"skip_reason\": \"Non-UI SD type (infrastructure) - UI/UX design validation not applicable\",\n  \"validation_approach\": \"Infrastructure design review: deployment, CI/CD, monitoring, rollback, config management\",\n  \"infra_checklist\": [\n    \"Deployment strategy documented\",\n    \"CI/CD pipeline integration verified\",\n    \"Monitoring and alerting configured\",\n    \"Rollback procedure defined\",\n    \"Configuration management approach specified\"\n  ]\n}\n\nfindings: {\n  \"design_system_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"component_analysis\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"accessibility_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"responsive_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"consistency_check\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no UI components\"\n  },\n  \"workflow_review\": {\n    \"skipped\": true,\n    \"reason\": \"infrastructure SD - no user-facing workflows\"\n  }\n}\n\nmetadata: {\n  \"repo_path\": \"C:/Users/rickf/Projects/_EHG/EHG_Engineer\",\n  \"repo_resolved\": true,\n  \"components_dir_exists\": true,\n  \"skip_reason\": \"non_ui_sd_type:infrastructure\",\n  \"registry_source\": \"db\",\n  \"executed_from_cwd\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001\",\n  \"probe_exists\": false,\n  \"verdict_chain\": [\n    {\n      \"from\": \"PASS\",\n      \"to\": \"CONDITIONAL_PASS\",\n      \"mutator\": \"lib/sub-agents/resolve-repo.js:applySubAgentRepoVerdict\",\n      \"reason\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\"\n    }\n  ]\n}\n\noptions: {\n  \"timeout\": 120000,\n  \"repo_path\": \"C:\\\\Users\\\\rickf\\\\Projects\\\\_EHG\\\\EHG_Engineer\\\\.worktrees\\\\SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001\",\n  \"target_application\": \"EHG_Engineer\",\n  \"_injectedBrief\": \"--- Five-Point Brief ---\\nSymptom: <describe what IS happening>\\nLocation: <file/endpoint/table>\\nFrequency: <pattern/timing>\\nPrior Attempts: <what you already tried>\\nDesired Outcome: <clear success criteria>\\nContext: SD SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001\\n--- End Brief ---\",\n  \"taskContract\": {\n    \"contract_id\": \"b7a87cca-55de-4f40-98cd-1eaa56dadc17\",\n    \"summary\": \"Contract b7a87cca-55de-4f40-98cd-1eaa56dadc17: LEO_EXECUTOR → DESIGN | Execute Senior Design Sub-Agent analysis for SD SD...\"\n  },\n  \"inputArtifacts\": [\n    \"7f7c3f40-dc4b-4146-9769-faf01403d59a\"\n  ],\n  \"sdKey\": \"SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001\",\n  \"sdUUID\": \"fbbf9a6d-e079-4c22-9189-88336aae9a16\"\n}\n\nconditions: [\n  {\n    \"action\": \"repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\",\n    \"priority\": \"medium\",\n    \"blocking\": false\n  }\n]\njustification: CONDITIONAL_PASS recorded by applySubAgentRepoVerdict: repo unresolved or probe missing (repo_resolved=true, probe_exists=false) — a scan of an empty/wrong tree cannot pass as green\n\nsub_agent: {\n  \"id\": \"2ebfbd8a-5aa0-4907-bb47-33a2dd04254f\",\n  \"code\": \"DESIGN\",\n  \"name\": \"Senior Design Sub-Agent\",\n  \"description\": \"## Senior Design Sub-Agent v6.0.0 - Lessons Learned Edition\\n\\n**🆕 NEW in v6.0.0**: Proactive learning, accessibility-first patterns, scope estimation protocol\\n\\n### Overview\\n**Mission**: Ensure design compliance, accessibility (WCAG 2.1 AA), and consistent UX across all implementations.\\n\\n**Philosophy**: **Accessibility-first design prevents technical debt.**\\n\\n**Tech Stack**: Vite + React + Shadcn UI + TypeScript + Tailwind CSS\\n\\n**Component Sizing Sweet Spot**: 300-600 lines of code (optimal for testing and maintenance)\\n\\n---\\n\\n## 🔍 PROACTIVE LEARNING INTEGRATION (SD-LEO-LEARN-001)\\n\\n### Before Starting ANY Design/UI Work\\n\\n**MANDATORY**: Query issue_patterns table for proven solutions:\\n\\n```bash\\n# Check for known UI/UX issue patterns\\nnode scripts/search-prior-issues.js \\\"UI component design\\\"\\n\\n# Query issue_patterns table\\nnode -e \\\"\\nimport { createDatabaseClient } from './lib/supabase-connection.js';\\n(async () => {\\n  const client = await createDatabaseClient('engineer', { verify: false });\\n  const result = await client.query(\\\\`\\n    SELECT pattern_id, issue_summary, proven_solutions, prevention_checklist\\n    FROM issue_patterns\\n    WHERE category IN ('design', 'ui"
+      },
+      "stories_analysis": {
+        "verdict": "PASS",
+        "warnings": [],
+        "conditions": null,
+        "confidence": 95,
+        "sd_context": "fbbf9a6d-e079-4c22-9189-88336aae9a16",
+        "executed_at": "2026-09-13T01:43:37.408Z",
+        "execution_id": "f0b0a34a-782c-4523-a938-bfb322d51aed",
+        "generated_at": "2026-09-13T01:43:37.408Z",
+        "raw_analysis": null,
+        "justification": null,
+        "critical_issues": [],
+        "recommendations": [
+          {
+            "title": "Stories Already Complete",
+            "description": "6 stories already have implementation context. This is a success - no additional work needed."
+          },
+          {
+            "title": "EXEC Phase Guidance",
+            "description": "User stories now include: implementation_context (architecture patterns, component locations), architecture_references (existing code to reference), example_code_patterns (code snippets), and testing_scenarios (test cases)."
+          }
+        ],
+        "validation_mode": "prospective",
+        "sub_agent_version": "1.0.0"
+      },
+      "database_analysis": {
+        "verdict": "PASS",
+        "warnings": [],
+        "conditions": null,
+        "confidence": 100,
+        "sd_context": "fbbf9a6d-e079-4c22-9189-88336aae9a16",
+        "executed_at": "2026-09-13T01:43:42.114Z",
+        "execution_id": "311069d6-7f02-4773-8147-77740c062469",
+        "generated_at": "2026-09-13T01:43:42.114Z",
+        "raw_analysis": {},
+        "justification": null,
+        "critical_issues": [],
+        "recommendations": [
+          "No database migrations needed for this SD"
+        ],
+        "validation_mode": "prospective",
+        "sub_agent_version": "1.0.0"
+      },
+      "generation_pattern": "generate_first_then_insert",
+      "plan_prd_sub_agents": {
+        "agents": [
+          {
+            "code": "DATABASE",
+            "verdict": "PASS",
+            "confidence": 100,
+            "executed_at": "2026-09-13T01:43:43.208Z"
+          },
+          {
+            "code": "RISK",
+            "verdict": "PASS",
+            "confidence": 85,
+            "executed_at": "2026-09-13T01:43:43.208Z"
+          },
+          {
+            "code": "STORIES",
+            "verdict": "PASS",
+            "confidence": 95,
+            "executed_at": "2026-09-13T01:43:43.208Z"
+          }
+        ],
+        "all_passed": true,
+        "executed_at": "2026-09-13T01:43:43.208Z"
+      },
+      "grounding_validation": {
+        "note": "11 requirements have <50% confidence but this is expected for implementation-level PRDs. No hallucination detected.",
+        "sd_id": "fbbf9a6d-e079-4c22-9189-88336aae9a16",
+        "has_issues": false,
+        "all_results": [
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 9.896907216494846,
+                "detail": "12.4% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 8,
+                "detail": "2/10 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 0.9022556390977443,
+                "detail": "4.5% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.1879916285559259,
+            "is_flagged": true,
+            "explanation": "Low confidence (19%): This requirement may not be grounded in the SD source. 12.4% semantic overlap with SD. 2/10 key phrases match SD. 4.5% alignment with strategic objectives",
+            "requirement_id": "FR-1",
+            "requirement_type": "functional",
+            "requirement_title": "Widen the proposed CI lint beyond new boolean *_evaluated/*_passed/*_verified columns to also flag a new JSONB-key summary field or a new cross-table-derived text/status column introduced without an accompanying derivation (generated expression or trigger)"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 8.508124076809453,
+                "detail": "10.6% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 20,
+                "detail": "2/4 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 1.3675213675213675,
+                "detail": "6.8% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.2987564544433082,
+            "is_flagged": true,
+            "explanation": "Low confidence (30%): This requirement may not be grounded in the SD source. 10.6% semantic overlap with SD. 6.8% alignment with strategic objectives",
+            "requirement_id": "FR-2",
+            "requirement_type": "functional",
+            "requirement_title": "Document the true extent of the summary/detail-drift class from a live-data walk, not a static schema grep, and record why an exhaustive enumeration is infeasible"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 14.025245441795231,
+                "detail": "17.5% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 6.666666666666666,
+                "detail": "1/6 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 1.083743842364532,
+                "detail": "5.4% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.21775655950826434,
+            "is_flagged": true,
+            "explanation": "Low confidence (22%): This requirement may not be grounded in the SD source. 1/6 key phrases match SD. 5.4% alignment with strategic objectives",
+            "requirement_id": "FR-3",
+            "requirement_type": "functional",
+            "requirement_title": "Derive uat_test_runs.metadata.control_pack_evaluated from control_pack_status (the per-control status map) via a BEFORE INSERT OR UPDATE trigger -- true only when all 4 required control keys are non-'not_attempted', mirroring lib/eva/uat-control-pack.js's existing application-layer allRequiredEvaluated logic -- never from control_pack_failures"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 7.680945347119645,
+                "detail": "9.6% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 0,
+                "detail": "0/1 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 1.4545454545454546,
+                "detail": "7.3% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.091354908016651,
+            "is_flagged": true,
+            "explanation": "Low confidence (9%): This requirement may not be grounded in the SD source. 9.6% semantic overlap with SD. 0/1 key phrases match SD. 7.3% alignment with strategic objectives",
+            "requirement_id": "FR-4",
+            "requirement_type": "functional",
+            "requirement_title": "No code change to lib/eva/uat-robustness-gate.js's reader -- document why FR-3's trigger makes scope item (3)'s original 'readers key on detail' ask unnecessary for this instance"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 14.725274725274726,
+                "detail": "18.4% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 0,
+                "detail": "0/0 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 0.6956521739130435,
+                "detail": "3.5% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.1542092689918777,
+            "is_flagged": true,
+            "explanation": "Low confidence (15%): This requirement may not be grounded in the SD source. 0/0 key phrases match SD. 3.5% alignment with strategic objectives",
+            "requirement_id": "FR-5",
+            "requirement_type": "functional",
+            "requirement_title": "Stage (not auto-apply) a narrowly-scoped, chairman-gated trigger deriving the child-E fence_status_2026_08_17 summary from its canonical detail source, with the 3-way source ambiguity surfaced as an explicit chairman decision at apply time"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 11.411589895988111,
+                "detail": "14.3% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 16,
+                "detail": "2/5 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 0.5673758865248226,
+                "detail": "2.8% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.2797896578251293,
+            "is_flagged": true,
+            "explanation": "Low confidence (28%): This requirement may not be grounded in the SD source. 2.8% alignment with strategic objectives",
+            "requirement_id": "FR-6",
+            "requirement_type": "functional",
+            "requirement_title": "Descope sms_outbound_obligations (instance 3) from this SD's implementation -- design constraints only, no migration, with an explicit follow-up recommendation"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 3.786259541984733,
+                "detail": "4.7% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 0,
+                "detail": "0/3 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 0.6666666666666666,
+                "detail": "3.3% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.044529262086514,
+            "is_flagged": true,
+            "explanation": "Low confidence (4%): This requirement may not be grounded in the SD source. 4.7% semantic overlap with SD. 0/3 key phrases match SD. 3.3% alignment with strategic objectives",
+            "requirement_id": "TR-1",
+            "requirement_type": "technical",
+            "requirement_title": "Every chairman-gated migration in this SD that adds a trigger on a live table must include the SET lock_timeout mitigation documented in database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql, scaled to the target table's actual write volume"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 2.822085889570552,
+                "detail": "3.5% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 0,
+                "detail": "0/1 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 0,
+                "detail": "0.0% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.028220858895705518,
+            "is_flagged": true,
+            "explanation": "Low confidence (3%): This requirement may not be grounded in the SD source. 3.5% semantic overlap with SD. 0/1 key phrases match SD. 0.0% alignment with strategic objectives",
+            "requirement_id": "TR-2",
+            "requirement_type": "technical",
+            "requirement_title": "Every DOWN-sibling migration must capture pre-derivation values (a snapshot INSERT or equivalent) before dropping its trigger, not just DROP TRIGGER"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 3.6809815950920246,
+                "detail": "4.6% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 30,
+                "detail": "1/1 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 0.7142857142857142,
+                "detail": "3.6% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.34395267309377736,
+            "is_flagged": true,
+            "explanation": "Low confidence (34%): This requirement may not be grounded in the SD source. 4.6% semantic overlap with SD. 3.6% alignment with strategic objectives",
+            "requirement_id": "TR-3",
+            "requirement_type": "technical",
+            "requirement_title": "The success metric 'zero rows disagree' must be paired with a trigger-liveness assertion (reading pg_trigger / information_schema.triggers), not only a data-agreement query"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 3.7462235649546827,
+                "detail": "4.7% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 0,
+                "detail": "0/0 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 0.29411764705882354,
+                "detail": "1.5% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.04040341212013506,
+            "is_flagged": true,
+            "explanation": "Low confidence (4%): This requirement may not be grounded in the SD source. 4.7% semantic overlap with SD. 0/0 key phrases match SD. 1.5% alignment with strategic objectives",
+            "requirement_id": "TR-4",
+            "requirement_type": "technical",
+            "requirement_title": "Every migration in this SD uses the SAVEPOINT-guarded, session_replication_role-toggling, always-ROLLBACK *_dry_run.mjs proof-script convention (e.g. database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger_dry_run.mjs) as its migration test harness, rather than a new, unreviewed test mechanism"
+          },
+          {
+            "factors": [
+              {
+                "name": "sd_text_similarity",
+                "score": 1.9601837672281777,
+                "detail": "2.5% semantic overlap with SD"
+              },
+              {
+                "name": "key_phrase_match",
+                "score": 0,
+                "detail": "0/1 key phrases match SD"
+              },
+              {
+                "name": "objectives_alignment",
+                "score": 0.4545454545454546,
+                "detail": "2.3% alignment with strategic objectives"
+              }
+            ],
+            "confidence": 0.024147292217736323,
+            "is_flagged": true,
+            "explanation": "Low confidence (2%): This requirement may not be grounded in the SD source. 2.5% semantic overlap with SD. 0/1 key phrases match SD. 2.3% alignment with strategic objectives",
+            "requirement_id": "TR-5",
+            "requirement_type": "technical",
+            "requirement_title": "Trigger-ordering claims must cite the measured live count, not the SD's original placeholder figure"
+          }
+        ],
+        "issue_reason": null,
+        "validated_at": "2026-09-13T01:43:27.376Z",
+        "grounding_score": 0.15555563415954773,
+        "average_confidence": 0.15555563415954773,
+        "flagged_requirements": [
+          {
+            "id": "FR-1",
+            "type": "functional",
+            "title": "Widen the proposed CI lint beyond new boolean *_evaluated/*_passed/*_verified columns to also flag a new JSONB-key summary field or a new cross-table-derived text/status column introduced without an accompanying derivation (generated expression or trigger)",
+            "confidence": 0.1879916285559259,
+            "explanation": "Low confidence (19%): This requirement may not be grounded in the SD source. 12.4% semantic overlap with SD. 2/10 key phrases match SD. 4.5% alignment with strategic objectives"
+          },
+          {
+            "id": "FR-2",
+            "type": "functional",
+            "title": "Document the true extent of the summary/detail-drift class from a live-data walk, not a static schema grep, and record why an exhaustive enumeration is infeasible",
+            "confidence": 0.2987564544433082,
+            "explanation": "Low confidence (30%): This requirement may not be grounded in the SD source. 10.6% semantic overlap with SD. 6.8% alignment with strategic objectives"
+          },
+          {
+            "id": "FR-3",
+            "type": "functional",
+            "title": "Derive uat_test_runs.metadata.control_pack_evaluated from control_pack_status (the per-control status map) via a BEFORE INSERT OR UPDATE trigger -- true only when all 4 required control keys are non-'not_attempted', mirroring lib/eva/uat-control-pack.js's existing application-layer allRequiredEvaluated logic -- never from control_pack_failures",
+            "confidence": 0.21775655950826434,
+            "explanation": "Low confidence (22%): This requirement may not be grounded in the SD source. 1/6 key phrases match SD. 5.4% alignment with strategic objectives"
+          },
+          {
+            "id": "FR-4",
+            "type": "functional",
+            "title": "No code change to lib/eva/uat-robustness-gate.js's reader -- document why FR-3's trigger makes scope item (3)'s original 'readers key on detail' ask unnecessary for this instance",
+            "confidence": 0.091354908016651,
+            "explanation": "Low confidence (9%): This requirement may not be grounded in the SD source. 9.6% semantic overlap with SD. 0/1 key phrases match SD. 7.3% alignment with strategic objectives"
+          },
+          {
+            "id": "FR-5",
+            "type": "functional",
+            "title": "Stage (not auto-apply) a narrowly-scoped, chairman-gated trigger deriving the child-E fence_status_2026_08_17 summary from its canonical detail source, with the 3-way source ambiguity surfaced as an explicit chairman decision at apply time",
+            "confidence": 0.1542092689918777,
+            "explanation": "Low confidence (15%): This requirement may not be grounded in the SD source. 0/0 key phrases match SD. 3.5% alignment with strategic objectives"
+          },
+          {
+            "id": "FR-6",
+            "type": "functional",
+            "title": "Descope sms_outbound_obligations (instance 3) from this SD's implementation -- design constraints only, no migration, with an explicit follow-up recommendation",
+            "confidence": 0.2797896578251293,
+            "explanation": "Low confidence (28%): This requirement may not be grounded in the SD source. 2.8% alignment with strategic objectives"
+          },
+          {
+            "id": "TR-1",
+            "type": "technical",
+            "title": "Every chairman-gated migration in this SD that adds a trigger on a live table must include the SET lock_timeout mitigation documented in database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql, scaled to the target table's actual write volume",
+            "confidence": 0.044529262086514,
+            "explanation": "Low confidence (4%): This requirement may not be grounded in the SD source. 4.7% semantic overlap with SD. 0/3 key phrases match SD. 3.3% alignment with strategic objectives"
+          },
+          {
+            "id": "TR-2",
+            "type": "technical",
+            "title": "Every DOWN-sibling migration must capture pre-derivation values (a snapshot INSERT or equivalent) before dropping its trigger, not just DROP TRIGGER",
+            "confidence": 0.028220858895705518,
+            "explanation": "Low confidence (3%): This requirement may not be grounded in the SD source. 3.5% semantic overlap with SD. 0/1 key phrases match SD. 0.0% alignment with strategic objectives"
+          },
+          {
+            "id": "TR-3",
+            "type": "technical",
+            "title": "The success metric 'zero rows disagree' must be paired with a trigger-liveness assertion (reading pg_trigger / information_schema.triggers), not only a data-agreement query",
+            "confidence": 0.34395267309377736,
+            "explanation": "Low confidence (34%): This requirement may not be grounded in the SD source. 4.6% semantic overlap with SD. 3.6% alignment with strategic objectives"
+          },
+          {
+            "id": "TR-4",
+            "type": "technical",
+            "title": "Every migration in this SD uses the SAVEPOINT-guarded, session_replication_role-toggling, always-ROLLBACK *_dry_run.mjs proof-script convention (e.g. database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger_dry_run.mjs) as its migration test harness, rather than a new, unreviewed test mechanism",
+            "confidence": 0.04040341212013506,
+            "explanation": "Low confidence (4%): This requirement may not be grounded in the SD source. 4.7% semantic overlap with SD. 0/0 key phrases match SD. 1.5% alignment with strategic objectives"
+          },
+          {
+            "id": "TR-5",
+            "type": "technical",
+            "title": "Trigger-ordering claims must cite the measured live count, not the SD's original placeholder figure",
+            "confidence": 0.024147292217736323,
+            "explanation": "Low confidence (2%): This requirement may not be grounded in the SD source. 2.5% semantic overlap with SD. 0/1 key phrases match SD. 2.3% alignment with strategic objectives"
+          }
+        ],
+        "requirements_flagged": 11,
+        "implementation_context": "web",
+        "requirements_validated": 11,
+        "validation_duration_ms": 31
+      }
+    },
+    "content": "# Product Requirements Document\n\n## Strategic Directive\nSD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001\n\n## Title\nSummary columns derived from their detail: stop the summary-versus-detail drift that misled three gates in one day\n\n## Status\nPlanning\n\n## Executive Summary\nDerive summary columns from their detail (trigger/generated) for the safe instances now, widen the CI lint to catch the actual defect shapes, and explicitly defer the one unsafe instance (SMS) pending a durable receipt design.\n\n## Functional Requirements\n\n### FR-1: Widen the proposed CI lint beyond new boolean *_evaluated/*_passed/*_verified columns to also flag a new JSONB-key summary field or a new cross-table-derived text/status column introduced without an accompanying derivation (generated expression or trigger)\nLEAD-phase VALIDATION (evidence 09ac5c83) found the originally-scoped lint (boolean-column-only) is DISJOINT from all 3 motivating incidents: 2 are JSONB metadata keys, 1 is a cross-table-derived TEXT column -- none is a new top-level boolean. The lint's detection needs 3 predicates, not 1: (a) new boolean *_evaluated/*_passed/*_verified column without a GENERATED expression (original ask, baseline = 7 real live columns after excluding PL/pgSQL locals: conformance_passed, content_lint_passed, gate_passed, subagent_verified, test_passed, uat_verified, validation_passed); (b) a migration writing to a metadata/jsonb column that also introduces a NEW summary-shaped key name (heuristic: key name containing status/verdict/evaluated/passed/verified/cleared) without a paired trigger in the same migration; (c) a new column whose name matches a status/summary pattern deriving from another table (heuristic: a foreign key column present alongside a status-shaped column, flagged for manual review rather than auto-failed, since this predicate cannot be fully mechanical).\n**Priority**: HIGH\n**Acceptance Criteria**:- A fixture migration adding an undereived boolean *_passed column fails the lint (unchanged from original ask)- A fixture migration adding a new jsonb summary-shaped key with no paired trigger in the same migration fails the lint- A fixture migration adding a GENERATED ALWAYS boolean column, or a migration whose CREATE TRIGGER derives a named jsonb key, passes the lint- The 7 real pre-existing boolean columns (not the originally-claimed 14, corrected per VALIDATION) are the asserted baseline -- the lint does not retroactively fail on them\n\n### FR-2: Document the true extent of the summary/detail-drift class from a live-data walk, not a static schema grep, and record why an exhaustive enumeration is infeasible\nScope item (4) mandates measuring the full extent at PRD. LEAD-phase VALIDATION already performed the live-data half: 7 real boolean *_passed/*_verified columns exist (not 14 -- 3 of the original grep hits were PL/pgSQL local variables, not columns), plus the 3 named non-boolean instances (2 jsonb keys, 1 cross-table text column). A fully exhaustive enumeration of every jsonb-key or cross-table-derived summary pair in the schema is not mechanically bounded (it requires semantic judgment about what counts as a 'summary', not a grep pattern) -- this FR records the corrected baseline and the boundary of what was actually measured, rather than promising a complete backfill census the lint (FR-1) cannot itself perform going forward.\n**Priority**: MEDIUM\n**Acceptance Criteria**:- PRD/documentation records the corrected 7-column boolean baseline with each column's table and detail-column pairing (or lack thereof)- PRD/documentation explicitly states the jsonb-key/cross-table extent is bounded to the 3 known incidents, not schema-wide, and names why (no mechanical predicate exists for exhaustive detection)\n\n### FR-3: Derive uat_test_runs.metadata.control_pack_evaluated from control_pack_status (the per-control status map) via a BEFORE INSERT OR UPDATE trigger -- true only when all 4 required control keys are non-'not_attempted', mirroring lib/eva/uat-control-pack.js's existing application-layer allRequiredEvaluated logic -- never from control_pack_failures\nCORRECTED at PLAN (TESTING evidence 51dde124, BLOCKER-1/2/3; independently re-verified live by this session against uat_test_runs row 84d310e1). The original design derived from control_pack_failures IS NOT NULL AND jsonb_typeof(...) != 'null', which reintroduces the exact QF-20260830-666 bug class in SQL: control_pack_failures is documented by its own writer (lib/uat/result-recorder.js:613) as AMBIGUOUS -- null means EITHER 'evaluated, all passed' OR 'never evaluated', and a failures-based predicate cannot tell these apart. Live measurement of row 84d310e1 confirms this directly: control_pack_status shows 3 of 4 required controls 'not_attempted' and 1 'evaluated', control_pack_failures is null, and control_pack_evaluated is (correctly) false -- exactly the 'never evaluated' case a failures-based predicate would misread. The corrected source is control_pack_status: derive true only when ALL 4 required keys (fence_two_sidedness, canary_mutation_control, live_deployment_binding, minimum_assertion_manifest) are present with a value other than 'not_attempted', matching the existing correct application-layer logic in result-recorder.js:593/619 (controlPackStatus.allRequiredEvaluated) and lib/eva/uat-control-pack.js. The originally-claimed '23 of 24 rows drifted, needs backfill' was independently verified FALSE by both TESTING and a direct query in this session: those 23 rows are already CORRECTLY control_pack_evaluated=false under the control_pack_status predicate (incomplete control coverage, not drift) -- a backfill under the flawed predicate would have corrupted 23 correct rows. Because a single writer (result-recorder.js:606-622) sets control_pack_failures, control_pack_evaluated and control_pack_status atomically in ONE .update(), there is in fact NO live drift for this instance today; the trigger is a forward-looking guarantee against a future writer bypassing that atomic path, not a fix for existing data. control_pack_failures/control_pack_status are not columns -- the trigger reads NEW.metadata->'control_pack_status' (jsonb path) and, having no distinct column to scope a WHEN clause to, fires on every INSERT/UPDATE touching the metadata blob. uat_test_runs is COLD (26 rows, ~6/day, ZERO existing triggers on this table today) -- ship this instance first as the pilot, per RISK's sequencing recommendation.\n**Priority**: CRITICAL\n**Acceptance Criteria**:- Trigger sets metadata.control_pack_evaluated = true only when metadata.control_pack_status has ALL 4 required keys (fence_two_sidedness, canary_mutation_control, live_deployment_binding, minimum_assertion_manifest) present with a value other than 'not_attempted' -- mirroring lib/eva/uat-control-pack.js's allRequiredEvaluated logic; the trigger never reads control_pack_failures- A fixture row with control_pack_status matching live row 84d310e1's shape (3 of 4 controls 'not_attempted') derives control_pack_evaluated = false -- matching the existing live value, confirming this is correct behavior, not drift- A fixture row with all 4 required controls non-'not_attempted' AND control_pack_failures = jsonb null (a clean, fully-evaluated pass) derives control_pack_evaluated = true -- the false-negative the original control_pack_failures-based predicate would have introduced- Chairman-gated migration (database/chairman-gated/) + DOWN sibling; DOWN captures pre-derivation values before dropping the trigger; migration test script follows the SAVEPOINT-guarded, session_replication_role-toggling, always-ROLLBACK *_dry_run.mjs convention (e.g. database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger_dry_run.mjs)- NO backfill ships with this migration -- the 23 existing evaluated=false rows are already correct under the corrected predicate; the migration's header comment records this explicitly so a future reviewer does not re-attempt one\n\n### FR-4: No code change to lib/eva/uat-robustness-gate.js's reader -- document why FR-3's trigger makes scope item (3)'s original 'readers key on detail' ask unnecessary for this instance\nExplore + VALIDATION evidence confirms this reader was ALREADY deliberately changed by QF-20260830-666 to key on the boolean control_pack_evaluated, not on absence-of-failures -- reverting it would undo a genuine, prior, evidenced fix. Once FR-3's trigger guarantees control_pack_evaluated is always in sync with control_pack_status (its corrected derivation source, per FR-3), the reader's existing boolean-keyed logic becomes SAFE BY CONSTRUCTION: the summary can no longer disagree with the detail, so keying on the summary is no longer a drift risk. This is the correct mechanism for this instance, not a scope violation of item (3) -- item (3)'s intent (readers must not be misled by a stale/wrong summary) is satisfied by making the summary un-stale-able, which is a stronger guarantee than redirecting the reader.\n**Priority**: HIGH\n**Acceptance Criteria**:- lib/eva/uat-robustness-gate.js is unmodified by this SD- A new regression test asserts that after FR-3's trigger fires, control_pack_evaluated and control_pack_status can never independently disagree for any insert/update path exercised by the test- The PRD/retrospective records this as a deliberate mechanism choice, not an oversight, so a future reviewer does not re-flag it as unaddressed scope\n\n### FR-5: Stage (not auto-apply) a narrowly-scoped, chairman-gated trigger deriving the child-E fence_status_2026_08_17 summary from its canonical detail source, with the 3-way source ambiguity surfaced as an explicit chairman decision at apply time\nRISK evidence (594115a9) found fence_status_2026_08_17 exists on 3 SD rows (2 already status=completed), and the named 'detail' (venture_gate_last_verdict) is itself 46 days stale per that row's own park_reason, with a 3rd disagreeing source (venture_gate_attestations, verdict=PASS). This SD cannot unilaterally pick a canonical source -- that is a chairman-gated decision, consistent with every other instance already being staged as chairman-gated. Also: Explore/VALIDATION found NO live reader for this key anywhere in lib/ or scripts/ -- scope item (3)'s 'child-E fence reader' does not exist, so only the write-side trigger applies to this instance; no reader work is needed or possible here. CORRECTION (this session, independently verified against live data): PLAN-phase TESTING (evidence 51dde124, BLOCKER-4) claimed venture_gate_last_verdict is 'absent' from this row and that FR-5 is therefore 'zero-yield by construction'. Direct query shows this is FACTUALLY WRONG -- the key IS present on this exact row (value NOT_MET, checked_at 2026-07-28T23:44:24Z), byte-identical to the value on SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 (both evidently stamped by the same batch writer in one pass); the row's updated_at (2026-09-12T15:33:08Z) predates TESTING's own evidence timestamp (2026-09-13T01:30:05Z), ruling out a timing race -- this was a genuine measurement error, not stale data. FR-5 is NOT dead-by-construction. The real, still-valid concern is LEAD-phase RISK finding R3: the SD row's own park_reason admits this value is stale ('needs a governed re-measure writer, not a hand edit'), and a genuinely disagreeing 3rd source exists -- venture_gate_attestations id=3 (verdict=PASS, check_type=chairman_site_review, computed_at=2026-08-18, more recent), confirmed via its subject (AltifyAI) matching this SD's own park_reason narrative about the same venture. FR-5's design (defer the 3-way reconciliation to an explicit chairman decision at apply time, never auto-resolve it in code) was already the correct response to that genuine ambiguity and needs no redesign -- only this factual correction to the record.\n**Priority**: HIGH\n**Acceptance Criteria**:- Migration's trigger is scoped via an explicit sd_key allowlist (only SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E), never a pattern match on the key name -- confirmed by a test asserting the trigger does not fire for the 2 unrelated completed SDs that also carry this key- Migration header names the 3-way source ambiguity explicitly and requires the chairman to confirm the canonical source as part of the apply-ceremony sign-off (not silently defaulted)- Migration includes the mandatory SET lock_timeout = '3s' header (per database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql's documented ACCESS EXCLUSIVE hazard on this exact table) and is named to fire correctly relative to the >=8 existing triggers on strategic_directives_v2 (alphabetical order)- DOWN sibling captures the pre-derivation fence_status_2026_08_17 value before dropping the trigger- A fixture/regression check directly queries strategic_directives_v2.metadata for the allowlisted row and asserts venture_gate_last_verdict IS present before the migration is staged for apply -- turning TESTING's (now-corrected) zero-yield concern into an enforced precondition rather than an assumption\n\n### FR-6: Descope sms_outbound_obligations (instance 3) from this SD's implementation -- design constraints only, no migration, with an explicit follow-up recommendation\nRISK evidence (594115a9) found this is the highest-severity instance: sms_outbound_obligations is a live WORKER CLAIM QUEUE (not a passive record table), and a receipt-derived trigger risks overwriting an in-flight status=sending claim before any provider receipt exists, causing the worker's sweep to re-claim and re-send -- an unbounded resend loop against a real phone number, which would amplify rather than close the QF-394 class this SD exists to address. Additionally, no durable table exists to derive from today (sms_status_staging is a 0-row transient buffer), and a related migration (delivery_status_source) has sat unapplied for 19 days. Implementing this instance safely requires a NEW durable receipt-history table design and a trigger scoped to fire ONLY on transitions into terminal states (sent/delivered/failed), never on transient claim states (owed/sending) -- real design work beyond this SD's remaining budget. Part of the remedy (terminal carrier-error-code handling) already shipped via QF-20260912-394.\n**Priority**: MEDIUM\n**Acceptance Criteria**:- No migration or trigger for sms_outbound_obligations ships in this SD- A written design note (this PRD) records the terminal-states-only trigger constraint and the durable-receipt-table prerequisite for whoever picks up the follow-up- The retrospective/completion-flags capture explicitly flags this as a deliberately descoped instance, not a silently dropped one\n\n## Technical Requirements\n\n### TR-1: Every chairman-gated migration in this SD that adds a trigger on a live table must include the SET lock_timeout mitigation documented in database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql, scaled to the target table's actual write volume\n**Rationale**: CREATE TRIGGER takes an ACCESS EXCLUSIVE lock that blocks reads too; service_role/postgres have no lock_timeout by default, so an unguarded apply on a hot table can hang every worker session fleet-wide.\n\n### TR-2: Every DOWN-sibling migration must capture pre-derivation values (a snapshot INSERT or equivalent) before dropping its trigger, not just DROP TRIGGER\n**Rationale**: A trigger's DROP reverses the schema but not the data it already overwrote -- a real rollback needs the pre-derivation state captured somewhere, or the DOWN migration is cosmetic.\n\n### TR-3: The success metric 'zero rows disagree' must be paired with a trigger-liveness assertion (reading pg_trigger / information_schema.triggers), not only a data-agreement query\n**Rationale**: RISK found that anon-key writers to some of these tables are already silent no-ops, and triggers can be disabled via DISABLE TRIGGER -- a data-agreement-only test can pass with the trigger never having fired.\n\n### TR-4: Every migration in this SD uses the SAVEPOINT-guarded, session_replication_role-toggling, always-ROLLBACK *_dry_run.mjs proof-script convention (e.g. database/chairman-gated/20260912_venture_channel_publish_ledger_outbound_gate_trigger_dry_run.mjs) as its migration test harness, rather than a new, unreviewed test mechanism\n**Rationale**: This is the established, already-working pattern for proving a chairman-gated trigger's behavior against live-shaped data without committing a real mutation or requiring an exec_sql/execute_sql RPC (none is exposed in this project) -- reusing it is lower-risk than inventing a parallel one for this SD's two high-hazard trigger targets.\n\n### TR-5: Trigger-ordering claims must cite the measured live count, not the SD's original placeholder figure\n**Rationale**: The SD spine's '>=8 existing triggers' claim on strategic_directives_v2 undercounts the measured reality: 57 triggers exist (37 BEFORE, firing in alphabetical NAME order), a load-bearing fact for FR-5's trigger-naming choice. uat_test_runs (FR-3's target) has ZERO existing triggers today -- it is the first trigger ever added to that table, materially lower ordering risk than FR-5's target.\n\n## System Architecture\n### Overview\nThree summary/detail column pairs get a governed derivation (trigger, sequenced by blast radius: cold table first) plus a CI lint widened to the actual defect shapes (boolean, jsonb-key, cross-table); the one instance where deriving is currently unsafe (a live worker claim queue with no durable detail source) is explicitly descoped with a documented design constraint for its own follow-up.\n### Components\n#### database/chairman-gated/*_uat_control_pack_evaluated_derive.sql- **Responsibility**: BEFORE trigger deriving uat_test_runs.metadata.control_pack_evaluated from control_pack_failures with the jsonb-null fix, plus a same-migration backfill- **Technology**: PL/pgSQL trigger\n#### database/chairman-gated/*_sd_fence_status_derive.sql- **Responsibility**: sd_key-allowlisted trigger deriving strategic_directives_v2.metadata.fence_status_2026_08_17 for exactly one SD row, staged pending chairman's canonical-source confirmation- **Technology**: PL/pgSQL trigger\n#### scripts/lint/summary-column-derivation-lint.mjs- **Responsibility**: CI lint widened to 3 predicates (boolean, jsonb-key, cross-table-derived), asserting the corrected 7-column baseline- **Technology**: Node.js CI lint\n### Data Flow\nThere is no distinct control_pack_status/control_pack_failures column to scope a WHEN clause to -- any INSERT/UPDATE touching the metadata jsonb blob on uat_test_runs fires a BEFORE trigger that recomputes control_pack_evaluated from control_pack_status in the SAME row/transaction before the write commits. Similarly, for the allowlisted strategic_directives_v2 row, any INSERT/UPDATE touching its metadata blob fires a BEFORE trigger recomputing the fence_status_2026_08_17.state sub-key from venture_gate_last_verdict via a two-level jsonb_set, preserving sibling provenance keys. In both cases summary and detail can never be observed out of sync by any reader once the trigger is live.\n### Integration Points- uat_test_runs- strategic_directives_v2 (one allowlisted row)- CI pipeline (new lint job)\n\n## Implementation Approach\n### Phases\n#### Phase 1Widen and ship the CI lint (FR-1, FR-2) -- no migration dependency, lowest risk\n**Deliverables**:- scripts/lint/summary-column-derivation-lint.mjs- baseline documentation\n#### Phase 2Ship the uat_test_runs pilot trigger + backfill (FR-3, FR-4) -- cold table, clear derivation\n**Deliverables**:- chairman-gated migration + DOWN- regression test for reader safety\n#### Phase 3Stage (not apply) the strategic_directives_v2 fence-status trigger (FR-5) -- awaits chairman's canonical-source decision\n**Deliverables**:- chairman-gated migration + DOWN, sd_key-allowlisted\n### Key Technical Decisions- Sequence by blast radius (cold table first, hot table staged-not-applied, worst-risk instance descoped) rather than the SD's original instance-numbering order- Keep lib/eva/uat-robustness-gate.js unmodified -- make the summary un-stale-able instead of redirecting the reader, since the reader's existing logic was itself a deliberate prior fix- Explicitly descope sms_outbound_obligations rather than force a design under time pressure that RISK found genuinely unsafe as currently designable\n\n## Test Scenarios\n\n### TS-1: Insert a uat_test_runs fixture with control_pack_status showing all 4 required controls non-'not_attempted' and confirm control_pack_evaluated derives to true without being written directly\n**Type**: integration\n**Given**: A uat_test_runs INSERT with metadata.control_pack_status having all 4 required keys set to a real status\n**When**: The row is inserted\n**Then**: metadata.control_pack_evaluated reads true, set by the trigger, never by the INSERT statement itself\n\n### TS-2: Insert a uat_test_runs fixture matching live row 84d310e1's shape (3 of 4 controls 'not_attempted') and confirm control_pack_evaluated derives to false, matching the existing correct live value\n**Type**: unit\n**Given**: A uat_test_runs row where metadata.control_pack_status has 3 of 4 required keys = 'not_attempted'\n**When**: The row is inserted\n**Then**: metadata.control_pack_evaluated derives to false -- confirms this is correct behavior (incomplete coverage), not drift needing a backfill\n\n### TS-2b: Insert a uat_test_runs fixture with all 4 required controls non-'not_attempted' AND control_pack_failures = JSON null (a clean, fully-evaluated pass) and confirm control_pack_evaluated derives to true, not false\n**Type**: unit\n**Given**: A uat_test_runs row that is fully evaluated with zero failures (control_pack_failures is the jsonb null literal)\n**When**: The row is inserted\n**Then**: metadata.control_pack_evaluated derives to true -- closes the false-negative the original control_pack_failures-based predicate would have introduced for this exact shape\n\n### TS-2c: Insert a uat_test_runs row with incomplete control_pack_status, then UPDATE it once all controls complete, and confirm the trigger re-fires on UPDATE (not only INSERT)\n**Type**: integration\n**Given**: A row inserted with control_pack_evaluated=false (incomplete coverage)\n**When**: The row is later UPDATEd so all 4 required keys become non-'not_attempted'\n**Then**: metadata.control_pack_evaluated flips to true on the UPDATE, proving the trigger covers both INSERT and UPDATE paths\n\n### TS-2d: Insert a uat_test_runs row whose metadata has no control_pack_status key at all\n**Type**: unit\n**Given**: A row inserted with metadata lacking the control_pack_status key entirely\n**When**: The row is inserted\n**Then**: metadata.control_pack_evaluated derives to false (fails closed) rather than erroring or defaulting true\n\n### TS-2e: Apply the DOWN migration after the trigger has derived values on fixture rows and confirm pre-derivation values are restorable, per TR-2\n**Type**: integration\n**Given**: Fixture rows whose control_pack_evaluated has been trigger-derived\n**When**: The DOWN migration runs\n**Then**: The captured pre-derivation snapshot allows restoring the prior values -- DOWN is a real data rollback, not only DROP TRIGGER\n\n### TS-3: The fence_status trigger fires for the allowlisted SD row and does not fire for either of the 2 other completed SDs carrying the same key\n**Type**: integration\n**Given**: Prior to this trigger existing: 3 SD rows all carrying a fence_status_2026_08_17 key, only one of them SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E\n**When**: venture_gate_last_verdict is updated on each row\n**Then**: Only the allowlisted row's fence_status_2026_08_17 changes; the 2 other completed SDs' values are untouched\n\n### TS-3b: A fixture/regression check confirms venture_gate_last_verdict is present in metadata on the allowlisted row before FR-5's migration is staged\n**Type**: unit\n**Given**: SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E's current metadata\n**When**: The check queries for the venture_gate_last_verdict key\n**Then**: The key is present (corrects TESTING's disproven BLOCKER-4 assumption; a future absence would now be caught, not assumed)\n\n### TS-3c: Each new migration's DDL block is preceded by SET lock_timeout='3s' (or tighter) before any CREATE TRIGGER/ALTER TABLE statement, per TR-1\n**Type**: unit\n**Given**: This SD's migration files\n**When**: A migration-header assertion scans for the SET lock_timeout statement preceding the DDL\n**Then**: Both FR-3 and FR-5 migrations pass; a fixture migration missing the header fails\n\n### TS-4: The widened CI lint fails a fixture migration adding a new jsonb summary-shaped key with no paired trigger\n**Type**: unit\n**Given**: A fixture migration file writing a metadata jsonb key matching a summary-name heuristic, no CREATE TRIGGER in the same file\n**When**: The lint runs against the fixture\n**Then**: CI fails with a message naming the undereived key\n\n### TS-5: The widened CI lint passes a fixture migration adding a GENERATED boolean column, and passes the 7 existing baseline boolean columns unchanged\n**Type**: unit\n**Given**: A fixture migration with a GENERATED ALWAYS boolean column, plus the live migration history containing the 7 baseline columns\n**When**: The lint runs\n**Then**: Both pass -- the baseline is asserted, not retroactively failed\n\n### TS-5b: The widened CI lint flags (not auto-fails) a fixture migration adding a column that is both a foreign key and matches the status/summary naming heuristic, per FR-1 predicate (c)\n**Type**: unit\n**Given**: A fixture migration adding a foreign-key column whose name matches a status/summary pattern\n**When**: The lint runs\n**Then**: CI surfaces a MANUAL REVIEW REQUIRED flag without blocking the PR outright, since predicate (c) cannot be fully mechanical\n\n### TS-6: A trigger-liveness assertion catches a disabled trigger that a data-agreement query alone would miss\n**Type**: integration\n**Given**: Within a SAVEPOINT-guarded transaction that is always rolled back (per the *_dry_run.mjs convention): the uat_test_runs trigger is disabled via ALTER TABLE ... DISABLE TRIGGER, then a drifted row is inserted through an anon-key-equivalent path that silently no-ops on the derivation\n**When**: The TR-3 liveness check runs (reading pg_trigger) inside the same guarded transaction\n**Then**: The check reports the trigger as disabled/not-firing, distinct from and in addition to any data-agreement query result -- then the transaction ROLLBACKs, so no disabled-trigger state or drifted row is ever committed to production\n\n### TS-7: sms_outbound_obligations receives no migration and no live trigger from this SD\n**Type**: unit\n**Given**: This SD's full migration set\n**When**: Reviewed against database/chairman-gated/ (file-existence check) AND a live query of pg_trigger for the sms_outbound_obligations table (mechanism check)\n**Then**: No file targets sms_outbound_obligations, and pg_trigger shows zero triggers on the table post-SD -- FR-6's descope is verified at the mechanism level, not only by a migration-file grep (a file's presence is a ceremony marker, never proof of live schema state)\n\n## Acceptance Criteria\n\n1. uat_test_runs.control_pack_evaluated is derived by a chairman-gated trigger from control_pack_status (not control_pack_failures); no backfill ships since existing rows are already correct under the corrected predicate\n2. strategic_directives_v2's fence_status trigger is staged (not applied) with an explicit sd_key allowlist and a chairman decision point for the 3-way canonical-source ambiguity\n3. The CI lint is widened to the 3 real defect shapes (boolean/jsonb-key/cross-table) and asserts the corrected 7-column baseline\n4. sms_outbound_obligations is explicitly, verifiably descoped with a documented design constraint for its own follow-up\n5. lib/eva/uat-robustness-gate.js is unmodified, with the reconciliation reasoning recorded\n\n## Risks & Mitigations\n\n### A trigger on strategic_directives_v2 (even sd_key-allowlisted) still takes the same ACCESS EXCLUSIVE lock class as any other trigger addition on this hot table\n**Probability**: LOW\n**Impact**: HIGH\n**Mitigation**: Mandatory SET lock_timeout='3s' per TR-1; apply during a low-traffic window as part of the chairman apply ceremony, same as the precedent migration this SD's own risk evidence cites\n**Rollback Plan**: DOWN sibling drops the trigger; TR-2 requires pre-derivation value capture so the fence_status can be restored if needed\n\n### The chairman, at apply time, may not have enough context to resolve the 3-way canonical-source ambiguity for venture_gate verdict, stalling FR-5's apply indefinitely\n**Probability**: MEDIUM\n**Impact**: MEDIUM\n**Mitigation**: FR-5's migration header documents all 3 candidate sources with their evidence (venture_gate_last_verdict's own staleness admission, venture_gate_attestations' disagreement) so the chairman has a self-contained decision packet, not a bare technical diff to review\n**Rollback Plan**: The migration simply stays unapplied (chairman-gated default state) until the decision is made -- no forced timeline\n\n### Descoping sms_outbound_obligations (FR-6) leaves the QF-394 defect class only 2/3 closed, and a future worker may re-attempt the SMS derivation without re-discovering the resend-loop risk this SD's RISK sub-agent found\n**Probability**: MEDIUM\n**Impact**: HIGH\n**Mitigation**: The descope is recorded as its own risk/completion-flag finding (not silently dropped), naming the exact hazard (trigger overwriting an in-flight status=sending claim) so a future SD inherits the finding rather than re-deriving it\n**Rollback Plan**: N/A -- no code shipped for this instance to roll back\n\n\n---\n*Generated by LLM PRD Content Generation (GPT 5.2)*\n*Date: 2026-09-13T01:43:27.483Z*",
+    "evidence_appendix": null,
+    "backlog_items": [],
+    "sd_id": "fbbf9a6d-e079-4c22-9189-88336aae9a16",
+    "planning_section": {
+      "quality_gates": [],
+      "risk_analysis": {},
+      "success_metrics": [],
+      "timeline_breakdown": {},
+      "implementation_steps": [],
+      "reasoning_depth_used": "standard",
+      "resource_requirements": {}
+    },
+    "reasoning_analysis": {},
+    "complexity_analysis": {},
+    "reasoning_depth": "standard",
+    "confidence_score": null,
+    "research_confidence_score": null,
+    "exploration_summary": {
+      "files_read": [
+        "lib/eva/uat-robustness-gate.js",
+        "lib/chairman/sms-outbound-worker.js",
+        "database/chairman-gated/20260824_strategic_directives_canonical_writer_choke.sql",
+        "database/migrations/ (grep sweep for *_passed/*_verified/*_evaluated boolean columns)"
+      ],
+      "key_decisions": [
+        "Sequence by blast radius, not by the SD's original instance numbering",
+        "Descope the highest-risk instance (SMS) rather than force an unsafe design under scope pressure",
+        "Prefer making the summary un-stale-able over redirecting an already-correct reader"
+      ],
+      "exploration_date": "2026-09-13",
+      "patterns_identified": [
+        "Chairman-gated migrations already have an established lock_timeout mitigation pattern for strategic_directives_v2 to reuse",
+        "A prior deliberate fix (QF-20260830-666) already exists for one of the 3 named readers -- must reconcile, not revert",
+        "sd_key-allowlisting (not pattern-matching on a jsonb key name) is the correct scoping mechanism for a trigger meant to touch exactly one row"
+      ]
+    },
+    "document_type": "prd",
+    "integration_operationalization": {
+      "consumers": [
+        {
+          "name": "lib/eva/uat-robustness-gate.js (stage-23 acceptance predicate)",
+          "frequency": "Every stage-23 gate evaluation",
+          "interaction": "Reads metadata.control_pack_evaluated, now guaranteed in sync with control_pack_failures by FR-3's trigger"
+        },
+        {
+          "name": "CI pipeline",
+          "frequency": "Every PR",
+          "interaction": "Runs the widened lint on every PR touching database/"
+        }
+      ],
+      "dependencies": [
+        {
+          "name": "database/chairman-gated/ apply ceremony",
+          "type": "downstream",
+          "contract": "FR-3 and FR-5's migrations require the existing chairman apply process; FR-5 additionally requires an explicit canonical-source decision recorded at apply time",
+          "failure_handling": "Migrations stay unapplied (safe default) until the ceremony completes"
+        },
+        {
+          "name": "20260824_strategic_directives_canonical_writer_choke.sql (existing trigger-hazard documentation)",
+          "type": "upstream",
+          "contract": "FR-5's migration must follow its documented lock_timeout mitigation and trigger-naming-order requirements",
+          "failure_handling": "N/A -- read-only reference"
+        }
+      ],
+      "data_contracts": [
+        {
+          "schema": "control_pack_status: jsonb object mapping each of 4 required control keys to 'not_attempted' or a real status (canonical derivation source); control_pack_failures: jsonb (array or jsonb null, NOT used for derivation -- ambiguous per its own writer); control_pack_evaluated: boolean, trigger-derived from control_pack_status",
+          "validation": "Trigger-enforced; TS-2 pins the jsonb-null edge case",
+          "versioning": "No column added -- existing metadata keys, derivation logic only",
+          "contract_name": "uat_test_runs.metadata shape"
+        },
+        {
+          "schema": "Object with state + 9 sibling provenance keys (evidence, cleared_by, evidence_correction, etc.)",
+          "validation": "Trigger updates only the state sub-key via two-level jsonb_set, preserving siblings",
+          "versioning": "Staged, not applied, pending chairman decision",
+          "contract_name": "strategic_directives_v2.metadata.fence_status_2026_08_17 shape"
+        }
+      ],
+      "runtime_config": {
+        "feature_flags": [],
+        "environment_variables": [],
+        "deployment_considerations": "FR-3 ships as a normal chairman-gated apply. FR-5 ships staged only -- explicitly NOT auto-applied, pending the chairman's canonical-source decision documented in its migration header."
+      },
+      "observability_rollout": {
+        "alerts": [
+          "None new"
+        ],
+        "monitoring": [
+          "Post-apply: query for any row where the summary and detail disagree (should be zero for uat_test_runs going forward); TR-3's pg_trigger liveness check run periodically"
+        ],
+        "rollback_trigger": "Any evidence the trigger derives an incorrect value in production",
+        "rollout_strategy": "Phase 1 (lint) ships immediately; Phase 2 (uat_test_runs) ships via chairman-gated apply; Phase 3 (strategic_directives_v2) stages only, apply timing owned by the chairman",
+        "rollback_procedure": "DOWN migration per TR-2 (captures pre-derivation values before dropping the trigger)"
+      }
+    },
+    "goal_summary": null,
+    "venture_id": null,
+    "smoke_test_cmd": null,
+    "activation_test_id": null
+  }
+]

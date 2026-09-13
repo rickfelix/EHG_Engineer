@@ -1,0 +1,13 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env' });
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await sb.from('sub_agent_execution_results').select('id,sub_agent_code,verdict,confidence,phase,created_at,updated_at,critical_issues,metadata').eq('id','1d78482f-bc8c-486f-b49d-5a10b9773718').single();
+console.log('id:', data.id, '| verdict:', data.verdict, '| conf:', data.confidence, '| phase:', data.phase);
+console.log('critical_issues:', data.critical_issues.length);
+console.log('metadata.detailed_findings:', data.metadata?.detailed_findings?.length);
+console.log('metadata.repo_path:', data.metadata?.repo_path);
+console.log('metadata.repo_resolved:', data.metadata?.repo_resolved, '| registry_source:', data.metadata?.registry_source);
+console.log('metadata.blockers:', data.metadata?.blockers);
+console.log('metadata.live_verification:', JSON.stringify(data.metadata?.live_verification));
+console.log('updated_at:', data.updated_at);

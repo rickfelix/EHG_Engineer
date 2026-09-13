@@ -1,0 +1,14 @@
+import pg from 'pg'; import dotenv from 'dotenv'; dotenv.config();
+const url = process.env.SUPABASE_POOLER_URL || process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+const c = new pg.Client({ connectionString: url, ssl:{rejectUnauthorized:false} }); await c.connect();
+const q = async (l,s,p=[]) => { try{const r=await c.query(s,p);console.log(`\n=== ${l} (${r.rows.length}) ===`);r.rows.forEach(x=>console.log(JSON.stringify(x).slice(0,600)));}catch(e){console.log(`\n=== ${l} ERR: ${e.message}`);} };
+await q('compliance_experiment generated?', `select column_name,data_type,is_generated,generation_expression from information_schema.columns where table_name like 'compliance_experiment%' and column_name in ('total_score','rating')`);
+await q('venture_gate_last_verdict as a COLUMN anywhere?', `select table_name,column_name,data_type from information_schema.columns where column_name ilike '%venture_gate_last_verdict%' or column_name ilike '%fence_status%'`);
+await q('child E SD metadata keys', `select sd_key,status, jsonb_object_keys(metadata) k from strategic_directives_v2 where sd_key='SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E'`);
+await q('child E the two values', `select sd_key, metadata->>'fence_status_2026_08_17' fence, metadata->>'venture_gate_last_verdict' verdict from strategic_directives_v2 where sd_key='SD-LEO-INFRA-VENTURE-DEMAND-DISTRIBUTION-001-E'`);
+await q('uat run c1f3fdd7 drifted pair', `select id, metadata->'control_pack_evaluated' ev, (metadata->'control_pack_failures') fails from uat_test_runs where id::text like 'c1f3fdd7%'`);
+await q('sms obligation 6f1931a5', `select id,status,left(last_error,160) err,provider_message_id,delivered_at,attempts from sms_outbound_obligations where id::text like '6f1931a5%'`);
+await q('sms provider receipt / delivery status tables', `select table_name from information_schema.tables where table_schema='public' and (table_name ilike '%sms%' or table_name ilike '%delivery%') order by 1`);
+await q('backlog items (Gate 1)', `select count(*) n from sd_backlog_map where sd_id=$1`, ['fbbf9a6d-e079-4c22-9189-88336aae9a16']);
+await q('QFs cited', `select qf_key,status,left(title,90) t from quick_fixes where qf_key in ('QF-366','QF-444','QF-394') or qf_key like 'QF-%366' or qf_key like 'QF-%444' or qf_key like 'QF-%394' order by qf_key limit 20`);
+await c.end();
