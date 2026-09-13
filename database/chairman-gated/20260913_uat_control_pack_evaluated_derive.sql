@@ -35,6 +35,14 @@
 -- control_pack_status, regardless of what value the writer attempted -- self-healing, not just
 -- self-consistent going forward.
 --
+-- BOUNDARY (EXEC-phase TESTING re-check, evidence d76ec942, verified live): self-healing applies
+-- to every write AFTER this trigger is installed. A row that was ALREADY drifted at install time,
+-- or a write that sets control_pack_evaluated to the SAME (still-wrong) value it already holds
+-- (OLD.control_pack_evaluated IS NOT DISTINCT FROM NEW.control_pack_evaluated, so the guard does
+-- not fire), is not retroactively healed by an unrelated-subkey update. Zero live rows are in
+-- this state today (confirmed: 24/24 keyed rows agree with their derivation, per FR-3 AC-5's
+-- no-backfill finding) -- this is a documentation-precision note, not an open defect.
+--
 -- The TG_OP='INSERT' branch forces the body to run on every INSERT, closing a silent-skip gap: an
 -- INSERT that sets metadata to an explicit NULL would otherwise evaluate NULL IS DISTINCT FROM
 -- NULL = FALSE and skip derivation entirely, leaving control_pack_evaluated undetermined. (A
@@ -110,6 +118,12 @@ COMMENT ON FUNCTION derive_uat_control_pack_evaluated() IS
 -- -- backwards. The only moment a snapshot can honestly be called "pre-derivation" is right here,
 -- before CREATE TRIGGER ever runs. This captures every row's state as it existed the instant
 -- before this trigger could touch anything; the DOWN file no longer re-snapshots at drop time.
+--
+-- MEDIUM fix (EXEC-phase TESTING re-check, evidence d76ec942): a re-apply (UP -> DOWN -> UP)
+-- would otherwise INSERT a SECOND, POST-derivation batch into this same table (DOWN
+-- intentionally leaves it in place for manual inspection), with no marker distinguishing which
+-- batch is the genuine pre-derivation one. The NOT EXISTS guard below makes the snapshot a
+-- true one-time capture: only the FIRST apply ever populates it.
 CREATE TABLE IF NOT EXISTS uat_control_pack_evaluated_rollback_snapshot (
   id uuid NOT NULL,
   control_pack_evaluated jsonb,
@@ -119,7 +133,8 @@ CREATE TABLE IF NOT EXISTS uat_control_pack_evaluated_rollback_snapshot (
 
 INSERT INTO uat_control_pack_evaluated_rollback_snapshot (id, control_pack_evaluated, control_pack_status)
 SELECT id, metadata->'control_pack_evaluated', metadata->'control_pack_status'
-FROM uat_test_runs;
+FROM uat_test_runs
+WHERE NOT EXISTS (SELECT 1 FROM uat_control_pack_evaluated_rollback_snapshot);
 
 DROP TRIGGER IF EXISTS trg_uat_control_pack_evaluated_derive ON uat_test_runs;
 CREATE TRIGGER trg_uat_control_pack_evaluated_derive

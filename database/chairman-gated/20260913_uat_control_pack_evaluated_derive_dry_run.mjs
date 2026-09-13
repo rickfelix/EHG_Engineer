@@ -124,15 +124,30 @@ export async function runDryRun(client) {
       metadata: { control_pack_status: { fence_two_sidedness: 'evaluated', canary_mutation_control: 'evaluated', live_deployment_binding: 'evaluated', minimum_assertion_manifest: 'evaluated' }, note: 'v1' },
     });
 
-    // TS-2j (AC-8): an UPDATE touching ONLY an unrelated subkey (neither control_pack_status
-    // nor control_pack_evaluated) must NOT recompute -- the existing correct value is preserved
-    // untouched, proving the guard genuinely short-circuits on truly-unrelated writes.
+    // TS-2j (AC-8, made GENUINELY discriminating per TESTING re-check evidence d76ec942 --
+    // the prior version's fixture had correct===stored, so it passed even with no guard at all,
+    // proven live in that review). Disable the trigger, plant a value where
+    // control_pack_evaluated DISAGREES with control_pack_status (impossible while the trigger
+    // is live), re-enable, then update ONLY an unrelated subkey. If the guard is genuinely
+    // scoped, the disagreeing value must SURVIVE (the guard never fires for this write shape);
+    // if it recomputed on every write, the disagreeing value would be corrected back to true,
+    // exactly as TS-2k proves happens for a write that DOES touch control_pack_evaluated.
+    await client.query(`ALTER TABLE uat_test_runs DISABLE TRIGGER trg_uat_control_pack_evaluated_derive`);
+    const disagreeing = await insertRow(client, {
+      runId: `dryrun-ts2j-${randomUUID()}`,
+      metadata: {
+        control_pack_status: { fence_two_sidedness: 'evaluated', canary_mutation_control: 'evaluated', live_deployment_binding: 'evaluated', minimum_assertion_manifest: 'evaluated' },
+        control_pack_evaluated: false, // deliberately disagrees with control_pack_status -- only possible with the trigger disabled
+        note: 'v1',
+      },
+    });
+    await client.query(`ALTER TABLE uat_test_runs ENABLE TRIGGER trg_uat_control_pack_evaluated_derive`);
     const unrelatedOnly = await client.query(
       `UPDATE uat_test_runs SET metadata = jsonb_set(metadata, '{note}', '"v2"') WHERE id = $1 RETURNING metadata`,
-      [inserted.id]
+      [disagreeing.id]
     );
-    const ts2jPass = unrelatedOnly.rows[0].metadata.control_pack_evaluated === true && unrelatedOnly.rows[0].metadata.note === 'v2';
-    log.push(`TS-2j (UPDATE touching only an unrelated subkey does not recompute -- correct value preserved, not merely unchanged by coincidence): ${ts2jPass}`);
+    const ts2jPass = unrelatedOnly.rows[0].metadata.control_pack_evaluated === false && unrelatedOnly.rows[0].metadata.note === 'v2';
+    log.push(`TS-2j (a pre-existing DISAGREEING value survives an unrelated-subkey update -- proves the guard genuinely short-circuits, not merely that it agreed by coincidence): ${ts2jPass}`);
 
     // TS-2k (CRITICAL-1 regression guard): a writer directly forcing control_pack_evaluated to a
     // WRONG value (while control_pack_status still shows fully-evaluated) must be self-corrected
