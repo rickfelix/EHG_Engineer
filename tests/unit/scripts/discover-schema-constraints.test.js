@@ -14,7 +14,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   parseCheckConstraint,
-  discoverConstraintsViaSupabase
+  discoverConstraintsViaSupabase,
+  upsertConstraintRecord
 } from '../../../scripts/discover-schema-constraints.js';
 
 describe('parseCheckConstraint', () => {
@@ -35,6 +36,74 @@ describe('parseCheckConstraint', () => {
     expect(new Set(parseCheckConstraint("CHECK (status IN ('draft', 'completed'))"))).toEqual(
       new Set(['draft', 'completed'])
     );
+  });
+
+  // QF-20260913-767 — Alpha-2 27423594 measured this exact definition against pg_constraint:
+  // sd_phase_handoffs.validation_score's chk_handoff_validation_threshold. A multi-branch OR
+  // check is NOT an enumeration; deriving ['blocked'] from it made the pre-validator reject
+  // every real numeric validation_score fleet-wide.
+  it('derives [] for a multi-branch OR CHECK, never a bogus single-value enumeration (row 59)', () => {
+    const definition = "CHECK ((validation_score IS NULL) OR ((status)::text = 'blocked'::text) OR ((validation_score >= 0) AND (validation_score <= 100)))";
+    expect(parseCheckConstraint(definition)).toEqual([]);
+  });
+
+  it('derives [] for a BETWEEN-shaped numeric range CHECK', () => {
+    expect(parseCheckConstraint('CHECK ((score BETWEEN 0 AND 100))')).toEqual([]);
+  });
+
+  it('derives [] for a plain comparison CHECK (not an enumeration)', () => {
+    expect(parseCheckConstraint("CHECK ((priority > 0) OR (status = 'draft'))")).toEqual([]);
+  });
+});
+
+describe('upsertConstraintRecord (QF-20260913-767: kept-manual-NULL guard)', () => {
+  const record = {
+    table_name: 'sd_phase_handoffs',
+    column_name: 'validation_score',
+    constraint_type: 'check',
+    constraint_definition: 'CHECK ((validation_score IS NULL) OR ((status)::text = \'blocked\'::text) OR ((validation_score >= 0) AND (validation_score <= 100)))',
+    valid_values: [],
+    remediation_hint: null,
+  };
+
+  function fakeSupabase({ existing, updateError = null, insertError = null }) {
+    const updateFn = vi.fn(() => ({ eq: vi.fn(async () => ({ error: updateError })) }));
+    const insertFn = vi.fn(async () => ({ error: insertError }));
+    const fromChain = {
+      select: vi.fn(() => fromChain),
+      eq: vi.fn(() => fromChain),
+      single: vi.fn(async () => ({ data: existing, error: null })),
+      update: updateFn,
+      insert: insertFn,
+    };
+    return { from: vi.fn(() => fromChain), updateFn, insertFn };
+  }
+
+  it('re-run over a fixture row with valid_values NULL and the SAME definition leaves it NULL ("kept")', async () => {
+    const supabase = fakeSupabase({ existing: { id: 'row-1', valid_values: null, constraint_definition: record.constraint_definition } });
+    const outcome = await upsertConstraintRecord(supabase, record);
+    expect(outcome.action).toBe('kept');
+    expect(supabase.updateFn).not.toHaveBeenCalled();
+  });
+
+  it('a row whose valid_values is NULL but whose constraint_definition CHANGED is still updated', async () => {
+    const supabase = fakeSupabase({ existing: { id: 'row-1', valid_values: null, constraint_definition: 'CHECK (status IN (\'old\'))' } });
+    const outcome = await upsertConstraintRecord(supabase, record);
+    expect(outcome.action).toBe('updated');
+    expect(supabase.updateFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('a row with a non-null valid_values is updated normally (no manual-NULL guard)', async () => {
+    const supabase = fakeSupabase({ existing: { id: 'row-1', valid_values: ['old'], constraint_definition: record.constraint_definition } });
+    const outcome = await upsertConstraintRecord(supabase, record);
+    expect(outcome.action).toBe('updated');
+  });
+
+  it('inserts a new record when no existing row is found', async () => {
+    const supabase = fakeSupabase({ existing: null });
+    const outcome = await upsertConstraintRecord(supabase, record);
+    expect(outcome.action).toBe('inserted');
+    expect(supabase.insertFn).toHaveBeenCalledWith(record);
   });
 });
 
