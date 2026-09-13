@@ -89,6 +89,15 @@ export async function sweepOnce(supabase, { limit = DEFAULT_ROW_LIMIT, observeOu
   // read error) so a stuck/never-progressing backlog is visible, not silent.
   const counters = { rows_selected: 0, rows_joined: 0, rows_left_unknown: 0, rows_unmeasurable: 0, rows_written: 0, rows_write_failed: 0, rows_write_failed_expected_pre_migration: 0 };
 
+  // count-truncation-diff-lint requires a literal numeric bound directly on the select
+  // chain (its chainWindow() scan looks for `.limit(N<1000)` as text on the chain itself
+  // -- a downstream wrapper like warnIfCapTruncated() is invisible to it, confirmed the
+  // hard way in scripts/one-off/insert-retro-sd-leo-infra-protocol-ssot-dedup-001.mjs's
+  // own retro). 999 is this codebase's established convention for "safely under
+  // PostgREST's 1000-row cap" (see e.g. lib/chairman/ratification-capture-detector.mjs,
+  // scripts/cron/batch-mint-sweep.mjs). The caller-configurable READ-BUDGET throttle
+  // (`limit`, default 200) is a rate-limit policy, not an anti-truncation bound, so it is
+  // enforced below via slice() once the literal DB-level bound has already been read.
   const { data: rows, error } = await supabase
     .from('venture_channel_publish_ledger')
     .select('correlation_id')
@@ -97,15 +106,21 @@ export async function sweepOnce(supabase, { limit = DEFAULT_ROW_LIMIT, observeOu
     // MEDIUM finding: oldest-first, so a backlog above `limit` doesn't starve the
     // longest-waiting rows behind a constant stream of newer ones.
     .order('created_at', { ascending: true })
-    .limit(limit);
+    .limit(999);
 
   if (error) {
     throw new Error(`row selection failed: ${error.message}`);
   }
 
-  counters.rows_selected = (rows || []).length;
+  // Defensive clamp: `limit` can be overridden by a caller (deps.sweepOptions.limit) with
+  // no upstream validation -- a bad override (NaN, negative, zero, non-numeric) must never
+  // silently process zero rows or otherwise misbehave; fall back to DEFAULT_ROW_LIMIT.
+  const safeLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.floor(Number(limit)) : DEFAULT_ROW_LIMIT;
+  const boundedRows = (rows || []).slice(0, safeLimit);
 
-  for (const row of rows || []) {
+  counters.rows_selected = boundedRows.length;
+
+  for (const row of boundedRows) {
     const classification = await observeOutcomeFn({ supabase, correlationId: row.correlation_id });
 
     if (classification.joined) {

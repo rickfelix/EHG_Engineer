@@ -193,6 +193,46 @@ describe('sweepOnce', () => {
     expect(recordPublishOutcomeFn).toHaveBeenCalledTimes(2);
   });
 
+  // count-truncation-diff-lint fix (CI finding on PR #8822): the DB-level select is now
+  // bounded by a literal .limit(999) (lint requires a literal on the chain itself), so the
+  // caller-configurable read-budget throttle (`limit`) is enforced afterward in JS via
+  // slice(). Proves the throttle still actually throttles -- only the requested number of
+  // rows are processed, never all 999.
+  it('only processes the first `limit` rows even when the DB read returns more (read-budget throttle)', async () => {
+    const rows = [{ correlation_id: 'corr-1' }, { correlation_id: 'corr-2' }, { correlation_id: 'corr-3' }];
+    const supabase = makeLedgerSelectSupabase(rows);
+    const observeOutcomeFn = vi.fn().mockResolvedValue({ outcome: 'shipped_clean', outcomeRef: 'p1', joined: true });
+    const recordPublishOutcomeFn = vi.fn().mockResolvedValue({ success: true });
+
+    const counters = await sweepOnce(supabase, { limit: 2, observeOutcomeFn, recordPublishOutcomeFn });
+
+    expect(counters.rows_selected).toBe(2);
+    expect(observeOutcomeFn).toHaveBeenCalledTimes(2);
+  });
+
+  // A caller-supplied override (deps.sweepOptions.limit) has no upstream validation --
+  // an unsafe value must fall back to DEFAULT_ROW_LIMIT (200) rather than silently
+  // process zero rows or misbehave.
+  it.each([
+    ['a negative number', -5],
+    ['zero', 0],
+    ['NaN', NaN],
+    ['a non-numeric string', 'not-a-number'],
+  ])('falls back to DEFAULT_ROW_LIMIT when `limit` is an unsafe override (%s)', async (_label, unsafeLimit) => {
+    const rows = [{ correlation_id: 'corr-1' }, { correlation_id: 'corr-2' }, { correlation_id: 'corr-3' }];
+    const supabase = makeLedgerSelectSupabase(rows);
+    const observeOutcomeFn = vi.fn().mockResolvedValue({ outcome: 'shipped_clean', outcomeRef: 'p1', joined: true });
+    const recordPublishOutcomeFn = vi.fn().mockResolvedValue({ success: true });
+
+    const counters = await sweepOnce(supabase, { limit: unsafeLimit, observeOutcomeFn, recordPublishOutcomeFn });
+
+    // 3 mock rows is well under DEFAULT_ROW_LIMIT (200), so a correct fallback processes
+    // all 3; the defect this guards against (no clamp) would instead process 0 rows for
+    // limit=-5/0, or throw/misbehave on slice(0, NaN) or slice(0, 'not-a-number').
+    expect(counters.rows_selected).toBe(3);
+    expect(observeOutcomeFn).toHaveBeenCalledTimes(3);
+  });
+
   // TS-2 (idempotent re-run, unit form): once every selected row has been recorded to a
   // terminal (non-unknown) outcome, the SECOND sweep's row SELECTION returns zero rows --
   // recordPublishOutcome does an unconditional .eq('correlation_id') update with no
@@ -293,6 +333,14 @@ describe('sweepOnce end-to-end with the REAL observeOutcome/recordPublishOutcome
               // sweepOnce's own row-selection query (select('correlation_id'))
               if (chain._cols === 'correlation_id') {
                 return Promise.resolve({ data: [{ correlation_id: 'corr-1' }], error: null });
+              }
+              // recordPublishOutcome's own probeExecutionModeExists() capability probe
+              // (lib/marketing/ledger-execution-mode-probe.js) -- a bare select('execution_mode')
+              // distinct from evaluateGraduation's own multi-column candidate query below.
+              // Resolving with no error confirms the column present, matching this fixture's
+              // ledgerRow having a real execution_mode value.
+              if (chain._cols === 'execution_mode') {
+                return Promise.resolve({ data: [], error: null });
               }
               // evaluateGraduation's candidate window query
               graduationCalls.push({ filters: { ...filters }, limit: n });
