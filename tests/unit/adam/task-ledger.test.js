@@ -243,20 +243,29 @@ describe('sumTokenCost (PURE) — coarse per-parent rollup', () => {
   });
 });
 
-/** In-memory adam_task_ledger stub supporting select().eq().in() filter chains + the update path. */
-function makeSyncSupabase(rows) {
+/**
+ * In-memory adam_task_ledger stub supporting select().eq()/.in()/.not() filter chains, an
+ * awaitable `.then()` (unranged reads) and `.range()` (paginated reads, per fetchAllPaginated),
+ * plus the update path. `calls` records each select's table+column-filter shape so tests can
+ * assert the query SHAPE (one children read, one small parents-by-id read) — not just outcomes.
+ */
+function makeSyncSupabase(rows, { calls = [] } = {}) {
   const ledger = [...rows];
   function from(table) {
     if (table !== 'adam_task_ledger') throw new Error(`unexpected table: ${table}`);
     return {
-      select() {
+      select(cols) {
         const filters = [];
+        const record = { cols, eq: [], in: [], not: [] };
+        calls.push(record);
+        const rowsFor = () => ledger.filter((r) => filters.every((f) => f(r)));
         const builder = {
-          eq(col, val) { filters.push((r) => r[col] === val); return builder; },
-          in(col, vals) { filters.push((r) => vals.includes(r[col])); return builder; },
+          eq(col, val) { record.eq.push([col, val]); filters.push((r) => r[col] === val); return builder; },
+          in(col, vals) { record.in.push([col, vals]); filters.push((r) => vals.includes(r[col])); return builder; },
+          not(col, _op, val) { record.not.push([col, val]); filters.push((r) => r[col] !== val); return builder; },
+          range(from_, to) { return Promise.resolve({ data: rowsFor().slice(from_, to + 1), error: null }); },
           then(resolve, reject) {
-            const data = ledger.filter((r) => filters.every((f) => f(r)));
-            return Promise.resolve({ data, error: null }).then(resolve, reject);
+            return Promise.resolve({ data: rowsFor(), error: null }).then(resolve, reject);
           },
         };
         return builder;
@@ -280,7 +289,7 @@ function makeSyncSupabase(rows) {
       },
     };
   }
-  return { from, _ledger: ledger };
+  return { from, _ledger: ledger, _calls: calls };
 }
 
 describe('syncParentRollupStatus (QF-20260711-503) — persists the rollup onto the parent row', () => {
@@ -320,7 +329,7 @@ describe('syncParentRollupStatus (QF-20260711-503) — persists the rollup onto 
   it('skips a parent with no children (nothing to roll up, status left as-is)', async () => {
     const sb = makeSyncSupabase([{ id: 'p1', tier: 'parent', status: 'open' }]);
     const result = await syncParentRollupStatus(sb);
-    expect(result).toMatchObject({ checked: 1, updated: 0, errors: [] });
+    expect(result).toMatchObject({ checked: 0, updated: 0, errors: [] });
   });
 
   it('is fail-soft: a throwing client returns a zeroed result, never throws', async () => {
@@ -329,5 +338,36 @@ describe('syncParentRollupStatus (QF-20260711-503) — persists the rollup onto 
     expect(result.checked).toBe(0);
     expect(result.updated).toBe(0);
     expect(result.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe('syncParentRollupStatus (QF-20260912-408) — children-first, no oversized .in()', () => {
+  it('reads children ONCE and fetches parents by id ONLY for the (few) parents that have children', async () => {
+    const calls = [];
+    const childless = Array.from({ length: 1293 }, (_, i) => ({ id: `noop-${i}`, tier: 'parent', status: 'open' }));
+    const withKids = Array.from({ length: 7 }, (_, i) => ({ id: `p${i}`, tier: 'parent', status: 'open' }));
+    const kids = withKids.map((p) => ({ id: `${p.id}-c1`, tier: 'child', parent_id: p.id, status: 'done' }));
+    const sb = makeSyncSupabase([...childless, ...withKids, ...kids], { calls });
+
+    const result = await syncParentRollupStatus(sb);
+
+    expect(result.checked).toBe(7);
+    expect(result.errors).toEqual([]);
+    const childReads = calls.filter((c) => c.eq.some(([col, val]) => col === 'tier' && val === 'child'));
+    const parentReads = calls.filter((c) => c.eq.some(([col, val]) => col === 'tier' && val === 'parent'));
+    expect(childReads).toHaveLength(1);
+    expect(parentReads).toHaveLength(1);
+    const idFilterEntry = parentReads[0].in.find(([col]) => col === 'id');
+    expect(idFilterEntry[1]).toHaveLength(7);
+  });
+
+  it('never builds an .in() filter wider than the parents that actually have children', async () => {
+    const calls = [];
+    const childless = Array.from({ length: 1247 }, (_, i) => ({ id: `noop-${i}`, tier: 'parent', status: 'open' }));
+    const sb = makeSyncSupabase(childless, { calls });
+    const result = await syncParentRollupStatus(sb);
+    expect(result).toMatchObject({ checked: 0, updated: 0, errors: [] });
+    // No children exist at all -> the function returns before ever querying parents by id.
+    expect(calls.some((c) => c.in.some(([col]) => col === 'id'))).toBe(false);
   });
 });
