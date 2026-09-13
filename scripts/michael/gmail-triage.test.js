@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { stubClient } from '../../lib/michael/db.test.js';
 import { THREADS_MAX_RESULTS } from '../../lib/michael/gmail-client.mjs';
-import { runGmailTriage, inboxQueries, intentFor, itemRow, firstMatch, ruleUsable, labelChangeFor, budgetFor, LEDGER_RECHECK_EVERY, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
+import { runGmailTriage, inboxQueries, intentFor, itemRow, isClasslessRuleMatch, firstMatch, ruleUsable, labelChangeFor, budgetFor, LEDGER_RECHECK_EVERY, ITEM_KEYS, ITEM_UPDATE_KEYS, LABEL_KEYS } from './gmail-triage.mjs';
 
 // 05:00 ET on 2026-09-06 (EDT) -> 09:00Z (inside 04:30-05:30); 02:00 ET -> 06:00Z.
 const NOW = new Date('2026-09-06T09:00:00.000Z');
@@ -143,6 +143,12 @@ describe('pure helpers', () => {
     expect(ruleUsable(RULES[1], { action: { label_id: 'TRASH' } }, { gmailIds: new Set(['TRASH']) })).toBe(false);
     expect(ruleUsable(RULES[1], { action: {} }, {})).toBe(false);
     expect(ruleUsable(RULES[0], { action: { verb: 'archive' } }, { gmailIds: new Set() })).toBe(true);
+    // QF-20260912-657: a class-less rule match (rule_key set, class null) is the exact shape a
+    // seat-classified row also has once the seat writes over an earlier class-less match --
+    // isClasslessRuleMatch identifies it so the update guard can exclude the vulnerable branch.
+    expect(isClasslessRuleMatch({ rule_key: 'gmail/always-surface', class: null })).toBe(true);
+    expect(isClasslessRuleMatch({ rule_key: 'gmail/exelon-digest', class: 'newsletter' })).toBe(false);
+    expect(isClasslessRuleMatch({ rule_key: null, class: null })).toBe(false);
   });
 });
 
@@ -209,6 +215,27 @@ describe('runGmailTriage', () => {
     }
     expect(dbCalls.filter((c) => c.table === 'michael_feeder_runs').map((c) => c.kind)).toEqual(['select', 'insert', 'update']);
     expect(r.counts).toMatchObject({ modify: false, threads_modified: 0 });
+  });
+  it('QF-20260912-657: a class-less rule match narrows the update guard to class.is.null alone, excluding the rule_key branch that let a retry re-null a seat-set class', async () => {
+    // A class-less rule (no `class` key in rule_json) matching t4 ("Lunch?"), which none of the
+    // classed RULES above match -- exactly the always-surface-stay-in-inbox shape the live
+    // specimen hit.
+    const classlessRule = { rule_key: 'gmail/always-surface', rule_json: { match: { subject: 'Lunch' }, action: {} }, auto_apply: false, auto_apply_verb: null };
+    const { sb, calls: dbCalls } = db({ labels: [], rules: [...RULES, classlessRule] });
+    const r = await runGmailTriage({ sb, argv: ['--apply'], now: NOW, auth: 'AUTH', gmail: gmailFactory(), env });
+    expect(r).toMatchObject({ ok: true, status: 'ok' });
+    const updates = dbCalls.filter((c) => c.table === 'michael_gmail_triage_items' && c.kind === 'update');
+    const t4Update = updates.find((u) => u.ops.some((o) => o.op === 'eq' && o.args[0] === 'thread_id' && o.args[1] === 't4'));
+    expect(t4Update).toBeTruthy();
+    // t4 now matches the class-less rule (rule_key set, class null) -- the update guard must
+    // exclude the rule_key.not.is.null branch, using class.is.null alone: a non-null class
+    // already on the row (a seat's Sonnet verdict) blocks this update from ever firing.
+    expect(t4Update.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is', 'is']);
+    expect(t4Update.ops[5].args).toEqual(['class', null]);
+    // every OTHER, genuinely classed match keeps the original OR guard, unaffected.
+    const t1Update = updates.find((u) => u.ops.some((o) => o.op === 'eq' && o.args[0] === 'thread_id' && o.args[1] === 't1'));
+    expect(t1Update.ops.map((o) => o.op)).toEqual(['update', 'eq', 'eq', 'is', 'is', 'or']);
+    expect(t1Update.ops[5].args).toEqual(['class.is.null,rule_key.not.is.null']);
   });
   it('--apply without --modify never calls threads.modify (the registrar\'s shadow mode)', async () => {
     const calls = [];

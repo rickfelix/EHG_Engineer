@@ -98,6 +98,23 @@ export function budgetFor(ceiling, priorRuns = [], stampedToday = 0) {
 }
 
 /**
+ * QF-20260912-657: whether an update to this item row must exclude the rule_key.not.is.null
+ * branch of the safe-update filter. A CLASS-LESS rule match (e.g. the always-surface-stay-in-
+ * inbox rule) yields row.rule_key SET and row.class null -- the exact shape a seat-classified
+ * row (class set by the seat, rule_key left standing from the earlier match) also has once the
+ * feeder recomputes the SAME class-less match on a retry. The rule_key.not.is.null branch then
+ * matched the seat-classified row too, re-nulling class every 15-minute retry (the seat's
+ * Sonnet verdict never persisted). Narrowing to class.is.null ALONE for this shape means a
+ * non-null class already on the DB row (the seat's verdict) blocks the overwrite; a genuinely
+ * classed rule match (row.class non-null) is unaffected and keeps refreshing on every fire.
+ * @param {{rule_key: string|null, class: string|null}} row
+ * @returns {boolean}
+ */
+export function isClasslessRuleMatch(row) {
+  return row.rule_key !== null && row.class === null;
+}
+
+/**
  * Pure: the item row for one thread given the first matching rule (or none). Uniform key set. `prior` is
  * an earlier row for the thread that was archived (action_intent archive, action_taken_at set): when the
  * thread is back with a newer last_message_id it is borderline — class kept, no automatic action (FR-5).
@@ -251,7 +268,11 @@ export async function runGmailTriage({ sb, argv = [], now = new Date(), auth, gm
           // does not lean on a seat stamp: the feeder rewrites only rows it queued itself (class IS NULL) or
           // rule-stamped itself (rule_key set); a seat-classified row has class set and rule_key null.
           // verified_by IS NULL is kept as belt-and-braces for the Opus re-judge stamp (spec §5).
-          const u = await writeRows(sb, 'michael_gmail_triage_items', (t) => t.update(patch).eq('et_date', etDate).eq('thread_id', row.thread_id).is('action_taken_at', null).is('verified_by', null).or('class.is.null,rule_key.not.is.null'));
+          // QF-20260912-657: a CLASS-LESS rule match breaks that assumption -- see isClasslessRuleMatch.
+          const base = (t) => t.update(patch).eq('et_date', etDate).eq('thread_id', row.thread_id).is('action_taken_at', null).is('verified_by', null);
+          const u = await writeRows(sb, 'michael_gmail_triage_items', isClasslessRuleMatch(row)
+            ? (t) => base(t).is('class', null)
+            : (t) => base(t).or('class.is.null,rule_key.not.is.null'));
           if (!u.ok) return { status: 'failed', counts: { ...counts, error_code: u.refusal, phase: 'items', updates } };
           updates += 1;
         }
