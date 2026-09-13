@@ -105,7 +105,7 @@ describe('resume.run() releases a stray claim end-to-end (QF-20260912-502)', () 
     const sb = {
       from: (table) => {
         if (table === 'strategic_directives_v2') {
-          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'active', progress: 0 }, error: null }) }) }) };
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'active', progress_percentage: 0 }, error: null }) }) }) };
         }
         if (table === 'claude_sessions') {
           return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { claimed_at: new Date(Date.now() - 20 * 60_000).toISOString(), commits_since_claim: 0 }, error: null }) }) }) };
