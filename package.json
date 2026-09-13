@@ -140,6 +140,7 @@
     "lint:count-truncation-diff": "node scripts/lint/count-truncation-diff-lint.mjs",
     "lint:no-connection-string-literals": "node scripts/lint/no-connection-string-literals-lint.mjs",
     "lint:gate-stage-hardcoded-literal": "node scripts/lint/gate-stage-hardcoded-literal-lint.mjs",
+    "lint:summary-column-derivation": "node scripts/lint/summary-column-derivation-lint.mjs",
     "lint:gemini-pin": "node scripts/lint/gemini-pin-lint.mjs",
     "lint:tier-rank-direct-comparison": "node scripts/lint/tier-rank-direct-comparison-lint.mjs",
     "lint:progress-column": "node scripts/lint/progress-column-lint.mjs",

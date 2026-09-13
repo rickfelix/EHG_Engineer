@@ -1,0 +1,49 @@
+name: Summary Column Derivation Lint
+
+# SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001 FR-1/FR-2
+# Flags a new summary column (boolean *_evaluated/*_passed/*_verified, or a
+# summary-shaped jsonb key) introduced without an accompanying derivation
+# (GENERATED expression or a paired CREATE TRIGGER in the same migration).
+# Also flags (advisory-only, never fails) a new foreign-key column with a
+# summary-shaped name for manual review.
+#
+# ADVISORY-FIRST: the lint step is `continue-on-error: true`, matching the
+# precedent set by alter-default-override-lint.yml (SD-LEO-INFRA-LINT-ALTER-SET-001).
+# Predicate (b) is scoped to UPDATE ... SET clauses specifically (EXEC-phase TESTING,
+# evidence cf40b474, MEDIUM-3: an earlier version also matched jsonb_build_object()
+# calls inside INSERT INTO ... VALUES (audit-log rows, one-time seed data), which
+# fired 10/10 false-positive on the live corpus -- none was a persisted summary
+# column). With that fix, predicate (b) currently finds exactly 1 genuine
+# pre-existing migration (a real advisory finding, not a false positive).
+# continue-on-error stays in place regardless, since this lint can always find a
+# genuine NEW instance in someone else's unrelated PR -- it should inform, not block.
+
+on:
+  pull_request:
+    paths:
+      - 'database/migrations/**/*.sql'
+      - 'scripts/lint/summary-column-derivation-lint.mjs'
+      - '.github/workflows/summary-column-derivation-lint.yml'
+
+# SECURITY finding SEC-M1 (EXEC-phase review, evidence 62384ee7): the repo default
+# workflow token is contents:write with PR-approval rights. This job only reads and
+# runs a lint (never writes back to the repo or comments on the PR), so it needs no
+# more than read access -- explicit here rather than relying on the repo default.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  summary-column-derivation-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Detect undereived summary columns (advisory)
+        continue-on-error: true
+        run: node scripts/lint/summary-column-derivation-lint.mjs
