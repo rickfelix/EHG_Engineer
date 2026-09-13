@@ -16,6 +16,11 @@
 --
 -- Additive-only: every existing accepted value stays accepted, so no existing
 -- row or caller is affected.
+--
+-- UPDATE 2026-09-13 (TESTING sub-agent finding, EXEC phase): 20260828's own
+-- CHECK-rebuild list was updated to include 'performance'/'responsive' too, so
+-- if it is ever applied after this one it stays a superset of live state
+-- instead of silently reverting these two values.
 
 BEGIN;
 

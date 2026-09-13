@@ -29,6 +29,7 @@ import {
   generateRemediationSdsBatch,
   selectPendingFindings,
   isLikelyTestFixture,
+  isWarnCappedCategoryFinding,
   resolveVentureApplication,
   mintVentureQuickFix,
   FIXTURE_VENTURE_ID_PREFIX,
@@ -36,7 +37,7 @@ import {
   FR_C_REMEDIATION_SEVERITIES,
   FR_C_OPEN_SD_STATUSES,
 } from '../../../../../lib/eva/quality-findings/sd-generator.js';
-import { computeFindingHash } from '../../../../../lib/eva/quality-findings/finding-shape.js';
+import { computeFindingHash, WARN_CAPPED_CATEGORIES } from '../../../../../lib/eva/quality-findings/finding-shape.js';
 
 // The local HAS_REAL_DB re-derivation that used to sit here is GONE, not corrected — it moved with
 // the suite it gated and was replaced there by the repo's canonical predicate, imported rather than
@@ -436,5 +437,53 @@ describe('FR-C generator — fixture discriminator', () => {
     const result = await selectPendingFindings(supabase, null);
     expect(result).toEqual([fixtureRow]);
     expect(auditInsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('WARN-capped category exclusion (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A, TESTING sub-agent finding)', () => {
+  test('isWarnCappedCategoryFinding matches every entry in WARN_CAPPED_CATEGORIES', () => {
+    for (const cat of WARN_CAPPED_CATEGORIES) {
+      expect(isWarnCappedCategoryFinding({ finding_category: cat })).toBe(true);
+    }
+  });
+
+  test('isWarnCappedCategoryFinding passes through non-WARN-capped categories and null/undefined', () => {
+    expect(isWarnCappedCategoryFinding({ finding_category: 'lint' })).toBe(false);
+    expect(isWarnCappedCategoryFinding({ finding_category: 'npm_audit' })).toBe(false);
+    expect(isWarnCappedCategoryFinding(null)).toBe(false);
+    expect(isWarnCappedCategoryFinding({})).toBe(false);
+  });
+
+  test('selectPendingFindings excludes WARN-capped-category rows (accessibility/performance/responsive) and emits warn_capped_category_skipped audit_log, without filing a remediation SD for them', async () => {
+    const a11yRow = { id: 'a11y-1', venture_id: '99999999-2222-3333-4444-555555555555', finding_category: 'accessibility', severity: 'medium', evidence_pointer: { sig: 's-prod' }, stage_number: 20, created_at: '2026-09-13T00:00:00Z' };
+    const perfRow = { id: 'perf-1', venture_id: '99999999-2222-3333-4444-555555555555', finding_category: 'performance', severity: 'medium', evidence_pointer: { sig: 's-prod' }, stage_number: 20, created_at: '2026-09-13T00:00:01Z' };
+    const respRow = { id: 'resp-1', venture_id: '99999999-2222-3333-4444-555555555555', finding_category: 'responsive', severity: 'medium', evidence_pointer: { sig: 's-prod' }, stage_number: 20, created_at: '2026-09-13T00:00:02Z' };
+    const prodRow = { id: 'prod-1', venture_id: '99999999-2222-3333-4444-555555555555', finding_category: 'lint', severity: 'medium', evidence_pointer: { sig: 's-prod' }, stage_number: 20, created_at: '2026-09-13T00:00:03Z' };
+
+    const auditInsert = vi.fn().mockResolvedValue({ data: null, error: null });
+    const findingsThenable = {
+      data: [a11yRow, perfRow, respRow, prodRow], error: null,
+      select: function () { return this; },
+      eq: function () { return this; },
+      in: function () { return this; },
+      order: function () { return this; },
+      range: function () { return this; },
+      then: function (cb) { return cb({ data: this.data, error: this.error }); },
+    };
+
+    const supabase = {
+      from: vi.fn((table) => {
+        if (table === 'venture_quality_findings') return findingsThenable;
+        if (table === 'audit_log') return { insert: auditInsert };
+        throw new Error('unexpected table: ' + table);
+      }),
+    };
+
+    const result = await selectPendingFindings(supabase, null);
+    expect(result).toEqual([prodRow]);
+    expect(auditInsert).toHaveBeenCalledTimes(3);
+    const events = auditInsert.mock.calls.map((c) => c[0]);
+    expect(events.every((e) => e.event_type === 'warn_capped_category_skipped')).toBe(true);
+    expect(events.map((e) => e.metadata.finding_category).sort()).toEqual(['accessibility', 'performance', 'responsive']);
   });
 });

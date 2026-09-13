@@ -49,9 +49,15 @@ function extractInListValues(constraintDef) {
     .map((s) => s.trim().replace(/^'|'$/g, ''));
 }
 
-async function probeInsertAccepts(category) {
+// TESTING sub-agent finding (PLAN-phase re-verification): a bare `!insertErr`
+// doesn't discriminate WHY an insert failed -- an RLS denial or a missing
+// required column would read identically to a genuine CHECK-constraint
+// rejection, so the "still rejects an invented category" test could pass
+// vacuously even with the constraint dropped entirely. Postgres error code
+// 23514 is specifically check_violation; assert on that, not just "any error".
+async function probeInsert(category) {
   const probeVentureId = '00000000-0000-0000-0000-000000000001';
-  const probeHash = `capa-001-a-probe-${category}-${Date.now()}`;
+  const probeHash = `capa-001-a-probe-${category}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const { error: insertErr } = await supabase.from('venture_quality_findings').insert({
     venture_id: probeVentureId,
     stage_number: 20,
@@ -61,7 +67,7 @@ async function probeInsertAccepts(category) {
     evidence_pointer: { probe: 'SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A/TS-2' },
   });
   await supabase.from('venture_quality_findings').delete().eq('finding_hash', probeHash);
-  return !insertErr;
+  return { accepted: !insertErr, code: insertErr?.code ?? null, message: insertErr?.message ?? null };
 }
 
 describe('venture_quality_findings_finding_category_check (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A, TS-2)', () => {
@@ -96,17 +102,18 @@ describe('venture_quality_findings_finding_category_check (SD-LEO-INFRA-VENTURE-
     // Fallback: exec_sql_readonly RPC unavailable in this environment -- probe
     // each category with a real insert/delete pair against the CHECK constraint.
     for (const cat of PRE_EXISTING_CATEGORIES) {
-      const accepted = await probeInsertAccepts(cat);
-      expect(accepted, `pre-existing category '${cat}' should not raise 23514 (regression)`).toBe(true);
+      const r = await probeInsert(cat);
+      expect(r.accepted, `pre-existing category '${cat}' should not raise 23514 (regression); got code=${r.code} msg=${r.message}`).toBe(true);
     }
     for (const cat of NEWLY_ADDED_CATEGORIES) {
-      const accepted = await probeInsertAccepts(cat);
-      expect(accepted, `newly added category '${cat}' should not raise 23514`).toBe(true);
+      const r = await probeInsert(cat);
+      expect(r.accepted, `newly added category '${cat}' should not raise 23514; got code=${r.code} msg=${r.message}`).toBe(true);
     }
   });
 
-  it('still rejects a category outside both the pre-existing and newly added sets', async () => {
-    const accepted = await probeInsertAccepts('not-a-real-category');
-    expect(accepted, 'an invented category must still be rejected by the CHECK constraint').toBe(false);
+  it('still rejects a category outside both the pre-existing and newly added sets, specifically via the CHECK constraint (23514)', async () => {
+    const r = await probeInsert('not-a-real-category');
+    expect(r.accepted, 'an invented category must still be rejected by the CHECK constraint').toBe(false);
+    expect(r.code, `rejection must be check_violation (23514), not some other failure (e.g. RLS): got code=${r.code} msg=${r.message}`).toBe('23514');
   });
 });

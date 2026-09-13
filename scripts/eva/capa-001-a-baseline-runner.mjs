@@ -133,7 +133,7 @@ export function buildLighthouseFindings(ventureId, url, runId, lhr, thresholds) 
       stage_number: STAGE_NUMBER,
       finding_category: 'performance',
       severity: 'medium',
-      finding_signature: `performance:${runId}:categories-performance-below-threshold`,
+      finding_signature: `performance:categories-performance-below-threshold`,
       evidence_pointer: { run_id: runId, metric: 'categories:performance', score: perfScore, min_score: perfCfg.minScore, url },
     });
   }
@@ -147,7 +147,7 @@ export function buildLighthouseFindings(ventureId, url, runId, lhr, thresholds) 
         stage_number: STAGE_NUMBER,
         finding_category: 'performance',
         severity: 'medium',
-        finding_signature: `performance:${runId}:${metricKey}-above-threshold`,
+        finding_signature: `performance:${metricKey}-above-threshold`,
         evidence_pointer: { run_id: runId, metric: metricKey, value_ms: audit.numericValue, max_ms: cfg.maxNumericValue, url },
       });
     }
@@ -159,7 +159,7 @@ export function buildLighthouseFindings(ventureId, url, runId, lhr, thresholds) 
     stage_number: STAGE_NUMBER,
     finding_category: 'performance',
     severity: 'low',
-    finding_signature: `performance:${runId}:run-recorded`,
+    finding_signature: `performance:run-recorded`,
     evidence_pointer: {
       run_id: runId,
       url,
@@ -176,7 +176,7 @@ export function buildLighthouseFailureFinding(ventureId, url, runId, reason, det
     stage_number: STAGE_NUMBER,
     finding_category: 'performance',
     severity: 'low',
-    finding_signature: `performance:${runId}:${reason}`,
+    finding_signature: `performance:${reason}`,
     evidence_pointer: { run_id: runId, url, error: String(detail || '').slice(0, 500) },
   }];
 }
@@ -240,6 +240,22 @@ async function runAccessibilityAndResponsiveChecks(page, ventureId, url) {
   return accessibilityFindings.concat(responsiveFindings);
 }
 
+// TESTING sub-agent finding (EXEC phase): the severity cap was enforced only
+// by construction in each builder, with no runtime guard before the write --
+// a future change to any builder could silently cross into critical/high and
+// trigger writeFinding()'s sync remediation-SD generation, contradicting this
+// baseline's informational-only scope. Fail loud instead.
+export function enforceSeverityCap(findings) {
+  const offenders = findings.filter((f) => f.severity === 'critical' || f.severity === 'high');
+  if (offenders.length > 0) {
+    throw new Error(
+      `capa-001-a-baseline-runner: ${offenders.length} finding(s) at critical/high severity ` +
+      `(informational-only baseline must stay medium/low): ${offenders.map((f) => f.finding_signature).join(', ')}`
+    );
+  }
+  return findings;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -268,6 +284,8 @@ async function main() {
       finding_signature: f.finding_signature,
     });
   }
+
+  enforceSeverityCap(findings);
 
   const result = await writeFindingsBatch(supabase, findings);
   console.log(`[capa-001-a-baseline] written=${result.written} errors=${result.errors.length} sd_generated=${result.sd_generated}`);

@@ -14,6 +14,7 @@ import {
   buildResponsiveFindings,
   buildLighthouseFindings,
   buildLighthouseFailureFinding,
+  enforceSeverityCap,
 } from '../../../../scripts/eva/capa-001-a-baseline-runner.mjs';
 import { validateFindingShape, computeFindingHash } from '../../../../lib/eva/quality-findings/finding-shape.js';
 
@@ -178,7 +179,7 @@ describe('buildLighthouseFindings — threshold comparison (FR-2)', () => {
     };
     const findings = buildLighthouseFindings(VENTURE_ID, URL, 'run-3', lhr, thresholds).map(withHash);
     expect(findings).toHaveLength(1);
-    expect(findings[0].finding_signature).toBe('performance:run-3:run-recorded');
+    expect(findings[0].finding_signature).toBe('performance:run-recorded');
     expect(findings[0].severity).toBe('low');
     expect(validateFindingShape(findings[0]).valid).toBe(true);
   });
@@ -196,6 +197,22 @@ describe('buildLighthouseFindings — threshold comparison (FR-2)', () => {
       expect(['medium', 'low']).toContain(f.severity);
     }
   });
+
+  it('finding_signature (and therefore finding_hash) is stable across different runIds — idempotent re-runs UPSERT the same row instead of piling up duplicates (writer.js upserts on venture_id+finding_hash)', () => {
+    const lhr = {
+      categories: { performance: { score: 0.95 } },
+      audits: {
+        'first-contentful-paint': { numericValue: 800 },
+        'largest-contentful-paint': { numericValue: 1200 },
+      },
+    };
+    const run1 = buildLighthouseFindings(VENTURE_ID, URL, 'capa-001-a-1000', lhr, thresholds).map(withHash);
+    const run2 = buildLighthouseFindings(VENTURE_ID, URL, 'capa-001-a-2000', lhr, thresholds).map(withHash);
+    expect(run1.map((f) => f.finding_hash)).toEqual(run2.map((f) => f.finding_hash));
+    expect(run1.map((f) => f.finding_signature)).toEqual(run2.map((f) => f.finding_signature));
+    // run_id still differs in evidence_pointer -- only the dedup key is stable.
+    expect(run1[0].evidence_pointer.run_id).not.toBe(run2[0].evidence_pointer.run_id);
+  });
 });
 
 describe('buildLighthouseFailureFinding — collection failure fallback', () => {
@@ -205,5 +222,26 @@ describe('buildLighthouseFailureFinding — collection failure fallback', () => 
     expect(finding.finding_category).toBe('performance');
     expect(validateFindingShape(finding).valid).toBe(true);
     expect(finding.evidence_pointer.error).toContain('chrome not found');
+  });
+});
+
+describe('enforceSeverityCap — runtime guard (TESTING sub-agent finding, EXEC phase)', () => {
+  it('passes through an all-medium/low finding set unchanged', () => {
+    const findings = [{ severity: 'medium', finding_signature: 'a' }, { severity: 'low', finding_signature: 'b' }];
+    expect(enforceSeverityCap(findings)).toBe(findings);
+  });
+
+  it('throws if any finding is severity critical', () => {
+    const findings = [{ severity: 'medium', finding_signature: 'a' }, { severity: 'critical', finding_signature: 'b' }];
+    expect(() => enforceSeverityCap(findings)).toThrow(/critical\/high severity/);
+  });
+
+  it('throws if any finding is severity high', () => {
+    const findings = [{ severity: 'high', finding_signature: 'a' }];
+    expect(() => enforceSeverityCap(findings)).toThrow(/critical\/high severity/);
+  });
+
+  it('handles an empty findings array', () => {
+    expect(enforceSeverityCap([])).toEqual([]);
   });
 });
