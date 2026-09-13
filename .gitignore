@@ -652,3 +652,15 @@ scripts/one-off/adam-provenance-split/
 # per-worktree reaper marker (lib/fleet worktree reaper reads it from disk; never tracked -- #8690 committed one by mistake)
 .reap-protected.json
 .artifacts/val-capa-a/
+
+# SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A: sub-agent scratch DB-writer/verify
+# scripts (not the stamped evidence output files, which stay tracked) -- one
+# (write-evidence.mjs) embedded prose describing a code fix that happened to
+# match the /ship review gate's CRIT-002 sql_injection closed-enumeration
+# pattern as a false positive (QF-20260904-439 is the same untracked-but-
+# unignored evidence-writer-script hazard class).
+.artifacts/testing-capa-a/write-evidence.mjs
+.artifacts/testing-capa-a/verify.mjs
+.artifacts/security-capa-a/write-evidence.mjs
+.artifacts/security-capa-a/write-evidence-recheck.mjs
+.artifacts/security-capa-a/ssrf-validator-probe.mjs
