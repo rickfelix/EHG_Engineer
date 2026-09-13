@@ -10,6 +10,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { main, parseArgs, ensureArmedRegistration, sweepOnce, SD_KEY, ACTIVATION_TRIGGER } from '../../../scripts/cron/publish-outcome-observer.mjs';
+import { observeOutcome } from '../../../lib/marketing/observer/observe-outcome.js';
+import { recordPublishOutcome } from '../../../lib/marketing/autonomy-gate.js';
 
 function makeRegistrySupabase({ alreadyRegistered = false } = {}) {
   const upsert = vi.fn().mockResolvedValue({ error: null });
@@ -250,5 +252,110 @@ describe('sweepOnce', () => {
 
     expect(counters.rows_write_failed).toBe(1);
     expect(counters.rows_write_failed_expected_pre_migration).toBe(0);
+  });
+});
+
+/**
+ * FR-8 AC-1 / TS-7 (VALIDATION + TESTING finding, both independently flagged this gap):
+ * every other test in this file injects fakes for BOTH observeOutcomeFn and
+ * recordPublishOutcomeFn, so the real composition sweepOnce -> recordPublishOutcome ->
+ * evaluateGraduation was never exercised end-to-end -- exactly the gap that let the SEC-2
+ * mode-filter defects (the original inertness AND the first fail-open fix attempt) go
+ * undetected until an independent code review caught them. This test uses the REAL
+ * observeOutcome, recordPublishOutcome, and evaluateGraduation -- only the platform
+ * adapter's fetchImpl and the credential resolver are faked (the genuine external
+ * boundary), backed by one fake supabase client that models every table this composition
+ * actually touches.
+ */
+describe('sweepOnce end-to-end with the REAL observeOutcome/recordPublishOutcome/evaluateGraduation (FR-8 AC-1, TS-7)', () => {
+  function makeEndToEndSupabase() {
+    const ledgerRow = {
+      id: 'ledger-1', venture_id: 'v-1', channel_type: 'x', correlation_id: 'corr-1',
+      created_at: new Date(Date.now() - 60_000).toISOString(),
+    };
+    const contentRow = { id: 'content-1', external_post_id: '123', platform: 'x' };
+    const graduationCalls = [];
+    const autonomyUpsert = vi.fn(() => Promise.resolve({ error: null }));
+
+    return {
+      autonomyUpsert,
+      graduationCalls,
+      from: vi.fn((table) => {
+        if (table === 'venture_channel_publish_ledger') {
+          const filters = {};
+          const chain = {
+            select: vi.fn((cols) => { chain._cols = cols; return chain; }),
+            eq: vi.fn((field, value) => { filters[field] = value; return chain; }),
+            not: vi.fn((field, _op, list) => { filters[`${field}_not_in`] = list; return chain; }),
+            order: vi.fn(() => chain),
+            update: vi.fn((patch) => { chain._update = patch; return chain; }),
+            limit: vi.fn((n) => {
+              // sweepOnce's own row-selection query (select('correlation_id'))
+              if (chain._cols === 'correlation_id') {
+                return Promise.resolve({ data: [{ correlation_id: 'corr-1' }], error: null });
+              }
+              // evaluateGraduation's candidate window query
+              graduationCalls.push({ filters: { ...filters }, limit: n });
+              return Promise.resolve({ data: [], error: null });
+            }),
+            maybeSingle: vi.fn(() => {
+              if (chain._update) {
+                // recordPublishOutcome's update-then-read
+                return Promise.resolve({ data: { venture_id: 'v-1', channel_type: 'x', execution_mode: 'mock' }, error: null });
+              }
+              // observeOutcome's own ledger read
+              return Promise.resolve({ data: ledgerRow, error: null });
+            }),
+          };
+          return chain;
+        }
+        if (table === 'campaign_content') {
+          return {
+            select: vi.fn(function () { return this; }),
+            eq: vi.fn(function () { return this; }),
+            maybeSingle: vi.fn(() => Promise.resolve({ data: contentRow, error: null })),
+          };
+        }
+        if (table === 'venture_channel_autonomy') {
+          return { upsert: autonomyUpsert };
+        }
+        if (table === 'venture_demand_verdicts') {
+          const chain = {
+            select: vi.fn(() => chain), eq: vi.fn(() => chain), order: vi.fn(() => chain), limit: vi.fn(() => chain),
+            maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+          };
+          return chain;
+        }
+        if (table === 'venture_channel_secrets') {
+          return {
+            select: vi.fn(function () { return this; }),
+            eq: vi.fn(function () { return this; }),
+            maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+          };
+        }
+        throw new Error(`unmocked table in end-to-end test: ${table}`);
+      }),
+    };
+  }
+
+  it('a mock-mode outcome flows through the real chain: joined, written, and evaluateGraduation runs scoped to mode=mock, never touching venture_channel_autonomy', async () => {
+    const supabase = makeEndToEndSupabase();
+    // resolveCredentials faked (the genuine external boundary -- no real secret store in
+    // this unit test); getTweet's own network call faked via fetchImpl so the REAL
+    // XAdapter class still runs, only its transport is stubbed.
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({ data: { id: '123' } }) });
+    const resolveCredentials = vi.fn(() => Promise.resolve({ fetchImpl, accessToken: 'tok' }));
+    const observeOutcomeFn = (args) => observeOutcome({ ...args, resolveCredentials });
+
+    const counters = await sweepOnce(supabase, { observeOutcomeFn, recordPublishOutcomeFn: recordPublishOutcome });
+
+    expect(counters.rows_selected).toBe(1);
+    expect(counters.rows_joined).toBe(1);
+    expect(counters.rows_written).toBe(1);
+    // evaluateGraduation's real candidate query ran, scoped to this venture/channel/mode:
+    expect(supabase.graduationCalls).toHaveLength(1);
+    expect(supabase.graduationCalls[0].filters).toMatchObject({ venture_id: 'v-1', channel_type: 'x', execution_mode: 'mock' });
+    // FR-5/SEC-2: a mock-mode evaluation never writes venture_channel_autonomy, in either direction.
+    expect(supabase.autonomyUpsert).not.toHaveBeenCalled();
   });
 });

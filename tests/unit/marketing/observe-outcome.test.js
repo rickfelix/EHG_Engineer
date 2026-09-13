@@ -6,7 +6,7 @@
  * ledger/campaign_content row pair already exists.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { observeOutcome } from '../../../lib/marketing/observer/observe-outcome.js';
+import { observeOutcome, OBSERVATION_WINDOW_MS } from '../../../lib/marketing/observer/observe-outcome.js';
 
 function makeSupabase({ ledgerRow, contentRow, ledgerError = null, contentError = null }) {
   return {
@@ -29,7 +29,12 @@ function makeSupabase({ ledgerRow, contentRow, ledgerError = null, contentError 
   };
 }
 
-const LEDGER_ROW = { id: 'ledger-1', venture_id: 'v-1', channel_type: 'x', correlation_id: 'corr-1' };
+// VALIDATION finding F1: join-miss classification now depends on the ledger row's age
+// relative to OBSERVATION_WINDOW_MS. Tests that expect the OLD (past-window) terminal
+// 'unmeasurable' behavior use a created_at far in the past; the new within-window
+// behavior (stays 'unknown') is tested separately below with a fresh created_at.
+const LONG_AGO = new Date(Date.now() - OBSERVATION_WINDOW_MS * 10).toISOString();
+const LEDGER_ROW = { id: 'ledger-1', venture_id: 'v-1', channel_type: 'x', correlation_id: 'corr-1', created_at: LONG_AGO };
 
 describe('observeOutcome', () => {
   it('classifies unmeasurable when no ledger row exists for the correlationId', async () => {
@@ -38,22 +43,34 @@ describe('observeOutcome', () => {
     expect(result.outcome).toBe('unmeasurable');
   });
 
-  it('classifies unmeasurable when no campaign_content row joins (FR-1 join-miss case)', async () => {
+  it('classifies unmeasurable when no campaign_content row joins after the observation window has elapsed (FR-1 join-miss case)', async () => {
     const supabase = makeSupabase({ ledgerRow: LEDGER_ROW, contentRow: null });
     const result = await observeOutcome({ supabase, correlationId: 'corr-1' });
     expect(result.outcome).toBe('unmeasurable');
   });
 
-  it('classifies unmeasurable when external_post_id is null (dry-run, no credentials)', async () => {
+  it('classifies unmeasurable when external_post_id is null (dry-run, no credentials) after the observation window has elapsed', async () => {
     const supabase = makeSupabase({ ledgerRow: LEDGER_ROW, contentRow: { platform: 'x', external_post_id: null } });
     const result = await observeOutcome({ supabase, correlationId: 'corr-1' });
     expect(result.outcome).toBe('unmeasurable');
   });
 
-  it('classifies unmeasurable on a dry-run-* sentinel external_post_id, never as a real post (TS-5)', async () => {
+  it('classifies unmeasurable on a dry-run-* sentinel external_post_id after the observation window has elapsed, never as a real post (TS-5)', async () => {
     const supabase = makeSupabase({ ledgerRow: LEDGER_ROW, contentRow: { platform: 'x', external_post_id: 'dry-run-1700000000' } });
     const result = await observeOutcome({ supabase, correlationId: 'corr-1' });
     expect(result.outcome).toBe('unmeasurable');
+  });
+
+  // VALIDATION finding F1 (HIGH): on the approval-gated path, the chairman can flip
+  // decision to 'accepted' out of band while the actual publish() retry (which creates
+  // campaign_content) is human-paced and can lag by hours. Without a grace window, a
+  // scheduled tick landing in that gap would wrongly, TERMINALLY classify the row
+  // unmeasurable even though the post WILL exist once the retry happens.
+  it('leaves the outcome unknown (never a premature terminal) when no campaign_content row joins but the ledger row is still within the observation window', async () => {
+    const freshLedgerRow = { ...LEDGER_ROW, created_at: new Date().toISOString() };
+    const supabase = makeSupabase({ ledgerRow: freshLedgerRow, contentRow: null });
+    const result = await observeOutcome({ supabase, correlationId: 'corr-1' });
+    expect(result.outcome).toBe('unknown');
   });
 
   const resolveCredentialsOk = vi.fn(() => Promise.resolve({ apiKey: 'test-key' }));
