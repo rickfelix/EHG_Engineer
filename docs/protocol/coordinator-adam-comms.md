@@ -160,6 +160,40 @@ never becomes a `task-rehydrate` board node). A target still breaching after a p
 Deduped 2h/target, plus an absolute per-tick cap (`MAX_PROBES_PER_TICK=5`) as an independent
 second storm guard.
 
+## Urgency escalation (`payload.urgency`, SD-LEO-FIX-COORDINATOR-RULING-REVERSES-001)
+
+A coordinator ruling that **reverses in-flight work** has no urgency class by default: it rides
+the same oldest-five directive batch as every other `coordinator_request` row, so it can sit
+behind older unread rows for as long as those go unacked — a canary ruling once cost 10 minutes
+of rework this way before the worker's `/checkin` finally surfaced it.
+
+**Writer** (this is the authoring-time contract — read this before sending a reversing ruling):
+call `dispatchToWorker`/`insertCoordinationRow` (`lib/coordinator/dispatch.cjs`) with
+`{ urgency: 'interrupt' }` in `opts`:
+
+```js
+await dispatchToWorker(supabase, {
+  target_session: workerSessionId,
+  message_type: 'INFO',
+  subject: '[RULING] ...',
+  payload: { kind: 'coordinator_request', topic: 'ruling', body: '...' },
+}, { urgency: 'interrupt' });
+```
+
+This stamps `payload.urgency='interrupt'` on the row, validated against the shared
+`lib/coordinator/urgency-levels.cjs` constant (currently just `'interrupt'`). Omitting `urgency`
+is byte-identical to today's behavior — this is an opt-in, additive signal, not a default.
+
+**Reader** (already shipped, QF-20260912-269 / PR #8889): `scripts/hooks/coordination-inbox.cjs`
+fetches `payload.urgency='interrupt'` rows uncapped (the same treatment `fence_notice` gets via
+`PRIORITY_EXEMPT_DIRECTIVE_KINDS`, but keyed on a payload **value** rather than kind membership),
+renders a red `URGENT` label, and fires the lane-blind nudge at a 2-minute cut (vs. the default
+15) naming the row's subject. Full reader-side mechanics: see
+[fleet-coordination.md § Urgency classes](../reference/fleet-coordination.md#urgency-classes-payloadurgency).
+
+There is no automatic detection of "reverses in-flight work" — the coordinator decides at
+authoring time, the same way a human decides whether a message needs `fence_notice`.
+
 ## Consumption-semantics census (SD-LEO-INFRA-SESSION-COORDINATION-LANE-002, 2026-07-11)
 
 Clause (e) of the chairman-ratified Solomon MODE-B advisory (`session_coordination` row
