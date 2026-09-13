@@ -91,7 +91,11 @@ describe('active-SD shipped-stale guard (classifyWorktree)', () => {
 });
 
 describe('loadSdKeySets returns activeSdSet', () => {
-  function mockSupabase({ sdKeys = [], qfIds = [], activeRows = [], qfRows = [] }) {
+  // QF-20260912-270: terminalSdRows is a separate fixture from activeRows so the mock can tell
+  // apart the two differently-filtered strategic_directives_v2 queries this function makes
+  // (draft/active/in_progress vs completed/cancelled/archived) -- distinguished here by checking
+  // for 'archived', a value unique to the terminal-status query.
+  function mockSupabase({ sdKeys = [], qfIds = [], activeRows = [], qfRows = [], terminalSdRows = [] }) {
     return {
       from: vi.fn((table) => {
         const builder = { _table: table, _inStatus: false, _statuses: null };
@@ -100,9 +104,10 @@ describe('loadSdKeySets returns activeSdSet', () => {
         builder.range = vi.fn(async (start) => {
           if (start > 0) return { data: [], error: null };
           if (table === 'strategic_directives_v2') {
-            return builder._inStatus
-              ? { data: activeRows, error: null }
-              : { data: sdKeys.map((k) => ({ sd_key: k })), error: null };
+            if (!builder._inStatus) return { data: sdKeys.map((k) => ({ sd_key: k })), error: null };
+            return (builder._statuses || []).includes('archived')
+              ? { data: terminalSdRows, error: null }
+              : { data: activeRows, error: null };
           }
           if (table === 'quick_fixes') {
             if (builder._inStatus) {
@@ -138,16 +143,16 @@ describe('loadSdKeySets returns activeSdSet', () => {
     expect(activeSdSet.size).toBe(0);
   });
 
-  // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001
-  test('builds activeQfSet (open/in_progress) and terminalQfSet (completed/cancelled), excluding escalated', async () => {
+  // SD-LEO-INFRA-WORKTREE-REAPER-QUICK-001 + QF-20260912-270
+  test('builds activeQfSet (open/in_progress) and terminalQfSet (completed/cancelled/closed)', async () => {
     const supabase = mockSupabase({
-      qfIds: ['QF-1', 'QF-2', 'QF-3', 'QF-4', 'QF-5'],
+      qfIds: ['QF-1', 'QF-2', 'QF-3', 'QF-4', 'QF-6'],
       qfRows: [
         { id: 'QF-1', status: 'open' },
         { id: 'QF-2', status: 'in_progress' },
         { id: 'QF-3', status: 'completed' },
         { id: 'QF-4', status: 'cancelled' },
-        { id: 'QF-5', status: 'escalated' },
+        { id: 'QF-6', status: 'closed' },
       ],
     });
     const { qfMap, activeQfSet, terminalQfSet } = await loadSdKeySets(supabase);
@@ -156,8 +161,41 @@ describe('loadSdKeySets returns activeSdSet', () => {
     expect(activeQfSet.has('QF-2')).toBe(true);
     expect(terminalQfSet.has('QF-3')).toBe(true);
     expect(terminalQfSet.has('QF-4')).toBe(true);
-    // 'escalated' is in NEITHER set (work moved to an SD) → normal claim/age handling
+    // QF-20260912-270: 'closed' is now as terminal as 'completed'/'cancelled'
+    expect(terminalQfSet.has('QF-6')).toBe(true);
+  });
+
+  // QF-20260912-270 item (d): an escalated QF is terminal (reclaimable) only when its
+  // successor SD has itself reached a terminal status -- never by its own status alone.
+  test('an escalated QF whose successor SD is completed is terminal (reclaimable)', async () => {
+    const supabase = mockSupabase({
+      qfIds: ['QF-5'],
+      qfRows: [{ id: 'QF-5', status: 'escalated', escalated_to_sd_id: 'sd-uuid-1' }],
+      terminalSdRows: [{ id: 'sd-uuid-1', sd_key: 'SD-DONE', status: 'completed' }],
+    });
+    const { activeQfSet, terminalQfSet } = await loadSdKeySets(supabase);
     expect(activeQfSet.has('QF-5')).toBe(false);
+    expect(terminalQfSet.has('QF-5')).toBe(true);
+  });
+
+  test('an escalated QF whose successor SD is still in_progress is NOT terminal (left to normal handling)', async () => {
+    const supabase = mockSupabase({
+      qfIds: ['QF-5'],
+      qfRows: [{ id: 'QF-5', status: 'escalated', escalated_to_sd_id: 'sd-uuid-2' }],
+      terminalSdRows: [], // sd-uuid-2's SD is in_progress -> not in the terminal-status query's result set
+    });
+    const { activeQfSet, terminalQfSet } = await loadSdKeySets(supabase);
+    expect(activeQfSet.has('QF-5')).toBe(false);
+    expect(terminalQfSet.has('QF-5')).toBe(false);
+  });
+
+  test('an escalated QF with no escalated_to_sd_id is NOT terminal (left to normal handling)', async () => {
+    const supabase = mockSupabase({
+      qfIds: ['QF-5'],
+      qfRows: [{ id: 'QF-5', status: 'escalated', escalated_to_sd_id: null }],
+      terminalSdRows: [],
+    });
+    const { terminalQfSet } = await loadSdKeySets(supabase);
     expect(terminalQfSet.has('QF-5')).toBe(false);
   });
 

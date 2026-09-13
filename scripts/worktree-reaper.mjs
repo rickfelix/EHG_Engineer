@@ -121,11 +121,16 @@ const TERMINAL_SD_STATUSES = ['completed', 'cancelled', 'archived'];
 // NEVER present in activeSdSet/terminalSdSet (those hold sd_keys only). Without these sets a QF
 // worktree was reaped by mere EXISTENCE: an open/in_progress QF could be flagged shipped-stale and
 // auto-removed under --execute (data loss of unpushed work). ACTIVE_QF protects open/in_progress
-// QFs (mirrors activeSdSet); TERMINAL_QF lets Stage-0 reclaim completed/cancelled QFs age-agnostically
-// (mirrors terminalSdSet). 'escalated' is intentionally in NEITHER set (the work moved to an SD), so
-// such a worktree falls through to the normal claim/age handling.
+// QFs (mirrors activeSdSet); TERMINAL_QF lets Stage-0 reclaim completed/cancelled/closed QFs
+// age-agnostically (mirrors terminalSdSet).
+// QF-20260912-270: 'closed' is as terminal as 'completed'/'cancelled' to the QF lifecycle, so it
+// belongs in this set too. 'escalated' stays OUT of this static list (the work moved to an SD, so
+// its own status never tells us whether that SD finished) -- loadSdKeySets instead resolves each
+// escalated QF's escalated_to_sd_id against terminalSdIdSet below and adds it to terminalQfSet only
+// when that successor SD is itself terminal; an escalated QF whose successor SD is still in
+// progress correctly falls through to the normal claim/age handling.
 const ACTIVE_QF_STATUSES = ['open', 'in_progress'];
-const TERMINAL_QF_STATUSES = ['completed', 'cancelled'];
+const TERMINAL_QF_STATUSES = ['completed', 'cancelled', 'closed'];
 // Pool-utilization threshold at/above which the watchdog proactively runs Stage-0.
 const DEFAULT_POOL_THRESHOLD = 0.8;
 const PRESERVE_EXEMPT_RE = /^(tmp-|scratch-|\.claude[\\/]|\.workflow-patterns|\.worktree\.json$|\.ehg-session\.json$)/;
@@ -627,16 +632,23 @@ async function loadSdKeySets(supabase) {
   // reclaim them regardless of idle age. Best-effort: empty on error → Stage-0 simply
   // finds nothing to reclaim (no over-reap).
   const terminalSdSet = new Set();
+  // QF-20260912-270: id-keyed twin of terminalSdSet (same query, same rows) so an escalated
+  // QF's escalated_to_sd_id (a strategic_directives_v2.id UUID, not a sd_key) can be resolved
+  // against it below without a second round-trip.
+  const terminalSdIdSet = new Set();
   try {
     const pageSize = 1000;
     for (let start = 0; start < 20000; start += pageSize) {
       const { data, error } = await supabase
         .from('strategic_directives_v2')
-        .select('sd_key, status')
+        .select('id, sd_key, status')
         .in('status', TERMINAL_SD_STATUSES)
         .range(start, start + pageSize - 1);
       if (error || !data || data.length === 0) break;
-      for (const r of data) if (r.sd_key) terminalSdSet.add(r.sd_key);
+      for (const r of data) {
+        if (r.sd_key) terminalSdSet.add(r.sd_key);
+        if (r.id) terminalSdIdSet.add(r.id);
+      }
       if (data.length < pageSize) break;
     }
   } catch { /* best-effort */ }
@@ -664,6 +676,28 @@ async function loadSdKeySets(supabase) {
   }
   await loadQfStatusSet(ACTIVE_QF_STATUSES, activeQfSet);
   await loadQfStatusSet(TERMINAL_QF_STATUSES, terminalQfSet);
+
+  // QF-20260912-270: an 'escalated' QF is terminal once its successor SD (escalated_to_sd_id)
+  // itself reaches a terminal status -- the work moved to that SD and finished there. An
+  // escalated QF whose successor SD is still in progress (or has no escalated_to_sd_id) is left
+  // alone, falling through to the normal claim/age handling as before.
+  try {
+    const pageSize = 1000;
+    for (let start = 0; start < 20000; start += pageSize) {
+      const { data, error } = await supabase
+        .from('quick_fixes')
+        .select('id, escalated_to_sd_id')
+        .in('status', ['escalated'])
+        .range(start, start + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const r of data) {
+        if (r.id && r.escalated_to_sd_id && terminalSdIdSet.has(r.escalated_to_sd_id)) {
+          terminalQfSet.add(r.id);
+        }
+      }
+      if (data.length < pageSize) break;
+    }
+  } catch { /* best-effort */ }
 
   return { sdMap, qfMap, activeSdSet, terminalSdSet, activeQfSet, terminalQfSet, orchestratorSdSet };
 }
