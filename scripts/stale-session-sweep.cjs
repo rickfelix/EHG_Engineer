@@ -3083,6 +3083,50 @@ async function main() {
     }
   }
 
+  // QF-20260912-961 (part b): the phantom-in_progress detector above is SD-only. A
+  // quick_fixes row can reach the identical shape (status=in_progress, claiming_session_id
+  // NULL) via a claim eviction (a second claim clears the first's claiming_session_id but
+  // never resets status) rather than a graceful release, so it is invisible to sd:next's
+  // open-QF picker and unreachable by anyone. Delegates to the SAME shared
+  // releaseWorkItemOnSessionEnd() helper the CLAIM_BOUNDARY_PROBE site below already uses —
+  // never a second hand-rolled copy of the reopen predicate (FR-1's whole point; pinned by
+  // stale-session-sweep-workitem-handback.test.js). A row carrying a pr_url or commit_sha is
+  // reported, not reopened (the helper's own qf_untouched verdict). The updated_at floor (one
+  // sweep interval) avoids racing a claim that landed moments ago.
+  const QF_SWEEP_INTERVAL_MS = 5 * 60_000;
+  let phantomInProgressQfs = [];
+  try {
+    const qfCutoffIso = new Date(now.getTime() - QF_SWEEP_INTERVAL_MS).toISOString();
+    phantomInProgressQfs = await fapPaginate(() => supabase
+      .from('quick_fixes')
+      .select('id, pr_url, commit_sha, updated_at')
+      .eq('status', 'in_progress')
+      .is('claiming_session_id', null)
+      .lt('updated_at', qfCutoffIso)
+      .order('id', { ascending: true })); // unique tiebreaker (FR-6)
+  } catch { phantomInProgressQfs = []; } // prior behavior: read error ignored
+
+  for (const qf of (phantomInProgressQfs || [])) {
+    const { releaseWorkItemOnSessionEnd: releasePhantomQf } = await import('../lib/fleet/release-work-item.mjs');
+    const verdict = await releasePhantomQf(supabase, qf.id, 'PHANTOM_QF_SWEEP');
+    if (verdict.action === 'qf_reopened') {
+      actions.push('PHANTOM_QF: reset ' + qf.id + ' from in_progress → open (no claimant, no pr_url, no commit_sha)');
+      // session_lifecycle_events.session_id is NOT NULL, but there is no session to name here
+      // (that is the entire defect — no claimant exists). 'none' is a literal sentinel, not a
+      // real session id, matching the reason field's own free-text convention in this file.
+      await supabase.from('session_lifecycle_events').insert({
+        event_type: 'PHANTOM_QF_REOPENED',
+        session_id: 'none',
+        reason: 'phantom_in_progress_no_claimant',
+        metadata: { qf_id: qf.id, reopened_at: new Date().toISOString() },
+      });
+    } else if (verdict.action === 'qf_untouched' && (qf.pr_url || qf.commit_sha)) {
+      warnings.push('PHANTOM_QF: ' + qf.id + ' is in_progress with no claimant but carries real work (pr_url=' + Boolean(qf.pr_url) + ', commit_sha=' + Boolean(qf.commit_sha) + ') — reported, not reopened');
+    } else if (verdict.action === 'error') {
+      warnings.push('PHANTOM_QF: reopen check failed for ' + qf.id + ' — ' + verdict.detail);
+    }
+  }
+
   // SD-LEO-INFRA-BLOCK-TEST-SESSION-001 (FR-2/FR-3): reap claims held by a PHANTOM
   // session. Positioned AFTER the phantom-in_progress reset above and the earlier
   // terminal-claim clears (FIX #2), so a terminal SD's claiming_session_id is already
