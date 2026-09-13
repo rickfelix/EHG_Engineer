@@ -45,12 +45,24 @@ async function main() {
     process.exit(1);
   }
 
+  // SECURITY finding SEC-LOW-2: a malformed --threshold (e.g. "abc") must not silently
+  // become NaN, which would score every screen 'fail' rather than falling back to the
+  // function's own default.
+  let threshold;
+  if (args.threshold) {
+    threshold = Number(args.threshold);
+    if (!Number.isFinite(threshold) || threshold < 0 || threshold > 100) {
+      console.error(`Invalid --threshold '${args.threshold}': must be a finite number 0-100`);
+      process.exit(1);
+    }
+  }
+
   // scoreWireframeFidelity resolves its own Supabase/Anthropic clients internally
   // (setSupabaseClientLoader/setAnthropicClientLoader are the injectable seams used by
   // tests) -- no client construction needed here for the real CLI path.
   const result = await run({
     ventureId: args.venture_id,
-    threshold: args.threshold ? Number(args.threshold) : undefined,
+    threshold,
   });
 
   console.log(JSON.stringify(result, null, 2));
