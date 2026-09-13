@@ -1,4 +1,4 @@
-<!-- file_content_hash: 2de2c24d047b0824 -->
+<!-- file_content_hash: d76b1416334361da -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
@@ -66,6 +66,9 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 > Why: The /signal channel is documented only in CLAUDE_CORE.md, so workers loaded into a phase file (LEAD/PLAN/EXEC) without core never see when to send. Surfacing the trigger heuristic at every entry point makes the channel discoverable at the moment friction occurs, not 3+ workers and several recurrences later.
 11. **Sub-agent repo evidence** — sub-agents record their repo as `metadata.repo_path` + `executed_from_cwd`; there are NO top-level `repo_path`/`local_path` columns on `sub_agent_execution_results`. The canonical writer is `lib/sub-agents/resolve-repo.js` `applySubAgentRepoVerdict` — never hand-roll path columns. The `SUB_AGENT_REPO_RESOLUTION` gate compares `metadata->>repo_path` to `applications.local_path` via the `v_sub_agent_repo_compliance` view.
 > Why: Folklore in older prompts/memories said to store top-level `repo_path`/`local_path`; following it produces malformed evidence the gate cannot read. Code, gate, view and the results-table columns were all verified correct (bbe5451d / RCA 9d33b954 — PROTOCOL_PROCESS guidance-vs-columns drift), so this prologue line is the authoritative contract.
+12. **Stage-gate predicate ARMED and the high-consequence gate flags graduated together (chairman-ratified 2026-09-12, ratification b75ddfff)** — Chairman by verified SMS 2026-09-12 16:00:30Z (sms_relay_staging 2a2fac91, signature valid), verbatim "A", answering decision packet 6cb60a30 (option A: arm STAGE_GATE_PREDICATE_ARMED and graduate LEO_HIGH_CONSEQUENCE_GATES_ENABLED together with HIGH_CONSEQUENCE_STAGE_CUTOVER_ENABLED), the ratification sitting SD-LEO-INFRA-STAGE-GATE-PREDICATE-001 (2026-08-25) required before arming. Standing effect: `checkStageGate` (lib/governance/stage-gate-predicate.js) is the enforced predicate on high-consequence venture stage transitions — it blocks on `launch_mode !== 'live'` and on the predicate's own failing limbs, by design, not as a defect to retune; the three flags are governed data in `leo_feature_flags` and carry this ratification as their provenance, so a seat that finds one of them off reads it as a chairman-level change to re-surface (a chairman decision), never a switch to flip in lane; the execution of the arming and graduations rode QF-20260906-235 and SD-LEO-FIX-FLAG-GOVERNANCE-REVIEW-001 (PR #8781), with the apply readback on decision 6cb60a30. Companion clause: PATH_INTEGRITY_EXIT_GATE_ENFORCE (a separate flag, off) is the same class and reaches the chairman the same way.
+> Why: A predicate that can be armed or disarmed in lane is a printed discriminator, not an enforced gate. Binding the armed state to a chairman ratification makes every later reader (worker, coordinator, Solomon, Adam) treat a disarmed reading as a governance event to escalate, which is the only state in which the gate's verdicts mean anything.
+
 
 ## AUTO-PROCEED Mode
 
@@ -200,4 +203,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-09-02 9:02:37 PM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-09-13 8:17:53 AM | Protocol: LEO 4.4.1 | Source: Database*

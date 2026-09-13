@@ -11,6 +11,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { runTriageGate } from '../triage-gate.js';
 import { runPostWriteStage, POST_WRITE_STAGE_TIMEOUT_EXIT_CODE } from '../../../lib/completion/post-write-stage.js';
+import { mergeMetadataKeys } from '../../../lib/coordinator/safe-metadata-merge.mjs';
 
 import {
   buildSDDescription,
@@ -228,17 +229,55 @@ export async function tagSourceItems(items, sdKey) {
     } else if (item.source_type === 'feedback') {
       // SD-LEARN-FIX-011: Feedback items - tag via resolution_sd_id
       const feedbackId = item.source_id || item.id?.replace('FB-', '');
-      if (feedbackId && feedbackId.length > 8) {
-        // Try to find the full UUID from the truncated ID
+      // QF-20260912-159: feedback.id is uuid-typed -- Postgres has no ilike/~~* operator for
+      // uuid, so the prior `.ilike('id', \`${feedbackId}%\`)` always threw 'operator does not
+      // exist: uuid ~~*', silently swallowed below and printed as a warning. context-builder.js
+      // always sets source_id to the row's real uuid, so feedbackId here IS the full uuid in
+      // every reachable case -- an exact match, never a pattern match.
+      const isFullUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(feedbackId || '');
+      if (feedbackId && isFullUuid) {
         const { error } = await supabase
           .from('feedback')
           .update({ resolution_sd_id: sdKey, updated_at: now })
-          .ilike('id', `${feedbackId}%`);
+          .eq('id', feedbackId);
 
         if (error) {
           console.log(`   ⚠️  Feedback ${feedbackId}: Could not tag (${error.message})`);
+          results.errors.push({ id: feedbackId, table: 'feedback', error: error.message });
+          results.success = false;
         } else {
           results.tagged++;
+        }
+      } else if (feedbackId && item.created_at) {
+        // A genuinely truncated id (no full uuid available): resolve it via a real predicate
+        // (this item's own created_at, carried from the row it was built from -- see
+        // context-builder.js) rather than an ilike against the uuid column, then confirm the
+        // prefix in JavaScript before tagging.
+        const { data: candidates, error: lookupError } = await supabase
+          .from('feedback')
+          .select('id')
+          .eq('created_at', item.created_at)
+          .limit(10);
+        const match = (candidates || []).find((row) => row.id.startsWith(feedbackId));
+
+        if (lookupError || !match) {
+          const reason = lookupError?.message || 'no feedback row matched the truncated id + created_at';
+          console.log(`   ⚠️  Feedback ${feedbackId}: Could not tag (${reason})`);
+          results.errors.push({ id: feedbackId, table: 'feedback', error: reason });
+          results.success = false;
+        } else {
+          const { error } = await supabase
+            .from('feedback')
+            .update({ resolution_sd_id: sdKey, updated_at: now })
+            .eq('id', match.id);
+
+          if (error) {
+            console.log(`   ⚠️  Feedback ${feedbackId}: Could not tag (${error.message})`);
+            results.errors.push({ id: feedbackId, table: 'feedback', error: error.message });
+            results.success = false;
+          } else {
+            results.tagged++;
+          }
         }
       } else {
         console.log(`   ✅ Feedback ${item.id}: Linked to SD`);
@@ -413,6 +452,22 @@ export async function executeSDCreationWorkflow(reviewedContext, decisions, crea
   const tagResult = tagStage.ok ? tagStage.result : { success: false, tagged: 0, errors: [tagStage.error?.message || 'timed out'] };
   if (!tagResult.success) {
     console.warn('Warning: Some items could not be tagged:', tagResult.errors);
+  }
+  // QF-20260912-159 (b): a failed tag must be visible on the SD row, not only in a console
+  // line that scrolls away -- an atomic partial merge (never touches any other metadata key,
+  // including one a concurrent writer just set). Wrapped in runPostWriteStage like every
+  // other post-write step in this function (QF-20260912-150): the SD row already persisted,
+  // so a hang here must never block the caller past its external kill timeout either.
+  if (Array.isArray(tagResult.errors) && tagResult.errors.length > 0) {
+    const tagFailureStage = await runPostWriteStage(
+      'persistTagFailures',
+      () => mergeMetadataKeys(sdKey, { tag_failures: tagResult.errors }),
+    );
+    if (tagFailureStage.timedOut) process.exitCode = POST_WRITE_STAGE_TIMEOUT_EXIT_CODE;
+    const mergeOutcome = tagFailureStage.ok ? tagFailureStage.result : null;
+    if (!mergeOutcome?.merged) {
+      console.warn(`Warning: could not persist tag_failures onto ${sdKey}: ${mergeOutcome?.error || tagFailureStage.error?.message || 'timed out'}`);
+    }
   }
 
   // 6. Create decision record

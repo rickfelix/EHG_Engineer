@@ -1,15 +1,15 @@
 {
-  "generated_at": "2026-09-13T01:29:54.339Z",
-  "git_commit": "b314e99b",
+  "generated_at": "2026-09-13T12:17:53.762Z",
+  "git_commit": "7ea715fa",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 20246,
-      "bytes": 20385,
-      "estimated_tokens": 5062,
-      "content_hash": "2de2c24d047b0824",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-148\\CLAUDE.md"
+      "chars": 21939,
+      "bytes": 22082,
+      "estimated_tokens": 5485,
+      "content_hash": "d76b1416334361da",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "6816c22f75648b66",
+    "global": "ac25ecf15a65f6ab",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -274,7 +274,7 @@
       "206": "630e37f49e96fd34",
       "207": "e445b9976ac071e4",
       "208": "a7d1a5ecfdf8499c",
-      "209": "1ae226bdd12ed412",
+      "209": "89b974408f1b7908",
       "210": "3d8916656964ed7f",
       "211": "5d137550e1e954b7",
       "212": "53916ba04560d9cf",
