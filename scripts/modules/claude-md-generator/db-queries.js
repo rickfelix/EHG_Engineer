@@ -399,14 +399,20 @@ async function getVisionGapInsights(supabase, limit = 3) {
       .select('pattern_id, issue_summary, category, severity')
       .like('pattern_id', 'VGAP-%')
       .eq('status', 'active')
-      .order('severity', { ascending: true }) // critical sorts first alphabetically
-      .limit(limit);
+      // PAT-LES-b991f4c09c40: PostgREST's .order() sorts by raw column value, which for a
+      // string severity column is alphabetical (critical, high, low, medium) — 'low' sorts
+      // ahead of 'medium', the wrong urgency order. .order() cannot express a CASE-based rank,
+      // so this fetches an overfetched, unordered batch and ranks it in JS below instead.
+      .limit(Math.max(limit * 10, 50));
 
     if (error) {
       console.warn(`[vision-gap-insights] Query failed: ${error.message} — continuing without gaps`);
       return [];
     }
-    return data ?? [];
+    const rows = data ?? [];
+    const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
+    rows.sort((a, b) => (SEVERITY_RANK[a.severity] ?? 99) - (SEVERITY_RANK[b.severity] ?? 99));
+    return rows.slice(0, limit);
   } catch (err) {
     console.warn(`[vision-gap-insights] Unexpected error: ${err.message} — continuing without gaps`);
     return [];

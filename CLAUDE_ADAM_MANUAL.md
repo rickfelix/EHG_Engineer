@@ -1,8 +1,8 @@
-<!-- file_content_hash: dde68749056ac620 -->
+<!-- file_content_hash: aabc8fcbd819de9a -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM_MANUAL.md — Adam Manual (how-to companion)
 
-**Generated**: 2026-09-12 11:13:24 PM
+**Generated**: 2026-09-13 9:29:54 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — SD creation field shapes, migration ceremony steps, gauge inputs
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -214,6 +214,6 @@ It defines the 5 bounding rules that keep 3-party (Adam/Solomon/coordinator) com
 
 ---
 
-*Generated from database: 2026-09-12*
+*Generated from database: 2026-09-13*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_manual, quick_fixes_schema_traps). Do not hand-edit — edit the DB section and regenerate.*
