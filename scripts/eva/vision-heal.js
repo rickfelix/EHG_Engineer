@@ -27,6 +27,7 @@ import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { ensureFresh, getGitMeta, warnIfWorktree } from './git-freshness.js';
+import { resolveDimensionIdentity } from '../../lib/eva/dimension-ids.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -146,10 +147,21 @@ async function cmdPersist(scoreJson, visionKey = DEFAULT_VISION_KEY, archKey = D
     .eq('plan_key', archKey)
     .single();
 
-  // Build dimension_scores JSONB with weights
+  // Build dimension_scores JSONB with weights.
+  // SD-LEO-INFRA-VISION-ARCHITECTURE-DIMENSION-001 (FR-2/FR-5): `id` on each
+  // ref stays the positional code (matches what dim.id from parsed.dimensions
+  // is expected to be — this persists to eva_vision_scores.dimension_scores,
+  // read by lib/handoff/threshold-resolver.js's identifyRubric()); the
+  // dimension's own stable id (if any) is preserved separately as stableId.
   const allDims = [
-    ...(vision.extracted_dimensions || []).map((d, i) => ({ ...d, id: `V${String(i + 1).padStart(2, '0')}` })),
-    ...(arch.extracted_dimensions || []).map((d, i) => ({ ...d, id: `A${String(i + 1).padStart(2, '0')}` })),
+    ...(vision.extracted_dimensions || []).map((d, i) => {
+      const { positionalId, stableId, idKind } = resolveDimensionIdentity(d, i, 'V');
+      return { ...d, id: positionalId, stableId, idKind };
+    }),
+    ...(arch.extracted_dimensions || []).map((d, i) => {
+      const { positionalId, stableId, idKind } = resolveDimensionIdentity(d, i, 'A');
+      return { ...d, id: positionalId, stableId, idKind };
+    }),
   ];
 
   const dimensionScores = {};
@@ -162,6 +174,8 @@ async function cmdPersist(scoreJson, visionKey = DEFAULT_VISION_KEY, archKey = D
       reasoning: dim.reasoning,
       gaps: dim.gaps || [],
       source: dim.id.startsWith('V') ? 'vision' : 'architecture',
+      stable_id: ref?.stableId ?? null,
+      id_kind: ref?.idKind ?? 'positional_fallback',
     };
   }
 

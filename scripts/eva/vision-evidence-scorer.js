@@ -30,6 +30,7 @@ import { ensureFresh, getGitMeta, warnIfWorktree } from './git-freshness.js';
 // SD-LEO-INFRA-VENTURE-RUBRIC-SEMANTIC-001 (FR-1/FR-2/FR-3): venture-aware rubric path
 import { computeCacheKey, getCachedRubrics, setCachedRubrics } from '../../lib/eva/rubric-cache.js';
 import { generateVentureRubrics } from '../../lib/eva/rubric-generator.js';
+import { resolveDimensionIdentity } from '../../lib/eva/dimension-ids.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '../../.env') });
@@ -274,30 +275,36 @@ async function main() {
   });
   console.log(`   ${rubricSource}: ${rubrics.size} rubrics`);
 
-  // 3. Build dimension weight map from DB metadata
+  // 3. Build dimension weight map from DB metadata.
+  // SD-LEO-INFRA-VISION-ARCHITECTURE-DIMENSION-001 (FR-5): `id` stays the positional code --
+  // this persists into eva_vision_scores.dimension_scores below (Surface A, read by
+  // lib/handoff/threshold-resolver.js's identifyRubric()), so its format cannot change.
+  // `rubricKey` is the NEW, additive lookup key used only to find this dimension's rubric
+  // (Surface B: the restored scripts/eva/evidence-rubrics/ files are keyed by stable id --
+  // FR-6 -- since the positional code is exactly what drifted and broke the V03/V04 match).
+  // SECURITY review (EXEC-TO-PLAN) found vision and arch dimension NAMES collide in practice
+  // (22% of live pairs, e.g. "exit-readiness" exists on both sides) -- rubricKey is namespaced
+  // by side (V:/A:) so a vision dimension can never resolve to an arch rubric or vice versa.
   const dbDimensions = [
-    ...(vision.extracted_dimensions || []).map((d, i) => ({
-      id: `V${String(i + 1).padStart(2, '0')}`,
-      name: d.key || d.name,
-      weight: d.weight || 0,
-      source: 'vision',
+    ...(vision.extracted_dimensions || []).map((d, i) => {
+      const { positionalId, stableId } = resolveDimensionIdentity(d, i, 'V');
+      return { id: positionalId, stableId, rubricKey: stableId ? `V:${stableId}` : null, name: d.key || d.name, weight: d.weight || 0, source: 'vision' };
+    }),
+    ...((arch?.extracted_dimensions || []).map((d, i) => {
+      const { positionalId, stableId } = resolveDimensionIdentity(d, i, 'A');
+      return { id: positionalId, stableId, rubricKey: stableId ? `A:${stableId}` : null, name: d.key || d.name, weight: d.weight || 0, source: 'architecture' };
     })),
-    ...((arch?.extracted_dimensions || []).map((d, i) => ({
-      id: `A${String(i + 1).padStart(2, '0')}`,
-      name: d.key || d.name,
-      weight: d.weight || 0,
-      source: 'architecture',
-    }))),
   ];
 
-  const weightMap = new Map(dbDimensions.map(d => [d.id, d]));
-
-  // 4. Run checks for each rubric
+  // 4. Run checks for each dimension that has a matching rubric (by namespaced stable id;
+  // falls back to the positional code for a dimension not yet backfilled with a stable id --
+  // matching a rubric that happens to still be keyed that way, which none are post-FR-6
+  // restore, so this degrades safely to "no rubric match" rather than a wrong match).
   const dimensionResults = [];
-  for (const [dimId, rubric] of rubrics) {
-    const dbDim = weightMap.get(dimId);
-    if (!dbDim) {
-      console.warn(`   Rubric ${dimId} has no matching DB dimension — skipping`);
+  for (const dbDim of dbDimensions) {
+    const rubric = (dbDim.rubricKey && rubrics.get(dbDim.rubricKey)) || rubrics.get(dbDim.id);
+    if (!rubric) {
+      console.warn(`   Dimension ${dbDim.id} (${dbDim.name}) has no matching rubric -- skipping`);
       continue;
     }
 
@@ -308,7 +315,8 @@ async function main() {
     const gaps = generateGaps(checkResults);
 
     dimensionResults.push({
-      id: dimId,
+      id: dbDim.id,
+      stableId: dbDim.stableId,
       name: dbDim.name,
       score,
       weight: dbDim.weight,
@@ -319,10 +327,10 @@ async function main() {
     });
 
     // Display progress
-    const bar = '\u2588'.repeat(Math.round(score / 10)) + '\u2591'.repeat(10 - Math.round(score / 10));
+    const bar = '█'.repeat(Math.round(score / 10)) + '░'.repeat(10 - Math.round(score / 10));
     const status = score >= ACCEPT_THRESHOLD ? 'PASS' : score >= 70 ? 'WARN' : 'FAIL';
-    const src = dimId.startsWith('V') ? 'V' : 'A';
-    console.log(`   ${dimId} [${src}] ${bar} ${String(score).padStart(3)}/100 ${status} ${dbDim.name}`);
+    const src = dbDim.source === 'vision' ? 'V' : 'A';
+    console.log(`   ${dbDim.id} [${src}] ${bar} ${String(score).padStart(3)}/100 ${status} ${dbDim.name}`);
 
     if (args.verbose) {
       for (const c of checkResults) {
@@ -379,6 +387,8 @@ async function main() {
         reasoning: dim.reasoning,
         gaps: dim.gaps,
         source: dim.source,
+        stable_id: dim.stableId ?? null,
+        id_kind: dim.stableId ? 'stable' : 'positional_fallback',
       };
     }
 

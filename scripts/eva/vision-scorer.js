@@ -28,6 +28,7 @@ import { GRADE } from '../../lib/standards/grade-scale.js';
 import { publishVisionEvent, VISION_EVENTS, registerVisionScoredHandlers } from '../../lib/eva/event-bus/index.js';
 import { aggregateFeedbackQuality } from '../../lib/eva/feedback-dimension-aggregator.js';
 import { sanitizeSDForScoring } from '../../lib/eva/input-sanitizer.js';
+import { resolveDimensionIdentity } from '../../lib/eva/dimension-ids.js';
 
 dotenv.config();
 
@@ -197,14 +198,24 @@ async function loadSDContext(supabase, sdKey) {
  * @param {string} prefix - 'V' for vision, 'A' for architecture
  * @returns {Array}
  */
-function dimensionsToCriteria(dimensions, prefix) {
-  return dimensions.map((dim, i) => ({
-    id: `${prefix}${String(i + 1).padStart(2, '0')}`,
-    name: dim.name,
-    weight: dim.weight || (1 / dimensions.length),
-    description: dim.description,
-    source_section: dim.source_section || '',
-  }));
+export function dimensionsToCriteria(dimensions, prefix) {
+  return dimensions.map((dim, i) => {
+    const { positionalId, stableId, idKind } = resolveDimensionIdentity(dim, i, prefix);
+    return {
+      // SD-LEO-INFRA-VISION-ARCHITECTURE-DIMENSION-001 (FR-2): id stays the
+      // positional code — eva_vision_scores.dimension_scores is read by
+      // lib/handoff/threshold-resolver.js's identifyRubric() (LEAD-TO-PLAN/
+      // PLAN-TO-LEAD gates) and 3 other consumers via a /^[VA]\d{2}$/ match,
+      // so this key format must not change. stableId/idKind are additive.
+      id: positionalId,
+      stableId,
+      idKind,
+      name: dim.name,
+      weight: dim.weight || (1 / dimensions.length),
+      description: dim.description,
+      source_section: dim.source_section || '',
+    };
+  });
 }
 
 /**
@@ -563,6 +574,11 @@ ${rawResponse.substring(0, 1000)}`;
       reasoning: dim.reasoning,
       gaps: dim.gaps || [],
       source: dim.id.startsWith('V') ? 'vision' : 'architecture',
+      // SD-LEO-INFRA-VISION-ARCHITECTURE-DIMENSION-001 (FR-2): additive only —
+      // dim.id (the object key) stays positional; stable_id/id_kind let a
+      // future consumer resolve this dimension without depending on position.
+      stable_id: criterion?.stableId ?? null,
+      id_kind: criterion?.idKind ?? 'positional_fallback',
     };
   }
 
@@ -813,6 +829,11 @@ async function runPersistMode(sdKey, visionKey, archKey, scoreJson) {
       reasoning: dim.reasoning,
       gaps: dim.gaps || [],
       source: dim.id.startsWith('V') ? 'vision' : 'architecture',
+      // SD-LEO-INFRA-VISION-ARCHITECTURE-DIMENSION-001 (FR-2): additive only —
+      // dim.id (the object key) stays positional; stable_id/id_kind let a
+      // future consumer resolve this dimension without depending on position.
+      stable_id: criterion?.stableId ?? null,
+      id_kind: criterion?.idKind ?? 'positional_fallback',
     };
   }
 
