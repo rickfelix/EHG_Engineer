@@ -25,16 +25,30 @@ const silentLogger = { info: () => {}, warn: () => {} };
 // Minimal chainable Supabase mock: every builder method returns the same thenable,
 // and awaiting it resolves to the per-table result. A single result object serves a
 // table's select/update/insert (length-based reads + error-based writes).
-function makeQuery(result) {
+//
+// `.single()` is special-cased (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G, FR-2): writeArtifact()
+// now backs persistPrelaunchGrowthPlaybook's inserts, and it does `.insert(...).select('id').single()`,
+// requiring `{data: {id}, error}` — distinct from the array-shaped `result` the idempotency probe's
+// plain `.limit(1)` read expects (`(data || []).length`). Resolving `.single()` to its own row shape
+// (mirroring `result.error` so an error-path test still sees the error) keeps both read shapes correct
+// off the same mocked table.
+function makeQuery(result, onInsert) {
   const q = {};
-  for (const m of ['select', 'eq', 'in', 'update', 'insert', 'order', 'limit', 'maybeSingle', 'single']) {
+  for (const m of ['select', 'eq', 'in', 'update', 'order', 'limit', 'maybeSingle']) {
     q[m] = vi.fn(() => q);
   }
+  q.insert = vi.fn((row) => {
+    onInsert?.(row);
+    return q;
+  });
+  q.single = vi.fn(() => ({
+    then: (resolve) => resolve(result.error ? { data: null, error: result.error } : { data: { id: 'new-artifact-id' }, error: null }),
+  }));
   q.then = (resolve) => resolve(result);
   return q;
 }
-function makeSupabase(byTable) {
-  return { from: vi.fn((t) => makeQuery(byTable[t] ?? { data: [], error: null })) };
+function makeSupabase(byTable, { onInsert } = {}) {
+  return { from: vi.fn((t) => makeQuery(byTable[t] ?? { data: [], error: null }, onInsert)) };
 }
 
 function setupLLM(json) {
@@ -100,7 +114,8 @@ describe('runPrelaunchGrowthCoOutput (FR-004)', () => {
 
   it('persists the growth_playbook + growth_optimization_roadmap pair on the happy path', async () => {
     setupLLM(VALID_PLAYBOOK);
-    const supabase = makeSupabase({ venture_artifacts: { data: [], error: null } });
+    const insertedRows = [];
+    const supabase = makeSupabase({ venture_artifacts: { data: [], error: null } }, { onInsert: (row) => insertedRows.push(row) });
     const out = await runPrelaunchGrowthCoOutput({
       supabase, ventureId: 'v1', ventureName: 'Acme',
       context: { gtm_strategy: { channels: ['x'] }, personas: { seg: 'a' } }, logger: silentLogger,
@@ -108,6 +123,13 @@ describe('runPrelaunchGrowthCoOutput (FR-004)', () => {
     expect(out.status).toBe('ok');
     expect(out.types).toEqual(['growth_playbook', 'growth_optimization_roadmap']);
     expect(supabase.from).toHaveBeenCalledWith('venture_artifacts');
+
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-2/TS-4): now routed through
+    // writeArtifact(), both rows carry a provenance stamp and non-null content.
+    const playbookRow = insertedRows.find((r) => r.artifact_type === 'growth_playbook');
+    expect(playbookRow.metadata.machine_provenance.producer).toBe('prelaunch-growth-playbook');
+    expect(playbookRow.metadata.machine_provenance.content_hash).toBeTruthy();
+    expect(playbookRow.content).not.toBeNull();
   });
 
   it('never throws even when Supabase access throws (fail-safe: no duplicate, graceful status)', async () => {
