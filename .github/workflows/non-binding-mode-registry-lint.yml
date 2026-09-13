@@ -1,0 +1,50 @@
+name: Non-Binding Mode Registry Lint
+
+# SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-E (FR-2).
+# Asserts every known non-binding venture-quality mechanism (a curated, explicit list --
+# see scripts/lint/non-binding-mode-registry-lint.mjs's NON_BINDING_MODES, never a
+# heuristic diff scan) has a matching leo_feature_flags registry row. ENFORCED from day
+# one (no continue-on-error): the curated registry starts at zero known violations, and
+# growing coverage is a deliberate, reviewed addition to the curated list, never an
+# automatic scan that could false-positive on unrelated code.
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/bridge/customer-facing-design-detector.js'
+      - 'lib/eva/lifecycle/thesis-kill-gate.js'
+      - 'lib/eva/quality-findings/finding-shape.js'
+      - 'lib/eva/stage-templates/analysis-steps/stage-20-code-quality.js'
+      - 'scripts/lint/non-binding-mode-registry-lint.mjs'
+      - 'database/migrations/*non_binding_mode*.sql'
+      - '.github/workflows/non-binding-mode-registry-lint.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: non-binding-mode-registry-lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  non-binding-mode-registry-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Assert secrets present
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          [ -n "$SUPABASE_URL" ] || { echo "[NON_BINDING_LINT_INFRA_ERROR] SUPABASE_URL missing"; exit 2; }
+          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo "[NON_BINDING_LINT_INFRA_ERROR] SUPABASE_SERVICE_ROLE_KEY missing"; exit 2; }
+      - run: npm ci --no-audit --no-fund
+      - name: Run non-binding-mode-registry-lint
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/lint/non-binding-mode-registry-lint.mjs
