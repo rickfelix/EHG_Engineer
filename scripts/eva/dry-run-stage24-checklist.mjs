@@ -11,6 +11,7 @@
  * Usage:
  *   node scripts/eva/dry-run-stage24-checklist.mjs --venture-id <uuid>
  *   node scripts/eva/dry-run-stage24-checklist.mjs --venture-name "AltifyAI"
+ *   npm run eva:stage24-dry-run -- --venture-id <uuid>
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
