@@ -51,7 +51,7 @@ describe('computeStage20Verdict — experience-category WARN cap', () => {
     expect(verdict).toBe('FAIL');
   });
 
-  it('WARN_CAPPED_CATEGORIES matches exactly the three experience categories', () => {
-    expect(WARN_CAPPED_CATEGORIES).toEqual(['usability', 'accessibility', 'journey_coherence']);
+  it('WARN_CAPPED_CATEGORIES matches exactly the three experience categories plus the two venture-quality-baseline categories (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A)', () => {
+    expect(WARN_CAPPED_CATEGORIES).toEqual(['usability', 'accessibility', 'journey_coherence', 'performance', 'responsive']);
   });
 });

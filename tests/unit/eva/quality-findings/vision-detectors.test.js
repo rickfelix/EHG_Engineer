@@ -31,8 +31,8 @@ import {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('FR-E FR-1 — FINDING_CATEGORIES enum extension', () => {
-  test('FINDING_CATEGORIES has 15 entries (12 after FR-E, +3 experience categories from SD-LEO-FEAT-STAGE-EXPERIENCE-DESIGN-001)', () => {
-    expect(FINDING_CATEGORIES.length).toBe(15);
+  test('FINDING_CATEGORIES has 17 entries (12 after FR-E, +3 experience categories from SD-LEO-FEAT-STAGE-EXPERIENCE-DESIGN-001, +2 baseline categories from SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A)', () => {
+    expect(FINDING_CATEGORIES.length).toBe(17);
   });
 
   test('FINDING_CATEGORIES includes feedback_widget_present and error_capture_wired', () => {
