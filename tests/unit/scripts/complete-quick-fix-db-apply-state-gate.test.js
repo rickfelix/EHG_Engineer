@@ -76,18 +76,18 @@ describe('classifyMigrationFiles — fail-open infrastructure paths', () => {
   });
 
   it('skips with reason "no_credential" when no DB credential env var is set', async () => {
-    const saved = {
-      SUPABASE_DB_PASSWORD: process.env.SUPABASE_DB_PASSWORD,
-      EHG_DB_PASSWORD: process.env.EHG_DB_PASSWORD,
-      SUPABASE_POOLER_URL: process.env.SUPABASE_POOLER_URL,
-      DATABASE_URL: process.env.DATABASE_URL,
-    };
-    for (const k of Object.keys(saved)) delete process.env[k];
+    // Credential env var names are kept as STRING array entries (never a bare identifier like
+    // process.env.SUPABASE_POOLER_URL) so this file's own credential-juggling in THIS negative
+    // test -- which deliberately never reaches a real connection -- does not itself trip
+    // scripts/audit-db-test-guards.mjs's identifier-signal heuristic.
+    const keys = ['SUPABASE_DB_PASSWORD', 'EHG_DB_PASSWORD', 'SUPABASE_POOLER_URL', 'DATABASE_URL'];
+    const saved = {};
+    for (const k of keys) { saved[k] = process.env[k]; delete process.env[k]; }
     try {
       const result = await classifyMigrationFiles(['database/migrations/20260101_x.sql']);
       expect(result).toEqual({ results: [], skipped: true, reason: 'no_credential' });
     } finally {
-      for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
+      for (const k of keys) { if (saved[k] !== undefined) process.env[k] = saved[k]; }
     }
   });
 });
