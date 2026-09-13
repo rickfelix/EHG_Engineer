@@ -81,6 +81,9 @@ import { readHoldStateMode, isStructuredPredicate } from '../lib/governance/hold
 import { classifyReleaseConditions } from '../lib/governance/release-condition-predicate.js';
 import { scanOpenQfsForOffCanonicalMints } from '../lib/fleet/off-canonical-mint-gauge.js';
 import { runCheck as checkWindDownRecurrence } from './gauges/wind-down-recurrence-check.mjs';
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-D (X3): experience-review coverage for active
+// ventures at stage>=20.
+import { runCheck as checkExperienceReviewCoverage } from './gauges/experience-review-coverage-check.mjs';
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: the hold-state-overdue detector's
 // .limit(5000) still silently re-clamps to the PostgREST 1000-row cap on a table with 5000+ live
 // SDs -- exactly the false-negative risk this detector's own comment already flags. Paginate.
@@ -477,6 +480,10 @@ function buildDetectorResolvers(supabase) {
     'wind-down-recurrence': async () => {
       const result = await checkWindDownRecurrence({ supabase });
       return { ...result, count: result.alarmed ? 1 : 0 };
+    },
+    'experience-review-coverage': async () => {
+      const result = await checkExperienceReviewCoverage({ supabase });
+      return { ...result, count: result.uncoveredCount };
     },
     // SD-LEO-INFRA-RESTORE-AGENT-TOOL-001 (FR-4): task-subagent-recorder.cjs had ZERO rows in its
     // entire history before this SD (matcher/guard named 'Task' only + two independent field-name
