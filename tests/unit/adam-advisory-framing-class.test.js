@@ -118,7 +118,7 @@ describe('SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed routing in drainI
     expect(logs).toMatch(/routing:adam-sourcing/);
   });
 
-  it('TS-3/TS-7 (QF-20260912-245): unproven (missing or garbage framing_class) oracle rows flag fail-closed as a comms-quality record, never an escalation', async () => {
+  it('TS-3/TS-7 (QF-20260912-245, renamed QF-20260912-514): unclassified (missing or garbage framing_class) oracle rows flag fail-closed as a comms-quality record, never an escalation', async () => {
     const mock = makeTableMock({ inboxRows: [oracleRow('u1', null), oracleRow('u2', 'garbage')] });
     const { logs } = await drainWith(mock);
     expect(mock.flagInserts).toHaveLength(2);
@@ -194,13 +194,24 @@ describe('SD-LEO-INFRA-FW3-FRAMING-PLUMBING-001-C: fail-closed routing in drainI
     }
   });
 
-  it('FR-3: the comms-quality flag carries the framing context', async () => {
+  it('FR-3 (renamed QF-20260912-514): the comms-quality flag carries the framing context, recorded as unclassified not unproven', async () => {
     const mock = makeTableMock({ inboxRows: [oracleRow('c1', null, 'portfolio kill/scale reversal')] });
     await drainWith(mock);
     const row = mock.flagInserts[0];
     expect(row.metadata.advisory_row_id).toBe('c1');
-    expect(row.metadata.framing_class).toBe('unproven');
+    expect(row.metadata.framing_class).toBe('unclassified');
     expect(row.metadata.lane_analog).toBe('chairman-gated');
+    expect(row.description).toMatch(/unclassified framing/);
     expect(row.description).toMatch(/portfolio kill\/scale reversal/);
+  });
+
+  it('QF-20260912-514: a re-drain of a LEGACY unproven-recorded row is still idempotent (probe keys on advisory_row_id only)', async () => {
+    const mock = makeTableMock({
+      inboxRows: [oracleRow('legacy1', null)],
+      flagProbeRows: [{ id: 'fb-legacy' }], // pre-existing row, recorded back when the value was still 'unproven'
+    });
+    const { logs } = await drainWith(mock);
+    expect(mock.flagInserts).toHaveLength(0); // probe found existing -> skip, regardless of the legacy value
+    expect(logs).toMatch(/routing:comms-quality-record/);
   });
 });

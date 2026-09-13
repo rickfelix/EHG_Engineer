@@ -666,7 +666,12 @@ async function recordFramingEscalation(supabase, r, routed) {
     const res = await emitFeedback({
       supabase,
       title: `Framing flag (${routed.reason}): ${String(body).slice(0, 90) || '(no body)'}`,
-      description: `Inter-role advisory flagged as ${(r.payload && r.payload.framing_class) || 'unproven'} framing `
+      // QF-20260912-514 (FIX SHAPE b): 'unclassified' replaces 'unproven' -- the sender never
+      // declared a class, so this is an honest THIRD STATE beside instrument/pick, not a
+      // verdict that was measured and failed. The idempotency probe above keys on
+      // advisory_row_id alone (never on this value), so a re-drain of a legacy 'unproven' row
+      // is already a no-op regardless of which label either write used.
+      description: `Inter-role advisory flagged as ${(r.payload && r.payload.framing_class) || 'unclassified'} framing `
         + `(reason: ${routed.reason}, lane analog: ${routed.laneAnalog}).\n\nExcerpt:\n${String(body).slice(0, 400)}`,
       type: 'issue',
       category: 'comms_quality',
@@ -676,7 +681,7 @@ async function recordFramingEscalation(supabase, r, routed) {
       dedup_key: `framing:${String(r.id)}`,
       metadata: {
         advisory_row_id: String(r.id),
-        framing_class: (r.payload && r.payload.framing_class) || 'unproven',
+        framing_class: (r.payload && r.payload.framing_class) || 'unclassified',
         reason: routed.reason,
         lane_analog: routed.laneAnalog,
         sender_session: r.sender_session || null,
@@ -843,6 +848,12 @@ async function drainInbox(supabase, sessionId, { quiet = false, background = fal
     // 1,473 measured 2026-09-12) is comms-quality noise, not a decision: it keeps the existing
     // feedback-only recordFramingEscalation, now rendered routing:comms-quality-record so a
     // reader is never told an escalation happened when it did not.
+    // QF-20260912-514: the RECORDED metadata.framing_class value for this case is now
+    // 'unclassified', not 'unproven' -- 'unproven' read as a verdict on the send (as if
+    // measured and failed) when it was only ever a default for a value the sender never
+    // stamped. routeFraming()'s own internal reason string stays 'unproven' (a separate,
+    // pinned contract -- tests/unit/governance/fw3-framing-router.test.js); only the
+    // human-facing recorded/rendered label changed.
     const framingClass = r.payload && r.payload.framing_class;
     const framingTag = framingClass ? ` framing:${framingClass}` : '';
     const routed = routeFraming(r);
