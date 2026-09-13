@@ -55,4 +55,35 @@ describe('runPostWriteStage', () => {
     await runPostWriteStage('quickTimeout', () => new Promise(() => {}), { timeoutMs: 10, log });
     expect(Date.now() - start).toBeLessThan(500);
   });
+
+  // QF-20260913-273: fn() used to be called directly (`const fnPromise = fn();`), so a caller
+  // passing a thenable with no .catch method (e.g. a raw Supabase PostgrestFilterBuilder --
+  // PromiseLike, but not a real Promise) crashed on the very next line's `fnPromise.catch(...)`
+  // with 'fnPromise.catch is not a function', escalating a best-effort post-write step into a
+  // process-ending TypeError. scripts/modules/learning/sd-creation.js:430 hit this on
+  // essentially every /learn auto-approve that created an SD.
+  it('(QF-20260913-273) a thenable-without-catch (e.g. a raw Supabase query builder) resolves through the stage instead of throwing', async () => {
+    const log = vi.fn();
+    // Mimics a PostgrestFilterBuilder: thenable (has .then), but no .catch/.finally.
+    const thenableOnly = () => ({
+      then(resolve) { resolve({ data: null, error: null }); },
+    });
+    const result = await runPostWriteStage('thenableStage', thenableOnly, { log });
+    expect(result.ok).toBe(true);
+    expect(result.timedOut).toBe(false);
+    expect(result.result).toEqual({ data: null, error: null });
+  });
+
+  // QF-20260913-273: a SYNCHRONOUS throw inside fn (before any await) used to escape
+  // runPostWriteStage entirely -- `const fnPromise = fn();` ran outside the function's own
+  // try/catch (which starts on the next-but-one line), so the throw propagated straight out of
+  // runPostWriteStage uncaught, defeating the whole "never block/crash the caller" contract.
+  it('(QF-20260913-273) a synchronous throw inside fn returns ok:false instead of escaping runPostWriteStage', async () => {
+    const log = vi.fn();
+    const syncThrower = () => { throw new Error('sync boom'); };
+    const result = await runPostWriteStage('syncThrowStage', syncThrower, { log });
+    expect(result.ok).toBe(false);
+    expect(result.timedOut).toBe(false);
+    expect(result.error.message).toBe('sync boom');
+  });
 });
