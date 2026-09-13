@@ -5,6 +5,7 @@
 
 - [2026-09-13](#2026-09-13)
   - [Infrastructure](#infrastructure)
+  - [Bugfix](#bugfix-13)
 - [2026-09-12](#2026-09-12)
   - [Infrastructure](#infrastructure-12)
   - [Security](#security-2)
@@ -211,6 +212,14 @@
   - New scheduled step `scripts/cron/publish-outcome-observer.mjs` (30-min cadence) sweeps `outcome='unknown'` ledger rows and classifies each via a real X/Bluesky lookup (`lib/marketing/observer/observe-outcome.js`) — never self-reported by `publish()` itself. Both adapters were hardened to recognize their platform's actual not-found response shape (X: HTTP 200 with an `errors[]` array, not a 404; Bluesky: HTTP 400 + `RecordNotFound`, not a plain 404) rather than asserting existence from HTTP-ok alone. A fixed 24h observation window keeps a join-miss `'unknown'` (retried) instead of a premature terminal `'unmeasurable'`, since the human-paced approval-to-publish retry can lag by hours.
   - `evaluateGraduation` is now `execution_mode`-scoped so a mock-mode outcome can never graduate or demote a venture/channel's real autonomy state — closing a fail-open gap in the guard's own first fix attempt (`null`/`undefined`/`'dry_run'` all slipped through before the fix was tightened to `mode !== undefined && mode !== 'live'`).
   - See `docs/design/venture-demand-distribution-engine.md` §5 Child C and `docs/06_deployment/publish-outcome-observer-runbook.md` for the full architecture and operational detail.
+
+### Bugfix
+
+- **Closed AltifyAI's stage-23 UAT acceptance fence with real control-pack evidence, replacing a planned canary waiver with a genuinely-evaluated control** - SD-LEO-FIX-ALTIFYAI-STAGE-WALK-001 (PR #8837)
+  - `checkUatRobustnessGate` (`lib/eva/uat-robustness-gate.js`) — the mechanism the stage-23 acceptance fence actually reads — could never be satisfied: the existing rerun script never passed `stageNumber` to `runVentureJourneyWalk`, so `uat_test_runs.metadata.stage_number` stayed `null` on every run, and the walk's own control-pack evidence covered only 1 of 4 required controls. Fixed by threading `stageNumber:23` and assembling real `fence_two_sidedness` + `live_deployment_binding` evidence (ported Clerk-based UAT session-token minting, `lib/apa/altifyai-uat-session-token.mjs`; live GitHub Actions/nonce round-trip derivation, `lib/apa/stage23-control-pack-builder.mjs`).
+  - `canary_mutation_control` was originally planned as an explicit waiver, but a coordinator ruling (relaying an independent verdict) determined the control is a mutation test of the walker itself, not a product decision — built instead as a real, deterministic, expected-FAIL runner step (`lib/apa/altifyai-canary-step.mjs`) via a new `deps.canaryStep` seam in `lib/apa/journey-walk-orchestrator.js`, run outside the main walk's pass-rate bookkeeping.
+  - Also fixed a related bug in the same shared orchestrator: `deps.controlPackEvidence`'s fallback was a full-object replace rather than a merge, which would have silently zeroed out the `minimum_assertion_manifest` control for any caller supplying a partial evidence pack.
+  - 22 new unit tests, 3 updated, 0 regressions across the wider apa/uat/eva suite (630 files, 8113 tests).
 
 ## 2026-09-12
 
