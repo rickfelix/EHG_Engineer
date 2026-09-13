@@ -50,6 +50,10 @@ import { checkResolverFreshness, logResolverFreshnessBanner } from '../../../lib
 import { execSync } from 'child_process';
 import { applyCompletionReadbackGate, ClaimMalformedError } from '../../../lib/checkers/completion-readback-gate.mjs';
 import { ReadbackCheckError } from '../../../lib/checkers/readback-checker.mjs';
+// QF-20260912-758: refuse (or park) completion when a database/ file this QF touched is not
+// yet live -- the gate reuses the verifier's own classifier, never a shell-out.
+import { classifyMigrationFiles } from '../../verify-migration-apply-state.mjs';
+import { filterDatabaseFiles, findApplyStateBlockers, describeApplyPath } from './db-apply-state-gate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1016,6 +1020,39 @@ export async function completeQuickFix(qfId, options = {}) {
       }
     } catch (e) {
       console.warn(`\n⚠️  Unread-directive check failed (fail-open): ${e.message}`);
+    }
+  }
+
+  // QF-20260912-758: a database/ file this QF's PR touched must be LIVE, not merely merged, for
+  // completion to mean what it says. Fails open at the infrastructure layer (no DB credential,
+  // DB unreachable) -- this is visibility the harness currently lacks entirely, never a reason to
+  // block on its own unavailability. --force-complete bypasses it like every other gate here.
+  const dbFiles = filterDatabaseFiles(filesChanged);
+  if (dbFiles.length > 0 && !options.forceComplete) {
+    const applyCheck = await classifyMigrationFiles(dbFiles);
+    if (applyCheck.skipped) {
+      console.warn(`\n⚠️  DB apply-state check skipped (${applyCheck.reason}) — not blocking completion.`);
+    } else {
+      const blockers = findApplyStateBlockers(applyCheck.results);
+      if (blockers.length > 0) {
+        const lines = blockers.map((b) => `   - ${b.file} (${b.status}) — apply path: ${describeApplyPath(b.file)}`);
+        if (options.parkUntilApplied) {
+          const escalationReason = `[DB_APPLY_STATE_PENDING ${new Date().toISOString()}] Parked instead of completed: `
+            + `${blockers.length} database file(s) not yet live:\n${lines.join('\n')}`;
+          const { error: parkError } = await supabase.from('quick_fixes').update({ status: 'escalated', escalation_reason: escalationReason }).eq('id', qfId);
+          if (parkError) {
+            console.error(`\n❌ Failed to park ${qfId}: ${parkError.message}`);
+            process.exit(1);
+          }
+          console.log(`\n⏸️  Parked ${qfId} (status=escalated) — database file(s) not yet live:\n${lines.join('\n')}`);
+          return;
+        }
+        console.error(`\n❌ [DB_APPLY_STATE_PENDING] Refusing to mark ${qfId} completed — database file(s) not yet live:\n${lines.join('\n')}`);
+        console.error('   This PR merged, but its DB dependency has not been applied yet (QF-20260912-253 specimen).');
+        console.error('   Apply the file(s) above, then re-run complete-quick-fix to reconcile.');
+        console.error('   Override (audited): --force-complete --reason "<why>", or defer with --park-until-applied.\n');
+        process.exit(1);
+      }
     }
   }
 
