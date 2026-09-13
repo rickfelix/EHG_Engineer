@@ -6,11 +6,16 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { checkStageArtifactPrecondition } from '../../../lib/eva/stage-artifact-precondition.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../lib/eva/artifact-persistence-service.js';
 
 vi.mock('../../../lib/eva/deviation-ledger.js', () => ({
   readDeviations: vi.fn(),
 }));
 import { readDeviations } from '../../../lib/eva/deviation-ledger.js';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 function fakeSupabase({ metadata = {}, flagEnabled = false, canonicalArtifacts = [], legacyArtifacts = [], presentArtifacts = [], presentArtifactRows = null } = {}) {
   return {
@@ -116,7 +121,7 @@ describe('checkStageArtifactPrecondition: machine provenance (SD-LEO-INFRA-VENTU
     const sb = fakeSupabase({
       flagEnabled: true,
       canonicalArtifacts: ['canonical_a'],
-      presentArtifactRows: [{ artifact_type: 'canonical_a', metadata: null, created_at: '2026-09-14T00:00:00Z' }],
+      presentArtifactRows: [{ artifact_type: 'canonical_a', metadata: null, created_at: POST_CUTOVER }],
     });
     const result = await checkStageArtifactPrecondition(sb, 'v1', 22);
     expect(result.blocked).toBe(false);

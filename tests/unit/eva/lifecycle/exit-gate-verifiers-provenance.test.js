@@ -8,6 +8,11 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { checkGateProvenance, GATE_VERIFIERS } from '../../../../lib/eva/lifecycle/exit-gate-verifiers.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../../lib/eva/artifact-persistence-service.js';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 function findVerifier(matchSubstring) {
   return GATE_VERIFIERS.find((g) => g.match === matchSubstring).verifier;
@@ -39,7 +44,7 @@ describe('checkGateProvenance()', () => {
   it('returns the artifact_type for a present, unprovenanced, post-cutover row', async () => {
     const verifier = findVerifier('application deployed');
     const supabase = mockSupabaseReturning([
-      { artifact_type: 'build_mvp_build', metadata: null, created_at: '2026-09-14T00:00:00Z' },
+      { artifact_type: 'build_mvp_build', metadata: null, created_at: POST_CUTOVER },
     ]);
     const result = await checkGateProvenance(supabase, 'v1', verifier);
     expect(result).toEqual(['build_mvp_build']);
@@ -70,7 +75,7 @@ describe('checkGateProvenance()', () => {
     const security = findVerifier('no critical security issues');
     const secrets = findVerifier('no exposed secrets');
     const lint = findVerifier('lint passes');
-    const row = { artifact_type: 'code_quality_report', metadata: null, created_at: '2026-09-14T00:00:00Z' };
+    const row = { artifact_type: 'code_quality_report', metadata: null, created_at: POST_CUTOVER };
     for (const verifier of [security, secrets, lint]) {
       const result = await checkGateProvenance(mockSupabaseReturning([row]), 'v1', verifier);
       expect(result).toEqual(['code_quality_report']);

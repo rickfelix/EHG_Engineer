@@ -20,6 +20,11 @@ import {
   evaluateSatisfied,
   isBindingEnabled,
 } from './acceptance-artifact-gate.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../../../../lib/eva/artifact-persistence-service.js';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 function chainable(terminal, calls) {
   const obj = {
@@ -129,7 +134,7 @@ describe('createAcceptanceArtifactGate', () => {
     // VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) is graded leniently regardless of source/metadata,
     // by design (the 7972-row/100%-unprovenanced legacy corpus must not be refused). To genuinely
     // exercise ABSENT, this fixture must be POST-cutover with no machine_provenance stamp.
-    const noProvenanceRow = { ...FIXTURE_A_ROW, source: null, metadata: null, created_at: '2026-09-14T00:00:00Z' };
+    const noProvenanceRow = { ...FIXTURE_A_ROW, source: null, metadata: null, created_at: POST_CUTOVER };
     const supabase = mockSupabase({ rows: [noProvenanceRow] });
     const gate = createAcceptanceArtifactGate(supabase);
     const result = await gate.validator({ sd: FIXTURE_A_SD });

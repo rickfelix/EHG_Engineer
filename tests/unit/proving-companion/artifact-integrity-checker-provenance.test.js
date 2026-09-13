@@ -20,6 +20,11 @@ vi.mock('../../../lib/supabase-client.js', () => ({
 }));
 
 import { checkArtifactIntegrity } from '../../../lib/proving-companion/artifact-integrity-checker.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../lib/eva/artifact-persistence-service.js';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 describe('checkArtifactIntegrity() machine provenance (advisory-only)', () => {
   it('records a present, unprovenanced, post-cutover artifact in provenance_warnings without touching checks/pass_count/fail_count', async () => {
@@ -31,7 +36,7 @@ describe('checkArtifactIntegrity() machine provenance (advisory-only)', () => {
         metadata: null,
         quality_score: 80,
         validation_status: 'validated',
-        created_at: '2026-09-14T00:00:00Z',
+        created_at: POST_CUTOVER,
       }],
       error: null,
     };

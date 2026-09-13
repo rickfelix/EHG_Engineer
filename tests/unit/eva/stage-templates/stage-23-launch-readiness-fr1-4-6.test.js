@@ -32,6 +32,11 @@ import {
 } from '../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js';
 import { getAnalysisStep } from '../../../../lib/eva/stage-templates/analysis-steps/index.js';
 import { ARTIFACT_TYPES } from '../../../../lib/eva/artifact-types.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../../lib/eva/artifact-persistence-service.js';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../../');
@@ -308,7 +313,7 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
       const oneType = UPSTREAM_REQUIREMENTS[0].anyOf[0];
       const supabase = buildMockSupabase({
         presentTypes: [oneType],
-        rowExtras: { [oneType]: { metadata: null, created_at: '2026-09-14T00:00:00Z' } },
+        rowExtras: { [oneType]: { metadata: null, created_at: POST_CUTOVER } },
       });
       const result = await preflightUpstream({ supabase, ventureId: 'v1', requirements: [UPSTREAM_REQUIREMENTS[0]], logger: { warn() {} } });
       expect(result.provenanceWarnings).toContain(oneType);

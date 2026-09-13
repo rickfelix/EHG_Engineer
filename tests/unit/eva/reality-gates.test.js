@@ -16,6 +16,11 @@ import {
   _resetBoundaryCacheForTest,
 } from '../../../lib/eva/reality-gates.js';
 import { createFaithfulRealtimeChannelMock } from '../../helpers/faithful-supabase-realtime-mock.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../lib/eva/artifact-persistence-service.js';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 // QF-20260829-634: gate_boundary_config and venture_artifacts are two different
 // tables hitting this same mocked `supabase.from()`. boundaryRows feeds the
@@ -327,10 +332,10 @@ describe('RealityGates', () => {
         const artifacts = [
           {
             artifact_type: 'truth_problem_statement', quality_score: 0.8, is_current: true,
-            created_at: '2026-09-14T00:00:00Z', metadata: null,
+            created_at: POST_CUTOVER, metadata: null,
           },
-          { artifact_type: 'truth_target_market_analysis', quality_score: 0.7, is_current: true, created_at: '2026-09-14T00:00:00Z' },
-          { artifact_type: 'truth_value_proposition', quality_score: 0.9, is_current: true, created_at: '2026-09-14T00:00:00Z' },
+          { artifact_type: 'truth_target_market_analysis', quality_score: 0.7, is_current: true, created_at: POST_CUTOVER },
+          { artifact_type: 'truth_value_proposition', quality_score: 0.9, is_current: true, created_at: POST_CUTOVER },
         ];
         const result = await evaluateRealityGate({
           ventureId: 'v1', fromStage: 5, toStage: 6,
@@ -363,7 +368,7 @@ describe('RealityGates', () => {
         const artifacts = [
           {
             artifact_type: 'truth_problem_statement', quality_score: 0.8, is_current: true,
-            created_at: '2026-09-14T00:00:00Z', content: 'the content',
+            created_at: POST_CUTOVER, content: 'the content',
             metadata: { machine_provenance: { producer: 'stage-05', run_id: 'r1', hash_source: 'content', content_hash: createHash('sha256').update('the content').digest('hex') } },
           },
           { artifact_type: 'truth_target_market_analysis', quality_score: 0.7, is_current: true, created_at: '2026-01-01T00:00:00Z' },
