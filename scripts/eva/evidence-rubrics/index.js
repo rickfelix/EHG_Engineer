@@ -10,7 +10,12 @@ import { readdirSync } from 'fs';
 import { join } from 'path';
 
 const RUBRIC_DIR = import.meta.dirname;
-const RUBRIC_FILE_PATTERN = /^(V\d{2}|A\d{2}|T\d{2})-/;
+// SD-LEO-INFRA-VISION-ARCHITECTURE-DIMENSION-001 (FR-6): rubric files are now keyed by a
+// stable, name-derived slug (e.g. analysisstep-active-intelligence.js) rather than the
+// positional V0x/A0x/T0x code that used to prefix every filename — that prefix is exactly
+// what drifted out of sync with the rubric's actual content (the V03/V04 mismatch). Any
+// kebab-case .js file in this directory other than index.js itself is a rubric.
+const RUBRIC_FILE_PATTERN = /^[a-z][a-z0-9-]*\.js$/;
 
 /**
  * Validate a rubric definition has required fields.
@@ -92,7 +97,7 @@ export function validateRubricStrict(rubric, source) {
 export async function loadAllRubrics() {
   const rubrics = new Map();
   const files = readdirSync(RUBRIC_DIR)
-    .filter(f => RUBRIC_FILE_PATTERN.test(f) && f.endsWith('.js'))
+    .filter(f => f !== 'index.js' && RUBRIC_FILE_PATTERN.test(f))
     .sort();
 
   for (const file of files) {
