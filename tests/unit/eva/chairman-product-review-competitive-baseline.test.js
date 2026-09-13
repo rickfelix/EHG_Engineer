@@ -16,6 +16,23 @@ vi.mock('../../../lib/chairman/record-pending-decision.mjs', () => ({ escalateCh
 vi.mock('../../../scripts/lib/sd-id-resolver.js', () => ({ resolveSdInputOrNull: vi.fn() }));
 vi.mock('../../../lib/eva/post-build-convergence-gate.js', () => ({ loadVerdictSummary: vi.fn(async () => null) }));
 vi.mock('../../../lib/eva/stage-governance.js', () => ({ getStageGovernance: vi.fn() }));
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-4/FR-5: additive, read-only lookups
+// generateReviewPacket now also makes -- stubbed so fakeSupabase below (which never
+// modeled these tables) doesn't need to.
+vi.mock('../../../lib/eva/stage-templates/screen-reconciliation-builder.js', () => ({
+  readScreenReconciliation: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, precheckCapabilities: vi.fn().mockResolvedValue(new Map()) };
+});
+vi.mock('../../../lib/eva/utils/validate-venture-default-capabilities.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, readCapabilityOverrides: vi.fn().mockResolvedValue(new Map()) };
+});
+vi.mock('../../../lib/eva/bridge/stack-scan-reader.js', () => ({
+  readStackScanConclusion: vi.fn().mockResolvedValue({ available: false, reason: 'no_venture_resources_github_repo_record' }),
+}));
 
 import { generateReviewPacket } from '../../../lib/eva/chairman-product-review.js';
 import { CompetitiveBaselineService } from '../../../lib/discovery/competitive-baseline-service.js';

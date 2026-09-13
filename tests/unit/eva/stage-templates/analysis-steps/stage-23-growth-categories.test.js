@@ -18,6 +18,7 @@ import {
   readGrowthPlaybookRequiredFlag,
   GROWTH_CATEGORIES,
   REQUIRED_CATEGORIES,
+  GROWTH_FLAG_KEY,
 } from '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js';
 
 const silentLogger = { info: () => {}, warn: () => {} };
@@ -35,10 +36,29 @@ function makeQuery(result) {
 // isolation and are not about the legal category (SD-FDBK-FIX-BUILD-LEGAL-DOC-001
 // moved 'legal' from ADVISORY to REQUIRED; defaulting it to satisfied here keeps
 // this file's verdicts focused on the growth-category behavior it actually tests).
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-3: leo_feature_flags now holds more than
+// one key (GROWTH_FLAG_KEY plus the new CAPABILITY_CHECKLIST_FLAG_KEY) -- this chain
+// must discriminate by the .eq('flag_key', ...) argument so flagEnabled only ever
+// answers for GROWTH_FLAG_KEY specifically; every other flag_key reads is_enabled:false
+// (the real production default), never inheriting flagEnabled by accident.
+function makeFeatureFlagQuery(flagEnabled) {
+  const q = {};
+  let requestedKey = null;
+  for (const m of ['select', 'in', 'not', 'update', 'insert', 'order', 'limit', 'maybeSingle', 'single']) {
+    q[m] = vi.fn(() => q);
+  }
+  q.eq = vi.fn((col, value) => {
+    if (col === 'flag_key') requestedKey = value;
+    return q;
+  });
+  q.then = (resolve) => resolve({ data: { is_enabled: requestedKey === GROWTH_FLAG_KEY ? flagEnabled : false }, error: null });
+  return q;
+}
+
 function makeSupabase({ flagEnabled = false, presentTypes = [], artifactData = {}, legalDocsPresent = true } = {}) {
   return {
     from: vi.fn((t) => {
-      if (t === 'leo_feature_flags') return makeQuery({ data: { is_enabled: flagEnabled }, error: null });
+      if (t === 'leo_feature_flags') return makeFeatureFlagQuery(flagEnabled);
       if (t === 'venture_artifacts') {
         return makeQuery({
           data: presentTypes.map((x) => ({ artifact_type: x, is_current: true, artifact_data: artifactData[x] ?? null })),
