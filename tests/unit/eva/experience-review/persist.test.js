@@ -69,6 +69,13 @@ describe('buildExperienceFindings', () => {
       .toThrow(/is not one of the experience-review categories/);
   });
 
+  it('rejects performance/responsive (REGRESSION sub-agent finding, SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A VERIFY phase): this pilot writer must NOT silently widen alongside WARN_CAPPED_CATEGORIES growing new members from an unrelated SD', () => {
+    expect(() => buildExperienceFindings([rawFinding({ category: 'performance' })], { ventureId: VENTURE_ID }))
+      .toThrow(/is not one of the experience-review categories/);
+    expect(() => buildExperienceFindings([rawFinding({ category: 'responsive' })], { ventureId: VENTURE_ID }))
+      .toThrow(/is not one of the experience-review categories/);
+  });
+
   it('rejects a missing ventureId', () => {
     expect(() => buildExperienceFindings([rawFinding()], {})).toThrow(/ventureId required/);
   });

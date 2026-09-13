@@ -37,7 +37,7 @@ import {
   FR_C_REMEDIATION_SEVERITIES,
   FR_C_OPEN_SD_STATUSES,
 } from '../../../../../lib/eva/quality-findings/sd-generator.js';
-import { computeFindingHash, WARN_CAPPED_CATEGORIES } from '../../../../../lib/eva/quality-findings/finding-shape.js';
+import { WARN_CAPPED_CATEGORIES } from '../../../../../lib/eva/quality-findings/finding-shape.js';
 
 // The local HAS_REAL_DB re-derivation that used to sit here is GONE, not corrected — it moved with
 // the suite it gated and was replaced there by the repo's canonical predicate, imported rather than
@@ -440,11 +440,20 @@ describe('FR-C generator — fixture discriminator', () => {
   });
 });
 
-describe('WARN-capped category exclusion (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A, TESTING sub-agent finding)', () => {
-  test('isWarnCappedCategoryFinding matches every entry in WARN_CAPPED_CATEGORIES', () => {
-    for (const cat of WARN_CAPPED_CATEGORIES) {
+describe('CAPA-001-A baseline category exclusion (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A; narrowed from the full WARN_CAPPED_CATEGORIES set per REGRESSION sub-agent finding, VERIFY phase)', () => {
+  test('isWarnCappedCategoryFinding matches exactly this SD\'s own 3 baseline categories (accessibility/performance/responsive)', () => {
+    for (const cat of ['accessibility', 'performance', 'responsive']) {
       expect(isWarnCappedCategoryFinding({ finding_category: cat })).toBe(true);
     }
+  });
+
+  test('isWarnCappedCategoryFinding does NOT match usability/journey_coherence — those belong to a different SD (SD-LEO-FEAT-STAGE-EXPERIENCE-DESIGN-001) and this exclusion must not change their FR-C remediation eligibility', () => {
+    expect(isWarnCappedCategoryFinding({ finding_category: 'usability' })).toBe(false);
+    expect(isWarnCappedCategoryFinding({ finding_category: 'journey_coherence' })).toBe(false);
+    // Both are still members of WARN_CAPPED_CATEGORIES (the verdict-cap list) --
+    // this SD's exclusion is deliberately a narrower, separate set.
+    expect(WARN_CAPPED_CATEGORIES).toContain('usability');
+    expect(WARN_CAPPED_CATEGORIES).toContain('journey_coherence');
   });
 
   test('isWarnCappedCategoryFinding passes through non-WARN-capped categories and null/undefined', () => {
