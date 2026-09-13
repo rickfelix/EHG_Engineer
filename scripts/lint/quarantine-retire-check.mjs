@@ -28,7 +28,7 @@
  * scripts/log-harness-bug.js, whose --file flag conflates dedup_key with metadata.source_location.
  */
 import { readFileSync, existsSync } from 'node:fs';
-import { makeHardenedGitRunner } from '../../lib/git/hardened-runner.cjs';
+import { makeHardenedGitRunner, validateBaseRef } from '../../lib/git/hardened-runner.cjs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 export const MANIFEST_PATH = 'tests/quarantine-manifest.json';
@@ -116,7 +116,11 @@ function readJson(path) {
 function readManifestAtRef(git, ref) {
   let raw;
   try {
-    raw = git(['show', `${ref}:${MANIFEST_PATH}`]);
+    // SEC: validateRefs makes the runner refuse an option-shaped/hostile ref (e.g. leading `-`)
+    // BEFORE it ever reaches `git show <ref>:<path>`, closing the same ref-injection class
+    // lib/git/hardened-runner.cjs's validateBaseRef exists for (mirrors the sibling call in
+    // scripts/lint/schema-lint-escape-budget.mjs).
+    raw = git(['show', `${ref}:${MANIFEST_PATH}`], { validateRefs: [ref] });
   } catch (e) {
     const stderr = String(e.stderr ?? e.message ?? '');
     if (/does not exist in|exists on disk, but not in/.test(stderr)) return { quarantined: [] };
@@ -132,6 +136,9 @@ function parseArgs(argv) {
     else if (argv[i] === '--base') out.base = argv[++i];
     else if (argv[i] === '--report-incomplete-outcome') out.reportIncompleteOutcome = true;
   }
+  // Validated here (not just inside readManifestAtRef) so a hostile/malformed --base fails
+  // loud and early at the CLI boundary, before any diff-mode work is attempted.
+  if (out.diff) validateBaseRef(out.base);
   return out;
 }
 
@@ -151,16 +158,19 @@ export function isIncompleteOutcome(outcome) {
 async function reportIncompleteRun(outcome) {
   const outcomeVal = outcome || 'unknown';
   console.log(`Gauge run step outcome='${outcomeVal}' (not success/failure) -- did not complete; reporting rather than staying silent.`);
-  const [{ emitFeedback }, { createClient }] = await Promise.all([
-    import('../../lib/governance/emit-feedback.js'),
-    import('@supabase/supabase-js'),
-  ]);
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-  );
   const today = new Date().toISOString().slice(0, 10);
   try {
+    const [{ emitFeedback }, { createClient }] = await Promise.all([
+      import('../../lib/governance/emit-feedback.js'),
+      import('@supabase/supabase-js'),
+    ]);
+    // createClient() throws SYNCHRONOUSLY when SUPABASE_URL is unset (e.g. secrets withheld on a
+    // fork-triggered pull_request run) -- moved inside this try so that condition degrades
+    // gracefully too, matching this function's own "always exits 0 (informational)" contract.
+    const supabase = createClient(
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    );
     await emitFeedback({
       supabase,
       title: 'Quarantine retire-check did not complete',
@@ -181,14 +191,23 @@ async function reportIncompleteRun(outcome) {
  * row is a downstream convenience). */
 async function emitOverdueBacklogRows(rows) {
   if (rows.length === 0) return;
-  const [{ emitFeedback }, { createClient }] = await Promise.all([
-    import('../../lib/governance/emit-feedback.js'),
-    import('@supabase/supabase-js'),
-  ]);
-  const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-  );
+  let emitFeedback;
+  let supabase;
+  try {
+    ({ emitFeedback } = await import('../../lib/governance/emit-feedback.js'));
+    const { createClient } = await import('@supabase/supabase-js');
+    // createClient() throws SYNCHRONOUSLY when SUPABASE_URL is unset (e.g. secrets withheld on a
+    // fork-triggered pull_request run) -- caught here so a credentials-absent condition degrades
+    // to a per-row warning below, never an uncaught top-level crash that masks the gauge's own
+    // baseline/overdue verdict (the actual loud signal this function's caller already emitted).
+    supabase = createClient(
+      process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    );
+  } catch (e) {
+    console.error(`::warning::quarantine-retire-check: harness_backlog setup failed, skipping all ${rows.length} row(s): ${e.message}`);
+    return;
+  }
   for (const row of rows) {
     try {
       await emitFeedback({

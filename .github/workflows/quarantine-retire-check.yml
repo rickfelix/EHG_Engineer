@@ -40,7 +40,12 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Run quarantine retire-check gauge (--diff vs PR base)
-        run: node scripts/lint/quarantine-retire-check.mjs --diff --base origin/${{ github.event.pull_request.base.ref }}
+        # PR_BASE_REF is passed through env: rather than interpolated straight into the run:
+        # string -- the documented GitHub Actions script-injection avoidance pattern (a `${{ }}`
+        # expression substitutes into the shell script TEXT before the shell ever parses it,
+        # ahead of any argv-level safety the invoked script itself provides).
+        run: node scripts/lint/quarantine-retire-check.mjs --diff --base "origin/$PR_BASE_REF"
         env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
