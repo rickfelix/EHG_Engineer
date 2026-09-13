@@ -174,3 +174,31 @@ describe('analyzeStage23DedicatedVentureUat FR-2: legal-doc-producer wiring', ()
     expect(logger.warn).toHaveBeenCalled();
   });
 });
+
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-1 AC-3: regression guard against
+// re-introducing the legal-producer wiring a second time. The wiring already
+// shipped in SD-LEO-INFRA-STAGE-LAUNCH-READINESS-001; this SD's job is to
+// trigger a real run and fix the domain-fallback gap, never to re-wire it.
+describe('generateLegalDocsForVenture wiring — single call-site regression guard', () => {
+  it('this file imports and calls generateLegalDocsForVenture exactly once', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../../../../../lib/eva/stage-templates/analysis-steps/stage-23-dedicated-venture-uat.js'),
+      'utf8'
+    );
+    // Strip comment-only lines first so a doc-comment mentioning the function
+    // name with trailing parens (e.g. "generateLegalDocsForVenture() as a
+    // side effect") isn't mistaken for a real call site.
+    const codeOnly = src
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*)/.test(line))
+      .join('\n');
+    const importMatches = codeOnly.match(/import\s*\{[^}]*generateLegalDocsForVenture[^}]*\}\s*from/g) || [];
+    const callMatches = codeOnly.match(/[^.\w]generateLegalDocsForVenture\s*\(/g) || [];
+    expect(importMatches).toHaveLength(1);
+    expect(callMatches).toHaveLength(1);
+  });
+});

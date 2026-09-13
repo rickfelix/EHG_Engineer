@@ -12,6 +12,7 @@ import {
   NOT_LEGAL_ADVICE_DISCLAIMER,
   REQUIRED_TEMPLATE_TYPES,
   extractBareDomain,
+  readVentureContext,
 } from '../../../lib/eva/legal-doc-producer.js';
 
 const silentLogger = { info: () => {}, warn: () => {} };
@@ -187,6 +188,38 @@ describe('extractBareDomain', () => {
     expect(extractBareDomain(null)).toBeNull();
     expect(extractBareDomain(undefined)).toBeNull();
     expect(extractBareDomain('')).toBeNull();
+  });
+});
+
+describe('readVentureContext — SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-1: venture-level domain fallback', () => {
+  it('falls back to ventures.metadata.live_url when company.website is absent (AltifyAI-shaped: holding company with no website)', async () => {
+    const supabase = makeSupabase({
+      ventureRow: { ...VENTURE_ROW, metadata: { live_url: 'https://altifyai.rickfelix2000.workers.dev' } },
+      companyRow: { ...COMPANY_ROW, name: 'EHG', website: null },
+    });
+    const result = await readVentureContext({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result.ok).toBe(true);
+    expect(result.context['{{COMPANY_DOMAIN}}']).toBe('altifyai.rickfelix2000.workers.dev');
+    expect(result.context['{{CONTACT_EMAIL}}']).toBe('legal@altifyai.rickfelix2000.workers.dev');
+  });
+
+  it('prefers company.website over the venture fallback when both are present', async () => {
+    const supabase = makeSupabase({
+      ventureRow: { ...VENTURE_ROW, metadata: { live_url: 'https://fallback.example.com' } },
+      companyRow: { ...COMPANY_ROW, website: 'alttextcompliance.com' },
+    });
+    const result = await readVentureContext({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result.context['{{COMPANY_DOMAIN}}']).toBe('alttextcompliance.com');
+  });
+
+  it('still reports COMPANY_DOMAIN missing when neither company.website nor metadata.live_url resolves', async () => {
+    const supabase = makeSupabase({
+      ventureRow: { ...VENTURE_ROW, metadata: {} },
+      companyRow: { ...COMPANY_ROW, website: null },
+    });
+    const result = await readVentureContext({ supabase, ventureId: 'v1', logger: silentLogger });
+    expect(result.ok).toBe(false);
+    expect(result.missingFields).toContain('COMPANY_DOMAIN');
   });
 });
 
