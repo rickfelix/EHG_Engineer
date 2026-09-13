@@ -154,8 +154,23 @@ function makeStub(cfg) {
         return { data: cfg.messages || [], error: null };
       }
       if (table === 'session_coordination' && state.op === 'update') return { data: null, error: null };
+      // SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-3): getMyClaims() (lib/claim/get-my-claims.cjs)
+      // queries WHERE claiming_session_id=<sessionId>, awaited directly (no .limit/.maybeSingle),
+      // landing on this SAME default handler. Without this branch it fell through to the
+      // draftDepsSatisfied case below and received cfg.depRows verbatim -- an UNRELATED
+      // dependency-check row keyed on a DIFFERENT sd_key, never filtered by claiming_session_id,
+      // making getMyClaims falsely conclude the session already holds a claim and skip every
+      // self-claim tier (the exact "stub drops a discriminant" class this file's own
+      // payload->>kind fix above already documents). None of this file's fixtures intend to
+      // simulate an existing claim, so the correct default is empty.
+      if (table === 'strategic_directives_v2' && 'claiming_session_id' in state.filters) {
+        return { data: cfg.myClaimedSdRows || [], error: null };
+      }
       // draftDepsSatisfied dep-check: SELECT sd_key,status WHERE sd_key IN (refKeys), awaited directly.
       if (table === 'strategic_directives_v2') return { data: cfg.depRows || [], error: null };
+      if (table === 'quick_fixes' && 'claiming_session_id' in state.filters) {
+        return { data: cfg.myClaimedQfRows || [], error: null };
+      }
       return { data: null, error: null };
     }
     return chain;

@@ -53,6 +53,12 @@ const ALLOWED_READERS = new Set([
   'lib/coordinator/self-id-handshake.cjs',
   'lib/coordinator/singleton-refresh-sequencer.cjs',
   'lib/coordinator/solomon-identity.cjs',
+  // SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-5): NOT a loop-liveness classification -- compares
+  // heartbeat_at against a SPECIFIC recorded past timestamp (metadata.wind_down.at) to decide
+  // whether a sleeping-seat notification hint would be spurious on an ordinary, already-awake
+  // self-release. classifyLoopLiveness answers a different, heavier question (is the AGENTIC
+  // LOOP wedged, via last_tool_at/loop_state) and would be a misuse here, not a fix.
+  'lib/fleet/best-effort-release.mjs',
   'lib/fleet/claim-boundary-probe.cjs',
   'lib/fleet/claim-release-guard.cjs',
   'lib/fleet/claimant-liveness.cjs',
