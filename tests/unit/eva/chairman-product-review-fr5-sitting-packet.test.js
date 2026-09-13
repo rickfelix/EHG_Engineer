@@ -73,16 +73,35 @@ describe('describeReconciliationRow', () => {
 });
 
 describe('buildGuidedTour -- FR-5 screenId fallback', () => {
-  it('signup and core_action resolve via reconciliationByScreen when no artifact backs them', () => {
+  // EXEC-phase TESTING review (post-merge finding): screen-1/screen-5 are NOT a
+  // universal signup/core_action mapping across ventures (measured live: screen-1
+  // is signup in 17/23 ventures but Pricing in 2 and a persona dashboard in 1;
+  // screen-5 has no shared meaning at all). 'core_action' therefore no longer
+  // carries a screenId (always the honest placeholder); 'signup' keeps its
+  // screenId but is gated on the screen's own recorded name plausibly matching
+  // "signup" before the reconciliation evidence is trusted.
+  it('signup resolves via reconciliationByScreen when its screen_name plausibly matches "signup"', () => {
     const tour = buildGuidedTour({}, {
-      'screen-1': { journey_ids: ['jny-a'], reconciliation_status: 'built_and_walked' },
-      'screen-5': { journey_ids: ['jny-b', 'jny-c'], reconciliation_status: 'built_not_walked' },
+      'screen-1': { screen_name: 'Signup/Registration', journey_ids: ['jny-a'], reconciliation_status: 'built_and_walked' },
     });
     const signup = tour.find((t) => t.stop === 'Sign up');
-    const coreAction = tour.find((t) => t.stop === 'The core thing this product does');
     expect(signup.note).toMatch(/Built and verified/);
-    expect(coreAction.note).toMatch(/Built —/);
-    expect(coreAction.note).not.toMatch(/Not yet documented/);
+  });
+
+  it('signup falls back to the honest placeholder when screen-1 is NOT actually a signup screen for this venture', () => {
+    const tour = buildGuidedTour({}, {
+      'screen-1': { screen_name: 'Pricing', journey_ids: ['jny-a'], reconciliation_status: 'built_and_walked' },
+    });
+    const signup = tour.find((t) => t.stop === 'Sign up');
+    expect(signup.note).toMatch(/Not yet documented/);
+  });
+
+  it('core_action never trusts reconciliationByScreen (no screenId -- no venture-independent signal exists for it)', () => {
+    const tour = buildGuidedTour({}, {
+      'screen-5': { screen_name: 'Project Details & Edit', journey_ids: ['jny-b', 'jny-c'], reconciliation_status: 'built_not_walked' },
+    });
+    const coreAction = tour.find((t) => t.stop === 'The core thing this product does');
+    expect(coreAction.note).toMatch(/Not yet documented/);
   });
 
   it('falls back to the placeholder note when no reconciliation row exists for a screenId stop', () => {
