@@ -201,6 +201,9 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockImplementation((col, val) => { eqCalls.push([col, val]); return chain; }),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         single: vi.fn().mockImplementation(() => {
           const typeFilter = eqCalls.find(([col]) => col === 'decision_type');
           // Only the pre-existing 'stage_gate' decision exists; a 'product_review' lookup finds nothing.
@@ -233,6 +236,9 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         single: vi.fn().mockImplementation(() => {
           callCount++;
           if (callCount === 1) {
@@ -263,6 +269,9 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         single: vi.fn().mockImplementation(() => {
           callCount++;
           if (callCount === 1) return Promise.resolve({ data: null }); // No existing
@@ -303,6 +312,8 @@ describe('createOrReusePendingDecision', () => {
         if (typeFilter && typeFilter[1] === 'product_review') return Promise.resolve({ data: null });
         return Promise.resolve({ data: { id: 'existing-stage-gate-id' } });
       }),
+      // The bounded attempt_number lookup (QF-20260913-466) — no prior attempts either way.
+      maybeSingle: vi.fn().mockImplementation(() => { currentEqCalls = []; return Promise.resolve({ data: null, error: null }); }),
       insert: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
           single: vi.fn().mockResolvedValue({ data: null, error: { code: '23505', message: 'unique_violation' } }),
@@ -332,6 +343,8 @@ describe('createOrReusePendingDecision', () => {
         if (typeFilter && typeFilter[1] === 'product_review') return Promise.resolve({ data: null });
         return Promise.resolve({ data: { id: 'approved-stage-gate-id' } });
       }),
+      // The bounded attempt_number lookup (QF-20260913-466) — no prior attempts either way.
+      maybeSingle: vi.fn().mockImplementation(() => { currentEqCalls = []; return Promise.resolve({ data: null, error: null }); }),
       insert: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnValue({
           single: vi.fn().mockResolvedValue({ data: null, error: { code: '23505', message: 'unique_violation' } }),
@@ -350,7 +363,10 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
             single: vi.fn().mockResolvedValue({ data: null, error: { code: '42P01', message: 'table not found' } }),
@@ -453,7 +469,10 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null }), // No existing
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: insertFn,
       }),
     };
@@ -480,8 +499,10 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null }), // No existing
-        maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: insertFn,
       }),
     };
@@ -520,7 +541,13 @@ describe('createOrReusePendingDecision', () => {
     expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ attempt_number: 2 }));
   });
 
-  it('omits attempt_number from the insert when not provided (preserves the DB default for every other caller)', async () => {
+  // QF-20260913-466: this used to assert attempt_number was OMITTED (relying on the DB column
+  // default of 1) when no explicit attemptNumber was given. That was the root cause of
+  // DECISION_CREATE_FAILED forever once ANY prior attempt existed (e.g. cancelled) at the same
+  // (venture, stage, decision_type): every retry re-collided on the same hardcoded default. Now
+  // attempt_number is ALWAYS computed as max(existing)+1 (1 when none exist, matching the old
+  // default for a first-ever attempt) and always included explicitly.
+  it('computes attempt_number as max(existing)+1 when not explicitly provided (1 when no prior attempts)', async () => {
     const insertFn = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
@@ -530,7 +557,10 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: insertFn,
       }),
     };
@@ -538,7 +568,56 @@ describe('createOrReusePendingDecision', () => {
     await createOrReusePendingDecision({ ventureId: 'v1', stageNumber: 10, supabase, logger });
 
     const insertedRow = insertFn.mock.calls[0][0];
-    expect(insertedRow).not.toHaveProperty('attempt_number');
+    expect(insertedRow).toHaveProperty('attempt_number', 1);
+  });
+
+  // QF-20260913-466 (c): the exact scenario measured live for AltifyAI — a CANCELLED prior
+  // attempt at attempt_number 1 for this (venture, stage, decision_type) must not make the new
+  // insert collide; it must land at attempt_number 2.
+  //
+  // Keyed on the select() COLUMNS argument rather than call order/count: this function also
+  // makes several OTHER select() calls (fixture-venture check, health resolution) en route to the
+  // insert, each via .maybeSingle() and unrelated to attempt_number — asserting a raw call count
+  // would couple this test to that unrelated internal call graph. Only the 'attempt_number'
+  // column set gets the "prior attempts" shape; everything else safely resolves to "not found"
+  // (matching each caller's own documented fail-open contract).
+  it('derives attempt_number 2 when a prior (e.g. cancelled) attempt_number 1 exists for the same venture/stage/type', async () => {
+    const insertFn = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }),
+      }),
+    });
+    const supabase = {
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockImplementation((columns) => {
+          if (columns === 'attempt_number') {
+            // Bounded via order().limit(1).maybeSingle() (count-truncation-diff-lint), matching
+            // the real production query shape exactly.
+            return {
+              eq: vi.fn().mockReturnThis(),
+              order: vi.fn().mockReturnThis(),
+              limit: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: { attempt_number: 1 }, error: null }),
+            };
+          }
+          // Every other select() in the call graph (fixture check, health resolution, the
+          // existing-pending-decision pre-check): safely resolves to nothing found.
+          return {
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: null, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          };
+        }),
+        insert: insertFn,
+      }),
+    };
+
+    await createOrReusePendingDecision({
+      ventureId: 'v1', stageNumber: 24, decisionType: 'stage_gate', supabase, logger,
+    });
+
+    const insertedRow = insertFn.mock.calls[0][0];
+    expect(insertedRow).toHaveProperty('attempt_number', 2);
   });
 
   // SD-LEO-FEAT-MAKE-HIGH-CONSEQUENCE-001 (FR-2): the blocking flag (chairman-designated
@@ -553,7 +632,10 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: insertFn,
       }),
     };
@@ -573,7 +655,10 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: insertFn,
       }),
     };
@@ -594,7 +679,10 @@ describe('createOrReusePendingDecision', () => {
       from: vi.fn().mockReturnValue({
         select: vi.fn().mockReturnThis(),
         eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
         single: vi.fn().mockResolvedValue({ data: null }), // No existing
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
         insert: insertFn,
       }),
     };
@@ -633,6 +721,8 @@ describe('createOrReusePendingDecision', () => {
             // Third: check for approved/rejected — found
             return Promise.resolve({ data: { id: 'approved-id' } });
           }),
+          // The bounded attempt_number lookup (QF-20260913-466) — no prior attempts.
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           insert: vi.fn().mockReturnValue({
             select: vi.fn().mockReturnValue({
               single: vi.fn().mockResolvedValue({
@@ -750,7 +840,10 @@ describe('createOrReusePendingDecision: fixture-venture guard (QF-20260703-236)'
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({ data: null }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           insert: vi.fn().mockImplementation((row) => {
             onInsert?.(row);
             return { select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'should-not-happen' }, error: null }) }) };
@@ -817,7 +910,10 @@ describe('createOrReusePendingDecision: fixture-venture guard (QF-20260703-236)'
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockReturnThis(),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
           single: vi.fn().mockResolvedValue({ data: null }),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           insert: vi.fn().mockImplementation((row) => {
             onInsert(row);
             return { select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: 'new-id' }, error: null }) }) };
