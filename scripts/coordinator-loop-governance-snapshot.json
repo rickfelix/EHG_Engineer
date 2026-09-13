@@ -4,11 +4,7 @@
   "gha_backed_count": 17,
   "session_arm_false_keys": [
     "sweep",
-    "unranked-gauge",
-    "relay-drop-gauge",
-    "fleet-retro",
     "row-growth",
-    "gauge-runner",
     "feedback-sla"
   ],
   "gha_only_carve_out_keys": [
@@ -18,5 +14,7 @@
   ],
   "reversal_condition_through": "2026-08-25T22:00:00Z",
   "reversal_condition": "If any dropped loop's artifact goes stale beyond 2x its GHA cadence before this date, revert its session_arm to true (re-arm it as a session-owned loop) pending re-review.",
-  "ruling_reference": "Operator commission 60153bf2, encoded QF-20260822-510"
+  "ruling_reference": "Operator commission 60153bf2, encoded QF-20260822-510",
+  "reversed_keys": ["gauge-runner", "fleet-retro", "relay-drop-gauge", "unranked-gauge"],
+  "reversal_reference": "QF-20260912-894 (2026-09-12): reversal condition triggered for these 4; singleton-relaunch was named in the ticket but is not part of the reversal -- QF-20260830-100 already retired it entirely (removed from STANDARD_LOOPS, not merely session_arm:false'd) for an unrelated reason."
 }

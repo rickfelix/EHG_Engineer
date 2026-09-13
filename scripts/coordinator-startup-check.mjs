@@ -143,6 +143,19 @@ export const RESPONSIBILITIES = [
 // "harmless redundant backup" posture. REVERSAL CONDITION (post-drop watch through
 // 2026-08-25T22Z): if any dropped loop's artifact goes stale beyond 2x its GHA cadence, same-day
 // re-arm the session copy (flip session_arm back to true) and log the reversal.
+//
+// REVERSAL LOGGED (QF-20260912-894, measured 2026-09-12 06:5xZ at the Adam seat, coordinator
+// finding 40c4813c): 4 of the remaining 7 dropped loops breached the 2x-GHA-cadence reversal
+// threshold on every measured gap — gauge-runner (2.3-4.9x), fleet-retro (4-9x), relay-drop-gauge
+// (7-20x), unranked-gauge (8-18x). Their session_arm flipped back to true below, each tagged
+// QF-20260912-894. singleton-relaunch is NOT part of this reversal despite appearing in QF-894's
+// own description: QF-20260830-100 already retired it ENTIRELY (removed from STANDARD_LOOPS, not
+// merely session_arm:false'd) for an independent reason — its consumer half was never built and
+// it fired 4x with zero relaunches, feeding false periodic-liveness escalations. There is no
+// session_arm field left on that (nonexistent) entry to flip, and re-adding it here would silently
+// re-litigate the QF-20260830-100 retirement under an unrelated ticket. sweep (host task cadence,
+// not GHA-cadence-comparable), feedback-sla and row-growth stay GHA-only — their measured cadence
+// meets their declared schedule (QF-894's own description agrees: "leave sweep ... on GHA").
 export const STANDARD_LOOPS = [
   { key: 'sweep',       label: 'Stale-session sweep',  script: 'stale-session-sweep.cjs',   cron: '*/5 * * * *',
     gha_backed: true, session_arm: false,
@@ -241,7 +254,7 @@ export const STANDARD_LOOPS = [
   // (reuses backlog-rank's own claimable computation); offset from backlog-rank's own cadence so it
   // always observes a just-refreshed rank rather than racing it.
   { key: 'unranked-gauge', label: 'Eligible-but-unranked-leaf-count invariant gauge', script: 'gauge-unranked-claimable-leaves.mjs', cron: '9,24,39,54 * * * *',
-    gha_backed: true, session_arm: false, // QF-20260822-510
+    gha_backed: true, session_arm: true, // QF-20260912-894: reversal — GHA gap measured 8-18x cadence
     prompt: 'node scripts/gauge-unranked-claimable-leaves.mjs' },
   // SD-LEO-INFRA-FORCE-ROLE-SESSIONS-001 (FR-3/FR-4): the coordinator's forced-capture obligation,
   // evaluated at a recurring operating choke rather than at turn end (a wedged session never
@@ -312,14 +325,14 @@ export const STANDARD_LOOPS = [
   // outbound within the window (default ~15min). Offset from relay-drain so it observes a
   // just-drained queue rather than racing it.
   { key: 'relay-drop-gauge', label: 'Unactioned relay/decision/review drop gauge', script: 'coordinator-relay-drop-gauge.cjs', cron: '11,26,41,56 * * * *',
-    gha_backed: true, session_arm: false, // QF-20260822-510
+    gha_backed: true, session_arm: true, // QF-20260912-894: reversal — GHA gap measured 7-20x cadence
     prompt: 'node scripts/coordinator-relay-drop-gauge.cjs' },
   // SD-LEO-INFRA-ENABLE-WIRE-AUTOMATIC-001 (FR-2a): restore the worker fleet-retro to a schedule
   // (it had drifted to manual — last ran ~2.5d ago). Re-arms the existing, idempotent capture/
   // synthesis script (reuses the feedback/issue_patterns pipeline; dedups on metadata.retro_key).
   // Cheap read+insert; */30 captures session_coordination FLEET-RETRO signals before they are swept.
   { key: 'fleet-retro',  label: 'Worker fleet-retro (periodic capture/synthesis)', script: 'coordinator-fleet-retro.mjs', cron: '*/30 * * * *',
-    gha_backed: true, session_arm: false, // QF-20260822-510
+    gha_backed: true, session_arm: true, // QF-20260912-894: reversal — GHA gap measured 4-9x cadence
     prompt: 'node scripts/coordinator-fleet-retro.mjs' },
   // SD-LEO-INFRA-STANDING-ROW-GROWTH-001: daily governance-table row-growth gauge.
   // Snapshots estimated row counts (PostgREST head+estimated — pg statistics, no COUNT(*))
@@ -381,7 +394,7 @@ export const STANDARD_LOOPS = [
   // for unwired machinery was itself unwired. Hourly cadence — cheap, and the gauges'
   // detector functions are internally due-gated/idempotent, so an extra run is a no-op.
   { key: 'gauge-runner', label: 'Invariant-gauges execution surface (hourly, durable)', script: 'gauge-runner.mjs', cron: '0 * * * *',
-    gha_backed: true, session_arm: false, // QF-20260822-510
+    gha_backed: true, session_arm: true, // QF-20260912-894: reversal — GHA gap measured 2.3-4.9x cadence
     prompt: 'node scripts/gauge-runner.mjs --json' },
   // QF-20260719-720 (operator directive: duty adherence must be schedule-driven, not memory-driven):
   // three duties proven necessary by 2026-07-19 live incidents existed only as the incumbent
@@ -565,6 +578,11 @@ export function renderAdamLane() {
   ].join('\n');
 }
 
+// QF-20260912-894: the 4 loops whose session_arm flipped back to true this reversal, so
+// renderLoops can call them out explicitly rather than let them blend into the ordinary
+// armable-loop list.
+export const REVERSED_ON_QF894 = ['gauge-runner', 'fleet-retro', 'relay-drop-gauge', 'unranked-gauge'];
+
 // Render the standard-loop status + CronCreate specs for missing/unverified loops (FR-2).
 export function renderLoops(armed) {
   const lines = [];
@@ -596,7 +614,8 @@ export function renderLoops(armed) {
     const status = loopStatus(loop, armed);
     const badge = status === 'armed' ? '✅ armed' : status === 'MISSING' ? '❌ MISSING' : '… unverified';
     const ghaMarker = loop.gha_backed ? ' [GHA-backed]' : '';
-    lines.push(`  [${badge}] ${loop.key.padEnd(10)} ${loop.label}${ghaMarker}`);
+    const reversedMarker = REVERSED_ON_QF894.includes(loop.key) ? ' [🔄 re-armed QF-20260912-894]' : '';
+    lines.push(`  [${badge}] ${loop.key.padEnd(10)} ${loop.label}${ghaMarker}${reversedMarker}`);
     lines.push(`              cron: ${loop.cron}   prompt: ${loop.prompt}`);
     if (status !== 'armed') toArm.push(loop);
   }
