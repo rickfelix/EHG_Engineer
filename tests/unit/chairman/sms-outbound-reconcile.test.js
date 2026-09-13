@@ -829,10 +829,15 @@ describe('sent-no-callback delivery-timeout (MEDIUM-2 / FR-2 provider-check)', (
   });
 
   it('QF-20260912-394: a non-terminal provider error code still re-arms under the cap (unchanged control flow), but the real code/message is stamped as last_error instead of the generic reason', async () => {
-    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-transient', sent_at: ago(20 * MIN), delivered_at: null })] });
+    // Fixed to a midday ET instant (DAY_NOW/agoAt), not ago()'s real wall-clock -- the re-arm
+    // branch stamps not_before via smsQuietWindowReleaseIso(now, zone), which defers the row
+    // to next-6AM whenever `now` falls in the 10PM-6AM ET quiet window. Without a fixed `now`,
+    // this test was flaky: it only passed when actually run outside that window (observed: a
+    // deterministic 3/3 local failure + a fleet-wide-blocking CI failure, both at ~10:3x PM ET).
+    const sb = makeFakeSupabase({ sms_outbound_obligations: [owedRow({ status: 'sent', attempts: 0, provider_message_id: 'SM-transient', sent_at: agoAt(20 * MIN), delivered_at: null })] });
     const checkMessageStatus = vi.fn(async () => ({ status: 'undelivered', errorCode: '30005', errorMessage: 'Unknown destination handset' }));
     const provider = { ...okProvider(), checkMessageStatus };
-    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN });
+    const summary = await reconcileOutboundSms(sb, { provider, sentDeliveryTimeoutMs: 15 * MIN, now: DAY_NOW });
     expect(summary.sentTimedOut).toBe(1);
     expect(provider.send).toHaveBeenCalledTimes(1); // re-armed then re-sent, same as pre-existing behavior
     const row = sb._tables.sms_outbound_obligations[0];
