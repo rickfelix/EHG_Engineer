@@ -1,9 +1,9 @@
 ---
 category: reference
 status: draft
-version: 1.8.0
+version: 1.9.0
 author: Rick Felix
-last_updated: 2026-08-26
+last_updated: 2026-09-13
 tags: [reference, auto-generated]
 ---
 # Infrastructure Hardening Patterns
@@ -1304,6 +1304,57 @@ proof, not just the registry entry.
 
 ---
 
+## Pattern: A summary column drifts from its detail in 3 shapes, not 1 -- and its derivation predicate needs the same adversarial rigor as any other fix (SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001)
+
+**Symptom**: A boolean/summary field disagreed with the detail data it exists to summarize,
+misleading three separate gates in one incident. The originally-scoped fix was narrow: flag a new
+undereived boolean `*_evaluated`/`*_passed`/`*_verified` column in CI. Live measurement found this
+class actually recurs in 3 shapes: (a) the boolean column (the original ask), (b) a jsonb summary
+key (`status`/`verdict`/`evaluated`/etc.) written via `jsonb_set`/`jsonb_build_object` with no
+paired derivation, and (c) a foreign-key column whose name is itself summary-shaped. Widening the
+lint from 1 shape to 3 is what actually closed the class this SD was named for.
+
+**Root cause, and why 6 rounds of review were needed to land the derivation trigger itself**:
+the natural-seeming derivation source (`control_pack_failures`) was *documented by its own writer*
+as ambiguous between "evaluated, all passed" and "never evaluated" -- deriving from it would have
+reintroduced the exact bug class this SD existed to close, in SQL. Each subsequent correction
+attempt introduced or missed something new: a "zero-yield" claim was itself disproven live but
+that same re-verification surfaced a *worse* finding (the fix would have inverted an evidenced
+governance decision); a claimed Postgres error mechanism for a guard clause was fabricated and only
+caught by *executing* the trigger against live Postgres, not by re-reading the code; the corrected
+guard closed one drift path (detail changes) but missed a second (a writer setting the *summary*
+directly bypassed derivation entirely) until a positive-control reproduction proved it live; a DOWN
+migration's "pre-derivation" snapshot was taken *after* the trigger had already been live, and the
+fix for that introduced its own new gap (a re-apply would silently duplicate the snapshot).
+
+**Generalization**: (1) when a defect class is named after an INCIDENT, measure the class's full
+extent from live data before scoping the fix to the one instance that was noticed -- the same
+mechanism (summary disagrees with detail) recurred in shapes the original incident never exercised.
+(2) A derivation/guard fix is not exempt from the adversarial-review discipline applied to the
+original bug: every one of the 6 correction rounds above was caught by *executing* the design
+(live Postgres, a positive control reproducing the original failure, a counterfactual with the
+fix removed) rather than by re-reading the corrected code, and 2 of the 6 rounds were the review
+process itself finding that the PREVIOUS round's own "fix" was wrong. (3) A new CI control that
+enforces a class needs to prove it can catch its own seeded instance of that class (this repo's
+`control-seed-test-lint` gate) -- an entry with no fixture, or a "known limitation" comment that
+asserts a coverage gap without measuring its live occurrence count, is exactly the same
+unverified-claim failure mode as everything else in this pattern.
+
+### PR-review checklist line
+
+> When a fix touches a derivation/guard predicate (a trigger, a lint, a gate condition), do not
+> accept "this looks right" from a second read of the code. Require: a positive control that
+> reproduces the ORIGINAL failure against the pre-fix version, then confirms the fix closes it;
+> a check for whether the fix's OWN new code path (a new guard clause, a new snapshot, a new
+> baseline list) introduces a fresh gap; and, for a new CI control, a seeded-defect fixture proving
+> it fires, plus a live-measured (not asserted) count for anything the control declares it cannot
+> catch.
+
+### Files Modified/Created
+`scripts/lint/summary-column-derivation-lint.mjs` (new), `.github/workflows/summary-column-derivation-lint.yml` (new), `database/chairman-gated/20260913_uat_control_pack_evaluated_derive.sql` (new, chairman-gated, staged), `database/chairman-gated/20260913_uat_control_pack_evaluated_derive_DOWN.sql` (new), `database/chairman-gated/20260913_uat_control_pack_evaluated_derive_dry_run.mjs` (new), `scripts/audit/control-seed-specs.json` (new entry), `tests/unit/lint/summary-column-derivation-lint.test.js` (new), `tests/unit/eva/uat-robustness-gate-control-pack-sync.test.js` (new).
+
+---
+
 ## Cross-References
 
 - **Database Patterns**: [database-agent-patterns.md](./database-agent-patterns.md)
@@ -1325,3 +1376,4 @@ proof, not just the registry entry.
 | 1.6.0 | 2026-08-25 | Added self-referential retry/backoff fixed-point pattern from SD-LEO-INFRA-STAGE-GATE-RETRY-001 |
 | 1.7.0 | 2026-08-25 | Added recurrence-fix-needs-its-own-adversarial-review pattern from SD-LEO-INFRA-SESSION-TICK-CLEAR-001 |
 | 1.8.0 | 2026-08-26 | Added gate-requirement-needs-a-verified-producer pattern from SD-LEO-GEN-ALL-VENTURES-PRODUCED-001-A |
+| 1.9.0 | 2026-09-13 | Added summary-column-drift-has-3-shapes / derivation-fix-needs-adversarial-review pattern from SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001 |
