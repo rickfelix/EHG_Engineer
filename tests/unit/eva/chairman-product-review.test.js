@@ -19,6 +19,27 @@ vi.mock('../../../lib/eva/post-build-convergence-gate.js', () => ({
   loadVerdictSummary: vi.fn(),
 }));
 
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I FR-4/FR-5: additive, read-only lookups
+// generateReviewPacket now also makes. Stubbed to safe empty defaults so the
+// pre-existing supabase mocks in this file (which never modeled these tables)
+// don't need to -- matches this file's existing per-module mock philosophy.
+// The capability modules keep their REAL constants (CAPABILITY_IDS,
+// SIGNAL_BACKED_CAPABILITY_IDS) via importOriginal, only the DB-touching
+// functions are stubbed.
+vi.mock('../../../lib/eva/stage-templates/screen-reconciliation-builder.js', () => ({
+  readScreenReconciliation: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, precheckCapabilities: vi.fn().mockResolvedValue(new Map()) };
+});
+
+vi.mock('../../../lib/eva/utils/validate-venture-default-capabilities.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, readCapabilityOverrides: vi.fn().mockResolvedValue(new Map()) };
+});
+
 import {
   buildGuidedTour,
   buildSurfacesInventory,
