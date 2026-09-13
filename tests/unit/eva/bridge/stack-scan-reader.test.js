@@ -121,6 +121,16 @@ describe('isSafeRepoShorthand', () => {
     expect(isSafeRepoShorthand('altifyai')).toBe(false);
     expect(isSafeRepoShorthand('https://github.com/rickfelix/altifyai')).toBe(false);
   });
+
+  // SECURITY post-fix re-review, LOW residual: an all-dots repo segment (e.g.
+  // "owner/..") passed the original allowlist and normalized out a path segment
+  // in the built URL. Not exploitable (measured: 404s upstream), but rejected
+  // by construction now rather than relying on that 404.
+  it('rejects an all-dots repo segment (SECURITY LOW residual, defense-in-depth)', () => {
+    expect(isSafeRepoShorthand('owner/..')).toBe(false);
+    expect(isSafeRepoShorthand('owner/.')).toBe(false);
+    expect(isSafeRepoShorthand('owner/...')).toBe(false);
+  });
 });
 
 describe('readStackScanConclusion', () => {
