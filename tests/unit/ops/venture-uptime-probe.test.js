@@ -170,7 +170,8 @@ function makeDeploymentsSupabase(rows) {
       if (table !== 'venture_deployments') throw new Error(`unexpected table ${table}`);
       return {
         select() { return this; },
-        eq() { return Promise.resolve({ data: rows, error: null }); },
+        eq() { return this; },
+        limit() { return Promise.resolve({ data: rows, error: null }); },
       };
     },
   };
@@ -222,7 +223,7 @@ describe('getLatestProbeStatus', () => {
   });
 
   it('returns null when the underlying query errors', async () => {
-    const supabase = { from: () => ({ select() { return this; }, eq() { return Promise.resolve({ data: null, error: { message: 'boom' } }); } }) };
+    const supabase = { from: () => ({ select() { return this; }, eq() { return this; }, limit() { return Promise.resolve({ data: null, error: { message: 'boom' } }); } }) };
     expect(await getLatestProbeStatus(supabase, 'v1')).toBeNull();
   });
 

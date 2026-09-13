@@ -52,7 +52,7 @@ function buildMockSupabase({ presentTypes = [], artifactData = {}, legalDocsPres
         return { insert() { return Promise.resolve({ data: null, error: null }); } };
       }
       if (table === 'venture_deployments') {
-        return { select() { return this; }, eq() { return Promise.resolve({ data: deploymentRows, error: null }); } };
+        return { select() { return this; }, eq() { return this; }, limit() { return Promise.resolve({ data: deploymentRows, error: null }); } };
       }
       throw new Error(`unexpected table ${table}`);
     },
@@ -141,7 +141,7 @@ describe('SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-F FR-4: monitoring checklist cas
           return { select() { return { eq() { return this; }, not() { return Promise.resolve({ data: [{ generated_at: '2026-07-13T00:00:00Z', legal_templates: { template_type: 'terms_of_service' } }, { generated_at: '2026-07-13T00:00:00Z', legal_templates: { template_type: 'privacy_policy' } }], error: null }); } }; } };
         }
         if (table === 'eva_orchestration_events') return { insert() { return Promise.resolve({ data: null, error: null }); } };
-        if (table === 'venture_deployments') return { select() { return this; }, eq() { return Promise.resolve({ data: null, error: { message: 'timeout' } }); } };
+        if (table === 'venture_deployments') return { select() { return this; }, eq() { return this; }, limit() { return Promise.resolve({ data: null, error: { message: 'timeout' } }); } };
         throw new Error(`unexpected table ${table}`);
       },
     };
