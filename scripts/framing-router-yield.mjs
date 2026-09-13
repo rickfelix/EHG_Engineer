@@ -18,12 +18,16 @@ const { tallyFramingYield, formatFramingYieldLine } = require('../lib/governance
 
 export async function computeWeeklyFramingYield(supabase, { days = 7, now = new Date() } = {}) {
   const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  // count-truncation-diff-lint requires a provably-bounded limit(N<1000) -- PostgREST's own
+  // server-side db-max-rows cap silently clamps ANY unranged read at 1000 regardless of a
+  // higher client .limit() (measured convention, see scripts/adam-advisory.cjs's
+  // SWEEP_ROW_LIMIT), so 2000 would have been misleading, not just unbounded.
   const { data, error } = await supabase
     .from('session_coordination')
     .select('id, payload, created_at')
     .eq('payload->>oracle', 'true')
     .gte('created_at', since.toISOString())
-    .limit(2000);
+    .limit(999);
   if (error) return { available: false, reason: error.message };
   const counts = tallyFramingYield(data || []);
   return { available: true, counts, line: formatFramingYieldLine(counts, { days }) };
