@@ -27,8 +27,14 @@ const FIXTURE_PATH = 'tests/unit/hygiene/clock-skew-fixture.test.js';
 const OFFSET_MS = 45 * 24 * 60 * 60 * 1000; // +45 days, matching FR-2's real sweep offset
 
 function runChildVitest(testPath, extraEnv) {
+  // SD-LEO-INFRA-CLOCK-SKEW-SWEEP-001 (EXEC-TO-PLAN TESTING finding): both clock vars must
+  // default to unset here, not inherited from this process's own env -- otherwise a parent
+  // process that happens to export either var leaks it into every child, inverting the
+  // negative-control cases (which need the var ABSENT unless a test explicitly sets it).
   const env = {
     ...process.env,
+    TEST_CLOCK_OFFSET_MS: '',
+    TEST_CLOCK_PIN_ISO: '',
     ...extraEnv,
     VITEST_DB_ALLOW_REF: '',
     CI: '1',
@@ -111,6 +117,100 @@ describe.skipIf(!NESTED_VITEST_AVAILABLE)('clock-skew setup hook (child process)
         });
         expect(output).toMatch(/Tests\s+2 passed/);
         expect(output).not.toContain('[clock-skew] TEST_CLOCK_OFFSET_MS active');
+        expect(fs.existsSync(ledgerPath)).toBe(false);
+      } finally {
+        fs.rmSync(ledgerPath, { force: true });
+      }
+    },
+    300000,
+  );
+
+  it(
+    'SD-LEO-INFRA-CLOCK-SKEW-SWEEP-001 piece (c): reapplies the ABSOLUTE pin for G2 even though G1 reset to real timers',
+    () => {
+      const ledgerPath = path.join(os.tmpdir(), `clock-skew-ledger-pin-${process.pid}-${Date.now()}.jsonl`);
+      const pinIso = '2026-10-28T09:00:00.000Z'; // arbitrary future instant, +45d-class skew
+      try {
+        const { output } = runChildVitest(FIXTURE_PATH, {
+          TEST_CLOCK_PIN_ISO: pinIso,
+          CLOCK_SKEW_LEDGER_PATH: ledgerPath,
+        });
+        expect(output).toMatch(/Tests\s+2 passed/);
+        expect(output).not.toMatch(/Tests\s+\d+ failed/);
+        expect(output).toContain('[clock-skew] TEST_CLOCK_PIN_ISO active');
+
+        const ledger = readLedger(ledgerPath);
+        expect(ledger.length).toBe(2); // AC-2, mirrored: both G1 and G2 show the pin
+        const TOLERANCE_MS = 5000;
+        for (const entry of ledger) {
+          expect(entry.mode).toBe('pin');
+          expect(entry.pinned_iso).toBe(pinIso);
+          expect(Math.abs(entry.observed_offset_ms)).toBeLessThan(TOLERANCE_MS); // ~0: the pin held, not drifted
+        }
+      } finally {
+        fs.rmSync(ledgerPath, { force: true });
+      }
+    },
+    300000,
+  );
+
+  it(
+    'SD-LEO-INFRA-CLOCK-SKEW-SWEEP-001 piece (c): pins to an instant inside the 22:00-06:00 ET SMS quiet window',
+    () => {
+      const ledgerPath = path.join(os.tmpdir(), `clock-skew-ledger-quiet-${process.pid}-${Date.now()}.jsonl`);
+      // 2027-01-14T23:00:00 ET (EST, UTC-5 -- January is unambiguously outside DST) = 04:00 UTC
+      // the next calendar day. Verified against lib/time/chairman-et-wall-clock.js's own
+      // SMS_QUIET_START_HOUR=22 / SMS_QUIET_END_HOUR=6 (hour >= 22 matches).
+      const pinIso = '2027-01-15T04:00:00.000Z';
+      try {
+        const { output } = runChildVitest(FIXTURE_PATH, {
+          TEST_CLOCK_PIN_ISO: pinIso,
+          CLOCK_SKEW_LEDGER_PATH: ledgerPath,
+        });
+        expect(output).toMatch(/Tests\s+2 passed/);
+        expect(output).toContain('[clock-skew] TEST_CLOCK_PIN_ISO active');
+        const etHour = new Date(pinIso).toLocaleString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit' });
+        expect(Number(etHour) >= 22 || Number(etHour) < 6).toBe(true); // fixture premise: really inside the quiet window
+        expect(readLedger(ledgerPath).every((e) => e.mode === 'pin')).toBe(true);
+      } finally {
+        fs.rmSync(ledgerPath, { force: true });
+      }
+    },
+    300000,
+  );
+
+  it(
+    'SD-LEO-INFRA-CLOCK-SKEW-SWEEP-001 piece (c): TEST_CLOCK_PIN_ISO wins when both vars are set (never combined)',
+    () => {
+      const ledgerPath = path.join(os.tmpdir(), `clock-skew-ledger-precedence-${process.pid}-${Date.now()}.jsonl`);
+      const pinIso = '2026-10-28T09:00:00.000Z';
+      try {
+        const { output } = runChildVitest(FIXTURE_PATH, {
+          TEST_CLOCK_PIN_ISO: pinIso,
+          TEST_CLOCK_OFFSET_MS: String(45 * 24 * 60 * 60 * 1000),
+          CLOCK_SKEW_LEDGER_PATH: ledgerPath,
+        });
+        expect(output).toContain('[clock-skew] TEST_CLOCK_PIN_ISO active');
+        expect(output).toContain('ignored, PIN takes precedence');
+        expect(readLedger(ledgerPath).every((e) => e.mode === 'pin' && e.pinned_iso === pinIso)).toBe(true);
+      } finally {
+        fs.rmSync(ledgerPath, { force: true });
+      }
+    },
+    300000,
+  );
+
+  it(
+    'SD-LEO-INFRA-CLOCK-SKEW-SWEEP-001 piece (c): malformed TEST_CLOCK_PIN_ISO fails safe instead of throwing',
+    () => {
+      const ledgerPath = path.join(os.tmpdir(), `clock-skew-ledger-pin-malformed-${process.pid}-${Date.now()}.jsonl`);
+      try {
+        const { output } = runChildVitest(FIXTURE_PATH, {
+          TEST_CLOCK_PIN_ISO: 'not-a-date',
+          CLOCK_SKEW_LEDGER_PATH: ledgerPath,
+        });
+        expect(output).toMatch(/Tests\s+2 passed/);
+        expect(output).not.toContain('[clock-skew] TEST_CLOCK_PIN_ISO active');
         expect(fs.existsSync(ledgerPath)).toBe(false);
       } finally {
         fs.rmSync(ledgerPath, { force: true });
