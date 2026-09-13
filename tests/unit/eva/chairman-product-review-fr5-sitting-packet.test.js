@@ -29,6 +29,7 @@ import {
 import { readScreenReconciliation } from '../../../lib/eva/stage-templates/screen-reconciliation-builder.js';
 import { precheckCapabilities } from '../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js';
 import { readCapabilityOverrides } from '../../../lib/eva/utils/validate-venture-default-capabilities.js';
+import { readStackScanConclusion } from '../../../lib/eva/bridge/stack-scan-reader.js';
 
 vi.mock('../../../lib/eva/stage-templates/screen-reconciliation-builder.js', () => ({
   readScreenReconciliation: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock('../../../lib/eva/utils/validate-venture-default-capabilities.js', async
   const actual = await importOriginal();
   return { ...actual, readCapabilityOverrides: vi.fn() };
 });
+vi.mock('../../../lib/eva/bridge/stack-scan-reader.js', () => ({ readStackScanConclusion: vi.fn() }));
 
 const fakeArtifactsSupabase = {
   from: () => ({ select: () => ({ eq: () => ({ eq: () => ({ in: () => Promise.resolve({ data: [] }) }) }) }) }),
@@ -126,25 +128,29 @@ describe('buildCapabilityScorecard', () => {
 describe('generateReviewPacket -- FR-5 new sections', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('includes reconciliationTable and registryScorecard as distinct top-level keys', async () => {
+  it('includes reconciliationTable, registryScorecard, and stackScan as distinct top-level keys', async () => {
     readScreenReconciliation.mockResolvedValue([{ screen_id: 'screen-2', reconciliation_status: 'built_and_walked' }]);
     precheckCapabilities.mockResolvedValue(new Map([['error-capture-middleware', { wired: true, reason: 'found a row' }]]));
     readCapabilityOverrides.mockResolvedValue(new Map());
+    readStackScanConclusion.mockResolvedValue({ available: true, conclusion: 'success', runId: 42, checkedAt: '2026-09-13T00:00:00Z' });
 
     const packet = await generateReviewPacket(fakeArtifactsSupabase, 'v1', { log: () => {} });
 
     expect(packet.reconciliationTable).toEqual([{ screen_id: 'screen-2', reconciliation_status: 'built_and_walked' }]);
     expect(packet.registryScorecard.pass).toBe(1);
     expect(packet.registryScorecard.capabilities).toHaveLength(7);
+    expect(packet.stackScan).toEqual({ available: true, conclusion: 'success', runId: 42, checkedAt: '2026-09-13T00:00:00Z' });
   });
 
-  it('degrades to empty sections (never throws) when the reconciliation/capability reads fail', async () => {
+  it('degrades to empty/unavailable sections (never throws) when the reconciliation/capability/stack-scan reads fail', async () => {
     readScreenReconciliation.mockResolvedValue([]);
     precheckCapabilities.mockResolvedValue(new Map());
     readCapabilityOverrides.mockResolvedValue(new Map());
+    readStackScanConclusion.mockResolvedValue({ available: false, reason: 'no_venture_resources_github_repo_record' });
 
     const packet = await generateReviewPacket(fakeArtifactsSupabase, 'v1', { log: () => {} });
     expect(packet.reconciliationTable).toEqual([]);
     expect(packet.registryScorecard.fail).toBe(7);
+    expect(packet.stackScan.available).toBe(false);
   });
 });

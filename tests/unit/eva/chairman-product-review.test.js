@@ -39,6 +39,9 @@ vi.mock('../../../lib/eva/utils/validate-venture-default-capabilities.js', async
   const actual = await importOriginal();
   return { ...actual, readCapabilityOverrides: vi.fn().mockResolvedValue(new Map()) };
 });
+vi.mock('../../../lib/eva/bridge/stack-scan-reader.js', () => ({
+  readStackScanConclusion: vi.fn().mockResolvedValue({ available: false, reason: 'no_venture_resources_github_repo_record' }),
+}));
 
 import {
   buildGuidedTour,
