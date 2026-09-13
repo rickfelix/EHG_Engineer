@@ -95,10 +95,12 @@ export function validateDeploymentUrl(rawUrl) {
 
 async function resolveVenture(supabase, ventureArg) {
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ventureArg);
-  const query = supabase.from('ventures').select('id, name, deployment_url');
+  // Each branch is a fully self-contained, single-row-bounded query (not a
+  // shared unbounded .select() split across a ternary) so count-truncation-
+  // diff-lint's static check can see the .maybeSingle() bound directly.
   const { data, error } = isUuid
-    ? await query.eq('id', ventureArg).maybeSingle()
-    : await query.eq('name', ventureArg).maybeSingle();
+    ? await supabase.from('ventures').select('id, name, deployment_url').eq('id', ventureArg).maybeSingle()
+    : await supabase.from('ventures').select('id, name, deployment_url').eq('name', ventureArg).maybeSingle();
   if (error) throw new Error(`ventures lookup failed: ${error.message}`);
   if (!data) throw new Error(`venture not found: ${ventureArg}`);
   if (!data.deployment_url) throw new Error(`venture ${data.name} has no deployment_url`);
