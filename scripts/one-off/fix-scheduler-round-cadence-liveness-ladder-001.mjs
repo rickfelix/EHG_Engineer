@@ -13,8 +13,12 @@ import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
+// QF-20260913-788: okr-day28-hardstop REMOVED from this list. It is not a registry
+// misdeclaration -- registerJob's cadenceDays is now 1 (86400s), matching the registry's
+// existing expected_interval_seconds=86400 exactly; the original 2592000 correction here
+// would have silenced the OVERDUE alarm while leaving the functional bug (hard-stop
+// unreachable past day 28) in place. See lib/eva/eva-master-scheduler.js.
 const CORRECTIONS = [
-  { process_key: 'scheduler_round:okr-day28-hardstop', expected_interval_seconds: 2592000 }, // registerJob cadenceDays:30
   { process_key: 'scheduler_round:portfolio_review', expected_interval_seconds: 604800 }, // registerRound cadence:'weekly'
   { process_key: 'scheduler_round:stage_health', expected_interval_seconds: 2592000 }, // registerRound cadence:'monthly'
 ];
