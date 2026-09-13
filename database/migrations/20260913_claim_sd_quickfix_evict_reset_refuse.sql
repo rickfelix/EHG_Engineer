@@ -1,4 +1,5 @@
 -- @approved-by: codestreetlabs@gmail.com
+-- @chairman-gated
 -- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-1, FR-2, FR-6)
 --
 -- BASELINE: this migration is built directly on top of
