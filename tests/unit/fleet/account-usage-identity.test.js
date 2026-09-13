@@ -329,6 +329,44 @@ describe('QF-20260911-082 — the hostDefault slot never shows a fixed label it 
     expect(hostReading?.reason).toBe(UNAVAILABLE_REASONS.DUPLICATE_IDENTITY);
   });
 
+  it('QF-20260912-509: a hostDefault alias of exactly ONE real profile slot keeps that slot\'s live reading, blanking only the hostDefault', async () => {
+    const hostDefaultEntry = ACCOUNT_REGISTRY.find((e) => e.hostDefault);
+    const canaryEntry = ACCOUNT_REGISTRY.find((e) => e.profile === 'canary');
+    const lines = [];
+    vi.spyOn(console, 'warn').mockImplementation((l) => lines.push(String(l)));
+    const out = await readAllAccounts({
+      env: ENV,
+      fs: fsWithTokens,
+      fetchImpl: fetchReturning(200, { five_hour: { utilization: 7 }, seven_day: { utilization: 2 } }),
+      // hostDefault and the canary profile alias the SAME account; deepsoul resolves distinctly
+      // -- the live specimen (CSL host-default dir holding the canary profile's own token).
+      getAccountIdentity: (p) => ({
+        email: 'x@y.invalid',
+        orgName: 'Org',
+        accountUuid8: p.includes('deepsoul') ? 'deepsoul-uuid' : 'shared-uuid',
+      }),
+    });
+    const hostReading = out.find((r) => r.name === hostDefaultEntry.name);
+    const canaryReading = out.find((r) => r.name === canaryEntry.name);
+
+    // The hostDefault alias is blanked (never shows a number under its fixed label)...
+    expect(hostReading?.state).toBe('unavailable');
+    expect(hostReading?.reason).toBe(UNAVAILABLE_REASONS.DUPLICATE_IDENTITY);
+    // ...but the real profile slot keeps its LIVE reading, attributed under its OWN name --
+    // the defect this QF fixes: the old code blanked BOTH.
+    expect(canaryReading?.state).toBe('ok');
+    expect(canaryReading?.reason).toBeUndefined();
+    expect(canaryReading?.weeklyPct).toBeDefined();
+
+    const line = lines.find((l) => l.includes('duplicate_identity_resolved'));
+    expect(line).toBeTruthy();
+    const parsed = JSON.parse(line);
+    expect(parsed.attributed_to).toBe(canaryEntry.name);
+    expect(parsed.slots.sort()).toEqual([hostDefaultEntry.name, canaryEntry.name].sort());
+    // VAL-02/TR-1 parity with the existing fail-loud message: label only, never the identity value.
+    expect(line).not.toContain('shared-uuid');
+  });
+
   it('resolveDisplayIdentities stays keyed exactly as the hostDefault fallback reading is named', async () => {
     let i = 0;
     const opts = {
