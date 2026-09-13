@@ -1,0 +1,11 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: sd, error: e1 } = await sb.from('strategic_directives_v2').select('id, uuid_id, sd_key, title, status, current_phase').eq('id','SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I').maybeSingle();
+console.log('SD:', JSON.stringify(sd), 'err:', e1?.message);
+const { data: rows, error: e2 } = await sb.from('sub_agent_execution_results').select('*').eq('sd_id', sd?.uuid_id || sd?.id).order('created_at',{ascending:false}).limit(3);
+console.log('existing rows for sd:', rows?.length, 'err:', e2?.message);
+if (rows?.[0]) console.log('SAMPLE KEYS:', Object.keys(rows[0]).join(','));
+if (rows?.[0]) console.log('SAMPLE:', JSON.stringify({sub_agent_code:rows[0].sub_agent_code, phase:rows[0].phase, verdict:rows[0].verdict, status:rows[0].status, confidence:rows[0].confidence, sd_id:rows[0].sd_id, metadata: rows[0].metadata}).slice(0,1200));
+const { data: ff, error: e3 } = await sb.from('leo_feature_flags').select('*').or('flag_key.eq.LEO_S24_CAPABILITY_CHECKLIST_REQUIRED,key.eq.LEO_S24_CAPABILITY_CHECKLIST_REQUIRED');
+console.log('FLAG ROWS:', JSON.stringify(ff), 'err:', e3?.message);

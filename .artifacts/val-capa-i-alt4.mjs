@@ -1,0 +1,24 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const vid = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
+const { data: lrc } = await sb.from('venture_artifacts').select('artifact_data,created_at,updated_at').eq('venture_id',vid).eq('lifecycle_stage',24).eq('artifact_type','launch_readiness_checklist').eq('is_current',true).maybeSingle();
+console.log('=== S24 launch_readiness_checklist ===');
+if (lrc) { const d = lrc.artifact_data||{}; console.log('created', lrc.created_at, 'verdict=', d.verdict, 'pct=', d.readiness_pct);
+  for (const c of (d.checklist||[])) console.log(`  [${c.mode}] ${c.category} = ${c.status} :: ${String(c.detail).slice(0,110)}`); }
+else console.log('none');
+const { data: uj } = await sb.from('venture_artifacts').select('artifact_data').eq('venture_id',vid).eq('lifecycle_stage',15).eq('artifact_type','blueprint_user_journey').eq('is_current',true).maybeSingle();
+console.log('=== S15 blueprint_user_journey coverage_selfcheck ===');
+console.log(JSON.stringify(uj?.artifact_data?.coverage_selfcheck ?? Object.keys(uj?.artifact_data||{}), null, 1).slice(0,1500));
+const { data: ws } = await sb.from('venture_artifacts').select('artifact_data').eq('venture_id',vid).eq('lifecycle_stage',15).eq('artifact_type','wireframe_screens').eq('is_current',true).maybeSingle();
+const wsd = ws?.artifact_data||{};
+console.log('=== S15 wireframe_screens keys ===', Object.keys(wsd).join(','));
+const screens = wsd.screens || wsd.wireframe_screens || [];
+console.log('screen count:', Array.isArray(screens)?screens.length:'n/a');
+if (Array.isArray(screens)) for (const s of screens.slice(0,20)) console.log('  ', s.id||s.screen_id, '|', s.name||s.title);
+const { data: vm } = await sb.from('ventures').select('metadata').eq('id',vid).single();
+console.log('=== venture metadata (repo-ish keys) ===');
+const md = vm?.metadata||{};
+console.log(Object.keys(md).join(','));
+for (const k of Object.keys(md)) if (/repo|github|git|ci/i.test(k)) console.log('  ', k, '=', JSON.stringify(md[k]).slice(0,200));

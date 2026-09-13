@@ -1,0 +1,12 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await s.from('product_requirements_v2').select('functional_requirements, acceptance_criteria, updated_at').eq('id','PRD-SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I').maybeSingle();
+const fr6 = data.functional_requirements.find(f=>f.id==='FR-6');
+const ac1 = fr6.acceptance_criteria[0];
+const all = JSON.stringify({ f: data.functional_requirements, a: data.acceptance_criteria });
+console.log('FR-6 AC-1 status clause:', (ac1.match(/STATUS AS OF[^.]*\./i) || ['<none found>'])[0]);
+console.log('stale "EXEC-TO-PLAN HANDOFF" gone from FR-6 AC-1:', !/EXEC-TO-PLAN HANDOFF/i.test(ac1));
+console.log('still states NOT YET DONE (disclosure intact):', /NOT YET DONE/i.test(ac1));
+console.log('any EXEC-TO-PLAN left anywhere in FRs/top-level ACs:', (all.match(/EXEC-TO-PLAN/g)||[]).length);
+console.log('updated_at:', data.updated_at);

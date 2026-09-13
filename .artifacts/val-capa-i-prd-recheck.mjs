@@ -1,0 +1,18 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+const s = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await s.from('product_requirements_v2').select('functional_requirements, acceptance_criteria, test_scenarios, risks, updated_at').eq('id','PRD-SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I').maybeSingle();
+console.log('updated_at:', data.updated_at);
+const fr5 = data.functional_requirements.find(f=>f.id==='FR-5');
+const fr6 = data.functional_requirements.find(f=>f.id==='FR-6');
+console.log('\n--- FR-5 AC-1 ---\n', fr5.acceptance_criteria[0]);
+console.log('\n--- FR-5 AC-3 ---\n', fr5.acceptance_criteria[2]);
+console.log('\n--- FR-6 AC-1 ---\n', fr6.acceptance_criteria[0]);
+console.log('\n--- FR-6 AC-2 ---\n', fr6.acceptance_criteria[1]);
+console.log('\n--- FR-6 desc tail (last 900 chars) ---\n', fr6.description.slice(-900));
+console.log('\n--- top-level AC[3] ---\n', data.acceptance_criteria[3]);
+console.log('\n--- top-level AC[4] ---\n', data.acceptance_criteria[4]);
+const ts7 = data.test_scenarios.find(t=>t.id==='TS-7');
+console.log('\n--- TS-7 given ---\n', ts7.given);
+console.log('--- TS-7 then ---\n', ts7.then);
+console.log('\n--- risks[3].mitigation ---\n', data.risks[3].mitigation);

@@ -1,0 +1,14 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const vid = '50763b6a-1fad-4e1e-b2fc-296a1d66ebf9';
+const { data: ws } = await sb.from('venture_artifacts').select('artifact_data').eq('venture_id',vid).eq('lifecycle_stage',15).eq('artifact_type','wireframe_screens').eq('is_current',true).maybeSingle();
+const screens = ws?.artifact_data?.screens||[];
+console.log('=== screens (full first entry) ===');
+console.log(JSON.stringify(screens[0],null,1).slice(0,800));
+console.log('=== id -> label map ===');
+for (const s of screens) console.log(' ', s.id, '|', s.screen_name||s.label||s.name||s.title||s.purpose||'(no label field)');
+const { data: vm } = await sb.from('ventures').select('metadata').eq('id',vid).single();
+console.log('=== gating_decision ===');
+console.log(JSON.stringify(vm.metadata.gating_decision,null,1).slice(0,1500));
