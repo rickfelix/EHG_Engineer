@@ -46,8 +46,11 @@ async function runCase(client, label, { stampSql }) {
     // pg_get_functiondef). A same-value write would silently skip the check entirely.
     const target = current === 1 ? 2 : 1;
     try {
+      // Adversarial PROBE of the canonical-writer choke-point trigger itself (never a real
+      // advancement), always inside a SAVEPOINT the caller rolls back -- see the module header's
+      // Safety note.
       await client.query(
-        `UPDATE ventures SET current_lifecycle_stage = $1 ${stampSql} WHERE id = $2`,
+        `UPDATE ventures SET current_lifecycle_stage = $1 ${stampSql} WHERE id = $2`, // stage-advancement-lint-disable-line
         [target, id]
       );
       return { label, status: 'NO_ERROR', ventureId: id };
