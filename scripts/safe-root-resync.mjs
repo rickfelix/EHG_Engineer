@@ -412,13 +412,13 @@ export async function safeRootResync(opts = {}) {
   // ── STEP 3.5: discard header-only generator dirt before the ff (QF-20260912-811) ──
   if (behind > 0) {
     try {
-      const { stdout: porcelain } = await exec(['status', '--porcelain']);
+      const { stdout: porcelain } = await exec(['status', '--porcelain']); // shell-injection-argv-disable-line: `exec` here is this file's own injectable argv-array seam (execFileSync('git', args)), not a real shell exec
       const dirtyTracked = (porcelain || '').split('\n').filter((l) => /^ ?M /.test(l)).map((l) => l.slice(3).trim()).filter(Boolean);
       if (isAllGeneratorOwned(dirtyTracked)) {
         const claudeFiles = dirtyTracked.filter((f) => f !== GENERATED_MANIFEST_FILE);
-        const diffs = await Promise.all(claudeFiles.map((f) => exec(['diff', 'origin/main', '--', f])));
+        const diffs = await Promise.all(claudeFiles.map((f) => exec(['diff', 'origin/main', '--', f]))); // shell-injection-argv-disable-line: same injectable argv-array seam
         if (diffs.every((d) => isHeaderOnlyDiff(d.stdout))) {
-          await exec(['checkout', '--', ...dirtyTracked]);
+          await exec(['checkout', '--', ...dirtyTracked]); // shell-injection-argv-disable-line: same injectable argv-array seam
           process.stdout.write(`[safe-root-resync] discarded header-only generator dirt (${dirtyTracked.length} files)\n`);
         } else {
           process.stderr.write('[safe-root-resync] generated files carry DB changes not on main: regenerate in a worktree and PR\n');
