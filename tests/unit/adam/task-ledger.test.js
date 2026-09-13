@@ -385,15 +385,17 @@ function makeCloseSourcedChildSupabase(rows) {
           not(col, _op, val) {
             const excluded = new Set(val.replace(/^\(|\)$/g, '').split(','));
             const matched = ledger.filter((r) => filters.every((f) => f(r)) && !excluded.has(r[col]));
-            return Promise.resolve({ data: matched.map((r) => ({ id: r.id })), error: null });
+            return {
+              maybeSingle: () => Promise.resolve({ data: matched.length ? { id: matched[0].id } : null, error: null }),
+            };
           },
         };
         return builder;
       },
       update(patch) {
         return {
-          in(col, ids) {
-            for (const r of ledger) if (ids.includes(r[col])) Object.assign(r, patch);
+          eq(col, val) {
+            for (const r of ledger) if (r[col] === val) Object.assign(r, patch);
             return Promise.resolve({ error: null });
           },
         };
@@ -404,16 +406,16 @@ function makeCloseSourcedChildSupabase(rows) {
 }
 
 describe('QF-20260911-447: closeSourcedChild — close-at-source board hygiene', () => {
-  it('closes OPEN sourced_sd children bound to sourceRef, stamping the terminal status + a timestamp into blocker', async () => {
+  it('closes the OPEN sourced_sd child bound to sourceRef, stamping the terminal status + a timestamp into blocker', async () => {
     const sb = makeCloseSourcedChildSupabase([
       { id: 'c1', source_kind: 'sourced_sd', source_ref: 'QF-1', status: 'open' },
-      { id: 'c2', source_kind: 'sourced_sd', source_ref: 'QF-1', status: 'in_progress' },
+      { id: 'c2', source_kind: 'sourced_sd', source_ref: 'QF-9', status: 'in_progress' }, // unrelated ref, untouched
     ]);
     const result = await closeSourcedChild(sb, 'QF-1', 'completed');
-    expect(result).toEqual({ closed: 2 });
+    expect(result).toEqual({ closed: 1 });
     expect(sb._ledger[0].status).toBe('done');
     expect(sb._ledger[0].blocker).toMatch(/^CLOSED AT SOURCE: QF-1 completed \d{4}-\d{2}-\d{2}T/);
-    expect(sb._ledger[1].status).toBe('done');
+    expect(sb._ledger[1].status).toBe('in_progress'); // unrelated source_ref left alone
   });
 
   it('is idempotent — a second call for the same sourceRef closes nothing further', async () => {

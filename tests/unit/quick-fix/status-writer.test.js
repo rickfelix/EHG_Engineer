@@ -15,8 +15,10 @@ function stubSupabase({ initialStatus = 'open', initialReason = null, initialCom
   const rowState = { status: initialStatus, escalation_reason: initialReason, completed_at: initialCompletedAt };
   const updateCalls = [];
   // QF-20260911-447: closeSourcedChild's read is the ONLY caller of .not() on this stub — its
-  // shape (select('id').eq(...).eq(...).not(...)) unambiguously disambiguates it from the
-  // quick_fixes read/update chain above, so real (not mocked) wiring is verifiable directly.
+  // shape (select('id').eq(...).eq(...).not(...).maybeSingle()) unambiguously disambiguates it
+  // from the quick_fixes read/update chain above, so real (not mocked) wiring is verifiable
+  // directly. Always resolves to no match (data: null) -- these tests verify the READ is reached
+  // with the right args, not the subsequent update.
   const boardCalls = [];
   const sb = {
     from() {
@@ -26,8 +28,11 @@ function stubSupabase({ initialStatus = 'open', initialReason = null, initialCom
         eq(col, val) { chain._eqs.push([col, val]); return chain; },
         not(col, op, val) {
           boardCalls.push({ eqs: [...chain._eqs], not: [col, op, val] });
-          if (boardSelectError) return Promise.resolve({ data: null, error: boardSelectError });
-          return Promise.resolve({ data: [], error: null }); // no matching rows -> closeSourcedChild no-ops
+          return {
+            maybeSingle: () => boardSelectError
+              ? Promise.resolve({ data: null, error: boardSelectError })
+              : Promise.resolve({ data: null, error: null }),
+          };
         },
         maybeSingle() {
           // SELECT branch (no update payload recorded on this chain)
