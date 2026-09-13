@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { evaluateRealityGate, _resetBoundaryCacheForTest } from '../../../lib/eva/reality-gates.js';
 import { attemptGateRecovery } from '../../../lib/eva/gate-failure-recovery.js';
+import { hasZeroAutomaticProducers } from '../../../lib/eva/producerless-artifact-registry.js';
 
 const silentLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), log: vi.fn() };
 
@@ -100,5 +101,63 @@ describe('FR-7 AC#4: zero-usage-event venture at the 24->25 boundary', () => {
     expect(insertedFeedback).toHaveLength(1);
     expect(insertedFeedback[0].category).toBe('harness_backlog');
     expect(insertedFeedback[0].title).toMatch(/launch_usage_signal/);
+  });
+});
+
+/**
+ * QF-20260913-349: the fixture above mocks gate_boundary_config directly, but the ONLY
+ * caller that evaluates the real 24->25 boundary (lib/eva/eva-orchestrator.js::processStage)
+ * never reaches that DB lookup -- it passes requiredArtifacts explicitly (sourced from
+ * venture_stages.required_artifacts, the SSOT), which evaluateRealityGate's own priority
+ * order (requiredArtifacts param > gate_boundary_config) takes first. Live-confirmed against
+ * AltifyAI (venture 50763b6a) 2026-09-13: gate_boundary_config's 24->25 row now lists only
+ * launch_readiness_checklist (corrected 08-28), so a test that mocks it with launch_usage_signal
+ * exercises a path production no longer takes. This covers the path that actually fires.
+ */
+describe('FR-7 AC#4 (caller-supplied path): venture_stages.required_artifacts drives the real boundary check', () => {
+  beforeEach(() => {
+    _resetBoundaryCacheForTest();
+  });
+
+  it('BLOCKED with a single pure producer-less reason when requiredArtifacts (SSOT) includes launch_usage_signal', async () => {
+    const supabase = {
+      from(table) {
+        if (table === 'venture_artifacts') {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  in: () => ({
+                    limit: () => Promise.resolve({
+                      data: [{ artifact_type: 'launch_readiness_checklist', quality_score: 0.9, file_url: null, is_current: true, content: null }],
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        throw new Error(`unexpected table in fixture: ${table}`);
+      },
+    };
+
+    const gateResult = await evaluateRealityGate(
+      {
+        ventureId: 'v-fr7-caller-supplied',
+        fromStage: 24,
+        toStage: 25,
+        requiredArtifacts: ['launch_readiness_checklist', 'launch_usage_signal'],
+        supabase,
+        logger: silentLogger,
+      }
+    );
+
+    expect(gateResult.config_source).toBe('lifecycle_stage_config');
+    expect(gateResult.status).toBe('BLOCKED');
+    expect(gateResult.reasons).toHaveLength(1);
+    expect(gateResult.reasons[0].code).toBe('ARTIFACT_MISSING');
+    expect(gateResult.reasons[0].artifact_type).toBe('launch_usage_signal');
+    expect(hasZeroAutomaticProducers(gateResult.reasons[0].artifact_type)).toBe(true);
   });
 });
