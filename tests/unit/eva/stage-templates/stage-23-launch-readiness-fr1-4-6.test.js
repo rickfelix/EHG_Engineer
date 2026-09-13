@@ -37,8 +37,11 @@ const REPO_ROOT = resolve(__dirname, '../../../../');
 
 // Fixture: supabase mock that satisfies the preflight + emit contract used by
 // FR-4. `presentTypes` is the set of artifact_types the venture currently has
-// at is_current=true; an empty set triggers SKIPPED.
-function buildMockSupabase({ presentTypes = [], emitSpy, legalDocsPresent = false } = {}) {
+// at is_current=true; an empty set triggers SKIPPED. `artifactData` (SD-LEO-
+// INFRA-STAGE-LAUNCH-READINESS-001 FR-1) supplies each present type's real
+// artifact_data payload, keyed by artifact_type -- preflightUpstream now reads
+// this column directly instead of a CROSS_STAGE_DEPS-derived stageNData param.
+function buildMockSupabase({ presentTypes = [], artifactData = {}, emitSpy, legalDocsPresent = false } = {}) {
   return {
     from(table) {
       if (table === 'venture_artifacts') {
@@ -52,6 +55,7 @@ function buildMockSupabase({ presentTypes = [], emitSpy, legalDocsPresent = fals
                     lifecycle_stage: 23,
                     artifact_type: t,
                     is_current: true,
+                    artifact_data: artifactData[t] ?? null,
                   })),
                   error: null,
                 });
@@ -93,26 +97,28 @@ function buildMockSupabase({ presentTypes = [], emitSpy, legalDocsPresent = fals
   };
 }
 
-const upstreamHappyPath = {
-  stage20Data: { verdict: 'PASS' },
-  stage21Data: { total_assets: 5 },
-  stage22Data: { active_channels: 3 },
-};
-
 const allUpstreamArtifacts = [
   'code_quality_report',
   'visual_device_screenshots',
   'distribution_channel_config',
 ];
 
+// SD-LEO-INFRA-STAGE-LAUNCH-READINESS-001 FR-1: real artifact_data payloads keyed by
+// artifact_type, read by preflightUpstream's widened select -- replaces the old
+// stage20Data/stage21Data/stage22Data positional params (no longer read at runtime).
+const passingArtifactData = {
+  code_quality_report: { verdict: 'PASS' },
+  visual_device_screenshots: { total_screenshots: 5 },
+  distribution_channel_config: { deployed: true, status: 'deployed' },
+};
+
 const silentLogger = { info: () => {}, warn: () => {}, log: () => {}, error: () => {} };
 
 describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
   describe('FR-1: canonical artifact_type emission', () => {
     it('TEMPLATE.analysisStep wraps analyzer output in typed-array contract with launch_readiness_checklist', async () => {
-      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts });
+      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts, artifactData: passingArtifactData });
       const result = await TEMPLATE_23.analysisStep({
-        ...upstreamHappyPath,
         ventureId: '00000000-0000-0000-0000-000000000001',
         ventureName: 'fixture',
         supabase,
@@ -126,9 +132,8 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
     });
 
     it('top-level analyzer fields (checklist, verdict) are preserved alongside artifacts for back-compat', async () => {
-      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts });
+      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts, artifactData: passingArtifactData });
       const result = await TEMPLATE_23.analysisStep({
-        ...upstreamHappyPath,
         ventureId: '00000000-0000-0000-0000-000000000002',
         supabase,
         logger: silentLogger,
@@ -170,9 +175,8 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
     });
 
     it('ADVISORY entries default to status=advisory in checklist (no producer needed)', async () => {
-      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts });
+      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts, artifactData: passingArtifactData });
       const result = await analyzeStage23LaunchReadiness({
-        ...upstreamHappyPath,
         ventureId: '00000000-0000-0000-0000-000000000003',
         supabase,
         logger: silentLogger,
@@ -185,11 +189,12 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
     });
 
     it('verdict=READY when all REQUIRED categories pass (including legal, via a real producer check), even with ADVISORY entries unsatisfied', async () => {
-      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts, legalDocsPresent: true });
+      const supabase = buildMockSupabase({
+        presentTypes: allUpstreamArtifacts,
+        artifactData: passingArtifactData,
+        legalDocsPresent: true,
+      });
       const result = await analyzeStage23LaunchReadiness({
-        stage20Data: { verdict: 'PASS' },
-        stage21Data: { total_assets: 12 },
-        stage22Data: { active_channels: 4 },
         ventureId: '00000000-0000-0000-0000-000000000004',
         supabase,
         logger: silentLogger,
@@ -199,11 +204,12 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
     });
 
     it('verdict=HOLD when legal is REQUIRED and no legal docs have been generated (was previously silent advisory-pass)', async () => {
-      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts, legalDocsPresent: false });
+      const supabase = buildMockSupabase({
+        presentTypes: allUpstreamArtifacts,
+        artifactData: passingArtifactData,
+        legalDocsPresent: false,
+      });
       const result = await analyzeStage23LaunchReadiness({
-        stage20Data: { verdict: 'PASS' },
-        stage21Data: { total_assets: 12 },
-        stage22Data: { active_channels: 4 },
         ventureId: '00000000-0000-0000-0000-000000000004b',
         supabase,
         logger: silentLogger,
@@ -215,15 +221,21 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
     });
 
     it('verdict=HOLD when any REQUIRED category fails (advisory ignored)', async () => {
-      const supabase = buildMockSupabase({ presentTypes: allUpstreamArtifacts });
+      const supabase = buildMockSupabase({
+        presentTypes: allUpstreamArtifacts,
+        artifactData: {
+          ...passingArtifactData,
+          code_quality_report: { verdict: 'FAIL', summary: { by_severity: { critical: 2 } } },
+        },
+        legalDocsPresent: true,
+      });
       const result = await analyzeStage23LaunchReadiness({
-        stage20Data: { verdict: 'FAIL', summary: { by_severity: { critical: 2 } } },
-        stage21Data: { total_assets: 5 },
-        stage22Data: { active_channels: 3 },
         ventureId: '00000000-0000-0000-0000-000000000005',
         supabase,
         logger: silentLogger,
       });
+      const codeQualityEntry = result.checklist.find(c => c.category === 'code_quality');
+      expect(codeQualityEntry.status).toBe('fail');
       expect(result.verdict).toBe('HOLD');
       expect(result.fail_count).toBeGreaterThanOrEqual(1);
     });
@@ -233,7 +245,6 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
     it('returns SKIPPED verdict when no canonical upstream artifacts present', async () => {
       const supabase = buildMockSupabase({ presentTypes: [] });
       const result = await analyzeStage23LaunchReadiness({
-        ...upstreamHappyPath,
         ventureId: '00000000-0000-0000-0000-000000000006',
         supabase,
         logger: silentLogger,
@@ -248,7 +259,6 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
       const emitSpy = vi.fn();
       const supabase = buildMockSupabase({ presentTypes: [], emitSpy });
       await analyzeStage23LaunchReadiness({
-        ...upstreamHappyPath,
         ventureId: '00000000-0000-0000-0000-000000000007',
         supabase,
         logger: silentLogger,
@@ -267,7 +277,6 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
         presentTypes: ['code_quality_report', 'visual_social_graphics', 'distribution_ad_copy'],
       });
       const result = await analyzeStage23LaunchReadiness({
-        ...upstreamHappyPath,
         ventureId: '00000000-0000-0000-0000-000000000008',
         supabase,
         logger: silentLogger,
