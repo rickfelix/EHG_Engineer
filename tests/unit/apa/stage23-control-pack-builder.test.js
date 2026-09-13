@@ -46,7 +46,10 @@ describe('buildFenceEvidence', () => {
     const supabase = fakeSupabase({ metadata: { synthetic_actor: { exclusion_predicate_ref: 'lib/synthetic-actor.js#isSyntheticActor' } } });
     const fetchImpl = vi.fn(async (url) => {
       if (url.includes('/actions/workflows/ci.yml/runs')) return OK({ workflow_runs: [{ id: 42, head_sha: 'deadbeef' }] });
-      if (url.includes('/actions/runs/42/jobs')) return OK({ jobs: [{ name: 'test', steps: [{ name: 'npm test', conclusion: 'success' }] }] });
+      // altifyai's ci.yml `- run: npm test` has no explicit `name:`, so GitHub Actions renders
+      // the step as "Run npm test" (confirmed live against run 34727450324) -- NOT the bare
+      // "npm test" a naive fixture would assume.
+      if (url.includes('/actions/runs/42/jobs')) return OK({ jobs: [{ name: 'test', steps: [{ name: 'Run npm test', conclusion: 'success' }] }] });
       throw new Error(`unexpected fetch: ${url}`);
     });
 
@@ -62,11 +65,22 @@ describe('buildFenceEvidence', () => {
     const supabase = fakeSupabase({ metadata: { synthetic_actor: { exclusion_predicate_ref: 'TBD' } } });
     const fetchImpl = vi.fn(async (url) => {
       if (url.includes('/actions/workflows/ci.yml/runs')) return OK({ workflow_runs: [{ id: 1, head_sha: 'x' }] });
-      return OK({ jobs: [{ name: 'test', steps: [{ name: 'npm test', conclusion: 'failure' }] }] });
+      return OK({ jobs: [{ name: 'test', steps: [{ name: 'Run npm test', conclusion: 'failure' }] }] });
     });
     const result = await buildFenceEvidence({ supabase, ventureId: 'v1', githubToken: 'gh-tok', fetchImpl });
     expect(result.exclusionPredicateDeclared).toBe(false);
     expect(result.exclusionPredicateAssertedInVentureCi).toBe(false);
+  });
+
+  it('also matches a bare (unprefixed) step name, in case the workflow ever gains an explicit `name: npm test`', async () => {
+    checkSyntheticActorFencing.mockResolvedValue({ satisfied: true, reason: 'ok' });
+    const supabase = fakeSupabase({ metadata: { synthetic_actor: { exclusion_predicate_ref: 'ref' } } });
+    const fetchImpl = vi.fn(async (url) => {
+      if (url.includes('/actions/workflows/ci.yml/runs')) return OK({ workflow_runs: [{ id: 1, head_sha: 'x' }] });
+      return OK({ jobs: [{ name: 'test', steps: [{ name: 'npm test', conclusion: 'success' }] }] });
+    });
+    const result = await buildFenceEvidence({ supabase, ventureId: 'v1', githubToken: 'gh-tok', fetchImpl });
+    expect(result.exclusionPredicateAssertedInVentureCi).toBe(true);
   });
 
   it('throws (fail-loud) if the ci.yml step cannot be found, rather than defaulting to false', async () => {
