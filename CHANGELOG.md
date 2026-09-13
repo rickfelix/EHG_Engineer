@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-13](#2026-09-13)
+  - [Bugfix](#bugfix-13)
 - [2026-09-12](#2026-09-12)
   - [Infrastructure](#infrastructure-12)
   - [Security](#security-2)
@@ -199,6 +201,14 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-13
+
+### Bugfix
+
+- **Venture domain DNS provisioning was silently unable to write DNS records for any venture with an already-registered Cloudflare zone** - SD-FDBK-ENH-COMPLETION-FLAG-HARNESS-001 (PR #8827)
+  - `createDnsAdapter()` read only `CLOUDFLARE_REGISTRAR_API_TOKEN` for all Cloudflare zone/DNS calls. That token measurably fails (403/401) on the `dns_records` endpoints `wireDomainDns()` actually needs to write a venture's apex/www CNAME records, while a separate, already-provisioned `CLOUDFLARE_DNS_API_TOKEN` works correctly. The adapter now prefers `CLOUDFLARE_DNS_API_TOKEN`, falling back to the registrar token for environments that only provision the original combined-scope credential.
+  - The `createZone` permission gap (neither token can create a brand-new zone) is a separate, unfixable-by-token-swap ops action -- explicitly fenced with a code comment rather than silently masked.
 
 ## 2026-09-12
 
