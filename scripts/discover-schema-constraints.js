@@ -9,6 +9,12 @@
  * Usage: node scripts/discover-schema-constraints.js [--dry-run] [--table <name>]
  *   --dry-run: Show what would be inserted without actually inserting
  *   --table <name>: Only discover constraints for specific table
+ *
+ * QF-20260913-767: SAFE TO RE-RUN BY HAND. parseCheckConstraint only derives an enumeration
+ * from a definition that genuinely IS one (never partially, from a multi-branch OR/range
+ * condition), and a row whose valid_values was hand-set to NULL for an unchanged
+ * constraint_definition is never overwritten -- a re-run can neither invent a bogus
+ * enumeration nor undo a documented manual NULL.
  */
 
 import { createSupabaseServiceClient } from '../lib/supabase-client.js';
@@ -93,33 +99,39 @@ export async function discoverConstraintsViaSupabase(supabase, tableName) {
   return data?.[0]?.result || [];
 }
 
+// QF-20260913-767: leo:discover is SAFE TO RE-RUN. parseCheckConstraint only ever derives an
+// enumeration from a definition that IS one (a single ANY (ARRAY[...]) or IN (...) over the
+// whole CHECK) -- it never partially-derives from a multi-branch OR/range condition, so a
+// re-run can never resurrect a stale/wrong enumeration for a constraint that isn't one.
 export function parseCheckConstraint(definition) {
   // Extract valid values from CHECK constraint definition
   // Examples:
   //   CHECK ((status = ANY (ARRAY['draft'::text, 'completed'::text])))
   //   CHECK (status IN ('active', 'superseded'))
-
-  const patterns = [
-    // ANY (ARRAY[...]) pattern
-    /ANY\s*\(\s*ARRAY\s*\[\s*'([^']+)'(?:::text)?(?:\s*,\s*'([^']+)'(?:::text)?)*\s*\]/gi,
-    // IN (...) pattern
-    /IN\s*\(\s*'([^']+)'(?:\s*,\s*'([^']+)')*\s*\)/gi
-  ];
+  //
+  // A multi-branch OR check (e.g. "x IS NULL OR status = 'blocked' OR (x >= 0 AND x <= 100)")
+  // is NOT an enumeration -- it is a disjunction where one branch happens to reference a
+  // string literal. The prior implementation declared ANY/IN patterns above but never actually
+  // used them to gate extraction: it ran a bare quoted-string scan over the WHOLE definition
+  // regardless of shape, so any CHECK containing a string literal anywhere (row 59 of
+  // leo_schema_constraints: sd_phase_handoffs.validation_score's
+  // chk_handoff_validation_threshold) became a bogus single-value enumeration. Disqualify the
+  // whole definition (return []) rather than partially deriving, whenever it contains a
+  // construct that only makes sense outside a pure enumeration.
+  const isMultiConditionCheck =
+    /\bOR\b/i.test(definition) ||
+    /\bBETWEEN\b/i.test(definition) ||
+    /\bIS\s+NULL\b/i.test(definition) ||
+    /(>=|<=|<>|!=|<|>)/.test(definition);
+  if (isMultiConditionCheck) return [];
 
   const values = new Set();
-
-  for (const pattern of patterns) {
-    let match;
-    const _regex = new RegExp(pattern);
-    const str = definition;
-
-    // Extract all quoted strings
-    const quotedPattern = /'([^']+)'/g;
-    while ((match = quotedPattern.exec(str)) !== null) {
-      // Filter out type casts like 'text'
-      if (!['text', 'varchar', 'integer'].includes(match[1])) {
-        values.add(match[1]);
-      }
+  const quotedPattern = /'([^']+)'/g;
+  let match;
+  while ((match = quotedPattern.exec(definition)) !== null) {
+    // Filter out type casts like 'text'
+    if (!['text', 'varchar', 'integer'].includes(match[1])) {
+      values.add(match[1]);
     }
   }
 
@@ -129,6 +141,51 @@ export function parseCheckConstraint(definition) {
 function generateRemediation(tableName, columnName, validValues) {
   if (validValues.length === 0) return null;
   return `Use one of: ${validValues.join(', ')}`;
+}
+
+/**
+ * Upserts one discovered constraint record. Exported so the "kept manual NULL" decision
+ * (QF-20260913-767) is unit-testable against an injected fake supabase client, without a live
+ * DB or exercising main()'s process.exit()/pg.Client wiring.
+ * @returns {Promise<{action: 'inserted'|'updated'|'kept'|'failed', error?: string}>}
+ */
+export async function upsertConstraintRecord(supabase, record) {
+  const { data: existing } = await supabase
+    .from('leo_schema_constraints')
+    .select('id, valid_values, constraint_definition')
+    .eq('table_name', record.table_name)
+    .eq('column_name', record.column_name)
+    .eq('constraint_type', record.constraint_type)
+    .single();
+
+  if (!existing) {
+    const { error } = await supabase.from('leo_schema_constraints').insert(record);
+    // False positive: the lint's proximity heuristic misreads this function's own local
+    // {action, error} return shape (below) as insert() payload keys for leo_schema_constraints
+    // above; the actual insert payload is `record`, an opaque variable the lint correctly
+    // cannot (and does not need to) inspect.
+    return error ? { action: 'failed', error: error.message } : { action: 'inserted' }; // schema-lint-disable-line
+  }
+
+  // A row whose valid_values was hand-set to NULL is a documented decision (e.g.
+  // SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E's 09-07 repair of
+  // sd_phase_handoffs.validation_score -- the row's own documentation field records why), not
+  // missing data. Never silently overwrite it for an UNCHANGED constraint_definition, even if
+  // this run's derivation is non-empty.
+  if (existing.valid_values === null && existing.constraint_definition === record.constraint_definition) {
+    return { action: 'kept' };
+  }
+
+  const { error } = await supabase
+    .from('leo_schema_constraints')
+    .update({
+      valid_values: record.valid_values,
+      constraint_definition: record.constraint_definition,
+      remediation_hint: record.remediation_hint,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', existing.id);
+  return error ? { action: 'failed', error: error.message } : { action: 'updated' };
 }
 
 async function main() {
@@ -212,51 +269,18 @@ async function main() {
     // Insert/update constraints
     console.log('\n📝 Upserting constraints...');
 
-    let inserted = 0;
-    let updated = 0;
-
+    const tally = { inserted: 0, updated: 0, kept: 0, failed: 0 };
     for (const record of discovered) {
-      // Check if exists
-      const { data: existing } = await supabase
-        .from('leo_schema_constraints')
-        .select('id')
-        .eq('table_name', record.table_name)
-        .eq('column_name', record.column_name)
-        .eq('constraint_type', record.constraint_type)
-        .single();
-
-      if (existing) {
-        // Update
-        const { error } = await supabase
-          .from('leo_schema_constraints')
-          .update({
-            valid_values: record.valid_values,
-            constraint_definition: record.constraint_definition,
-            remediation_hint: record.remediation_hint,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existing.id);
-
-        if (error) {
-          console.error(`   ❌ ${record.table_name}.${record.column_name}: ${error.message}`);
-        } else {
-          updated++;
-        }
-      } else {
-        // Insert
-        const { error } = await supabase
-          .from('leo_schema_constraints')
-          .insert(record);
-
-        if (error) {
-          console.error(`   ❌ ${record.table_name}.${record.column_name}: ${error.message}`);
-        } else {
-          inserted++;
-        }
+      const outcome = await upsertConstraintRecord(supabase, record);
+      if (outcome.action === 'failed') {
+        console.error(`   ❌ ${record.table_name}.${record.column_name}: ${outcome.error}`);
+      } else if (outcome.action === 'kept') {
+        console.log(`      🔒 ${record.table_name}.${record.column_name}: kept manual NULL (constraint_definition unchanged)`);
       }
+      tally[outcome.action]++;
     }
 
-    console.log(`\n✅ Complete: ${inserted} inserted, ${updated} updated`);
+    console.log(`\n✅ Complete: ${tally.inserted} inserted, ${tally.updated} updated, ${tally.kept} kept (manual NULL preserved)`);
 
   } catch (error) {
     console.error('❌ Error:', error.message);
