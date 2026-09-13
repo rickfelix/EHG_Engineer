@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch(); const c = await b.newContext(); const p = await c.newPage();
+await p.goto('https://altifyai.app', { waitUntil: 'networkidle' });
+await p.waitForTimeout(1500);
+console.log('title:', await p.title());
+console.log('h1/h2:', JSON.stringify(await p.evaluate(()=>Array.from(document.querySelectorAll('h1,h2,h3')).map(e=>e.textContent.trim()).slice(0,10))));
+const txt = await p.evaluate(()=>document.body.innerText.replace(/\s+/g,' ').slice(0,700));
+console.log('body text:', txt);
+console.log('links:', JSON.stringify(await p.evaluate(()=>Array.from(document.querySelectorAll('a')).map(a=>a.getAttribute('href')).slice(0,15))));
+console.log('buttons:', await p.evaluate(()=>document.querySelectorAll('button').length), 'inputs:', await p.evaluate(()=>document.querySelectorAll('input').length));
+await b.close();

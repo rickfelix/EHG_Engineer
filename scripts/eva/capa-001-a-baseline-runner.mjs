@@ -217,6 +217,22 @@ function loadLighthouseThresholds() {
   return JSON.parse(raw).ci.assert.assertions;
 }
 
+// VALIDATION sub-agent finding (VERIFY phase, first live run against
+// AltifyAI): on at least one Windows fleet machine, `lhci collect` reliably
+// fails with a non-zero exit even though the underlying Lighthouse audit
+// completes -- chrome-launcher's own post-run cleanup (`destroyTmp()`,
+// `rmSync` on its auto-generated Chrome profile dir under %TEMP%) throws
+// EPERM, and lighthouse/cli/run.js treats that as a hard failure, so no LHR
+// is ever saved to .lighthouseci for this runner to read. This is an
+// upstream chrome-launcher/Windows race (a known class of issue with
+// antivirus/real-time-scan temp-dir locks), not a defect in this script or
+// in the deployment_url/argv handling above -- confirmed reproducible (2/2)
+// running the exact same lhci invocation directly, independent of this
+// runner. The catch below already degrades this to a single low-severity
+// `collect-failed` finding with the real error captured, which is the
+// correct informational-only behavior either way; on an environment without
+// this Windows-specific chrome-launcher issue, the same code persists real
+// performance/best-practice scores per FR-2.
 async function runLighthouseCheck(ventureId, url) {
   const runId = `capa-001-a-${Date.now()}`;
   const lhciDir = path.join(REPO_ROOT, '.lighthouseci');
@@ -312,8 +328,17 @@ async function main() {
   const browser = await chromium.launch();
   let findings = [];
   try {
-    const page = await browser.newPage();
-    findings = findings.concat(await runAccessibilityAndResponsiveChecks(page, venture.id, venture.deployment_url));
+    // VALIDATION sub-agent finding VAL-1 (VERIFY phase): @axe-core/playwright's
+    // AxeBuilder rejects a page created via the shorthand browser.newPage() --
+    // it throws "Please use browser.newContext()" -- so an explicit context is
+    // required even though this script only ever needs one page from it.
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      findings = findings.concat(await runAccessibilityAndResponsiveChecks(page, venture.id, venture.deployment_url));
+    } finally {
+      await context.close();
+    }
   } finally {
     await browser.close();
   }
