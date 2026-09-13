@@ -804,7 +804,7 @@ describe('drainSmsRelayStaging parking (FR-4/FR-6)', () => {
     expect(row.parked_at).toBeTruthy();
   });
 
-  it("QF-20260913-173: no_open_question (reply to an already-decided question) gets parked, same as no_match", async () => {
+  it('QF-20260913-173: no_open_question (reply to an already-decided question) from the chairman ROUTES (routed_at set, not parked_at), same as chairman no_match/rate_limited', async () => {
     process.env.CHAIRMAN_PHONE = CHAIRMAN;
     const sb = makeFakeSupabase({
       chairman_decisions: [{
@@ -820,7 +820,11 @@ describe('drainSmsRelayStaging parking (FR-4/FR-6)', () => {
     await drainSmsRelayStaging(sb);
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-terminal');
     expect(row.drained_at).toBeTruthy();
-    expect(row.parked_at || row.routed_at).toBeTruthy();
+    // Chairman-originated rows in ADAM_ROUTABLE_OUTCOMES route to Adam instead of parking (same
+    // as chairman no_match/rate_limited — see sms-relay-park.test.js TS-1/TS-2) so a genuine
+    // reply to a closed question reaches a human/Adam review, never silently terminal-drains.
+    expect(row.parked_at).toBeFalsy();
+    expect(row.routed_at).toBeTruthy();
   });
 
   it('suspended and invalid_signature outcomes remain excluded from parking', async () => {
