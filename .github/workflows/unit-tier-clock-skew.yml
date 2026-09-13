@@ -84,3 +84,45 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SKEW_RUN_OUTCOME: ${{ steps.skew_run.outcome }}
         run: node scripts/clock-skew-report-failures.mjs clock-skew-run.log
+
+  # SD-LEO-FIX-TESTS-QUARANTINE-MANIFEST-001 FR-3: same weekly schedule, its own independent job
+  # (not a step in clock-skew-sweep above -- a red/cancelled unit-tier run must not also block
+  # this unrelated manifest check, and vice versa). Asserts the committed baseline count never
+  # grows and flags any entry past its review_by with no cited verdict, feeding one harness_backlog
+  # row per reason_class cohort (see scripts/lint/quarantine-retire-check.mjs).
+  quarantine-retire-check:
+    name: Quarantine Manifest Retire-Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run quarantine retire-check gauge
+        id: retire_check_run
+        run: node scripts/lint/quarantine-retire-check.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # QF-20260912-364's shape, mirrored: `if: always()` so a cancelled/timed-out run step
+      # (which would otherwise leave the whole job silently reporting nothing) still files a
+      # "did not complete" row -- distinct from the per-reason_class overdue rows the gauge
+      # itself emits inline when it runs to completion.
+      - name: Report incomplete run (only fires on a non-success/non-failure outcome)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RETIRE_CHECK_RUN_OUTCOME: ${{ steps.retire_check_run.outcome }}
+        run: node scripts/lint/quarantine-retire-check.mjs --report-incomplete-outcome

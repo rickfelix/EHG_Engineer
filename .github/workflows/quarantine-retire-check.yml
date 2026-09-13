@@ -1,0 +1,51 @@
+# Quarantine manifest retire-check (PR mode) — SD-LEO-FIX-TESTS-QUARANTINE-MANIFEST-001 FR-3.
+#
+# tests/quarantine-manifest.json must never grow silently past its asserted baseline, and any
+# entry touched by a PR must not introduce a new past-due, uncited overdue debt. Runs the same
+# gauge as the weekly job in .github/workflows/unit-tier-clock-skew.yml, but scoped via --diff to
+# entries changed by this PR relative to its base ref -- a pre-existing overdue entry the PR never
+# touched is the weekly full-manifest sweep's job to catch, not this one's.
+#
+# paths: includes the gauge script's OWN filename (per the documented lesson in
+# .github/workflows/schema-reference-lint.yml) -- otherwise a PR that edits the guard itself would
+# never re-trigger this check.
+name: Quarantine Retire-Check (PR)
+
+on:
+  pull_request:
+    paths:
+      - 'tests/quarantine-manifest.json'
+      - 'scripts/lint/quarantine-retire-check.mjs'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  retire-check-diff:
+    name: Quarantine Retire-Check (--diff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run quarantine retire-check gauge (--diff vs PR base)
+        # PR_BASE_REF is passed through env: rather than interpolated straight into the run:
+        # string -- the documented GitHub Actions script-injection avoidance pattern (a `${{ }}`
+        # expression substitutes into the shell script TEXT before the shell ever parses it,
+        # ahead of any argv-level safety the invoked script itself provides).
+        run: node scripts/lint/quarantine-retire-check.mjs --diff --base "origin/$PR_BASE_REF"
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
