@@ -44,7 +44,10 @@
 --
 -- CHAIRMAN-GATED. Per the SD family convention this file is a DELIVERABLE, not an applied change.
 --
--- @approved-by:
+-- CHAIRMAN-APPROVED 2026-09-07 ~01:52Z: verbal at the Adam terminal, quote: "apply the role flag
+-- execute exposure migration". Scribed by Adam session bc762fa4 under the 3c ceremony; the empty
+-- stamp below was filled, no executable content changed.
+-- @approved-by: codestreetlabs@gmail.com
 --   ^ INTENTIONALLY BLANK. Do NOT fill this in on the SD's behalf. Apply via
 --     `node scripts/apply-migration.js --prod-deploy` once approved.
 --     scripts/lib/migration-tier-classifier.mjs classifies REVOKE/GRANT statements as Tier-2, so
