@@ -21,6 +21,13 @@
  * KNOWN LIMITATION, stated concretely: this is a text scan (like the sibling
  * or-filter-must-project.mjs), not an AST pass — a column name built from a variable
  * (`.ilike(col, ...)`) is invisible, and that is a silent miss, never a false alarm.
+ *
+ * QF-20260912-056: --diff mode is now scoped to ADDED LINES, not just changed FILES. Before
+ * this fix, touching any one line of a file re-flagged every pre-existing offender elsewhere
+ * in that same file (PR #8818, gate-bug 96df56ea) — the "diff-only" promise above was true at
+ * the file level but false at the line level. `git diff -U0` hunk headers (`@@ -a,b +c,d @@`)
+ * are parsed into per-file added-line ranges; a finding outside every range for its file is
+ * pre-existing backlog and is not reported.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -72,16 +79,50 @@ function walk(dir, exts, out = []) {
 }
 
 /**
- * Files changed vs the PR base, filtered to the scanned extensions/dirs. Diff-only so the
- * pre-existing backlog (24 findings, mostly in scripts/archive/ + scripts/one-off/, measured
- * 2026-08-29) never blocks a PR that didn't touch them — same tradeoff schema-reference-lint
- * makes for the identical reason. Fails soft to a full sweep if the base is unresolvable.
+ * Parses `git diff -U0 <range>` output into a Map<file, Array<[start,end]>> of ADDED-line
+ * ranges — derived ONLY from each hunk's `+c[,d]` side (the new file's line numbers), never
+ * `-a[,b]` (the old file's numbering, meaningless for reporting against HEAD). A deleted file
+ * (`+++ /dev/null`) contributes no entry; a file with only removed lines gets an entry with an
+ * EMPTY range list (present in the diff, but nothing to flag) rather than being silently
+ * treated the same as an untouched file. QF-20260912-056.
  */
-function changedFiles(exts) {
+export function parseAddedLineRanges(diffText) {
+  const ranges = new Map();
+  let currentFile = null;
+  for (const line of String(diffText || '').split('\n')) {
+    const fileMatch = line.match(/^\+\+\+ b\/(.+)$/);
+    if (fileMatch) {
+      currentFile = fileMatch[1];
+      if (!ranges.has(currentFile)) ranges.set(currentFile, []);
+      continue;
+    }
+    const hunkMatch = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+    if (hunkMatch && currentFile) {
+      const start = Number(hunkMatch[1]);
+      const count = hunkMatch[2] !== undefined ? Number(hunkMatch[2]) : 1;
+      if (count > 0) ranges.get(currentFile).push([start, start + count - 1]);
+    }
+  }
+  return ranges;
+}
+
+/**
+ * Files changed vs the PR base, filtered to the scanned extensions/dirs, PLUS the added-line
+ * ranges within each (QF-20260912-056: previously the file list alone, so a PR touching one
+ * line of a file re-flagged every pre-existing offender anywhere else in that same file —
+ * PR #8818, gate-bug 96df56ea). `-U0` (zero context lines) keeps hunk ranges exact. Diff-only
+ * so the pre-existing backlog (24 findings, mostly in scripts/archive/ + scripts/one-off/,
+ * measured 2026-08-29) never blocks a PR that didn't touch them — same tradeoff
+ * schema-reference-lint makes for the identical reason. Fails soft to a full sweep if the base
+ * is unresolvable.
+ */
+function changedFilesAndRanges(exts) {
   const base = process.env.ILIKE_UUID_LINT_BASE || 'origin/main';
   try {
-    const out = execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${base}...HEAD`], { encoding: 'utf8' });
-    return out.split('\n').filter((f) => f && exts.some((e) => f.endsWith(e)) && (f.startsWith('scripts/') || f.startsWith('lib/')));
+    const out = execFileSync('git', ['diff', '-U0', `${base}...HEAD`], { encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 });
+    const ranges = parseAddedLineRanges(out);
+    const files = [...ranges.keys()].filter((f) => exts.some((e) => f.endsWith(e)) && (f.startsWith('scripts/') || f.startsWith('lib/')));
+    return { files, ranges };
   } catch (e) {
     console.warn(`⚠️  diff base unavailable (${e.message.split('\n')[0]}) — falling back to a full sweep (advisory backlog included).`);
     return null;
@@ -92,14 +133,29 @@ async function main() {
   const census = JSON.parse(readFileSync('database/uuid-columns-census.json', 'utf8'));
   const uuidColumns = new Set(census.columns);
   const exts = ['.js', '.mjs', '.cjs'];
-  const files = process.argv.includes('--diff')
-    ? (changedFiles(exts) ?? [...walk('scripts', exts), ...walk('lib', exts)])
-    : [...walk('scripts', exts), ...walk('lib', exts)];
+  const diffMode = process.argv.includes('--diff');
+  let files;
+  let addedRanges = null; // non-null in --diff mode => findings outside these ranges are pre-existing
+  if (diffMode) {
+    const result = changedFilesAndRanges(exts);
+    if (result) {
+      ({ files, ranges: addedRanges } = result);
+      console.log(`ilike-on-uuid-lint: --diff mode — ${files.length} file(s) touched, checking added lines only.`);
+    } else {
+      files = [...walk('scripts', exts), ...walk('lib', exts)];
+      console.log('ilike-on-uuid-lint: --diff requested but base unavailable — full sweep ran instead.');
+    }
+  } else {
+    files = [...walk('scripts', exts), ...walk('lib', exts)];
+    console.log('ilike-on-uuid-lint: full sweep mode.');
+  }
 
   let total = 0;
   for (const file of files) {
     const source = readFileSync(file, 'utf8');
+    const ranges = addedRanges ? addedRanges.get(file) : null;
     for (const f of findIlikeOnUuid(source, uuidColumns, file)) {
+      if (ranges && !ranges.some(([s, e]) => f.line >= s && f.line <= e)) continue;
       console.error(`${f.file}:${f.line}  ${f.message}`);
       total++;
     }
