@@ -83,7 +83,10 @@ describe('publishVisionEvent + subscribeVisionEvent', () => {
   });
 
   it('catches and logs subscriber errors without throwing', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-148: publishVisionEvent now logs subscriber errors via
+    // lib/logger.js's createLogger (writes structured JSON to process.stderr), not bare
+    // console.error, per the eva-logger-required-lint standard -- spy on stderr instead.
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     subscribeVisionEvent(VISION_EVENTS.SCORED, async () => {
       throw new Error('subscriber exploded');
     });
@@ -91,12 +94,12 @@ describe('publishVisionEvent + subscribeVisionEvent', () => {
     // publishVisionEvent must not throw
     expect(() => publishVisionEvent(VISION_EVENTS.SCORED, {})).not.toThrow();
     await new Promise(r => setTimeout(r, 10));
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('subscriber exploded'));
-    consoleSpy.mockRestore();
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('subscriber exploded'));
+    stderrSpy.mockRestore();
   });
 
   it('second subscriber executes even if first subscriber throws', async () => {
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const executed = [];
     subscribeVisionEvent(VISION_EVENTS.SCORED, async () => { throw new Error('sub1 fail'); });
     subscribeVisionEvent(VISION_EVENTS.SCORED, async () => { executed.push('sub2'); });
@@ -104,7 +107,7 @@ describe('publishVisionEvent + subscribeVisionEvent', () => {
     publishVisionEvent(VISION_EVENTS.SCORED, {});
     await new Promise(r => setTimeout(r, 20));
     expect(executed).toContain('sub2');
-    consoleSpy.mockRestore();
+    stderrSpy.mockRestore();
   });
 
   it('clearVisionSubscribers removes all listeners', async () => {
