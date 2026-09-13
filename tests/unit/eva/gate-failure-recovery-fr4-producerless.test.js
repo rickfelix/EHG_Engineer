@@ -98,6 +98,29 @@ describe('routeGateOutcome FR-4: producer-less artifact carve-out', () => {
     expect(insertFn).toHaveBeenCalled();
   });
 
+  // testing-agent EXEC-phase review (17bc4580): the emitFeedback try/catch inside the
+  // harness_backlog branch was untested -- an unexpected throw must degrade to a
+  // structured {routed:false} result, never propagate uncaught.
+  it('degrades to a structured error instead of throwing when emitFeedback itself throws', async () => {
+    const supabase = mockSupabase({
+      feedback: {
+        select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }),
+        insert: () => { throw new Error('unexpected feedback insert failure'); },
+      },
+    });
+
+    const result = await routeGateOutcome(
+      'v1',
+      'critical',
+      { reasons: [{ code: 'ARTIFACT_MISSING', artifact_type: 'launch_usage_signal' }], fromStage: 24, toStage: 25 },
+      { supabase, logger: silentLogger }
+    );
+
+    expect(result.routed).toBe(false);
+    expect(result.path).toBe('harness_backlog');
+    expect(result.error).toMatch(/unexpected feedback insert failure/);
+  });
+
   it('still escalates normally (chairman_decisions) for a non-ARTIFACT_MISSING critical reason', async () => {
     const insertFn = vi.fn().mockResolvedValue({ error: null });
     const supabase = mockSupabase({ chairman_decisions: { insert: insertFn } });

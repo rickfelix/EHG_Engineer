@@ -145,4 +145,32 @@ describe('analyzeStage23DedicatedVentureUat FR-2: legal-doc-producer wiring', ()
     expect(result.applies).toBe(false);
     expect(result.satisfied).toBe(true);
   });
+
+  // testing-agent EXEC-phase review (17bc4580): the generateLegalDocsForVenture
+  // try/catch was untested -- an unexpected throw must degrade to a structured
+  // result, never break this stage's own UAT artifact.
+  it('catches an unexpected throw from generateLegalDocsForVenture without breaking the UAT result', async () => {
+    const supabase = {
+      from(table) {
+        if (table === 'venture_stages') {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { metadata: {} }, error: null }) }) }) };
+        }
+        if (table === 'legal_templates') {
+          return { select: () => { throw new Error('unexpected DB client failure'); } };
+        }
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+    const logger = { info: vi.fn(), warn: vi.fn() };
+
+    const result = await analyzeStage23DedicatedVentureUat({ supabase, ventureId: 'v-1', ventureName: 'Test Venture', logger });
+
+    expect(result.legal_docs.ok).toBe(false);
+    expect(result.legal_docs.reason).toBe('threw');
+    expect(result.legal_docs.error).toMatch(/unexpected DB client failure/);
+    // The UAT gate's own result is untouched by the legal-doc producer throwing.
+    expect(result.applies).toBe(false);
+    expect(result.satisfied).toBe(true);
+    expect(logger.warn).toHaveBeenCalled();
+  });
 });
