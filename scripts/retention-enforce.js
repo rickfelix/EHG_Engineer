@@ -42,6 +42,7 @@ import {
 } from '../lib/retention/policies.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+import { resolvePendingRelationStatus } from '../lib/retention/pending-relation.js';
 
 dotenv.config();
 
@@ -201,6 +202,21 @@ export async function enforcePolicy(supabase, policy, { apply = false, runId = n
     }
     return result;
   } catch (err) {
+    // QF-20260913-915: a relation that does not exist because its creating file is still
+    // awaiting the chairman's apply ceremony (CEREMONY_PENDING) or is explicitly DEFERRED in
+    // the disposition ledger is a known wait state -- the count guard is still right to throw
+    // (a missing relation must never read as zero rows), but this job must not alert on a wait
+    // the chairman already knows about. Any other cause of COUNT_UNMEASURABLE (no pendingFile
+    // declared, or the file resolves to no known wait state) falls through to the existing error.
+    if (err.code === 'COUNT_UNMEASURABLE' && policy.pendingFile) {
+      const pending = resolvePendingRelationStatus(policy.pendingFile);
+      if (pending) {
+        result.status = 'pending_relation';
+        result.pendingFile = policy.pendingFile;
+        result.pendingReason = pending;
+        return result;
+      }
+    }
     result.error = err.message;
     return result;
   }
@@ -229,7 +245,11 @@ export async function runEnforcement({ apply = false, tables = null } = {}) {
     const r = await enforcePolicy(supabase, policy, { apply, runId });
     perTable.push(r);
     anyError = anyError || Boolean(r.error);
-    const tail = r.error ? `ERROR: ${r.error}` : apply ? `archived ${r.archived}, deleted ${r.deleted}` : 'dry';
+    const tail = r.error
+      ? `ERROR: ${r.error}`
+      : r.status === 'pending_relation'
+        ? `PENDING (${r.pendingReason}: ${r.pendingFile})`
+        : apply ? `archived ${r.archived}, deleted ${r.deleted}` : 'dry';
     console.log(`  ${r.table.padEnd(26)} >${r.hotDays}d: ${String(r.eligible).padStart(7)} eligible | ${tail}`);
   }
 
