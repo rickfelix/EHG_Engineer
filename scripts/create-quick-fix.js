@@ -94,6 +94,24 @@ export async function resolveCreatedBy({ supabase, sessionId, override }) {
   return role ? `${role}-${sessionId}` : sessionId;
 }
 
+/**
+ * QF-20260912-006: whether to auto-claim (and pre-provision a worktree for) a freshly-minted
+ * QF. A role session (coordinator/Adam/Solomon) never auto-claims its own filings -- QF-20260704-
+ * 143. This extends the same unclaimed-queue behavior to a WORKER seat that already holds a
+ * claim (an SD, or another open QF): auto-claiming anyway left a busy seat holding two claims at
+ * once, with the new one invisible to every other seat's open-QF poll (QF-20260912-509
+ * specimen). `claimOverride` (--claim) is the one way a worker mints-and-switches in the same
+ * breath -- still true, it just means claim via claim_sd (the canonical switch path), never the
+ * raw update the default branch uses.
+ * @param {{isRoleSession: boolean, existingClaimKey: string|null, claimOverride: boolean}} args
+ * @returns {boolean} true if this mint should attempt to claim + provision a worktree
+ */
+export function shouldAutoClaimQf({ isRoleSession, existingClaimKey, claimOverride }) {
+  if (isRoleSession) return false;
+  if (existingClaimKey && !claimOverride) return false;
+  return true;
+}
+
 // Interactive prompting
 function prompt(question) {
   const rl = readline.createInterface({
@@ -690,6 +708,21 @@ async function createQuickFix(options = {}) {
       return printNextSteps(qfId, false, null);
     }
 
+    // QF-20260912-006: does the creator seat already hold a claim -- an SD, or another open QF?
+    // Checked for every non-role creator (role sessions already returned above).
+    const [{ data: creatorSdSession }, { data: existingQfClaim }] = await Promise.all([
+      supabase.from('claude_sessions').select('sd_key').eq('session_id', creatorSessionId).maybeSingle(),
+      supabase.from('quick_fixes').select('id').eq('claiming_session_id', creatorSessionId).eq('status', 'open').maybeSingle(),
+    ]);
+    const existingClaimKey = creatorSdSession?.sd_key || existingQfClaim?.id || null;
+    const claimOverride = options.claimOverride === true;
+
+    if (!shouldAutoClaimQf({ isRoleSession, existingClaimKey, claimOverride })) {
+      console.log(`🌲 Worktree Isolation skipped — this seat already holds ${existingClaimKey}; QF queued unclaimed for pickup.`);
+      console.log(`   Pass --claim to claim this QF now instead (switches via claim_sd), or run /leo ${qfId} later.\n`);
+      return printNextSteps(qfId, false, null);
+    }
+
     // SD-LEO-INFRA-CLAIM-LIVENESS-FENCE-001 FR-3: this is the third QF claim-write surface.
     //
     // Honest note on value: a session running THIS script is alive by construction, so a DEAD
@@ -708,17 +741,37 @@ async function createQuickFix(options = {}) {
       console.warn(`[create-quick-fix] liveness fence skipped (failing open): ${e && e.message}`);
     }
 
-    // Atomically set claiming_session_id; if another session already holds it, bail.
-    const { data: claimed } = await supabase
-      .from('quick_fixes')
-      .update({ claiming_session_id: creatorSessionId, started_at: new Date().toISOString() })
-      .eq('id', qfId).is('claiming_session_id', null)
-      .select('id,claiming_session_id').maybeSingle();
-    if (!claimed) {
-      console.log('   ⚠️  Could not claim QF atomically — skipping worktree creation.\n');
-      return printNextSteps(qfId, false, null);
+    let qfClaim;
+    if (existingClaimKey && claimOverride) {
+      // QF-20260912-006 (fix shape b): a worker switching off an existing claim goes through
+      // the canonical claim_sd RPC (the same path qf-start.js / checkin use), which handles the
+      // session-claim switch correctly -- never the raw update below, which only ever wrote
+      // THIS row's claiming_session_id and left the seat's prior claim pointer untouched.
+      const { data: claimResult, error: claimError } = await supabase.rpc('claim_sd', {
+        p_sd_id: qfId,
+        p_session_id: creatorSessionId,
+        p_track: null,
+      });
+      if (claimError || !claimResult?.success) {
+        console.log(`   ⚠️  --claim override failed via claim_sd (${claimError?.message || claimResult?.error || 'unknown'}) — skipping worktree creation.\n`);
+        return printNextSteps(qfId, false, null);
+      }
+      qfClaim = { id: qfId };
+      console.log(`🌲 Worktree Isolation (claimed via --claim override by ${creatorSessionId})\n`);
+    } else {
+      // Atomically set claiming_session_id; if another session already holds it, bail.
+      const { data } = await supabase
+        .from('quick_fixes')
+        .update({ claiming_session_id: creatorSessionId, started_at: new Date().toISOString() })
+        .eq('id', qfId).is('claiming_session_id', null)
+        .select('id,claiming_session_id').maybeSingle();
+      qfClaim = data;
+      if (!qfClaim) {
+        console.log('   ⚠️  Could not claim QF atomically — skipping worktree creation.\n');
+        return printNextSteps(qfId, false, null);
+      }
+      console.log(`🌲 Worktree Isolation (claimed by ${creatorSessionId})\n`);
     }
-    console.log(`🌲 Worktree Isolation (claimed by ${creatorSessionId})\n`);
 
     try {
       // Check if git repo
@@ -906,6 +959,10 @@ for (let i = 0; i < args.length; i++) {
     options.targetApplication = args[++i];
   } else if (arg === '--feedback-id') {
     options.feedbackId = args[++i];
+  } else if (arg === '--claim') {
+    // QF-20260912-006: claim this QF even though the creator seat already holds another
+    // claim -- the switch still routes through claim_sd, never a raw update.
+    options.claimOverride = true;
   } else if (arg === '--force-claim') {
     options.forceClaim = true;
   } else if (arg === '--force-claim-reason' || arg === '--reason') {
@@ -949,6 +1006,8 @@ Options:
   --actual               Actual behavior
   --estimated-loc        Estimated lines of code (default: 10)
   --target-application   Target repo: any active applications-registry name (auto-detected from cwd)
+  --claim                Claim this QF now even if the creator seat already holds another claim
+                         (default when already busy: queue unclaimed for pickup instead)
   --allow-duplicate      Audited override for dedup gate; requires non-empty <reason>
   --force-liveness       Audited override for STALE_PREMISE gate; requires non-empty <reason>
   --created-by           Override attribution (default: resolved from CLAUDE_SESSION_ID's role, or the raw session id)
