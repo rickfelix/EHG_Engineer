@@ -21,7 +21,8 @@ import { tmpdir } from 'node:os';
 const h = vi.hoisted(() => ({
   cfg: null,            // per-test config for the createFromQF (context.js) supabase mock
   createSDArgs: null,   // captures the args createSDOrThrow was called with
-  sdMeta: { data: null } // return value for the resolveEscalatedBaseRef metadata lookup
+  sdMeta: { data: null }, // return value for the resolveEscalatedBaseRef metadata lookup
+  sdMetaUpdates: []      // captures every strategic_directives_v2 metadata .update() payload
 }));
 
 // createFromQF's supabase client (lib/sd-creation/context.js)
@@ -90,16 +91,22 @@ vi.mock('../../lib/eva/stage-zero/data-pollers/retry.js', () => ({
   withRetry: async (fn) => fn()
 }));
 
-// resolveEscalatedBaseRef's supabase client (lib/supabase-client.js)
+// resolveEscalatedBaseRef's / stampEscalatedFilesToModify's supabase client (lib/supabase-client.js)
 vi.mock('../../lib/supabase-client.js', () => ({
   createSupabaseServiceClient: () => ({
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => h.sdMeta }) }) })
+    from: () => {
+      const b = {
+        select: () => ({ eq: () => ({ maybeSingle: async () => h.sdMeta }) }),
+        update: (payload) => ({ eq: async () => { h.sdMetaUpdates.push(payload); return { error: null }; } })
+      };
+      return b;
+    }
   })
 }));
 
 // SUTs imported AFTER the mocks are registered.
 const { createFromQF } = await import('../../lib/sd-creation/source-adapters/qf.js');
-const { resolveEscalatedBaseRef } = await import('../../scripts/resolve-sd-workdir.js');
+const { resolveEscalatedBaseRef, stampEscalatedFilesToModify } = await import('../../scripts/resolve-sd-workdir.js');
 
 function baseQfRow(overrides = {}) {
   return {
@@ -132,6 +139,7 @@ beforeEach(() => {
   h.cfg = null;
   h.createSDArgs = null;
   h.sdMeta = { data: null };
+  h.sdMetaUpdates = [];
 });
 
 describe('FR-2: branch-continuity seed', () => {
@@ -259,6 +267,13 @@ describe('Description/scope inheritance (QF-20260729-534 option C)', () => {
     expect(h.createSDArgs.description).toBe(exact);
   });
 
+  // strategic_directives_v2.title is varchar(500) -- title truncation itself (truncateTitle(),
+  // SD_TITLE_MAX_CHARS) is covered by tests/unit/leo-create-sd-from-qf-title-length.test.js
+  // (QF-20260912-186), including the end-to-end createFromQF path. This session independently
+  // found and fixed the same defect while escalating QF-20260912-959 (a different QF, same root
+  // cause); merged onto main's already-shipped, dedicated-test-covered version rather than
+  // duplicating it here.
+
   it('preserves the full, untruncated original in metadata.qf_origin_body regardless of length', async () => {
     const long = 'z'.repeat(21693);
     h.cfg = {
@@ -316,5 +331,61 @@ describe('FR-3: resolveEscalatedBaseRef — local-ref base resolution', () => {
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
+  });
+});
+
+describe('QF-20260912-512: stampEscalatedFilesToModify — auto-populate the non-UI TESTING fallback', () => {
+  it('stamps metadata.files_to_modify from the escalated branch diff against origin/main', async () => {
+    const repo = createFixtureRepo();
+    const worktreePath = join(tmpdir(), `esc-cont-wt-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    try {
+      const initialSha = execSync('git rev-parse HEAD', { cwd: repo, encoding: 'utf8' }).trim();
+      execSync(`git update-ref refs/remotes/origin/main ${initialSha}`, { cwd: repo, stdio: 'pipe' });
+      execSync('git branch qf/QF-B-1', { cwd: repo, stdio: 'pipe' });
+      execSync(`git worktree add "${worktreePath}" qf/QF-B-1`, { cwd: repo, stdio: 'pipe' });
+      mkdirSync(join(worktreePath, 'scripts'), { recursive: true });
+      writeFileSync(join(worktreePath, 'scripts', 'classify-quick-fix.js'), '// fix');
+      execSync('git add scripts/classify-quick-fix.js && git commit -m "the qf fix"', { cwd: worktreePath, stdio: 'pipe' });
+
+      h.sdMeta = { data: { metadata: { escalated_from_branch: 'qf/QF-B-1' } } };
+      await stampEscalatedFilesToModify('SD-LEO-FIX-TEST-001', worktreePath);
+
+      expect(h.sdMetaUpdates).toHaveLength(1);
+      expect(h.sdMetaUpdates[0].metadata.files_to_modify).toEqual(['scripts/classify-quick-fix.js']);
+      // Existing metadata (the seed this same test read) is preserved, not clobbered.
+      expect(h.sdMetaUpdates[0].metadata.escalated_from_branch).toBe('qf/QF-B-1');
+    } finally {
+      try { execSync(`git worktree remove "${worktreePath}" --force`, { cwd: repo, stdio: 'pipe' }); } catch { /* best-effort cleanup */ }
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
+  });
+
+  it('never writes when the escalated branch has zero diff against origin/main', async () => {
+    const repo = createFixtureRepo();
+    const worktreePath = join(tmpdir(), `esc-cont-wt-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    try {
+      const initialSha = execSync('git rev-parse HEAD', { cwd: repo, encoding: 'utf8' }).trim();
+      execSync(`git update-ref refs/remotes/origin/main ${initialSha}`, { cwd: repo, stdio: 'pipe' });
+      execSync('git branch qf/QF-B-2', { cwd: repo, stdio: 'pipe' });
+      execSync(`git worktree add "${worktreePath}" qf/QF-B-2`, { cwd: repo, stdio: 'pipe' });
+      // No new commit -- this branch is byte-identical to origin/main (the exact QF-186/933/476
+      // shape this fix targets: the QF's own fix already merged before this SD was created).
+
+      h.sdMeta = { data: { metadata: { escalated_from_branch: 'qf/QF-B-2' } } };
+      await stampEscalatedFilesToModify('SD-LEO-FIX-TEST-001', worktreePath);
+
+      expect(h.sdMetaUpdates).toHaveLength(0);
+    } finally {
+      try { execSync(`git worktree remove "${worktreePath}" --force`, { cwd: repo, stdio: 'pipe' }); } catch { /* best-effort cleanup */ }
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(worktreePath, { recursive: true, force: true });
+    }
+  });
+
+  it('never throws when git or the DB is unavailable (best-effort only)', async () => {
+    h.sdMeta = { data: null };
+    await expect(stampEscalatedFilesToModify('SD-LEO-FIX-TEST-001', join(tmpdir(), 'definitely-not-a-repo-dir'))).resolves.toBeUndefined();
+    expect(h.sdMetaUpdates).toHaveLength(0);
   });
 });

@@ -260,6 +260,46 @@ export async function resolveEscalatedBaseRef(sdKey, repoRoot) {
 }
 
 /**
+ * QF-20260912-512: an SD escalated from an already-implemented QF (this function's own
+ * caller, when resolveEscalatedBaseRef finds a local qf/<qf-id> branch to base the new
+ * worktree on) carries a worktree whose branch is IDENTICAL to origin/main whenever that
+ * QF's own PR had already merged before the SD was created -- a genuine, recurring shape
+ * (QF-186, QF-933, QF-476/358 this session), not a corner case. With a zero-diff branch,
+ * the TESTING sub-agent's prospective-mode gate (lib/sub-agents/testing/index.js
+ * checkForNonUISdType) has nothing to scope against and falls through to demanding a full
+ * --full-e2e run -- which the escalated SD's own code change never needed, since it already
+ * shipped and was already tested as the QF. checkForNonUISdType already reads
+ * metadata.files_to_modify as its first, cheapest non-UI-scoping fallback (resolveFallbackNonUiFiles);
+ * this stamps that field automatically from the escalated branch's own diff against
+ * origin/main, at the one moment the worktree (and therefore the branch content) is known to
+ * exist locally -- so a worker escalating an already-shipped QF never has to discover and
+ * hand-set this field themselves. Best-effort: a git or DB failure here only means the field
+ * stays unset, exactly like before this fix -- it must never fail worktree creation itself.
+ */
+export async function stampEscalatedFilesToModify(sdKey, worktreePath) {
+  try {
+    const diffOutput = execSync('git diff origin/main...HEAD --name-only', {
+      cwd: worktreePath, encoding: 'utf8', stdio: 'pipe'
+    });
+    const files = diffOutput.split('\n').map((f) => f.trim()).filter(Boolean);
+    if (files.length === 0) return;
+
+    const supabase = createSupabaseServiceClient();
+    const { data } = await supabase
+      .from('strategic_directives_v2')
+      .select('metadata')
+      .eq('sd_key', sdKey)
+      .maybeSingle();
+    if (!data) return;
+
+    const metadata = { ...(data.metadata || {}), files_to_modify: files };
+    await supabase.from('strategic_directives_v2').update({ metadata }).eq('sd_key', sdKey);
+  } catch {
+    // Best-effort only -- see doc comment above.
+  }
+}
+
+/**
  * Scan .worktrees/ directory for existing worktree matching sdKey
  */
 function resolveFromScan(sdKey, repoRoot) {
@@ -542,6 +582,7 @@ async function createWorktree(sdKey, repoRoot, opts = {}) {
         execSync(`git worktree add -b "${branch}" "${worktreePath}" "${baseRef}"`, {
           cwd: repoRoot, encoding: 'utf8', stdio: 'pipe'
         });
+        await stampEscalatedFilesToModify(sdKey, worktreePath);
       } else {
         baseRef = resolveWorktreeBaseRef();
         fetchBaseRef(repoRoot, baseRef);
