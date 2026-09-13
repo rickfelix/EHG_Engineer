@@ -262,7 +262,9 @@ export async function reconcileBoard(sb) {
 // the fresh rollup first so this read always reflects current children state.
 export async function readCriticalPathParents(sb) {
   try {
-    await syncParentRollupStatus(sb).catch(() => {}); // fail-soft: a sync error falls through to the pre-fix (possibly stale) read rather than aborting the tick
+    // QF-20260912-408: was silently swallowed.
+    const rollupSync = await syncParentRollupStatus(sb).catch((e) => ({ errors: [String(e?.message || e)] }));
+    if (rollupSync.errors?.length) console.error(`QUIET_TICK_PARENT_ROLLUP_SYNC_ERROR=adam n=${rollupSync.errors.length} detail="${rollupSync.errors.join('; ')}"`);
     // QF-20260703-229: pre-filter to OPEN nodes at the query — a done/cancelled parent has
     // stopped moving BY DEFINITION and is never a stall candidate. source_kind/source_ref are
     // read here too so checkAndAlertStalls can self-heal a sourced_sd node whose linked SD
