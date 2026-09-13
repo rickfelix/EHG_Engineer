@@ -1,231 +1,231 @@
 {
-  "generated_at": "2026-09-13T14:30:04.621Z",
-  "git_commit": "724a9098",
+  "generated_at": "2026-09-13T18:24:10.411Z",
+  "git_commit": "d5990733",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
       "type": "full",
-      "chars": 28734,
-      "bytes": 28885,
+      "chars": 28733,
+      "bytes": 28884,
       "estimated_tokens": 7184,
       "content_hash": "42fb478c7b2c3de6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE.md"
     },
     "CLAUDE_CORE.md": {
       "type": "full",
-      "chars": 57243,
-      "bytes": 57664,
+      "chars": 57242,
+      "bytes": 57663,
       "estimated_tokens": 14311,
       "content_hash": "ddf787ab1c308b39",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_CORE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_CORE.md"
     },
     "CLAUDE_CORE_MANUAL.md": {
       "type": "full",
-      "chars": 39565,
-      "bytes": 39727,
-      "estimated_tokens": 9892,
+      "chars": 39564,
+      "bytes": 39726,
+      "estimated_tokens": 9891,
       "content_hash": "117dab3f43ffceed",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_CORE_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_CORE_MANUAL.md"
     },
     "CLAUDE_CORE_PROVENANCE.md": {
       "type": "full",
-      "chars": 1864,
-      "bytes": 1876,
+      "chars": 1863,
+      "bytes": 1875,
       "estimated_tokens": 466,
       "content_hash": "a6e3b22c1726a843",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_CORE_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_CORE_PROVENANCE.md"
     },
     "CLAUDE_LEAD.md": {
       "type": "full",
-      "chars": 50011,
-      "bytes": 50181,
+      "chars": 50010,
+      "bytes": 50180,
       "estimated_tokens": 12503,
       "content_hash": "48b0c464922209e7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_LEAD.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_LEAD.md"
     },
     "CLAUDE_LEAD_MANUAL.md": {
       "type": "full",
-      "chars": 17780,
-      "bytes": 17852,
+      "chars": 17779,
+      "bytes": 17851,
       "estimated_tokens": 4445,
       "content_hash": "2d2a6b1ad7a5d7a9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_LEAD_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_LEAD_MANUAL.md"
     },
     "CLAUDE_PLAN.md": {
       "type": "full",
-      "chars": 54855,
-      "bytes": 55112,
+      "chars": 54854,
+      "bytes": 55111,
       "estimated_tokens": 13714,
       "content_hash": "793c8d8b0005d733",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_PLAN.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_PLAN.md"
     },
     "CLAUDE_PLAN_MANUAL.md": {
       "type": "full",
-      "chars": 38354,
-      "bytes": 38461,
+      "chars": 38353,
+      "bytes": 38460,
       "estimated_tokens": 9589,
       "content_hash": "cb3aab0808812680",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_PLAN_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_PLAN_MANUAL.md"
     },
     "CLAUDE_EXEC.md": {
       "type": "full",
-      "chars": 46980,
-      "bytes": 47241,
+      "chars": 46979,
+      "bytes": 47240,
       "estimated_tokens": 11745,
       "content_hash": "9ff144f0b745b31f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_EXEC.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_EXEC.md"
     },
     "CLAUDE_EXEC_MANUAL.md": {
       "type": "full",
-      "chars": 59014,
-      "bytes": 59222,
+      "chars": 59013,
+      "bytes": 59221,
       "estimated_tokens": 14754,
       "content_hash": "f3762973d2fc70a1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_EXEC_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_EXEC_MANUAL.md"
     },
     "CLAUDE_EXEC_PROVENANCE.md": {
       "type": "full",
-      "chars": 4746,
-      "bytes": 4780,
+      "chars": 4745,
+      "bytes": 4779,
       "estimated_tokens": 1187,
       "content_hash": "58f339174fd0a4b4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_EXEC_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_EXEC_PROVENANCE.md"
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 100104,
-      "bytes": 101015,
+      "chars": 100103,
+      "bytes": 101014,
       "estimated_tokens": 25026,
       "content_hash": "9f6f7ae10cc1cc4b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_ADAM.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
       "type": "full",
-      "chars": 27196,
-      "bytes": 27468,
+      "chars": 27195,
+      "bytes": 27467,
       "estimated_tokens": 6799,
       "content_hash": "aabc8fcbd819de9a",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_ADAM_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_ADAM_MANUAL.md"
     },
     "CLAUDE_ADAM_PROVENANCE.md": {
       "type": "full",
-      "chars": 95086,
-      "bytes": 95427,
+      "chars": 95085,
+      "bytes": 95426,
       "estimated_tokens": 23772,
       "content_hash": "7497a16771c34d1b",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_ADAM_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_ADAM_PROVENANCE.md"
     },
     "CLAUDE_COORDINATOR.md": {
       "type": "full",
-      "chars": 53469,
-      "bytes": 53820,
-      "estimated_tokens": 13368,
-      "content_hash": "1797353723bd4655",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_COORDINATOR.md"
+      "chars": 55426,
+      "bytes": 55777,
+      "estimated_tokens": 13857,
+      "content_hash": "061c1b2710b593d4",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_COORDINATOR.md"
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
       "type": "full",
-      "chars": 12644,
-      "bytes": 12708,
+      "chars": 12643,
+      "bytes": 12707,
       "estimated_tokens": 3161,
       "content_hash": "70b54bedb3b8a5fc",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_COORDINATOR_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_COORDINATOR_MANUAL.md"
     },
     "CLAUDE_COORDINATOR_PROVENANCE.md": {
       "type": "full",
-      "chars": 16887,
-      "bytes": 16929,
+      "chars": 16886,
+      "bytes": 16928,
       "estimated_tokens": 4222,
       "content_hash": "ccf36064fe11941d",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_COORDINATOR_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_COORDINATOR_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 57940,
-      "bytes": 58481,
+      "chars": 57939,
+      "bytes": 58480,
       "estimated_tokens": 14485,
       "content_hash": "849a4f82536c98f5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_SOLOMON.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 58773,
-      "bytes": 59106,
-      "estimated_tokens": 14694,
+      "chars": 58772,
+      "bytes": 59105,
+      "estimated_tokens": 14693,
       "content_hash": "daccb21fa1c4d539",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_SOLOMON_MANUAL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
       "type": "full",
-      "chars": 24779,
-      "bytes": 24987,
+      "chars": 24778,
+      "bytes": 24986,
       "estimated_tokens": 6195,
       "content_hash": "68ac1671fc1ed1ce",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_SOLOMON_PROVENANCE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_SOLOMON_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
       "type": "full",
-      "chars": 3581,
-      "bytes": 3608,
-      "estimated_tokens": 896,
+      "chars": 3580,
+      "bytes": 3607,
+      "estimated_tokens": 895,
       "content_hash": "6495bed60eecaac1",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_SOLOMON_MODEL_POSTURE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_SOLOMON_MODEL_POSTURE.md"
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 27825,
-      "bytes": 27939,
-      "estimated_tokens": 6957,
+      "chars": 27824,
+      "bytes": 27938,
+      "estimated_tokens": 6956,
       "content_hash": "5faaee2f0cf4df20",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_MICHAEL.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
       "type": "full",
-      "chars": 5173,
-      "bytes": 5182,
-      "estimated_tokens": 1294,
+      "chars": 5172,
+      "bytes": 5181,
+      "estimated_tokens": 1293,
       "content_hash": "57a7b86c9753b0c4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_MICHAEL_MODEL_POSTURE.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_MICHAEL_MODEL_POSTURE.md"
     },
     "CLAUDE_DIGEST.md": {
       "type": "digest",
-      "chars": 9618,
-      "bytes": 9668,
+      "chars": 9617,
+      "bytes": 9667,
       "estimated_tokens": 2405,
       "content_hash": "f886ce9fb82fc8f4",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_DIGEST.md"
     },
     "CLAUDE_CORE_DIGEST.md": {
       "type": "digest",
-      "chars": 13266,
-      "bytes": 13376,
+      "chars": 13265,
+      "bytes": 13375,
       "estimated_tokens": 3317,
       "content_hash": "698f34f7355317b5",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_CORE_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_CORE_DIGEST.md"
     },
     "CLAUDE_LEAD_DIGEST.md": {
       "type": "digest",
-      "chars": 5552,
-      "bytes": 5572,
+      "chars": 5551,
+      "bytes": 5571,
       "estimated_tokens": 1388,
       "content_hash": "1ec5134d706f6db7",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_LEAD_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_LEAD_DIGEST.md"
     },
     "CLAUDE_PLAN_DIGEST.md": {
       "type": "digest",
-      "chars": 8542,
-      "bytes": 8582,
+      "chars": 8541,
+      "bytes": 8581,
       "estimated_tokens": 2136,
       "content_hash": "9db58685e569e0d6",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_PLAN_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_PLAN_DIGEST.md"
     },
     "CLAUDE_EXEC_DIGEST.md": {
       "type": "digest",
-      "chars": 11885,
-      "bytes": 11958,
-      "estimated_tokens": 2972,
+      "chars": 11884,
+      "bytes": 11957,
+      "estimated_tokens": 2971,
       "content_hash": "39b0e916f98da56f",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_EXEC_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_EXEC_DIGEST.md"
     },
     "CLAUDE_ADAM_DIGEST.md": {
       "type": "digest",
@@ -233,15 +233,15 @@
       "bytes": 17701,
       "estimated_tokens": 4360,
       "content_hash": "b779e057bd39e9b9",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_ADAM_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_ADAM_DIGEST.md"
     },
     "CLAUDE_COORDINATOR_DIGEST.md": {
       "type": "digest",
       "chars": 12955,
       "bytes": 13063,
       "estimated_tokens": 3239,
-      "content_hash": "7bbae932aedb7558",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_COORDINATOR_DIGEST.md"
+      "content_hash": "98f9709fc48de77d",
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_COORDINATOR_DIGEST.md"
     },
     "CLAUDE_SOLOMON_DIGEST.md": {
       "type": "digest",
@@ -249,11 +249,11 @@
       "bytes": 4012,
       "estimated_tokens": 992,
       "content_hash": "5edae88971cb06b8",
-      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-20260913b\\CLAUDE_SOLOMON_DIGEST.md"
+      "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\qf\\QF-20260913-254\\CLAUDE_SOLOMON_DIGEST.md"
     }
   },
   "section_digests": {
-    "global": "35c8cf6e9dd07f69",
+    "global": "9b5b3ee39f51e924",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -530,7 +530,7 @@
       "632": "df3f3261b608ddbd",
       "633": "9da337cbf092e0c5",
       "634": "6518b5f83a72be9e",
-      "635": "890cc8668c3046b7",
+      "635": "d8aa183013fa3044",
       "636": "3d8d5889d76a9346",
       "653": "29214fac1aff5e6f",
       "654": "daf0a7933d7819ec",

@@ -510,6 +510,17 @@ export const STANDARD_LOOPS = [
   { key: 'batch-mint-sweep', label: 'Batch-mint detector sweep + bounded-wait release', script: 'batch-mint-sweep.mjs', cron: '*/10 * * * *',
     gha_backed: true, session_arm: true,
     prompt: 'node scripts/cron/batch-mint-sweep.mjs' },
+  // QF-20260913-254: scripts/gauge-findings/disposition-sweep.mjs (QF-20260911-425) had ZERO
+  // invokers anywhere (no STANDARD_LOOPS entry, no GHA workflow, no cron) since it shipped, so the
+  // designed drain for invariant_gauge_finding feedback never ran and the backlog read UNDRAINED
+  // tick after tick (5687 outstanding rows measured 2026-09-13). Wired the same way
+  // QF-20260913-812 wired batch-mint-sweep above -- session-armed backup beside a GHA leg
+  // (gha_backed: true). Hourly (23 * * * *, offset from the other hourly loops) is right for the
+  // fixed ~29-fingerprint gauge set this sweep groups by, not the row count. --apply performs the
+  // writes; the script's own dry-run-by-default guard stays load-bearing here too.
+  { key: 'gauge-finding-disposition-sweep', label: 'Gauge-finding disposition sweep', script: 'disposition-sweep.mjs', cron: '23 * * * *',
+    gha_backed: true, session_arm: true,
+    prompt: 'node scripts/gauge-findings/disposition-sweep.mjs --apply' },
   // SD-LEO-INFRA-ACTIVATE-INERT-STALL-001-A (CAPA-5): scripts/safe-root-resync.mjs (npm run
   // resync:safe) had ZERO periodic_process_registry rows — scheduled nowhere, its own liveness
   // unwatched. Schedules ONLY the fetch+ff-merge half (scripts/cron/safe-root-resync-scheduled.mjs,
