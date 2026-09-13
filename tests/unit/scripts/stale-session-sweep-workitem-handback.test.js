@@ -66,3 +66,31 @@ describe('FR-1b slice 2 — the sweep delegates its work-item handback to the sh
     expect(calls).toHaveLength(3);
   });
 });
+
+describe('QF-20260912-961 (part b) — phantom-in_progress quick_fixes detector', () => {
+  it('queries quick_fixes for the exact orphan shape: in_progress + null claimant', () => {
+    expect(SOURCE).toMatch(/from\(\s*['"]quick_fixes['"]\s*\)/);
+    expect(SOURCE).toMatch(/\.eq\(\s*['"]status['"]\s*,\s*['"]in_progress['"]\s*\)\s*\n\s*\.is\(\s*['"]claiming_session_id['"]\s*,\s*null\s*\)/);
+  });
+
+  it('delegates the reopen decision to the shared releaseWorkItemOnSessionEnd helper, never a second inline predicate', () => {
+    expect(SOURCE).toMatch(/releasePhantomQf\(\s*supabase,\s*qf\.id,\s*['"]PHANTOM_QF_SWEEP['"]\s*\)/);
+    // The one inline reopen already asserted absent by the earlier test in this file covers
+    // this too; this test additionally proves this specific site delegates rather than
+    // silently reading verdict.action without ever calling the helper.
+    expect(SOURCE).toMatch(/const\s*\{\s*releaseWorkItemOnSessionEnd:\s*releasePhantomQf\s*\}\s*=\s*await import\(\s*['"]\.\.\/lib\/fleet\/release-work-item\.mjs['"]\s*\)/);
+  });
+
+  it('audits a genuine reopen to session_lifecycle_events as PHANTOM_QF_REOPENED', () => {
+    expect(SOURCE).toMatch(/event_type:\s*['"]PHANTOM_QF_REOPENED['"]/);
+  });
+
+  it('reports (never reopens) a row carrying real work, distinguishing pr_url from commit_sha in the warning', () => {
+    expect(SOURCE).toMatch(/qf_untouched['"]?\s*&&\s*\(qf\.pr_url\s*\|\|\s*qf\.commit_sha\)/);
+  });
+
+  it('floors the candidate window at one sweep interval so a claim landing moments ago is never raced', () => {
+    expect(SOURCE).toMatch(/QF_SWEEP_INTERVAL_MS\s*=\s*5\s*\*\s*60_000/);
+    expect(SOURCE).toMatch(/\.lt\(\s*['"]started_at['"]\s*,\s*qfCutoffIso\s*\)/);
+  });
+});
