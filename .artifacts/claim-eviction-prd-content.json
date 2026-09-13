@@ -1,0 +1,264 @@
+{
+  "executive_summary": "Fixes the quick_fixes claim-eviction race: claim_sd resets an evicted row to open (or refuses if mid-CI) atomically, and worker-checkin's three self-claim paths uniformly skip self-claim via getMyClaims().",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "claim_sd's claim-switch eviction path resets an evicted quick_fixes row's status to 'open' in the SAME guarded UPDATE that clears claiming_session_id.",
+      "description": "database/migrations/20260903_claim_sd_symmetric_clear_returning_fix.sql lines 474-478 (the `IF v_evicted_sd_key LIKE 'QF-%' THEN UPDATE quick_fixes SET claiming_session_id = NULL WHERE id = v_evicted_sd_key` branch) must add `status = 'open'` to that SET clause. Does NOT apply to the strategic_directives_v2 branch immediately below it (lines ~479-486) -- that table has no 'open' status value in its CHECK constraint (verified live) and already correctly clears claiming_session_id/active_session_id/is_working_on with no orphan shape.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: Evicting a quick_fixes claim with no pr_url/commit_sha leaves the row with status='open', claiming_session_id=NULL, queryable immediately after the evicting claim_sd call returns.",
+        "AC-2: The reset and the clear happen in the SAME UPDATE statement (not a follow-up UPDATE by id), so a third session's fresh legitimate claim landing between two statements can never be stomped back to 'open'.",
+        "AC-3: The strategic_directives_v2 eviction branch is unchanged byte-for-byte except for this SD's other additions."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "claim_sd refuses (touches nothing, returns a refusal code) when the quick_fixes row being evicted carries a non-null pr_url or commit_sha.",
+      "description": "Express the refusal as a predicate directly on the destructive UPDATE's WHERE clause (`AND pr_url IS NULL AND commit_sha IS NULL`) plus a GET DIAGNOSTICS row-count check -- matching this same migration's own existing pattern for v_evicted_row_count (line 470-473) -- never a separate prior SELECT+branch, because READ COMMITTED with no FOR UPDATE means a prior read can go stale before the write executes.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: A quick_fixes row with pr_url set is NOT evicted by a competing claim_sd call; the row's status and claiming_session_id are unchanged.",
+        "AC-2: The same holds for commit_sha set with pr_url NULL (tested as a distinct case).",
+        "AC-3: claim_sd's return shape carries a distinguishable refusal code/reason the caller (worker-checkin.cjs) can branch on, not a silent no-op."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "worker-checkin.cjs's three self-claim producer steps (critical-qf-jump.cjs, merged-pool-self-claim.cjs, self-claim-qf.cjs) all skip self-claim when the calling session already authoritatively holds ANY live claim (SD or QF).",
+      "description": "Apply lib/claim/get-my-claims.cjs's getMyClaims(supabase, sessionId) -- the existing authoritative both-kinds, multiplicity-aware predicate, currently called only from resume.cjs -- to all three producer steps uniformly. Do NOT key the guard on ctx.mySd: it is a one-shot mirror snapshot nulled at multiple points in the same pipeline (resume.cjs:147, resume.cjs:229, release-request.cjs:117), so a guard keyed on it is inert in exactly the race this SD exists to fix.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: A session already holding a live SD claim does not self-claim a QF from self-claim-qf.cjs's self_claimed_qf tier.",
+        "AC-2: A session already holding a live QF claim does not self-claim an SD from critical-qf-jump.cjs or merged-pool-self-claim.cjs.",
+        "AC-3: All three producer steps call the SAME getMyClaims() import -- no duplicated/reimplemented ownership check."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Investigate what happens today when a directed-assignment claim attempt is REJECTED by claim_sd, and fix the fall-through if the pipeline does not correctly resolve to self-claim afterward.",
+      "description": "Assignment already outranks self-claim in the existing worker-checkin.cjs step ordering, so a guard merely restating that ordering is a no-op -- the real unknown is the REJECTION path specifically: does a rejected assigned-claim attempt correctly fall through to the self-claim tiers, or does it leave the pipeline stuck having already skipped them for this tick? This is an investigation-first requirement; implement a fix only if the investigation finds a genuine gap.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: A documented trace (code reading + a reproducing test) of the current rejected-assignment fall-through behavior exists.",
+        "AC-2: If a gap is found, the pipeline resolves to a self-claim (or a correctly-reported idle/error state) after a rejected assignment, never a silent no-action tick.",
+        "AC-3: If no gap is found, the investigation's finding is recorded in the PRD/handoff evidence rather than producing speculative code changes."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "A seat sleeping on a claim-wakeup (wind_down.had_claim=true) whose claim is removed by someone else receives a hint it can act on at its NEXT check-in.",
+      "description": "Matches the existing precedent at scripts/stale-session-sweep.cjs:352-366. This SD does NOT attempt to preempt or re-arm an already-scheduled ScheduleWakeup mid-sleep -- that capability does not exist in the harness and is already formally risk-accepted (docs/.../fleet-hibernation-quiet-tick.md:159-171, lib/fleet/self-wake-escalation.cjs:15-22). The fix is purely a hint written at removal time and read at the seat's own next check-in.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: A park/release action on a had_claim=true-sleeping seat's claim writes a hint record.",
+        "AC-2: The seat's next /checkin call surfaces and can act on that hint.",
+        "AC-3: No new wake-preemption mechanism is introduced."
+      ]
+    },
+    {
+      "id": "FR-6",
+      "requirement": "Every claim_sd eviction-with-reset and every eviction-refusal emits a queryable structured audit event.",
+      "description": "Follow this same migration file's existing event_type='CLAIM_SWITCH_EVICTED_CLEARED' pattern (session_lifecycle_events INSERT gated on the clear actually firing) as the template: add a distinct event_type for the quick_fixes reset-on-evict case and another for the pr_url/commit_sha refusal case. Verification of this SD's effect must use these events, never a standing orphan-row COUNT -- the live orphan count is already 0 (the defect is racy/intermittent, not a steady population), so a count-based check would read as permanently healthy whether or not the fix is present.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: An eviction-with-reset (FR-1) inserts a session_lifecycle_events row identifying the evicted quick_fixes id and the evicting session.",
+        "AC-2: An eviction-refusal (FR-2) inserts a session_lifecycle_events row identifying the refused id and the reason (pr_url/commit_sha present).",
+        "AC-3: Both event types are queryable after the fact and distinguishable from the existing CLAIM_SWITCH_EVICTED_CLEARED event."
+      ]
+    },
+    {
+      "id": "FR-7",
+      "requirement": "No regression to QF-20260912-961's already-shipped parts (a) and (b).",
+      "description": "LEO_RELEASE_WORKITEM_RESET (lib/fleet/release-work-item.mjs:134, verified live) must still default ON ('off' remains the only kill switch), and the quick_fixes phantom-in_progress detector in scripts/stale-session-sweep.cjs (verified live at lines 3086-3127, delegating to releaseWorkItemOnSessionEnd() at line 3113-3114) must still delegate to that shared helper with no duplicated reopen predicate.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: Existing stale-session-sweep-workitem-handback.test.js and sibling QF-961 regression tests pass unmodified.",
+        "AC-2: No new code path reimplements releaseWorkItemOnSessionEnd()'s reopen logic."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "The claim_sd migration expresses both the reset (FR-1) and the refusal (FR-2) as predicates and GET DIAGNOSTICS row-count checks directly on the single destructive UPDATE statement, never as a prior SELECT followed by a branching UPDATE.",
+      "rationale": "The database runs READ COMMITTED with no FOR UPDATE row lock on this path (confirmed by this same migration file's own v_evicted_row_count pattern, added for the identical reason at lines 41/470-473) -- a prior SELECT can go stale before the write executes, reintroducing exactly the race class this migration file already exists to close."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "lib/claim/get-my-claims.cjs's getMyClaims(supabase, sessionId) is imported identically (same module path, same call signature) into critical-qf-jump.cjs, merged-pool-self-claim.cjs, and self-claim-qf.cjs -- no per-file reimplementation of the ownership predicate.",
+      "rationale": "A second, slightly-different hand-rolled ownership check in any one producer step is how this exact bug class regresses silently -- the predicate must stay single-sourced so a future fix to getMyClaims() reaches all three call sites automatically."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "The new audit events (FR-6) reuse the existing session_lifecycle_events table and insert pattern already present in this migration file, adding new event_type literals rather than a new table or sink.",
+      "rationale": "session_lifecycle_events is already the canonical durable-trail sink for claim-lifecycle events in this codebase (the CLAIM_SWITCH_EVICTED_CLEARED precedent in the same file); a second sink would fragment the audit trail this SD's own success criteria depend on for verification."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "The migration is additive and backward compatible: existing callers of claim_sd (worker-checkin.cjs's multiple call sites) continue to work unchanged against the new function signature/behavior, with no caller-side code required to adopt the reset/refusal behavior.",
+      "rationale": "claim_sd is called from numerous call sites across the fleet-worker checkin pipeline; a signature or return-shape change that requires every caller to be updated in lockstep would turn a small, low-risk fix into a fleet-wide breaking change."
+    }
+  ],
+  "system_architecture": {
+    "overview": "A Postgres RPC function (claim_sd) mediates every SD/QF claim and claim-switch in the fleet. worker-checkin.cjs's three self-claim producer steps call it when a session has no directed assignment. This SD tightens claim_sd's eviction branch for quick_fixes (reset-on-evict, refuse-if-mid-CI) and adds a single shared pre-check (getMyClaims) across the three producer steps so a session that already holds a claim never races itself into a second one.",
+    "components": [
+      { "name": "claim_sd (Postgres function)", "responsibility": "Atomically claims/evicts SD and QF rows; this SD adds a status reset and a refusal predicate to its quick_fixes eviction branch.", "technology": "PL/pgSQL migration" },
+      { "name": "lib/claim/get-my-claims.cjs", "responsibility": "Authoritative, both-kinds (SD+QF) predicate for 'does this session already hold a live claim' -- applied uniformly to all three self-claim producer steps.", "technology": "Node.js (CJS)" },
+      { "name": "worker-checkin.cjs self-claim producer steps (critical-qf-jump.cjs, merged-pool-self-claim.cjs, self-claim-qf.cjs)", "responsibility": "Each calls getMyClaims() before attempting a self-claim; skip if the session already holds any live claim.", "technology": "Node.js (CJS)" },
+      { "name": "session_lifecycle_events", "responsibility": "Durable audit sink; receives a new event_type on every eviction-with-reset and every eviction-refusal.", "technology": "Postgres table" },
+      { "name": "scripts/stale-session-sweep.cjs (hint writer)", "responsibility": "Writes a next-checkin hint when a sleeping seat's claim is removed out from under it, matching the existing precedent at lines 352-366.", "technology": "Node.js (CJS)" }
+    ],
+    "data_flow": "worker-checkin.cjs calls claim_sd (RPC) when claiming an item. If the call evicts an existing quick_fixes claim, claim_sd checks pr_url/commit_sha on the evicted row: if both NULL, it resets status to 'open' and clears claiming_session_id in one UPDATE and emits an audit event; if either is set, it refuses, touches nothing, and emits a different audit event. Separately, each of the three self-claim producer steps calls getMyClaims() before attempting any self-claim RPC call, short-circuiting if the session already holds a live claim. A sleeping seat whose claim is removed gets a hint row it reads at its next /checkin.",
+    "integration_points": ["claim_sd Postgres RPC", "quick_fixes table", "strategic_directives_v2 table (read-only for this SD; eviction branch unchanged)", "lib/claim/get-my-claims.cjs", "session_lifecycle_events table", "scripts/stale-session-sweep.cjs"]
+  },
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Evict a quick_fixes claim with no pr_url/commit_sha via a competing claim_sd call.",
+      "test_type": "integration",
+      "given": "Session A holds a quick_fixes claim with pr_url=NULL and commit_sha=NULL.",
+      "when": "Session B calls claim_sd to claim a different item, triggering the claim-switch eviction of A's claim.",
+      "then": "The evicted row reads status='open', claiming_session_id=NULL in the same transaction, and a CLAIM_EVICT_RESET (or equivalent) audit event is recorded."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Attempt to evict a quick_fixes claim that carries a pr_url.",
+      "test_type": "integration",
+      "given": "Session A holds a quick_fixes claim with pr_url set.",
+      "when": "Session B calls claim_sd in a way that would otherwise evict A's claim.",
+      "then": "claim_sd returns a refusal; the row's status and claiming_session_id are unchanged; an audit event distinct from TS-1's is recorded."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Attempt to evict a quick_fixes claim that carries a commit_sha but no pr_url.",
+      "test_type": "integration",
+      "given": "Session A holds a quick_fixes claim with pr_url=NULL and commit_sha set.",
+      "when": "Session B calls claim_sd in a way that would otherwise evict A's claim.",
+      "then": "Same refusal behavior as TS-2 -- commit_sha alone is sufficient to block eviction."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "A session already holding a live SD claim reaches the QF self-claim tier.",
+      "test_type": "unit",
+      "given": "Session C holds a live SD claim (confirmed via getMyClaims).",
+      "when": "self-claim-qf.cjs's self_claimed_qf tier runs for session C with an open QF available.",
+      "then": "Session C does not self-claim the QF; the tier short-circuits on getMyClaims() returning a live claim."
+    },
+    {
+      "id": "TS-5",
+      "scenario": "A session already holding a live QF claim reaches an SD self-claim tier.",
+      "test_type": "unit",
+      "given": "Session D holds a live QF claim (confirmed via getMyClaims).",
+      "when": "critical-qf-jump.cjs or merged-pool-self-claim.cjs runs for session D with a claimable SD available.",
+      "then": "Session D does not self-claim the SD; both tiers short-circuit identically via the same getMyClaims() call."
+    },
+    {
+      "id": "TS-6",
+      "scenario": "A directed-assignment claim attempt is rejected by claim_sd.",
+      "test_type": "integration",
+      "given": "Session E receives a directed WORK_ASSIGNMENT for an item that claim_sd rejects (e.g. already claimed elsewhere).",
+      "when": "worker-checkin.cjs processes the rejected assignment.",
+      "then": "The pipeline falls through to the self-claim tiers (or correctly reports an idle/error state) for that tick -- never a silent no-action tick (FR-4)."
+    },
+    {
+      "id": "TS-7",
+      "scenario": "QF-20260912-961 regression suite runs unmodified against the new claim_sd migration.",
+      "test_type": "integration",
+      "given": "The existing stale-session-sweep-workitem-handback.test.js and sibling QF-961 tests.",
+      "when": "The full suite runs after this SD's migration and code changes are applied.",
+      "then": "All QF-961 tests pass unmodified -- LEO_RELEASE_WORKITEM_RESET still defaults ON and the quick_fixes phantom-in_progress detector still delegates to releaseWorkItemOnSessionEnd()."
+    }
+  ],
+  "acceptance_criteria": [
+    "A quick_fixes claim evicted with no pr_url/commit_sha reads status='open' immediately after the evicting claim_sd call returns, with the reset and the clear performed in one UPDATE statement.",
+    "A quick_fixes claim carrying a pr_url or commit_sha is never evicted; claim_sd returns a refusal and the row is left completely untouched.",
+    "A session already holding a live claim (SD or QF, via getMyClaims) never self-claims a second item from any of the three self-claim producer steps.",
+    "Every eviction-with-reset and every eviction-refusal emits a distinguishable, queryable session_lifecycle_events row.",
+    "Existing QF-20260912-961 regression tests pass unmodified."
+  ],
+  "risks": [
+    {
+      "risk": "A migration written directly from the originating ticket text (pre-LEAD-correction) would attempt status='open' and pr_url/commit_sha predicates against strategic_directives_v2, which has no 'open' status value and no pr_url/commit_sha columns (both verified live) -- either silently no-op or hard-fail with 42703.",
+      "probability": "LOW",
+      "impact": "HIGH",
+      "mitigation": "LEAD-phase prospective testing-agent review (evidence row 5d196f47-4555-4f50-998d-101d38a2ccef) caught this before PRD authoring; every FR above is explicitly scoped to quick_fixes only, and the strategic_directives_v2 eviction branch is called out as unchanged in FR-1.",
+      "rollback_plan": "No production exposure possible: the PRD itself enforces quick_fixes-only scope, so there is no strategic_directives_v2 migration path to roll back."
+    },
+    {
+      "risk": "FR-5's 'next-checkin hint' could be mis-implemented as an attempt to preempt or re-arm an already-scheduled ScheduleWakeup mid-sleep, which has no implementation primitive in the harness.",
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "mitigation": "FR-5 explicitly scopes the fix to a hint written at removal time and read at the seat's own next check-in, citing the existing formal risk-acceptance docs (fleet-hibernation-quiet-tick.md, self-wake-escalation.cjs) so EXEC does not re-open that decision under time pressure.",
+      "rollback_plan": "The hint write is a single additive INSERT/UPDATE with no behavioral coupling to ScheduleWakeup; reverting it is a straight revert of that one code change."
+    },
+    {
+      "risk": "The new claim_sd migration could introduce a regression in an existing, frequently-exercised call path (claim_sd is called from numerous worker-checkin.cjs sites) if the new predicates are not additive.",
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "mitigation": "TR-4 requires the migration to be additive and backward compatible; TS-7 runs the full QF-961 regression suite plus this SD's own new tests (TS-1..TS-6) before the migration is considered complete.",
+      "rollback_plan": "Revert via a down-migration restoring the prior claim_sd function body (pinned verbatim in git history at database/migrations/20260903_claim_sd_symmetric_clear_returning_fix.sql) -- a single CREATE OR REPLACE FUNCTION statement, no data migration involved."
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      { "phase": "Phase 1", "description": "Author the claim_sd migration: add the status='open' reset (FR-1) and the pr_url/commit_sha refusal predicate (FR-2) to the quick_fixes eviction branch, plus the two new audit event types (FR-6).", "deliverables": ["New migration file modifying claim_sd", "Unit/integration tests for TS-1, TS-2, TS-3"] },
+      { "phase": "Phase 2", "description": "Apply getMyClaims() uniformly to the three self-claim producer steps (FR-3).", "deliverables": ["Guard added to critical-qf-jump.cjs, merged-pool-self-claim.cjs, self-claim-qf.cjs", "Tests for TS-4, TS-5"] },
+      { "phase": "Phase 3", "description": "Investigate directed-assignment rejection fall-through (FR-4); implement a fix only if a gap is confirmed.", "deliverables": ["Investigation finding documented", "Fix + TS-6 if needed, or a documented no-gap finding"] },
+      { "phase": "Phase 4", "description": "Add the next-checkin hint for a sleeping seat's removed claim (FR-5).", "deliverables": ["Hint write + read-on-checkin code", "Test confirming hint surfaces at next check-in"] },
+      { "phase": "Phase 5", "description": "Run the full QF-20260912-961 regression suite (FR-7/TS-7) and this SD's own new tests together before EXEC-TO-PLAN handoff.", "deliverables": ["Green regression suite", "Green new test suite (TS-1..TS-6)"] }
+    ],
+    "technical_decisions": [
+      "Scope the claim_sd changes to quick_fixes only -- strategic_directives_v2 has no 'open' status and no pr_url/commit_sha columns, verified live during LEAD phase.",
+      "Express eviction-reset and eviction-refusal as predicates + row-count checks on the single destructive UPDATE, not a prior SELECT+branch, given no row locking on this path.",
+      "Reuse getMyClaims() and session_lifecycle_events rather than introducing new ownership predicates or audit sinks.",
+      "Scope the sleeping-seat fix to a next-checkin hint only, explicitly declining to attempt ScheduleWakeup preemption (no implementation primitive exists)."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      { "name": "Fleet worker sessions", "interaction": "Call claim_sd via worker-checkin.cjs on every check-in cycle to claim/switch SD and QF work items.", "frequency": "Every /checkin cycle, fleet-wide." },
+      { "name": "Coordinator", "interaction": "Reads session_lifecycle_events audit rows to observe eviction-reset and eviction-refusal events.", "frequency": "On-demand / monitoring sweeps." }
+    ],
+    "dependencies": [
+      { "name": "claim_sd Postgres function", "type": "upstream", "contract": "worker-checkin.cjs calls it as an RPC; this SD changes its internal eviction behavior without changing its external call contract (TR-4).", "failure_handling": "A refusal returns a distinguishable code the caller already has to handle (claim contention is a normal, expected outcome of this RPC)." },
+      { "name": "lib/claim/get-my-claims.cjs", "type": "upstream", "contract": "Imported identically by all three self-claim producer steps (TR-2).", "failure_handling": "If getMyClaims() throws or errors, the producer step should fail closed (skip self-claim) rather than assume no existing claim." }
+    ],
+    "data_contracts": [
+      { "contract_name": "quick_fixes eviction shape", "schema": "status, claiming_session_id, pr_url, commit_sha columns on quick_fixes", "validation": "Enforced inside the claim_sd migration's predicates (FR-1, FR-2)", "versioning": "Single additive migration; no version negotiation needed since callers are unaffected (TR-4)." }
+    ],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": [],
+      "deployment_considerations": "Straight SQL migration + application code change; no feature flag per this SD's scope (unlike QF-20260912-961's LEO_RELEASE_WORKITEM_RESET precedent) since the new behavior is strictly additive and low-risk per the RISK sub-agent's LOW rating."
+    },
+    "observability_rollout": {
+      "monitoring": ["session_lifecycle_events rows for the two new event_types (eviction-with-reset, eviction-refusal)"],
+      "alerts": ["An unexpected spike in eviction-refusal events could indicate a claim-contention problem elsewhere in the fleet worth investigating."],
+      "rollout_strategy": "Single migration + code deploy; verified via TS-1..TS-7 before merge.",
+      "rollback_trigger": "Any QF-961 regression test failure, or a new test (TS-1..TS-6) failing post-deploy.",
+      "rollback_procedure": "Revert via a down-migration restoring the prior claim_sd function body, pinned verbatim in database/migrations/20260903_claim_sd_symmetric_clear_returning_fix.sql; revert the getMyClaims() guard commits independently if only Phase 2 regresses."
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "database/migrations/20260903_claim_sd_symmetric_clear_returning_fix.sql",
+      "lib/claim/get-my-claims.cjs",
+      "lib/fleet/release-work-item.mjs",
+      "scripts/stale-session-sweep.cjs",
+      "lib/repo-paths.js"
+    ],
+    "patterns_identified": [
+      "claim_sd has two distinct eviction paths: a 'takeover' path (evicting a DIFFERENT session's claim on the SAME item) and a 'claim-switch'/'symmetric-clear' path (evicting the CALLING session's OWN prior claim on a DIFFERENT item) -- this SD's defect lives in the latter.",
+      "ctx.mySd is a one-shot mirror, not a durable guard key -- it is nulled at multiple points in the checkin pipeline (resume.cjs:147, :229, release-request.cjs:117), so any guard keyed on it is inert against the exact race this SD targets.",
+      "getMyClaims() is already the authoritative, both-kinds, multiplicity-aware claim-ownership predicate but is currently called only from resume.cjs, not from the other self-claim producer steps.",
+      "session_lifecycle_events already has a precedent (CLAIM_SWITCH_EVICTED_CLEARED) for a gated INSERT on a successful clear -- the correct template for this SD's new audit events rather than a new sink."
+    ],
+    "key_decisions": [
+      "Scope c2/f to quick_fixes only after live-verifying strategic_directives_v2 has no 'open' status value and no pr_url/commit_sha columns.",
+      "Scope g (sleeping-seat handling) to a next-checkin hint only, per existing formal risk-acceptance that ScheduleWakeup preemption is not implementable.",
+      "Reframe c1 (directed-assignment) as an investigation-first requirement rather than an assumed fix, since the existing step ordering already makes a naive restated guard a no-op."
+    ],
+    "exploration_date": "2026-09-13"
+  }
+}
