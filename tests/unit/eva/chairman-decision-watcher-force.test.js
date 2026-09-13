@@ -40,7 +40,13 @@ function makeSupabase({ venture = { is_demo: false, name: 'RealVenture' } } = {}
     // chairman_decisions
     return {
       select: () => {
-        const c = { eq: () => c, single: () => Promise.resolve({ data: null, error: { code: 'PGRST116' } }) };
+        const c = {
+          eq: () => c,
+          order: () => c,
+          limit: () => c,
+          single: () => Promise.resolve({ data: null, error: { code: 'PGRST116' } }),
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        };
         return c;
       },
       insert: (payload) => {

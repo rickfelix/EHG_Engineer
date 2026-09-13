@@ -180,7 +180,10 @@ describe('TS-3: forward path (createOrReusePendingDecision) proceeds unchanged w
           return {
             select() { return this; },
             eq() { return this; },
+            order() { return this; },
+            limit() { return this; },
             single: async () => ({ data: null }), // none existing → create
+            maybeSingle: async () => ({ data: null, error: null }), // no prior attempts
             insert() { return { select: () => ({ single: async () => ({ data: { id: 'new-id' }, error: null }) }) }; },
           };
         }
