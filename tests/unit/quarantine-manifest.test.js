@@ -61,6 +61,14 @@ describe('quarantine-manifest shape (debt register integrity)', () => {
     }
   });
 
+  it('every entry has a review_by past its own quarantined_at (SD-LEO-FIX-TESTS-QUARANTINE-MANIFEST-001 FR-1)', () => {
+    for (const e of manifest.quarantined) {
+      expect(Date.parse(e.review_by), `${e.file}: missing/unparseable review_by`).not.toBeNaN();
+      expect(Date.parse(e.review_by), `${e.file}: review_by must be after quarantined_at`)
+        .toBeGreaterThan(Date.parse(e.quarantined_at));
+    }
+  });
+
   it('every quarantined file still exists on disk (deleted files must leave the manifest)', () => {
     const missing = manifest.quarantined.filter(e => !fs.existsSync(path.join(ROOT, e.file)));
     expect(missing.map(e => e.file)).toEqual([]);
