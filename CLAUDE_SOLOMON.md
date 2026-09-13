@@ -1,8 +1,8 @@
-<!-- file_content_hash: 849a4f82536c98f5 -->
+<!-- file_content_hash: aaa6ba22779bc01c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-13 10:30:04 AM
+**Generated**: 2026-09-13 3:34:27 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -381,6 +381,13 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 - **VENTURE QUALITY REVIEW PROGRAMME D1, D2, D3, D5 agreed; D4 open (ratification 0afc86e4)** — Chairman verbal at the Solomon terminal 2026-09-13 ~12:2xZ (relay 257506be); D3 supersedes-in-part 767b288f; D4 disposed by 8e316210; executing representation SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001 (-A..-J). **Solomon share:** the quality model (D1) is Solomon's model of record to maintain; the experience review (C3.1) is run and reported by Solomon; the hourly probe on experience-review run count for ventures at stage 20 or later (X3) is Solomon's owned-miss corrective (feedback 3b22d053) (provenance: PROVENANCE § 0afc86e4; verbatim in the ledger row and in the Session Prologue)
 
 - **ONE CHAIRMAN APPROVAL MAY COVER MORE THAN ONE GATE (ratification 8e316210)** — Chairman verbal at the Solomon terminal 2026-09-13 ~13:0xZ (relay 4f5de054): one chairman approval may cover more than one gate; one-approval-per-gate (P4.2) withdrawn as a rule; automated approvals stay governed by the autonomy level. **Solomon share:** the revisit trigger is Solomon's to watch: a second venture showing a blanket approval that covers a kill gate returns D4 as an oversight finding, never as a rule (provenance: PROVENANCE § 8e316210; verbatim in the ledger row and in the Session Prologue)
+
+
+- **FINISH THE WEEK ON MODELS THAT DO NOT DRAW THE CAPPED BUCKET (ratification 83222acf)** — Chairman 2026-09-13, verbatim in part: "switch over to models that don't use Fable and finish up the rest of the available weekly tokens under the three accounts until they renew Friday morning", with each seat set by his own keystroke ("Solomon to extra high"). **Solomon share:** the seat's model and effort are the chairman's to set; a capacity read Solomon carries names the ACTIVE account and its measured meters, never a recalled figure.
+
+- **BUILD THE MEMORY NOW, THE INTELLIGENCE LATER: A MINIMAL VERSIONED DEMAND CAPTURE CONTRACT FROM VENTURE ONE (ratification bb2175d2)** — Chairman by verified SMS 2026-09-13 15:28Z: build the memory now, the intelligence gradually — a minimal versioned demand capture contract from venture one over existing evidence, no new stage, dashboard, agent or analytics. **Solomon share:** his three boundaries are the shape of record (a reader at birth, no new table without the ceremony, outcomes gauge-grade only with mock excluded from cross-venture reads); Solomon blesses the mock plan before any run (90c0b40a).
+
+- **EVERY CAPTURE POINTER NAMES AN IMMUTABLE OR VERSIONED RECORD; VALUES ARE NOT COPIED BY DEFAULT (ratification df3186e6)** — Chairman by verified SMS 2026-09-13 15:48Z: every pointer names an immutable or versioned record, an overwritable source carries its version or hash, values are not copied by default. **Solomon share:** apply this when reviewing any capture or provenance design.
 
 
 ## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)

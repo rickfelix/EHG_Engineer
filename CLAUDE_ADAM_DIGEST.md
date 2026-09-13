@@ -1,7 +1,7 @@
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 <!-- DIGEST FILE - Enforcement-focused protocol content -->
-<!-- generated_at: 2026-09-11T14:49:02.326Z -->
-<!-- git_commit: 96b905ec -->
+<!-- generated_at: 2026-09-13T23:29:01.687Z -->
+<!-- git_commit: a97c92e0 -->
 <!-- db_snapshot_hash: 99a244a75eacde8a -->
 <!-- file_content_hash: b779e057bd39e9b9 -->
 

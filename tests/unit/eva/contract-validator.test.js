@@ -188,16 +188,21 @@ describe('Stage template outputSchema integration', () => {
 // silently falling back to [targetStage-1]) that disagreed with the canonical export in
 // stage-contracts.js for ~24 of 27 stages. It now imports the canonical map instead.
 describe('FR-5: CROSS_STAGE_DEPS agreement regression guard', () => {
-  it('validateContracts resolves requiredStages from the canonical CROSS_STAGE_DEPS for every stage 2-26', async () => {
-    for (let stage = 2; stage <= 26; stage++) {
+  it('validateContracts resolves requiredStages from the canonical CROSS_STAGE_DEPS for every stage 2-27', async () => {
+    for (let stage = 2; stage <= 27; stage++) {
       const result = await validateContracts({ targetStage: stage, ventureId: 'test-venture', supabase: makeMockSupabase() });
       const expected = CROSS_STAGE_DEPS[stage] || [stage - 1];
       expect(result.requiredStages).toEqual(expected);
     }
   });
 
-  it('stage 24 resolves to the canonical [1,21,22,23], not the old local fallback [23]', async () => {
+  it('stage 24 resolves to the canonical [1,18,19,20,21,22,23], not the old local fallback [23]', async () => {
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-5): CROSS_STAGE_DEPS[24] was pinned to the
+    // pre-renumber "Go Live" deps [1,21,22,23] -- that list now correctly lives at key 25 (Go
+    // Live's live-dispatched stage), and 24 (Launch Readiness Gate, was pinned at 23) carries the
+    // full build-loop + UAT deps instead. The explicit literal below still guards against a
+    // silent regression to the [targetStage-1] local-fallback bug this test was written for.
     const result = await validateContracts({ targetStage: 24, ventureId: 'test-venture', supabase: makeMockSupabase() });
-    expect(result.requiredStages).toEqual([1, 21, 22, 23]);
+    expect(result.requiredStages).toEqual([1, 18, 19, 20, 21, 22, 23]);
   });
 });

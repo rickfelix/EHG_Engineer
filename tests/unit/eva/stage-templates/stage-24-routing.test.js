@@ -50,9 +50,9 @@ describe('SD-LEO-FEAT-STAGE-LIVE-ANNOUNCE-001 FR-1 — artifact-types.js canonic
 describe('SD-LEO-FEAT-STAGE-LIVE-ANNOUNCE-001 FR-4 — analyzeStage24GoLive entry precondition', () => {
   const silentLogger = { info: () => {}, warn: () => {}, error: () => {} };
 
-  it('proceeds when stage23Data.verdict === "PASS" (PRD literal)', async () => {
+  it('proceeds when stage24Data.verdict === "PASS" (PRD literal)', async () => {
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -61,9 +61,9 @@ describe('SD-LEO-FEAT-STAGE-LIVE-ANNOUNCE-001 FR-4 — analyzeStage24GoLive entr
     expect(result.readiness_verdict).toBe('PASS');
   });
 
-  it('proceeds when stage23Data.verdict === "READY" (production reality)', async () => {
+  it('proceeds when stage24Data.verdict === "READY" (production reality)', async () => {
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'READY' },
+      stage24Data: { verdict: 'READY' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -72,30 +72,30 @@ describe('SD-LEO-FEAT-STAGE-LIVE-ANNOUNCE-001 FR-4 — analyzeStage24GoLive entr
     expect(result.readiness_verdict).toBe('READY');
   });
 
-  it('throws when stage23Data.verdict === "FAIL"', async () => {
+  it('throws when stage24Data.verdict === "FAIL"', async () => {
     await expect(analyzeStage24GoLive({
-      stage23Data: { verdict: 'FAIL' },
+      stage24Data: { verdict: 'FAIL' },
       logger: silentLogger,
     })).rejects.toThrow(/verdict='FAIL'/);
   });
 
-  it('throws when stage23Data.verdict === "NOT_READY"', async () => {
+  it('throws when stage24Data.verdict === "NOT_READY"', async () => {
     await expect(analyzeStage24GoLive({
-      stage23Data: { verdict: 'NOT_READY' },
+      stage24Data: { verdict: 'NOT_READY' },
       logger: silentLogger,
     })).rejects.toThrow(/verdict='NOT_READY'/);
   });
 
-  it('throws when stage23Data.verdict === "HOLD" without chairman_override', async () => {
+  it('throws when stage24Data.verdict === "HOLD" without chairman_override', async () => {
     await expect(analyzeStage24GoLive({
-      stage23Data: { verdict: 'HOLD' },
+      stage24Data: { verdict: 'HOLD' },
       logger: silentLogger,
     })).rejects.toThrow(/verdict='HOLD'/);
   });
 
-  it('proceeds when stage23Data.verdict === "HOLD" with chairman_override === true', async () => {
+  it('proceeds when stage24Data.verdict === "HOLD" with chairman_override === true', async () => {
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'HOLD', chairman_override: true },
+      stage24Data: { verdict: 'HOLD', chairman_override: true },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -104,7 +104,7 @@ describe('SD-LEO-FEAT-STAGE-LIVE-ANNOUNCE-001 FR-4 — analyzeStage24GoLive entr
     expect(result.chairman_override_applied).toBe(true);
   });
 
-  it('throws when stage23Data is missing entirely', async () => {
+  it('throws when stage24Data is missing entirely', async () => {
     await expect(analyzeStage24GoLive({ logger: silentLogger }))
       .rejects.toThrow(/MISSING/);
   });

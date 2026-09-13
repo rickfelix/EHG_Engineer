@@ -264,6 +264,50 @@ describe('handleInboundSmsReply — send/receive round trip against a fake provi
     expect(decision.sms_reply_used_at).toBeFalsy();
   });
 
+  // QF-20260913-173: a genuine chairman reply to an already-decided (terminal) question must be
+  // distinguishable from a real no_match, not silently folded into the same outcome. Measured live
+  // 2026-09-13: four consecutive verified-chairman replies against a status='approved' decision
+  // whose token had also expired all logged outcome='no_match', indistinguishable from noise.
+  it("a terminal (already-decided) most-recent candidate logs 'no_open_question', not 'no_match' or 'expired'", async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-terminal-1', status: 'approved', decision: 'approve', brief_data: {},
+        sms_reply_token: 'tok-terminal', sms_reply_token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+      }],
+      chairman_notifications: [{
+        id: 'n-terminal-1', channel: 'sms', recipient_phone: '+15556667777', decision_id: 'dec-terminal-1',
+        created_at: new Date(Date.now() - 120_000).toISOString(),
+      }],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15556667777', to: '+15559999999', body: 'I approve Option A',
+      messageSid: 'SM-terminal-1', signatureValid: true,
+    });
+    expect(result.resolved).toBe(false);
+    expect(result.outcome).toBe('no_open_question');
+    const decision = sb._tables.chairman_decisions.find((d) => d.id === 'dec-terminal-1');
+    expect(decision.status).toBe('approved'); // untouched -- never re-answered
+  });
+
+  it("a terminal candidate with NO token at all (never SMS-eligible) still logs 'no_open_question', not 'no_match'", async () => {
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-terminal-2', status: 'rejected', decision: 'reject', brief_data: {},
+        sms_reply_token: null, sms_reply_token_expires_at: null,
+      }],
+      chairman_notifications: [{
+        id: 'n-terminal-2', channel: 'sms', recipient_phone: '+15556667778', decision_id: 'dec-terminal-2',
+        created_at: new Date(Date.now() - 120_000).toISOString(),
+      }],
+    });
+    const result = await handleInboundSmsReply(sb, {
+      from: '+15556667778', to: '+15559999999', body: 'A',
+      messageSid: 'SM-terminal-2', signatureValid: true,
+    });
+    expect(result.resolved).toBe(false);
+    expect(result.outcome).toBe('no_open_question');
+  });
+
   // Adversarial review findings (deep-tier PR #6093) — regression coverage.
   it('correlates to the most-recent-PENDING question, not simply the most-recently-sent one', async () => {
     const now = Date.now();
@@ -758,6 +802,29 @@ describe('drainSmsRelayStaging parking (FR-4/FR-6)', () => {
     const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-exp');
     expect(row.drained_at).toBeTruthy();
     expect(row.parked_at).toBeTruthy();
+  });
+
+  it('QF-20260913-173: no_open_question (reply to an already-decided question) from the chairman ROUTES (routed_at set, not parked_at), same as chairman no_match/rate_limited', async () => {
+    process.env.CHAIRMAN_PHONE = CHAIRMAN;
+    const sb = makeFakeSupabase({
+      chairman_decisions: [{
+        id: 'dec-park-terminal', status: 'approved', decision: 'approve', brief_data: {},
+        sms_reply_token: 'tok-terminal', sms_reply_token_expires_at: new Date(Date.now() - 60_000).toISOString(),
+      }],
+      chairman_notifications: [{ id: 'n-park-terminal', channel: 'sms', recipient_phone: CHAIRMAN, decision_id: 'dec-park-terminal', created_at: new Date(Date.now() - 120_000).toISOString() }],
+      sms_relay_staging: [{
+        id: 'stg-park-terminal', provider_message_id: 'SM-park-terminal', from_phone: CHAIRMAN, to_phone: '+15559999999',
+        body_raw: 'A', signature_valid: true, received_at: new Date().toISOString(), drained_at: null,
+      }],
+    });
+    await drainSmsRelayStaging(sb);
+    const row = sb._tables.sms_relay_staging.find((r) => r.id === 'stg-park-terminal');
+    expect(row.drained_at).toBeTruthy();
+    // Chairman-originated rows in ADAM_ROUTABLE_OUTCOMES route to Adam instead of parking (same
+    // as chairman no_match/rate_limited — see sms-relay-park.test.js TS-1/TS-2) so a genuine
+    // reply to a closed question reaches a human/Adam review, never silently terminal-drains.
+    expect(row.parked_at).toBeFalsy();
+    expect(row.routed_at).toBeTruthy();
   });
 
   it('suspended and invalid_signature outcomes remain excluded from parking', async () => {

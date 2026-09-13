@@ -136,17 +136,28 @@ describe('evaluateVentureStackCriterion (SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 FR-5
 });
 
 describe('groupRowsByGateString (SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 FR-2)', () => {
-  it('groups rows by (stage_number, gate_string) into the 5 candidate buckets', () => {
+  it('groups rows by (stage_number, gate_string) into every candidate bucket', () => {
     const rows = [
       { stage_number: 19, gate_string: 'stack descriptor valid', venture_id: null, would_satisfy: true, created_at: new Date().toISOString() },
-      { stage_number: 24, gate_string: 'pages url live', venture_id: null, would_satisfy: false, created_at: new Date().toISOString() },
+      { stage_number: 25, gate_string: 'pages url live', venture_id: null, would_satisfy: false, created_at: new Date().toISOString() },
     ];
     const { groups, malformed } = groupRowsByGateString(rows);
     expect(groups.size).toBe(CANDIDATE_GATE_STRINGS.length);
     expect(groups.get('19::stack descriptor valid')).toHaveLength(1);
-    expect(groups.get('24::pages url live')).toHaveLength(1);
+    expect(groups.get('25::pages url live')).toHaveLength(1);
     expect(groups.get('19::deployment target provisioned')).toHaveLength(0);
     expect(malformed).toHaveLength(0);
+  });
+
+  it('SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-D (C3.2): the stage-15 design-fidelity candidate is registered at the correct stage, not just a length bump', () => {
+    // A length-only assertion (above) would not catch a typo'd stage_number -- assert the
+    // exact pair explicitly so a wrong stage silently landing here fails this suite.
+    expect(CANDIDATE_GATE_STRINGS).toContainEqual({ stage_number: 15, gate_string: 'design fidelity reviewed' });
+    const rows = [
+      { stage_number: 15, gate_string: 'design fidelity reviewed', venture_id: null, would_satisfy: true, created_at: new Date().toISOString() },
+    ];
+    const { groups } = groupRowsByGateString(rows);
+    expect(groups.get('15::design fidelity reviewed')).toHaveLength(1);
   });
 
   it('excludes rows missing stage_number or gate_string, counting them as malformed rather than silently dropping', () => {
