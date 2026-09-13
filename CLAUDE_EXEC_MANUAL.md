@@ -1,8 +1,8 @@
-<!-- file_content_hash: c259254eaf1449fa -->
+<!-- file_content_hash: f3762973d2fc70a1 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC_MANUAL.md — EXEC Manual (reference companion)
 
-**Generated**: 2026-09-13 9:29:54 PM
+**Generated**: 2026-09-13 10:02:15 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form EXEC reference — skills catalogue, human-like E2E fixtures, Playwright MCP, deliverable tracking mechanics, the EXEC-TO-PLAN gate descriptions, runtime-audit protocol, branch creation, /batch, code-quality and KR procedures, the Database Schema Constraints and LEO Process Scripts references
 **Load when**: At the MOMENT OF DOING one of these procedures or looking up one of these references — not at every EXEC phase entry
@@ -1253,8 +1253,8 @@ git push origin --delete feature/SD-YYYY-XXX
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
 | `status` | created, validated, accepted, rejected, superseded | Use one of: created, validated, accepted, rejected, superseded |
+| `validation_score` | N/A | Validation score must be an integer between 0 and 100. Use Math.round() and clamp to 0-100. |
 
 ### leo_process_scripts
 
@@ -1267,8 +1267,8 @@ git push origin --delete feature/SD-YYYY-XXX
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `context_tier` | ROUTER, CORE, PHASE_LEAD, PHASE_PLAN, PHASE_EXEC, REFERENCE | Use one of: ROUTER, CORE, PHASE_LEAD, PHASE_PLAN, PHASE_EXEC, REFERENCE |
 | `priority` | CORE, STANDARD, SITUATIONAL | Use one of: CORE, STANDARD, SITUATIONAL |
+| `context_tier` | ROUTER, CORE, PHASE_LEAD, PHASE_PLAN, PHASE_EXEC, REFERENCE | Use one of: ROUTER, CORE, PHASE_LEAD, PHASE_PLAN, PHASE_EXEC, REFERENCE |
 
 ### leo_protocols
 
@@ -1286,11 +1286,11 @@ git push origin --delete feature/SD-YYYY-XXX
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `tool_policy_profile` | full, coding, readonly, minimal | Use one of: full, coding, readonly, minimal |
-| `thinking_effort` | low, medium, high | Use one of: low, medium, high |
 | `activation_type` | automatic, manual | Use one of: automatic, manual |
-| `model_tier` | haiku, sonnet, opus | Use one of: haiku, sonnet, opus |
+| `thinking_effort` | low, medium, high | Use one of: low, medium, high |
 | `team_role` | leader, teammate | Use one of: leader, teammate |
+| `tool_policy_profile` | full, coding, readonly, minimal | Use one of: full, coding, readonly, minimal |
+| `model_tier` | haiku, sonnet, opus | Use one of: haiku, sonnet, opus |
 
 ### leo_validation_rules
 
@@ -1310,35 +1310,35 @@ git push origin --delete feature/SD-YYYY-XXX
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `learning_category` | APPLICATION_ISSUE, PROCESS_IMPROVEMENT, TESTING_STRATEGY, DATABASE_SCHEMA, DEPLOYMENT_ISSUE, PERFORMANCE_OPTIMIZATION, USER_EXPERIENCE, SECURITY_VULNERABILITY, DOCUMENTATION | Use one of: APPLICATION_ISSUE, PROCESS_IMPROVEMENT, TESTING_STRATEGY, DATABASE_SCHEMA, DEPLOYMENT_ISSUE, PERFORMANCE_OPTIMIZATION, USER_EXPERIENCE, SECURITY_VULNERABILITY, DOCUMENTATION |
 | `action_items` | array | Use one of: array |
+| `what_needs_improvement` | array | Use one of: array |
 | `test_verdict` | PASS, FAIL, PARTIAL, ERROR | Use one of: PASS, FAIL, PARTIAL, ERROR |
 | `protocol_improvements` | array | Use one of: array |
 | `retrospective_type` | LEAD_TO_PLAN, PLAN_TO_EXEC, EXEC_TO_PLAN, SD_COMPLETION | Use one of: LEAD_TO_PLAN, PLAN_TO_EXEC, EXEC_TO_PLAN, SD_COMPLETION |
 | `test_evidence_freshness` | FRESH, AGING, STALE | Use one of: FRESH, AGING, STALE |
-| `retro_type` | SPRINT, SD_COMPLETION, INCIDENT, MILESTONE, WEEKLY, MONTHLY, ARCHITECTURE_DECISION, RELEASE, AUDIT, HANDOFF | Use one of: SPRINT, SD_COMPLETION, INCIDENT, MILESTONE, WEEKLY, MONTHLY, ARCHITECTURE_DECISION, RELEASE, AUDIT, HANDOFF |
-| `status` | DRAFT, PUBLISHED, ARCHIVED | Use one of: DRAFT, PUBLISHED, ARCHIVED |
-| `key_learnings` | array | Use one of: array |
-| `generated_by` | MANUAL, SUB_AGENT, TRIGGER, SCHEDULED | Use one of: MANUAL, SUB_AGENT, TRIGGER, SCHEDULED |
+| `learning_category` | APPLICATION_ISSUE, PROCESS_IMPROVEMENT, TESTING_STRATEGY, DATABASE_SCHEMA, DEPLOYMENT_ISSUE, PERFORMANCE_OPTIMIZATION, USER_EXPERIENCE, SECURITY_VULNERABILITY, DOCUMENTATION | Use one of: APPLICATION_ISSUE, PROCESS_IMPROVEMENT, TESTING_STRATEGY, DATABASE_SCHEMA, DEPLOYMENT_ISSUE, PERFORMANCE_OPTIMIZATION, USER_EXPERIENCE, SECURITY_VULNERABILITY, DOCUMENTATION |
 | `what_went_well` | array | Use one of: array |
-| `what_needs_improvement` | array | Use one of: array |
+| `retro_type` | SPRINT, SD_COMPLETION, INCIDENT, MILESTONE, WEEKLY, MONTHLY, ARCHITECTURE_DECISION, RELEASE, AUDIT, HANDOFF | Use one of: SPRINT, SD_COMPLETION, INCIDENT, MILESTONE, WEEKLY, MONTHLY, ARCHITECTURE_DECISION, RELEASE, AUDIT, HANDOFF |
+| `generated_by` | MANUAL, SUB_AGENT, TRIGGER, SCHEDULED | Use one of: MANUAL, SUB_AGENT, TRIGGER, SCHEDULED |
+| `key_learnings` | array | Use one of: array |
+| `status` | DRAFT, PUBLISHED, ARCHIVED | Use one of: DRAFT, PUBLISHED, ARCHIVED |
 
 ### sd_backlog_map
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `item_type` | epic, story, task | Use one of: epic, story, task |
 | `verification_status` | not_run, failing, passing | Use one of: not_run, failing, passing |
+| `item_type` | epic, story, task | Use one of: epic, story, task |
 
 ### sd_phase_handoffs
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `from_phase` | LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED | Use one of: LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED |
-| `validation_score` | N/A | Use one of: blocked |
 | `to_phase` | LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED | Use one of: LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED |
-| `status` | pending_acceptance, accepted, rejected, blocked | Use one of: pending_acceptance, accepted, rejected, blocked |
+| `validation_score` | N/A |  |
 | `handoff_type` | LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL, BYPASS-COMPLETION | Use one of: LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL, BYPASS-COMPLETION |
+| `status` | pending_acceptance, accepted, rejected, blocked | Use one of: pending_acceptance, accepted, rejected, blocked |
+| `from_phase` | LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED | Use one of: LEAD, PLAN, EXEC, PLAN_PRD, PLAN_VERIFICATION, EXEC_COMPLETE, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, COMPLETED, CANCELLED |
 
 ### sd_scope_deliverables
 
@@ -1350,46 +1350,47 @@ git push origin --delete feature/SD-YYYY-XXX
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `intensity_level` | cosmetic, structural, architectural | Use one of: cosmetic, structural, architectural |
-| `metadata` | do_not_advance_without_trigger, trigger_condition | Use one of: do_not_advance_without_trigger, trigger_condition |
+| `success_criteria` | array | Use one of: array |
+| `key_principles` | array | Use one of: array |
+| `priority` | critical, high, medium, low | Use one of: critical, high, medium, low |
+| `lineage_verdict` | BACKFILLED_HIGH, BACKFILLED_LOW_CONFIDENCE, GRANDFATHERED_NO_VALIDATION | Use one of: BACKFILLED_HIGH, BACKFILLED_LOW_CONFIDENCE, GRANDFATHERED_NO_VALIDATION |
+| `rolled_triage` | High, Medium, Low, Future | Use one of: High, Medium, Low, Future |
 | `key_changes` | array | Use one of: array |
 | `sd_type` | feature, bugfix, database, infrastructure, security, refactor, documentation, orchestrator, performance, enhancement, docs, discovery_spike, implementation, ux_debt, uat | Use one of: feature, bugfix, database, infrastructure, security, refactor, documentation, orchestrator, performance, enhancement, docs, discovery_spike, implementation, ux_debt, uat |
+| `complexity_level` | simple, moderate, complex, critical | Use one of: simple, moderate, complex, critical |
+| `current_phase` | LEAD, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, PLAN_PRD, PLAN_VERIFICATION, EXEC, EXEC_COMPLETE, COMPLETED, CANCELLED | Use one of: LEAD, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, PLAN_PRD, PLAN_VERIFICATION, EXEC, EXEC_COMPLETE, COMPLETED, CANCELLED |
+| `intensity_level` | cosmetic, structural, architectural | Use one of: cosmetic, structural, architectural |
 | `relationship_type` | standalone, parent, child | Use one of: standalone, parent, child |
 | `human_verification_status` | not_required, pending, in_progress, passed, failed | Use one of: not_required, pending, in_progress, passed, failed |
-| `priority` | critical, high, medium, low | Use one of: critical, high, medium, low |
 | `status` | draft, active, in_progress, planning, review, pending_approval, completed, deferred, cancelled | Use one of: draft, active, in_progress, planning, review, pending_approval, completed, deferred, cancelled |
-| `complexity_level` | simple, moderate, complex, critical | Use one of: simple, moderate, complex, critical |
-| `key_principles` | array | Use one of: array |
 | `vision_score_action` | accept, minor_sd, gap_closure_sd, escalate | Use one of: accept, minor_sd, gap_closure_sd, escalate |
-| `rolled_triage` | High, Medium, Low, Future | Use one of: High, Medium, Low, Future |
-| `success_criteria` | array | Use one of: array |
 | `success_metrics` | array | Use one of: array |
-| `lineage_verdict` | BACKFILLED_HIGH, BACKFILLED_LOW_CONFIDENCE, GRANDFATHERED_NO_VALIDATION | Use one of: BACKFILLED_HIGH, BACKFILLED_LOW_CONFIDENCE, GRANDFATHERED_NO_VALIDATION |
-| `current_phase` | LEAD, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, PLAN_PRD, PLAN_VERIFICATION, EXEC, EXEC_COMPLETE, COMPLETED, CANCELLED | Use one of: LEAD, LEAD_APPROVAL, LEAD_COMPLETE, LEAD_FINAL, LEAD_FINAL_APPROVAL, PLAN_PRD, PLAN_VERIFICATION, EXEC, EXEC_COMPLETE, COMPLETED, CANCELLED |
+| `worktree_commit_pin` | ^.+@[0-9a-f]{7,40}$, ^.+@[0-9a-f]{7,40}~asof:\d{4}-\d{2}-\d{2}T, ^HISTORICAL:.+$ | Use one of: ^.+@[0-9a-f]{7,40}$, ^.+@[0-9a-f]{7,40}~asof:\d{4}-\d{2}-\d{2}T, ^HISTORICAL:.+$ |
+| `metadata` | do_not_advance_without_trigger, trigger_condition | Use one of: do_not_advance_without_trigger, trigger_condition |
 
 ### sub_agent_execution_results
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
+| `verdict` | PASS, FAIL, BLOCKED, CONDITIONAL_PASS, WARNING, MANUAL_REQUIRED, PENDING, ERROR | Use one of: PASS, FAIL, BLOCKED, CONDITIONAL_PASS, WARNING, MANUAL_REQUIRED, PENDING, ERROR |
+| `recommendations` | array | Use one of: array |
 | `warnings` | array | Use one of: array |
+| `critical_issues` | array | Use one of: array |
 | `justification` | CONDITIONAL_PASS | Use one of: CONDITIONAL_PASS |
 | `status` | pending, running, completed, failed, skipped | Use one of: pending, running, completed, failed, skipped |
-| `critical_issues` | array | Use one of: array |
-| `verdict` | PASS, FAIL, BLOCKED, CONDITIONAL_PASS, WARNING, MANUAL_REQUIRED, PENDING, ERROR | Use one of: PASS, FAIL, BLOCKED, CONDITIONAL_PASS, WARNING, MANUAL_REQUIRED, PENDING, ERROR |
-| `conditions` | CONDITIONAL_PASS | Use one of: CONDITIONAL_PASS |
 | `validation_mode` | prospective, retrospective | Use one of: prospective, retrospective |
-| `recommendations` | array | Use one of: array |
+| `conditions` | CONDITIONAL_PASS | Use one of: CONDITIONAL_PASS |
 
 ### user_stories
 
 | Column | Valid Values | Hint |
 |--------|--------------|------|
-| `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
-| `story_key` | ^[A-Z0-9-]+:US-[0-9]{3,}$ | Use one of: ^[A-Z0-9-]+:US-[0-9]{3,}$ |
-| `priority` | critical, high, medium, low, minimal | Use one of: critical, high, medium, low, minimal |
-| `implementation_context` | ::text) AND (implementation_context <>  | Use one of: ::text) AND (implementation_context <>  |
 | `validation_status` | pending, in_progress, validated, failed, skipped | Use one of: pending, in_progress, validated, failed, skipped |
 | `status` | draft, ready, in_progress, testing, completed, blocked | Use one of: draft, ready, in_progress, testing, completed, blocked |
+| `priority` | critical, high, medium, low, minimal | Use one of: critical, high, medium, low, minimal |
+| `implementation_context` | ::text) AND (implementation_context <>  | Use one of: ::text) AND (implementation_context <>  |
+| `story_key` | ^[A-Z0-9-]+:US-[0-9]{3,}$ | Use one of: ^[A-Z0-9-]+:US-[0-9]{3,}$ |
+| `e2e_test_status` | not_created, created, passing, failing, skipped | Use one of: not_created, created, passing, failing, skipped |
 
 
 

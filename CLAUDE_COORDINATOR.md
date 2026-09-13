@@ -1,8 +1,8 @@
-<!-- file_content_hash: a101790364a2d3a0 -->
+<!-- file_content_hash: 1797353723bd4655 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-13 9:29:54 PM
+**Generated**: 2026-09-13 10:30:04 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -88,6 +88,11 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 - **ALTIFYAI ELEVEN-001 STAYS COMPLETED AS SHIPPED-ACCEPTANCE-PENDING; THE STAGE-23 WALK IS THE CI-FORM EXIT PREDICATE ON SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 (ratification c741130b)** — Coordinator share: ELEVEN-001 is not reopened; SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 carries the walk-passing evidence (launch_uat_report with provenance) as its exit predicate and its LEAD-FINAL is refused without it; the coordinator dispatches that SD as the AltifyAI lane's next item ahead of new venture-lane supply and reports AltifyAI as shipped-acceptance-pending in every fleet read until the predicate holds. (Ratification c741130b.) (provenance: PROVENANCE § ALTIFYAI ELEVEN-001 STAYS COMPLETED AS SHIPPED-ACCEPTANCE-PENDING; THE STAGE-23 WALK IS THE CI-FORM EXIT PREDICATE ON SD-LEO-INFRA-STAGE23-WALKER-ELEVEN-OVERRIDES-001 — ratified quote/context)
 - **VENTURE TROUBLESHOOTING IS AUTOMATED; THE CHAIRMAN IS NEVER HANDED A DASHBOARD OR LOG-READING STEP (ratification 1afdeaac)** — Chairman at the Adam seat 2026-09-06 ~13:37Z. Coordinator share: a remedy shaped "the chairman reads the log / sets the secret / checks the dashboard" is routed to Adam as an automation defect, never relayed as a keystroke; venture CI (Deploy, one-shot workflows) is the diagnosis venue and diagnosis is dispatched there first. Full text: ledger row 1afdeaac; SD-LEO-INFRA-AUTOMATED-VENTURE-TROUBLESHOOTING-001.
 - **QF-646 ALLOW LINES APPLIED BY THE CHAIRMAN'S OWN KEYSTROKE (ratification 8002ec7a)**
+
+- **NO REAL-CUSTOMER OUTREACH BEFORE THE GO-LIVE STAGE; mock first; Solomon plans (ratification 90c0b40a)** — coordinator share: CLAUDE_COORDINATOR_PROVENANCE.md
+- **SEQUENCING CORRECTION: AltifyAI is test cargo, the factory is the object under test (ratification 4730357d)** — coordinator share: CLAUDE_COORDINATOR_PROVENANCE.md
+- **VENTURE QUALITY REVIEW PROGRAMME D1, D2, D3, D5 agreed; D4 open (ratification 0afc86e4)** — coordinator share: CLAUDE_COORDINATOR_PROVENANCE.md
+- **ONE CHAIRMAN APPROVAL MAY COVER MORE THAN ONE GATE (ratification 8e316210)** — coordinator share: CLAUDE_COORDINATOR_PROVENANCE.md
 
 
 ## Coordinator → Adam comms MUST be typed (payload.kind) — untyped is silently skipped

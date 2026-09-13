@@ -839,12 +839,17 @@ async function main() {
 
   // QF-20260912-269: a ruling that reverses in-flight work rides the same oldest-5 batch as
   // every other coordinator_request row, so it can sit behind older unread rows for as long as
-  // those rows go unacked. payload.urgency='interrupt' (documented in
-  // docs/protocol/coordinator-adam-comms.md beside fence_notice) gets the SAME uncapped-fetch
+  // those rows go unacked. payload.urgency='interrupt' (documented in docs/reference/
+  // fleet-coordination.md's "Urgency classes" section, cross-referenced from
+  // docs/protocol/coordinator-adam-comms.md's "Urgency escalation" subsection — SD-LEO-FIX-
+  // COORDINATOR-RULING-REVERSES-001 corrected this pointer, which originally named
+  // coordinator-adam-comms.md as if it carried the full spec itself) gets the SAME uncapped-fetch
   // treatment as PRIORITY_EXEMPT_DIRECTIVE_KINDS — but keyed on a payload VALUE, not a kind
   // membership list, since urgency is a per-message authoring decision, not a property of the
   // kind itself. Separate query for the same reason priorityRows/replyToSignalRows are separate:
-  // the condition is a distinct JSONB check, not a kind-membership check.
+  // the condition is a distinct JSONB check, not a kind-membership check. The WRITER side (a
+  // caller stamping payload.urgency='interrupt' at ruling-authoring time) is
+  // lib/coordinator/dispatch.cjs's insertCoordinationRow/dispatchToWorker opts.urgency option.
   let urgentRows = [];
   if (!tableErr) {
     try {
