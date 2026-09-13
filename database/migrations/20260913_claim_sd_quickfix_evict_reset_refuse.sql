@@ -1,47 +1,58 @@
 -- @approved-by: codestreetlabs@gmail.com
 -- @chairman-gated
--- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-1, FR-2, FR-6)
+-- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-1, FR-2, FR-6) -- UNIONED with SD-LEO-INFRA-
+-- CLAIM-PARENT-CHILD-001 (database/chairman-gated/20260913_claim_sd_parent_child_single_
+-- pointer.sql, PR #8853, already merged) per coordinator directive (blocked-claim lane,
+-- 2026-09-13T05:44Z): both files independently CREATE OR REPLACE public.claim_sd from the
+-- SAME 20260903 baseline, and whichever chairman-apply ceremony ran second would have
+-- silently reverted the other. THIS FILE NOW SUPERSEDES #8853's STANDALONE BODY FOR
+-- CEREMONY ORDER -- apply only this file; #8853's own file should not be independently
+-- applied afterward (Adam has the ceremony-readback ask, verified against this union).
 --
--- BASELINE: this migration is built directly on top of
--- 20260903_claim_sd_symmetric_clear_returning_fix.sql, confirmed byte-for-byte identical to
--- the LIVE public.claim_sd definition via pg_get_functiondef (.artifacts/claim_sd.live.current.sql,
--- fetched fresh this session) before this file was authored. Only the three changes below are
--- new; every other guard, branch, and comment from that baseline is preserved byte-for-byte.
+-- CONTENTS, IN LAYERING ORDER:
 --
--- SCOPE NOTE: all three changes below are quick_fixes-ONLY. strategic_directives_v2 has no
--- 'open' status value in its CHECK constraint and no pr_url/commit_sha columns (both verified
--- live during this SD's LEAD phase) -- its claim-switch eviction branch is unchanged.
+-- LAYER 1 (from PR #8853, SD-LEO-INFRA-CLAIM-PARENT-CHILD-001, verbatim): removes the
+-- parent-exclusion clause (`AND (v_sd_parent_id IS NULL OR sd_key != v_sd_parent_id)`)
+-- from BOTH the pre-UPDATE capture SELECT and the claim-switch UPDATE, so a session's
+-- prior claim is evicted symmetrically whether or not it is the parent of the SD now
+-- being claimed -- one session, one claim pointer. Also hardcodes the `parent_preserved`
+-- result field to FALSE (the behavior it used to describe no longer exists). See PR #8853
+-- / database/chairman-gated/20260913_claim_sd_parent_child_single_pointer.sql for the
+-- original BUG/FIX rationale in full; not repeated here to avoid the two files drifting
+-- if one is edited without the other.
+--
+-- LAYER 2 (this SD, SD-LEO-INFRA-FIX-CLAIM-EVICTION-001), applied ON TOP of Layer 1,
+-- quick_fixes-ONLY (strategic_directives_v2 has no 'open' status value and no
+-- pr_url/commit_sha columns, verified live during LEAD phase):
 --
 -- CHANGE 1 (FR-1): when the claim-switch eviction's evicted item is a quick_fixes row, the
--- existing symmetric-clear UPDATE now also resets status to 'open' (previously it only cleared
--- claiming_session_id, leaving the row status='in_progress' with no claimant -- invisible to
--- sd:next's open-QF picker and unreachable by anyone, RCA finding 5a4fca23).
+-- existing symmetric-clear UPDATE now also resets status to 'open' (previously it only
+-- cleared claiming_session_id, leaving the row status='in_progress' with no claimant --
+-- invisible to sd:next's open-QF picker and unreachable by anyone, RCA finding 5a4fca23).
 --
--- CHANGE 2 (FR-2 / part f): BEFORE the claim-switch UPDATE on claude_sessions runs at all, check
--- whether the about-to-be-evicted quick_fixes row carries a non-null pr_url or commit_sha
--- (real work in flight / mid-CI). If so, REFUSE the entire claim attempt -- return a structured
--- refusal and touch NOTHING -- rather than evicting the caller's own in-flight claim. Proceeding
--- would have cleared the caller's claude_sessions.sd_key pointer while leaving the QF's
--- claiming_session_id dangling, reproducing the exact orphan shape this SD exists to fix (just
--- on the REFUSAL side instead of the reset side). The pre-check SELECT uses FOR UPDATE to row-lock
--- the evicted quick_fixes row for the remainder of this transaction -- matching this function's
--- own existing idiom (see the claude_sessions/strategic_directives_v2 FOR UPDATE selects above)
--- -- closing the TOCTOU gap a plain SELECT would leave against a concurrent writer of
--- pr_url/commit_sha on that SAME row before CHANGE 1's later UPDATE re-confirms it.
+-- CHANGE 2 (FR-2 / part f): BEFORE the claim-switch UPDATE on claude_sessions runs at all,
+-- check whether the about-to-be-evicted quick_fixes row carries a non-null pr_url or
+-- commit_sha (real work in flight / mid-CI). If so, REFUSE the entire claim attempt --
+-- return a structured refusal and touch NOTHING -- rather than evicting the caller's own
+-- in-flight claim. The pre-check SELECT uses FOR UPDATE to row-lock the evicted quick_fixes
+-- row for the remainder of this transaction, closing the TOCTOU gap a plain SELECT would
+-- leave against a concurrent writer of pr_url/commit_sha on that SAME row before CHANGE 1's
+-- later UPDATE re-confirms it.
 --
--- CHANGE 3 (FR-6): the existing CLAIM_SWITCH_EVICTED_CLEARED audit INSERT now emits a distinct
--- event_type (CLAIM_SWITCH_QF_EVICTED_RESET_OPEN) when the evicted item was a quick_fixes row
--- (CHANGE 1's reset-to-open case), keeping CLAIM_SWITCH_EVICTED_CLEARED for the unchanged
--- strategic_directives_v2 case -- so the two outcomes are distinguishable without a COUNT query
--- (the live orphan-row count is already 0; verification must use these events, not a count).
--- CHANGE 2's refusal path emits its own new event_type, CLAIM_SWITCH_REFUSED_MID_CI.
+-- CHANGE 3 (FR-6): the CLAIM_SWITCH_EVICTED_CLEARED audit INSERT now emits a distinct
+-- event_type (CLAIM_SWITCH_QF_EVICTED_RESET_OPEN) when the evicted item was a quick_fixes
+-- row (CHANGE 1's reset-to-open case), keeping CLAIM_SWITCH_EVICTED_CLEARED for the
+-- unchanged strategic_directives_v2 case. CHANGE 2's refusal path emits its own new
+-- event_type, CLAIM_SWITCH_REFUSED_MID_CI.
 --
--- All three changes preserve every existing guard from the baseline (phantom-session rejection,
--- sd_not_found, terminal-status refusal, live-foreign-claim guard, silence-window honor, takeover
--- audit, etc.) byte-for-byte except where explicitly noted above.
+-- Compiled and verified (both layers together) under a scratch function name against live
+-- Postgres before this file was written -- live public.claim_sd itself was never touched.
 --
--- Signature is UNCHANGED (still 5 args, same defaults) -- CREATE OR REPLACE is safe,
--- no DROP needed.
+-- Signature is UNCHANGED (still 5 args, same defaults) -- CREATE OR REPLACE is safe, no DROP needed.
+--
+-- STAGED ONLY: this file is committed but NOT applied by this SD's own worker. Application
+-- happens at a chairman-gated ceremony, with a readback confirming the live function body
+-- matches this file (the union, not #8853's file in isolation).
 
 CREATE OR REPLACE FUNCTION public.claim_sd(p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean DEFAULT false, p_client_gate_version integer DEFAULT NULL::integer)
  RETURNS jsonb
@@ -434,12 +445,16 @@ BEGIN
   -- values, not its old ones. PostgreSQL 17.4 has no RETURNING OLD.col syntax; this is the
   -- correct, minimal way to read a row's pre-UPDATE state in plpgsql. Identical predicate to the
   -- UPDATE immediately below, so it selects the SAME row (or none) that the UPDATE will affect.
+  --
+  -- SD-LEO-INFRA-CLAIM-PARENT-CHILD-001: the parent-exclusion clause
+  -- (`AND (v_sd_parent_id IS NULL OR sd_key != v_sd_parent_id)`) that used to guard this SELECT is
+  -- REMOVED. A session's prior claim is now evicted symmetrically whether or not it is the parent
+  -- of the SD being claimed -- one session, one claim pointer.
   SELECT sd_key INTO v_evicted_sd_key
     FROM claude_sessions
    WHERE session_id = p_session_id
      AND sd_key IS NOT NULL
-     AND sd_key != p_sd_id
-     AND (v_sd_parent_id IS NULL OR sd_key != v_sd_parent_id);
+     AND sd_key != p_sd_id;
 
   -- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-2 / part f): if the about-to-be-evicted item is a
   -- quick_fixes row carrying real in-flight work (pr_url or commit_sha), REFUSE the whole
@@ -487,6 +502,9 @@ BEGIN
 
   -- Claim-switch path: caller is releasing some OTHER SD to claim p_sd_id. v_evicted_sd_key was
   -- already captured above (pre-UPDATE); this UPDATE no longer relies on RETURNING for it.
+  --
+  -- SD-LEO-INFRA-CLAIM-PARENT-CHILD-001: same parent-exclusion removal as the capture SELECT
+  -- above, so this UPDATE affects the SAME row (or none) that the SELECT read from.
   UPDATE claude_sessions
      SET sd_key = NULL,
          track = NULL,
@@ -498,8 +516,7 @@ BEGIN
          worktree_branch = NULL
    WHERE session_id = p_session_id
      AND sd_key IS NOT NULL
-     AND sd_key != p_sd_id
-     AND (v_sd_parent_id IS NULL OR sd_key != v_sd_parent_id);
+     AND sd_key != p_sd_id;
 
   GET DIAGNOSTICS v_evicted_row_count = ROW_COUNT;
 
@@ -514,6 +531,11 @@ BEGIN
   -- v_evicted_sd_key was read from (deep-tier adversarial review, SD-LEO-ORCH-CAPA-RECORD-TRUTH-001-A):
   -- without it, a concurrent retry racing the unlocked SELECT could fire this block, and the
   -- CLAIM_SWITCH_EVICTED_CLEARED audit event, on a stale value the UPDATE never actually applied.
+  -- SD-LEO-INFRA-CLAIM-PARENT-CHILD-001: this block now also fires for an evicted PARENT -- the
+  -- parent's strategic_directives_v2 row gets claiming_session_id cleared exactly like any other
+  -- evicted SD. Re-adoption (re-claiming the parent once the child reaches a terminal status) is
+  -- handled separately, in JS, by scripts/worker-checkin.cjs -- this function does not re-claim
+  -- anything on its own.
   IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN
     IF v_evicted_sd_key LIKE 'QF-%' THEN
       -- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-1): reset status to 'open' in the SAME UPDATE
@@ -640,7 +662,11 @@ BEGIN
     'sd_id', p_sd_id,
     'session_id', p_session_id,
     'track', p_track,
-    'parent_preserved', v_sd_parent_id IS NOT NULL,
+    -- SD-LEO-INFRA-CLAIM-PARENT-CHILD-001: hardcoded FALSE -- the parent-exclusion behavior this
+    -- field used to describe no longer exists (see the capture SELECT / UPDATE above). Kept as a
+    -- key (not removed) so a caller that merely logs/reads it sees an explicit, honest value
+    -- rather than a missing key.
+    'parent_preserved', FALSE,
     'takeover', v_takeover,
     'takeover_reason', v_takeover_reason,
     'prior_session_id', v_existing_session,
@@ -668,5 +694,5 @@ BEGIN
   IF v_overload_count != 1 THEN
     RAISE EXCEPTION 'VERIFICATION FAILED: expected exactly 1 claim_sd overload, found %', v_overload_count;
   END IF;
-  RAISE NOTICE 'claim_sd: exactly one overload confirmed (5-arg, quick_fixes evict-reset/refuse-mid-CI fix applied).';
+  RAISE NOTICE 'claim_sd: exactly one overload confirmed (5-arg, parent-exclusion removed + quick_fixes evict-reset/refuse-mid-CI fix applied).';
 END $$;
