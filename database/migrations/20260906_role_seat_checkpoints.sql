@@ -1,4 +1,8 @@
 -- @chairman-gated: applied by the chairman after sign-off (Tier 3: schema; fleet role-seat memory)
+-- CHAIRMAN-APPROVED 2026-09-07 ~01:40Z: verbal at the Adam terminal, quote: "apply the role
+-- seat checkpoints migration." Scribed by Adam session bc762fa4 under the 3c ceremony; the
+-- executable content is unchanged from the merged file, only this marker block was added.
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-A (CAPA W6 durability, ratification 49656c8c) — FR-1.
 --
 -- Every role seat (adam/solomon/coordinator/michael) keeps its ENTIRE operational memory in an
