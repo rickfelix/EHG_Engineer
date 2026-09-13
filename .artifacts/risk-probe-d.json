@@ -1,0 +1,479 @@
+{
+  "review_runs_table": {
+    "exists": true,
+    "count": null
+  },
+  "altify_artifacts_err": null,
+  "altify_artifact_types": {
+    "launch_readiness_checklist": 1,
+    "launch_uat_report": 1,
+    "blueprint_review_summary": 1,
+    "launch_uat_report (not_current)": 5,
+    "launch_readiness_checklist (not_current)": 9,
+    "system_devils_advocate_review": 5,
+    "launch_test_plan": 2,
+    "visual_social_graphics": 1,
+    "visual_device_screenshots": 1,
+    "distribution_block_marker": 1,
+    "code_quality_report": 1,
+    "code_quality_report (not_current)": 3,
+    "build_mvp_build": 1,
+    "build_mvp_build (not_current)": 3,
+    "launch_deployment_runbook": 1,
+    "launch_deployment_runbook (not_current)": 4,
+    "lifecycle_sd_bridge": 1,
+    "marketing_blog_draft": 1,
+    "marketing_seo_meta": 1,
+    "marketing_social_posts": 1,
+    "marketing_email_reengagement": 1,
+    "marketing_email_onboarding": 1,
+    "marketing_email_welcome": 1,
+    "marketing_landing_hero": 1,
+    "marketing_app_store_desc": 1,
+    "marketing_tagline": 1,
+    "s17_strategy_recommendation": 1,
+    "blueprint_financial_projection": 1,
+    "blueprint_positioning_brief": 1,
+    "blueprint_user_journey": 1,
+    "wireframe_screens": 1,
+    "blueprint_wireframes": 1,
+    "blueprint_user_story_pack": 1,
+    "blueprint_schema_spec": 1,
+    "blueprint_api_contract": 1,
+    "blueprint_erd_diagram": 1,
+    "blueprint_data_model": 1,
+    "blueprint_technical_architecture": 1,
+    "blueprint_product_roadmap": 1,
+    "identity_gtm_sales_strategy": 1,
+    "identity_logo_image": 1,
+    "identity_naming_visual": 1,
+    "identity_brand_name": 1,
+    "identity_persona_brand": 1,
+    "identity_persona_brand (not_current)": 1,
+    "identity_brand_guidelines": 1,
+    "engine_exit_strategy": 1,
+    "engine_business_model_canvas": 1,
+    "distribution_ad_copy": 1,
+    "distribution_channel_config": 1,
+    "engine_pricing_model": 1,
+    "engine_risk_matrix": 1,
+    "engine_risk_matrix (not_current)": 124
+  },
+  "altify_relevant": [
+    {
+      "id": "81e39c29-7ced-40df-81af-bae6b89a583e",
+      "artifact_type": "wireframe_screens",
+      "is_current": true,
+      "version": 1,
+      "lifecycle_stage": 15,
+      "created_at": "2026-08-11T15:13:02.795496+00:00"
+    },
+    {
+      "id": "fa5ed84d-325a-40aa-bae4-c1d1361d0be7",
+      "artifact_type": "blueprint_wireframes",
+      "is_current": true,
+      "version": 1,
+      "lifecycle_stage": 15,
+      "created_at": "2026-08-11T15:13:00.776038+00:00"
+    }
+  ],
+  "altify_stitch_qa_report": null,
+  "altify_wireframe_count": 0,
+  "altify_stitch_design_export_screens": 0,
+  "altify_wireframe_screens_metadata_keys": [],
+  "altify_wireframe_screens_count": 0,
+  "stage15": {
+    "error": "column venture_stages.name does not exist"
+  },
+  "ventures_stage_ge20": [
+    {
+      "id": "809ec7e7-f688-4a0c-b9f8-c8a8291cf94d",
+      "name": "ApexNiche AI",
+      "stage": 21,
+      "status": "active"
+    },
+    {
+      "id": "26ad971b-353b-4264-80c2-f9fd8075748e",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-idempotent-1783815086786",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "4a888207-d0a4-416b-993b-8b5bcb3b90ae",
+      "name": "parity-test-cli-1783724616731",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "c9852d49-26a0-49e8-87c9-3289b6e245b6",
+      "name": "Launch Checklist Test 1788745814737",
+      "stage": 23,
+      "status": "cancelled"
+    },
+    {
+      "id": "6e60da47-e790-4bcf-8027-180b8c8f6cac",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-1783815086723",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "0cddf0cd-4514-4733-b818-11f7f2ed1879",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-1783815086857",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "57631950-71b3-4107-b179-aad46eadaac5",
+      "name": "Test Venture for Owned-Audience Loop",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "7a85eb5d-7248-4f2e-9391-2e6235c0158c",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-partial-1783815086794",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "fce7726f-805f-4aaa-af6e-b3f8f191d1dd",
+      "name": "parity-test-drift-1783724618392",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "b9595677-a52b-4396-910b-60d7fd4871c5",
+      "name": "canonical-source-test-1782945932137",
+      "stage": 22,
+      "status": "cancelled"
+    },
+    {
+      "id": "222cabde-b425-4782-9adb-ca8fff0760e1",
+      "name": "TEST-79d7eeee9b-SD-A",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "50763b6a-1fad-4e1e-b2fc-296a1d66ebf9",
+      "name": "AltifyAI",
+      "stage": 24,
+      "status": "active"
+    },
+    {
+      "id": "daa4aaae-d48e-4807-8ef3-b53a2d31a88d",
+      "name": "parity-test-frontend-1783724616731",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "b8d67348-c5c6-43c9-a82e-f17a06d4c40d",
+      "name": "__e2e_product_review_gate_adv_1783723784384__",
+      "stage": 24,
+      "status": "cancelled"
+    },
+    {
+      "id": "3aaeace9-7811-4779-9f97-53ffe57a6aca",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-idempotent-1783815086778",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "6a9497bc-3570-41e8-844f-f7c397874fc1",
+      "name": "TEST-4b3a1808b7-SD-A",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "42ba3289-664a-425d-bb9a-2ba7435671a4",
+      "name": "__e2e_product_review_gate_worker_1784286490617__",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "dbb993a0-bf91-496a-b18e-a73ce51feaf9",
+      "name": "__e2e_product_review_gate_adv_1783726540179__",
+      "stage": 24,
+      "status": "cancelled"
+    },
+    {
+      "id": "903ba167-df84-4f1e-9d34-7ce3b6ba83d5",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-partial-1783815087007",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "8735daa2-933b-4391-87f8-b92397b50a11",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-partial-1783815088236",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "da59741c-d144-46b1-b045-bff0ec711fdc",
+      "name": "ProductReviewGate-RealDB-worker-1784320650395",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "2f3d4aa9-d255-4cfc-a0c4-993e1fedf24e",
+      "name": "__e2e_product_review_gate_rpc_1784238025597__",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "41788016-2abc-4d9d-991c-66c82031e7f6",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-1783815088216",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "e8fe2347-f3d2-4d08-b147-c4dce2840945",
+      "name": "Low-Cap High-Success 1788723470896",
+      "stage": 23,
+      "status": "cancelled"
+    },
+    {
+      "id": "2bf0982e-bd11-4f24-b7a6-89494833f207",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-partial-1783815086819",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "7c449f86-6b1d-40e6-bdc0-225eaa5732b5",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-1783815086773",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "9080416f-3600-431e-a4cb-c5c842ac5229",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-1783815086859",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "67d6a54d-23b6-4ce1-95bb-b5928a979dce",
+      "name": "__e2e_product_review_gate_adv_1784286490617__",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "912c0af2-419f-451a-b30a-a5623b0fecf3",
+      "name": "ProductReviewGate-RealDB-adv-1784560110973",
+      "stage": 24,
+      "status": "cancelled"
+    },
+    {
+      "id": "b401c0ec-3896-463a-b28d-b4dcdf892c85",
+      "name": "Low-Cap High-Success 1788745812924",
+      "stage": 23,
+      "status": "cancelled"
+    },
+    {
+      "id": "13b39bc4-68ff-4411-b459-f91e47aa891a",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-idempotent-1783815088205",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "6dfa21c7-eb6c-4d6d-9ea2-fa7bf48b21ae",
+      "name": "Test Venture for Owned-Audience Loop",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "510177ba-435f-4dd7-bfa5-6154cc8cf54b",
+      "name": "DataDistill",
+      "stage": 27,
+      "status": "cancelled"
+    },
+    {
+      "id": "6e23ad2b-2f6c-45b2-8ee9-e9e69a32bb66",
+      "name": "CronGenius",
+      "stage": 21,
+      "status": "cancelled"
+    },
+    {
+      "id": "6f7d4afa-a83d-4dbd-9937-8a36ce5ac26f",
+      "name": "Test Venture for Owned-Audience Loop",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "940a8dc2-f194-4996-9d32-a963a8ba44f1",
+      "name": "__e2e_product_review_gate_adv_1783461843298__",
+      "stage": 24,
+      "status": "cancelled"
+    },
+    {
+      "id": "ccb86eb3-badd-4971-87b3-bbd79e40b586",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-idempotent-1783815086850",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "c4bc2ab2-002a-4c06-90ff-0a5629441d8c",
+      "name": "TEST-38b37ddc84-SD-A",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "74f0b6a9-6c66-4102-9cd2-fd0b7dddc13f",
+      "name": "Test Venture for Owned-Audience Loop",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "bbb27f1f-5af0-4b07-91cb-4ed77d0541f9",
+      "name": "__e2e_product_review_gate_adv_1783688132319__",
+      "stage": 24,
+      "status": "cancelled"
+    },
+    {
+      "id": "64f8db58-bcda-46ea-ade9-91ea6e37e4e6",
+      "name": "Critical Attention 1788745813998",
+      "stage": 23,
+      "status": "cancelled"
+    },
+    {
+      "id": "a8cb4a3c-f6d5-4342-96ae-79f5afb88689",
+      "name": "TEST-HARNESS-S20-SD-A-e2e-idempotent-1783815086775",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "d269537b-a26d-4951-9e4f-709eb41afbf2",
+      "name": "TEST-5d8aea98a6-SD-A",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "ecbba50e-3c98-4493-9e77-1719cf6b6f00",
+      "name": "MarketLens",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "358e68c8-fc80-4601-8b45-b65c9c73283d",
+      "name": "Critical Attention 1788745814692",
+      "stage": 23,
+      "status": "cancelled"
+    },
+    {
+      "id": "93894682-3948-4095-884a-e74ff3fb1a79",
+      "name": "Critical Attention 1788745814594",
+      "stage": 23,
+      "status": "cancelled"
+    },
+    {
+      "id": "fe1dcddb-aa35-49ae-8f4f-ce94b10ac3f9",
+      "name": "ProductReviewGate-RealDB-adv-1784320650395",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "d3455b71-1bac-4f83-8aa0-bae2e27f464f",
+      "name": "Phase 6 Test Venture 1788745824906",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "e108cd23-e76f-4f44-955a-5e97a28ebca5",
+      "name": "Launch Checklist Test 1788745814770",
+      "stage": 23,
+      "status": "cancelled"
+    },
+    {
+      "id": "11d633ca-9453-4faa-ba08-bcca50671f7b",
+      "name": "ProductReviewGate-RealDB-adv-1784287676240",
+      "stage": 24,
+      "status": "cancelled"
+    },
+    {
+      "id": "27dabff3-b022-449d-ac66-09eebd3101f7",
+      "name": "ProductReviewGate-RealDB-worker-1784287676240",
+      "stage": 24,
+      "status": "cancelled"
+    },
+    {
+      "id": "3c9497c2-585b-445a-8517-688f2f86993e",
+      "name": "TEST-HARNESS-S20-s2026-hotel-0817",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "477fc915-4861-4b86-a24e-f41b32e06dd3",
+      "name": "ProductReviewGate-RealDB-rpc-1784320650395",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "97717b7d-51ea-4e81-b256-5060f7e23000",
+      "name": "TEST-f6f198b376-SD-A",
+      "stage": 20,
+      "status": "cancelled"
+    },
+    {
+      "id": "9cdad540-26f7-4a6f-8085-d7d3b8465bab",
+      "name": "ProductReviewGate-RealDB-rpc-1784287676240",
+      "stage": 25,
+      "status": "cancelled"
+    },
+    {
+      "id": "e3adec5b-4f02-4a0d-abe4-9e7e8b8a1179",
+      "name": "__e2e_product_review_gate_adv_1784238025597__",
+      "stage": 25,
+      "status": "cancelled"
+    }
+  ],
+  "ventures_stage_15": [
+    {
+      "id": "886d2dc3-e950-4633-b5e3-4628e9502de7",
+      "name": "WTP Insights",
+      "status": "cancelled"
+    },
+    {
+      "id": "2b90c658-e943-4efc-98a8-9bfcacb700b2",
+      "name": "ValueGauge",
+      "status": "cancelled"
+    },
+    {
+      "id": "3c44f48a-3090-42a3-849f-c9d48f23edbd",
+      "name": "StageArtifactGate-RealDB-deviated-1784317185067",
+      "status": "cancelled"
+    },
+    {
+      "id": "b55368d9-a38c-4f4e-8a3a-d4a4057e3d99",
+      "name": "__e2e_stage_artifact_gate_blocked_1783784469742__",
+      "status": "cancelled"
+    },
+    {
+      "id": "4182daf6-c1fb-4fd3-a81a-c6c617ebeb01",
+      "name": "__e2e_stage_artifact_gate_complete_1783784469742__",
+      "status": "cancelled"
+    },
+    {
+      "id": "b466205a-35d6-4e10-b6f5-51b257633750",
+      "name": "__e2e_stage_artifact_gate_deviated_1784286514744__",
+      "status": "cancelled"
+    },
+    {
+      "id": "14bf4587-785d-432b-b13a-9862ddcf4cfb",
+      "name": "StageArtifactGate-RealDB-deviated-1784287689752",
+      "status": "cancelled"
+    },
+    {
+      "id": "a97b2cf0-861d-4f00-823c-9e2a021ee4bf",
+      "name": "__e2e_stage_artifact_gate_deviated_1783784469742__",
+      "status": "cancelled"
+    },
+    {
+      "id": "420de128-268a-4702-840a-b88b108dd32f",
+      "name": "__e2e_stage_artifact_gate_blocked_1784286514744__",
+      "status": "cancelled"
+    },
+    {
+      "id": "e791719f-1c46-414b-b4eb-52f50a6ff4ad",
+      "name": "__e2e_stage_artifact_gate_deviated_1784238025597__",
+      "status": "cancelled"
+    }
+  ],
+  "siblings": []
+}

@@ -1,0 +1,229 @@
+{
+  "executive_summary": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-D runs the two graduation-track pilots from the chairman-ratified Venture Quality Review Programme (ratification 0afc86e4, D5 sequencing) and ships one preventive gauge. Re-verification against current main and live DB (per this SD's own instruction to re-grep every named file/symbol at claim time, an adversarial RISK sub-agent pass, and a VALIDATION sub-agent pass that itself caught an error in the LEAD worker's own earlier probe methodology) corrected the SD's own text on FOUR points: (1) of the two named experience-review migrations, only 'venture_experience_review_runs' is unapplied live (confirmed via a live PGRST205 'table not found' probe); 'venture_quality_findings_experience_categories' (the CHECK-constraint widen for usability/accessibility/journey_coherence) was INITIALLY misjudged as already-applied from an incomplete-row insert probe that (invalidly) inferred a CHECK pass from a NOT NULL failure on an unrelated column -- a corrected, fully-NOT-NULL-satisfying probe proves it was NEVER applied, and that the live constraint instead reflects sibling CAPA-001-A's unmerged accessibility/performance/responsive widen (commit aa3ca9abd10) -- FR-1 now writes one new UNION-valued migration instead of re-running 20260828 verbatim, which would have regressed -A's categories; (2) the 'design-fidelity gate' the SD asks to 'register' has no producer to read from yet -- lib/eva/qa/stitch-wireframe-qa.js's scoreWireframeFidelity() is fully built and unit-tested but has ZERO production call sites (grep-confirmed: only its own test files reference it), so simply adding a CANDIDATE_GATE_STRINGS entry would create a printed discriminator that never accumulates real observation data; and (3) the scorer's actual input is NOT blueprint_wireframes+wireframe_screens as its own file-header comment claims -- getExportedScreens() reads artifact_type='stitch_design_export' (verified by reading the function body directly), and a live fleet-wide query confirms ZERO ventures, AltifyAI included, have ever produced that artifact. Building the missing Stitch-export producer is a separate, larger, out-of-scope problem (C3.2 asks only to register the reader, not build a new producer) -- so this PRD invokes the scorer against AltifyAI honestly and accepts status='no_screens' as a valid, informational outcome (consistent with ratification 4730357d: 'an honest AltifyAI kill can still represent a successful factory test'), while still wiring the verifier + observe-only gate string so a real signal appears automatically for any future venture that does produce a stitch_design_export artifact. AltifyAI's current_lifecycle_stage is 24 (confirmed live) -- past Stage 20 -- so the experience review runs via the existing out-of-band annex path (docs/reference/experience-review-out-of-band-annex-runbook.md), never the in-traversal path, and never touches Stage-20/23 gating. All new signals land in gates.exit_observe only, never gates.exit (binding) -- matching the SD's explicit exclusion of making either pilot binding; stage 15's current metadata is exactly {metrics, stage_timeout_ms} with no gates key at all (confirmed live), so the migration MUST jsonb_set-merge in the new key, never overwrite metadata wholesale. X3's hourly probe reuses the existing gauge-runner.mjs / GAUGE_REGISTRY / lib/governance/*-guard.js pattern already shipped for the wind-down-recurrence gauge (rather than inventing a parallel mechanism), redesigned per-venture and active-only after a live check found 56 ventures at stage>=20 split across {active, cancelled} -- a global existence check would false-clear on one covered venture while an uncovered active venture goes unnoticed, and would false-alarm on cancelled test fixtures. A RISK sub-agent pass also flagged CAPA-001-A (active/EXEC, commit aa3ca9abd10) is concurrently touching lib/eva/quality-findings/finding-shape.js and a venture_quality_findings CHECK migration -- no file overlap with this SD's touched files, but the same AltifyAI venture_quality_findings rows may see concurrent writes from both SDs; this SD re-verifies the live CHECK constraint shape immediately before FR-2's write rather than assuming point-in-time state stays current.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Apply the outstanding experience-review migration; write a UNION-valued replacement for the second (collision with sibling -A, corrected)",
+      "description": "Apply database/migrations/20260828_venture_experience_review_runs.sql via the canonical migration-apply path -- confirmed NOT yet applied against the live DB (a direct select against public.venture_experience_review_runs returns PGRST205 'Could not find the table in the schema cache'). Neither migration lives under database/chairman-gated/, so neither requires a chairman ceremony packet -- this is a normal PLAN/EXEC action. SECOND MIGRATION CORRECTED AFTER TWO ROUNDS OF VERIFICATION: an initial incomplete-row insert probe wrongly suggested database/migrations/20260828_venture_quality_findings_experience_categories.sql (usability/accessibility/journey_coherence) was already live -- that probe was INVALID (it hit a NOT NULL failure on stage_number before Postgres ever evaluated the CHECK constraint, so 'passing' past it proved nothing about the CHECK). A corrected, fully-NOT-NULL-satisfying probe insert shows the LIVE constraint currently accepts only the 10 base categories PLUS accessibility/performance/responsive (from sibling CAPA-001-A's unmerged branch commit aa3ca9abd10, file database/migrations/20260913_venture_quality_findings_capa_baseline_categories.sql) -- 'usability' is REJECTED live (23514 CHECK violation), and 20260828's own file header says it was 'never applied live'. Re-running 20260828 verbatim (DROP+ADD with only the 10-base+usability/accessibility/journey_coherence list) would REGRESS -A's accessibility/performance/responsive support whenever it lands relative to -A's merge. This FR therefore does NOT run 20260828 as authored: it writes ONE NEW additive migration (dated after both 20260828 and -A's 20260913 file) that widens the constraint to the UNION of everything known-needed -- the 10 base categories + accessibility/performance/responsive (-A) + usability/journey_coherence (this SD's C3.1 need) = 15 DISTINCT VALUES TOTAL, not 13 -- a TESTING sub-agent pass caught that '13' is an arithmetic error that happens to equal the ORIGINAL, UNRELATED 20260828 file's own value count (10 base + usability/accessibility/journey_coherence, which OMITS performance/responsive) -- an implementer who trusts a count instead of the explicit name list could silently reapply that wrong, narrower file and recreate the exact -A regression this FR exists to prevent. Assert set CONTAINMENT of all 15 named values in tests, never a bare count. Re-verify the live constraint's accepted set immediately before writing this migration (state may have moved again since LEAD-phase verification).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "SELECT against public.venture_experience_review_runs succeeds (no PGRST205) after the migration is applied.",
+        "A row can be inserted and read back via (venture_id, run_id) uniqueness as the migration defines.",
+        "After the new union migration, inserting finding_category IN ('usability','journey_coherence','accessibility','performance','responsive') all pass the CHECK constraint using a complete (all-NOT-NULL-satisfied) test row -- never inferred from an incomplete row. Test asserts CONTAINMENT of all 15 values (10 base + 5 named), not a bare count.",
+        "No write is attempted against database/chairman-gated/ or any ceremony-packet mechanism for either migration."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Run the experience review once against AltifyAI via the out-of-band annex path, informational only",
+      "description": "AltifyAI (venture_id 50763b6a-1fad-4e1e-b2fc-296a1d66ebf9) is confirmed live at current_lifecycle_stage=24, past Stage 20 -- so this runs via the already-documented out-of-band annex path (docs/reference/experience-review-out-of-band-annex-runbook.md), not the in-traversal Stage-20 step: (1) node scripts/experience-review/gather-context.mjs --venture-id 50763b6a-1fad-4e1e-b2fc-296a1d66ebf9 --deployment-url <AltifyAI live URL> --venture-name AltifyAI; (2) perform the review per the printed prompt, producing category/severity/title/detail/evidence_pointer findings; (3) node scripts/experience-review/record-review.mjs --venture-id 50763b6a-1fad-4e1e-b2fc-296a1d66ebf9 --run-id <unique> --content @findings.json --run-mode out_of_band_annex --deployment-url <url>. Depends on FR-1 (the runs table must exist first). Findings are informational only and queryable by Solomon directly from venture_experience_review_runs for his chairman report -- this SD does not build a report, only makes the data exist.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "One row exists in venture_experience_review_runs for AltifyAI with run_mode='out_of_band_annex'.",
+        "git diff --stat -- '**/stage-23*' shows no output after the run (per the runbook's own verification step) -- confirms nothing live was touched.",
+        "AltifyAI's existing Stage-20 verdict and Stage-24 workflow_status are byte-identical before and after the run."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Invoke the existing wireframe-fidelity scorer once against AltifyAI, honestly (the missing producer step)",
+      "description": "lib/eva/qa/stitch-wireframe-qa.js exports scoreWireframeFidelity(ventureId, {threshold}) -- built and unit-tested (tests/unit/eva/qa/stitch-wireframe-qa*.test.js) but grep-confirmed to have ZERO non-test call sites anywhere in the codebase. Its getWireframes() reads artifact_type='blueprint_wireframes' (AltifyAI has a current one) but getExportedScreens() reads artifact_type='stitch_design_export' -- confirmed live that ZERO ventures fleet-wide (AltifyAI included) have ever produced this artifact type, so the call is EXPECTED to return {status:'no_screens'} for AltifyAI today. Add a small script (scripts/eva/run-wireframe-fidelity-qa.mjs, mirroring the shape of the existing gather-context.mjs/record-review.mjs CLI pair) that calls scoreWireframeFidelity('50763b6a-1fad-4e1e-b2fc-296a1d66ebf9') once, persists whatever real result comes back (including 'no_screens' -- never fabricate screens or force a pass), and prints the result. Building the missing stitch_design_export producer is explicitly OUT OF SCOPE for this SD (a separate, larger factory-level gap, not what C3.2 asks for) -- if AltifyAI returns 'no_screens', that absence is itself the documented, honest finding for Solomon's report, per ratification 4730357d.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "The script runs to completion without throwing and reports scoreWireframeFidelity's real returned status verbatim (completed, no_screens, no_wireframes, or vision_api_unavailable), whichever is true.",
+        "If status='completed', stitch_qa_report artifact for AltifyAI gains a metadata.wireframe_fidelity field. If status is anything else (e.g. 'no_screens'), no stitch_qa_report artifact is fabricated -- absence is recorded as a finding, not papered over.",
+        "The run does not modify blueprint_wireframes or wireframe_screens artifacts (read-only against those two)."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Wire a design-fidelity observe-only exit gate at Stage 15 and register it in bind-criterion-checker",
+      "description": "Three-part wiring, all observe-only (never binding): (a) add verifyDesignFidelityReviewed to lib/eva/lifecycle/exit-gate-verifiers.js's GATE_VERIFIERS (match string e.g. 'design fidelity reviewed'), reading the venture's current stitch_qa_report artifact and returning satisfied=true only when metadata.wireframe_fidelity.status==='completed' AND aggregate.fail_count===0, fail-closed (missing artifact, or status!=='completed' e.g. 'no_screens' -> satisfied:false with a reason), matching the existing verifier conventions in that file; (b) add the gate string 'design fidelity reviewed' to Stage 15's venture_stages.metadata.gates.exit_observe array via an ADDITIVE, MERGE-SAFE migration -- Stage 15's live metadata is confirmed to be EXACTLY {metrics, stage_timeout_ms} with no gates key at all, so the migration MUST use jsonb_set(metadata, '{gates,exit_observe}', ..., true) (or an equivalent read-merge-write), NEVER a blind UPDATE...SET metadata='{...}' that would silently destroy the existing metrics/stage_timeout_ms keys; gates.exit (binding) is never touched or created; (c) add {stage_number: 15, gate_string: 'design fidelity reviewed'} to CANDIDATE_GATE_STRINGS in lib/eva/lifecycle/bind-criterion-checker.js so scripts/eva/check-bind-criteria.mjs starts tracking graduation-readiness (MIN_ROWS=25, MIN_SPAN_HOURS=48, zero MarketLens false-rejects) for this string going forward. This closes the exact producer/reader split named as Root Cause B in ratification 0afc86e4 for this one dimension.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "resolveVerifier('design fidelity reviewed') returns the new verifier function.",
+        "Stage 15's venture_stages.metadata.gates.exit_observe contains 'design fidelity reviewed' after the migration; gates.exit for stage 15 is unchanged (still absent/unset); metadata.metrics and metadata.stage_timeout_ms are BYTE-IDENTICAL before and after the migration (proves the merge, not overwrite).",
+        "CANDIDATE_GATE_STRINGS in bind-criterion-checker.js includes {stage_number: 15, gate_string: 'design fidelity reviewed'}.",
+        "A unit test proves the verifier is fail-closed when stitch_qa_report is missing OR status is not 'completed' (e.g. 'no_screens'), and satisfied when a completed, zero-fail-count report exists."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Hourly gauge: experience-review coverage for ventures at stage>=20 (X3, preventive)",
+      "description": "Reuse the exact gauge-runner.mjs / GAUGE_REGISTRY / lib/governance/*-guard.js pattern already shipped for the 'wind-down-recurrence' gauge (same file family, same hourly cron: .github/workflows/gauge-runner-cron.yml). A live check found 56 ventures at current_lifecycle_stage>=20, statuses split across {active, cancelled} -- so the gauge is PER-VENTURE and ACTIVE-ONLY, not a single global existence check (a global check would false-CLEAR on any one covered venture while an uncovered active venture goes unnoticed, and would false-ALARM by counting cancelled test fixtures). New files: lib/governance/experience-review-coverage-guard.js (pure evaluator over the input {qualifyingVentureIds: string[], coveredVentureIds: Set<string>}, returning an EXPLICIT tri-state {status: 'not_applicable'|'clear'|'alarmed', alarmed: boolean, ...} -- a TESTING sub-agent pass flagged that the existing wind-down-recurrence-guard.js template returns only a binary {alarmed, reason}, which would make 'not_applicable' collapse indistinguishably into 'clear' (both alarmed:false) if copied as-is; this guard MUST carry the extra status discriminator so a caller can tell 'nothing to check yet' apart from 'checked and clean'. status='not_applicable' when qualifyingVentureIds (status='active' AND current_lifecycle_stage>=20) is empty (never alarmed); status='alarmed' when at least one qualifying id has zero venture_experience_review_runs rows; else status='clear'. Matches the 'a guard may decline, never report a number it did not take' convention; the executor throws rather than coercing a non-finite/errored query result to a count, mirroring wind-down-recurrence-check.mjs's own guard against that exact failure mode), scripts/gauges/experience-review-coverage-check.mjs (executor: query ventures where status='active' AND current_lifecycle_stage>=20, query venture_experience_review_runs for those venture_ids, call the pure evaluator, exit 1 if alarmed). Register in GAUGE_REGISTRY (lib/governance/gauge-registry.js) with id 'experience-review-coverage', ownerRole 'solomon' (feedback 3b22d053 names this a Solomon-owned miss), and wire the detectorFn key into gauge-runner.mjs's resolver map (same shape as the existing 'wind-down-recurrence' entry). PREVENTIVE-CLASS PER RATIFICATION 49656c8c / D5: this SD's own completion bar for FR-5 is 'gauge shipped, registered, enabled, picked up by the existing hourly cron' -- the programme-level exit predicate of two consecutive weekly non-alarmed readings belongs to the PARENT SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001's own tracking, not a blocking condition on this child's own LEAD-FINAL-APPROVAL.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "node scripts/gauges/experience-review-coverage-check.mjs exits 0 or 1 correctly against a live/mocked DB in three cases, each with its own status field (not just alarmed:boolean): zero qualifying (active, stage>=20) ventures -> status='not_applicable', exit 0; all qualifying ventures covered -> status='clear', exit 0; at least one qualifying active venture uncovered -> status='alarmed', exit 1.",
+        "The gauge query excludes status='cancelled' ventures from both the qualifying population and the alarm decision.",
+        "GAUGE_REGISTRY contains an enabled entry with id 'experience-review-coverage' and a tripWhen predicate reading result.alarmed.",
+        "gauge-runner.mjs's resolver map has a matching key so the gauge actually executes on the next hourly cron run (not merely registered-but-unresolved)."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No new gauge/verifier/registry mechanism -- reuse existing frameworks exactly",
+      "description": "FR-4 reuses the existing exit-gate-verifiers.js GATE_VERIFIERS + bind-criterion-checker.js CANDIDATE_GATE_STRINGS pattern (SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 family); FR-5 reuses the existing gauge-runner.mjs / GAUGE_REGISTRY / lib/governance/*-guard.js pattern (SD-LEO-INFRA-WIND-DOWN-SURVEY-001 family). No parallel mechanism is invented for either."
+    },
+    {
+      "id": "TR-2",
+      "title": "Observe-only, additive-only, never binding",
+      "description": "FR-4's gate string is added ONLY to venture_stages.metadata.gates.exit_observe for stage 15, never to gates.exit. FR-1's migrations and FR-4's config migration are additive (CREATE TABLE IF NOT EXISTS / array append), touching no existing row's meaning. Matches the SD's own explicit exclusion: neither pilot (C3.1 experience-review, C3.2 design-fidelity) is made binding by this SD."
+    },
+    {
+      "id": "TR-3",
+      "title": "Migrations are not chairman-gated",
+      "description": "All three migration files this SD touches or applies (the two named in C3.1, plus the new stage-15 exit_observe config migration for FR-4) live under database/migrations/, not database/chairman-gated/ -- applying them is a normal PLAN/EXEC worker action, no ceremony packet required."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "venture_experience_review_runs table usable after migration",
+      "type": "integration",
+      "expected": "Insert + unique-constraint-conflict-upsert on (venture_id, run_id) both behave as the migration defines."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Out-of-band annex run for AltifyAI leaves Stage-20/23 state untouched",
+      "type": "integration",
+      "expected": "git diff --stat -- '**/stage-23*' empty; AltifyAI's stage/workflow_status unchanged before/after."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "verifyDesignFidelityReviewed fail-closed and satisfied paths",
+      "type": "unit",
+      "expected": "Missing stitch_qa_report -> satisfied:false with reason; a completed zero-fail-count report -> satisfied:true."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Stage 15 gates config gains exit_observe without touching gates.exit",
+      "type": "integration",
+      "expected": "venture_stages row for stage_number=15 has metadata.gates.exit_observe containing the new string; gates.exit is absent/unchanged."
+    },
+    {
+      "id": "TS-5",
+      "scenario": "experience-review-coverage gauge: explicit tri-state (not_applicable vs clear vs alarmed), active-only",
+      "type": "unit",
+      "expected": "No ACTIVE venture at stage>=20 -> status='not_applicable' (distinct field from alarmed, never collapsed into a bare alarmed:false). All active qualifying ventures covered -> status='clear'. At least one active qualifying venture uncovered -> status='alarmed'. Decisive fixture: a venture at stage>=20 with status='cancelled' and zero runs must NOT alarm (proves active-only filtering, not just presence)."
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Stage 15 metadata migration preserves existing keys",
+      "type": "integration",
+      "expected": "metadata.metrics and metadata.stage_timeout_ms are unchanged after the migration; only metadata.gates.exit_observe is newly present."
+    },
+    {
+      "id": "TS-7",
+      "scenario": "FR-3 honest no-op path (already proven by an existing test)",
+      "type": "unit",
+      "expected": "tests/unit/eva/qa/stitch-wireframe-qa.test.js:195 already asserts status='no_screens' with zero API calls, using the exported setAnthropicClientLoader/setSupabaseClientLoader seams. NOTE: getAnthropicClient() is called BEFORE the wireframes/screens checks, so the test must stub a truthy client via setAnthropicClientLoader even to reach the no_screens branch -- a real ANTHROPIC_API_KEY is not required. The wrapper script itself reports whatever real status scoreWireframeFidelity returns and does not write a stitch_qa_report artifact unless status='completed'."
+    }
+  ],
+  "acceptance_criteria": [
+    "Both experience-review migrations verified live (one newly applied, one confirmed pre-existing) with evidence cited, not assumed.",
+    "AltifyAI has one persisted experience-review run (out-of-band annex) and one honestly-reported wireframe-fidelity scoring attempt (real status, whatever it is -- 'completed' or 'no_screens'), both informational.",
+    "The design-fidelity gate string is resolvable, observe-only at stage 15, and tracked in bind-criterion-checker's CANDIDATE_GATE_STRINGS -- ready to read real data the moment any venture produces a stitch_design_export artifact.",
+    "The experience-review-coverage gauge is registered, enabled, per-venture, active-only, and executes on the existing hourly cron.",
+    "Neither pilot is binding; no gates.exit array is modified by this SD; stage 15's pre-existing metadata keys (metrics, stage_timeout_ms) are untouched."
+  ],
+  "risks": [
+    {
+      "risk": "Two sibling SDs (this one and CAPA-001-A) each widen the SAME venture_quality_findings_finding_category_check constraint with different, non-union value lists -- whichever migration is applied last silently regresses the other's categories if applied as originally authored",
+      "mitigation": "FR-1 does not re-run 20260828 verbatim; it writes one new migration with the full union (10 base + -A's accessibility/performance/responsive + this SD's usability/journey_coherence) and re-verifies the live constraint's accepted set immediately before applying, not relying on a point-in-time LEAD-phase snapshot.",
+      "severity": "high"
+    },
+    {
+      "risk": "AltifyAI (and every other venture, fleet-wide, confirmed live) has no stitch_design_export artifact, so the wireframe-fidelity scorer will return 'no_screens' rather than a real pass/fail -- the SD could be misread as having 'not really tested' the design-fidelity gate",
+      "mitigation": "FR-3's acceptance criteria explicitly accept and require reporting the real status, including 'no_screens', as a valid informational outcome rather than fabricating data; the executive_summary and FR-4 both document that the gate is fully wired end-to-end and will produce real signal automatically once ANY venture's stitch_design_export exists -- the absence itself is the honest, chairman-doctrine-consistent finding (ratification 4730357d).",
+      "severity": "medium"
+    },
+    {
+      "risk": "stitch_qa_report could go stale relative to a later wireframe_screens/stitch_design_export re-export, causing verifyDesignFidelityReviewed to read an outdated pass/fail",
+      "mitigation": "Verifier checks the report's scored_at against the current stitch_design_export artifact's created_at and treats a stale report as satisfied:false, matching the fail-closed convention of sibling verifiers in the same file.",
+      "severity": "low"
+    },
+    {
+      "risk": "Anthropic vision API cost/availability during the one-time wireframe-fidelity run or the experience-review LLM step",
+      "mitigation": "Both underlying functions already degrade gracefully (vision_api_unavailable / printed-prompt-for-manual-review); each is invoked exactly once, manually, not on a recurring path.",
+      "severity": "low"
+    },
+    {
+      "risk": "Accidentally promoting a gate string to binding (gates.exit) instead of observe-only",
+      "mitigation": "TS-4 asserts gates.exit for stage 15 is unchanged; code review checks the migration touches only gates.exit_observe.",
+      "severity": "high"
+    },
+    {
+      "risk": "The Stage 15 metadata migration blind-overwrites the metadata column, silently destroying the existing metrics/stage_timeout_ms keys (stage 15's live metadata has no gates key today)",
+      "mitigation": "FR-4's migration is written as a jsonb_set read-merge-write, never a whole-column UPDATE; TS-6 asserts metrics/stage_timeout_ms are byte-identical before/after.",
+      "severity": "high"
+    },
+    {
+      "risk": "Sibling child SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A is concurrently active in EXEC, touching lib/eva/quality-findings/finding-shape.js and a venture_quality_findings CHECK migration -- no file overlap with this SD, but both write venture_quality_findings rows for the same AltifyAI venture in the same window",
+      "mitigation": "No shared files are edited by this SD (confirmed via RISK sub-agent + direct verification), so no git-level conflict is expected; FR-2's write re-verifies the live CHECK constraint shape immediately before writing rather than trusting the LEAD-time snapshot, so a concurrent widen from -A cannot silently break this SD's insert.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Solomon -- reads venture_experience_review_runs and the new observe-only fidelity signal for chairman sitting-packet reporting",
+      "scripts/eva/check-bind-criteria.mjs -- future graduation-readiness tracking for the new CANDIDATE_GATE_STRINGS entry",
+      "lib/eva/lifecycle/exit-gate-enforcer.js -- emits EXIT_GATE_OBSERVE_ONLY for the new gate string on future Stage-15 traversals",
+      "scripts/gauge-runner.mjs's existing hourly cron -- picks up the new gauge automatically once registered+enabled"
+    ],
+    "dependencies": [
+      "SD-LEO-FEAT-STAGE-EXPERIENCE-DESIGN-001 (existing experience-review pipeline + migrations)",
+      "SD-WIREFRAME-FIDELITY-VERIFICATION-VISION-ORCH-001-A (existing stitch-wireframe-qa.js scorer)",
+      "SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 (bind-criterion-checker.js framework)",
+      "SD-LEO-INFRA-WIND-DOWN-SURVEY-001 (gauge-runner.mjs / GAUGE_REGISTRY framework)"
+    ],
+    "data_contracts": [
+      "database/migrations/20260828_venture_experience_review_runs.sql (apply, not author)",
+      "new additive migration: stage 15 venture_stages.metadata.gates.exit_observe gains one string"
+    ],
+    "runtime_config": [
+      "none new -- reuses existing ANTHROPIC_API_KEY / SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY already required by the underlying scripts"
+    ],
+    "observability_rollout": [
+      "Direct DB verification post-run: SELECT against venture_experience_review_runs and venture_artifacts(stitch_qa_report) for AltifyAI's venture_id",
+      "gauge-runner.mjs's next hourly cron firing is the rollout signal for FR-5 -- no separate deploy step"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two one-time pilot runs against AltifyAI (experience review, wireframe fidelity) feed two new observe-only signals (an exit-gate verifier + a hourly coverage gauge), reusing three existing frameworks rather than building new ones.",
+    "components": [
+      { "name": "database/migrations/20260828_venture_experience_review_runs.sql", "change": "APPLY (already authored; confirmed unapplied live)" },
+      { "name": "scripts/experience-review/gather-context.mjs + record-review.mjs", "change": "INVOKE (existing, unchanged) against AltifyAI, --run-mode out_of_band_annex" },
+      { "name": "scripts/eva/run-wireframe-fidelity-qa.mjs", "change": "NEW -- one-shot CLI wrapper invoking the existing scoreWireframeFidelity()" },
+      { "name": "lib/eva/lifecycle/exit-gate-verifiers.js", "change": "add verifyDesignFidelityReviewed to GATE_VERIFIERS" },
+      { "name": "lib/eva/lifecycle/bind-criterion-checker.js", "change": "add {stage_number:15, gate_string:'design fidelity reviewed'} to CANDIDATE_GATE_STRINGS" },
+      { "name": "venture_stages (stage_number=15) metadata.gates.exit_observe", "change": "additive migration, new array with the new gate string" },
+      { "name": "lib/governance/experience-review-coverage-guard.js", "change": "NEW -- pure evaluator, mirrors wind-down-recurrence-guard.js" },
+      { "name": "scripts/gauges/experience-review-coverage-check.mjs", "change": "NEW -- executor, mirrors wind-down-recurrence-check.mjs" },
+      { "name": "lib/governance/gauge-registry.js", "change": "add GAUGE_REGISTRY entry 'experience-review-coverage'" },
+      { "name": "scripts/gauge-runner.mjs", "change": "add resolver map entry for the new detectorFn key" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Apply the missing migration, run both pilots once against AltifyAI, wire each pilot's result to one observe-only reader, ship the hourly gauge by cloning the existing wind-down-recurrence pattern.",
+    "steps": [
+      "Apply database/migrations/20260828_venture_experience_review_runs.sql via the canonical migration-apply path; verify the table is queryable.",
+      "Run the out-of-band annex experience review against AltifyAI (gather-context.mjs -> manual review -> record-review.mjs).",
+      "Write and run scripts/eva/run-wireframe-fidelity-qa.mjs against AltifyAI once; confirm stitch_qa_report.metadata.wireframe_fidelity is populated.",
+      "Add verifyDesignFidelityReviewed to exit-gate-verifiers.js; add the CANDIDATE_GATE_STRINGS entry to bind-criterion-checker.js; write the additive stage-15 exit_observe migration.",
+      "Clone wind-down-recurrence-guard.js / wind-down-recurrence-check.mjs into experience-review-coverage-guard.js / experience-review-coverage-check.mjs with the inverted (zero-is-bad) alarm condition; register in GAUGE_REGISTRY and gauge-runner.mjs's resolver map.",
+      "Write unit/integration tests for FR-3 through FR-5; run the full suite."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "node -e \"require('dotenv').config(); const {createClient}=require('@supabase/supabase-js'); const s=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY); s.from('venture_experience_review_runs').select('id').limit(1).then(r=>console.log(JSON.stringify(r.error)))\"", "expected_outcome": "error is null (table exists and is queryable)" },
+    { "step_number": 2, "instruction": "Query venture_experience_review_runs filtered to venture_id=50763b6a-1fad-4e1e-b2fc-296a1d66ebf9", "expected_outcome": "At least one row with run_mode='out_of_band_annex'" },
+    { "step_number": 3, "instruction": "Run scripts/eva/run-wireframe-fidelity-qa.mjs against AltifyAI's venture_id and read its printed result", "expected_outcome": "A real status is printed (expected: 'no_screens', since no venture fleet-wide has a stitch_design_export artifact yet); no fabricated stitch_qa_report is written if status is not 'completed'" },
+    { "step_number": 4, "instruction": "node -e \"import('./lib/eva/lifecycle/exit-gate-verifiers.js').then(m=>console.log(!!m.resolveVerifier('design fidelity reviewed')))\"", "expected_outcome": "true" },
+    { "step_number": 5, "instruction": "node scripts/gauges/experience-review-coverage-check.mjs", "expected_outcome": "Exits 0 or 1 with a JSON result printed, no thrown error" }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-D"
+  }
+}

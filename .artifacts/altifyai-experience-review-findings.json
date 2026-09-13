@@ -1,0 +1,23 @@
+[
+  {
+    "category": "accessibility",
+    "severity": "low",
+    "title": "No <noscript> fallback on a pure client-rendered SPA",
+    "detail": "The live deployment (https://altifyai.app) serves an empty <div id=\"root\"></div> with all rendering deferred to a client-side JS bundle (index-BTrbyG0N.js), confirmed via a direct static fetch of the served HTML. There is no <noscript> element, so a visitor whose JS fails to load or execute (blocked script, slow/failed CDN fetch, JS disabled) sees a permanently blank page with no explanation. lang=\"en\" and a responsive viewport meta tag ARE present (real positives, not findings).",
+    "evidence_pointer": "curl -sL https://altifyai.app (raw served HTML, 2026-09-13)"
+  },
+  {
+    "category": "usability",
+    "severity": "low",
+    "title": "INCONCLUSIVE: core upload / alt-text-generation / edit / copy journeys not verifiable this run",
+    "detail": "This review session had no connected browser-automation extension (mcp__claude-in-chrome reported 'Browser extension is not connected'), and AltifyAI is a pure client-side-rendered SPA with no server-rendered markup for WebFetch's static HTML-to-markdown conversion to capture -- both the interactive upload flow, the AI alt-text generation flow, the edit/save flow, and the copy-to-clipboard flow (Stage-15 journeys jny-the-busy-content-image-upload-organizatio, jny-the-busy-content-ai-alt-text-generation, jny-the-busy-content-review-editing-workflow, jny-the-busy-content-export-integration) require live JS execution and interaction to observe. Per this runbook's own precedent for missing Stage-15 artifacts ('mark dependent findings INCONCLUSIVE rather than fabricate'), these are marked INCONCLUSIVE, not scored as defects. A future review run with a connected browser (or a headless-Chrome-capable tool) should re-attempt these four journeys specifically.",
+    "evidence_pointer": "mcp__claude-in-chrome__tabs_context_mcp result: 'Browser extension is not connected'; WebFetch on https://altifyai.app returned only the SPA's empty pre-render shell"
+  },
+  {
+    "category": "journey_coherence",
+    "severity": "low",
+    "title": "INCONCLUSIVE: journey_coherence cross-check against live routes not performed",
+    "detail": "journey_coherence findings (whether the live app's actual navigation/route structure matches the Stage-15 journey artifact's screen_ref sequence: screen-2 -> screen-4 -> screen-5) require observing real page transitions, which this review pass could not do (see the usability INCONCLUSIVE finding above for the tooling limitation). No journey_coherence defect is asserted either way.",
+    "evidence_pointer": "Same tooling limitation as the usability INCONCLUSIVE finding"
+  }
+]

@@ -1,0 +1,14 @@
+import { GAUGE_REGISTRY } from '../lib/governance/gauge-registry.js';
+import { CANDIDATE_GATE_STRINGS } from '../lib/eva/lifecycle/bind-criterion-checker.js';
+import { GATE_VERIFIERS, resolveVerifier } from '../lib/eva/lifecycle/exit-gate-verifiers.js';
+import fs from 'fs';
+const e = GAUGE_REGISTRY.find(g => g.id === 'experience-review-coverage');
+console.log('registry entry:', !!e, '| enabled:', e?.enabled, '| detectorFn:', e?.detectorFn);
+console.log('tripWhen(alarmed:true):', e?.thresholdConfig.tripWhen({alarmed:true}), '| tripWhen(alarmed:false):', e?.thresholdConfig.tripWhen({alarmed:false}));
+const src = fs.readFileSync(new URL('../scripts/gauge-runner.mjs', import.meta.url),'utf8');
+console.log("resolver key in gauge-runner:", src.includes("'experience-review-coverage': async"));
+const c = CANDIDATE_GATE_STRINGS.find(x => x.gate_string === 'design fidelity reviewed');
+console.log('candidate gate string:', JSON.stringify(c));
+const v = GATE_VERIFIERS.find(x => x.match === 'design fidelity reviewed');
+console.log('GATE_VERIFIERS entry:', !!v);
+console.log('resolveVerifier type:', typeof resolveVerifier('design fidelity reviewed'));
