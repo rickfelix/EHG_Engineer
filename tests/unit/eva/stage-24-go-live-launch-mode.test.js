@@ -84,7 +84,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
 
   it('no launchedAt: behaves exactly as before (no artifacts, no launch_mode read)', async () => {
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -95,7 +95,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
 
   it('simulated mode (default, no supabase/ventureId): launches + stamps labeled_simulation:true', async () => {
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -110,7 +110,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
   it('simulated mode (explicit venture row): launches + stamps labeled_simulation:true', async () => {
     const supabase = buildSupabase({ ventureRow: { launch_mode: 'simulated' } });
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -131,7 +131,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
     // No appRow.id -> collectExternalObservations cannot look up venture_telemetry ->
     // telemetryRowCount/gaugeWriterAlive stay null -> fails closed, even with endpoint+billing OK.
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -159,7 +159,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
       telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
     });
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -184,7 +184,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
       telemetryRow: { kpis: { signups: 3 }, pulled_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(), ingest_status: 'ok' },
     });
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -202,7 +202,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
     global.fetch = vi.fn().mockRejectedValue(new Error('unreachable'));
     const supabase = buildSupabase({ ventureRow: { launch_mode: 'live' }, appRow: null });
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -222,7 +222,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
     global.fetch = vi.fn().mockResolvedValue({ status: 200 });
     const supabase = buildSupabase({ ventureRow: { launch_mode: 'live' }, appRow: { deployment_url: 'https://example.com', metadata: {} } });
     const result = await analyzeStage24GoLive({
-      stage23Data: { verdict: 'PASS' },
+      stage24Data: { verdict: 'PASS' },
       stage22Data: { channels: [] },
       ventureName: 'TestVenture',
       logger: silentLogger,
@@ -245,7 +245,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
   describe('SD-LEO-INFRA-VENTURE-SUBSTRATE-WIRING-001 FR-1/FR-3 wiring', () => {
     function liveVerifiedParams(supabase) {
       return {
-        stage23Data: { verdict: 'PASS' },
+        stage24Data: { verdict: 'PASS' },
         stage22Data: { channels: [] },
         ventureName: 'TestVenture',
         logger: silentLogger,
@@ -344,7 +344,7 @@ describe('analyzeStage24GoLive launch_mode branch (SD-LEO-INFRA-LAUNCH-MODE-POLI
   describe('SD-MAN-INFRA-VENTURE-CRACK-GATE-001 FR-4 crack-gate observation (shadow-mode)', () => {
     function liveVerifiedParams(supabase) {
       return {
-        stage23Data: { verdict: 'PASS' },
+        stage24Data: { verdict: 'PASS' },
         stage22Data: { channels: [] },
         ventureName: 'TestVenture',
         logger: silentLogger,

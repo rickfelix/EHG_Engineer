@@ -273,6 +273,11 @@ scripts/verify-*.cjs
 # SD-LEO-FIX-ENF-TRUSTS-FILE-001: CI-wired regression check (npm run test:coordinator-pointer-invariant,
 # .github/workflows/unit-tier.yml) proving the coordinator unit suites never touch the live pointer file.
 !scripts/verify-coordinator-pointer-invariant.mjs
+# SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-7): live BEGIN/ROLLBACK proof of the canonical-
+# writer choke-point trigger's 3-way discriminator (unstamped / unregistered-stamp / registered-
+# stamp). Lives outside vitest (unit tier's network fence; db tier currently dead in CI) --
+# mirrors scripts/rdap-live-network-smoke.mjs's precedent for a manual, standalone verifier.
+!scripts/verify-canonical-stage-write-trigger.mjs
 # Exception: verify-l2p/ directory is production code (modular handoff verifier)
 scripts/comprehensive-*.mjs
 scripts/infrastructure-*.mjs

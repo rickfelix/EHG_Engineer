@@ -1192,9 +1192,9 @@ describe('Stage 24: analyzeStage24 (Go Live & Announce)', () => {
   // which was a stale Stage 23 copy). Stale copies archived to docs/archived/orphan-stage-23-modules/.
   // FR-4: Entry-precondition refusal — throws if Stage 23 verdict is not PASS/READY (or HOLD with chairman_override).
 
-  it('returns ready_to_launch when Stage 23 verdict is "READY" (production reality)', async () => {
+  it('returns ready_to_launch when Stage 24 verdict is "READY" (production reality)', async () => {
     const result = await analyzeStage24({
-      stage23Data: { verdict: 'READY' },
+      stage24Data: { verdict: 'READY' },
       stage22Data: { channels: [] },
       ventureName: 'Test Venture',
       logger: silentLogger,
@@ -1203,14 +1203,14 @@ describe('Stage 24: analyzeStage24 (Go Live & Announce)', () => {
     expect(result.readiness_verdict).toBe('READY');
   });
 
-  it('throws when Stage 23 verdict is "NOT_READY" (FR-4 refusal)', async () => {
+  it('throws when Stage 24 verdict is "NOT_READY" (FR-4 refusal)', async () => {
     await expect(analyzeStage24({
-      stage23Data: { verdict: 'NOT_READY' },
+      stage24Data: { verdict: 'NOT_READY' },
       logger: silentLogger,
     })).rejects.toThrow(/NOT_READY/);
   });
 
-  it('throws when stage23Data is missing entirely (FR-4 refusal)', async () => {
+  it('throws when stage24Data is missing entirely (FR-4 refusal)', async () => {
     await expect(analyzeStage24({ logger: silentLogger }))
       .rejects.toThrow(/MISSING/);
   });

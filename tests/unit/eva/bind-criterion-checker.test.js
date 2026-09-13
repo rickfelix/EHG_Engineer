@@ -139,12 +139,12 @@ describe('groupRowsByGateString (SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 FR-2)', () =
   it('groups rows by (stage_number, gate_string) into every candidate bucket', () => {
     const rows = [
       { stage_number: 19, gate_string: 'stack descriptor valid', venture_id: null, would_satisfy: true, created_at: new Date().toISOString() },
-      { stage_number: 24, gate_string: 'pages url live', venture_id: null, would_satisfy: false, created_at: new Date().toISOString() },
+      { stage_number: 25, gate_string: 'pages url live', venture_id: null, would_satisfy: false, created_at: new Date().toISOString() },
     ];
     const { groups, malformed } = groupRowsByGateString(rows);
     expect(groups.size).toBe(CANDIDATE_GATE_STRINGS.length);
     expect(groups.get('19::stack descriptor valid')).toHaveLength(1);
-    expect(groups.get('24::pages url live')).toHaveLength(1);
+    expect(groups.get('25::pages url live')).toHaveLength(1);
     expect(groups.get('19::deployment target provisioned')).toHaveLength(0);
     expect(malformed).toHaveLength(0);
   });

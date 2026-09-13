@@ -2,18 +2,21 @@
  * Tests for Cross-Stage Data Contracts Registry
  * SD-MAN-ORCH-EVA-GOVERNANCE-POLISH-001-B
  * SD-RCA-PREEMPTIVE-S26: Updated to cover all 26 stages.
+ * SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-5): venture_stages inserted stage 23
+ * (Dedicated Venture UAT) ahead of the launch/learn tail, pushing the pipeline terminus
+ * (Growth Playbook) from 26 to 27 -- now covers all 27 stages.
  */
 
 import { describe, it, expect } from 'vitest';
-import { getContract, validatePreStage, validatePostStage, STAGE_CONTRACTS } from '../../../lib/eva/contracts/stage-contracts.js';
+import { getContract, validatePreStage, validatePostStage, validateDependencyChain, STAGE_CONTRACTS } from '../../../lib/eva/contracts/stage-contracts.js';
 
 const silentLogger = { warn() {}, info() {}, error() {}, debug() {}, log() {} };
 
 describe('stage-contracts', () => {
 
   describe('STAGE_CONTRACTS', () => {
-    it('covers all 26 stages', () => {
-      for (let i = 1; i <= 26; i++) {
+    it('covers all 27 stages', () => {
+      for (let i = 1; i <= 27; i++) {
         expect(STAGE_CONTRACTS.has(i), `stage ${i} missing`).toBe(true);
       }
     });
@@ -35,22 +38,54 @@ describe('stage-contracts', () => {
       expect(c.produces).toHaveProperty('description');
     });
 
-    it('returns contract for stage 26 (pipeline terminus)', () => {
-      // SD-LEO-INFRA-DATADISTILL-HONEST-LAUNCH-001: contracts 21-26 repointed to
-      // the live SSOT (26 = Growth Playbook); the old assertions pinned the
-      // pre-redesign phantom shape (distribution_channels/pipeline_terminus).
-      const c = getContract(26);
+    it('returns contract for stage 27 (pipeline terminus)', () => {
+      // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-5): Growth Playbook moved from 26 to 27
+      // when Dedicated Venture UAT was inserted as the new stage 23.
+      const c = getContract(27);
       expect(c).not.toBeNull();
       expect(c.consumes).toHaveLength(1);
-      expect(c.consumes[0].stage).toBe(25);
+      expect(c.consumes[0].stage).toBe(26);
       expect(c.produces).toHaveProperty('growth_experiments');
       expect(c.produces).toHaveProperty('scaling_priorities');
     });
 
+    it('returns contract for stage 23 (Dedicated Venture UAT, new stage)', () => {
+      const c = getContract(23);
+      expect(c).not.toBeNull();
+      expect(c.consumes).toEqual([]);
+      expect(c.produces).toHaveProperty('applies');
+      expect(c.produces).toHaveProperty('satisfied');
+    });
+
     it('returns null for invalid stage', () => {
       expect(getContract(0)).toBeNull();
-      expect(getContract(27)).toBeNull();
+      expect(getContract(28)).toBeNull();
       expect(getContract(99)).toBeNull();
+    });
+  });
+
+  describe('validateDependencyChain (FR-5 non-vacuity proof)', () => {
+    // PLAN-phase TESTING review: a stage missing from CROSS_STAGE_DEPS makes
+    // validateDependencyChain() return {valid:true} WITHOUT ever querying supabase --
+    // a pass that proves nothing. This throws if .from() is called, so a regression
+    // back to "stage 27 has no deps entry" fails LOUDLY instead of passing vacuously.
+    function throwingSupabase() {
+      return { from: () => { throw new Error('NON_VACUOUS_PROOF: .from() was called'); } };
+    }
+
+    it('stage 27 has a real (non-empty) deps entry and actually queries supabase', async () => {
+      await expect(validateDependencyChain(27, throwingSupabase(), 'venture-1'))
+        .rejects.toThrow(/NON_VACUOUS_PROOF/);
+    });
+
+    it('stage 23 has a real (non-empty) deps entry and actually queries supabase', async () => {
+      await expect(validateDependencyChain(23, throwingSupabase(), 'venture-1'))
+        .rejects.toThrow(/NON_VACUOUS_PROOF/);
+    });
+
+    it('a genuinely deps-free stage (e.g. an unknown stage number) short-circuits without querying', async () => {
+      const result = await validateDependencyChain(9999, throwingSupabase(), 'venture-1');
+      expect(result).toEqual({ valid: true, missingStages: [], presentStages: [] });
     });
   });
 
@@ -114,29 +149,35 @@ describe('stage-contracts', () => {
       expect(result.valid).toBe(true);
     });
 
-    it('validates stage 26 pre-stage with stage 25 data', () => {
+    it('validates stage 27 pre-stage with stage 26 data', () => {
+      // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-5): Growth Playbook (consumes
+      // optional key_learnings from Post-Launch Review) moved from 26 to 27.
       const upstreamMap = new Map([
-        [25, {
-          chairmanGate: { status: 'approved', rationale: 'test', decision_id: 'abc' },
-          go_no_go_decision: 'go',
-          readiness_score: 80,
-        }],
+        [26, { key_learnings: ['retention driven by onboarding'] }],
+      ]);
+      const result = validatePreStage(27, upstreamMap, { logger: silentLogger });
+      expect(result.valid).toBe(true);
+    });
+
+    it('passes stage 27 pre-stage when stage 26 data missing (consumes now optional)', () => {
+      // Repointed contract: S27 consumes only optional key_learnings from S26 —
+      // the S26 analyzer does its own upstream verification; the contract layer
+      // must not double-block on a stricter phantom shape (warnings, not errors).
+      const result = validatePreStage(27, new Map(), { logger: silentLogger });
+      expect(result.valid).toBe(true);
+    });
+
+    it('validates stage 26 pre-stage with stage 25 data (Post-Launch Review consumes Go Live)', () => {
+      const upstreamMap = new Map([
+        [25, { launch_status: 'launched' }],
       ]);
       const result = validatePreStage(26, upstreamMap, { logger: silentLogger });
       expect(result.valid).toBe(true);
     });
 
-    it('passes stage 26 pre-stage when stage 25 data missing (consumes now optional)', () => {
-      // Repointed contract: S26 consumes only optional key_learnings from S25 —
-      // the S25 analyzer does its own upstream verification; the contract layer
-      // must not double-block on a stricter phantom shape (warnings, not errors).
-      const result = validatePreStage(26, new Map(), { logger: silentLogger });
-      expect(result.valid).toBe(true);
-    });
-
     it('passes stage 25 pre-stage when upstream stages absent (all optional)', () => {
-      // Stage 25 consumes stages 23 and 24, but all fields are required: false
-      // When the upstream stages are entirely absent, optional fields produce warnings not errors
+      // Stage 25 (Go Live) consumes stages 1, 21, 22, 24, but all fields are required: false.
+      // When the upstream stages are entirely absent, optional fields produce warnings not errors.
       const result = validatePreStage(25, new Map(), { logger: silentLogger });
       expect(result.valid).toBe(true);
       expect(result.warnings.length).toBeGreaterThanOrEqual(0);
@@ -211,23 +252,39 @@ describe('stage-contracts', () => {
       expect(result.valid).toBe(false);
     });
 
-    it('validates stage 26 post-stage output (Growth Playbook terminus)', () => {
-      // Repointed contract: S26 = Growth Playbook (growth_experiments required;
-      // scaling_priorities / operations_handoff optional).
+    it('validates stage 27 post-stage output (Growth Playbook terminus)', () => {
+      // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-5): S27 = Growth Playbook
+      // (growth_experiments required; scaling_priorities / operations_handoff optional).
       const output = {
         growth_experiments: [{ name: 'SEO content sprint', hypothesis: 'organic signups +20%' }],
         scaling_priorities: ['blog_seo'],
         operations_handoff: { monitoring: {}, escalation: {} },
       };
-      const result = validatePostStage(26, output, { logger: silentLogger });
+      const result = validatePostStage(27, output, { logger: silentLogger });
       expect(result.valid).toBe(true);
     });
 
-    it('rejects stage 26 output missing growth_experiments', () => {
+    it('rejects stage 27 output missing growth_experiments', () => {
       const output = {
         scaling_priorities: [],
         operations_handoff: {},
       };
+      const result = validatePostStage(27, output, { logger: silentLogger });
+      expect(result.valid).toBe(false);
+    });
+
+    it('validates stage 26 post-stage output (Post-Launch Review)', () => {
+      const output = {
+        metrics: { signups: 12, impressions: 500 },
+        key_learnings: ['onboarding friction at step 2'],
+        data_collection_status: 'collected',
+      };
+      const result = validatePostStage(26, output, { logger: silentLogger });
+      expect(result.valid).toBe(true);
+    });
+
+    it('rejects stage 26 output missing required metrics/data_collection_status', () => {
+      const output = { key_learnings: [] };
       const result = validatePostStage(26, output, { logger: silentLogger });
       expect(result.valid).toBe(false);
     });
