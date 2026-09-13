@@ -59,6 +59,17 @@ describe('summary-column-derivation-lint', () => {
       const sql = 'UPDATE widgets SET metadata = jsonb_set(metadata, \'{description}\', \'"hello"\');';
       expect(findUnpairedJsonbSummaryKeys(sql)).toHaveLength(0);
     });
+
+    it('ignores jsonb_build_object inside an INSERT INTO ... VALUES (audit-log row, not a persisted summary column)', () => {
+      // MEDIUM-3 (EXEC-phase TESTING, evidence cf40b474): an earlier version of this
+      // detector matched jsonb_build_object() regardless of statement shape, firing
+      // 10/10 false-positive on real audit-log/history-table inserts.
+      const sql = `
+        INSERT INTO audit_log (event, payload)
+        VALUES ('status_change', jsonb_build_object('status', 'accepted', 'verdict', 'PASS'));
+      `;
+      expect(findUnpairedJsonbSummaryKeys(sql)).toHaveLength(0);
+    });
   });
 
   describe('findForeignKeySummaryColumns (predicate c, manual review only)', () => {

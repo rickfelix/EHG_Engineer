@@ -3,12 +3,14 @@
  * Dry-run proof for 20260913_uat_control_pack_evaluated_derive.sql
  * (SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001 FR-3).
  *
- * Runs the real UP file's body, exercises the trigger against disposable synthetic
- * uat_test_runs rows (positive/negative controls, the live row 84d310e1's exact shape, a
- * waived control, an absent-required-key case, an absent-whole-key case, an explicit-NULL
- * INSERT, and an unrelated-subkey UPDATE short-circuit proof), then runs the real DOWN file's
- * body -- all inside ONE transaction that ALWAYS ROLLBACKs, so nothing is ever persisted. Safe
- * to re-run against production any time before the real ceremony.
+ * Runs the real UP file's body (which captures the pre-derivation snapshot itself, before its
+ * own CREATE TRIGGER -- TR-2), exercises the trigger against disposable synthetic uat_test_runs
+ * rows (positive/negative controls, the live row 84d310e1's exact shape, a waived control, an
+ * absent-required-key case, an absent-whole-key case, an explicit-NULL INSERT, an
+ * unrelated-subkey UPDATE short-circuit proof, and a direct-write-to-control_pack_evaluated
+ * self-healing proof -- EXEC-phase TESTING CRITICAL-1, evidence cf40b474), then runs the real
+ * DOWN file's body -- all inside ONE transaction that ALWAYS ROLLBACKs, so nothing is ever
+ * persisted. Safe to re-run against production any time before the real ceremony.
  *
  * Usage: node database/chairman-gated/20260913_uat_control_pack_evaluated_derive_dry_run.mjs
  */
@@ -114,21 +116,34 @@ export async function runDryRun(client) {
     // TS-2i: INSERT (not UPDATE) with a fully-evaluated status succeeds without error (regression guard)
     log.push(`TS-2i (INSERT path succeeds without error, regression-guards TG_OP='INSERT' branch): ${ts1.ok}`);
 
-    // TS-2c/TS-2j: UPDATE behavior -- guard is scoped to control_pack_status sub-key specifically
+    // TS-2c/TS-2j/TS-2k: UPDATE behavior -- guard is scoped to control_pack_status AND
+    // control_pack_evaluated sub-keys (CRITICAL-1 fix, EXEC-phase TESTING evidence cf40b474)
     const baseRunId = `dryrun-ts2j-${randomUUID()}`;
     const inserted = await insertRow(client, {
       runId: baseRunId,
       metadata: { control_pack_status: { fence_two_sidedness: 'evaluated', canary_mutation_control: 'evaluated', live_deployment_binding: 'evaluated', minimum_assertion_manifest: 'evaluated' }, note: 'v1' },
     });
-    // Plant a WRONG control_pack_evaluated value directly, changing only the unrelated 'note' sub-key
-    // (control_pack_status untouched) -- if the guard is genuinely sub-key-scoped, this wrong value
-    // must SURVIVE the update (proves the body did not recompute, not merely that it agreed).
-    const planted = await client.query(
-      `UPDATE uat_test_runs SET metadata = jsonb_set(jsonb_set(metadata, '{note}', '"v2"'), '{control_pack_evaluated}', 'false') WHERE id = $1 RETURNING metadata`,
+
+    // TS-2j (AC-8): an UPDATE touching ONLY an unrelated subkey (neither control_pack_status
+    // nor control_pack_evaluated) must NOT recompute -- the existing correct value is preserved
+    // untouched, proving the guard genuinely short-circuits on truly-unrelated writes.
+    const unrelatedOnly = await client.query(
+      `UPDATE uat_test_runs SET metadata = jsonb_set(metadata, '{note}', '"v2"') WHERE id = $1 RETURNING metadata`,
       [inserted.id]
     );
-    const ts2jPass = planted.rows[0].metadata.control_pack_evaluated === false && planted.rows[0].metadata.note === 'v2';
-    log.push(`TS-2j (UPDATE touching only an unrelated subkey does not recompute -- a planted wrong value survives): ${ts2jPass}`);
+    const ts2jPass = unrelatedOnly.rows[0].metadata.control_pack_evaluated === true && unrelatedOnly.rows[0].metadata.note === 'v2';
+    log.push(`TS-2j (UPDATE touching only an unrelated subkey does not recompute -- correct value preserved, not merely unchanged by coincidence): ${ts2jPass}`);
+
+    // TS-2k (CRITICAL-1 regression guard): a writer directly forcing control_pack_evaluated to a
+    // WRONG value (while control_pack_status still shows fully-evaluated) must be self-corrected
+    // back to the value control_pack_status actually derives -- proves the summary can never be
+    // set to disagree with its detail via ANY write shape, not only ones that also touch status.
+    const plantedWrong = await client.query(
+      `UPDATE uat_test_runs SET metadata = jsonb_set(metadata, '{control_pack_evaluated}', 'false') WHERE id = $1 RETURNING metadata`,
+      [inserted.id]
+    );
+    const ts2kPass = plantedWrong.rows[0].metadata.control_pack_evaluated === true;
+    log.push(`TS-2k (a direct write forcing control_pack_evaluated=false is self-corrected back to true, since control_pack_status is still fully-evaluated): ${ts2kPass}`);
 
     // TS-2c: an UPDATE that DOES change control_pack_status re-fires and recomputes correctly
     const recomputed = await client.query(
@@ -138,18 +153,19 @@ export async function runDryRun(client) {
     const ts2cPass = recomputed.rows[0].metadata.control_pack_evaluated === false;
     log.push(`TS-2c (UPDATE changing control_pack_status re-fires and recomputes to false): ${ts2cPass}`);
 
+    const preDownSnapshotCount = await client.query(`SELECT count(*) FROM uat_control_pack_evaluated_rollback_snapshot`);
+    const preDownSnapshotCaptured = Number(preDownSnapshotCount.rows[0].count) > 0;
+    log.push(`TR-2 (fixed): pre-derivation snapshot captured by the UP file itself, before CREATE TRIGGER (${preDownSnapshotCount.rows[0].count} rows): ${preDownSnapshotCaptured}`);
+
     await client.query(downSql);
-    log.push('DOWN applied without error (snapshot captured before drop, per TR-2)');
+    log.push('DOWN applied without error (drops trigger + function only; snapshot was already captured at UP time, per the corrected TR-2 timing)');
 
     const fnAfterDown = await client.query(`SELECT 1 FROM pg_proc WHERE proname = 'derive_uat_control_pack_evaluated'`);
     const triggerAfterDown = await client.query(`SELECT 1 FROM pg_trigger WHERE tgname = 'trg_uat_control_pack_evaluated_derive'`);
-    const snapshotRows = await client.query(`SELECT count(*) FROM uat_control_pack_evaluated_rollback_snapshot`);
     const bothGone = fnAfterDown.rows.length === 0 && triggerAfterDown.rows.length === 0;
-    const snapshotCaptured = Number(snapshotRows.rows[0].count) > 0;
     log.push(`Function + trigger both gone after DOWN: ${bothGone}`);
-    log.push(`TR-2: pre-derivation snapshot captured (${snapshotRows.rows[0].count} rows): ${snapshotCaptured}`);
 
-    const allPass = ts1Pass && ts2Pass && ts2fPass && ts2dPass && ts2gPass && ts2hPass && ts1.ok && ts2jPass && ts2cPass && bothGone && snapshotCaptured && hasLockTimeout;
+    const allPass = ts1Pass && ts2Pass && ts2fPass && ts2dPass && ts2gPass && ts2hPass && ts1.ok && ts2jPass && ts2kPass && ts2cPass && bothGone && preDownSnapshotCaptured && hasLockTimeout;
     return { pass: allPass, log };
   } finally {
     await client.query('ROLLBACK');

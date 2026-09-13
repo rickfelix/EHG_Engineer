@@ -9,10 +9,14 @@ name: Summary Column Derivation Lint
 #
 # ADVISORY-FIRST: the lint step is `continue-on-error: true`, matching the
 # precedent set by alter-default-override-lint.yml (SD-LEO-INFRA-LINT-ALTER-SET-001).
-# The script's own predicate (b) (jsonb key) currently fires on 4 pre-existing
-# migrations that shipped before this lint existed -- continue-on-error keeps
-# those from turning an unrelated PR red on day one. Flip to blocking once
-# those 4 are triaged (paired with a trigger, or explicitly exempted).
+# Predicate (b) is scoped to UPDATE ... SET clauses specifically (EXEC-phase TESTING,
+# evidence cf40b474, MEDIUM-3: an earlier version also matched jsonb_build_object()
+# calls inside INSERT INTO ... VALUES (audit-log rows, one-time seed data), which
+# fired 10/10 false-positive on the live corpus -- none was a persisted summary
+# column). With that fix, predicate (b) currently finds exactly 1 genuine
+# pre-existing migration (a real advisory finding, not a false positive).
+# continue-on-error stays in place regardless, since this lint can always find a
+# genuine NEW instance in someone else's unrelated PR -- it should inform, not block.
 
 on:
   pull_request:

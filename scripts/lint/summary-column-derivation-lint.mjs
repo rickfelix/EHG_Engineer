@@ -11,16 +11,26 @@
  *      column NAMES (measured live across the schema; several exist on multiple
  *      tables under the same name, so the exemption is name-based, not a single
  *      table.column pair) — see BASELINE_BOOLEAN_COLUMNS below.
- *  (b) JSONB KEY — a migration that writes a summary-shaped jsonb key (status,
- *      verdict, evaluated, passed, verified, cleared) via jsonb_set(...) or a
- *      ->/->> path in an assignment, with no CREATE TRIGGER in the SAME file to
- *      keep that key derived going forward.
+ *  (b) JSONB KEY — an UPDATE ... SET clause that writes a summary-shaped jsonb key
+ *      (status, verdict, evaluated, passed, verified, cleared) via jsonb_set(...) or
+ *      jsonb_build_object(...) concatenation, with no CREATE TRIGGER in the SAME
+ *      file to keep that key derived going forward. Deliberately scoped to
+ *      UPDATE ... SET (a write to an EXISTING, persisted column) -- an
+ *      INSERT INTO ... VALUES (...) using the same functions (audit-log rows,
+ *      one-time seed data, a function's RETURN payload) is a different, out-of-
+ *      scope shape; an earlier version matched both and found 10/10 false
+ *      positives on the live corpus (EXEC-phase TESTING, evidence cf40b474).
  *  (c) CROSS-TABLE — a new column that is BOTH a foreign key (REFERENCES another
  *      table) and matches the summary-name heuristic. This predicate cannot be
  *      fully mechanical (a status-shaped FK is sometimes exactly the right
  *      design), so it is flagged MANUAL REVIEW REQUIRED, never auto-failed.
  *
  * Only (a) and (b) fail CI; (c) is advisory-only (exit code unaffected by it alone).
+ *
+ * SCOPE: scans database/migrations/**\/*.sql only. database/chairman-gated/ (135+ files,
+ * including this SD's own FR-3 migration) is NOT scanned -- those migrations are staged,
+ * not auto-applied, and go through their own chairman apply-ceremony review; widening this
+ * lint to cover them is a deliberate future decision, not an oversight.
  *
  * Usage:
  *   node scripts/lint/summary-column-derivation-lint.mjs [--json] [--root <dir>]
@@ -93,8 +103,26 @@ export function findUndereivedBooleanColumns(src) {
 // ── (b) JSONB KEY: summary key with no paired trigger in-file ────────────────
 
 /**
- * Find summary-shaped jsonb key writes (jsonb_set path, or a ->/->> assignment
- * target) in a migration file that has no CREATE TRIGGER anywhere in it.
+ * Extract the SET-clause body of every `UPDATE t SET ... (WHERE|;)` statement --
+ * the only shape that overwrites an EXISTING, persisted column/jsonb-blob in place.
+ * An INSERT INTO ... VALUES (...) (audit-log rows, one-time seed data, function
+ * RETURN payloads) is a different, out-of-scope shape: EXEC-phase TESTING (evidence
+ * cf40b474, MEDIUM-3) found 10/10 live jsonb_build_object findings were exactly this
+ * -- audit-log/history-table inserts, never a persisted summary column.
+ * @returns {string[]}
+ */
+function extractUpdateSetClauses(code) {
+  const clauses = [];
+  const updateRe = /\bUPDATE\s+(?:ONLY\s+)?(?:"?[a-z_][a-z0-9_]*"?\.)?"?[a-z_][a-z0-9_]*"?\s+SET\s+([\s\S]*?)(?:\bWHERE\b|;)/gi;
+  let m;
+  while ((m = updateRe.exec(code))) clauses.push(m[1]);
+  return clauses;
+}
+
+/**
+ * Find summary-shaped jsonb key writes (jsonb_set, or jsonb_build_object via
+ * concatenation) inside an UPDATE ... SET clause specifically, in a migration file
+ * that has no CREATE TRIGGER anywhere in it.
  * @returns {Array<{key, mechanism}>}
  */
 export function findUnpairedJsonbSummaryKeys(src) {
@@ -103,19 +131,24 @@ export function findUnpairedJsonbSummaryKeys(src) {
   if (hasTrigger) return [];
 
   const found = new Map();
+  const setClauses = extractUpdateSetClauses(code);
   const jsonbSetRe = /jsonb_set\s*\([^,]+,\s*'\{([a-z_][a-z0-9_]*)\}'/gi;
-  let m;
-  while ((m = jsonbSetRe.exec(code))) {
-    const key = m[1].toLowerCase();
-    if (SUMMARY_KEY_NAME_RE.test(key)) found.set(key, 'jsonb_set');
-  }
-  // A jsonb key can also be written via concatenation with jsonb_build_object(...)
-  // (`metadata = metadata || jsonb_build_object('key', ...)`), a real alternate
-  // shape to jsonb_set that raw hand-written UPDATEs sometimes use.
   const buildObjectRe = /jsonb_build_object\s*\(\s*'([a-z_][a-z0-9_]*)'/gi;
-  while ((m = buildObjectRe.exec(code))) {
-    const key = m[1].toLowerCase();
-    if (SUMMARY_KEY_NAME_RE.test(key)) found.set(key, 'jsonb_build_object');
+  for (const clause of setClauses) {
+    let m;
+    jsonbSetRe.lastIndex = 0;
+    while ((m = jsonbSetRe.exec(clause))) {
+      const key = m[1].toLowerCase();
+      if (SUMMARY_KEY_NAME_RE.test(key)) found.set(key, 'jsonb_set');
+    }
+    // A jsonb key can also be written via concatenation with jsonb_build_object(...)
+    // (`metadata = metadata || jsonb_build_object('key', ...)`), a real alternate
+    // shape to jsonb_set that raw hand-written UPDATEs sometimes use.
+    buildObjectRe.lastIndex = 0;
+    while ((m = buildObjectRe.exec(clause))) {
+      const key = m[1].toLowerCase();
+      if (SUMMARY_KEY_NAME_RE.test(key)) found.set(key, 'jsonb_build_object');
+    }
   }
   return [...found.entries()].map(([key, mechanism]) => ({ key, mechanism }));
 }

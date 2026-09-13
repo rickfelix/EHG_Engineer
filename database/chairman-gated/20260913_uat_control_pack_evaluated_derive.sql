@@ -18,18 +18,30 @@
 -- (lib/uat/result-recorder.js:613) as ambiguous between "evaluated, all passed" and "never
 -- evaluated" (both are jsonb null).
 --
--- GUARD (5 rounds of adversarial TESTING review, PLAN phase, evidence 51dde124 / 1d78482f /
--- fc38d1fd / d12076b3 / 9b7255fd -- see PRD FR-3 description for the full correction history):
--- `IF TG_OP = 'INSERT' OR OLD.metadata->'control_pack_status' IS DISTINCT FROM NEW.metadata->
--- 'control_pack_status' THEN`. Scoped to the control_pack_status sub-key (not the whole
--- metadata blob), so an UPDATE touching an unrelated metadata sub-key does not recompute. The
--- TG_OP='INSERT' branch forces the body to run on every INSERT, closing a silent-skip gap: an
+-- GUARD (6 rounds of adversarial TESTING review, PLAN + EXEC phase, evidence 51dde124 /
+-- 1d78482f / fc38d1fd / d12076b3 / 9b7255fd / cf40b474 -- see PRD FR-3 description for the
+-- full correction history): `IF TG_OP = 'INSERT' OR OLD.metadata->'control_pack_status' IS
+-- DISTINCT FROM NEW.metadata->'control_pack_status' OR OLD.metadata->'control_pack_evaluated'
+-- IS DISTINCT FROM NEW.metadata->'control_pack_evaluated' THEN`. Scoped to the
+-- control_pack_status AND control_pack_evaluated sub-keys (not the whole metadata blob), so an
+-- UPDATE touching an unrelated metadata sub-key (e.g. a timestamp field) does not recompute --
+-- but a write to EITHER the source (control_pack_status) OR the summary itself
+-- (control_pack_evaluated) always forces a fresh derivation. EXEC-phase TESTING (evidence
+-- cf40b474, CRITICAL-1) proved live that without the second OR clause, a writer setting
+-- control_pack_evaluated DIRECTLY (without touching control_pack_status) bypassed derivation
+-- entirely -- the summary could still drift from its detail via that one write shape, which is
+-- exactly the class of bug this trigger exists to close. With the second clause, ANY write to
+-- control_pack_evaluated is immediately overwritten by a fresh derivation from the row's actual
+-- control_pack_status, regardless of what value the writer attempted -- self-healing, not just
+-- self-consistent going forward.
+--
+-- The TG_OP='INSERT' branch forces the body to run on every INSERT, closing a silent-skip gap: an
 -- INSERT that sets metadata to an explicit NULL would otherwise evaluate NULL IS DISTINCT FROM
 -- NULL = FALSE and skip derivation entirely, leaving control_pack_evaluated undetermined. (A
 -- bare, unguarded OLD reference does NOT error on INSERT in PG 11+ -- OLD is given an all-NULL
 -- row via tupdesc, not an unassigned-record error; that error is PG<=10 statement-level
--- behavior. Verified live against PG 17.4, always-ROLLBACK, TEMP table, by two independent
--- passes of this SD's own review before this design was finalized.)
+-- behavior. Verified live against PG 17.4, always-ROLLBACK, by three independent passes of
+-- this SD's own review before this design was finalized.)
 --
 -- SCOPE: uat_test_runs is COLD (26 rows, ~6/day, ZERO existing triggers on this table today) --
 -- the lowest-blast-radius instance of the 3 originally named by this SD, and the only one that
@@ -66,7 +78,10 @@ DECLARE
   v_key text;
   v_evaluated boolean := true;
 BEGIN
-  IF TG_OP = 'INSERT' OR OLD.metadata->'control_pack_status' IS DISTINCT FROM NEW.metadata->'control_pack_status' THEN
+  IF TG_OP = 'INSERT'
+     OR OLD.metadata->'control_pack_status' IS DISTINCT FROM NEW.metadata->'control_pack_status'
+     OR OLD.metadata->'control_pack_evaluated' IS DISTINCT FROM NEW.metadata->'control_pack_evaluated'
+  THEN
     v_status := NEW.metadata->'control_pack_status';
     IF v_status IS NULL OR jsonb_typeof(v_status) != 'object' THEN
       v_evaluated := false;
@@ -86,7 +101,25 @@ $$;
 COMMENT ON FUNCTION derive_uat_control_pack_evaluated() IS
 'SD-LEO-INFRA-SUMMARY-COLUMNS-DERIVED-001 FR-3: derives uat_test_runs.metadata.control_pack_evaluated '
 'from control_pack_status (never control_pack_failures, which is ambiguous per its own writer). '
-'Guard is scoped to the control_pack_status sub-key and forced on every INSERT.';
+'Guard is scoped to the control_pack_status AND control_pack_evaluated sub-keys (self-healing -- '
+'a direct write to control_pack_evaluated is always overwritten by a fresh derivation) and forced '
+'on every INSERT.';
+
+-- TR-2 (EXEC-phase TESTING, evidence cf40b474, CRITICAL-2): the DOWN file's original snapshot ran
+-- AFTER the trigger had been live, capturing POST-derivation state under a "pre-derivation" label
+-- -- backwards. The only moment a snapshot can honestly be called "pre-derivation" is right here,
+-- before CREATE TRIGGER ever runs. This captures every row's state as it existed the instant
+-- before this trigger could touch anything; the DOWN file no longer re-snapshots at drop time.
+CREATE TABLE IF NOT EXISTS uat_control_pack_evaluated_rollback_snapshot (
+  id uuid NOT NULL,
+  control_pack_evaluated jsonb,
+  control_pack_status jsonb,
+  snapshotted_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO uat_control_pack_evaluated_rollback_snapshot (id, control_pack_evaluated, control_pack_status)
+SELECT id, metadata->'control_pack_evaluated', metadata->'control_pack_status'
+FROM uat_test_runs;
 
 DROP TRIGGER IF EXISTS trg_uat_control_pack_evaluated_derive ON uat_test_runs;
 CREATE TRIGGER trg_uat_control_pack_evaluated_derive
