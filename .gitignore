@@ -651,3 +651,4 @@ scripts/one-off/adam-provenance-split/
 
 # per-worktree reaper marker (lib/fleet worktree reaper reads it from disk; never tracked -- #8690 committed one by mistake)
 .reap-protected.json
+.artifacts/val-capa-a/
