@@ -26,6 +26,13 @@
  * On overdue findings, emits ONE harness_backlog feedback row per distinct reason_class among the
  * overdue set (never one per file) via lib/governance/emit-feedback.js's emitFeedback() -- NOT
  * scripts/log-harness-bug.js, whose --file flag conflates dedup_key with metadata.source_location.
+ *
+ * KNOWN LIMITATION: the BASELINE ceiling is a hardcoded literal (BASELINE_COUNT) that never
+ * decays -- if the live entry count later drops well below it, a slow partial regression back up
+ * toward the ceiling stays invisible until someone re-tightens it by hand. Separately,
+ * findOverdueEntries() treats a missing or unparseable review_by as never-overdue rather than
+ * failing closed, so a malformed entry silently escapes the overdue check forever unless a
+ * different control (tests/unit/quarantine-manifest.test.js) catches the malformed field first.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { makeHardenedGitRunner, validateBaseRef } from '../../lib/git/hardened-runner.cjs';
