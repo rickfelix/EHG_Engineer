@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- ============================ STAGED. NOT APPLIED. ============================
 -- CHAIRMAN-GATED: any live-DB write (additive new-table schema included) is denied by the
 -- permission classifier at EXEC time regardless of shape. No @approved-by attestation — the

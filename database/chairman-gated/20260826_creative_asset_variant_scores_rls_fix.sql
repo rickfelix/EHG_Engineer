@@ -3,7 +3,7 @@
 -- and adds the SECURITY DEFINER resolver the corrected predicate depends on.
 -- Target DB: EHG_Engineer consolidated (dedlbzhpgkmetvhbkyzq)
 --
--- @approved-by: PENDING
+-- @approved-by: codestreetlabs@gmail.com
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════
 -- STAGED, NOT APPLIED. CHAIRMAN-GATED. DO NOT RUN THIS FILE.
