@@ -99,6 +99,21 @@ export function parseCheckConstraint(definition) {
   //   CHECK ((status = ANY (ARRAY['draft'::text, 'completed'::text])))
   //   CHECK (status IN ('active', 'superseded'))
 
+  // QF-20260913-092: a composite/multi-clause OR constraint spanning several columns (e.g.
+  // CHECK ((validation_score IS NULL) OR (status = 'blocked') OR (validation_score >= 0 AND
+  // validation_score <= 100)), live on sd_phase_handoffs as chk_handoff_validation_threshold)
+  // has its quoted literals extracted globally below with no awareness of which column/clause
+  // they belong to -- 'blocked' (from the status clause) gets wrongly cached as the ENTIRE
+  // valid-value set for the numeric validation_score column. Bail out to the existing
+  // "could not parse" path (empty array, never written by the upsert loop) for any definition
+  // that mixes OR with IS NULL or a numeric range/comparison -- the same signal SD-LEO-ORCH-
+  // CAPA-DURABILITY-AUDIT-001-E hand-curated to valid_values=null for this exact constraint.
+  const isCompositeMultiClause = /\bOR\b/i.test(definition)
+    && (/\bIS\s+NULL\b/i.test(definition) || /[<>]=?/.test(definition));
+  if (isCompositeMultiClause) {
+    return [];
+  }
+
   const patterns = [
     // ANY (ARRAY[...]) pattern
     /ANY\s*\(\s*ARRAY\s*\[\s*'([^']+)'(?:::text)?(?:\s*,\s*'([^']+)'(?:::text)?)*\s*\]/gi,

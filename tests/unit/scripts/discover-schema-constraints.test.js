@@ -36,6 +36,34 @@ describe('parseCheckConstraint', () => {
       new Set(['draft', 'completed'])
     );
   });
+
+  // QF-20260913-092: a composite/multi-clause OR constraint must derive NO values (the existing
+  // "could not parse" path) rather than wrongly attributing another column's quoted literal to
+  // this one.
+  it('derives no values for a composite OR constraint mixing IS NULL + a string literal + a numeric range (live sd_phase_handoffs.chk_handoff_validation_threshold)', () => {
+    // Captured verbatim via discoverConstraintsViaSupabase('sd_phase_handoffs') this session --
+    // the exact live definition that, pre-fix, wrongly derived valid_values=['blocked'] for the
+    // NUMERIC validation_score column (and clobbered a curated valid_values=null override on
+    // rerun, per SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001-E).
+    const definition =
+      "CHECK (((validation_score IS NULL) OR ((status)::text = 'blocked'::text) OR " +
+      "((validation_score >= 0) AND (validation_score <= 100))))";
+    expect(parseCheckConstraint(definition)).toEqual([]);
+  });
+
+  it('derives no values for an OR constraint mixing IS NULL + a string literal (no numeric range)', () => {
+    const definition = "CHECK ((col IS NULL) OR (status = 'blocked'))";
+    expect(parseCheckConstraint(definition)).toEqual([]);
+  });
+
+  it('derives no values for an OR constraint mixing a string literal + a numeric comparison (no IS NULL)', () => {
+    const definition = "CHECK ((status = 'blocked') OR (score >= 0))";
+    expect(parseCheckConstraint(definition)).toEqual([]);
+  });
+
+  it('still extracts values from a plain numeric-range constraint with no OR (unchanged behavior)', () => {
+    expect(parseCheckConstraint('CHECK (((validation_score >= 0) AND (validation_score <= 100)))')).toEqual([]);
+  });
 });
 
 describe('discoverConstraintsViaSupabase', () => {
