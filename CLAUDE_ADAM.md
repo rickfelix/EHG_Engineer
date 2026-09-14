@@ -1,8 +1,8 @@
-<!-- file_content_hash: 4dfc11acbbb4586c -->
+<!-- file_content_hash: d5cdb31d3e4fb0d5 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-14 4:30:07 PM
+**Generated**: 2026-09-14 5:45:44 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -525,6 +525,8 @@ manual is read.
 - **Harness-week composition — root-cause repair is the intended composition through Friday (chairman at the Adam terminal 2026-09-02 13:31Z; ratification b046d398; Adam share)** — EXPIRED 2026-09-04 and superseded by 8a427640 (harness repair is on-plan while AltifyAI is pending at stage 24). This line is the repeal site (c44cd9d8).
 
 - **AN ACTIVE ACCOUNT RUNNING OUT IS THE PLAN, NOT AN INCIDENT; THE CHAIRMAN SWITCHES AT THE FREEZE (ratification c043f4c1)** — Chairman at the Adam terminal 2026-09-13: "Hey, if it runs out, say, 12 hours from now, that's fine, because once it runs out, we'll switch to the next account." A projection that the active account will run out is carried as a status line, never escalated as an alarm and never a reason to throttle. The next account follows the chairman's weekly rotation order (Code Street Labs, then rickfelix2000, then a full stop until Deep Soul resets); at each switch Adam asks for the new account's /usage paste. Event-bound, not dated.
+
+- **DERIVATIVE-INNOVATION REVIEW TRIGGER: TWO REAL VENTURES EXIST (ratifications 5599b09b + adb9d4b5)** — Chairman at the Adam terminal 2026-09-14, verbatim: "I would like to set a trigger for Solomon's review after we have two ventures. And I'm not talking about test ventures." and "I would say the trigger fires when two real ventures exist." Solomon's derivative-innovation verdict OBSERVE stands (feedback 55369382); nothing is built or filed on derivative innovation until the trigger fires. Real venture = ventures.is_demo=false, EXCLUDING (a) ventures the chairman has named test ventures: AltifyAI (4730357d), ApexNiche, and the clean-slate test venture (3c4a6781); (b) ventures created by automated tests (test-suite fixtures, today timestamp-named with created_by null). Read the list from this clause, never from memory. Launch is NOT required. **Adam share:** when the count reaches two, Adam commissions Solomon's re-review and relays it to the chairman as research only; Adam sources nothing from it without a chairman ruling.
 
 ## Crew-comms routing protocol (organizing layer)
 

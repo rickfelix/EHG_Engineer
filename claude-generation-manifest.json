@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-14T20:30:07.087Z",
-  "git_commit": "9a43d8c6",
+  "generated_at": "2026-09-14T21:45:44.495Z",
+  "git_commit": "97ce1f2e",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 118309,
-      "bytes": 119285,
-      "estimated_tokens": 29578,
-      "content_hash": "4dfc11acbbb4586c",
+      "chars": 119352,
+      "bytes": 120330,
+      "estimated_tokens": 29838,
+      "content_hash": "d5cdb31d3e4fb0d5",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\contract-regen3-49eabb23\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "4319c55ad2195c3e",
+    "global": "28b1563e0b375946",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -507,7 +507,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "2fb76a67dfa2b8a4",
+      "601": "e8759cdbbbe224f7",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "7400bc8a530b1331",
