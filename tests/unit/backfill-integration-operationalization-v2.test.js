@@ -104,25 +104,50 @@ describe('SD-LEARN-FIX-ADDRESS-PAT-LES-012 (TS-6): backfill keyset pagination su
  * caught it before it shipped: pre-existing metadata keys MUST be a subset of post-write
  * keys. Recovered via scripts/one-off/restore-integration-backfill-metadata.mjs.
  */
-function makeWriteFakeSupabase(initialRow) {
-  const state = { row: { ...initialRow } };
+function makeWriteFakeSupabase(initialRow, { simulateConcurrentWriteAfterRead = false } = {}) {
+  const state = { row: { updated_at: '2026-01-01T00:00:00.000000', ...initialRow } };
   return {
     state,
     from(_table) {
       return {
         select: () => ({
           eq: () => ({
-            maybeSingle: async () => ({ data: { metadata: state.row.metadata }, error: null }),
+            maybeSingle: async () => {
+              const readSnapshot = { metadata: state.row.metadata, updated_at: state.row.updated_at };
+              if (simulateConcurrentWriteAfterRead) {
+                // Simulates another writer touching this row in the gap between this
+                // read and the eventual write -- exactly the race the updated_at CAS
+                // guard exists to catch. The real table's BEFORE-UPDATE trigger touches
+                // updated_at on every write, so any concurrent write moves it.
+                state.row = {
+                  ...state.row,
+                  metadata: { ...(state.row.metadata || {}), concurrent_writer_field: 'added-by-someone-else' },
+                  updated_at: 'CHANGED-' + state.row.updated_at,
+                };
+              }
+              return { data: readSnapshot, error: null };
+            },
           }),
         }),
-        update: (patch) => ({
-          eq: () => ({
-            is: (_col, _val) => ({
+        update: (patch) => {
+          const conditions = {};
+          const builder = {
+            eq: (col, val) => {
+              conditions[col] = val;
+              return builder;
+            },
+            is: (col, val) => ({
               select: () => ({
                 maybeSingle: async () => {
-                  if (state.row.integration_operationalization !== null) {
-                    // Simulates the .is('integration_operationalization', null) guard:
-                    // no match, no write, matching real PostgREST behavior.
+                  if (conditions.id !== undefined && conditions.id !== state.row.id) {
+                    return { data: null, error: null };
+                  }
+                  if (conditions.updated_at !== undefined && conditions.updated_at !== state.row.updated_at) {
+                    // CAS mismatch: the row changed since it was read. Matching real
+                    // PostgREST behavior -- 0 rows matched, no write performed.
+                    return { data: null, error: null };
+                  }
+                  if (col === 'integration_operationalization' && state.row[col] !== val) {
                     return { data: null, error: null };
                   }
                   state.row = { ...state.row, ...patch };
@@ -130,8 +155,9 @@ function makeWriteFakeSupabase(initialRow) {
                 },
               }),
             }),
-          }),
-        }),
+          };
+          return builder;
+        },
       };
     },
   };
@@ -189,5 +215,29 @@ describe('SD-LEARN-FIX-ADDRESS-PAT-LES-012: writeBackfillRow metadata preservati
     expect(result.written).toBe(false);
     // Metadata must be untouched -- the guard prevented the write entirely.
     expect(sb.state.row.metadata).toEqual({ existing: true });
+  });
+
+  it('ADVERSARIAL SHIP-REVIEW FINDING (PR #8950, WARNING #4): the updated_at CAS guard rejects the write when a concurrent writer touches the row between read and write, instead of silently clobbering the concurrent write', async () => {
+    const priorMetadata = { plan_handoff: { handoff_id: 'x' }, sd_key: 'SD-EXAMPLE-001' };
+    const sb = makeWriteFakeSupabase(
+      { id: 'prd-6', integration_operationalization: null, metadata: priorMetadata },
+      { simulateConcurrentWriteAfterRead: true }
+    );
+
+    const result = await writeBackfillRow(sb, 'prd-6', { consumers: null, dependencies: null, data_contracts: null, runtime_config: null, observability_rollout: null });
+
+    // The write must be REJECTED, not silently applied with the concurrent writer's
+    // content clobbered by our stale-read-based mergedMetadata.
+    expect(result.ok).toBe(true);
+    expect(result.written).toBe(false);
+    // The concurrent writer's addition survives untouched -- proof the CAS guard fired
+    // BEFORE any write landed, not that we happened to merge it in.
+    expect(sb.state.row.metadata.concurrent_writer_field).toBe('added-by-someone-else');
+    expect(sb.state.row.metadata.plan_handoff).toEqual(priorMetadata.plan_handoff);
+    // AND our own provenance marker was never added, since the write never happened.
+    expect(sb.state.row.metadata.integration_backfill).toBeUndefined();
+    // AND integration_operationalization was never touched either -- this row still
+    // needs a future run to backfill it once the race clears.
+    expect(sb.state.row.integration_operationalization).toBeNull();
   });
 });

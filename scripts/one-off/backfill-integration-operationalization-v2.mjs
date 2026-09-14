@@ -84,10 +84,22 @@ async function* enumerateNullRows(supabase, batchSize = BATCH_SIZE) {
  * product_requirements_v2 (mergeMetadataKeys() there is hard-scoped to
  * strategic_directives_v2). This script's fetch-then-merge closes THIS incident because
  * writeBackfillRow() re-checks `integration_operationalization IS NULL` at write time
- * (closing that column's race), but the residual metadata TOCTOU between the fetch and
- * the write is accepted debt here, not a solved problem -- tracked for a proper
- * generalized merge helper as a separate follow-up (see restore script's own fix for the
- * same class of bug, SECURITY finding #1, evidence f93b30cc).
+ * (closing that column's race), and now closes the residual metadata TOCTOU too
+ * (ADVERSARIAL SHIP-REVIEW FINDING, PR #8950, WARNING #4): the .is('integration_
+ * operationalization', null) guard protects only that column, not metadata -- a
+ * concurrent writer landing in the gap between this function's read and its write
+ * (e.g. storeSubAgentResults stamping metadata.security_analysis, observed live on
+ * this SD's own PRD) would have been silently overwritten by mergedMetadata, which was
+ * built from a now-stale read. Fixed with a true compare-and-swap: read `updated_at`
+ * alongside `metadata`, then require it be unchanged at write time. product_requirements_v2
+ * has a BEFORE-UPDATE trigger that touches `updated_at` on every write regardless of
+ * which columns changed (confirmed live), so this CAS catches ANY concurrent write to
+ * the row, not just ones that happen to touch metadata -- if the row changed at all,
+ * the UPDATE matches 0 rows and is reported as `written: false` rather than silently
+ * clobbering whatever the concurrent writer added. A generalized, reusable atomic-merge
+ * helper for this table is still tracked separately (SD-LEO-INFRA-GENERALIZE-ATOMIC-
+ * JSONB-001); this is the same local CAS-guard fix already applied to the restore
+ * script's own equivalent race.
  *
  * @param {object} supabase
  * @param {string} id
@@ -97,7 +109,7 @@ async function* enumerateNullRows(supabase, batchSize = BATCH_SIZE) {
 async function writeBackfillRow(supabase, id, placeholder) {
   const { data: currentRow, error: readError } = await supabase
     .from('product_requirements_v2')
-    .select('metadata')
+    .select('metadata, updated_at')
     .eq('id', id)
     .maybeSingle();
   if (readError) {
@@ -118,13 +130,18 @@ async function writeBackfillRow(supabase, id, placeholder) {
   // SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-5): re-check per-row (not just the batch
   // predicate) so a concurrent authoring write between enumeration and this UPDATE is
   // never overwritten -- WHERE ... IS NULL on the write itself, not just the read.
-  const { data: updated, error: updateError } = await supabase
+  // Plus the updated_at CAS guard (see docstring above) closing the metadata TOCTOU.
+  let updateQuery = supabase
     .from('product_requirements_v2')
     .update({
       integration_operationalization: placeholder,
       metadata: mergedMetadata
     })
-    .eq('id', id)
+    .eq('id', id);
+  updateQuery = currentRow?.updated_at
+    ? updateQuery.eq('updated_at', currentRow.updated_at)
+    : updateQuery;
+  const { data: updated, error: updateError } = await updateQuery
     .is('integration_operationalization', null)
     .select('id')
     .maybeSingle();
