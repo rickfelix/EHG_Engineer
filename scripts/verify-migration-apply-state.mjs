@@ -417,21 +417,193 @@ export function extractTriggerWhenClause(stmtText) {
   return null;
 }
 
+/** A dollar-quote tag opener at position `i` of `s` (`$$` or `$tag$`), or null. Same
+ *  detection shape as FUNCTION_DEF_RE/CREATE_TRIGGER_STMT_RE's own tag matching above --
+ *  the tag's own closing occurrence (a literal indexOf, never a regex backreference) is
+ *  exactly standard SQL dollar-quote semantics: a tag can never nest with itself.
+ *  ROUND-2 ADVERSARIAL REVIEW (WARNING): the lookahead bound covers Postgres's own
+ *  identifier limit (NAMEDATALEN-1 = 63 bytes) plus the two '$' delimiters (65), rounded
+ *  up to 70 for headroom -- a legal dollar-quote tag can never exceed this, so a null match
+ *  here means "not a real tag" (falls through to ordinary-text handling), never a
+ *  false-negative on a real, merely-long tag. */
+function matchDollarQuoteTagAt(s, i) {
+  const m = /^\$([A-Za-z_]\w*)?\$/.exec(s.slice(i, i + 70));
+  return m ? m[0] : null;
+}
+
 /**
- * Collapse whitespace runs and strip SQL comments before comparing a live pg_proc.prosrc against
- * a migration file's own declared body. Pure (TR-2) -- no I/O, no live clock.
+ * Apply `transformFn` to every substring OUTSIDE single-quoted string literals,
+ * double-quoted identifiers, and dollar-quoted regions -- all three are case-/content-
+ * preserving in Postgres (a string literal's characters ARE its data; a quoted
+ * identifier's case is significant; dollar-quoting is the standard idiom -- live in this
+ * codebase, e.g. `RAISE NOTICE $m$...$m$` or `EXECUTE format($$...$$, ...)` -- for
+ * embedding literal text without escaping). ADVERSARIAL SHIP REVIEW (CRITICAL, fixed
+ * pre-merge): the original version of this function protected only `'`/`"`, so
+ * case-folding silently altered case-sensitive content inside a nested dollar-quoted
+ * literal (demonstrated: "$m$User Not Found$m$" and "$m$user not found$m$" folded equal).
+ * Doubled-quote escaping ('' inside a '...' literal, "" inside a "..." identifier) is
+ * honoured so the scan never exits a region early on an escaped quote. Same balanced,
+ * quote-aware scanning convention as splitTableBodyItems() above; the dollar-quote tag
+ * match is deliberately narrow ($<ident>$ or bare $$, checked with a bounded lookahead) so
+ * a positional parameter like `$1` is never mistaken for a tag opener.
  *
- * KNOWN LIMITATION: this is whitespace/comment normalization, not a SQL parser -- two bodies that
- * are semantically identical but differ in ways this does not collapse (e.g. reordered but
- * equivalent clauses, `$1` vs a renamed parameter with the same position) can still register as a
- * false BODY_MISMATCH. Treat BODY_MISMATCH as "needs a human look," not a proven-wrong body.
+ * SD-LEO-INFRA-APPLY-STATE-VERIFIER-001: shared primitive behind case-folding,
+ * implicit-cast stripping, and paren-whitespace trimming so protected content is never
+ * mangled by any of the three transforms.
+ */
+function transformOutsideQuotedRegions(s, transformFn) {
+  let out = '';
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === "'" || ch === '"') {
+      const quote = ch;
+      let j = i + 1;
+      let region = ch;
+      while (j < s.length) {
+        region += s[j];
+        if (s[j] === quote) {
+          if (s[j + 1] === quote) { region += s[j + 1]; j += 2; continue; }
+          j += 1;
+          break;
+        }
+        j += 1;
+      }
+      out += region;
+      i = j;
+      continue;
+    }
+    if (ch === '$') {
+      const tag = matchDollarQuoteTagAt(s, i);
+      if (tag) {
+        const closeIdx = s.indexOf(tag, i + tag.length);
+        if (closeIdx !== -1) {
+          out += s.slice(i, closeIdx + tag.length);
+          i = closeIdx + tag.length;
+          continue;
+        }
+      }
+      // Not a real tag opener (e.g. a bare positional parameter like `$1`), or an
+      // unbalanced tag (truncated text) -- treat this single '$' as ordinary text and
+      // advance by exactly one character. Must NOT fall through to the scan-chunk loop
+      // below unconditionally: that loop stops AT a '$', so without this explicit advance
+      // it would re-observe the same '$' forever (infinite loop) whenever `tag` is null.
+      out += transformFn(ch);
+      i += 1;
+      continue;
+    }
+    let k = i;
+    while (k < s.length && s[k] !== "'" && s[k] !== '"' && s[k] !== '$') k += 1;
+    out += transformFn(s.slice(i, k));
+    i = k;
+  }
+  return out;
+}
+
+/**
+ * SD-LEO-INFRA-APPLY-STATE-VERIFIER-001: lowercase everything outside quoted regions.
+ * Postgres itself folds unquoted identifiers/keywords to lowercase -- a migration file's
+ * author-chosen casing (OLD/NEW, WHEN, IS DISTINCT FROM, ...) and a live pg_get_triggerdef()
+ * reconstruction's casing (mixed: lowercase identifiers, uppercase keywords, measured live)
+ * can differ while remaining semantically identical. Safe on both the function-prosrc and
+ * trigger-WHEN branches -- case never carries real drift outside a quoted region.
+ */
+function foldCaseOutsideQuotedRegions(s) {
+  return transformOutsideQuotedRegions(s, (chunk) => chunk.toLowerCase());
+}
+
+/**
+ * SD-LEO-INFRA-APPLY-STATE-VERIFIER-001: strip implicit varchar/text cast annotations that
+ * Postgres's pg_get_triggerdef() deparser materializes on a trigger's WHEN clause but the
+ * migration file's source text never wrote (confirmed live specimen: trg_sd_mutation_audit,
+ * file "OLD.status IS DISTINCT FROM NEW.status" vs live "old.status::text IS DISTINCT FROM
+ * new.status::text"). Replaces each match with a SPACE, never empty string -- TESTING
+ * sub-agent evidence (100f23af) measured that an empty-string replace glues adjacent tokens
+ * ("old.statusis distinct"), which would silently swap one false result for another.
+ * Deliberately NOT exported/used on the function-prosrc branch: prosrc is stored verbatim
+ * (author-written), so a real ::text cast delta there is genuine drift, not a reconstruction
+ * artifact -- stripping it there would be the blanket normalization this SD explicitly
+ * forbids (RECOMMENDED AGAINST (i)).
+ */
+function stripImplicitCastArtifacts(s) {
+  return transformOutsideQuotedRegions(s, (chunk) =>
+    chunk.replace(/::(?:character varying(?:\(\d+\))?|varchar(?:\(\d+\))?|text)\b/gi, ' ')
+  );
+}
+
+/**
+ * Trim whitespace immediately touching a paren -- never the paren itself, so
+ * precedence-changing structure ("a AND (b OR c)" vs "(a AND b) OR c") stays
+ * distinguishable. Quote-aware (via transformOutsideQuotedRegions), matching its sibling
+ * transforms above. ADVERSARIAL SHIP REVIEW (CRITICAL, fixed pre-merge): an earlier,
+ * non-quote-scoped version of this trim also stripped padding INSIDE string literals --
+ * demonstrated live, `'text ( padded )'` and `'text (padded)'` normalized equal, a genuine
+ * string-literal content difference silently masked.
+ */
+function trimParenWhitespaceOutsideQuotedRegions(s) {
+  return transformOutsideQuotedRegions(s, (chunk) =>
+    chunk.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')
+  );
+}
+
+/**
+ * Collapse whitespace runs to a single space, outside quoted/dollar-quoted regions.
+ * ROUND-2 ADVERSARIAL REVIEW (CRITICAL, fixed pre-merge): the original version of this
+ * step used a plain global `.replace(/\s+/g, ' ')`, which -- unlike its case-fold/cast-strip/
+ * paren-trim siblings, all quote-scoped -- also collapsed whitespace INSIDE string and
+ * dollar-quoted literals, masking real content differences (demonstrated: "'a    b'" and
+ * "'a b'" normalized equal; same for "$$Hello     World$$" vs the single-spaced variant).
+ */
+function collapseWhitespaceOutsideQuotedRegions(s) {
+  return transformOutsideQuotedRegions(s, (chunk) => chunk.replace(/\s+/g, ' '));
+}
+
+/** Collapse whitespace runs, then trim paren-adjacent whitespace -- both quote-scoped (see
+ *  collapseWhitespaceOutsideQuotedRegions / trimParenWhitespaceOutsideQuotedRegions).
+ *  Closes a gap VALIDATION measured (b81e397b): a multi-line, indented migration-file WHEN
+ *  clause collapses to "( old.status ..." while a single-line live reconstruction has no
+ *  such padding. */
+function collapseAndTrimParenWhitespace(s) {
+  return trimParenWhitespaceOutsideQuotedRegions(collapseWhitespaceOutsideQuotedRegions(s).trim());
+}
+
+/**
+ * Strip SQL comments before further normalization. Pure (TR-2) -- no I/O, no live clock.
+ */
+function stripSqlComments(s) {
+  return s.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
+}
+
+/**
+ * Collapse whitespace runs, strip SQL comments, and case-fold outside quoted regions before
+ * comparing a live pg_proc.prosrc against a migration file's own declared body. Pure (TR-2) --
+ * no I/O, no live clock. Shared by both the function-prosrc and trigger-WHEN comparison
+ * branches (the trigger branch layers stripImplicitCastArtifacts() on top via
+ * normalizeTriggerWhenClause() below).
+ *
+ * KNOWN LIMITATION: this is whitespace/comment/case normalization, not a SQL parser -- two
+ * bodies that are semantically identical but differ in ways this does not collapse (e.g.
+ * reordered but equivalent clauses, `$1` vs a renamed parameter with the same position) can
+ * still register as a false BODY_MISMATCH. Treat BODY_MISMATCH as "needs a human look," not a
+ * proven-wrong body.
  */
 export function normalizeSqlBody(body) {
-  return body
-    .replace(/--[^\n]*/g, ' ')
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  let s = stripSqlComments(body);
+  s = foldCaseOutsideQuotedRegions(s);
+  return collapseAndTrimParenWhitespace(s);
+}
+
+/**
+ * SD-LEO-INFRA-APPLY-STATE-VERIFIER-001: normalizeSqlBody()'s pipeline plus a cast-strip,
+ * scoped ONLY to the trigger-WHEN comparison call site below -- never the function-prosrc
+ * branch. See stripImplicitCastArtifacts() docblock for why the scoping matters.
+ */
+export function normalizeTriggerWhenClause(raw) {
+  if (raw == null) return '';
+  let s = stripSqlComments(raw);
+  s = foldCaseOutsideQuotedRegions(s);
+  s = stripImplicitCastArtifacts(s);
+  return collapseAndTrimParenWhitespace(s);
 }
 
 /**
@@ -866,8 +1038,8 @@ export function classifyFiles(orderedFiles, expected, perFile, live, now = new D
         fileTriggerDefs.has(o.name) &&
         live.has(`trigger:${o.name}`) &&
         liveTriggerDefs.has(o.name) &&
-        normalizeSqlBody(extractTriggerWhenClause(fileTriggerDefs.get(o.name)) ?? '') !==
-          normalizeSqlBody(extractTriggerWhenClause(liveTriggerDefs.get(o.name)) ?? ''))
+        normalizeTriggerWhenClause(extractTriggerWhenClause(fileTriggerDefs.get(o.name)) ?? '') !==
+          normalizeTriggerWhenClause(extractTriggerWhenClause(liveTriggerDefs.get(o.name)) ?? ''))
     ));
     if (bodyMismatches.length && status === 'APPLIED') status = 'BODY_MISMATCH';
     const result = { file, status, missing, objects: relevant.length };
