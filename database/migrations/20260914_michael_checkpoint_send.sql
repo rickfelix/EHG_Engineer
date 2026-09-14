@@ -1,4 +1,5 @@
 -- @chairman-gated: applied by the chairman after sign-off (Tier 3: schema; personal data)
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-INFRA-MICHAEL-TIER2-CHECKPOINT-SEND-001 -- the durable state for the Tier-2 personal
 -- checkpoint send verb (ratification 561878ae): a same-day ledger (FR-1/FR-6/FR-7) and a
 -- fail-closed enable/disable row (FR-5), following the database/migrations/20260906_michael_tables.sql
