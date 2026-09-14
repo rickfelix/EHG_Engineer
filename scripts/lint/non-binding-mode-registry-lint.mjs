@@ -15,6 +15,15 @@
 // FAIL-CLOSED (TESTING finding F11): a DB-connectivity failure exits non-zero with a
 // clear message -- never a silent exit 0 that looks like a pass.
 //
+// KNOWN LIMITATION: this checks only ROW EXISTENCE for the 4 hardcoded flagKeys in
+// NON_BINDING_MODES -- it cannot detect (a) a fifth non-binding mechanism added to the
+// codebase but never added to this list, (b) a registered row whose fields have drifted
+// (e.g. enablement_criteria edited to claim a live reader that does not exist, or
+// lifecycle_state moved off 'archived'), or (c) a `lineAnchor` gone stale because the
+// cited file was edited -- the anchor is never checked against the file it names, only
+// surfaced verbatim in the failure message. Growing coverage or correcting a registered
+// row's fields is a deliberate follow-up PR, not something this lint notices on its own.
+//
 // Usage: node scripts/lint/non-binding-mode-registry-lint.mjs
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
