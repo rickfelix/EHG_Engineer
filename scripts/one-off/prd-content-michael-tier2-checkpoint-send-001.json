@@ -1,0 +1,204 @@
+{
+  "executive_summary": "Michael (an autonomous fleet seat) currently has zero sending capability -- confirmed absent, not blocked (44 files under scripts/michael/, zero SMS/email transport calls). Chairman ratification 561878ae (amending b9d3607e) authorizes exactly one narrow, capped, revocable exception to the flat 'Michael never sends SMS/email' rule: a four-times-daily (6am/10am/2pm/6pm ET) personal-domain checkpoint text to the chairman, and nothing else. A pre-build security-agent baseline (verdict: acceptable-with-controls) produced 7 MUST controls (FR-1..FR-7) plus a SHOULD (FR-8); this SD's own VALIDATION pass at LEAD-TO-PLAN (sub_agent_execution_results 1171f9c8) resolved each control's concrete mechanism, and a subsequent TESTING pass at PLAN-TO-EXEC (sub_agent_execution_results id captured below) measured and disproved the original FR-8 census route (ADDITIONAL_SCOPE would FAIL the ratchet, not pass it -- proven by a live probe), found a real fail-open edge in partial-identity handling (H4), found two pinned registry tests that break by construction and were unlisted (H3), and found the original all-unit test plan could not satisfy the SD's own 'demonstrated BY A RUN' exit predicate (H2). This PRD folds all TESTING findings in as binding requirements/decisions before EXEC starts. Delivered: a new DB-backed ledger + enable/disable row (with an ephemeral-PG DDL test proving the constraints pre-chairman-apply), an additive identity parameter on the existing Twilio provider (all-three-or-null, no partial-identity fail-open), a new closed-verb script following the house scripts/michael/*.mjs pattern, Task-Scheduler wiring reusing the existing multi-window FEEDERS registry, and KNOWN_DEBT census registration (not ADDITIONAL_SCOPE) for the new chairman-reaching sink.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Same-day cap of 4, fail-closed on BOTH read-failure branches",
+      "description": "Before sending, read a same-day count of outcome='sent' rows for the ledger, for IN-WINDOW send attempts only (see FR-6 for the attempt definition). A schedule firing twice, a hand re-run, or a duplicate trigger must all be refused past the 4th accepted send. lib/michael/db.mjs's readRows() returns {rows:[],tables_absent:true} on a missing relation AND {rows:[],error} on any other read error -- BOTH yield an empty array, which reads as \"0 sent today\" and fails OPEN unless the verb explicitly branches on tables_absent OR error and refuses in either case (mirror scripts/michael/todoist-act.mjs:73-77's two-branch preflight). TESTING-verified: this two-branch shape correctly mirrors todoist-act.mjs (TESTING C13).",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "A 5th in-window send attempt in one ET date is refused with a distinct code (CAP_EXCEEDED), no external call made, a ledger row recorded",
+        "A simulated ledger-read error (tables_absent=true) refuses the send with TABLES_ABSENT, never proceeds as if 0 were sent",
+        "A simulated ledger-read error (error set, tables_absent=false) refuses the send with READ_FAILED, never proceeds as if 0 were sent"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Immutable recipient, hash-pinned as TAMPER-EVIDENCE (not secrecy)",
+      "description": "The recipient is never accepted from a CLI parameter, DB row, or an alternate env override. The real chairman number is read from process.env.CHAIRMAN_PHONE (the existing repo-wide convention; no literal E.164 goes into git), and the RAW resolved string's sha256 must match a hardcoded module constant before any send is attempted -- refusing on any mismatch (RECIPIENT_HASH_MISMATCH), including a mismatch caused by incidental formatting drift (whitespace, missing +). PER TESTING M9: hash the RAW env string, not a normalized form (do NOT route through lib/solomon/chairman-sms-exchanges.js's phoneKey(), which strips to the last-10-digits and would accept a different-country number sharing them). This mechanism is TAMPER-EVIDENCE / unredirectability, not secrecy -- a phone-number sha256 is only ~1e10 candidates and is trivially offline-enumerable, so the PRD makes no secrecy claim about the constant.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Passing any alternate recipient via CLI flag has no code path to reach the send call",
+        "A CHAIRMAN_PHONE value whose RAW-string sha256 does not match the pinned constant refuses the send (RECIPIENT_HASH_MISMATCH), no external call made",
+        "A CHAIRMAN_PHONE value differing ONLY by surrounding whitespace also refuses (proves raw-string hashing, not silent normalization)",
+        "A code read confirms zero parameter/row inputs feed the recipient"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Messaging identity isolated via an additive optional parameter on the shared provider -- ALL THREE fields or null, never partial",
+      "description": "Extend lib/messaging/providers/twilio-provider.js's send()/isConfigured() with an optional `identity` parameter: {accountSid, authToken, messagingService}. When supplied, sid/token/messagingService are read ONLY from it, never falling back to process.env. TESTING H4 (MEASURED): the existing isConfigured() checks only accountSid()+authToken() (twilio-provider.js:35-37) and messagingService() is read UNGUARDED at :59 -- so a partial identity (sid+token set, messagingService unset) would make a REAL authenticated POST to Twilio with an empty MessagingServiceSid, a fail-OPEN edge inside a capability whose entire premise is fail-closed. FIX (binding): lib/michael/checkpoint-identity.mjs returns the identity object ONLY when ALL THREE of MICHAEL_TWILIO_ACCOUNT_SID/MICHAEL_TWILIO_AUTH_TOKEN/MICHAEL_TWILIO_MESSAGING_SERVICE are non-empty -- any subset returns null, and the verb then refuses closed exactly like the fully-unset case. send()'s own identity-branch validation must independently also require all three (defense in depth against a caller bypassing the resolver). TESTING M5: statusCallbackUrl() (:26, :63-64) reads the SHARED process.env.TWILIO_STATUS_CALLBACK_URL regardless of identity -- a Michael-identity send would register Adam's webhook as the callback target, where signature verification uses the shared authToken() and would always fail for a Michael-signed callback (fail-closed, not a security hole, but persistent cross-lane noise). FIX (binding): when identity is supplied, OMIT the StatusCallback form field entirely (Michael has no delivery-callback receiver; unconditionally registering one is the actual bug). Adam's chairman-sms-gate continues calling send() with no identity argument and is untouched (3 existing callers: api/webhooks/twilio-sms.js, lib/chairman/sms-bridge.js, lib/chairman/sms-outbound-worker.js -- zero call-site changes, TESTING/VALIDATION-verified). A parallel/duplicate provider module was rejected (VALIDATION V-6): it would exit scripts/lint/transport-test-isolation-guard-lint.mjs's frozen GUARDED_FILES list and tests/unit/outbound-sink-conformance.test.js's TRANSPORT_TARGETS census. TESTING vacuous-pass warning (C13): twilio-provider.js:48 shouldRefuseRealSend() short-circuits under VITEST before the identity branch UNLESS the test explicitly vi.stubGlobal('fetch', ...) -- every FR-3 test MUST stub fetch or it passes without ever exercising the identity code path.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "send({identity: {...}}) never reads process.env.TWILIO_* when identity is supplied",
+        "A partial identity (any 1 or 2 of the 3 MICHAEL_TWILIO_* vars set) resolves to null from checkpoint-identity.mjs and the verb refuses closed -- zero external calls, proven by a test with fetch stubbed (not vacuously passing via the test-env guard)",
+        "An identity-bearing send omits the StatusCallback form field entirely",
+        "Existing callers (sms-bridge.js, sms-outbound-worker.js, twilio-sms.js webhook) pass no identity argument and are behaviorally unchanged (regression-tested)",
+        "Unsetting only MICHAEL_TWILIO_* env vars fails Michael's send while an Adam chairman-SMS send in the same process succeeds unaffected"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Template-only body, never raw personal text, with an as-of freshness pointer",
+      "description": "The checkpoint body is composed from a fixed template plus booleans and counts only -- pulled from existing michael_* count-producing tables (calendar-read, gmail-triage, todoist-brief), never raw mail/calendar/health/household text. Matches the existing brief assembler (scripts/michael/brief-assemble.mjs) convention of composing from counts and already-redacted rows. TESTING M8: the producing feeders run at 04:00-05:30 / 12:00-12:30 / 18:00-18:30 ET (lib/michael/feeder.mjs:35-43), so the 10:00 checkpoint would otherwise carry counts up to ~4.5h stale and the 18:00 checkpoint races the SAME-window producers and usually carries noon data -- a checkpoint that READS as current but is not. FIX (binding): the body includes an as-of pointer (the producing run's timestamp/et_date, not the send time), so a stale count is visible as stale rather than silently implied fresh.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The body-composer function's inputs are limited to numeric/boolean values plus the producing run's as-of timestamp -- no free-text parameter reaches the template",
+        "A test asserts the composed body reflects the actual producing run's as-of value, not the checkpoint's own send time",
+        "A code/test inspection confirms zero raw-text fields (mail subject/body, calendar title, health metric text) are interpolated into the message"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Dedicated Michael-local enable/disable row, read fresh, fail-closed",
+      "description": "A new, dedicated table michael_checkpoint_send_enabled (singleton row, natural key 'checkpoint_send') is read with NO cache on every send attempt, failing closed (treated as disabled) on tables_absent, a read error, or a missing row. leo_feature_flags was rejected (VALIDATION V-4: 30s cache, fails OPEN, and CLAUDE.md rule 12 binds specific flags there to chairman ratification, too heavy for a lightweight toggle). michael_rules.auto_apply was rejected (VALIDATION V-5: flipping an active rule off requires an Opus-verifier artifact, too slow for 'revocation is a row flip'). A dedicated table keeps this SD self-sufficient (no dependency on the staged-unapplied chairman_switchon_policy migration) and revocable by a simple UPDATE.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Disabling the row (enabled=false) causes the next in-window send attempt to be held/refused, no external call, a ledger row written",
+        "A simulated read failure on the enable table is treated as disabled (fail-closed), not enabled",
+        "Re-enabling the row allows the next in-window send to proceed normally",
+        "Proven at the ephemeral-PG DDL tier that the table's RLS/REVOKE grants match the michael_* convention (service_role only)"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Every IN-WINDOW attempt writes a ledger row, redacted; out-of-window fires and dry-runs write no row",
+      "description": "TESTING L11 (contradiction found): the original wording ('every attempt -- sent, held, or refused -- writes a ledger row') directly contradicted TS-1's dry-run expectation of no row, and TESTING M6 separately found the schedule fires ~96x/day (15-min interval) of which only 8 fall in-window, with no defined behavior for the other ~88 -- risking ~32k rows/year with no retention story if written, or a silently-wrong FR if not. RESOLVED DEFINITION (binding): an 'attempt' is an IN-WINDOW invocation that passes the window gate (lib/michael/feeder.mjs's own inWindow/windowIdFor). Out-of-window fires return inert with NO ledger row and NO external call (matching every other Michael feeder's existing inert-outside-window convention). A --dry-run invocation, even in-window, writes NO ledger row (matches the dry-run-by-default convention every Michael verb follows). Every OTHER in-window, non-dry-run attempt -- sent, held, or refused -- writes exactly one row to michael_checkpoint_send_ledger at-or-before the external call, storing only sha256(body) and body length (never the verbatim body), mirroring todoist-act.mjs's redactCall/SEC-M3 convention.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "An out-of-window invocation is inert: no ledger row, no external call",
+        "A --dry-run in-window invocation writes no ledger row",
+        "A capped in-window, non-dry-run attempt writes a ledger row with outcome='refused' and a refusal_code",
+        "A held (disabled) in-window, non-dry-run attempt writes a ledger row with outcome='held'",
+        "A sent attempt writes a ledger row with outcome='sent', body_sha256, body_len, and provider_message_id -- never the raw body text"
+      ]
+    },
+    {
+      "id": "FR-7",
+      "title": "Per-slot deduplication key, proven at the DDL tier",
+      "description": "Each of the 4 daily ET windows (6am/10am/2pm/6pm) has its own dedup identity so a re-run inside an already-sent window cannot double-send it. Reuses lib/michael/feeder.mjs's existing windowIdFor(minuteOfDay, window) -- the window's own `start` string IS the per-slot key -- plus a DB-level UNIQUE (et_date, window_slot) WHERE outcome='sent' constraint as defense-in-depth. TESTING H2: the constraint's existence cannot be proven by a mocked-client unit test (it can only prove the CODE handles a 23505, never that the CONSTRAINT exists) -- proof requires the ephemeral-PG DDL tier (see FR-1..FR-7's shared DDL test below), matching the repo's existing tests/ddl/michael-tables-ddl.db.test.js pattern (applies the real migration to an ephemeral vanilla PG16, no chairman apply needed).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Two runs inside the same window on the same ET date (app-level): the second is refused (ALREADY_SENT_THIS_WINDOW), no double external call",
+        "At the ephemeral-PG DDL tier: a concurrent double-insert for the same (et_date, window_slot) sent row is independently rejected by the DB constraint, not merely by application logic"
+      ]
+    },
+    {
+      "id": "FR-8",
+      "title": "SHOULD reuse existing gate checks + dry-run-by-default; MUST register via KNOWN_DEBT (not ADDITIONAL_SCOPE) in the outbound-sink census",
+      "description": "SHOULD reuse the existing gate's quiet-hours/no-secrets/length checks and the dry-run-by-default convention every Michael verb follows (a bare run without --apply/--live never calls the provider). CORRECTED (TESTING H1, MEASURED): the original plan to register via ADDITIONAL_SCOPE was WRONG and disproven by a live probe -- ADDITIONAL_SCOPE puts a path IN the scanned scope, and since the new verb reaches lib/messaging/providers/twilio-provider.js WITHOUT reaching lib/adam/should-consult-solomon.js's CONSULT_GATE, it lands in nonConformant, which tests/unit/outbound-sink-conformance.test.js:256 asserts toEqual([]) -- so ADDITIONAL_SCOPE registration makes the RATCHET TEST FAIL, not pass. Routing through CONSULT_GATE was considered and rejected as semantically wrong (Solomon-consult is an Adam-lane governance check, not fitting a personal 4x/day checkpoint). BINDING DECISION: register scripts/michael/checkpoint-send.mjs into the file's KNOWN_DEBT allowlist with a linked_ref citing this SD, and raise KNOWN_DEBT_CEILING from 9 to 10 (line ~124, whose comment reads 'Never raise this') AND update the pinned expectation at line ~292 (expect(KNOWN_DEBT_CEILING).toBe(9) -> toBe(10)) in the SAME PR -- the file's own comment calls this 'a one-line ratchet kill', making it a deliberate, reviewable exception rather than a silent bump. This is the chairman-ratified, capped, narrow exception the KNOWN_DEBT allowlist exists to hold.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "tests/unit/outbound-sink-conformance.test.js passes with the new verb registered in KNOWN_DEBT (not ADDITIONAL_SCOPE), KNOWN_DEBT_CEILING raised 9->10, and the corresponding pin updated in the same PR",
+        "The default (no --apply) invocation never calls the Twilio provider"
+      ]
+    },
+    {
+      "id": "FR-9",
+      "title": "Cross-seat dependency: encode ratification 561878ae into the live Michael contract",
+      "description": "The authorizing ratification 561878ae is UNENCODED (encoded_at/encoded_ref both NULL, verified live query). CLAUDE_MICHAEL.md:127 currently carries only its predecessor b9d3607e's text, ending 'Neither tier is built or scheduled and this clause authorises no build.' Per the single-scribe convention, scribe_seat=adam-49eabb23 owns this encode, not this build -- already signaled to the coordinator (worker-signal 6249c0d4, severity high) as a named cross-seat dependency to land before/alongside this SD's completion, covering all 4 contract sites the carve-out under-scopes (CLAUDE_MICHAEL.md :36, :56, :61, :62), not just section 4. TESTING L12: this FR's AC is satisfiable whether or not the encode ever lands (an 'OR still pending' clause) -- defensible since it is owned by a different seat, but LEAD-FINAL-APPROVAL must record the ACTUAL encode state as a measured fact (query encoded_at), not treat the green AC itself as evidence the contract was updated.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "LEAD-FINAL-APPROVAL queries chairman_ratifications for 561878ae.encoded_at and records the actual value (non-null = landed; null = still pending, cite worker-signal 6249c0d4) -- either outcome is acceptable, but it must be a measured fact in the completion record, not inferred from this AC being green"
+      ]
+    },
+    {
+      "id": "FR-10",
+      "title": "A missed window is accepted as silent (no reconciliation gauge in this SD's scope)",
+      "description": "TESTING M7: lib/michael/feeder.mjs:241 returns inert('outside_et_window') with no row if the host is asleep/hibernating through both fire-minutes of a window (each window offers only 2 fires at :00/:15 given the 15-min interval); scripts/setup-michael-host-tasks.mjs's own header notes no wake-from-sleep is configured. For read feeders this is survivable (an existing missing/failed-run gauge covers it in Adam's 6am brief); the checkpoint-send verb has no equivalent reader, so a missed window means the chairman simply does not get a text and nothing records that he did not. BINDING SCOPE DECISION: building a reconciliation/missed-window gauge is explicitly OUT OF SCOPE for this narrow SD (it would expand the capability grant beyond 'one verb, four windows, nothing else'); this limitation is accepted and documented here rather than silently discovered later. A future SD may add a daily reconciliation gauge (docs/michael/02-SPEC.md:149's michael-feeder-health pattern) if this proves to matter in practice.",
+      "priority": "low",
+      "acceptance_criteria": [
+        "No reconciliation/missed-window-detection code is built as part of this SD (explicitly out of scope, not an oversight)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "Built on the existing lib/michael/db.mjs seam", "description": "createMichaelClient/readRows/writeRows/parseArgs/refusal/emit -- no new DB access seam invented." },
+    { "id": "TR-2", "title": "Scheduling via lib/michael/feeder.mjs's existing multi-window FEEDERS pattern", "description": "Add a 'checkpoint-send' entry with window: [{start:'06:00',end:'06:15'},{start:'10:00',end:'10:15'},{start:'14:00',end:'14:15'},{start:'18:00',end:'18:15'}], venue:'task_scheduler', intervalMinutes:15. TESTING-verified boundary-clean: inWindow is inclusive, schtasks fires :00/:15/:30/:45 (INTERVAL_MINUTES=15, START_TIME=00:00), so each 15-min window catches exactly 2 fires with no gap, and 15%15===0 satisfies feeder.test.js's existing interval-divisibility assertion. Register the new task via scripts/setup-michael-host-tasks.mjs's MICHAEL_TASKS array (the same setup script every other Michael feeder uses)." },
+    { "id": "TR-3", "title": "New migration follows ALL database/migrations/20260906_michael_tables.sql conventions, not a subset", "description": "RLS enabled, single service_role-only ALL policy, REVOKE ALL FROM anon/authenticated/PUBLIC, updated_at trigger via michael_set_updated_at(), natural-key unique index, COMMENT ON TABLE citing this SD. TESTING M10 (previously omitted, now required): a companion _DOWN.sql file; the '-- @approved-by:' chairman sign-off header convention (a ceremony marker only, not apply state -- per docs/michael/02-SPEC.md:49); and a DO $verify$ self-check block (mirroring 20260906_michael_tables.sql:343-368) proving the constraints actually exist post-apply. A migration-shape test under tests/unit/migrations/ (mirroring the 4 existing michael-*-migration-shape.test.js precedents) is also required." },
+    { "id": "TR-4", "title": "No schema change to lib/messaging/providers/twilio-provider.js's existing call shape", "description": "The identity parameter is additive/optional; existing 3 callers (api/webhooks/twilio-sms.js, lib/chairman/sms-bridge.js, lib/chairman/sms-outbound-worker.js) require zero changes. isConfigured() and the identity branch must require ALL THREE identity fields (accountSid/authToken/messagingService), never a partial subset (TESTING H4)." },
+    { "id": "TR-5", "title": "Two pinned registry tests MUST be updated in the same PR", "description": "TESTING H3 (measured, previously unlisted): lib/michael/feeder.test.js:37-38 (expect(FEEDER_IDS).toEqual([10 ids])) and tests/unit/fleet/setup-michael-host-tasks.test.js:41-42 (expect(MICHAEL_TASKS.map(t=>t.feeder)).toEqual([7 feeders]) and a Set-size===7 pin) both break by construction when the 11th feeder / 8th task is added, and must be updated to the new counts/arrays in the SAME PR, not discovered as a CI surprise. Baseline measured green pre-change: 97/97 across these two files plus outbound-sink-conformance." },
+    { "id": "TR-6", "title": "Identity resolver requires ALL THREE MICHAEL_TWILIO_* vars present, else returns null", "description": "lib/michael/checkpoint-identity.mjs: MICHAEL_TWILIO_ACCOUNT_SID, MICHAEL_TWILIO_AUTH_TOKEN, MICHAEL_TWILIO_MESSAGING_SERVICE must ALL be non-empty or the resolver returns null (TESTING H4 fix)." },
+    { "id": "TR-7", "title": "Every FR-3 test must stub fetch to avoid a vacuous pass", "description": "twilio-provider.js:48 shouldRefuseRealSend() short-circuits under VITEST before the identity branch is ever reached, UNLESS the test explicitly vi.stubGlobal('fetch', ...) (TESTING C13). Any test claiming to exercise the identity/partial-identity code path must stub fetch, or it passes without testing anything." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Dry-run at a valid window", "type": "unit", "expected": "ok:true, dry_run:true, would-send payload; no external call; no ledger row (FR-6's dry-run exemption)." },
+    { "id": "TS-2", "scenario": "5th in-window send attempt same ET date", "type": "unit", "expected": "Refused CAP_EXCEEDED, ledger row written, no external call." },
+    { "id": "TS-3", "scenario": "Ledger read returns tables_absent=true", "type": "unit", "expected": "Refused TABLES_ABSENT (fail-closed), never treated as 0-sent-today." },
+    { "id": "TS-4", "scenario": "Ledger read returns a non-missing-relation error", "type": "unit", "expected": "Refused READ_FAILED (fail-closed), never treated as 0-sent-today." },
+    { "id": "TS-5", "scenario": "Enable row disabled", "type": "unit", "expected": "Held/refused, ledger row written, no external call; re-enabling allows the next in-window send." },
+    { "id": "TS-6", "scenario": "Enable-row read fails", "type": "unit", "expected": "Treated as disabled (fail-closed), send refused." },
+    { "id": "TS-7", "scenario": "Recipient hash mismatch (simulated CHAIRMAN_PHONE tampering, including a whitespace-only difference)", "type": "unit", "expected": "Refused RECIPIENT_HASH_MISMATCH in both cases, no external call -- proves raw-string hashing per FR-2." },
+    { "id": "TS-8", "scenario": "Two runs inside the same window/date (app-level dedup)", "type": "unit", "expected": "Second refused ALREADY_SENT_THIS_WINDOW, no double external call." },
+    { "id": "TS-9", "scenario": "Successful send (mocked provider, fetch stubbed per TR-7)", "type": "unit", "expected": "Ledger row outcome='sent' with body_sha256/body_len/provider_message_id, never verbatim body; regression check that existing Adam-lane sends (no identity arg) are unaffected; StatusCallback omitted for identity sends (FR-3/M5)." },
+    { "id": "TS-10", "scenario": "Partial identity (1 or 2 of 3 MICHAEL_TWILIO_* vars set), fetch stubbed per TR-7", "type": "unit", "expected": "checkpoint-identity.mjs returns null; verb refuses closed; zero fetch calls recorded (proves the H4 fail-open edge is closed, not just asserted)." },
+    { "id": "TS-11", "scenario": "Out-of-window invocation (e.g. 08:00 ET)", "type": "unit", "expected": "Inert: no ledger row, no external call (FR-6/M6)." },
+    { "id": "TS-12", "scenario": "Body composition reflects the producing feeder run's as-of timestamp, not send time", "type": "unit", "expected": "A stale producing run (e.g. 04:00 run read at a 10:00 checkpoint) surfaces its own as-of pointer in the body (FR-4/M8)." },
+    { "id": "TS-13", "scenario": "Ephemeral-PG DDL test for michael_checkpoint_send_ledger + michael_checkpoint_send_enabled", "type": "ddl", "expected": "Migration applies cleanly to an ephemeral vanilla PG16 (mirroring tests/ddl/michael-tables-ddl.db.test.js); RLS/REVOKE grants match convention; the partial UNIQUE (et_date, window_slot) WHERE outcome='sent' constraint independently rejects a concurrent double-insert (proves FR-7 AC-2, which is unprovable at the unit tier); the DOWN migration cleanly reverses; re-apply is idempotent." },
+    { "id": "TS-14", "scenario": "Seeded-DB integration: cap enforcement and revocation demonstrated by a real run against a test-schema Supabase instance (not a stubbed client)", "type": "integration", "expected": "Ledger rows for both a capped attempt and a revoked (disabled) attempt exist as real rows in the test DB after the run -- satisfies the SD's own exit predicate ('demonstrated BY A RUN', 'ledger rows ... both exist'), which stubbed-client unit tests cannot satisfy (TESTING H2)." },
+    { "id": "TS-15", "scenario": "outbound-sink-conformance census (KNOWN_DEBT route)", "type": "unit", "expected": "New verb resolves via KNOWN_DEBT (not ADDITIONAL_SCOPE) with KNOWN_DEBT_CEILING raised 9->10 and the corresponding pin updated; census test passes (FR-8, corrected per H1)." },
+    { "id": "TS-16", "scenario": "Pinned registry tests updated (feeder.test.js, setup-michael-host-tasks.test.js)", "type": "unit", "expected": "Both files' exact-array/exact-count pins reflect the new 11th feeder / 8th task; 97/97 baseline plus the new coverage all green (TESTING H3)." }
+  ],
+  "acceptance_criteria": [
+    "The verb sends the checkpoint only within its 4 authorized windows and provably cannot send anything else (no other outbound verb, no general send credential)",
+    "The cap, the recipient pin, and the revocation are each demonstrated BY A RUN (TS-14, a seeded-DB integration test) per the SD's own exit predicate, not only by reading the code or a stubbed-client unit test",
+    "Ledger rows exist for both a capped attempt and a revoked attempt (TS-14)",
+    "The DB-level per-slot unique constraint is proven to exist at the DDL tier (TS-13), not merely asserted by application code",
+    "outbound-sink-conformance.test.js passes via the corrected KNOWN_DEBT route, not the originally-planned (and disproven) ADDITIONAL_SCOPE route"
+  ],
+  "risks": [
+    { "risk": "Building without the chairman-gated MICHAEL_TWILIO_* credentials means live sending cannot be end-to-end verified in this environment", "mitigation": "The existing provider's own fail-closed-when-unconfigured behavior is reused, so dry-run/fail-closed/DDL/integration testing (cap, pin, revocation, dedup, partial-identity) is fully achievable without live credentials; live send verification is a post-provisioning follow-up, not a build blocker.", "severity": "low" },
+    { "risk": "The contract encode (FR-9) landing after this SD ships leaves CLAUDE_MICHAEL.md self-contradictory for a window", "mitigation": "Signaled to the coordinator (worker-signal 6249c0d4) as a named cross-seat dependency; LEAD-FINAL-APPROVAL records the measured encoded_at value, not an inferred green AC.", "severity": "medium" },
+    { "risk": "A partial Michael Twilio identity (mid-provisioning) could cause a real, malformed outbound API call if the fail-open edge (H4) were not closed", "mitigation": "TR-6/FR-3 requires all-three-or-null from the resolver; TS-10 proves zero fetch calls occur for a partial identity.", "severity": "medium" },
+    { "risk": "A missed window (host asleep) is silent -- the chairman gets no text and nothing records the miss", "mitigation": "Explicitly accepted and out of scope for this SD (FR-10); documented rather than silently discovered.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["The chairman (sole recipient)", "Task Scheduler (host-local, venue=task_scheduler, per lib/michael/feeder.mjs)"],
+    "dependencies": ["MICHAEL_TWILIO_ACCOUNT_SID / MICHAEL_TWILIO_AUTH_TOKEN / MICHAEL_TWILIO_MESSAGING_SERVICE (new env vars, chairman-provisioned, needed only for LIVE sending; the resolver requires all three or returns null)", "CHAIRMAN_PHONE (existing env var, read-only, hash-pin verified against the raw string)", "ratification 561878ae encode into CLAUDE_MICHAEL.md (cross-seat, Adam scribe, signaled 6249c0d4)"],
+    "data_contracts": ["New tables: michael_checkpoint_send_ledger, michael_checkpoint_send_enabled (this SD's migration, with _DOWN.sql and a DO $verify$ self-check block)"],
+    "runtime_config": ["MICHAEL_TWILIO_ACCOUNT_SID", "MICHAEL_TWILIO_AUTH_TOKEN", "MICHAEL_TWILIO_MESSAGING_SERVICE"],
+    "observability_rollout": ["michael_checkpoint_send_ledger rows are the audit trail for every in-window, non-dry-run attempt (sent/held/refused)", "Task Scheduler task visible via scripts/setup-michael-host-tasks.mjs --status", "A missed window is NOT observable in this SD's scope (FR-10, accepted)"]
+  },
+  "system_architecture": {
+    "summary": "A new closed-verb script on the existing Michael DB seam, an additive all-or-nothing identity parameter on the shared Twilio provider (no partial identity, no shared status-callback bleed, no parallel transport module), a dedicated fail-closed enable row proven at the DDL tier, Task-Scheduler wiring via the existing multi-window FEEDERS registry, and KNOWN_DEBT (not ADDITIONAL_SCOPE) census registration.",
+    "components": [
+      { "name": "database/migrations/2026091X_michael_checkpoint_send.sql (+ _DOWN.sql)", "change": "NEW -- michael_checkpoint_send_ledger, michael_checkpoint_send_enabled, with @approved-by header + DO $verify$ block" },
+      { "name": "tests/ddl/michael-checkpoint-send-ddl.db.test.js", "change": "NEW -- ephemeral-PG16 proof of DDL/RLS/REVOKE/partial-unique-constraint/DOWN/re-apply (TESTING H2/FR-7)" },
+      { "name": "tests/unit/migrations/michael-checkpoint-send-migration-shape.test.js", "change": "NEW -- migration-shape test mirroring the 4 existing michael-*-migration-shape.test.js precedents (TESTING M10)" },
+      { "name": "lib/messaging/providers/twilio-provider.js", "change": "MODIFIED -- additive optional identity parameter on send()/isConfigured(), all-three-or-none required, StatusCallback omitted for identity sends" },
+      { "name": "lib/michael/checkpoint-identity.mjs", "change": "NEW -- resolves MICHAEL_TWILIO_* env vars into an identity object ONLY when all three are present, else null" },
+      { "name": "scripts/michael/checkpoint-send.mjs", "change": "NEW -- the verb: window gate, cap check, enable check, recipient hash-pin, per-slot dedup, template+as-of body, ledger write, dry-run-by-default" },
+      { "name": "lib/michael/feeder.mjs", "change": "MODIFIED -- new 'checkpoint-send' FEEDERS entry (11th), 4-window array, venue=task_scheduler" },
+      { "name": "lib/michael/feeder.test.js", "change": "MODIFIED -- update the pinned FEEDER_IDS exact-array assertion to include the 11th feeder (TESTING H3)" },
+      { "name": "scripts/setup-michael-host-tasks.mjs", "change": "MODIFIED -- register checkpoint-send in MICHAEL_TASKS (8th task)" },
+      { "name": "tests/unit/fleet/setup-michael-host-tasks.test.js", "change": "MODIFIED -- update the pinned 7-feeder exact-array/Set-size assertions to 8 (TESTING H3)" },
+      { "name": "tests/unit/outbound-sink-conformance.test.js", "change": "MODIFIED -- register the new verb in KNOWN_DEBT (not ADDITIONAL_SCOPE), raise KNOWN_DEBT_CEILING 9->10, update the corresponding pin (TESTING H1, corrected)" },
+      { "name": "tests/unit/michael/checkpoint-send.test.js", "change": "NEW -- TS-1..TS-12, TS-15, TS-16" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Migration + DDL test first (proves the schema independent of chairman apply), then the corrected additive provider parameter (all-or-nothing identity, no status-callback bleed), then the identity resolver, then the verb itself, then scheduler + registry-pin + KNOWN_DEBT-census registration, then the full test suite including the seeded-DB integration test -- each step independently testable in dry-run/fail-closed mode without live credentials.",
+    "steps": [
+      "1. Write the migration (+ _DOWN.sql, @approved-by header, DO $verify$ block) and tests/ddl/michael-checkpoint-send-ddl.db.test.js against an ephemeral PG16 (TS-13)",
+      "2. Add the migration-shape test (mirroring the 4 existing precedents)",
+      "3. Add the optional all-or-nothing identity parameter to twilio-provider.js send()/isConfigured(); omit StatusCallback for identity sends; verify the 3 existing callers are unaffected (regression test)",
+      "4. Write lib/michael/checkpoint-identity.mjs (MICHAEL_TWILIO_* resolver, all-three-or-null)",
+      "5. Write scripts/michael/checkpoint-send.mjs on the lib/michael/db.mjs seam: window gate (in/out), cap check (FR-1), enable check (FR-5), recipient hash-pin on the raw string (FR-2), per-slot dedup (FR-7), template+as-of body (FR-4), ledger write with the FR-6 attempt definition, dry-run-by-default",
+      "6. Add the FEEDERS registry entry (lib/michael/feeder.mjs) and update its pinned test; register the Task Scheduler task (scripts/setup-michael-host-tasks.mjs) and update its pinned test",
+      "7. Register the new verb in tests/unit/outbound-sink-conformance.test.js's KNOWN_DEBT list, raise KNOWN_DEBT_CEILING 9->10, update the pin",
+      "8. Write tests/unit/michael/checkpoint-send.test.js covering TS-1..TS-12/TS-15/TS-16, stubbing fetch per TR-7, mutation-verify the fail-closed branches (temporarily invert a check, confirm the test fails, restore)",
+      "9. Write the TS-14 seeded-DB integration test proving cap+revocation by a real run against a test-schema instance",
+      "10. Run the full regression sweep before EXEC-TO-PLAN"
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "node scripts/michael/checkpoint-send.mjs --window 6am --dry-run --json", "expected_outcome": "ok:true, dry_run:true, would-send payload shown; no external call; no ledger row." },
+    { "step_number": 2, "instruction": "Seed 4 already-sent ledger rows for today, then run the verb for a 5th in-window attempt", "expected_outcome": "Refused CAP_EXCEEDED; a ledger row records the refusal; no external call." },
+    { "step_number": 3, "instruction": "Flip michael_checkpoint_send_enabled.enabled to false, then run the verb at a valid window", "expected_outcome": "Held/refused; a ledger row records it; no external call; re-enabling and re-running at the next window sends normally." },
+    { "step_number": 4, "instruction": "Attempt to pass an alternate recipient via CLI arg or env override while running the verb", "expected_outcome": "The override has no code path to the send call; only the hash-pinned chairman number is ever targeted." },
+    { "step_number": 5, "instruction": "Query michael_checkpoint_send_ledger for today's ET date after the above runs", "expected_outcome": "One row per in-window non-dry-run attempt (capped, held, and any sent) exists, each with a redacted (sha256+length) body, never verbatim; no rows for the dry-run or any out-of-window fire." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-MICHAEL-TIER2-CHECKPOINT-SEND-001"
+  }
+}

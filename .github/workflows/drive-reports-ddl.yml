@@ -138,6 +138,11 @@ on:
       - 'database/chairman-gated/20260906_retrospectives_published_guard.sql'
       - 'database/chairman-gated/20260906_retrospectives_published_guard_DOWN.sql'
       - 'tests/ddl/retrospectives-published-guard-ddl.db.test.js'
+      # SD-LEO-INFRA-MICHAEL-TIER2-CHECKPOINT-SEND-001 (TESTING H1): same TR-5 fix, applied again --
+      # a PR touching only this SD's migration and its ddl test would otherwise trigger nothing.
+      - 'database/migrations/20260914_michael_checkpoint_send.sql'
+      - 'database/migrations/20260914_michael_checkpoint_send_DOWN.sql'
+      - 'tests/ddl/michael-checkpoint-send-ddl.db.test.js'
       - 'vitest.ddl.config.mjs'
       # Self-validating: edits to this file re-run it.
       - '.github/workflows/drive-reports-ddl.yml'

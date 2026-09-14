@@ -21,7 +21,7 @@ describe('seedMichaelFeederCrons (QF-20260907-830)', () => {
     const expectedIds = Object.entries(FEEDERS)
       .filter(([, reg]) => reg.venue === 'task_scheduler')
       .map(([id]) => id);
-    expect(expectedIds.sort()).toEqual(['brief-assemble', 'calendar-read', 'gmail-triage', 'health-sync', 'oracle-extract', 'tasks-classifier', 'todoist-brief'].sort());
+    expect(expectedIds.sort()).toEqual(['brief-assemble', 'calendar-read', 'checkpoint-send', 'gmail-triage', 'health-sync', 'oracle-extract', 'tasks-classifier', 'todoist-brief'].sort());
     expect(rows.map((r) => r.process_key).sort()).toEqual(expectedIds.map((id) => `host_cron:michael-${id}`).sort());
   });
 
