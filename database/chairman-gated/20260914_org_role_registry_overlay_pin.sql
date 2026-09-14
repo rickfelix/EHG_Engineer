@@ -2,6 +2,10 @@
 -- SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001 (FR-2, FR-3) -- org_role_venture_overlays and
 -- org_role_venture_pins: the per-venture OVERLAY and PIN layers of the versioned role registry.
 --
+-- REQUIRED APPLY ORDER: apply AFTER 20260914_org_role_registry_base.sql, BEFORE
+-- 20260914_org_role_registry_change_log.sql -- see the base migration's header for why (its
+-- triggers reference the two tables this file creates).
+--
 -- @approved-by: <PENDING -- chairman must add this line + a token before apply>
 --   Chairman verification NOT yet obtained. Staged only, per R1 (ratification bb2175d2). Not
 --   applied to any environment by this SD. See the companion base migration

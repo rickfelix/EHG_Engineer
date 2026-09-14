@@ -80,6 +80,29 @@ describe('placement and ceremony marker (TS-5)', () => {
   }
 });
 
+// Round-2 adversarial /ship review finding (HIGH): change_log.sql's AFTER triggers reference
+// tables overlay_pin.sql creates, but change_log sorts lexically BEFORE overlay_pin -- a naive
+// alphabetical apply order fails on CREATE TRIGGER. Each forward migration must document the
+// required order so the chairman ceremony operator does not discover this by trial and error.
+describe('required apply order is documented (round-2 finding)', () => {
+  it('base.sql documents applying itself first, overlay_pin second, change_log last', () => {
+    expect(base.fwd).toMatch(/REQUIRED APPLY ORDER/i);
+    expect(base.fwd).toMatch(/overlay_pin\.sql/);
+    expect(base.fwd).toMatch(/change_log\.sql/);
+  });
+
+  it('overlay_pin.sql documents applying after base, before change_log', () => {
+    expect(overlayPin.fwd).toMatch(/REQUIRED APPLY ORDER/i);
+    expect(overlayPin.fwd).toMatch(/AFTER\s+20260914_org_role_registry_base\.sql/);
+    expect(overlayPin.fwd).toMatch(/BEFORE[\s\S]{0,40}20260914_org_role_registry_change_log\.sql/);
+  });
+
+  it('change_log.sql documents applying itself LAST', () => {
+    expect(changeLog.fwd).toMatch(/REQUIRED APPLY ORDER/i);
+    expect(changeLog.fwd).toMatch(/LAST/);
+  });
+});
+
 describe('org_role_base_versions shape (FR-1, E1a)', () => {
   it('creates the table with structure/function/norms as separate NOT NULL JSONB columns', () => {
     expect(base.fwd).toMatch(/CREATE TABLE IF NOT EXISTS public\.org_role_base_versions/i);

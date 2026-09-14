@@ -4,6 +4,14 @@
 -- STANDARD_VENTURE_TEMPLATE (lib/agents/venture-ceo-factory.js:44) as the source of truth for
 -- the 28 venture role templates.
 --
+-- REQUIRED APPLY ORDER (round-2 adversarial /ship review finding, HIGH): apply this file FIRST,
+-- then 20260914_org_role_registry_overlay_pin.sql, then 20260914_org_role_registry_change_log.sql
+-- LAST. change_log.sql's AFTER triggers reference org_role_venture_overlays/org_role_venture_pins
+-- (created by overlay_pin.sql), so applying in lexical/alphabetical order (change_log sorts before
+-- overlay_pin) fails on CREATE TRIGGER with "relation does not exist" -- each file is its own
+-- BEGIN/COMMIT so a misordered apply fails atomically and cleanly, but nothing enforces the order
+-- automatically; the chairman ceremony operator must apply base -> overlay_pin -> change_log.
+--
 -- @approved-by: <PENDING -- chairman must add this line + a token before apply>
 --   Chairman verification NOT yet obtained. This file is staged only, per R1 (reserved chairman
 --   decision, ratification bb2175d2): "new tables need the ceremony." This SD's own scope states

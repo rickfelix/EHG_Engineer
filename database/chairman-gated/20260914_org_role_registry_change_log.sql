@@ -2,6 +2,13 @@
 -- SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001 (FR-4) -- org_role_change_log: append-only audit
 -- trail for all three registry layers (base, overlay, pin).
 --
+-- REQUIRED APPLY ORDER: apply THIS FILE LAST, after both
+-- 20260914_org_role_registry_base.sql and 20260914_org_role_registry_overlay_pin.sql (round-2
+-- adversarial /ship review finding, HIGH) -- this file's AFTER triggers on
+-- org_role_venture_overlays/org_role_venture_pins fail with "relation does not exist" if applied
+-- before overlay_pin.sql, which lexically sorts AFTER this file (a naive alphabetical apply order
+-- gets this wrong). Each file is its own BEGIN/COMMIT, so a misordered apply fails atomically.
+--
 -- @approved-by: <PENDING -- chairman must add this line + a token before apply>
 --   Chairman verification NOT yet obtained. Staged only, per R1 (ratification bb2175d2). Not
 --   applied to any environment by this SD. See the companion base migration
