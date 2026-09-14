@@ -19,8 +19,13 @@
  * Safety:
  *   - dry-run by default; --execute required to write.
  *   - Per-row guard: only restores a row if it STILL carries exactly the single
- *     integration_backfill key (i.e., untouched since the original backfill) --
- *     re-checked live, not from a stale read.
+ *     integration_backfill key (i.e., untouched since the original backfill). This is
+ *     re-checked with a FRESH read immediately before each write (SECURITY re-review
+ *     finding #1, evidence f93b30cc): the initial batch fetch is a snapshot that can be
+ *     minutes stale by the time a given row's turn comes up in a 1,570-row run, and a
+ *     concurrent legitimate writer (e.g. storeSubAgentResults) touching a target row in
+ *     that window must not be clobbered. The write-time `.not(...)` filter alone is
+ *     defense in depth only -- it tests marker presence, not the single-key invariant.
  *   - Idempotent: a row already restored (more than 1 metadata key) is skipped.
  *   - Never overwrites a row that was legitimately re-written by something else since
  *     the backfill (that data is newer and must win).
@@ -86,6 +91,7 @@ async function run() {
   let restored = 0;
   let failed = 0;
   let noPriorKeys = 0;
+  let concurrentlyModified = 0;
   const problems = [];
 
   for (const row of markedRows) {
@@ -113,22 +119,49 @@ async function run() {
       continue;
     }
 
-    const restoredMetadata = {
-      ...priorMetadata,
-      integration_backfill: row.metadata.integration_backfill,
-    };
-
     if (!EXECUTE) {
       restored++; // count as "would restore" in dry-run
       continue;
     }
 
+    // SECURITY re-review finding #1 (evidence f93b30cc, superseding 9d21ac12): markedRows
+    // is a batch snapshot read ONCE at the top of the loop, but a run over 1,570 rows can
+    // take minutes -- a concurrent legitimate writer (e.g. storeSubAgentResults stamping
+    // metadata.security_analysis, observed live on this SD's own PRD) can touch a target
+    // row between that snapshot and this row's turn. The prior write-time guard
+    // (`.not('metadata->integration_backfill','is',null)`) only tested marker PRESENCE,
+    // which is true of every marked row by definition, so it enforced nothing. Re-fetch
+    // the row's CURRENT metadata immediately before writing and re-check the single-key
+    // invariant live, closing the race window from "whole script runtime" down to one
+    // round trip.
+    const { data: freshRow, error: freshReadError } = await supabase
+      .from('product_requirements_v2')
+      .select('metadata')
+      .eq('id', row.id)
+      .maybeSingle();
+    if (freshReadError) {
+      failed++;
+      problems.push({ id: row.id, issue: `pre-write live re-check failed: ${freshReadError.message}` });
+      continue;
+    }
+    const freshKeyCount = Object.keys(freshRow?.metadata || {}).length;
+    if (freshKeyCount !== 1) {
+      // Row was touched by something else between the batch snapshot and now -- never
+      // overwrite it. Manual recovery from governance_audit_log remains possible.
+      concurrentlyModified++;
+      continue;
+    }
+
+    const restoredMetadata = {
+      ...priorMetadata,
+      integration_backfill: freshRow.metadata.integration_backfill,
+    };
+
     const { data: updatedRow, error: updateError } = await supabase
       .from('product_requirements_v2')
       .update({ metadata: restoredMetadata })
       .eq('id', row.id)
-      // Re-guard at write time: only restore if the row STILL has exactly the single
-      // provenance key (never clobber a newer legitimate write).
+      // Defense in depth: still require the marker to be present at write time.
       .not('metadata->integration_backfill', 'is', null)
       .select('id, metadata')
       .maybeSingle();
@@ -154,6 +187,7 @@ async function run() {
   console.log(`Already-restored/touched-since-backfill (skipped): ${alreadyRestored}`);
   console.log(`No prior metadata to restore (was genuinely empty before): ${noPriorKeys}`);
   console.log(`No audit row found (investigate): ${noAuditRow}`);
+  console.log(`Concurrently modified since batch snapshot (skipped, manual recovery still possible): ${concurrentlyModified}`);
   console.log(`${EXECUTE ? 'Restored' : 'Would restore'}: ${restored}`);
   console.log(`Failed: ${failed}`);
   if (problems.length > 0) {

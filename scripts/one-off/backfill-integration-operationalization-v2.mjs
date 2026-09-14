@@ -75,10 +75,19 @@ async function* enumerateNullRows(supabase, batchSize = BATCH_SIZE) {
  * across 1,382 rows: plan_handoff, design_analysis, database_analysis, and other
  * PLAN-phase/sub-agent provenance. Recovered from governance_audit_log via
  * scripts/one-off/restore-integration-backfill-metadata.mjs (SECURITY sub-agent evidence
- * row 9d21ac12; TESTING row 96d51bde). Root cause per SECURITY: no read-before-write, so
- * the prior value was never available to merge. Fix: fetch the row's CURRENT metadata
- * immediately before writing (enumeration only selects `id`) and spread it into the new
- * payload -- provenance is ADDED, nothing pre-existing is ever dropped.
+ * row 9d21ac12, re-reviewed and superseded at f93b30cc; TESTING row 96d51bde).
+ *
+ * CORRECTED ATTRIBUTION (per SECURITY re-review f93b30cc): the root cause is NOT simply
+ * "no read-before-write" -- a naive read-spread-write is itself the documented-unsafe
+ * pattern (see lib/coordinator/safe-metadata-merge.mjs's own header: "unsafe by
+ * construction" without atomicity). The real gap is that no atomic-merge seam exists for
+ * product_requirements_v2 (mergeMetadataKeys() there is hard-scoped to
+ * strategic_directives_v2). This script's fetch-then-merge closes THIS incident because
+ * writeBackfillRow() re-checks `integration_operationalization IS NULL` at write time
+ * (closing that column's race), but the residual metadata TOCTOU between the fetch and
+ * the write is accepted debt here, not a solved problem -- tracked for a proper
+ * generalized merge helper as a separate follow-up (see restore script's own fix for the
+ * same class of bug, SECURITY finding #1, evidence f93b30cc).
  *
  * @param {object} supabase
  * @param {string} id
