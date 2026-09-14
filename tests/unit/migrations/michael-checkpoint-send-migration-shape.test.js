@@ -69,9 +69,9 @@ describe('michael checkpoint-send migration shape', () => {
     expect(up).not.toMatch(/ALTER TABLE[^;]*ADD CONSTRAINT/i);
   });
 
-  it('carries @chairman-gated and NO @approved-by marker', () => {
+  it('carries @chairman-gated and the chairman @approved-by marker (signed off 2026-09-14, ratification 92b44597); the DOWN stays unsigned', () => {
     expect(up).toMatch(CHAIRMAN_GATED_RE);
-    expect(up).not.toMatch(APPROVED_BY_RE);
+    expect(up).toMatch(/^--\s*@approved-by: codestreetlabs@gmail\.com\s*$/m);
     expect(down).toMatch(CHAIRMAN_GATED_RE);
     expect(down).not.toMatch(APPROVED_BY_RE);
   });
