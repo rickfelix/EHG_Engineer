@@ -1,0 +1,173 @@
+{
+  "executive_summary": "voidStaleAndCollapseObligations re-emits stale chairman decision questions via enqueueChairmanSms without minting a fresh reply token or staging chairman_notifications, so a chairman's reply can never match. This PRD closes that gap.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "voidStaleAndCollapseObligations (lib/chairman/sms-outbound-worker.js:357) must mint a fresh sms_reply_token + sms_reply_token_expires_at on the linked chairman_decisions row and insert a chairman_notifications row BEFORE calling enqueueChairmanSms to re-emit a stale, still-pending decision_question",
+      "description": "Reuse the existing staging mechanism (stageDecisionSmsNotification / updateChairmanDecisionSmsFields / insertChairmanSmsNotification in lib/chairman/sms-bridge.js) rather than hand-rolling new token logic, mirroring exactly what sendChairmanSMS does at chairman-sms-gate/index.js:664 before its own dispatch at :700",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: After a re-emit, chairman_decisions.sms_reply_token_expires_at for the decision is a fresh timestamp strictly greater than the original (pre-re-emit) expiry",
+        "AC-2: After a re-emit, a new chairman_notifications row exists with the correct decision_id and status='queued' (matching insertChairmanSmsNotification's contract)",
+        "AC-3: The existing supersede behavior (original obligation -> status=canceled, last_error=re_asked_as:<new_id>) is unchanged"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "The re-emit branch must resolve the chairman's identity (chairmanUserId, chairmanEmail, chairmanPhone) before staging, since sms-outbound-worker.js currently has no such resolution",
+      "description": "Reuse the existing resolver used by the gate (resolveChairmanUserId, referenced at chairman-sms-gate/index.js:657) rather than writing a second resolution path",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: The staging call passes a real chairmanUserId/email/phone resolved via the existing helper, not a hardcoded or null value",
+        "AC-2: If chairman identity resolution fails, the re-emit fails closed (falls back to the pre-fix void/leave-owed behavior) rather than sending an unmatchable SMS anyway"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "A chairman's SMS reply to a re-emitted decision_question must resolve to outcome=answered (not expired) in handleInboundSmsReply (lib/chairman/sms-bridge.js:722)",
+      "description": "This is the end-to-end behavioral proof that FR-1/FR-2 actually close the loop, not just that a token column got written",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: A simulated inbound reply within the new token's TTL window, matched against the re-emitted decision's fresh token, resolves outcome=answered",
+        "AC-2: The stale, expired original token no longer matches anything (it was invalidated or superseded, never left live and ambiguous)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "lib/adam/chairman-held-send-release.js:511 and :575 (heartbeat_status kind, also calling enqueueChairmanSms with a decisionId) are explicitly documented as OUT OF SCOPE for this SD",
+      "description": "These are non-reply-expecting notices (kind=heartbeat_status), not decision_question rows -- they have no reply-matching requirement. Documenting this prevents silent scope ambiguity (VALIDATION sub-agent finding, evidence row 3037cac9-6caf-4d5f-9d4c-00139a5f22c6)",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: A code comment at both call sites (or a shared helper's docblock) states plainly that heartbeat_status notices are intentionally excluded from the staging requirement, citing this SD",
+        "AC-2: No functional change is made to chairman-held-send-release.js in this SD"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "The existing regression suite (tests/unit/chairman/sms-outbound-reconcile.test.js: TS-3, QF-20260829-320, SEC-2, TS-11) must continue to pass unmodified in its existing assertions",
+      "description": "These tests already exercise summary.reEmitted counts and the re_asked_as: supersede marker; the fix must extend, not replace, this coverage",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: npx vitest run tests/unit/chairman/sms-outbound-reconcile.test.js passes with 0 pre-existing assertions removed or weakened",
+        "AC-2: New assertions for token-refresh and chairman_notifications-insert are added to the SAME test cases (TS-3 and friends), not a disconnected new file"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "Do not construct a new Twilio client, token-generation scheme, or notification-insert path in sms-outbound-worker.js",
+      "rationale": "lib/chairman/sms-bridge.js already owns token generation + TOKEN_TTL_MS (15min) + insertChairmanSmsNotification; a second implementation would fork the two-stack hazard this codebase has already been hardened against (see chairman-sms-gate/index.js's own docblock on the -B durable send path)"
+    },
+    {
+      "id": "TR-2",
+      "requirement": "The staging call must run strictly before the enqueueChairmanSms(...) call at line 357-360, inside the same synchronous flow, so a staging failure can prevent the send (fail-closed), matching sendChairmanSMS's own ordering at chairman-sms-gate/index.js:664 -> :700",
+      "rationale": "A send-then-stage ordering would recreate the exact QF-20260725-738 class of bug this codebase already fixed once (enqueue reported as delivery before verification)"
+    },
+    {
+      "id": "TR-3",
+      "requirement": "Preserve the NO-DOUBLE-SEND / atomic-claim guarantees already in sms_outbound_obligations (status='owed'->'sending' claim predicate) -- the fix must not introduce a second obligation row per stale decision or race two staging calls for the same decision_id",
+      "rationale": "voidStaleAndCollapseObligations already has a documented supersede pattern (original->canceled, new row created); staging must attach to the SAME re-emit flow, not run twice if the sweep is invoked concurrently"
+    }
+  ],
+  "system_architecture": {
+    "overview": "sms-outbound-worker.js's stale-decision re-emit branch gains a staging step that reuses lib/chairman/sms-bridge.js's existing token/notification machinery, making the durable-queue re-emit path behaviorally identical (for staging purposes) to the normal chairman-sms-gate send path.",
+    "components": [
+      { "name": "voidStaleAndCollapseObligations", "responsibility": "Detects stale, still-pending decision_question obligations and triggers a fresh re-ask", "technology": "Node.js, Supabase" },
+      { "name": "stageDecisionSmsNotification (reused)", "responsibility": "Mints sms_reply_token/expiry on chairman_decisions and inserts a chairman_notifications row", "technology": "lib/chairman/sms-bridge.js" },
+      { "name": "resolveChairmanUserId (reused)", "responsibility": "Resolves chairman identity fields needed for staging", "technology": "lib/comms/adam-outbound/chairman-sms-gate/index.js" }
+    ],
+    "data_flow": "voidStaleAndCollapseObligations detects a stale, pending decision_question -> resolves chairman identity -> calls stageDecisionSmsNotification (mints token, inserts notification) -> calls enqueueChairmanSms with the SAME decisionId -> supersedes the original obligation. A later inbound reply from the chairman is matched by handleInboundSmsReply against the fresh, live token.",
+    "integration_points": ["chairman_decisions.sms_reply_token / sms_reply_token_expires_at", "chairman_notifications table", "sms_outbound_obligations table"]
+  },
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Stale decision_question, still pending, re-emits with a fresh token and notification", "test_type": "unit", "given": "An owed decision_question obligation older than DEFAULT_STALE_THRESHOLD_MS with decision_id X, chairman_decisions.status=pending for X", "when": "voidStaleAndCollapseObligations runs", "then": "chairman_decisions.sms_reply_token_expires_at for X is refreshed (> now, > the pre-run value) and a new chairman_notifications row exists for X" },
+    { "id": "TS-2", "scenario": "Chairman replies to a re-emitted question within the fresh token's TTL", "test_type": "integration", "given": "A re-emitted decision_question with a fresh, live token", "when": "handleInboundSmsReply processes a matching reply", "then": "outcome=answered, chairman_decisions.status updated accordingly" },
+    { "id": "TS-3", "scenario": "Decision already resolved (non-pending) while its obligation is stale", "test_type": "unit", "given": "chairman_decisions.status != pending for decision_id X, X's obligation is stale", "when": "voidStaleAndCollapseObligations runs", "then": "the obligation is voided (status=canceled, decided:<status>), NOT re-emitted, no staging call made -- unchanged from current behavior" },
+    { "id": "TS-4", "scenario": "Second re-emit cycle after the first re-emit also goes unanswered and stale", "test_type": "unit", "given": "A re-emitted obligation itself goes stale again", "when": "voidStaleAndCollapseObligations runs a second time", "then": "a SECOND fresh token/notification is minted (not the first re-emit's now-stale token reused)" },
+    { "id": "TS-5", "scenario": "Chairman identity resolution fails during re-emit", "test_type": "error", "given": "resolveChairmanUserId (or equivalent) throws or returns null", "when": "voidStaleAndCollapseObligations attempts to stage", "then": "the re-emit is aborted (no enqueueChairmanSms call), the original obligation remains owed for the next sweep, and a warning is logged -- never sends an unmatchable message" },
+    { "id": "TS-6", "scenario": "chairman-held-send-release.js heartbeat_status path is unaffected", "test_type": "unit", "given": "An existing heartbeat_status enqueueChairmanSms call at chairman-held-send-release.js:511/575", "when": "the fix for FR-1 is deployed", "then": "no behavior change for heartbeat_status kind -- confirmed by the existing chairman-held-send-release.test.js suite still passing unmodified" }
+  ],
+  "acceptance_criteria": [
+    "npx vitest run tests/unit/chairman/sms-outbound-reconcile.test.js passes with all pre-existing TS-3/QF-20260829-320/SEC-2/TS-11 assertions intact plus new token/notification assertions",
+    "A simulated re-emit -> inbound-reply round trip resolves outcome=answered, not expired",
+    "chairman-held-send-release.js is documented as out-of-scope and its own test suite (tests/unit/adam/chairman-held-send-release.test.js) is unmodified and passing",
+    "No second Twilio client or token-generation scheme is introduced -- grep confirms sms-outbound-worker.js imports stageDecisionSmsNotification (or equivalent) from sms-bridge.js rather than reimplementing it"
+  ],
+  "risks": [
+    {
+      "risk": "This touches chairman authentication/reply-matching (sms_reply_token generation and staging), flagged CRITICAL security risk by the RISK sub-agent (score 9/10) purely on keyword match (auth, security, token)",
+      "probability": "LOW",
+      "impact": "HIGH",
+      "mitigation": "The fix reuses the EXISTING, already-audited token-generation and staging code path (stageDecisionSmsNotification) verbatim rather than writing new crypto/auth logic -- it closes a gap in when that path is called, not how tokens are generated. A SECURITY sub-agent review is still requested at EXEC-TO-PLAN despite infrastructure-type normally skipping it, given the RISK sub-agent's CRITICAL flag.",
+      "rollback_plan": "Revert the single commit adding the staging call; the re-emit branch returns to its current (buggy but stable) behavior with no data loss, since sms_outbound_obligations rows are unaffected by the staging insert itself"
+    },
+    {
+      "risk": "Regression to the existing, currently-passing reconcile-worker test suite (TS-3, QF-20260829-320, SEC-2, TS-11) which asserts reEmitted counts and the re_asked_as: supersede marker",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Extend the existing test cases with new assertions rather than replacing them; run the full suite before and after the change and diff the pass/fail set",
+      "rollback_plan": "Revert the commit; the pre-existing test suite (already green) is the safety net"
+    },
+    {
+      "risk": "Scope creep into lib/adam/chairman-held-send-release.js, which has a similar-looking but functionally distinct call pattern (heartbeat_status, not decision_question)",
+      "probability": "LOW",
+      "impact": "LOW",
+      "mitigation": "FR-4 explicitly documents these call sites as out of scope with a code comment; no functional changes are made there in this SD",
+      "rollback_plan": "N/A -- no code changes made to this file in this SD"
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      { "phase": "Phase 1", "description": "Add the staging call (chairman-identity resolution + stageDecisionSmsNotification) to voidStaleAndCollapseObligations's re-emit branch, before the existing enqueueChairmanSms call", "deliverables": ["Modified lib/chairman/sms-outbound-worker.js", "Extended tests/unit/chairman/sms-outbound-reconcile.test.js (TS-1, TS-3, TS-4, TS-5 above)"] },
+      { "phase": "Phase 2", "description": "Add the end-to-end re-emit -> inbound-reply integration test proving outcome=answered", "deliverables": ["New/extended test covering the full round trip (TS-2)"] },
+      { "phase": "Phase 3", "description": "Document the chairman-held-send-release.js out-of-scope disposition and confirm its test suite is unaffected", "deliverables": ["Code comment at chairman-held-send-release.js:511/575", "Confirmed-green tests/unit/adam/chairman-held-send-release.test.js run (TS-6)"] }
+    ],
+    "technical_decisions": [
+      "Reuse stageDecisionSmsNotification rather than routing the re-emit through the full sendChairmanSMS gate, since the gate applies rubric/spend-cap/quiet-window checks appropriate for a FRESH decision ask, not a re-emit of an already-approved-to-ask decision -- PLAN should confirm this is the right layer (staging fn, not full gate) at PLAN-TO-EXEC",
+      "Resolve chairman identity via the existing resolveChairmanUserId helper rather than duplicating chairman lookup logic in the worker"
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      { "name": "Chairman (via SMS)", "interaction": "Receives a re-emitted decision question and replies to it", "frequency": "Whenever a decision_question obligation goes stale (>6h unanswered)" }
+    ],
+    "dependencies": [
+      { "name": "lib/chairman/sms-bridge.js (stageDecisionSmsNotification, resolveChairmanUserId equivalent)", "type": "upstream", "contract": "Reused as-is, no interface changes proposed", "failure_handling": "Fail-closed per TS-5: staging failure aborts the re-emit, leaves the obligation owed for the next sweep" }
+    ],
+    "data_contracts": [
+      { "contract_name": "chairman_decisions.sms_reply_token / sms_reply_token_expires_at", "schema": "TEXT UNIQUE / TIMESTAMPTZ, database/migrations/20260716_sms_bridge_schema.sql:24-25", "validation": "Uniqueness enforced by DB constraint", "versioning": "No schema change in this SD" }
+    ],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": [],
+      "deployment_considerations": "No new env vars or flags; behavior change is scoped to the existing worker's re-emit branch"
+    },
+    "observability_rollout": {
+      "monitoring": ["sms_outbound_obligations summary.reEmitted counter (existing)", "chairman_notifications insert rate for re-emitted decisions (new, derivable from existing table)"],
+      "alerts": ["No new alerts required -- existing retryOrAlert/escalate machinery covers send failures"],
+      "rollout_strategy": "Standard PR merge, no feature flag needed (pure bugfix to an existing, low-traffic branch -- 0 live occurrences measured to date)",
+      "rollback_trigger": "sms-outbound-reconcile.test.js regression, or a production report of a re-emit still producing an unmatchable reply",
+      "rollback_procedure": "Revert the single PR; no data migration involved"
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/chairman/sms-outbound-worker.js",
+      "lib/chairman/sms-bridge.js",
+      "lib/comms/adam-outbound/chairman-sms-gate/index.js",
+      "lib/adam/chairman-held-send-release.js",
+      "tests/unit/chairman/sms-outbound-reconcile.test.js",
+      "tests/unit/comms/chairman-sms-gate/chairman-sms-gate.test.js",
+      "database/migrations/20260716_sms_bridge_schema.sql"
+    ],
+    "patterns_identified": [
+      "stageDecisionSmsNotification is the sole token-minting/notification-staging function; all correctly-ordered call sites run it BEFORE dispatch",
+      "TOKEN_TTL_MS (15min) is always shorter than the re-emit staleness threshold (6h), so the bug is guaranteed to fire every time the branch is reached, not a rare race"
+    ],
+    "key_decisions": [
+      "Fix at the staging-call level (reuse stageDecisionSmsNotification), not by routing the re-emit through the full sendChairmanSMS gate, to avoid re-applying rubric/spend-cap checks meant for fresh asks"
+    ],
+    "exploration_date": "2026-09-14"
+  }
+}
