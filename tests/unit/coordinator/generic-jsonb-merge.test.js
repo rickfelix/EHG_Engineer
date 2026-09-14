@@ -38,8 +38,91 @@ describe('JSONB_MERGE_ALLOWLIST', () => {
 
   it('product_requirements_v2 entry matches the live-verified schema: PK id, jsonb column metadata', () => {
     expect(JSONB_MERGE_ALLOWLIST.product_requirements_v2).toEqual({
-      keyColumns: ['id'], jsonbColumn: 'metadata',
+      keyColumns: ['id'], jsonbColumn: 'metadata', extraGuardColumns: [],
     });
+  });
+
+  // SD-LEO-INFRA-GENERALIZE-ATOMIC-JSONB-001 EXEC-phase SECURITY review (SEC-1/SEC-2): the
+  // allowlist must be immutable and looked up safely, not just documented as fixed.
+  it('is deep-frozen at every level — cannot be mutated to admit an unreviewed table/column', () => {
+    expect(Object.isFrozen(JSONB_MERGE_ALLOWLIST)).toBe(true);
+    expect(Object.isFrozen(JSONB_MERGE_ALLOWLIST.strategic_directives_v2)).toBe(true);
+    expect(Object.isFrozen(JSONB_MERGE_ALLOWLIST.strategic_directives_v2.keyColumns)).toBe(true);
+    expect(Object.isFrozen(JSONB_MERGE_ALLOWLIST.strategic_directives_v2.extraGuardColumns)).toBe(true);
+    // ESM modules run in strict mode, so an assignment to a frozen object throws outright
+    // (rather than silently no-op'ing, strict mode's stronger guarantee) — either way, assert
+    // the mutation had no effect.
+    expect(() => { JSONB_MERGE_ALLOWLIST.probe_injected_table = { keyColumns: ['id'], jsonbColumn: 'metadata' }; }).toThrow(TypeError);
+    expect(Object.hasOwn(JSONB_MERGE_ALLOWLIST, 'probe_injected_table')).toBe(false);
+  });
+
+  it('a prototype-chain property name (constructor, toString, __proto__) is refused, not silently truthy', async () => {
+    const client = fakeClient();
+    for (const hostileTable of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      await expect(mergeJsonbColumn({
+        table: hostileTable, keyColumn: 'id', keyValue: 'x', jsonbColumn: 'metadata', patch: {}, client,
+      })).rejects.toThrow(/not in JSONB_MERGE_ALLOWLIST/);
+    }
+    expect(client.queries).toHaveLength(0);
+  });
+});
+
+// SD-LEO-INFRA-GENERALIZE-ATOMIC-JSONB-001 EXEC-phase SECURITY review (SEC-1): the prior
+// free-text extraGuardSql/extraGuardParams API accepted an unvalidated predicate fragment
+// from the caller -- `extraGuardSql: 'OR 1=1'` would widen the WHERE clause to match every
+// row, silently defeating the compare-and-swap it exists to express. Replaced with a
+// closed-shape extraGuardColumn (allowlist-validated) + extraGuardValue (always a bind
+// parameter) pair. These tests pin that the new shape is genuinely closed.
+describe('removeJsonbColumnKey extra-guard column allowlisting (SEC-1 regression)', () => {
+  it('an allowlisted extraGuardColumn produces a parameterized AND clause', async () => {
+    const client = fakeClient({ rowCount: 1 });
+    const result = await removeJsonbColumnKey({
+      table: 'strategic_directives_v2', keyColumn: 'id', keyValue: 'sd-1',
+      jsonbColumn: 'metadata', key: 'release_request', client,
+      extraGuardColumn: 'claiming_session_id', extraGuardValue: 'sess-1',
+    });
+    expect(result.rowCount).toBe(1);
+    expect(client.queries[0].sql).toMatch(/WHERE id = \$1 AND claiming_session_id = \$3\s*$/);
+    expect(client.queries[0].params).toEqual(['sd-1', 'release_request', 'sess-1']);
+  });
+
+  it('an extraGuardColumn NOT in that table\'s extraGuardColumns allowlist is refused', async () => {
+    const client = fakeClient();
+    await expect(removeJsonbColumnKey({
+      table: 'strategic_directives_v2', keyColumn: 'id', keyValue: 'sd-1',
+      jsonbColumn: 'metadata', key: 'k', client,
+      extraGuardColumn: 'sd_key', extraGuardValue: 'x', // real column, but not allowlisted as an extra guard
+    })).rejects.toThrow(/extraGuardColumn 'sd_key' is not allowed/);
+    expect(client.queries).toHaveLength(0);
+  });
+
+  it('a hostile predicate-widening string as extraGuardColumn is refused outright (the SEC-1 exploit shape)', async () => {
+    const client = fakeClient();
+    await expect(removeJsonbColumnKey({
+      table: 'strategic_directives_v2', keyColumn: 'id', keyValue: 'sd-1',
+      jsonbColumn: 'metadata', key: 'k', client,
+      extraGuardColumn: '1=1 OR id != $99 --', extraGuardValue: 'irrelevant',
+    })).rejects.toThrow(/is not allowed/);
+    expect(client.queries).toHaveLength(0);
+  });
+
+  it('product_requirements_v2 has no allowlisted extra-guard columns yet — any attempt is refused', async () => {
+    const client = fakeClient();
+    await expect(removeJsonbColumnKey({
+      table: 'product_requirements_v2', keyColumn: 'id', keyValue: 'PRD-1',
+      jsonbColumn: 'metadata', key: 'k', client,
+      extraGuardColumn: 'anything', extraGuardValue: 'x',
+    })).rejects.toThrow(/extraGuardColumn 'anything' is not allowed/);
+  });
+
+  it('omitting extraGuardColumn entirely produces the plain 2-param remove (unchanged from before this fix)', async () => {
+    const client = fakeClient({ rowCount: 1 });
+    await removeJsonbColumnKey({
+      table: 'strategic_directives_v2', keyColumn: 'sd_key', keyValue: 'SD-1',
+      jsonbColumn: 'metadata', key: 'k', client,
+    });
+    expect(client.queries[0].params).toEqual(['SD-1', 'k']);
+    expect(client.queries[0].sql).not.toMatch(/AND/);
   });
 });
 
