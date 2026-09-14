@@ -29,6 +29,14 @@
  * (0 rows checked, 0 drifted). `missing` below closes that coverage gap by asserting every
  * role_key the current template defines actually has a row.
  *
+ * KNOWN LIMITATION: this check only evaluates role_keys that computeCanonicalRoleTitles()
+ * (i.e. the CURRENT STANDARD_VENTURE_TEMPLATE / EHG_SHARED_OPERATORS) still defines -- the
+ * `if (expected === undefined) continue;` line below skips any row whose role_key was since
+ * REMOVED from the template. A stale/orphaned row for a retired role_key is therefore
+ * invisible to this check: it is reported as neither drifted nor missing, no matter what its
+ * title column holds. Detecting that class requires a separate reverse-diff (live role_keys
+ * not in canonical) that this control does not perform.
+ *
  * Usage: node scripts/lint/org-agent-roles-canonical-titles-check.mjs
  */
 import 'dotenv/config';
