@@ -338,3 +338,10 @@ export {
   SKIP_SD_TYPES,
   ERROR_CODE_PREFIX
 };
+
+// SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-1): additive exports of the gate's own emptiness
+// predicate, so the PRD write-path default-builder, the one-time NULL backfill, and the
+// UAT integration-check reader all share this ONE definition of "empty" instead of each
+// re-implementing it (predicate drift is how a prior backfill's fabricated content passed
+// its own hand-rolled "complete" test). No behavior change to the gate itself.
+export { isSubsectionEmpty, validateIntegrationContent };
