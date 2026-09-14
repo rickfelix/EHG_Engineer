@@ -3,6 +3,12 @@
  * SD-MAN-ORCH-EVA-INTELLIGENCE-LAYER-001-D
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const emitFeedbackMock = vi.fn().mockResolvedValue({ id: 'fb-1', deduped: false });
+vi.mock('../../../lib/governance/emit-feedback.js', () => ({
+  emitFeedback: (...args) => emitFeedbackMock(...args),
+}));
+
 import {
   collectRealityMeasurements,
   buildCalibrationReport,
@@ -694,6 +700,94 @@ describe('updateAssumptionSetStatus', () => {
     updateAssumptionSetStatus(sb, 'v1', 20, report, logger);
 
     expect(warnFn).toHaveBeenCalledWith(expect.stringContaining('update failed'));
+  });
+
+  // PAT-LES-6d8e6a986931: a fire-and-forget write failure must also become durably visible
+  // via emitFeedback, not just a console.warn line.
+  it('routes a .then() error through emitFeedback (harness_backlog) in addition to logging', () => {
+    emitFeedbackMock.mockClear();
+    const thenFn = vi.fn((cb) => {
+      cb({ error: { message: 'update failed' } });
+      return { catch: vi.fn() };
+    });
+
+    const sb = {
+      from: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(() => ({ then: thenFn, catch: vi.fn() })),
+    };
+
+    const report = { aggregate_accuracy: 0.5, category_scores: {} };
+    updateAssumptionSetStatus(sb, 'venture-42', 20, report, silentLogger);
+
+    expect(emitFeedbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supabase: sb,
+        category: 'harness_backlog',
+        // Regression guard for the exact bug validation-learn154 caught: a source_type not
+        // present in the live feedback_source_type_check constraint makes emitFeedback throw,
+        // silently swallowed by .catch() below -- reproducing the pattern this fix closes.
+        // 'assumption_reality_tracker' is NOT a valid value; 'auto_capture' is (see the
+        // DB-tier cross-check in tests/database/assumption-reality-tracker-source-type.db.test.js).
+        source_type: 'auto_capture',
+        dedup_key: 'assumption-sets-write-failure:venture-42',
+        // validation-learn154 F3: description feeds emit-feedback.js's daily dedup_hash, so
+        // it must stay STABLE per venture per day -- the volatile error text belongs in
+        // metadata only, never in description (a raw message there would defeat dedup, the
+        // exact incident emit-feedback.js's own header documents for fleet_dormancy).
+        description: expect.not.stringContaining('update failed'),
+        metadata: expect.objectContaining({ error_message: 'update failed' }),
+      }),
+    );
+  });
+
+  it('routes a rejected promise through emitFeedback (harness_backlog) in addition to logging', () => {
+    emitFeedbackMock.mockClear();
+    let catchFn;
+    const sb = {
+      from: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(() => ({
+        then: vi.fn(() => ({
+          catch: vi.fn((cb) => { catchFn = cb; }),
+        })),
+      })),
+    };
+
+    const report = { aggregate_accuracy: 0.5, category_scores: {} };
+    updateAssumptionSetStatus(sb, 'venture-99', 20, report, silentLogger);
+    catchFn({ message: 'network error' });
+
+    expect(emitFeedbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source_type: 'auto_capture',
+        dedup_key: 'assumption-sets-write-failure:venture-99',
+        description: expect.not.stringContaining('network error'),
+        metadata: expect.objectContaining({ error_message: 'network error' }),
+      }),
+    );
+  });
+
+  it('does not call emitFeedback when the write succeeds', () => {
+    emitFeedbackMock.mockClear();
+    const thenFn = vi.fn((cb) => {
+      cb({ error: null });
+      return { catch: vi.fn() };
+    });
+
+    const sb = {
+      from: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(() => ({ then: thenFn, catch: vi.fn() })),
+    };
+
+    const report = { aggregate_accuracy: 0.85, category_scores: {} };
+    updateAssumptionSetStatus(sb, 'v1', 20, report, silentLogger);
+
+    expect(emitFeedbackMock).not.toHaveBeenCalled();
   });
 });
 
