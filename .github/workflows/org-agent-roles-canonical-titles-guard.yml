@@ -50,6 +50,18 @@ jobs:
           out="$(node scripts/lint/org-agent-roles-canonical-titles-check.mjs 2>&1)"
           code=$?
           echo "$out"
+          # MISCONFIG (no DB credential at all) is an operator error, NOT a transient
+          # outage -- HARD FAIL so the gate can never sit permanently green while never
+          # actually checking the live DB. Fixed-string whole-line match (-Fxq, not -q),
+          # same convention as migration-deploy-drift-guard.yml, so a role_key or title
+          # value that happens to contain this bracketed text as a SUBSTRING can never
+          # accidentally satisfy the check.
+          if echo "$out" | grep -Fxq '[ORG_AGENT_ROLES_CANONICAL_TITLES_MISCONFIG] no Supabase credential available.'; then
+            echo "::error::Org-agent-roles canonical-titles guard has NO DB credential -- set SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY repo secrets. Failing loud: a credential-less gate verifies nothing."
+            exit 1
+          fi
+          # INFRA = a genuine transient connect/query failure AFTER a credential was
+          # present -- non-blocking so an outage cannot red-X main.
           if [ "$code" -eq 2 ]; then
             echo "::warning::Could not reach the database (INFRA) -- not failing the gate on an outage."
             exit 0

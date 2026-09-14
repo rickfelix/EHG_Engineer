@@ -9,9 +9,20 @@
  *
  * Exit 0: every known role_key is present with a canonical title.
  * Exit 1: at least one drifted or MISSING -- prints role_key/current/expected for each.
- * Exit 2: could not reach the database (treated as a non-blocking INFRA warning by the
- *         calling workflow, matching this repo's migration-deploy-drift-guard.yml convention
- *         -- a real DB outage must never red-X main, only a genuine drift may).
+ * Exit 2 [ORG_AGENT_ROLES_CANONICAL_TITLES_INFRA_ERROR]: a credential WAS present but the
+ *   query itself failed (transient DB outage) -- non-blocking, a real outage must never
+ *   red-X main.
+ * Exit 3 [ORG_AGENT_ROLES_CANONICAL_TITLES_MISCONFIG]: no DB credential at all -- an
+ *   operator error, NOT a transient outage. HARD FAIL: a credential-less gate verifies
+ *   nothing and must never sit permanently, silently green.
+ *
+ * Adversarial ship review finding (PR #8980): the original version collapsed MISCONFIG and
+ * INFRA into the same exit code, both treated as non-blocking by the calling workflow --
+ * exactly the failure mode this repo's migration-deploy-drift-guard.yml documents fixing
+ * for its own verifier ("MISCONFIG ... is an operator error, NOT a transient outage --
+ * HARD FAIL so the gate can never sit permanently green while never actually checking the
+ * live DB"). Split into two distinct, whole-line-matchable markers so the calling workflow
+ * can apply that same asymmetric handling.
  *
  * VALIDATION finding (LEAD-TO-PLAN, evidence 5363c1ea): the drift check alone iterates only
  * the rows the table RETURNS, so an emptied/truncated table would read as a false green
@@ -50,20 +61,21 @@ export async function checkCanonicalTitles(supabase) {
 }
 
 async function run() {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) {
+    console.error('[ORG_AGENT_ROLES_CANONICAL_TITLES_MISCONFIG] no Supabase credential available.');
+    process.exitCode = 3;
+    return;
+  }
+
   let supabase;
   try {
     supabase = createClient(
       process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SERVICE_ROLE_KEY,
     );
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)) {
-      console.error('MISCONFIG: no Supabase credential available.');
-      process.exitCode = 2;
-      return;
-    }
   } catch (e) {
-    console.error(`MISCONFIG: ${e.message}`);
-    process.exitCode = 2;
+    console.error(`[ORG_AGENT_ROLES_CANONICAL_TITLES_MISCONFIG] ${e.message}`);
+    process.exitCode = 3;
     return;
   }
 
@@ -71,7 +83,7 @@ async function run() {
   try {
     result = await checkCanonicalTitles(supabase);
   } catch (e) {
-    console.error(`INFRA: ${e.message}`);
+    console.error(`[ORG_AGENT_ROLES_CANONICAL_TITLES_INFRA_ERROR] ${e.message}`);
     process.exitCode = 2;
     return;
   }
