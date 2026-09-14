@@ -133,6 +133,12 @@ const owedRow = (over = {}) => ({
 
 const okProvider = () => ({ send: vi.fn(async () => ({ provider_message_id: 'SM-SENT-1', status: 'queued' })) });
 
+// SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001 (TR-5): the fake Supabase above exposes only .from() --
+// no .rpc() -- and resolveChairmanUserId's real implementation calls supabase.rpc(...). Inject
+// this stub via opts.resolveChairmanUserId (mirroring chairman-sms-gate/index.js's identical
+// seam) wherever a test exercises the stale-decision re-ask/staging branch.
+const fakeResolveChairmanUserId = async () => 'chairman-test-user-id-001';
+
 function makeRes() {
   const res = { statusCode: null, body: null };
   res.status = vi.fn((c) => { res.statusCode = c; return res; });
@@ -322,11 +328,17 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
 
   it('TS-3: a stale decision_question obligation WITH a decision_id is re-emitted as a fresh obligation, and the original is superseded (never re-asked again) -- SECURITY SEC-2 fix', async () => {
     const originalCreatedAt = ago(7 * HOUR);
-    const sb = makeFakeSupabase({ sms_outbound_obligations: [
-      owedRow({ id: 'ob-decision', kind: 'decision_question', decision_id: 'dec-123', created_at: originalCreatedAt }),
-    ] });
+    const sb = makeFakeSupabase({
+      sms_outbound_obligations: [
+        owedRow({ id: 'ob-decision', kind: 'decision_question', decision_id: 'dec-123', created_at: originalCreatedAt }),
+      ],
+      // SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001 FR-5 AC-3: a real decision_question obligation
+      // always has a backing chairman_decisions row (FK-backed invariant) -- seeded here so the
+      // new staging step's updateChairmanDecisionSmsFields call can find it, matching production.
+      chairman_decisions: [{ id: 'dec-123', status: 'pending' }],
+    });
     const provider = okProvider();
-    const summary = await reconcileOutboundSms(sb, { provider });
+    const summary = await reconcileOutboundSms(sb, { provider, resolveChairmanUserId: fakeResolveChairmanUserId });
     expect(summary.reEmitted).toBe(1);
     expect(summary.voided).toBe(0); // NOT counted as a stale-void -- distinct reason (superseded-by-reask)
     const original = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-decision');
@@ -343,6 +355,26 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     // FR-2 AC-2: the re-ask carries a FRESH created_at, strictly newer than the stale original's.
     expect(new Date(reAsk.created_at).getTime()).toBeGreaterThan(new Date(originalCreatedAt).getTime());
     expect(original.last_error).toContain(reAsk.id);
+
+    // SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001 FR-1/TR-4/TS-1/TS-9 (extends this existing test per
+    // FR-5 AC-2, rather than a disconnected new file):
+    const decisionRow = sb._tables.chairman_decisions.find((r) => r.id === 'dec-123');
+    // AC-2 (as corrected by TESTING sub-agent review): an overwrite assertion, not "no longer
+    // matches anything" -- sms_reply_token is a single column, staging overwrites it in place.
+    expect(decisionRow.sms_reply_token).toBeTruthy();
+    // TS-9: the fresh expiry is within TOKEN_TTL_MS of now, not merely > 0 (a token expiring in
+    // 1s would pass a bare greater-than check but is not a meaningful fix).
+    const expiresAtMs = new Date(decisionRow.sms_reply_token_expires_at).getTime();
+    expect(expiresAtMs).toBeGreaterThan(Date.now() - 1000);
+    expect(expiresAtMs).toBeLessThanOrEqual(Date.now() + 15 * 60 * 1000 + 1000); // TOKEN_TTL_MS + slack
+    // FR-1 AC-2: a chairman_notifications row was staged for this decision.
+    const notification = sb._tables.chairman_notifications.find((r) => r.decision_id === 'dec-123');
+    expect(notification).toBeTruthy();
+    expect(notification.status).toBe('queued');
+    // TR-4 (the highest-priority TESTING sub-agent finding): the staged notification's phone is
+    // BYTE-IDENTICAL to the phone the re-ask obligation actually dispatches to -- never sourced
+    // from a separate env-var fallback that could silently diverge.
+    expect(notification.recipient_phone).toBe(reAsk.recipient_phone);
   });
 
   it('QF-20260829-320 (i): a stale decision_question for an ALREADY-DECIDED decision (status=approved) is voided, never re-asked', async () => {
@@ -372,7 +404,7 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
       chairman_decisions: [{ id: 'dec-pending', status: 'pending' }],
     });
     const provider = okProvider();
-    const summary = await reconcileOutboundSms(sb, { provider });
+    const summary = await reconcileOutboundSms(sb, { provider, resolveChairmanUserId: fakeResolveChairmanUserId });
     expect(summary.reEmitted).toBe(1);
     expect(summary.voided).toBe(0);
     const original = sb._tables.sms_outbound_obligations.find((r) => r.id === 'ob-pending');
@@ -381,18 +413,22 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
   });
 
   it('SECURITY SEC-2 regression: repeated sweeps against the SAME stale decision produce exactly ONE re-ask, not one per sweep (amplification guard)', async () => {
-    const sb = makeFakeSupabase({ sms_outbound_obligations: [
-      owedRow({ id: 'ob-decision-amp', kind: 'decision_question', decision_id: 'dec-amp', created_at: ago(7 * HOUR) }),
-    ] });
+    const sb = makeFakeSupabase({
+      sms_outbound_obligations: [
+        owedRow({ id: 'ob-decision-amp', kind: 'decision_question', decision_id: 'dec-amp', created_at: ago(7 * HOUR) }),
+      ],
+      chairman_decisions: [{ id: 'dec-amp', status: 'pending' }],
+    });
     const provider = okProvider();
+    const opts = { provider, resolveChairmanUserId: fakeResolveChairmanUserId };
     // Four consecutive sweeps against the SAME persisted state -- pre-fix this produced one fresh
     // re-ask row EVERY sweep (proven live by the SECURITY sub-agent's PROBE-A: table size grew
     // every tick, unbounded). Post-fix, the original is superseded after sweep 1, so it is no
     // longer status='owed' and cannot be picked up as "stale decision_question" again.
-    await reconcileOutboundSms(sb, { provider, now: Date.now() });
-    await reconcileOutboundSms(sb, { provider, now: Date.now() });
-    await reconcileOutboundSms(sb, { provider, now: Date.now() });
-    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    await reconcileOutboundSms(sb, { ...opts, now: Date.now() });
+    await reconcileOutboundSms(sb, { ...opts, now: Date.now() });
+    await reconcileOutboundSms(sb, { ...opts, now: Date.now() });
+    await reconcileOutboundSms(sb, { ...opts, now: Date.now() });
     const decisionRows = sb._tables.sms_outbound_obligations.filter((r) => r.decision_id === 'dec-amp');
     // Exactly 2 rows total for this decision: the original (now superseded) and ONE re-ask -- not
     // 5 (original + 4 sweeps' worth of re-asks).
@@ -404,11 +440,13 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     const rows = Array.from({ length: 9 }, (_, i) => owedRow({
       id: `ob-decision-${i}`, kind: 'decision_question', decision_id: `dec-${i}`, created_at: ago(7 * HOUR),
     }));
-    const sb = makeFakeSupabase({ sms_outbound_obligations: rows });
+    const decisions = Array.from({ length: 9 }, (_, i) => ({ id: `dec-${i}`, status: 'pending' }));
+    const sb = makeFakeSupabase({ sms_outbound_obligations: rows, chairman_decisions: decisions });
     const provider = okProvider();
-    await reconcileOutboundSms(sb, { provider, now: Date.now() });
-    await reconcileOutboundSms(sb, { provider, now: Date.now() });
-    await reconcileOutboundSms(sb, { provider, now: Date.now() });
+    const opts = { provider, resolveChairmanUserId: fakeResolveChairmanUserId };
+    await reconcileOutboundSms(sb, { ...opts, now: Date.now() });
+    await reconcileOutboundSms(sb, { ...opts, now: Date.now() });
+    await reconcileOutboundSms(sb, { ...opts, now: Date.now() });
     // 9 originals (now superseded) + 9 re-asks = 18 total -- NOT the unbounded growth the security
     // sub-agent measured pre-fix (9 -> 15 -> 18 SENDS while the table kept growing every sweep).
     expect(sb._tables.sms_outbound_obligations.length).toBe(18);
@@ -443,12 +481,15 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     // corrupt row (should not occur via this codebase's own writers, but defensive coverage
     // matters here since a re-ask failure must never crash the whole reconcile pass) exercises
     // that guard's failure return rather than its happy path.
-    const sb = makeFakeSupabase({ sms_outbound_obligations: [
-      owedRow({ id: 'ob-corrupt-decision', kind: 'decision_question', decision_id: 'dec-999', body: '', created_at: ago(7 * HOUR) }),
-    ] });
+    const sb = makeFakeSupabase({
+      sms_outbound_obligations: [
+        owedRow({ id: 'ob-corrupt-decision', kind: 'decision_question', decision_id: 'dec-999', body: '', created_at: ago(7 * HOUR) }),
+      ],
+      chairman_decisions: [{ id: 'dec-999', status: 'pending' }],
+    });
     const provider = okProvider();
     const warn = vi.fn();
-    const summary = await reconcileOutboundSms(sb, { provider, logger: { warn, log: vi.fn(), error: vi.fn() } });
+    const summary = await reconcileOutboundSms(sb, { provider, logger: { warn, log: vi.fn(), error: vi.fn() }, resolveChairmanUserId: fakeResolveChairmanUserId });
     expect(summary.reEmitted).toBe(0); // the enqueue failed -- not counted as a success
     expect(warn).toHaveBeenCalled();
     expect(warn.mock.calls.some((c) => String(c[0]).includes('re-ask enqueue failed'))).toBe(true);
@@ -457,6 +498,57 @@ describe('burst avoidance: stale-void / decision re-ask / collapse / burst cap',
     // successful one that then gets treated as safe to drop the original.
     const row = sb._tables.sms_outbound_obligations[0];
     expect(row.status).not.toBe('canceled');
+    // SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001 TS-7 (coverage gap, TESTING sub-agent finding):
+    // staging succeeded (a chairman_notifications row landed) but the SUBSEQUENT enqueue failed --
+    // the orphaned notification must be invalidated, never left live and matchable for nothing.
+    const notification = sb._tables.chairman_notifications.find((r) => r.decision_id === 'dec-999');
+    expect(notification).toBeTruthy();
+    expect(notification.status).toBe('failed');
+  });
+
+  it('TS-5 (TESTING sub-agent coverage gap): chairman-identity resolution failure during re-ask staging aborts the RE-ASK (no new staged row, no phantom obligation) -- the ORIGINAL row is untouched by this branch and falls through to Pass 2s pre-existing, unmodified claim+send path exactly as it would have before this SD (same as the no-decision_id case)', async () => {
+    const sb = makeFakeSupabase({
+      sms_outbound_obligations: [
+        owedRow({ id: 'ob-identity-fail', kind: 'decision_question', decision_id: 'dec-identity-fail', created_at: ago(7 * HOUR) }),
+      ],
+      chairman_decisions: [{ id: 'dec-identity-fail', status: 'pending' }],
+    });
+    const provider = okProvider();
+    const warn = vi.fn();
+    const failingResolver = async () => { throw new Error('fn_resolve_chairman_user_id RPC failed: boom'); };
+    const summary = await reconcileOutboundSms(sb, { provider, logger: { warn, log: vi.fn(), error: vi.fn() }, resolveChairmanUserId: failingResolver });
+    expect(summary.reEmitted).toBe(0); // the RE-ASK never happened -- no fresh token/notification was staged
+    expect(warn.mock.calls.some((c) => String(c[0]).includes('re-ask staging failed'))).toBe(true);
+    expect(sb._tables.sms_outbound_obligations.length).toBe(1); // no phantom re-ask row, no supersede
+    const row = sb._tables.sms_outbound_obligations[0];
+    expect(row.status).not.toBe('canceled'); // never voided/superseded by the failed re-ask attempt
+    // Nothing was ever staged BY THIS BRANCH for this event -- this SD's fix touches only the
+    // re-ask staging step, not Pass 2's pre-existing claim+send, which still runs on this row
+    // exactly as it always has (this is not a regression: identical to TS-11's decision_id-less
+    // case two tests above, and the self-review-gap test's corrupt-body case, neither of which
+    // this SD changes or is responsible for).
+    expect(sb._tables.chairman_notifications.length).toBe(0);
+  });
+
+  it('TS-8 (TESTING sub-agent coverage gap, TR-3): a concurrent supersede race does not leave a duplicate stage for the same decision', async () => {
+    // Models the "second run's supersede UPDATE matches 0 rows" race: the original is already
+    // canceled (by a concurrent sweep) by the time THIS pass's staging/re-emit would run, so the
+    // row is no longer status='owed' and this pass's stale-decision branch never sees it at all --
+    // the atomic .eq('status','owed') claim/select predicate is the actual serialization point.
+    const sb = makeFakeSupabase({
+      sms_outbound_obligations: [
+        owedRow({ id: 'ob-raced', kind: 'decision_question', decision_id: 'dec-raced', status: 'canceled', last_error: 're_asked_as:ob-raced-winner', created_at: ago(7 * HOUR) }),
+        owedRow({ id: 'ob-raced-winner', kind: 'decision_question', decision_id: 'dec-raced', created_at: new Date().toISOString() }),
+      ],
+      chairman_decisions: [{ id: 'dec-raced', status: 'pending' }],
+    });
+    const provider = okProvider();
+    const summary = await reconcileOutboundSms(sb, { provider, resolveChairmanUserId: fakeResolveChairmanUserId });
+    expect(summary.reEmitted).toBe(0); // the already-canceled original is never reconsidered for re-ask
+    const forDecision = sb._tables.sms_outbound_obligations.filter((r) => r.decision_id === 'dec-raced');
+    expect(forDecision.length).toBe(2); // still exactly 2 rows -- no second stage/re-ask was created
+    const notifications = sb._tables.chairman_notifications.filter((r) => r.decision_id === 'dec-raced');
+    expect(notifications.length).toBe(0); // the winner row is fresh (not stale), so it isn't re-asked in this pass either
   });
 
   it('TS-4: same-kind duplicates collapse to newest-only', async () => {
