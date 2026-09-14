@@ -12,7 +12,7 @@ import {
   isRecent, partitionRecentGaps, migrationDateToken, RETIRED_BEFORE,
   hasAnyDbCredential, OUTCOME, summarizeResults, DEFAULT_EXTRA_ROOTS,
   partitionBlockingFailSet, extractFunctionBodies, normalizeSqlBody,
-  extractTriggerDefs, extractTriggerWhenClause,
+  extractTriggerDefs, extractTriggerWhenClause, normalizeTriggerWhenClause,
 } from '../scripts/verify-migration-apply-state.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -628,6 +628,93 @@ describe('QF-20260912-708 — trigger WHEN-clause-aware classification', () => {
     const live = new Set(['view:v']);
     const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, new Map(), new Map([['v', 'garbage']]));
     expect(row.status).toBe('APPLIED');
+  });
+});
+
+describe('SD-LEO-INFRA-APPLY-STATE-VERIFIER-001 — case-folding + implicit cast reconstruction normalization', () => {
+  // TS-1: confirmed live specimen (trg_sd_mutation_audit, database/chairman-gated/
+  // 20260912_sd_mutation_audit_actor_threading.sql:154-162). File side is the VERBATIM
+  // multi-line, indented, uppercase text with no casts -- a collapsed single-line fixture
+  // would false-green under case-fold + cast-strip alone, without the paren-whitespace-trim
+  // fix (TESTING sub-agent finding, evidence 100f23af-887f-408b-a682-48b114e17cbf).
+  it('TS-1: confirmed specimen (multi-line/indented file WHEN clause, uppercase, no casts) matches the live single-line/lowercase pg_get_triggerdef() reconstruction with implicit ::text casts -> APPLIED, not BODY_MISMATCH', () => {
+    const sql = `
+      CREATE TRIGGER trg_sd_mutation_audit
+        AFTER UPDATE ON strategic_directives_v2
+        FOR EACH ROW
+        WHEN (
+          OLD.status IS DISTINCT FROM NEW.status
+          OR OLD.current_phase IS DISTINCT FROM NEW.current_phase
+          OR OLD.claiming_session_id IS DISTINCT FROM NEW.claiming_session_id
+        )
+        EXECUTE FUNCTION log_sd_mutation_audit();
+    `;
+    const ff = [{ file: 'database/chairman-gated/20260912_sd_mutation_audit_actor_threading.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['trigger:trg_sd_mutation_audit']);
+    // Verbatim live pg_get_triggerdef(t.oid, true) output, measured this session.
+    const liveTriggerDefs = new Map([
+      ['trg_sd_mutation_audit', 'CREATE TRIGGER trg_sd_mutation_audit AFTER UPDATE ON strategic_directives_v2 FOR EACH ROW WHEN (old.status::text IS DISTINCT FROM new.status::text OR old.current_phase IS DISTINCT FROM new.current_phase OR old.claiming_session_id IS DISTINCT FROM new.claiming_session_id) EXECUTE FUNCTION log_sd_mutation_audit()'],
+    ]);
+    const [row] = classifyFiles(
+      ['database/chairman-gated/20260912_sd_mutation_audit_actor_threading.sql'],
+      expected, perFile, live, undefined, new Map(), liveTriggerDefs
+    );
+    expect(row.status).toBe('APPLIED');
+    expect(row.body_mismatches).toBeUndefined();
+  });
+
+  it('TS-2: negative control — a live WHEN clause naming a genuinely different column still yields BODY_MISMATCH (not masked by case-fold/cast-strip)', () => {
+    const sql = 'CREATE TRIGGER trg_diff_col AFTER UPDATE ON t FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE FUNCTION f();';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['trigger:trg_diff_col']);
+    const liveTriggerDefs = new Map([
+      ['trg_diff_col', 'CREATE TRIGGER trg_diff_col AFTER UPDATE ON public.t FOR EACH ROW WHEN (old.status2::text IS DISTINCT FROM new.status2::text) EXECUTE FUNCTION f()'],
+    ]);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, new Map(), liveTriggerDefs);
+    expect(row.status).toBe('BODY_MISMATCH');
+  });
+
+  it('TS-3: negative control — a real, non-text/varchar cast difference (::integer) still yields BODY_MISMATCH', () => {
+    const sql = 'CREATE TRIGGER trg_real_cast AFTER UPDATE ON t FOR EACH ROW WHEN (OLD.status IS DISTINCT FROM NEW.status) EXECUTE FUNCTION f();';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['trigger:trg_real_cast']);
+    const liveTriggerDefs = new Map([
+      ['trg_real_cast', 'CREATE TRIGGER trg_real_cast AFTER UPDATE ON public.t FOR EACH ROW WHEN (old.status::integer IS DISTINCT FROM new.status::integer) EXECUTE FUNCTION f()'],
+    ]);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, new Map(), liveTriggerDefs);
+    expect(row.status).toBe('BODY_MISMATCH');
+  });
+
+  it('TS-4: the function-prosrc branch is unaffected by cast-stripping — an author-written ::text cast delta between file and live body still yields BODY_MISMATCH', () => {
+    const sql = 'CREATE OR REPLACE FUNCTION fn_cast() RETURNS void LANGUAGE plpgsql AS $$ BEGIN RETURN foo::text; END $$;';
+    const ff = [{ file: 'm.sql', ...extractDdlFacts(sql) }];
+    const { expected, perFile } = foldLifecycle(ff);
+    const live = new Set(['function:fn_cast']);
+    // Live body genuinely lacks the cast -- a real behavioral difference, not a reconstruction artifact.
+    const liveFunctionBodies = new Map([['fn_cast', 'BEGIN RETURN foo; END']]);
+    const [row] = classifyFiles(['m.sql'], expected, perFile, live, undefined, liveFunctionBodies);
+    expect(row.status).toBe('BODY_MISMATCH');
+  });
+
+  it('TS-5: quoted literal content and quoted-identifier case are preserved by normalizeSqlBody (never folded/stripped)', () => {
+    expect(normalizeSqlBody("SELECT 'MixedCase';")).toContain("'MixedCase'");
+    expect(normalizeSqlBody('SELECT "MixedCaseIdent";')).toContain('"MixedCaseIdent"');
+    // A literal string containing the substring "::text" as DATA must survive cast-stripping too.
+    expect(normalizeTriggerWhenClause("(col = 'literally::text')")).toContain("'literally::text'");
+  });
+
+  it('TS-8: paren-adjacent whitespace trim (FR-2), isolated from case-fold and cast-strip', () => {
+    expect(normalizeSqlBody('(  old.status  )')).toBe(normalizeSqlBody('(old.status)'));
+    // Structural negative control: whitespace-trimming near parens must never collapse
+    // precedence-changing structure.
+    expect(normalizeSqlBody('(a AND (b OR c))')).not.toBe(normalizeSqlBody('((a AND b) OR c)'));
+  });
+
+  it('normalizeTriggerWhenClause does not glue adjacent tokens when stripping a cast (regression for the empty-string-replace bug TESTING measured)', () => {
+    expect(normalizeTriggerWhenClause('(old.status::text IS DISTINCT FROM new.status)')).not.toMatch(/statusis/);
   });
 });
 
