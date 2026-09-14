@@ -9,6 +9,7 @@
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix-13)
 - [2026-09-12](#2026-09-12)
+  - [Bugfix](#bugfix-5)
   - [Infrastructure](#infrastructure-12)
   - [Bugfix](#bugfix)
   - [Security](#security-2)
@@ -355,6 +356,13 @@
   - The second limb of the original defect — the Adam packet path minting no reply token at all for its lettered-option packets — is scoped OUT of this fix and tracked separately as `SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001` (root-caused to `enqueueChairmanSms`/`sms-outbound-worker.js` bypassing the `chairman-sms-gate` token-minting choke point entirely).
 
 ## 2026-09-12
+
+### Bugfix
+
+- **coordinator_self_score_age gauge had 0 rows ever, and all 3 tri-party self-score-age gauges shipped enabled:false permanently** - SD-LEO-FIX-COORDINATOR-SELF-SCORE-001 (escalated from QF-20260911-404, PR #8742)
+  - Root cause: `COORD_SELF_SCORE_V1` was never set anywhere (machine/user env, .env, CI all checked), and unlike Adam/Solomon's parallel self-score writers -- which ship the same ships-inert-by-default convention but ALSO ship a `--force` CLI bypass their own crons invoke -- `coordinator-self-review.mjs` shipped with no `--force` bypass at all, so no override could ever reach the write.
+  - Added the missing `--force` bypass (mirroring Adam/Solomon exactly) and wired it into the coordinator's self-review cron prompt; enabled `adam_self_score_age` and `solomon_self_score_age` in `lib/governance/gauge-registry.js` (writers independently verified live: 174 and 84 rows, both fresh). `coordinator_self_score_age` itself stays disabled -- its write sits behind a single-writer mutation guard only a live coordinator session can satisfy, so a worker seat correctly declined to bypass it to manufacture a first row; enabling it is a coordinator-side follow-up once its cron actually fires.
+  - Added `scripts/lint/self-score-gauge-writer-lint.mjs`, a durable check that fails loud if any enabled self-score-age gauge's writer goes silent for more than 30 days -- verified probative by neuter-testing (temporarily flipping the coordinator gauge on with its known-zero writer made the lint fail; reverting made it pass).
 
 ### Infrastructure
 
