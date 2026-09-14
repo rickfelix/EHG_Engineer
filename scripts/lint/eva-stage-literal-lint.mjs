@@ -106,15 +106,28 @@ function loadJson(p, fallback) {
 }
 
 const allowlist = loadJson(ALLOWLIST_PATH, { entries: [] });
+// SECURITY (EXEC-TO-PLAN review): a malformed committed allowlist (e.g. `{"entries": {}}`,
+// an object instead of an array) must fail loud, not throw an uncaught TypeError from .some().
+const allowlistEntries = Array.isArray(allowlist.entries) ? allowlist.entries : [];
+if (!Array.isArray(allowlist.entries)) {
+  console.error(`⚠️  ${ALLOWLIST_PATH}'s "entries" is not an array -- treating as empty.`);
+}
 const isAllowed = (file, line, snippet) =>
-  (allowlist.entries || []).some((e) => e.file === file && e.line === line && e.snippet === snippet);
+  allowlistEntries.some((e) => e.file === file && e.line === line && e.snippet === snippet);
 
 function candidateFiles() {
   if (mode === 'diff') {
     try {
       const base = process.env.EVA_STAGE_LITERAL_LINT_BASE || 'origin/main';
+      // SECURITY (EXEC-TO-PLAN review): `base` is env-controllable. execFileSync's argv array
+      // already defeats SHELL injection, but a value starting with `-` is still parsed by git
+      // itself as an OPTION, not a revision -- e.g. `--output=<path>` writes an attacker-chosen
+      // file and returns empty stdout, which reads as a silent "0 files, 0 violations" false
+      // clean. `--end-of-options` (verified: rejects a leading-dash value with exit 128, leaves
+      // a genuine ref like `HEAD~1` working) forces everything after it to be a revision, never
+      // an option.
       const out = [
-        execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${base}...HEAD`], { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', '--end-of-options', `${base}...HEAD`], { encoding: 'utf8', timeout: 30000 }),
         execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', '--cached'], { encoding: 'utf8', timeout: 30000 }),
         execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR'], { encoding: 'utf8', timeout: 30000 }),
         execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { encoding: 'utf8', timeout: 30000 }),

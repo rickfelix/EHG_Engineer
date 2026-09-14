@@ -49,7 +49,10 @@ export async function checkRegistryDrift(supabase) {
     else if (live !== key) mismatches.push({ stage_number: num, registry: key, live });
   }
   for (const row of data) {
-    if (!(row.stage_number in STAGE_KEY_BY_NUMBER)) {
+    // hasOwnProperty, not `in` -- `in` walks the prototype chain, so a stage_number that
+    // happened to collide with an Object.prototype member name would read as "present" and
+    // silently suppress a real drift report.
+    if (!Object.prototype.hasOwnProperty.call(STAGE_KEY_BY_NUMBER, row.stage_number)) {
       mismatches.push({ stage_number: row.stage_number, registry: 'MISSING_FROM_REGISTRY', live: row.stage_key });
     }
   }
