@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-14](#2026-09-14)
+  - [Infrastructure](#infrastructure-14)
 - [2026-09-13](#2026-09-13)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix-13)
@@ -203,6 +205,15 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-14
+
+### Infrastructure
+
+- **Verified 3 /learn-reported patterns were already fixed 7 months before /learn re-surfaced them, and closed the one genuinely untested link in an otherwise-live gate** - SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-151 (PR TBD)
+  - `/learn` had minted issue_patterns rows from OLD retrospective text with a FRESH created_at timestamp, without checking whether the underlying issue was already fixed: PAT-LES-7fd10bfaf89a ("no structured logging in 5 EVA stages") and PAT-LES-e72314a404ae ("stage 14 missing security object") both traced verbatim to 2026-02-14 retrospectives, each fixed within 24-48 hours (commits `0dd7e2735dd`, `d5f3ab7d`) -- 7 months before /learn surfaced them as "new". PAT-LES-1a22954978cc's underlying scoring-logic bug was likewise already fixed (`d228da9dac7`, 2026-02-27); its 45 recorded occurrences reflect a gate-timing/sequencing artifact, not a live defect.
+  - Added `tests/unit/handoff/validation/validator-registry/gate-l-sd-creation.test.js`: a mutation-tested regression guard for the LIVE `sdObjectivesDefined` validator (`scripts/modules/handoff/validation/validator-registry/gates/gate-l-sd-creation.js`, wired into the real validator registry) -- previously untested, unlike a differently-named sibling file implementing the same threshold logic. Includes the one boundary case (0 objectives + metrics, score exactly 30) that actually distinguishes the current `score >= 30` formula from its pre-fix `issues.length === 0` formula.
+  - Confirmed and cancelled a full duplicate, `SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-152` (identical source_items, minted 1 minute apart by a race in `/learn`'s `ALREADY_ASSIGNED_OPEN_SD` filter), reassigning its 3 shared `issue_patterns` rows to this SD.
 
 ## 2026-09-13
 
