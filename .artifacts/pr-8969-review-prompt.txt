@@ -1,0 +1,146 @@
+You are a code reviewer performing a thorough adversarial review. Your job is to find bugs, security issues, and logic errors in this diff. You did NOT write this code — approach it with fresh eyes and skepticism.
+
+REVIEW THIS DIFF:
+```
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index d32576823fb..e6cebea8e44 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -5,6 +5,7 @@
+ 
+ - [2026-09-14](#2026-09-14)
+   - [Infrastructure](#infrastructure-14)
++  - [Bugfix](#bugfix-14)
+ - [2026-09-13](#2026-09-13)
+   - [Infrastructure](#infrastructure)
+   - [Bugfix](#bugfix-13)
+@@ -221,6 +222,13 @@
+   - Added `tests/unit/handoff/validation/validator-registry/gate-l-sd-creation.test.js`: a mutation-tested regression guard for the LIVE `sdObjectivesDefined` validator (`scripts/modules/handoff/validation/validator-registry/gates/gate-l-sd-creation.js`, wired into the real validator registry) -- previously untested, unlike a differently-named sibling file implementing the same threshold logic. Includes the one boundary case (0 objectives + metrics, score exactly 30) that actually distinguishes the current `score >= 30` formula from its pre-fix `issues.length === 0` formula.
+   - Confirmed and cancelled a full duplicate, `SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-152` (identical source_items, minted 1 minute apart by a race in `/learn`'s `ALREADY_ASSIGNED_OPEN_SD` filter), reassigning its 3 shared `issue_patterns` rows to this SD.
+ 
++### Bugfix
++
++- **Fixed a 7-month leak where new PRDs could ship with `integration_operationalization` left NULL, and backfilled all 1,570 affected rows** - SD-LEARN-FIX-ADDRESS-PAT-LES-012 (PR #8950)
++  - `scripts/prd/prd-creator.js` had 3 write paths with no default for this column; all 3 now apply a structurally-valid, honestly-empty placeholder (5 canonical keys, each `null`) instead of leaving NULL or fabricating content. Also fixed a `scripts/modules/uat-assessment/sections/integration-check.js` reader that treated the new placeholder as "has content", and a naming-drift bug that made an authoring-time warning unreachable for real `bugfix` PRDs.
++  - **Incident and remediation**: the production backfill script's first `--execute` run blind-replaced (rather than merged) `metadata` on the same 1,570 rows, destroying 7,743 keys across 1,382 of them, because Supabase's `.update()` replaces a full JSONB column value. Caught before merge by two independent EXEC-phase sub-agent reviews (TESTING and SECURITY, each via a different method), root-caused, and recovered from `governance_audit_log`'s row-level audit trail. Root-cause bug fixed in both the original script and a dormant identical sibling; a deep-tier adversarial ship review found and closed 3 more defects in the recovery path itself (a missing keyset `ORDER BY`, an unenforced concurrency guard, a loose audit-window lookup). 1,364 of 1,382 damaged rows are restored; the final 18 (64 keys) are tracked as a separate, ongoing repair item (`scripts/one-off/repair-18-outstanding-metadata-rows.mjs`), not blocking this fix.
++  - Filed and shipped a generalized atomic-merge helper follow-up the same day (`SD-LEO-INFRA-GENERALIZE-ATOMIC-JSONB-001`) so the underlying unsafe-JSONB-write pattern has a safe primitive to reach for on `product_requirements_v2`, not just `strategic_directives_v2`.
++
+ ## 2026-09-13
+ 
+ ### Infrastructure
+diff --git a/scripts/one-off/repair-18-outstanding-metadata-rows.mjs b/scripts/one-off/repair-18-outstanding-metadata-rows.mjs
+new file mode 100644
+index 00000000000..febbd15bb71
+--- /dev/null
++++ b/scripts/one-off/repair-18-outstanding-metadata-rows.mjs
+@@ -0,0 +1,194 @@
++#!/usr/bin/env node
++/**
++ * repair-18-outstanding-metadata-rows -- coordinator-authorized repair spec for the final
++ * 18 rows of SD-LEARN-FIX-ADDRESS-PAT-LES-012's metadata-loss incident (directive
++ * 9baf0834-590a-4813-bc96-a7f84c2799d6).
++ *
++ * HARD PRECONDITION (per directive, answered with measured evidence, not guessed):
++ * WHAT performed the earlier recovery: this SD's own restore-integration-backfill-
++ * metadata.mjs, first --execute invocation. The tool call reported "denied by the
++ * classifier", but the underlying process had already run for some time before being
++ * interrupted -- 1,364 of 1,382 restorable rows were found correctly written on a
++ * subsequent independent state check.
++ * WHY it skipped exactly these 18: measured, not inferred. All 18 outstanding rows
++ * cluster at positions 1511-1568 of the 1,570-row id-ascending enumeration (the very
++ * tail), AND their own integration_backfill.at marker timestamps (written by the
++ * ORIGINAL backfill run, which used the same id-ascending keyset order) cluster within
++ * the last ~2.4 seconds of the entire run (02:47:29.216Z-02:47:31.605Z). Both signals
++ * independently point to the same conclusion: the restore process was interrupted
++ * (classifier kill) very near the end of a sequential, id-ordered scan, before reaching
++ * the final ~60 positions (of which 18 needed real restoration; the rest were the
++ * genuinely-empty-prior-metadata rows). This is not a row-specific anomaly -- every
++ * other explanation (concurrent writer, missing audit row, data corruption) has been
++ * independently ruled out across multiple sub-agent passes (RCA, SECURITY, TESTING,
++ * the ship-adversarial reviewer) and this script's own live re-verification.
++ *
++ * THE WRITE: a single in-database UPDATE, `metadata = old_meta || current_meta` (old as
++ * base, current overlaid -- current's keys win any collision, so nothing legitimately
++ * written since the incident is ever reverted). Executed as ONE parameterized statement
++ * covering all 18 rows via a JSON-array CTE, inside an explicit transaction with a hard
++ * rowcount gate: if the UPDATE does not affect EXACTLY 18 rows, the transaction is
++ * ROLLED BACK and nothing is written -- never a partial or over-broad write. Idempotent
++ * by construction (guarded on the row still carrying exactly the single provenance key),
++ * so a denied/interrupted retry cannot double-apply or corrupt state.
++ *
++ * Usage:
++ *   node scripts/one-off/repair-18-outstanding-metadata-rows.mjs             # dry-run
++ *   node scripts/one-off/repair-18-outstanding-metadata-rows.mjs --execute   # apply
++ */
++import 'dotenv/config';
++import { createSupabaseServiceClient } from '../../lib/supabase-client.js';
++import { createDatabaseClient } from '../lib/supabase-connection.js';
++import { isMainModule } from '../../lib/utils/is-main-module.js';
++
++const EXECUTE = process.argv.includes('--execute');
++const WINDOW_START = '2026-09-14T02:46:00Z';
++const WINDOW_END = '2026-09-14T02:48:00Z';
++
++async function findPreBackfillMetadata(supabase, recordId) {
++  const { data, error } = await supabase
++    .from('governance_audit_log')
++    .select('old_values, changed_at')
++    .eq('table_name', 'product_requirements_v2')
++    .eq('record_id', recordId)
++    .eq('operation', 'UPDATE')
++    .gte('changed_at', WINDOW_START)
++    .lte('changed_at', WINDOW_END)
++    .not('new_values->metadata->>integration_backfill', 'is', null)
++    .is('old_values->metadata->>integration_backfill', null)
++    .order('changed_at', { ascending: true })
++    .limit(1)
++    .maybeSingle();
++  if (error) throw new Error(`findPreBackfillMetadata(${recordId}) failed: ${error.message}`);
++  return data;
++}
++
++/**
++ * Identify the current set of rows needing repair: carries the marker, exactly one
++ * metadata key, and has real (non-empty) prior content recorded in governance_audit_log.
++ */
++async function findRepairTargets(supabase) {
++  const rows = [];
++  let from = 0;
++  const pageSize = 1000;
++  for (;;) {
++    const { data, error } = await supabase
++      .from('product_requirements_v2')
++      .select('id, metadata')
++      .not('metadata->integration_backfill', 'is', null)
++      .order('id', { ascending: true })
++      .range(from, from + pageSize - 1);
++    if (error) throw new Error(`findRepairTargets query failed: ${error.message}`);
++    if (!data || data.length === 0) break;
++    rows.push(...data);
++    if (data.length < pageSize) break;
++    from += pageSize;
++  }
++
++  const targets = [];
++  for (const row of rows) {
++    if (Object.keys(row.metadata || {}).length !== 1) continue;
++  
+... [diff truncated]
+```
+
+For each issue found, classify it as:
+- CRITICAL: Security vulnerability, data loss risk, auth bypass
+- WARNING: Logic error, missing edge case, potential regression
+- INFO: Style issue, minor improvement suggestion
+
+Return your findings as JSON:
+{
+  "findings": [
+    { "type": "WARNING|CRITICAL|INFO", "description": "...", "location": "file:line (approximate)" }
+  ],
+  "summary": "1-2 sentence overall assessment"
+}
+
+If no issues found, return: { "findings": [], "summary": "No issues detected" }
+
+Be specific. Do NOT flag theoretical issues — only flag concrete problems visible in the diff.
