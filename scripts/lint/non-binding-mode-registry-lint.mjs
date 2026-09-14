@@ -45,7 +45,9 @@ export function findUnregistered(modes, registeredFlagKeys) {
  */
 export async function runLint(supabase, modes = NON_BINDING_MODES) {
   const flagKeys = modes.map((m) => m.flagKey);
-  const { data, error } = await supabase.from('leo_feature_flags').select('flag_key').in('flag_key', flagKeys);
+  // flag_key is UNIQUE NOT NULL, and the literal bound below is NON_BINDING_MODES.length --
+  // update both together when the curated list grows (it is deliberately hand-maintained).
+  const { data, error } = await supabase.from('leo_feature_flags').select('flag_key').in('flag_key', flagKeys).limit(4);
   if (error) {
     return { ok: false, unregistered: [], dbUnreachable: true, error: error.message };
   }

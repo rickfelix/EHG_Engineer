@@ -1089,5 +1089,21 @@
    "input": "strategic_directives_v2.metadata (all rows, paginated via fetchAllPaginated to avoid PostgREST's 1000-row cap), scanned for any key matching /^fence_status_\\d{4}_\\d{2}_\\d{2}$/ whose .state === 'CLEARED' alongside metadata.venture_gate_last_verdict === 'NOT_MET'.",
    "seen": "Real positive observed 2026-09-13 running node scripts/audit/venture-gate-fence-consistency.mjs against the live DB: flagged SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 (fence_status_2026_08_17 CLEARED, venture_gate_last_verdict still NOT_MET from the stale 2026-07-28 measurement) -- exactly the specimen shape this QF was filed against, and the reason remeasureVentureFlagshipGate() exists as a governed re-measure writer."
   }
+ },
+ {
+  "name": "non-binding-mode-registry-lint",
+  "script": "scripts/lint/non-binding-mode-registry-lint.mjs",
+  "rootFlag": null,
+  "seedTest": "tests/unit/non-binding-mode-registry-capa-e.test.js",
+  "neuter": {
+   "find": "return modes.filter((m) => !registeredFlagKeys.has(m.flagKey));",
+   "replace": "return [];",
+   "why": "Forces findUnregistered() to always report zero unregistered mechanisms regardless of what the DB actually holds -- the exact ENF-18-shaped fail-open this lint exists to prevent (a non-binding venture-quality mechanism added to NON_BINDING_MODES, or dropped from the registry, would never be flagged). The committed test's 'TS-2: a fixture entry with no matching registry row is detected as unregistered' assertion (unregistered.toHaveLength(1)) and 'runLint: ok=false when one known flag_key is missing from the DB' assertion (result.ok === false) both fail once neutered, since a neutered findUnregistered() always returns [] and runLint()'s ok becomes unregistered.length === 0 === true."
+  },
+  "note": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-E (FR-2). DB-querying script (leo_feature_flags via a curated, hardcoded flag_key list), not repo-scannable by design -- a heuristic naming-shape scan was deliberately rejected during PLAN (it matched 20 locations across 18 unrelated files on main), so there is no --root/cwd fixture-tree concept that fits; seedTest points at the committed unit test exercising the pure findUnregistered()/runLint() functions directly via a mocked Supabase client, no DB connection required for the test.",
+  "observability_proof": {
+   "input": "leo_feature_flags.flag_key, queried via .in('flag_key', [the 4 curated identifiers: DESIGN_FIDELITY_GATE_MODE, LEO_THESIS_KILL_GATE, WARN_CAPPED_CATEGORIES, VISION_ABSENCE_SEVERITY]) and compared against NON_BINDING_MODES by findUnregistered().",
+   "seen": "Real positive observed live in this PR's own CI run (non-binding-mode-registry-lint job, 2026-09-14T00:22:45Z): all 4 known non-binding modes reported unregistered ('4 known non-binding mode(s) have no leo_feature_flags registry row') because FR-1's migration (database/migrations/20260913_register_non_binding_mode_archived_flags.sql) had not yet been applied to production at PR-open time -- exactly the condition this lint exists to catch, not a fixture."
+  }
  }
 ]

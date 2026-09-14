@@ -40,11 +40,14 @@ const GATE_FLAG = 'FLAG_GOVERNANCE_REVIEW_V1';
  */
 export async function listNonBindingModes(supabase) {
   const flagKeys = NON_BINDING_MODES.map((m) => m.flagKey);
+  // flag_key is UNIQUE NOT NULL, and the literal bound below is NON_BINDING_MODES.length --
+  // update both together when the curated list grows (it is deliberately hand-maintained).
   const { data, error } = await supabase
     .from('leo_feature_flags')
     .select('flag_key, gates_what, enablement_criteria, lifecycle_state')
     .in('flag_key', flagKeys)
-    .eq('lifecycle_state', 'archived');
+    .eq('lifecycle_state', 'archived')
+    .limit(4);
   if (error) {
     console.error(`[FLAG-GOV] listNonBindingModes query failed: ${error.message}`);
     return [];

@@ -60,21 +60,22 @@ describe('TS-1/TS-2: non-binding-mode-registry-lint curated-list check', () => {
   });
 
   it('runLint: ok=true when the DB reports all 4 flag_keys present', async () => {
-    const supabase = { from: () => ({ select: () => ({ in: async () => ({ data: NON_BINDING_MODES.map((m) => ({ flag_key: m.flagKey })), error: null }) }) }) };
+    const rows = NON_BINDING_MODES.map((m) => ({ flag_key: m.flagKey }));
+    const supabase = { from: () => ({ select: () => ({ in: () => ({ limit: async () => ({ data: rows, error: null }) }) }) }) };
     const result = await runLint(supabase);
     expect(result).toEqual({ ok: true, unregistered: [], dbUnreachable: false });
   });
 
   it('runLint: ok=false when one known flag_key is missing from the DB', async () => {
     const present = NON_BINDING_MODES.slice(1).map((m) => ({ flag_key: m.flagKey })); // omit the first
-    const supabase = { from: () => ({ select: () => ({ in: async () => ({ data: present, error: null }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ in: () => ({ limit: async () => ({ data: present, error: null }) }) }) }) };
     const result = await runLint(supabase);
     expect(result.ok).toBe(false);
     expect(result.unregistered).toEqual([NON_BINDING_MODES[0]]);
   });
 
   it('FAIL-CLOSED (TESTING finding F11): a DB error is reported as dbUnreachable, never a silent pass', async () => {
-    const supabase = { from: () => ({ select: () => ({ in: async () => ({ data: null, error: { message: 'connection refused' } }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ in: () => ({ limit: async () => ({ data: null, error: { message: 'connection refused' } }) }) }) }) };
     const result = await runLint(supabase);
     expect(result.ok).toBe(false);
     expect(result.dbUnreachable).toBe(true);
@@ -94,7 +95,7 @@ describe('TS-4: listNonBindingModes (FR-3 additive digest section)', () => {
             return {
               eq: (col2, val2) => {
                 capturedFilters.eq = { col: col2, val: val2 };
-                return Promise.resolve({ data: rows, error: null });
+                return { limit: async (n) => { capturedFilters.limit = n; return { data: rows, error: null }; } };
               },
             };
           },
@@ -106,10 +107,11 @@ describe('TS-4: listNonBindingModes (FR-3 additive digest section)', () => {
     expect(capturedFilters.in.col).toBe('flag_key');
     expect(capturedFilters.in.vals).toEqual(NON_BINDING_MODES.map((m) => m.flagKey));
     expect(capturedFilters.eq).toEqual({ col: 'lifecycle_state', val: 'archived' });
+    expect(capturedFilters.limit).toBe(4);
   });
 
   it('a query error is handled gracefully (returns empty, does not throw)', async () => {
-    const supabase = { from: () => ({ select: () => ({ in: () => ({ eq: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) };
+    const supabase = { from: () => ({ select: () => ({ in: () => ({ eq: () => ({ limit: async () => ({ data: null, error: { message: 'boom' } }) }) }) }) }) };
     await expect(listNonBindingModes(supabase)).resolves.toEqual([]);
   });
 });
