@@ -64,7 +64,7 @@
  * Exit: 1 when violations found outside the allowlist, 0 otherwise.
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { isFixturePath, isFixtureEntry } from '../../lib/lint/added-line-text.mjs';
 
@@ -114,10 +114,10 @@ function candidateFiles() {
     try {
       const base = process.env.EVA_STAGE_LITERAL_LINT_BASE || 'origin/main';
       const out = [
-        execSync(`git diff --name-only --diff-filter=ACMR ${base}...HEAD`, { encoding: 'utf8', timeout: 30000 }),
-        execSync('git diff --name-only --diff-filter=ACMR --cached', { encoding: 'utf8', timeout: 30000 }),
-        execSync('git diff --name-only --diff-filter=ACMR', { encoding: 'utf8', timeout: 30000 }),
-        execSync('git ls-files --others --exclude-standard', { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${base}...HEAD`], { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', '--cached'], { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR'], { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { encoding: 'utf8', timeout: 30000 }),
       ].join('\n');
       return [...new Set(out.split('\n').map((s) => s.trim()).filter(Boolean))]
         .filter((f) => CODE_RE.test(f))
