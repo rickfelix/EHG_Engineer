@@ -1,13 +1,13 @@
 {
- "lib/eva/artifact-persistence-service.js:211": {
+ "lib/eva/artifact-persistence-service.js:214": {
   "classification": "bounded-by-design",
   "match": ".select('id, metadata')",
-  "note": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-1): bounded by .limit(1).maybeSingle() on the awaited statement several lines below (`await dedupQuery.limit(1).maybeSingle()`) -- the select/eq chain is built onto a `let dedupQuery = ...;` builder variable that a later, separate statement calls .limit()/.maybeSingle() on (the conditional screenId .eq() in between requires the reassignment), so the classifier's single-statement chainWindow cannot trace across it. Same class as lib/coordinator/reply-class.cjs:114."
+  "note": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-1): bounded by .limit(1).maybeSingle() on the awaited statement several lines below (`await dedupQuery.limit(1).maybeSingle()`) -- the select/eq chain is built onto a `let dedupQuery = ...;` builder variable that a later, separate statement calls .limit()/.maybeSingle() on (the conditional screenId .eq() in between requires the reassignment), so the classifier's single-statement chainWindow cannot trace across it. Same class as lib/coordinator/reply-class.cjs:114. (Line shifted 211->214 by an unrelated merge from origin/main; same query, unchanged.)"
  },
- "lib/eva/artifact-persistence-service.js:320": {
+ "lib/eva/artifact-persistence-service.js:323": {
   "classification": "bounded-by-design",
   "match": ".select('id, metadata')",
-  "note": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-1): bounded by .limit(1).maybeSingle() on the awaited statement several lines below (`await query.limit(1).maybeSingle()`) -- same builder-variable-reassignment pattern (a `let query = ...;` conditionally extended with a screenId .eq()) as the :211 entry above, which the classifier's single-statement chainWindow cannot trace across."
+  "note": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-1): bounded by .limit(1).maybeSingle() on the awaited statement several lines below (`await query.limit(1).maybeSingle()`) -- same builder-variable-reassignment pattern (a `let query = ...;` conditionally extended with a screenId .eq()) as the :214 entry above, which the classifier's single-statement chainWindow cannot trace across. (Line shifted 320->323 by an unrelated merge from origin/main; same query, unchanged.)"
  },
  "lib/marketing/autonomy-gate.js:509": {
   "classification": "bounded-by-design",
