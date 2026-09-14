@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- SD-LEO-FEAT-GUARDRAILED-BROWSER-ACTUATION-001 — FR-4 atomic per-session action cap
 --
 -- ═══════════════════════════════════════════════════════════════════════════════════════════════
