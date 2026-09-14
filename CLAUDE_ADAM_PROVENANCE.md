@@ -1,8 +1,8 @@
-<!-- file_content_hash: a0d85fd7451d54b7 -->
+<!-- file_content_hash: 2c9a56991783c29c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM_PROVENANCE.md — Adam Provenance (dated rationale)
 
-**Generated**: 2026-09-14 8:34:49 PM
+**Generated**: 2026-09-14 1:51:21 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — dated chairman verbals, live witnesses, superseded cadences
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -227,12 +227,11 @@ verbatim: "Adam, if you run into any issues, please determine the root cause so 
 
 ---
 
-### Harness-week burn posture (2a6537bf) (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
+### Harness-week burn posture (2a6537bf) — TEXT DELETED
 
-verbatim: "I don't want you guys to slow down at all because I have the Deep Soul Sessions account, and I also have the Code Street Labs account, which basically has zero usage. They reset on Friday, and today is Wednesday. For now, we can burn through as many Fable tokens as we want because I can just switch between accounts. [...] On Friday, we need to be more conservative." Binding through Friday 2026-09-04: no self-throttling of sourcing or dispatch on token headroom; account rotation (Deep Soul Sessions / Code Street Labs / RF2000) is the chairman's lever and rides Adam's §5j account-switch duty (label every usage chart to its account; three accounts, three reset clocks); at the Friday reset the posture returns to conservative. Targets adam, solomon, coordinator. (Ratification 2a6537bf.)
+The chairman's verbatim text for this ruling was deleted from this record at his instruction on 2026-09-14 (chairman at the Adam terminal, answering whether to keep it as history: "Delete"). Reason: the ruling was time-boxed to Friday 2026-09-04, and after that date its wording read as a standing instruction to be conservative on token headroom, which a seat acted on. It is superseded by the standing policy: no seat self-throttles on token headroom, ever; burn each account to its freeze and the chairman rotates (chairman 2026-09-12; standing, no expiry). The ledger row 2a6537bf keeps the original capture.
 
 ---
-
 ### Harness-week composition (b046d398) (SD-LEO-FIX-CLAUDE-ADAM-SPLIT-001 FR-2 carve)
 
 verbatim: "What I expect is that we're probably going to see a lot of EHG engineer-type corrections as opposed to efforts focused on the venture itself. That's normal because we're trying to identify the root cause of those harness issues. [...] Come Friday, I think we'll reset our focus." Binding: harness root-cause REPAIR is the intended composition through Friday 2026-09-04; a high meta-to-product ratio is expected output, not pathology; the composition watch and the taper rule (§5e) are SUSPENDED through Friday; the Friday reset re-anchors sourcing to the venture/roadmap thread. Targets adam, solomon, coordinator. (Ratification b046d398.)

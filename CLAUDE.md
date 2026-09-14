@@ -1,4 +1,4 @@
-<!-- file_content_hash: dc65f9a6622a0101 -->
+<!-- file_content_hash: 55904f31e97884a4 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
@@ -87,6 +87,8 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 
 18. **EVERY CAPTURE POINTER NAMES AN IMMUTABLE OR VERSIONED RECORD; VALUES ARE NOT COPIED BY DEFAULT (ratification df3186e6)** — Chairman by verified SMS 2026-09-13 15:48Z, verbatim: "Each pointer should identify an immutable or versioned record. If any source record can be overwritten, the pointer should include its version or hash, but the values should not be copied by default." Standing effect: every field of a capture contract points at a record rather than copying it; a pointer at an overwritable source carries that record's version or content hash; copying values is a deviation justified at the row.
 > Why: a pointer into mutable state silently rewrites history, and copying values by default builds a second source of truth that drifts from the first.
+19. **HARNESS BACKLOG BASELINE AND A CRITICAL CHECK ON EVERY NEW ITEM (ratification e38df53f)** — Chairman at the Adam terminal 2026-09-14, verbatim in part: "What if we stick to a baseline of the backlog and, if something comes up that we identify as new, we add it to a new backlog? We continue to work down the current backlog. Maybe there's also an evaluation of anything new prior to adding it to the backlog to say, 'Hey, is this critical?' ... let's make sure it's durable and doesn't rely on memory." Standing effect for every session that files work: the open harness backlog frozen in feedback 58cc4231 (2026-09-14) is the finish line. Before filing ANY new SD or QF, ask "is this critical?" — critical means it breaks a venture stage or the coming test venture, loses data, stops the fleet working, or is a security risk. A critical item is filed normally; anything else is logged to the harness_backlog channel (`node scripts/log-harness-bug.js`) and fixed after the baseline. Record the verdict and a one-line reason on the item. When every baseline item is completed or cancelled, the clean-slate test venture (ratification 3c4a6781) returns to the chairman.
+> Why: the fleet was opening work as fast as it closed it, so a finish line that moves with the inflow never arrives; a fixed baseline plus a check at the door lets the backlog shrink without dropping real problems.
 
 
 ## AUTO-PROCEED Mode
@@ -222,4 +224,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-09-13 3:34:27 PM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-09-14 1:51:21 PM | Protocol: LEO 4.4.1 | Source: Database*
