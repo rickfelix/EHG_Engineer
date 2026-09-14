@@ -34,7 +34,39 @@ import { buildTestExecution } from '../../lib/sub-agents/testing/test-execution-
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_KEY = 'SD-LEARN-FIX-ADDRESS-PAT-LES-014';
-const HEAD_COMMIT = '092b3bd875b5654b41bc9a355b4ee36f0df9fb5a';
+
+// The commit the vitest artifacts were actually produced against.
+const TESTED_AT_COMMIT = '092b3bd875b5654b41bc9a355b4ee36f0df9fb5a';
+// Resolved at write time, NOT hardcoded: storeSubAgentResults auto-stamps evaluated_commit_sha
+// from the worktree HEAD, and subagent-evidence-gate's detectStaleEvidence compares it to HEAD
+// with strict equality. Hardcoding a SHA that the evidence commit then moves past manufactures
+// a "[ADVISORY] SUBAGENT_EVIDENCE_STALE ... re-run before trusting this handoff" warning on a
+// handoff whose evidence is in fact current.
+const HEAD_COMMIT = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+
+/**
+ * The artifacts were produced at TESTED_AT_COMMIT, and HEAD may have advanced by the commit that
+ * COMMITS those artifacts and these writer scripts. That is only legitimate if nothing the tests
+ * actually exercise changed in between -- so verify it instead of asserting it. Any tests/ or
+ * production-path change in that span invalidates the artifacts and must refuse a PASS.
+ */
+function verifyArtifactsStillCertifyHead() {
+  if (TESTED_AT_COMMIT === HEAD_COMMIT) {
+    return { tested_at_commit: TESTED_AT_COMMIT, head_commit: HEAD_COMMIT, span_files: [], invalidating_files: [], artifacts_certify_head: true };
+  }
+  const spanFiles = execFileSync('git', ['diff', `${TESTED_AT_COMMIT}..${HEAD_COMMIT}`, '--name-only'], { encoding: 'utf8' })
+    .split(String.fromCharCode(10)).map(x => x.trim()).filter(Boolean);
+  // Evidence-only paths cannot change what the tests exercise.
+  const invalidating = spanFiles.filter(f => !f.startsWith('.artifacts/') && !f.startsWith('scripts/one-off/'));
+  return {
+    tested_at_commit: TESTED_AT_COMMIT,
+    head_commit: HEAD_COMMIT,
+    span_files: spanFiles,
+    invalidating_files: invalidating,
+    artifacts_certify_head: invalidating.length === 0,
+    basis: 'every file changed between the tested commit and HEAD is under .artifacts/ or scripts/one-off/ (evidence-only), so no test input or production line moved',
+  };
+}
 
 // PRIMARY artifact: the SD's sole deliverable file. Its counts are what metadata.test_execution
 // reports, so artifact_sha and the counters describe the same run.
@@ -141,6 +173,16 @@ async function main() {
     process.exit(1);
   }
 
+  const freshness = verifyArtifactsStillCertifyHead();
+  if (!freshness.artifacts_certify_head) {
+    console.error(
+      'REFUSING to write PASS: files changed between the tested commit and HEAD that are not ' +
+      'evidence-only, so the vitest artifacts no longer certify HEAD: ' +
+      JSON.stringify(freshness.invalidating_files)
+    );
+    process.exit(1);
+  }
+
   const summary = buildSummary(artifact, dir, neighbor, guard);
   const supabase = await getSupabaseClient();
 
@@ -233,6 +275,7 @@ async function main() {
         'tests/unit/retro-no-global-pattern-stamping.test.js': `${neighbor.passed}/${neighbor.executed} pass (out-of-directory consumer, no regression)`,
       },
       production_untouched_check: guard,
+      artifact_head_freshness: freshness,
       mutation_test: {
         performed_in_this_phase: false,
         inherited_from_phase: 'PLAN',
