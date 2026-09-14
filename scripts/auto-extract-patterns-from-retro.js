@@ -251,7 +251,11 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedba
         found_via_search: false,
         // FR-4: best-effort, honestly empty when retro carries no test-path-shaped field --
         // never fabricated. See extractCandidateTestPaths' own coverage measurement.
-        target_test_paths: extractCandidateTestPaths(retro)
+        target_test_paths: extractCandidateTestPaths(retro),
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: this retro may be years old (extraction is
+        // driven by a backlog-draining cron, oldest-first) -- record the site's first_seen as
+        // the retro's real historical creation time, not the moment this extraction runs.
+        occurred_at: retro.created_at
       });
 
       patterns.push({
@@ -277,7 +281,11 @@ async function extractPatternsFromImprovements(retro, sdId, _sdKey, linkedFeedba
         solution: retro.action_items.length > 0 ? actionItemToText(retro.action_items[0]) : null,
         resolution_time_minutes: null,
         related_sub_agents: relatedSubAgents,
-        source_feedback_ids: linkedFeedbackIds
+        source_feedback_ids: linkedFeedbackIds,
+        // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: same rationale as the recordOccurrence call
+        // above -- a brand-new pattern mined from an old, backlog-drained retro should not be
+        // born with today's date as its created_at.
+        occurred_at: retro.created_at
       });
 
       patterns.push({
