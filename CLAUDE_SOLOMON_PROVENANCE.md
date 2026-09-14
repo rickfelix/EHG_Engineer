@@ -1,8 +1,8 @@
-<!-- file_content_hash: 85e94cf7b93204b3 -->
+<!-- file_content_hash: 7531d0b126547ea1 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_PROVENANCE.md — Solomon Provenance (dated rationale)
 
-**Generated**: 2026-09-14 8:34:49 PM
+**Generated**: 2026-09-14 6:03:18 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each clause exists — originating-incident narratives, measurement citations, dated rationale moved out of the gated contract per FR-6
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -207,6 +207,12 @@ Named unpark trigger: revisit if routed-consult volume falls such that Mode-B be
 
 Chairman at the Solomon terminal 2026-09-05T08:27:44Z, verbatim (binding half): "Just because the chairman recommends an activity for completion or to be worked on doesn't mean the workers need to jump on it right away. If I mention something, it doesn't necessarily mean it needs to go to the front of the line." A rank bump justified only by "the chairman mentioned it" is flagged as a ranking defect. (Ratification 29741684.)
 
+
+### Codex-review commission (f0503e6d)
+
+_Moved verbatim from CLAUDE_SOLOMON.md on 2026-09-14 (Solomon decision, relay 8fdd21f7) to make room under the single-read cap; the binding Solomon share stays in the contract._
+
+- **CODEX-REVIEW COMMISSION CLOSED — nine-point chairman decision at the Solomon seat (ratification f0503e6d)** — Chairman in-terminal at THIS seat 2026-09-11 ~11:02Z, closing the Mode-C commission (chairman-authorized 10:02Z, delivered in-session 10:32Z, addendum 10:33Z) that reviewed an outside Codex assessment; captured by the Adam scribe (49eabb23) from Solomon's verbatim relay (row cab55fb0) under the single-scribe convention c44cd9d8. The full nine-point quote is encoded in the Adam contract under the same header; the SOLOMON SHARE is points 3-7 and 8-9, verbatim: "3. No broad model-portfolio evaluation is authorized. 4. No Claude fleet-plane changes are authorized. 5. No Astra production integration is authorized. Astra remains available as a manual Chairman-directed independent second opinion. 6. No Qwen3-8B experiment is authorized. EHG must first understand the quality and canary evidence for the existing Qwen 30B lane. 7. The proposed GPT-5.6 Luna versus Gemini classification/fast comparison is deferred until the existing CAPA work provides sufficiently reliable accounting and acceptance evidence. Return it to me as a future decision when those prerequisites exist. 8. Confirm deletion of the commission-derived private auto-memory note as previously directed. 9. Complete the separately authorized Friday audit within its existing scope. Do not infer any additional authority from this decision." **Solomon share:** the Cluster 5 model/effort-evaluation duty on this seat runs NO broad model-portfolio evaluation, proposes NO fleet-plane change, wires NO Astra integration (Astra stays a manual, chairman-directed second opinion), and runs NO Qwen3-8B experiment until the existing Qwen 30B lane's quality and canary evidence is understood; the GPT-5.6-versus-Gemini classification/fast comparison is a CARRIED FUTURE DECISION whose prerequisites are CAPA W4/W6 accounting and acceptance evidence (venture_token_ledger cost never populated, no fleet metering, llm_canary_metrics empty) — it is re-presented to the chairman only when those exist, never re-proposed on its merits alone. Point 8 was executed 11:0xZ (memory note and index line deleted). The commission-derived task-contract finding (points 1-2) is characterized only as a broken execution-accounting instrument inside CAPA W4 — never as unfinished work — and rides the Friday audit record under existing CAPA authority; no authority is inferred from this decision.
 
 ---
 

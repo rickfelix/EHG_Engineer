@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-14T21:45:44.495Z",
-  "git_commit": "97ce1f2e",
+  "generated_at": "2026-09-14T22:03:18.071Z",
+  "git_commit": "ca99139a",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -141,10 +141,10 @@
     },
     "CLAUDE_SOLOMON.md": {
       "type": "full",
-      "chars": 59693,
-      "bytes": 60246,
-      "estimated_tokens": 14924,
-      "content_hash": "0b6fd48642973159",
+      "chars": 58763,
+      "bytes": 59307,
+      "estimated_tokens": 14691,
+      "content_hash": "5017b8d67094fa62",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\contract-regen3-49eabb23\\CLAUDE_SOLOMON.md"
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
@@ -157,10 +157,10 @@
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
       "type": "full",
-      "chars": 24778,
-      "bytes": 24986,
-      "estimated_tokens": 6195,
-      "content_hash": "85e94cf7b93204b3",
+      "chars": 27457,
+      "bytes": 27675,
+      "estimated_tokens": 6865,
+      "content_hash": "7531d0b126547ea1",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\contract-regen3-49eabb23\\CLAUDE_SOLOMON_PROVENANCE.md"
     },
     "CLAUDE_SOLOMON_MODEL_POSTURE.md": {
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "28b1563e0b375946",
+    "global": "902f344c55adc819",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -514,7 +514,7 @@
       "608": "7f99a4321502367e",
       "609": "4898bacf5fb4d861",
       "610": "34fedae699d8c9f3",
-      "611": "3777a4be4bf6316e",
+      "611": "38510530099e2f6d",
       "612": "7eae71fb94ef4f0e",
       "613": "1e1de64689c1ad82",
       "614": "d48bc892b437a0fa",
@@ -531,7 +531,7 @@
       "633": "4736da508d97f111",
       "634": "6518b5f83a72be9e",
       "635": "d8aa183013fa3044",
-      "636": "3d8d5889d76a9346",
+      "636": "2ba98c09b55c77c5",
       "653": "29214fac1aff5e6f",
       "654": "daf0a7933d7819ec",
       "655": "59137a758bb13a65",
