@@ -51,6 +51,8 @@ const RETRO = {
   ],
   action_items: ['do the thing'],
   business_value_delivered: 'some value',
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: a real retro row always carries created_at.
+  created_at: '2026-02-28T15:30:47.167Z',
 };
 
 beforeEach(() => {
@@ -120,5 +122,34 @@ describe('FR-2: a failing lesson must not abort the remaining batch', () => {
 
     expect(patterns).toHaveLength(0);             // nothing persisted...
     expect(patterns.destroyed).toHaveLength(3);   // ...and all three losses are accounted for
+  });
+});
+
+// SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: the createPattern/recordOccurrence occurred_at wiring
+// is only correct if the PRODUCTION call site actually forwards retro.created_at — a unit test on
+// issue-knowledge-base.js alone (tests/unit/learning/issue-knowledge-base-occurred-at.test.js)
+// cannot catch a regression here, since it never invokes this module's own call sites. Verified by
+// mutation: deleting `occurred_at: retro.created_at` from either call site leaves the pre-existing
+// suite fully green (277/277) -- these two tests close that gap.
+describe('SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: occurred_at reaches the production call sites', () => {
+  it('createPattern branch (no similar pattern found): occurred_at === retro.created_at', async () => {
+    createPattern.mockResolvedValueOnce({ pattern_id: 'PAT-LES-aaaaaaaaaaaa' });
+
+    await extractPatternsFromImprovements(RETRO, 'sd-uuid', 'SD-KEY');
+
+    expect(createPattern).toHaveBeenCalledWith(
+      expect.objectContaining({ occurred_at: RETRO.created_at })
+    );
+  });
+
+  it('recordOccurrence branch (similar pattern found): occurred_at === retro.created_at', async () => {
+    search.mockResolvedValue([{ pattern_id: 'PAT-EXISTING-001', similarity: 0.9 }]);
+    recordOccurrence.mockResolvedValue({});
+
+    await extractPatternsFromImprovements(RETRO, 'sd-uuid', 'SD-KEY');
+
+    expect(recordOccurrence).toHaveBeenCalledWith(
+      expect.objectContaining({ occurred_at: RETRO.created_at })
+    );
   });
 });
