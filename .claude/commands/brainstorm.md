@@ -1615,12 +1615,16 @@ Architecture plans MUST reference specific details from the brainstorm conversat
 
 ### 9.5D: Register Architecture Plan in EVA (with Key Capture)
 
+**Always register as `--draft` (SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 / FR-2, ratification a588adba).**
+Unlike a vision, an architecture plan is never chairman-approved by this flow — a588adba is explicit that the chairman approves visions, not designs, and a design's real sign-off comes from a seat other than its author. This automated registration step is the plan's author, not its reviewer, so it always passes `--draft`. The upsert command **requires** exactly one of `--approved` / `--draft` and will error if neither is given — do not omit it.
+
 ```bash
 node scripts/eva/archplan-command.mjs upsert \
   --plan-key ARCH-<CONTEXT>-<NNN> \
   --vision-key <VISION_KEY_FROM_STEP_9.5B> \
   --content '<ARCHITECTURE_CONTENT_FROM_STEP_9.5C>' \
-  --dimensions '<JSON_ARRAY>'
+  --dimensions '<JSON_ARRAY>' \
+  --draft
 ```
 
 Use the **same** `<CONTEXT>` you derived in Step 9.5B (so vision and arch share an ID root). Compute `<NNN>` with the collision scan against `eva_architecture_plans` (prefix `ARCH-<CONTEXT>-`). `<VISION_KEY_FROM_STEP_9.5B>` is the exact key returned by the vision upsert — do NOT re-derive it.

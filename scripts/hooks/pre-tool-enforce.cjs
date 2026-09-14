@@ -1152,8 +1152,8 @@ async function main() {
         process.stderr.write(
           'DB-ONLY ENFORCEMENT: Blocked new markdown file in docs/plans/.\n' +
           'Vision/architecture documents must be stored in the database.\n' +
-          'Use: node scripts/eva/vision-command.mjs upsert --content "..."\n' +
-          'Or:  node scripts/eva/archplan-command.mjs upsert --content "..."\n'
+          'Use: node scripts/eva/vision-command.mjs upsert --content "..." --approved|--draft\n' +
+          'Or:  node scripts/eva/archplan-command.mjs upsert --content "..." --approved|--draft\n'
         );
         await auditAndExit(auditPromise, 2);
       }

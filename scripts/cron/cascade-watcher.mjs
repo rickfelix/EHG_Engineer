@@ -10,8 +10,11 @@
  *     AND venture_id IS NOT NULL
  *     AND NOT EXISTS (downstream archplan)
  *   Stage 2 — archplans ready for orchestrator generation:
- *     status='active' AND chairman_approved=true AND vision_key IS NOT NULL
+ *     status='active' AND vision_key IS NOT NULL
  *     AND NOT EXISTS (downstream orchestrator SD)
+ *     (SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001: chairman_approved is deliberately NOT
+ *     required here -- Stage 1 now writes draft/unapproved plans, since this is a fully
+ *     automated cron with no chairman touch and must never claim chairman approval.)
  *
  * Stage 1 refusals (no Architectural Plan section, manual override on existing
  * record) emit eva_cascade_errors rows with remediation_command.
@@ -202,6 +205,12 @@ export async function runStage1({ supabase, ventureId, dryRun = false, logger = 
       content: ext.content,
       ventureId: v.venture_id,
       createdBy: 'cascade-watcher',
+      // SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2/B2): this is a fully automated cron
+      // with NO chairman touch -- it must never claim chairman_approved=true. Writing draft
+      // deliberately interrupts the previously-fully-automated Stage-1->Stage-2 cascade at
+      // this plan until a real reviewer promotes it (see runStage2's predicate below, and
+      // lib/eva/archplan-promote.js for the gated promotion path a reviewer would use).
+      approved: false,
     });
     if (error) {
       await writeCascadeError(supabase, {
@@ -239,7 +248,15 @@ export async function runStage2({ supabase, ventureId, dryRun = false, logger = 
       .from('eva_architecture_plans') // schema-lint-disable-line: pre-existing metadata column reference, unrelated to FR-6 pagination edits in this file (surfaced by file-level diff scoping)
       .select('id, plan_key, vision_key, vision_id, content, sections, extracted_dimensions, venture_id, metadata')
       .eq('status', 'active')
-      .eq('chairman_approved', true)
+      // SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2/B2): chairman_approved is no longer
+      // required here -- before this SD it was a no-op filter (archplan-upsert.js hardcoded
+      // it true on every row), so it was never actually gating anything. Now that the flag
+      // is meaningful, requiring it here would either silently strand every cascade-watcher-
+      // originated plan (Stage 1 now writes draft/chairman_approved=false, deliberately --
+      // see the Stage 1 upsertArchPlan call above) or require inserting a real human-review
+      // step into what has always been a fully automated pipeline, a scope decision this SD
+      // does not make. status='active' (real content synthesized, whether via the CLI's
+      // --approved choice or a future promoteArchPlan call) remains the readiness signal.
       .not('vision_key', 'is', null);
     if (ventureId) q = q.eq('venture_id', ventureId);
     return q;

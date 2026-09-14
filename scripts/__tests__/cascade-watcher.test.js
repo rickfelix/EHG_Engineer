@@ -7,19 +7,20 @@
  * Mock pattern follows quality-findings-aggregator.test.js + archplan-upsert.test.js.
  */
 import { describe, it, expect } from 'vitest';
-import { parseArgs, main } from '../cron/cascade-watcher.mjs';
+import { parseArgs, main, runStage1, runStage2 } from '../cron/cascade-watcher.mjs';
 
 const VISION_WITH_ARCH_SECTION = '# Vision\n\n## Problem\n...\n\n## Architectural Plan\n\nPhase 1 plan body of substantial length here to clear the body minimum threshold.\n\n## Phase 1: Backend setup\nWith schema migration logic.\n\n## Phase 2: Frontend dashboard\nWith UI components.\n\n## Phase 3: Integration tests\nTest harness.\n';
 
 function makeSupabase({ visions = [], archplans = [], orchestrators = [], ventures = [], errorRows = [], insertCb = () => {} } = {}) {
   const inserts = [];
   const updates = [];
+  const eqCalls = [];
 
   function from(table) {
     const filters = [];
     const builder = {
       select(_cols, _opts) { return builder; },
-      eq(col, val) { filters.push([col, val, 'eq']); return builder; },
+      eq(col, val) { eqCalls.push({ table, col, val }); filters.push([col, val, 'eq']); return builder; },
       neq() { return builder; },
       gte() { return builder; },
       not(col, _op, val) { filters.push([col, val, 'not']); return builder; },
@@ -76,7 +77,7 @@ function makeSupabase({ visions = [], archplans = [], orchestrators = [], ventur
     return builder;
   }
 
-  return { from, _inserts: inserts, _updates: updates };
+  return { from, _inserts: inserts, _updates: updates, _eqCalls: eqCalls };
 }
 
 describe('parseArgs', () => {
@@ -172,5 +173,44 @@ describe('cascade-watcher main()', () => {
   it('help mode exits 0 without doing work', async () => {
     const { exitCode } = await main(['node', 'cmd', '--help'], { supabase: {}, pgClient: null, logger: { log: () => {}, warn: () => {}, error: () => {} } });
     expect(exitCode).toBe(0);
+  });
+});
+
+// SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2/B2): cascade-watcher is a fully automated
+// cron with no chairman touch -- Stage 1 must never claim chairman_approved=true, and Stage
+// 2's readiness gate must no longer require it (previously a no-op filter when
+// upsertArchPlan hardcoded chairman_approved=true on every row).
+describe('cascade-watcher chairman-approval honesty (SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001)', () => {
+  it("Stage 1's auto-generated archplan is written draft/chairman_approved=false, never claiming chairman approval", async () => {
+    const supabase = makeSupabase({
+      visions: [{ id: 'v1', vision_key: 'VISION-TEST-API-L2-001', content: VISION_WITH_ARCH_SECTION, level: 'L2', status: 'active', chairman_approved: true, version: 1, venture_id: 'vent1' }],
+      archplans: [],
+      ventures: [{ id: 'vent1', name: 'TestVenture' }],
+    });
+    const { success } = await runStage1({ supabase, logger: { log: () => {}, warn: () => {}, error: () => {} } });
+    expect(success).toBeGreaterThan(0);
+
+    const archUpserts = supabase._inserts.filter((i) => i.table === 'eva_architecture_plans');
+    expect(archUpserts.length).toBeGreaterThan(0);
+    for (const { row } of archUpserts) {
+      expect(row.status).toBe('draft');
+      expect(row.status).not.toBe('active');
+      expect(row.chairman_approved).toBe(false);
+      expect(row.chairman_approved_at).toBeNull();
+    }
+  });
+
+  it("Stage 2's readiness query never filters on chairman_approved (only status='active')", async () => {
+    const supabase = makeSupabase({
+      archplans: [{ id: 'a1', vision_id: 'v1', vision_key: 'VISION-TEST-002', plan_key: 'ARCH-TEST-002', status: 'active', chairman_approved: false, content: 'x', venture_id: 'vent1', metadata: {} }],
+      visions: [{ id: 'v1', vision_key: 'VISION-TEST-002', extracted_dimensions: null, venture_id: 'vent1' }],
+      orchestrators: [],
+      ventures: [{ id: 'vent1', name: 'TestVenture' }],
+    });
+    await runStage2({ supabase, logger: { log: () => {}, warn: () => {}, error: () => {} } });
+
+    const archPlanEqCalls = supabase._eqCalls.filter((c) => c.table === 'eva_architecture_plans');
+    expect(archPlanEqCalls.some((c) => c.col === 'chairman_approved')).toBe(false);
+    expect(archPlanEqCalls.some((c) => c.col === 'status' && c.val === 'active')).toBe(true);
   });
 });
