@@ -1,8 +1,14 @@
 /**
  * SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001 (FR-1a) — worker-level test driving the REAL
- * _advanceStage() product-review choke-point at the Stage 23 -> 24 boundary. Mirrors the
+ * _advanceStage() product-review choke-point at the Stage 24 -> 25 boundary. Mirrors the
  * stage-execution-worker-s19-harden.test.js pattern (drives the real method against a fake
  * chainable supabase, rather than re-implementing _advanceStage's logic inline).
+ *
+ * SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-1): corrected from the stale 23 -> 24 boundary
+ * to the live 24 -> 25 boundary (live venture_stages: 23=dedicated_venture_uat,
+ * 24=launch_readiness_gate). The choke-point condition now reads
+ * PRODUCT_REVIEW_STAGE/PRODUCT_REVIEW_STAGE+1 from chairman-product-review.js instead of the
+ * hardcoded 23/24 pair.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -22,7 +28,11 @@ vi.mock('../../../lib/eva/autonomy-model.js', () => ({ checkAutonomy: vi.fn().mo
 vi.mock('../../../lib/eva/stage-governance.js', () => ({
   getStageGovernance: vi.fn().mockResolvedValue({ isBlocking: () => false, isReview: () => false, isHighConsequence: () => false }),
 }));
-vi.mock('../../../lib/eva/chairman-product-review.js', () => ({ requestProductReview: vi.fn().mockResolvedValue({ id: 'decision-x', isNew: true }) }));
+vi.mock('../../../lib/eva/chairman-product-review.js', () => ({
+  requestProductReview: vi.fn().mockResolvedValue({ id: 'decision-x', isNew: true }),
+  PRODUCT_REVIEW_STAGE: 24,
+  PRODUCT_REVIEW_DECISION_TYPE: 'product_review',
+}));
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
 import { requestProductReview } from '../../../lib/eva/chairman-product-review.js';
@@ -40,7 +50,7 @@ const logger = { log: vi.fn(), warn: vi.fn(), error: vi.fn(), info: vi.fn(), deb
  * leo_feature_flags is keyed by the .eq('flag_key', ...) filter actually applied — WITHOUT this,
  * a single shared terminalData would leak killSwitchRow into every leo_feature_flags read on this
  * fake, including FR-1's unrelated PATH_INTEGRITY_EXIT_GATE_ENFORCE read (now also composed into
- * _advanceStage() for every fromStage/toStage pair, not just 23->24), silently "enabling" FR-1
+ * _advanceStage() for every fromStage/toStage pair, not just 24->25), silently "enabling" FR-1
  * enforcement whenever a test only meant to enable FR-4's kill-switch.
  *
  * venture_stages defaults to a row with no declared exit gates so FR-1's checkExitGates call
@@ -95,11 +105,11 @@ function makeWorker(supabase) {
 describe('_advanceStage product-review choke-point (FR-1a) — real method', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('REFUSES a Stage 23 -> 24 advance with no approved product_review decision, and asks for one', async () => {
+  it('REFUSES a Stage 24 -> 25 advance with no approved product_review decision, and asks for one', async () => {
     const supabase = makeSupabase({ productReviewDecision: null });
     const worker = makeWorker(supabase);
 
-    const result = await worker._advanceStage('v-1', 23, 24, {});
+    const result = await worker._advanceStage('v-1', 24, 25, {});
 
     expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
     expect(supabase.calls.venturesUpdate).toBe(0);
@@ -107,11 +117,11 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     expect(requestProductReview).toHaveBeenCalledWith(supabase, 'v-1', worker._logger);
   });
 
-  it('ADVANCES a Stage 23 -> 24 transition once an approved product_review decision exists, without re-asking', async () => {
+  it('ADVANCES a Stage 24 -> 25 transition once an approved product_review decision exists, without re-asking', async () => {
     const supabase = makeSupabase({ productReviewDecision: { id: 'decision-1' } });
     const worker = makeWorker(supabase);
 
-    const result = await worker._advanceStage('v-1', 23, 24, {});
+    const result = await worker._advanceStage('v-1', 24, 25, {});
 
     expect(result?.blocked).not.toBe(true);
     expect(supabase.calls.venturesUpdate).toBe(1);
@@ -123,7 +133,7 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     const worker = makeWorker(supabase);
     requestProductReview.mockRejectedValueOnce(new Error('escalation transport down'));
 
-    const result = await worker._advanceStage('v-1', 23, 24, {});
+    const result = await worker._advanceStage('v-1', 24, 25, {});
 
     expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
     expect(supabase.calls.venturesUpdate).toBe(0);
@@ -142,7 +152,7 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     };
     const worker = makeWorker(supabase);
 
-    const result = await worker._advanceStage('v-1', 23, 24, {});
+    const result = await worker._advanceStage('v-1', 24, 25, {});
 
     expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
     // block log must distinguish an evaluator-error case from a genuine no-approval
@@ -161,7 +171,7 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     };
     const worker = makeWorker(supabase);
 
-    const result = await worker._advanceStage('v-1', 23, 24, {});
+    const result = await worker._advanceStage('v-1', 24, 25, {});
 
     expect(result?.blocked).not.toBe(true);
     expect(requestProductReview).not.toHaveBeenCalled();
@@ -180,7 +190,7 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     };
     const worker = makeWorker(supabase);
 
-    const result = await worker._advanceStage('v-1', 23, 24, {});
+    const result = await worker._advanceStage('v-1', 24, 25, {});
 
     expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
   });
@@ -197,7 +207,7 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     };
     const worker = makeWorker(supabase);
 
-    const result = await worker._advanceStage('v-1', 23, 24, {});
+    const result = await worker._advanceStage('v-1', 24, 25, {});
 
     expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
   });
@@ -211,7 +221,7 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     const supabase = makeSupabase({ productReviewDecision: null }); // no approved decision exists
     const worker = makeWorker(supabase);
 
-    const result = await worker._advanceStage('v-fixture', 23, 24, {});
+    const result = await worker._advanceStage('v-fixture', 24, 25, {});
 
     expect(result?.blocked).not.toBe(true);
     expect(supabase.calls.venturesUpdate).toBe(1);
@@ -229,8 +239,9 @@ describe('_advanceStage product-review choke-point (FR-1a) — real method', () 
     const worker = makeWorker(supabase);
 
     await worker._advanceStage('v-1', 22, 23, {});
-    await worker._advanceStage('v-1', 23, 24.5, {}); // wrong toStage — must not match
-    await worker._advanceStage('v-1', 24, 25, {});
+    // FR-1: the pre-fix stale pair (23->24) must NOT match post-fix -- PRODUCT_REVIEW_STAGE is 24.
+    await worker._advanceStage('v-1', 23, 24, {});
+    await worker._advanceStage('v-1', 24, 25.5, {}); // wrong toStage — must not match
 
     expect(chairmanDecisionsSpy).not.toHaveBeenCalled();
     expect(requestProductReview).not.toHaveBeenCalled();

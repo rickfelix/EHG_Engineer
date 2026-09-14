@@ -114,18 +114,50 @@ function checkFingerprint(pattern) {
 }
 
 /**
- * Pattern's first_seen_sd_id == last_seen_sd_id AND source SD is closed
- * (status in closedStatuses, default {completed, cancelled}). Catches the
- * highest-confidence single-SD-noise case: handoff-rejection retry loop on
- * an SD that has since closed. Pure function.
+ * Every DISTINCT SD a pattern actually touches is closed (status in closedStatuses, default
+ * {completed, cancelled}). Catches the highest-confidence noise case: a problem whose every
+ * known source has since closed cannot itself be an ongoing, active recurrence — whether it
+ * touched one SD or many.
+ *
+ * GENERALIZED from single-SD to N-SD by SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158. The distinct-
+ * SD set is drawn from pattern.metadata.sites[].sd_id when that array has resolvable entries
+ * (this is the authoritative, complete occurrence list); when it does not (a pattern predating
+ * rich site tracking, or one whose sites carry no sd_id at all), this falls back to EXACTLY the
+ * original single-SD-only predicate — first_seen_sd_id === last_seen_sd_id, and closed — so a
+ * pattern lacking site data behaves byte-identically to before this SD.
+ *
+ * WHY the generalization: a backlog-draining retro-extraction cron (scripts/extract-pending-
+ * retro-patterns.mjs) can record the SAME one-time historical incident against many sibling
+ * SDs, each under its own distinct sd_id — the old strict single-SD check only ever recognized
+ * N=1 as noise, so N>1 (however many sibling SDs a single incident happened to touch) read as
+ * genuine cross-SD recurrence even when every one of those SDs has since completed. Considered
+ * and rejected during PLAN: a parent_sd_id + recording-proximity-window predicate, which
+ * measurement against the motivating patterns showed does not match the real data (7-8 distinct
+ * parent_sd_id values per pattern, 5-minute-to-22-hour recording spans) — "every referenced SD
+ * is closed" is the predicate the data actually supports, and unlike a window it reads no
+ * timestamp at all, so it cannot be destabilized by FR-2's timestamp-fidelity fix touching the
+ * very field a window would have needed.
  */
 function checkSingleSDClosedSource(pattern, sourceSdStatusMap, closedStatuses) {
-  const firstId = pattern?.first_seen_sd_id;
-  const lastId = pattern?.last_seen_sd_id;
-  if (!firstId || !lastId) return null;
-  if (firstId !== lastId) return null;
-  const status = sourceSdStatusMap.get(firstId);
-  if (status === undefined) return null;
+  const sites = Array.isArray(pattern?.metadata?.sites) ? pattern.metadata.sites : null;
+  const siteIds = sites
+    ? [...new Set(sites.map((s) => s && s.sd_id).filter((id) => typeof id === 'string' && id.length > 0))]
+    : [];
+
+  let ids;
+  if (siteIds.length > 0) {
+    ids = siteIds;
+  } else {
+    // No resolvable sd_ids in metadata.sites[] -- fall back to exactly the original predicate:
+    // never treat a firstId !== lastId pair as "2 sources" without real site evidence for it.
+    const firstId = pattern?.first_seen_sd_id;
+    const lastId = pattern?.last_seen_sd_id;
+    if (!firstId || !lastId || firstId !== lastId) return null;
+    ids = [firstId];
+  }
+
+  const statuses = ids.map((id) => sourceSdStatusMap.get(id));
+  if (statuses.some((s) => s === undefined)) return null;
   // SD-FDBK-ENH-LEARNING-LOOP-DESTROYS-001 / FR-6 — honour the severity bypass the VIEW already
   // encodes, instead of two components answering the same policy question opposite ways.
   //
@@ -145,7 +177,7 @@ function checkSingleSDClosedSource(pattern, sourceSdStatusMap, closedStatuses) {
   // severities the view has already exempted, and no further — the threshold is borrowed, not
   // invented.
   if (SINGLE_SD_SEVERITY_BYPASS.has(String(pattern?.severity || '').toLowerCase())) return null;
-  if (closedStatuses.has(status)) return REJECT_REASONS.SINGLE_SD_CLOSED_SOURCE;
+  if (statuses.every((s) => closedStatuses.has(s))) return REJECT_REASONS.SINGLE_SD_CLOSED_SOURCE;
   return null;
 }
 
@@ -486,6 +518,16 @@ export async function fetchPatternSourceSDStatuses(supabase, patterns) {
     }
     if (typeof p?.last_seen_sd_id === 'string' && p.last_seen_sd_id.length > 0) {
       ids.add(p.last_seen_sd_id);
+    }
+    // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: checkSingleSDClosedSource now also considers
+    // every distinct sd_id recorded in metadata.sites[] (not just first/last), so their
+    // statuses must be resolvable here too -- same batched/deduped .in() path, no new query
+    // pattern.
+    const sites = Array.isArray(p?.metadata?.sites) ? p.metadata.sites : null;
+    if (sites) {
+      for (const s of sites) {
+        if (typeof s?.sd_id === 'string' && s.sd_id.length > 0) ids.add(s.sd_id);
+      }
     }
   }
 

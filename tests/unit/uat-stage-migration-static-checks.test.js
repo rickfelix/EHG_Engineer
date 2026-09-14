@@ -54,16 +54,28 @@ describe('migration static check: no direct UPDATE of historical tables (FR-4 AC
   });
 });
 
-// TS-8: stage-execution-worker.js's literal fromStage/toStage check -- this SD's disposition is
-// "explicitly documented as intentionally stale-named" (not fixed), per TS-8's own contract.
-describe('TS-8 disposition: stage-execution-worker.js literal is documented, not silently dropped', () => {
-  it('the migration explains why the p_from_stage=23/p_to_stage=24 literal was left unchanged', () => {
+// TS-8: stage-execution-worker.js's literal fromStage/toStage check. Originally deferred here
+// ("DOCUMENTED, NOT FIXED") on the premise that this migration was still STAGED/PENDING and the
+// literal correctly matched live reality until chairman approval landed. SD-LEO-INFRA-VENTURE-
+// QUALITY-CAPA-001-H live-verified (direct pg introspection, not this file's own header) that the
+// renumber is ALREADY APPLIED in production: ventures.current_lifecycle_stage's CHECK constraint
+// reads `<= 27`, fn_advance_venture_stage's own bound check is `> 27`, and a real venture already
+// sits at stage 27 -- this migration file's "STAGED, NOT APPLIED ... DO NOT RUN" header is a stale
+// ceremony marker, not evidence of apply state (a completion-flags finding for follow-up: the
+// header should be corrected to reflect it already ran). Given that, the pre-renumber literal was
+// genuinely stale against the LIVE database, not merely against this file's own eventual apply --
+// CAPA-001-H FR-1 fixed it to read PRODUCT_REVIEW_STAGE/+1 (imported from chairman-product-
+// review.js's own producer constant) instead, closing exactly the deferred work TS-8 anticipated.
+describe('TS-8 disposition: stage-execution-worker.js literal was fixed once the renumber was confirmed live (CAPA-001-H)', () => {
+  it('the migration explains why the p_from_stage=23/p_to_stage=24 literal was originally left unchanged', () => {
     expect(migrationSql).toMatch(/DOCUMENTED, NOT FIXED/);
     expect(migrationSql).toContain('lib/eva/stage-execution-worker.js:2971');
   });
 
-  it('the literal check named by TS-8 still exists at the documented location (no silent drift)', () => {
-    expect(workerSource).toContain('if (fromStage === 23 && toStage === 24)');
+  it('the worker no longer hardcodes the stale 23/24 pair -- it reads PRODUCT_REVIEW_STAGE dynamically', () => {
+    expect(workerSource).not.toContain('if (fromStage === 23 && toStage === 24)');
+    expect(workerSource).toContain('if (fromStage === PRODUCT_REVIEW_STAGE && toStage === PRODUCT_REVIEW_STAGE + 1)');
+    expect(workerSource).toMatch(/import\(['"]\.\/chairman-product-review\.js['"]\)/);
   });
 });
 

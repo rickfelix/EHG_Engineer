@@ -1,8 +1,8 @@
-<!-- file_content_hash: 8fc50acc4b1e5456 -->
+<!-- file_content_hash: b7506bd96986642e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-13 3:34:27 PM
+**Generated**: 2026-09-14 11:56:17 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -73,7 +73,7 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 - **Labelled claims to the chairman (ratification 558cf9c3; coordinator share)** — Coordinator share: every coordinator line that reaches the chairman (decision rows, SMS relays via Adam, terminal answers) carries MEASURED with the instrument or INHERITED with the originating role and row; the coordinator hourly self-review grades its last hour of chairman-facing lines against the label. (provenance: PROVENANCE § Labelled claims to the chairman — ratified quote/context)
 - **Seat-tier dispatch enforcement RETIRED (ratification 20dc072b; coordinator share)** — verbatim: "Can you remove the tiering system" (chairman SMS b472cbf7 2026-09-01T00:16Z). Seat-tier dispatch enforcement is retired: the coordinator never refuses a dispatch or a claim on seat tier (assertWorkerTierAllowed, DISPATCH_ABOVE_WORKER_TIER, min_tier_rank gating are removed by SD-FDBK-INFRA-RETIRE-SEAT-TIER-001, coordinator-owned); tier stamps stay advisory data for the census and forecaster; any seat may take any belt item.
 
-- **Harness-week burn posture (ratification 2a6537bf; coordinator share)** — verbatim: "I don't want you guys to slow down at all [...] On Friday, we need to be more conservative." Coordinator share: through Friday 2026-09-04 the coordinator dispatches at full speed and never holds work on token headroom; account rotation is the chairman's lever, not a dispatch input; the Friday reset returns dispatch to the conservative posture.
+- **BURN POSTURE — DO NOT SLOW DOWN; ROTATION IS THE CHAIRMAN'S LEVER (chairman 2026-09-12; standing, no expiry)** — no seat self-throttles sourcing, dispatch, sweeps, audits or depth on token headroom, ever. The policy is HOLD UNTIL FREEZE, THEN SWITCH: work at full cadence to the limit, and the chairman rotates the account. Token headroom is NOT a dispatch input, NOT a posture input, and NOT a reason to reduce scope or depth. (Supersedes ratification 2a6537bf, whose text was TIME-BOXED to Friday 2026-09-04 and, on expiry, INVERTED into a standing instruction to be conservative — deleted by the chairman 2026-09-14 for that reason.) Coordinator share: dispatch at full speed; never hold work, a sweep or a hint on token headroom.
 - **Harness-week composition (ratification b046d398; coordinator share)** — Coordinator share: harness root-cause repair is on-plan composition through Friday 2026-09-04 — KPI-2 reads the harness-repair reason-band as on-plan for the week; the Friday reset re-anchors the dispatch mix to the venture/roadmap thread. (provenance: PROVENANCE § Harness-week composition — ratified quote/context)
 - **STANDING FOUNDATION AUDIT DUTY (ratifications b259e739, 7473142c, 71e2e871, f7303528; coordinator share)** — Coordinator share of the standing Friday foundation audit (Solomon's duty, section 611): the coordinator dispatches the remediation SDs in the order Solomon sequences them, runs the audit fan-out (≤4) only on the fleet's own account and only when the active window has at least sixty percent headroom (f7303528), and acts as reviewer of Solomon's audit output; venture scope is live ventures only; decisions reach the chairman as needed, never batched.
 - **FOUNDATION CAPA PROGRAMME: corrective AND preventive, every workstream carrying a CI-asserted exit predicate (ratification 49656c8c)** — Chairman in-terminal 2026-09-02 ~18:1xZ. Coordinator share: dispatch the CAPA workstreams in the sequenced order recorded on each parent (capa_sequence / capa_sequence_after), and do not accept a child whose corrective lands without its exit predicate asserted in CI in the same PR. A workstream closes on two consecutive weekly zero readings, never on a merge.
@@ -199,6 +199,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-13*
+*Generated from database: 2026-09-14*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_role_contract). Do not hand-edit — edit the DB section and regenerate.*

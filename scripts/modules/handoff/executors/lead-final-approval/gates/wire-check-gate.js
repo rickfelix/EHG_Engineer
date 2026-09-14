@@ -16,6 +16,8 @@ import { buildCallGraph } from '../../../../../../lib/static-analysis/call-graph
 import { checkReachability } from '../../../../../../lib/static-analysis/reachability-checker.js';
 import { getMainRef } from '../../../shared-git-context.js';
 import { isVentureRepo } from '../../../../../../lib/repo-paths.js';
+import { allDispatchEntries } from '../../../../../../lib/eva/stage-templates/dispatch-registry.js';
+import { parseExemptMarker, isExemptionActive } from '../../../../../../lib/wire-check/exempt-marker-grammar.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,6 +70,14 @@ export const EXCLUSION_PATTERNS = [
  * is excluded from the reachability check. Only ever read for the handful of
  * NEW files in the diff (never the whole scoped tree), and fail-open: an
  * unreadable file is simply NOT exempt (the gate still validates it).
+ *
+ * SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C (P2.3): marker parsing and the
+ * active/expired decision now live in the shared lib/wire-check/
+ * exempt-marker-grammar.js module (consumed by this gate AND the EXEC-TO-PLAN
+ * advisory twin, wire-check-advisory.js, closing a previous parity gap where the
+ * advisory gate never checked the marker at all). WIRE_CHECK_EXEMPT_MARKER stays
+ * exported (byte-identical regex) for any existing external reference, but is no
+ * longer read directly by this function.
  */
 export const WIRE_CHECK_EXEMPT_MARKER = /@wire-check-exempt\b/;
 
@@ -83,7 +93,8 @@ export function hasWireCheckExemptMarker(absPath, deps = {}) {
     }
   });
   try {
-    return WIRE_CHECK_EXEMPT_MARKER.test(readHead(absPath));
+    const marker = parseExemptMarker(readHead(absPath));
+    return isExemptionActive(marker, deps.now);
   } catch {
     return false; // fail-open: unreadable -> not exempt, gate still validates
   }
@@ -165,6 +176,28 @@ export const KNOWN_DYNAMIC_PATTERNS = [
 export function isExcludedFromWireCheck(file) {
   return EXCLUSION_PATTERNS.some((re) => re.test(file)) ||
     KNOWN_DYNAMIC_PATTERNS.some((re) => re.test(file));
+}
+
+/**
+ * SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C (P2.2): ADVISORY-ONLY report over the
+ * KNOWN_DYNAMIC_PATTERNS blanket exemption above. That regex exemption is NOT
+ * removed by this change (see the module-level docblock on
+ * lib/eva/stage-templates/dispatch-registry.js for why: 18+ analysis-step files
+ * are legitimately reachable only via a dead loader map, and the registry has not
+ * yet run advisory for a bake-in period). This only flags a NEW analysis-step
+ * file the diff added that the dispatch registry does not yet know about, so a
+ * future analysis step ships with its dispatch path visible in review instead of
+ * silently invisible behind the blanket exemption.
+ */
+export function dispatchRegistryAdvisoriesForNewFiles(addedFiles) {
+  const newAnalysisStepFiles = (addedFiles || [])
+    .filter((f) => /(^|\/)lib\/eva\/stage-templates\/analysis-steps\/[^/]+\.js$/.test(f))
+    .filter((f) => !f.endsWith('/index.js'));
+  if (newAnalysisStepFiles.length === 0) return [];
+  const registeredBasenames = new Set(allDispatchEntries().map((e) => e.analysisStepFile));
+  return newAnalysisStepFiles
+    .filter((f) => !registeredBasenames.has(path.basename(f)))
+    .map((f) => `DISPATCH_REGISTRY advisory: new analysis-step file ${f} has no entry in lib/eva/stage-templates/dispatch-registry.js — add one so its dispatch path stays visible (non-blocking).`);
 }
 
 /**
@@ -315,6 +348,7 @@ export function createWireCheckGate(_supabase) {
       // origin/main (authoritative) rather than bare 'main' which is routinely
       // stale or missing in worktrees / parallel sessions.
       let newFiles = [];
+      let dispatchRegistryWarnings = [];
       const refResult = getMainRef({ cwd: rootDir });
       const mainRef = refResult.ref;
       const refWarnings = refResult.warning ? [refResult.warning] : [];
@@ -327,7 +361,7 @@ export function createWireCheckGate(_supabase) {
           ['diff', '--name-only', '--diff-filter=A', `${mainRef}...HEAD`, '--', '*.js', '*.mjs', '*.cjs'],
           { encoding: 'utf8', cwd: rootDir, timeout: 10000 }
         );
-        newFiles = diff
+        const addedFiles = diff
           .split('\n')
           .map((f) => f.trim())
           .filter(Boolean)
@@ -335,7 +369,12 @@ export function createWireCheckGate(_supabase) {
           .filter((f) => f.startsWith('lib/') || f.startsWith('scripts/'))
           // Skip tmp/scratch files
           .filter((f) => !f.includes('/tmp-') && !f.includes('/.tmp-'))
-          .map((f) => f.replace(/\\/g, '/'))
+          .map((f) => f.replace(/\\/g, '/'));
+        // P2.2: computed over the FULL added-file list, before the blanket
+        // lib/eva/stage-templates/ exemption below removes them from newFiles —
+        // otherwise a new analysis-step file would never reach this advisory.
+        dispatchRegistryWarnings = dispatchRegistryAdvisoriesForNewFiles(addedFiles);
+        newFiles = addedFiles
           // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-127 FR-1: skip test/spec files
           .filter((f) => !isExcludedFromWireCheck(f))
           // SD-LEO-FIX-FIX-WIRE-CHECK-001: marker-comment escape hatch for one-off
@@ -372,7 +411,7 @@ export function createWireCheckGate(_supabase) {
           score: 100,
           max_score: 100,
           issues: [],
-          warnings: [],
+          warnings: dispatchRegistryWarnings,
         };
       }
 
@@ -415,9 +454,12 @@ export function createWireCheckGate(_supabase) {
           score: 100,
           max_score: 100,
           issues: [],
-          warnings: buildWarnings.length > 0
-            ? [`${buildWarnings.length} file(s) had parse warnings`]
-            : [],
+          warnings: [
+            ...dispatchRegistryWarnings,
+            ...(buildWarnings.length > 0
+              ? [`${buildWarnings.length} file(s) had parse warnings`]
+              : []),
+          ],
           details: {
             newFiles: newFiles.length,
             reachable: reachable.size,
@@ -481,6 +523,7 @@ export function createWireCheckGate(_supabase) {
           ...remediation,
         ],
         warnings: [
+          ...dispatchRegistryWarnings,
           ...crossSessionWarnings,
           ...(buildWarnings.length > 0
             ? [`${buildWarnings.length} file(s) had parse warnings`]

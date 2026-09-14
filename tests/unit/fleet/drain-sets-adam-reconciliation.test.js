@@ -75,9 +75,14 @@ describe('DRAIN_SETS.adam reconciliation with ADAM_INBOX_KINDS (TS-1)', () => {
     // permission_wait was split by notification_type into three kinds; the two new ones
     // ('notification_idle_prompt', 'notification_usage_limit_reset') are addressed to
     // role=coordinator exactly like the original and need the same registration.
+    // +1 to coordinator ONLY (36), the rest unchanged, as of QF-20260913-426: this ticket's own
+    // WARN->REFUSE send-time tightening surfaced 'sweep_escalation_decision'
+    // (lib/fleet/sweep-consecutive-escalation.cjs, target_session='broadcast-coordinator') as a
+    // genuinely undrained, actionable kind never registered when that mechanism shipped
+    // (QF-20260905-594) -- same defect shape as sweep_finding_alert/self_escalation above.
     expect(DRAIN_SETS.adam.length).toBe(32);
     expect(DRAIN_SETS.solomon.length).toBe(22);
-    expect(DRAIN_SETS.coordinator.length).toBe(35);
+    expect(DRAIN_SETS.coordinator.length).toBe(36);
     expect(DRAIN_SETS.worker.length).toBe(27);
   });
 

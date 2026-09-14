@@ -1,0 +1,36 @@
+# runner: node .artifacts/security-capa-a/ssrf-validator-probe.mjs
+# HEAD: 769fb4857c4a8b6e7290472458dbb578210b3dae
+# date: 2026-09-13T18:19:50Z
+---
+  ok  BLOCK file:// local disclosure (SEC-2 sharpest limb)   file:///C:/Users/rickf/.env
+  ok  BLOCK plain http downgrade                             http://example.com/
+  ok  BLOCK embedded credentials                             https://user:pass@example.com/
+  ok  BLOCK IPv4 loopback                                    https://127.0.0.1/
+  ok  BLOCK localhost                                        https://localhost:3000/
+  ok  BLOCK cloud metadata IP                                https://169.254.169.254/latest/meta-data/
+  ok  BLOCK private 10/8                                     https://10.0.0.5/
+  ok  BLOCK private 192.168/16                               https://192.168.1.1/
+  ok  BLOCK private 172.16/12                                https://172.17.0.1/
+  ok  BLOCK IPv6 loopback bracketed                          https://[::1]/
+  ok  BLOCK IPv6 loopback EXPANDED form                      https://[0:0:0:0:0:0:0:1]/
+  ok  BLOCK IPv4 as DECIMAL (127.0.0.1)                      https://2130706433/
+  ok  BLOCK IPv4 as HEX (127.0.0.1)                          https://0x7f000001/
+  ok  BLOCK IPv4 short form (127.0.0.1)                      https://127.1/
+GAP  ALLOW IPv4-MAPPED IPv6 loopback                        https://[::ffff:127.0.0.1]/
+GAP  ALLOW IPv6 LINK-LOCAL                                  https://[fe80::1]/
+GAP  ALLOW IPv6 UNIQUE-LOCAL                                https://[fd00::1]/
+GAP  ALLOW carrier-grade NAT 100.64/10                      https://100.64.0.1/
+GAP  ALLOW bare single-label internal host                  https://supabase/
+GAP  ALLOW internal cluster DNS                             https://kubernetes.default.svc.cluster.local/
+  ok  ALLOW real live venture URL                            https://altifyai.app
+  ok  ALLOW real live venture URL                            https://marketlens-429436826471.us-central1.run.app
+  ok  ALLOW legal & in query string (must NOT be rejected)   https://example.com/?utm=a&utm_medium=b
+
+=== DEVIATIONS FROM A STRICT SSRF POSTURE: 6 ===
+  - IPv4-MAPPED IPv6 loopback: expected BLOCK, got ALLOW  [https://[::ffff:127.0.0.1]/]
+  - IPv6 LINK-LOCAL: expected BLOCK, got ALLOW  [https://[fe80::1]/]
+  - IPv6 UNIQUE-LOCAL: expected BLOCK, got ALLOW  [https://[fd00::1]/]
+  - carrier-grade NAT 100.64/10: expected BLOCK, got ALLOW  [https://100.64.0.1/]
+  - bare single-label internal host: expected BLOCK, got ALLOW  [https://supabase/]
+  - internal cluster DNS: expected BLOCK, got ALLOW  [https://kubernetes.default.svc.cluster.local/]
+---

@@ -1841,6 +1841,45 @@ async function main() {
         }
       }
     }
+
+    // --- ENFORCEMENT 21: Vanished-Worktree-Linkage Guard (QF-20260914-380) ---
+    // A worktree's `.git` FILE can disappear mid-session (root cause undetermined — this
+    // ticket's own investigation ruled out the current worktree-reaper code specifically: its
+    // live-session guards are wired, its execution source was current, and its last run
+    // removed nothing). Once that file is gone, EVERY git command run from inside the
+    // directory silently WALKS UP to the enclosing repo's own .git (the shared root) instead
+    // of erroring — a session that believes it is isolated actually mutates the tree the
+    // whole fleet depends on. Live incident 2026-09-14: exactly this happened; only luck (the
+    // fallthrough window held only read-only commands) prevented a shared-root mutation.
+    // Decision logic lives in lib/vanished-worktree-guard.cjs (unit-tested, pure — the fs check
+    // is injected here); this owns the fs.existsSync + audit + exit. Fail-open on any internal
+    // error or fs-stat failure (never blocks on our own bug). No bypass flag: recreate the
+    // worktree instead (nothing of value survives a vanished .git link).
+    try {
+      const { decideVanishedWorktreeLinkage } = require('./lib/vanished-worktree-guard.cjs');
+      const fs = require('fs');
+      const verdict = decideVanishedWorktreeLinkage(cmd, {
+        cwd: (input && input.cwd) || process.cwd(),
+        gitLinkExists: (dir) => {
+          try { return fs.existsSync(path.join(dir, '.git')); } catch { return true; } // fail-open on a stat error
+        },
+      });
+      if (verdict.block) {
+        const auditPromise = auditPermissionDecision(_SESSION_ID, TOOL_NAME, 'ENF-21', 'Vanished-worktree-linkage guard: blocks a git command targeting a .worktrees/** tree whose own .git entry no longer exists', 'block', { dir: verdict.dir });
+        process.stderr.write(
+          `[ENF-21] VANISHED WORKTREE LINKAGE: ${verdict.dir} no longer has a .git entry.\n` +
+          `  Running git here would silently fall through to the SHARED ROOT instead of erroring (QF-20260914-380).\n` +
+          `  Do NOT proceed — investigate before touching this directory again; nothing of value survives a vanished .git link.\n` +
+          `  Recreate via: node scripts/session-worktree.js --sd-key <key> --branch <branch>  (write .reap-protected.json immediately after creation)\n`
+        );
+        await auditAndExit(auditPromise, 2);
+      }
+    } catch (vanishedWorktreeErr) {
+      // Fail-open: any internal error in ENF-21 must NOT block tool execution.
+      if (process.env.LEO_TELEMETRY_DEBUG === '1') {
+        process.stderr.write(`[pre-tool-enforce] ENF-21 errored (fail-open): ${vanishedWorktreeErr.message}\n`);
+      }
+    }
   }
 
   // --- ENFORCEMENT 10: Source-Side Telemetry Writer (SD-LEO-INFRA-WORKER-SOURCE-SIDE-001) ---

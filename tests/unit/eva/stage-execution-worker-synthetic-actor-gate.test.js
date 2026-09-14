@@ -26,7 +26,7 @@ vi.mock('../../../lib/eva/chairman-decision-watcher.js', () => ({
 }));
 vi.mock('../../../lib/eva/shared-services.js', () => ({ emit: vi.fn().mockResolvedValue({}) }));
 vi.mock('../../../lib/eva/autonomy-model.js', () => ({ checkAutonomy: vi.fn().mockResolvedValue({ action: 'block', level: 'L0' }) }));
-vi.mock('../../../lib/eva/chairman-product-review.js', () => ({ requestProductReview: vi.fn().mockResolvedValue({ id: 'decision-x', isNew: true }) }));
+vi.mock('../../../lib/eva/chairman-product-review.js', () => ({ requestProductReview: vi.fn().mockResolvedValue({ id: 'decision-x', isNew: true }), PRODUCT_REVIEW_STAGE: 24, PRODUCT_REVIEW_DECISION_TYPE: 'product_review' }));
 vi.mock('../../../lib/eva/stage-governance.js', () => ({
   getStageGovernance: vi.fn(async () => ({ isBlocking: () => false, isReview: () => false, isHighConsequence: () => false })),
 }));

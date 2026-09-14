@@ -1,8 +1,8 @@
-<!-- file_content_hash: daccb21fa1c4d539 -->
+<!-- file_content_hash: e60cdafcd1edf010 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-13 9:29:54 PM
+**Generated**: 2026-09-14 11:56:17 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -230,7 +230,7 @@ RECOMMENDED AGAINST: a thirteenth lens (every new class above is folded under th
 
 Time-boxed posture through Friday 2026-09-04 (encode 2026-09-03; the operative pointer lives in 611 HARNESS-WEEK POSTURE):
 
-**HARNESS-WEEK BURN POSTURE (ratification 2a6537bf; Solomon share)**: "I don't want you guys to slow down at all [...] On Friday, we need to be more conservative." Through Friday 2026-09-04 Solomon's audits, consults and sweeps run at full cadence; account rotation is the chairman's lever; the Friday reset returns to the conservative posture.
+**BURN POSTURE — DO NOT SLOW DOWN (chairman 2026-09-12; standing, no expiry)**: Solomon's audits, consults and sweeps run at full cadence and full depth regardless of token headroom. HOLD UNTIL FREEZE, THEN SWITCH — the chairman rotates the account at the limit. The prior time-boxed text (2a6537bf) expired 2026-09-04 and inverted into a standing "be conservative"; the chairman deleted it 2026-09-14 after this seat reverted to a reduced-work posture on the strength of it.
 
 **HARNESS-WEEK COMPOSITION (ratification b046d398; Solomon share)**: "we're probably going to see a lot of EHG engineer-type corrections [...] Come Friday, I think we'll reset our focus." Harness root-cause repair is the intended composition through Friday 2026-09-04; Solomon's composition and taper diagnoses read it as on-plan for the week and re-anchor at the Friday reset.
 
@@ -377,6 +377,6 @@ Solomon operates under the canonical crew-comms routing protocol: `docs/protocol
 
 ---
 
-*Generated from database: 2026-09-13*
+*Generated from database: 2026-09-14*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_manual). Do not hand-edit — edit the DB section and regenerate.*

@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const mockLimit = vi.fn();
 const mockIn = vi.fn();
 const mockEq = vi.fn();
 const mockSelect = vi.fn();
@@ -17,6 +18,9 @@ let checkArtifactIntegrity;
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  // count-truncation-diff-lint (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G): production code now
+  // chains .in(...).limit(999) -- .in() returns a chainable stub whose .limit() resolves.
+  mockIn.mockReturnValue({ limit: mockLimit });
   mockEq.mockReturnValue({ in: mockIn });
   mockSelect.mockReturnValue({ eq: mockEq });
   mockFrom.mockReturnValue({ select: mockSelect });
@@ -29,7 +33,7 @@ function artifact(type, contentLength = 200, qualityScore = 80) {
 
 describe('checkArtifactIntegrity - stage 21 anyOf (QF-20260703-439)', () => {
   it('passes when ONLY distribution_channel_config exists (organic-only venture, no ad copy)', async () => {
-    mockIn.mockResolvedValue({ data: [artifact('distribution_channel_config')], error: null });
+    mockLimit.mockResolvedValue({ data: [artifact('distribution_channel_config')], error: null });
     const results = await checkArtifactIntegrity('venture-1', 21, 21);
     const anyOfCheck = results['21'].checks.find((c) => c.name.startsWith('artifact_anyOf:'));
     expect(anyOfCheck.pass).toBe(true);
@@ -38,13 +42,13 @@ describe('checkArtifactIntegrity - stage 21 anyOf (QF-20260703-439)', () => {
   });
 
   it('passes when ONLY distribution_ad_copy exists', async () => {
-    mockIn.mockResolvedValue({ data: [artifact('distribution_ad_copy')], error: null });
+    mockLimit.mockResolvedValue({ data: [artifact('distribution_ad_copy')], error: null });
     const results = await checkArtifactIntegrity('venture-1', 21, 21);
     expect(results['21'].checks.find((c) => c.name.startsWith('artifact_anyOf:')).pass).toBe(true);
   });
 
   it('fails when NEITHER distribution artifact exists', async () => {
-    mockIn.mockResolvedValue({ data: [], error: null });
+    mockLimit.mockResolvedValue({ data: [], error: null });
     const results = await checkArtifactIntegrity('venture-1', 21, 21);
     const anyOfCheck = results['21'].checks.find((c) => c.name.startsWith('artifact_anyOf:'));
     expect(anyOfCheck.pass).toBe(false);
@@ -53,7 +57,7 @@ describe('checkArtifactIntegrity - stage 21 anyOf (QF-20260703-439)', () => {
   });
 
   it('does not count an anyOf group as satisfied by a low-quality/short-content artifact', async () => {
-    mockIn.mockResolvedValue({ data: [artifact('distribution_channel_config', 10, null)], error: null });
+    mockLimit.mockResolvedValue({ data: [artifact('distribution_channel_config', 10, null)], error: null });
     const results = await checkArtifactIntegrity('venture-1', 21, 21);
     expect(results['21'].checks.find((c) => c.name.startsWith('artifact_anyOf:')).pass).toBe(false);
   });

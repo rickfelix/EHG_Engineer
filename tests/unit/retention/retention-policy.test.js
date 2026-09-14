@@ -123,6 +123,11 @@ describe('policy registry (TS-1)', () => {
       // never drained by a queue, with no cleanup path of its own. Keyed on created_at,
       // DATABASE-stamped by the migration, never caller-supplied.
       mock_outreach_personas: 'created_at',
+      // SD-LEO-INFRA-MICHAEL-TIER2-CHECKPOINT-SEND-001 (operator-contract REAPER): both tables are
+      // append-only ledgers (one row per checkpoint-send verb invocation / per enablement toggle)
+      // with no natural drain. Keyed on created_at, DB-defaulted on both (never caller-supplied).
+      michael_checkpoint_send_ledger: 'created_at',
+      michael_checkpoint_send_enabled: 'created_at',
     });
   });
 

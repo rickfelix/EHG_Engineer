@@ -117,9 +117,23 @@ describe('insertCoordinationRow: Adam-directed untyped-kind guard (QF-20260709-0
   });
 
   it('fails open (allows the send) when no live Adam resolves', async () => {
+    // QF-20260913-426: kind changed from 'coordinator_notice' to 'chairman_heads_up' —
+    // 'coordinator_notice' is not in DRAIN_SETS.adam (a separate, real gap, out of THIS
+    // ticket's scope), and the drain-set check below this guard now REFUSES a confident
+    // mismatch instead of warning. 'chairman_heads_up' is a typed ADAM_INBOX_KINDS entry (this
+    // guard's own untyped-kind check is a non-issue regardless of live-Adam resolution) AND
+    // drain-recognized for role 'adam'.
+    // NOTE (adversarial review finding): dispatch.cjs's module-level _roleIdsCache (60s TTL) is
+    // warmed by an EARLIER it() in this same file (adamSessionId: ADAM_TARGET), so by the time
+    // this test runs the drain-check resolves role 'adam' from that stale cache, NOT from this
+    // test's own adamSessionId:null stub — it does not actually exercise "role unresolved" for
+    // the drain-check. That's fine: this test's real target is the untyped-kind guard just
+    // above (which does its own FRESH getActiveAdamId lookup and correctly fails open here);
+    // the drain-check underneath only needs to stay silent, which 'chairman_heads_up' guarantees
+    // regardless of which role it resolves to.
     const sb = stubSupabase({ adamSessionId: null });
-    const row = { message_type: 'INFO', target_session: ADAM_TARGET, payload: { kind: 'coordinator_notice', body: 'fyi' } };
+    const row = { message_type: 'INFO', target_session: ADAM_TARGET, payload: { kind: 'chairman_heads_up', body: 'fyi' } };
     const res = await insertCoordinationRow(sb, row, { logger: silentLog });
-    expect(res.data.payload.kind).toBe('coordinator_notice');
+    expect(res.data.payload.kind).toBe('chairman_heads_up');
   });
 });

@@ -1,8 +1,8 @@
-<!-- file_content_hash: 70b54bedb3b8a5fc -->
+<!-- file_content_hash: 2dca75ea890b56f1 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR_MANUAL.md — Coordinator Manual (how-to companion)
 
-**Generated**: 2026-09-13 9:29:54 PM
+**Generated**: 2026-09-14 8:34:49 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — dispatch mechanics, gauge/count verification steps, loop-registry operating detail
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -67,6 +67,6 @@ rather than leaving it unresolved.
 
 ---
 
-*Generated from database: 2026-09-13*
+*Generated from database: 2026-09-14*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_manual). Do not hand-edit — edit the DB section and regenerate.*

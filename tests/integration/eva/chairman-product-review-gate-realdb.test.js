@@ -1,6 +1,14 @@
 /**
  * REAL, DB-backed integration test for the chairman product-review gate at the
- * Stage 23 -> 24 boundary (Launch Readiness -> Go Live & Announce).
+ * Stage 24 -> 25 boundary (Launch Readiness Gate -> Go Live).
+ *
+ * SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H (FR-1) CORRECTION: this file originally targeted the
+ * 23->24 boundary, which a prior stage renumber (SD-LEO-INFRA-STAGE-RENUMBER-DRIFT-001) made
+ * stale -- live venture_stages has stage 23=dedicated_venture_uat (gate_type=none) and
+ * stage 24=launch_readiness_gate (gate_type=kill), so the kill-gate + product-review boundary
+ * this test exercises now sits at 24->25, matching stage-execution-worker.js's corrected
+ * PRODUCT_REVIEW_STAGE-derived choke point. Every stage-number reference below is updated
+ * accordingly (was 23/24, now 24/25).
  *
  * SD: SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001
  *
@@ -15,7 +23,7 @@
  *
  * plus an adversarial coexistence check proving a 'product_review' decision and
  * a 'stage_gate' decision live independently at the SAME
- * (venture_id, lifecycle_stage=23), and a widened-partial-pending-index check.
+ * (venture_id, lifecycle_stage=24), and a widened-partial-pending-index check.
  *
  * Uses real Supabase service-role connection (requires .env). Skipped if no real
  * DB. Creates disposable ventures whose names deliberately do NOT match
@@ -24,8 +32,8 @@
  * afterAll → zero residue.
  *
  * IMPORTANT gate-ordering nuance discovered live (documented via the 2a-raw vs
- * 2a-isolated split below): for 23->24 the RPC evaluates the pre-existing
- * decision_type-AGNOSTIC kill-gate FIRST (stage 23 is gate_type='kill'), THEN the
+ * 2a-isolated split below): for 24->25 the RPC evaluates the pre-existing
+ * decision_type-AGNOSTIC kill-gate FIRST (stage 24 is gate_type='kill'), THEN the
  * new product_review block, THEN an artifact precondition (launch_readiness_
  * checklist). So a venture with ZERO decisions returns 'gate_blocked' (the old
  * kill-gate), NOT 'product_review_required'. To ISOLATE the new gate we satisfy
@@ -52,6 +60,8 @@ import { resolve } from 'path';
 // escalation side effect, so that one call is neutralized here and nowhere else in this file.
 vi.mock('../../../lib/eva/chairman-product-review.js', () => ({
   requestProductReview: vi.fn().mockResolvedValue({ id: null, isNew: false, skipped: true, reason: 'test_neutralized' }),
+  PRODUCT_REVIEW_STAGE: 24,
+  PRODUCT_REVIEW_DECISION_TYPE: 'product_review',
 }));
 
 import { StageExecutionWorker } from '../../../lib/eva/stage-execution-worker.js';
@@ -90,7 +100,7 @@ async function createVenture(tag) {
       // residue so it can never reach the chairman queue/digest.
       name: `ProductReviewGate-RealDB-${tag}-${runId}`,
       problem_statement: 'Disposable venture for SD-LEO-INFRA-CHAIRMAN-PRODUCT-REVIEW-001 real-DB gate test',
-      current_lifecycle_stage: 23,
+      current_lifecycle_stage: 24,
       is_demo: false,
       status: 'active',
     }, { classification: CLASSIFICATION.DELIBERATELY_REAL, source: 'tests/integration/eva/chairman-product-review-gate-realdb.test.js', reason: 'Exercises the REAL (non-fixture) chairman path end to end; the venture must NOT be excluded by fixture predicates.' })
@@ -112,7 +122,7 @@ async function insertDecision({ ventureId, decisionType, status, decision, attem
     .from('chairman_decisions')
     .insert({
       venture_id: ventureId,
-      lifecycle_stage: 23,
+      lifecycle_stage: 24,
       decision_type: decisionType,
       status,
       decision,
@@ -134,7 +144,7 @@ async function approveOrInsertDecision({ ventureId, decisionType }) {
     .from('chairman_decisions')
     .select('id')
     .eq('venture_id', ventureId)
-    .eq('lifecycle_stage', 23)
+    .eq('lifecycle_stage', 24)
     .eq('decision_type', decisionType)
     .eq('status', 'pending')
     .maybeSingle();
@@ -195,22 +205,22 @@ describe.skipIf(!HAS_REAL_DB)('Chairman product-review gate — REAL DB, both ch
 
   // ───────────────────────── RPC PATH (Venture A) ─────────────────────────
 
-  it('RPC 2a-raw: 23→24 with ZERO decisions is blocked & does NOT advance (kill-gate fires first)', async () => {
-    const { data, error } = await callAdvance(ventureA.id, 23, 24);
+  it('RPC 2a-raw: 24→25 with ZERO decisions is blocked & does NOT advance (kill-gate fires first)', async () => {
+    const { data, error } = await callAdvance(ventureA.id, 24, 25);
     expect(error).toBeNull();
     expect(data.success).toBe(false);
     // Documented ordering nuance: with no decisions at all, the pre-existing
     // decision_type-agnostic kill-gate ('gate_blocked') fires before the new
     // product_review block. Either way the transition is refused.
     expect(['gate_blocked', 'review_gate_blocked', 'product_review_required']).toContain(data.error);
-    expect(await currentStage(ventureA.id)).toBe(23);
+    expect(await currentStage(ventureA.id)).toBe(24);
   });
 
   it('RPC 2a-isolated: with kill-gate+artifact satisfied but NO product_review, returns product_review_required', async () => {
-    // Satisfy the artifact precondition (stage 23 requires launch_readiness_checklist).
+    // Satisfy the artifact precondition (stage 24 requires launch_readiness_checklist).
     const { error: artErr } = await supabase.from('venture_artifacts').insert({
       venture_id: ventureA.id,
-      lifecycle_stage: 23,
+      lifecycle_stage: 24,
       artifact_type: 'launch_readiness_checklist',
       title: 'E2E launch readiness checklist',
       is_current: true,
@@ -224,25 +234,25 @@ describe.skipIf(!HAS_REAL_DB)('Chairman product-review gate — REAL DB, both ch
     });
     expect(sgErr).toBeNull();
 
-    const { data, error } = await callAdvance(ventureA.id, 23, 24);
+    const { data, error } = await callAdvance(ventureA.id, 24, 25);
     expect(error).toBeNull();
     expect(data.success).toBe(false);
     // The NEW gate is now the sole remaining blocker → isolates it precisely.
     expect(data.error).toBe('product_review_required');
-    expect(await currentStage(ventureA.id)).toBe(23);
+    expect(await currentStage(ventureA.id)).toBe(24);
   });
 
-  it('RPC 2c-release: approving a product_review decision releases 23→24 and advances the DB row', async () => {
+  it('RPC 2c-release: approving a product_review decision releases 24→25 and advances the DB row', async () => {
     const { error: prErr } = await insertDecision({
       ventureId: ventureA.id, decisionType: 'product_review', status: 'approved', decision: 'approve',
     });
     expect(prErr).toBeNull();
 
-    const { data, error } = await callAdvance(ventureA.id, 23, 24);
+    const { data, error } = await callAdvance(ventureA.id, 24, 25);
     expect(error).toBeNull();
     expect(data.success).toBe(true);
-    expect(data.to_stage).toBe(24);
-    expect(await currentStage(ventureA.id)).toBe(24);
+    expect(data.to_stage).toBe(25);
+    expect(await currentStage(ventureA.id)).toBe(25);
   });
 
   // ──────────────────── DAEMON-WALK PATH (Venture B) ─────────────────────
@@ -250,31 +260,31 @@ describe.skipIf(!HAS_REAL_DB)('Chairman product-review gate — REAL DB, both ch
   // worker gate checks ONLY the approved product_review decision (kill-gate /
   // artifacts are the RPC's responsibility), so no extra preconditions here.
 
-  it('WORKER 3a-block: _advanceStage(23→24) with no product_review returns blocked & does NOT advance', async () => {
+  it('WORKER 3a-block: _advanceStage(24→25) with no product_review returns blocked & does NOT advance', async () => {
     const worker = new StageExecutionWorker({ supabase, logger: console });
-    const result = await worker._advanceStage(ventureB.id, 23, 24, {});
+    const result = await worker._advanceStage(ventureB.id, 24, 25, {});
     expect(result).toEqual({ advanced: false, blocked: true, reason: 'product_review_choke_point' });
     // Authoritative DB assertion — not just the in-memory return value.
-    expect(await currentStage(ventureB.id)).toBe(23);
+    expect(await currentStage(ventureB.id)).toBe(24);
   });
 
-  it('WORKER 3c-release: after approving product_review, _advanceStage advances the DB row to 24', async () => {
+  it('WORKER 3c-release: after approving product_review, _advanceStage advances the DB row to 25', async () => {
     // 3a-block's _advanceStage() call already minted a PENDING product_review decision via its
     // own proactive requestProductReview() side effect — approve that same row.
     const { error: prErr } = await approveOrInsertDecision({ ventureId: ventureB.id, decisionType: 'product_review' });
     expect(prErr).toBeNull();
 
     const worker = new StageExecutionWorker({ supabase, logger: console });
-    const result = await worker._advanceStage(ventureB.id, 23, 24, {});
+    const result = await worker._advanceStage(ventureB.id, 24, 25, {});
     expect(result?.blocked).not.toBe(true);
-    // Authoritative DB assertion: the ventures row actually moved to 24.
-    expect(await currentStage(ventureB.id)).toBe(24);
+    // Authoritative DB assertion: the ventures row actually moved to 25.
+    expect(await currentStage(ventureB.id)).toBe(25);
   });
 
   // ──────────────── ADVERSARIAL COEXISTENCE (Venture C) ──────────────────
 
-  it('ADVERSARIAL: product_review and stage_gate decisions coexist independently at (venture,23)', async () => {
-    // Both inserted as PENDING at the same (venture_id, lifecycle_stage=23):
+  it('ADVERSARIAL: product_review and stage_gate decisions coexist independently at (venture,24)', async () => {
+    // Both inserted as PENDING at the same (venture_id, lifecycle_stage=24):
     // pre-widening this violated idx_chairman_decisions_unique_pending
     // (venture_id, lifecycle_stage) WHERE status='pending'. Both succeeding
     // proves decision_type is now part of that partial unique index.
@@ -292,7 +302,7 @@ describe.skipIf(!HAS_REAL_DB)('Chairman product-review gate — REAL DB, both ch
       .from('chairman_decisions')
       .select('id, decision_type, status, decision')
       .eq('venture_id', ventureC.id)
-      .eq('lifecycle_stage', 23)
+      .eq('lifecycle_stage', 24)
       .order('decision_type');
     expect(rows.map(r => r.decision_type)).toEqual(['product_review', 'stage_gate']);
 

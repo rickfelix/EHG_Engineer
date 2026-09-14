@@ -1,0 +1,53 @@
+# EVA stage-literal lint — weekly graduation gauge. SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J
+# (FR-10 acceptance criterion: "closes/graduates only after 2 consecutive weekly zero
+# readings via a periodic_process_registry row (ratification 49656c8c), never on a single
+# merge"). This is the GRADUATION instrument for eva-stage-literal-lint.yml's advisory
+# per-PR gate — see that workflow's own header for the flip criterion.
+#
+# Runs the full --all sweep against main and stamps standard_loop:eva-stage-literal-lint-weekly
+# in periodic_process_registry ONLY when the sweep is clean (exit 0). A dirty week does not
+# stamp, so periodic-liveness-watcher.mjs's existing missed-cadence machinery makes "how many
+# recent weeks were clean" directly readable from the row without a bespoke history table.
+#
+# Prerequisite: node scripts/one-off/register-eva-stage-literal-lint-periodic-process-001-j.mjs
+# must have run once (registry membership is additive, never auto-created by the stamp call).
+
+name: EVA Stage Literal Lint (weekly graduation gauge)
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eva-stage-literal-lint-weekly
+  cancel-in-progress: true
+
+jobs:
+  eva-stage-literal-lint-weekly:
+    name: eva-stage-literal-lint-weekly
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Needed: this script imports @supabase/supabase-js + dotenv (unlike the underlying
+      # per-PR lint it wraps, which is dependency-free node builtins only).
+      - name: Install dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Weekly full sweep (stamps on clean, never on dirty)
+        run: node scripts/cron/eva-stage-literal-lint-weekly-stamp.mjs

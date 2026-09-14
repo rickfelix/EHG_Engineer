@@ -538,3 +538,46 @@ describe('SD-LEO-FIX-FIX-WIRE-CHECK-001: probe-script exemptions', () => {
     expect(source).toMatch(/Re-run LEAD-FINAL-APPROVAL from the SD worktree/);
   });
 });
+
+// ─── SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C (P2.2): dispatch-registry advisory ──
+describe('P2.2: dispatchRegistryAdvisoriesForNewFiles (advisory-only, never blocking)', () => {
+  it('returns no advisories when the added-file list has no new analysis-step file', async () => {
+    const { dispatchRegistryAdvisoriesForNewFiles } = await import(
+      '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js'
+    );
+    expect(dispatchRegistryAdvisoriesForNewFiles([])).toEqual([]);
+    expect(dispatchRegistryAdvisoriesForNewFiles(['lib/eva/some-other-file.js'])).toEqual([]);
+  });
+
+  it('flags a new analysis-step file with no dispatch-registry entry', async () => {
+    const { dispatchRegistryAdvisoriesForNewFiles } = await import(
+      '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js'
+    );
+    const advisories = dispatchRegistryAdvisoriesForNewFiles([
+      'lib/eva/stage-templates/analysis-steps/stage-99-brand-new.js',
+    ]);
+    expect(advisories).toHaveLength(1);
+    expect(advisories[0]).toMatch(/stage-99-brand-new\.js/);
+    expect(advisories[0]).toMatch(/dispatch-registry\.js/);
+  });
+
+  it('does not flag a new analysis-step file that already has a real registry entry', async () => {
+    const { dispatchRegistryAdvisoriesForNewFiles } = await import(
+      '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js'
+    );
+    // stage-01-hydration.js is a real, currently-registered entry (stage-01.js dispatches it).
+    const advisories = dispatchRegistryAdvisoriesForNewFiles([
+      'lib/eva/stage-templates/analysis-steps/stage-01-hydration.js',
+    ]);
+    expect(advisories).toEqual([]);
+  });
+
+  it('never inspects the dead index.js loader itself as a "new analysis-step file"', async () => {
+    const { dispatchRegistryAdvisoriesForNewFiles } = await import(
+      '../../../scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js'
+    );
+    expect(dispatchRegistryAdvisoriesForNewFiles([
+      'lib/eva/stage-templates/analysis-steps/index.js',
+    ])).toEqual([]);
+  });
+});

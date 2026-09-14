@@ -182,4 +182,37 @@ describe('isTrackedMigrationPath — write-time guard (QF-20260903-622)', () => 
     // exist on disk, so real git ls-files fails and this must resolve to false, not throw.
     expect(isTrackedMigrationPath(`${FAKE_ROOT}/${REPO_RELATIVE}`)).toBe(false);
   });
+
+  /**
+   * QF-20260913-250: getRepoRoot() deliberately resolves a .worktrees/<sd> checkout to the
+   * MAIN repo (lib/repo-paths.js). A file committed only on a pre-merge feature branch,
+   * checked from ITS OWN worktree, must be checked against THAT worktree's root — not
+   * silently defaulted to main, which does not yet have the branch-only file.
+   */
+  describe('repoRoot option (QF-20260913-250)', () => {
+    it('without an explicit repoRoot, the git subprocess cwd defaults to getRepoRoot() (unchanged behaviour)', () => {
+      const execFn = vi.fn(() => '');
+      isTrackedMigrationPath(`${FAKE_ROOT}/${REPO_RELATIVE}`, { execFn });
+      expect(execFn.mock.calls[0][1].cwd).toBe(FAKE_ROOT);
+    });
+
+    it('an explicit repoRoot overrides the git subprocess cwd', () => {
+      const WORKTREE_ROOT = 'C:/fake/checkout/.worktrees/some-sd';
+      const execFn = vi.fn(() => '');
+      isTrackedMigrationPath(`${FAKE_ROOT}/${REPO_RELATIVE}`, { execFn, repoRoot: WORKTREE_ROOT });
+      expect(execFn.mock.calls[0][1].cwd).toBe(WORKTREE_ROOT);
+    });
+
+    it('a file tracked only in the worktree checkout: passes when the worktree root is supplied, fails when the main root is used', () => {
+      const WORKTREE_ROOT = 'C:/fake/checkout/.worktrees/some-sd';
+      // Simulates: `git ls-files` succeeds when cwd is the worktree (branch-only file is
+      // tracked there), fails when cwd is main (file does not exist on main yet).
+      const execFn = vi.fn((_cmd, opts) => {
+        if (opts.cwd === WORKTREE_ROOT) return '';
+        throw new Error('pathspec did not match any file(s) known to git');
+      });
+      expect(isTrackedMigrationPath(`${FAKE_ROOT}/${REPO_RELATIVE}`, { execFn, repoRoot: WORKTREE_ROOT })).toBe(true);
+      expect(isTrackedMigrationPath(`${FAKE_ROOT}/${REPO_RELATIVE}`, { execFn })).toBe(false);
+    });
+  });
 });

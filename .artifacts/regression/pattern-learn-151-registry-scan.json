@@ -1,0 +1,78 @@
+{
+  "generated_at": "2026-09-14T04:50:00.016Z",
+  "generated_by": "scripts/one-off/_regression-write-result-sd-learn-fix-address-pattern-learn-151-plan-to-lead.mjs --scan",
+  "repo_root": "C:/Users/rickf/Projects/_EHG/EHG_Engineer/.worktrees/SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-151",
+  "files_scanned": 13630,
+  "scanner_defects_corrected": [
+    "self-match false positive (scanner excluded itself)",
+    "factory-call singleton false negative (create*ValidatorRegistry now matched)",
+    "comment-as-import false positive (import detection now ignores comments)"
+  ],
+  "constructs_validator_registry": [
+    {
+      "file": "scripts/modules/handoff/validation/validator-registry/index.js",
+      "isTest": false,
+      "occurrences": 1
+    },
+    {
+      "file": "tests/unit/governance/verdict-measured-provenance.test.js",
+      "isTest": true,
+      "occurrences": 3
+    },
+    {
+      "file": "tests/unit/handoff/handoff-system.test.js",
+      "isTest": true,
+      "occurrences": 2
+    },
+    {
+      "file": "tests/unit/handoff/validation/validator-registry/gate-l-sd-creation.test.js",
+      "isTest": true,
+      "occurrences": 1
+    },
+    {
+      "file": "tests/unit/implementation-fidelity/gate2-section-a-non-ui-skip.test.js",
+      "isTest": true,
+      "occurrences": 1
+    },
+    {
+      "file": "tests/unit/plan-to-exec/gate1-prd-quality-leniency.test.js",
+      "isTest": true,
+      "occurrences": 1
+    }
+  ],
+  "registers_gate_l_validators": [
+    {
+      "file": "scripts/modules/handoff/validation/validator-registry/gates/gate-l-sd-creation.js",
+      "isTest": false,
+      "occurrences": 1
+    },
+    {
+      "file": "scripts/modules/handoff/validation/validator-registry/index.js",
+      "isTest": false,
+      "occurrences": 1
+    },
+    {
+      "file": "scripts/one-off/_testing-write-result-sd-learn-fix-address-pattern-learn-151-plan-to-exec.mjs",
+      "isTest": false,
+      "occurrences": 2
+    },
+    {
+      "file": "tests/unit/handoff/validation/validator-registry/gate-l-sd-creation.test.js",
+      "isTest": true,
+      "occurrences": 1
+    }
+  ],
+  "module_level_registry_singletons": [
+    {
+      "file": "scripts/modules/handoff/validation/validator-registry/index.js",
+      "isTest": false
+    }
+  ],
+  "cached_registry_singletons": [],
+  "deliverable_imports_registry_index": false,
+  "deliverable_references_exported_singleton": false,
+  "deliverable_constructs_own_registry": true,
+  "deliverable_uses_mocks": false,
+  "other_test_files_registering_gate_l": [],
+  "leakage_risk": "SHARED_REGISTRY_UNREACHABLE_FROM_DELIVERABLE"
+}

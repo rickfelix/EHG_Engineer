@@ -134,17 +134,21 @@ describe('stageDecisionSmsNotification (FR-1)', () => {
     expect(sb._tables.chairman_decisions[0].sms_reply_token).toBeUndefined();
   });
 
-  it('TR-2: a decisionId that matches zero chairman_decisions rows throws decision_not_found (the notification row is already staged by then)', async () => {
+  it('TR-2: a decisionId that matches zero chairman_decisions rows throws decision_not_found, and the notification row it already staged is self-healed to failed (SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001)', async () => {
     const sb = makeFakeSupabase({ chairman_decisions: [] }); // no row for 'dec-missing'
     await expect(stageDecisionSmsNotification(sb, {
       decisionId: 'dec-missing', chairmanUserId: 'u1', chairmanEmail: 'c@example.com', chairmanPhone: '+1555',
       options: [], token: 'tok-1', expiresAt: future(),
     })).rejects.toThrow(/decision_not_found/);
-    // The notification insert still landed — this is the "loud, distinguishable failure" FR-4 relies on.
+    // The notification insert still landed, but is no longer left live -- stageDecisionSmsNotification
+    // self-heals via invalidateDecisionSmsStaging before rethrowing, marking it failed rather than
+    // leaving an orphaned 'queued' row that reads as a real, still-pending ask.
     expect(sb._tables.chairman_notifications).toHaveLength(1);
+    expect(sb._tables.chairman_notifications[0].status).toBe('failed');
+    expect(sb._tables.chairman_notifications[0].error_message).toMatch(/staging_partial_failure/);
   });
 
-  it('an injected chairman_decisions update error throws', async () => {
+  it('an injected chairman_decisions update error throws, and the already-staged notification is self-healed to failed', async () => {
     const sb = makeFakeSupabase(
       { chairman_decisions: [{ id: 'dec-1', status: 'pending', brief_data: {} }] },
       { forceUpdateError: { table: 'chairman_decisions', message: 'update boom' } },
@@ -153,6 +157,11 @@ describe('stageDecisionSmsNotification (FR-1)', () => {
       decisionId: 'dec-1', chairmanUserId: 'u1', chairmanEmail: 'c@example.com', chairmanPhone: '+1555',
       options: [], token: 'tok-1', expiresAt: future(),
     })).rejects.toThrow(/update boom/);
+    // SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001: invalidateDecisionSmsStaging's own chairman_decisions
+    // clear also hits this same forced error (harmless, best-effort, caught internally) -- but its
+    // chairman_notifications status update is a DIFFERENT table and must still land.
+    expect(sb._tables.chairman_notifications[0].status).toBe('failed');
+    expect(sb._tables.chairman_notifications[0].error_message).toMatch(/staging_partial_failure.*update boom/);
   });
 });
 

@@ -11,6 +11,16 @@
 --
 -- Additive-only: every existing accepted value stays accepted, so no existing
 -- row or caller is affected.
+--
+-- UPDATE 2026-09-13 (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-A, TESTING sub-agent
+-- finding, EXEC phase): this migration was authored 2026-08-28 but never applied
+-- live. Meanwhile 20260913_venture_quality_findings_capa_baseline_categories.sql
+-- WAS applied live, adding 'performance' and 'responsive' (plus 'accessibility',
+-- which this migration's list already carried) via its own DROP+ADD of the same
+-- constraint. Both migrations rebuild the constraint from a hardcoded list rather
+-- than the live value set, so whichever applies LAST silently clobbers the other's
+-- additions -- 'performance'/'responsive' were added here to keep this file a true
+-- superset of current live state, so applying it later cannot regress them.
 
 BEGIN;
 
@@ -24,7 +34,8 @@ ALTER TABLE venture_quality_findings
     'unit_test', 'e2e_test',
     'uat_test', 'bug_report', 'uat_signoff',
     'capability',
-    'usability', 'accessibility', 'journey_coherence'
+    'usability', 'accessibility', 'journey_coherence',
+    'performance', 'responsive'
   ));
 
 COMMIT;

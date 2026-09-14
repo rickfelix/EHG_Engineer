@@ -1,0 +1,39 @@
+name: Venture Quality Model Predicate
+
+# SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-B (FR-4)
+#
+# Two-limb predicate over lib/eva/quality-model/registry.js:
+#   Limb 1 (BLOCKING): every generated category (FINDING_CATEGORIES + the stage-23
+#     launch-readiness checklist arrays) maps to a registry dimension.
+#   Limb 2 (ADVISORY): every dimension has a producer+reader or a dated waiver. The
+#     runner script's own exit code reflects ONLY limb 1 -- limb 2 findings are always
+#     printed to the job log but never fail the step, since most dimensions don't have
+#     both yet (root cause B). Tracked graduation trigger:
+#     docs/04_features/venture-quality-model-v1.md.
+#
+# NO brace-alternation in the paths filter below (workflow-path-filter-lint.yml
+# blocks that shape -- GitHub Actions does not expand '{a,b}' globs).
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/quality-model/**'
+      - 'lib/eva/quality-findings/finding-shape.js'
+      - 'lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js'
+      - 'scripts/eva/run-quality-model-predicate.mjs'
+      - '.github/workflows/quality-model-predicate.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-model-predicate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Limb 1 (blocking) + Limb 2 (advisory report)
+        run: node scripts/eva/run-quality-model-predicate.mjs

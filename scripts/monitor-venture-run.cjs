@@ -21,12 +21,15 @@ const VENTURE_NAME = process.env.VENTURE_NAME || (VENTURE_ID ? `venture ${VENTUR
 const STOP_AT_STAGE = parseInt(process.env.STOP_AT_STAGE || '17', 10);
 const POLL_MS = 30000;
 
-// Gate classification — sourced from venture_stages (DB authoritative as of 2026-04-25)
+// Gate classification — sourced from venture_stages (DB authoritative; re-verified live
+// 2026-09-13 against venture_stages.gate_type for SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H FR-6,
+// after venture_stages inserted stage 23 = Dedicated Venture UAT [gate_type=none] ahead of the
+// launch/learn tail, shifting the old S23 Launch Readiness Kill Gate to S24).
 // Decision gates require chairman_decision row before advance. PROMOTION = metadata.gate_type='promotion'.
-// S23 is named "Launch Readiness Kill Gate" but stored as decision_gate; flagged here for log clarity.
-const KILL_GATES = new Set([23]);
+// S24 is named "Launch Readiness Kill Gate" but stored as decision_gate; flagged here for log clarity.
+const KILL_GATES = new Set([24]);
 const PROMOTION_GATES = new Set([17]);
-const BLOCKING_GATES = new Set([3, 5, 13, 16, 17, 23, 24]);
+const BLOCKING_GATES = new Set([3, 5, 13, 16, 17, 24]);
 // Stages that need an SD/human input (work_type=sd_required) — auto-advance is unsafe.
 // SD-LEO-INFRA-CONFIG-HONESTY-RECONCILE-001: only S19 (BUILD) genuinely creates a per-venture
 // SD tree (via lifecycle-sd-bridge). S10 (Customer & Brand Foundation) and S18 (Marketing Copy
@@ -60,10 +63,11 @@ const STAGE_NAMES = {
   20:'Code Quality Gate',
   21:'Distribution Setup',
   22:'Visual Assets',
-  23:'Launch Readiness [KILL GATE]',
-  24:'Go Live & Announce [GATE]',
-  25:'Post-Launch Review',
-  26:'Growth Playbook'
+  23:'Dedicated Venture UAT',
+  24:'Launch Readiness [KILL GATE]',
+  25:'Go Live & Announce [GATE]',
+  26:'Post-Launch Review',
+  27:'Growth Playbook'
 };
 
 // Post-Stitch-replacement: monitor wireframe_screens instead of stitch artifacts

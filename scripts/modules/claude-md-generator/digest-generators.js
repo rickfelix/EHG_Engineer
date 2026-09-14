@@ -125,6 +125,15 @@ const AUTHORITY_MARKERS = [
   // exactly these two lines and nothing else.
   /\bis NOT\b/, /\bdoes NOT\b/, /\bNOT a\b/, /\bnot\b.{0,30}\bdelegat/i,
 ];
+
+/**
+ * QF-20260913-791: a rule the contract itself ranks above the others (e.g. RULE #0's own heading
+ * says "ABOVE ALL OTHER DUTIES") must survive by that RANK, not by whether its prose happens to
+ * contain a marker word — its body can be plain narrative prose with zero AUTHORITY_MARKERS hits.
+ * A heading matching this list forces its ENTIRE block (heading through the next heading) into the
+ * top seating tier, ahead of STRONG_MARKERS, regardless of vocabulary.
+ */
+const RANK_HEADING_MARKERS = [/ABOVE ALL OTHER DUTIES/i];
 // CASE MATTERS HERE, AND GETTING IT WRONG IS HOW I MIS-MEASURED MY OWN FIX.
 // never/must/only are case-INSENSITIVE because prose carries them in lowercase ("the only way to
 // get a context-fresh perspective") and that sentence is as binding as a shouted one. The NOT forms
@@ -177,6 +186,19 @@ function retainAuthorityClauses(title, content, maxChars) {
   const binding = new Set();
   let heading = -1;
 
+  // Rank-marked blocks (heading through the next heading) are seated whole, unconditionally —
+  // see RANK_HEADING_MARKERS. This runs before the vocabulary scan so a ranked rule's plain-prose
+  // body is never left depending on luck.
+  const rankBlocks = new Set();
+  lines.forEach((line, i) => {
+    if (!RANK_HEADING_MARKERS.some((re) => re.test(line))) return;
+    for (let j = i; j < lines.length; j++) {
+      if (j > i && /^#{2,6}\s/.test(lines[j])) break;
+      rankBlocks.add(j);
+    }
+  });
+  rankBlocks.forEach((i) => binding.add(i));
+
   lines.forEach((line, i) => {
     if (/^#{2,6}\s/.test(line)) { heading = i; return; }
     if (!AUTHORITY_MARKERS.some((re) => re.test(line))) return;
@@ -209,7 +231,7 @@ function retainAuthorityClauses(title, content, maxChars) {
   // tail, which is the bug this whole function exists to fix. So seat in THREE passes, strongest
   // first: explicit prohibitions, then general modals, then prose backfill. Position stops deciding
   // what survives at every tier, not just the first.
-  const tier = (i) => (STRONG_MARKERS.some((re) => re.test(lines[i])) ? 0 : 1);
+  const tier = (i) => (rankBlocks.has(i) ? -1 : STRONG_MARKERS.some((re) => re.test(lines[i])) ? 0 : 1);
   const ordered = [...binding].sort((a, b) => tier(a) - tier(b) || a - b);
 
   for (const i of ordered) {
@@ -227,6 +249,22 @@ function retainAuthorityClauses(title, content, maxChars) {
     used = next;
   }
 
+  // A heading advertising a rule with none of its body is worse than dropping the rule entirely
+  // (QF-20260913-791) — a reader who greps for it finds it present and reads nothing. Prune any
+  // seated heading whose block (through the next heading) has no other seated line.
+  let blockHeading = -1;
+  let blockHasBody = false;
+  for (let i = 0; i <= lines.length; i++) {
+    const isHeading = i < lines.length && /^#{2,6}\s/.test(lines[i]);
+    if (isHeading || i === lines.length) {
+      if (blockHeading >= 0 && seated.has(blockHeading) && !blockHasBody) seated.delete(blockHeading);
+      blockHeading = isHeading ? i : -1;
+      blockHasBody = false;
+      continue;
+    }
+    if (seated.has(i) && lines[i].trim().length > 0) blockHasBody = true;
+  }
+
   const keep = [...seated].sort((a, b) => a - b);
   const out = [];
   let prev = -1;
@@ -237,6 +275,11 @@ function retainAuthorityClauses(title, content, maxChars) {
     prev = i;
   }
   if (prev >= 0 && prev < lines.length - 1) out.push('…');
+
+  const evicted = lines.length - keep.length;
+  if (evicted > 0) {
+    console.log(`[digest-generators] "${title}": authority-selected digest evicted ${evicted}/${lines.length} lines to fit budget`);
+  }
 
   return head + out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + NOTE;
 }

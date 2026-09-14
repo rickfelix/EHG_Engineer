@@ -6,13 +6,18 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { checkStageArtifactPrecondition } from '../../../lib/eva/stage-artifact-precondition.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../lib/eva/artifact-persistence-service.js';
 
 vi.mock('../../../lib/eva/deviation-ledger.js', () => ({
   readDeviations: vi.fn(),
 }));
 import { readDeviations } from '../../../lib/eva/deviation-ledger.js';
 
-function fakeSupabase({ metadata = {}, flagEnabled = false, canonicalArtifacts = [], legacyArtifacts = [], presentArtifacts = [] } = {}) {
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
+
+function fakeSupabase({ metadata = {}, flagEnabled = false, canonicalArtifacts = [], legacyArtifacts = [], presentArtifacts = [], presentArtifactRows = null } = {}) {
   return {
     from(table) {
       if (table === 'ventures') {
@@ -28,7 +33,13 @@ function fakeSupabase({ metadata = {}, flagEnabled = false, canonicalArtifacts =
         return { select: () => ({ eq: () => ({ eq: () => Promise.resolve({ data: legacyArtifacts.map((a) => ({ artifact_type: a })), error: null }) }) }) };
       }
       if (table === 'venture_artifacts') {
-        return { select: () => ({ eq: () => ({ eq: () => ({ in: () => Promise.resolve({ data: presentArtifacts.map((a) => ({ artifact_type: a })), error: null }) }) }) }) };
+        // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-5): presentArtifactRows lets a test supply
+        // metadata/created_at/content for provenance grading; presentArtifacts stays the plain
+        // artifact_type-only shape every pre-existing test uses.
+        const rows = presentArtifactRows || presentArtifacts.map((a) => ({ artifact_type: a }));
+        // count-truncation-diff-lint (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G): production code
+        // now chains .in(...).limit(999).
+        return { select: () => ({ eq: () => ({ eq: () => ({ in: () => ({ limit: () => Promise.resolve({ data: rows, error: null }) }) }) }) }) };
       }
       throw new Error(`unexpected table: ${table}`);
     },
@@ -104,6 +115,30 @@ describe('checkStageArtifactPrecondition: FR-6 deviation valve', () => {
     expect(result.blocked).toBe(true);
     expect(result.deviatedArtifacts).toEqual(['artifact_a']);
     expect(result.missingArtifacts).toEqual(['artifact_b']);
+  });
+});
+
+describe('checkStageArtifactPrecondition: machine provenance (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G, FR-5, advisory-only)', () => {
+  it('records a present-but-unprovenanced post-cutover artifact in provenanceWarnings without blocking', async () => {
+    const sb = fakeSupabase({
+      flagEnabled: true,
+      canonicalArtifacts: ['canonical_a'],
+      presentArtifactRows: [{ artifact_type: 'canonical_a', metadata: null, created_at: POST_CUTOVER }],
+    });
+    const result = await checkStageArtifactPrecondition(sb, 'v1', 22);
+    expect(result.blocked).toBe(false);
+    expect(result.provenanceWarnings).toEqual(['canonical_a']);
+  });
+
+  it('does not record a provenance warning for a pre-cutover legacy artifact', async () => {
+    const sb = fakeSupabase({
+      flagEnabled: true,
+      canonicalArtifacts: ['canonical_a'],
+      presentArtifactRows: [{ artifact_type: 'canonical_a', metadata: null, created_at: '2026-01-01T00:00:00Z' }],
+    });
+    const result = await checkStageArtifactPrecondition(sb, 'v1', 22);
+    expect(result.blocked).toBe(false);
+    expect(result.provenanceWarnings).toEqual([]);
   });
 });
 

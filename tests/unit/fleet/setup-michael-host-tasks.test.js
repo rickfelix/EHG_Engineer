@@ -37,9 +37,9 @@ const GMAIL_WRAPPER = path.join(REPO, 'scripts', 'cron', 'michael-gmail-triage-t
 const BATTERY_FALSE = '<Settings><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries></Settings>';
 
 describe('MICHAEL_TASKS and the plan', () => {
-  it('registers exactly the seven host-venue feeders with distinct colon-free names and michael-<feeder>-task.cmd wrappers (gitignored pattern)', () => {
-    expect(MICHAEL_TASKS.map((t) => t.feeder)).toEqual(['tasks-classifier', 'calendar-read', 'gmail-triage', 'todoist-brief', 'brief-assemble', 'oracle-extract', 'health-sync']);
-    expect(new Set(MICHAEL_TASKS.map((t) => t.taskName)).size).toBe(7);
+  it('registers exactly the eight host-venue feeders with distinct colon-free names and michael-<feeder>-task.cmd wrappers (gitignored pattern)', () => {
+    expect(MICHAEL_TASKS.map((t) => t.feeder)).toEqual(['tasks-classifier', 'calendar-read', 'gmail-triage', 'todoist-brief', 'brief-assemble', 'oracle-extract', 'health-sync', 'checkpoint-send']);
+    expect(new Set(MICHAEL_TASKS.map((t) => t.taskName)).size).toBe(8);
     for (const t of MICHAEL_TASKS) {
       for (const ch of TASK_NAME_ILLEGAL_CHARS) expect(t.taskName, `${t.taskName} contains ${JSON.stringify(ch)}`).not.toContain(ch);
       expect(t.taskName).toMatch(/^EHG Michael [a-z-]+$/);
@@ -68,7 +68,7 @@ describe('MICHAEL_TASKS and the plan', () => {
   });
   it('the create args carry /SC MINUTE /MO 15 /ST 00:00 /F and NEITHER /RU NOR /NP (measured denied unelevated); the TR action is the quoted hidden launcher', () => {
     const plan = buildPlan({ repoRoot: REPO });
-    expect(plan).toHaveLength(7);
+    expect(plan).toHaveLength(8);
     for (const p of plan) {
       expect(p.createArgs).toEqual(['/Create', '/TN', p.taskName, '/TR', p.trAction, '/SC', 'MINUTE', '/MO', '15', '/ST', '00:00', '/F']);
       expect(p.createArgs).not.toContain('/RU'); expect(p.createArgs).not.toContain('/NP');
@@ -113,13 +113,13 @@ describe('main (injected deps, no host mutation)', () => {
     expect(await main(['node', 'x'], d)).toEqual({ exitCode: 2, action: 'not_win32' });
     expect(calls).toEqual([]); expect(errors[0]).toMatch(/win32-only/);
   });
-  it('--dry-run prints seven wrappers, seven /Create lines and seven Set-ScheduledTask lines with no /RU /NP, states the preconditions, and mutates nothing', async () => {
+  it('--dry-run prints eight wrappers, eight /Create lines and eight Set-ScheduledTask lines with no /RU /NP, states the preconditions, and mutates nothing', async () => {
     const { d, calls, writes, logs, batteryCalls } = deps();
     const r = await main(['node', 'x', '--dry-run'], d);
     expect(r).toMatchObject({ exitCode: 0, action: 'dry_run_register' });
-    expect(r.plan.map((p) => p.script)).toEqual(['scripts/michael/tasks-classifier.mjs --apply', 'scripts/michael/calendar-read.mjs --apply', 'scripts/michael/gmail-triage.mjs --apply', 'scripts/michael/todoist-brief.mjs --apply', 'scripts/michael/brief-assemble.mjs --apply', 'scripts/michael/oracle-extract.mjs --apply', 'scripts/michael/health-sync.mjs --apply']);
-    expect(logs.filter((l) => /would run: schtasks \/Create/.test(l))).toHaveLength(7);
-    expect(logs.filter((l) => /would run: Set-ScheduledTask -TaskName 'EHG Michael [a-z-]+' -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries$/.test(l))).toHaveLength(7);
+    expect(r.plan.map((p) => p.script)).toEqual(['scripts/michael/tasks-classifier.mjs --apply', 'scripts/michael/calendar-read.mjs --apply', 'scripts/michael/gmail-triage.mjs --apply', 'scripts/michael/todoist-brief.mjs --apply', 'scripts/michael/brief-assemble.mjs --apply', 'scripts/michael/oracle-extract.mjs --apply', 'scripts/michael/health-sync.mjs --apply', 'scripts/michael/checkpoint-send.mjs --apply']);
+    expect(logs.filter((l) => /would run: schtasks \/Create/.test(l))).toHaveLength(8);
+    expect(logs.filter((l) => /would run: Set-ScheduledTask -TaskName 'EHG Michael [a-z-]+' -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries$/.test(l))).toHaveLength(8);
     expect(logs.join('\n')).toMatch(/awake/); expect(logs.join('\n')).toMatch(/battery-tolerant/); expect(logs.join('\n')).not.toMatch(/mains power/); expect(logs.join('\n')).toMatch(/no \/RU \/NP/);
     for (const l of logs.filter((x) => /would run: schtasks/.test(x))) expect(l).not.toMatch(/\/RU |\/NP /);
     expect(calls).toEqual([]); expect(writes).toEqual([]); expect(batteryCalls).toEqual([]);
@@ -130,14 +130,14 @@ describe('main (injected deps, no host mutation)', () => {
     expect(pre.errors.join('\n')).toMatch(/would REFUSE: feeder script\(s\) missing/); expect(pre.warns.join('\n')).toMatch(/would DEMOTE/);
     expect(pre.calls).toEqual([]); expect(pre.writes).toEqual([]);
   });
-  it('register writes the seven wrappers, runs seven /Create calls and clears the battery restrictions on each registered task; --with-modify promotes only gmail-triage', async () => {
+  it('register writes the eight wrappers, runs eight /Create calls and clears the battery restrictions on each registered task; --with-modify promotes only gmail-triage', async () => {
     const { d, calls, writes, batteryCalls, warns, logs } = deps();
     expect(await main(['node', 'x'], d)).toMatchObject({ exitCode: 0, action: 'registered', withModify: false });
-    expect(writes.map(([p]) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new', 'michael-todoist-brief-task.cmd.new', 'michael-brief-assemble-task.cmd.new', 'michael-oracle-extract-task.cmd.new', 'michael-health-sync-task.cmd.new']);
-    // 7 /Create + 1 /Change /DISABLE (tasks-classifier only, QF-20260911-282 / ratification 04c9dd29 point 2)
-    expect(calls).toHaveLength(8);
+    expect(writes.map(([p]) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new', 'michael-todoist-brief-task.cmd.new', 'michael-brief-assemble-task.cmd.new', 'michael-oracle-extract-task.cmd.new', 'michael-health-sync-task.cmd.new', 'michael-checkpoint-send-task.cmd.new']);
+    // 8 /Create + 1 /Change /DISABLE (tasks-classifier only, QF-20260911-282 / ratification 04c9dd29 point 2)
+    expect(calls).toHaveLength(9);
     const createCalls = calls.filter((c) => c[0] === '/Create');
-    expect(createCalls).toHaveLength(7);
+    expect(createCalls).toHaveLength(8);
     expect(calls.filter((c) => c[0] === '/Change')).toEqual([['/Change', '/TN', 'EHG Michael tasks-classifier', '/DISABLE']]);
     expect(batteryCalls).toEqual(MICHAEL_TASKS.map((t) => t.taskName)); expect(warns).toEqual([]);
     for (const c of createCalls) { expect(c).not.toContain('/RU'); expect(c).not.toContain('/NP'); }
@@ -182,7 +182,7 @@ describe('main (injected deps, no host mutation)', () => {
     expect(await main(['node', 'x'], f.d)).toMatchObject({ exitCode: 1, action: 'registered' });
     expect(f.errors.join('\n')).toMatch(/Access is denied/);
     // the wrapper is swapped in only after /Create succeeds: the failed task's staged wrapper is removed, its old wrapper untouched
-    expect(f.renames.map(([, to]) => path.basename(to))).toEqual(['michael-tasks-classifier-task.cmd', 'michael-gmail-triage-task.cmd', 'michael-todoist-brief-task.cmd', 'michael-brief-assemble-task.cmd', 'michael-oracle-extract-task.cmd', 'michael-health-sync-task.cmd']);
+    expect(f.renames.map(([, to]) => path.basename(to))).toEqual(['michael-tasks-classifier-task.cmd', 'michael-gmail-triage-task.cmd', 'michael-todoist-brief-task.cmd', 'michael-brief-assemble-task.cmd', 'michael-oracle-extract-task.cmd', 'michael-health-sync-task.cmd', 'michael-checkpoint-send-task.cmd']);
     // the battery post-step runs only on a task that /Create actually registered
     expect(f.batteryCalls).toEqual(MICHAEL_TASKS.filter((t) => t.feeder !== 'calendar-read').map((t) => t.taskName));
     expect(f.unlinks.map((p) => path.basename(p))).toEqual(['michael-calendar-read-task.cmd.new']);
@@ -196,17 +196,17 @@ describe('main (injected deps, no host mutation)', () => {
     expect(await main(['node', 'x'], swap.d)).toMatchObject({ exitCode: 1 });
     expect(swap.errors.join('\n')).toMatch(/runs the PREVIOUS wrapper/);
     // the staged file never lingers (it embeds the host-absolute repo root): removed on a failed rename too
-    expect(swap.unlinks.map((p) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new', 'michael-todoist-brief-task.cmd.new', 'michael-brief-assemble-task.cmd.new', 'michael-oracle-extract-task.cmd.new', 'michael-health-sync-task.cmd.new']);
+    expect(swap.unlinks.map((p) => path.basename(p))).toEqual(['michael-tasks-classifier-task.cmd.new', 'michael-calendar-read-task.cmd.new', 'michael-gmail-triage-task.cmd.new', 'michael-todoist-brief-task.cmd.new', 'michael-brief-assemble-task.cmd.new', 'michael-oracle-extract-task.cmd.new', 'michael-health-sync-task.cmd.new', 'michael-checkpoint-send-task.cmd.new']);
     // a refused Set-ScheduledTask is non-fatal (the task exists; QF-20260908-848 shape) but is said out loud, per task, with the failure code
     const b = deps({ battery: (name) => (/health-sync/.test(name) ? { ok: false, error: 'Access is denied' } : { ok: true }) });
     expect(await main(['node', 'x'], b.d)).toMatchObject({ exitCode: 0, action: 'registered' });
-    expect(b.batteryCalls).toHaveLength(7);
+    expect(b.batteryCalls).toHaveLength(8);
     expect(b.warns).toHaveLength(1); expect(b.warns[0]).toMatch(/battery restrictions for 'EHG Michael health-sync'.*Access is denied.*0x800710E0/);
   });
   it('--status queries each task; --remove deletes each; --verify reads the split <Command>/<Arguments> XML and reports the shadow phase', async () => {
     const s = deps({ schtasks: () => ({ ok: true, stdout: 'TaskName: x' }) });
     expect(await main(['node', 'x', '--status'], s.d)).toEqual({ exitCode: 0, action: 'status' });
-    expect(s.calls.map((c) => c[0])).toEqual(Array(7).fill('/Query'));
+    expect(s.calls.map((c) => c[0])).toEqual(Array(8).fill('/Query'));
     const rm = deps();
     expect(await main(['node', 'x', '--remove'], rm.d)).toEqual({ exitCode: 0, action: 'removed' });
     expect(rm.calls.map((c) => c.slice(0, 3))).toEqual(MICHAEL_TASKS.map((t) => ['/Delete', '/TN', t.taskName]));
@@ -223,7 +223,7 @@ describe('main (injected deps, no host mutation)', () => {
     const v = deps({ schtasks: perTask });
     const r = await main(['node', 'x', '--verify'], v.d);
     expect(r).toMatchObject({ exitCode: 0, action: 'verified' });
-    expect(r.results.map((x) => x.ok)).toEqual(Array(7).fill(true));
+    expect(r.results.map((x) => x.ok)).toEqual(Array(8).fill(true));
     for (const l of v.logs.filter((x) => /VERIFIED/.test(x))) expect(l).toMatch(/battery-tolerant/);
     expect(r.results.map((x) => x.wrapper)).toEqual(MICHAEL_TASKS.map((t) => wrapperOf(t.feeder)));
     expect(v.logs.find((l) => /gmail-triage/.test(l))).toMatch(/shadow phase/);

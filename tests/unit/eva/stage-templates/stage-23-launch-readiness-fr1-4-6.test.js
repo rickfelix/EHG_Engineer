@@ -28,9 +28,15 @@ import {
   REQUIRED_CATEGORIES,
   ADVISORY_CATEGORIES,
   UPSTREAM_REQUIREMENTS,
+  preflightUpstream,
 } from '../../../../lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js';
 import { getAnalysisStep } from '../../../../lib/eva/stage-templates/analysis-steps/index.js';
 import { ARTIFACT_TYPES } from '../../../../lib/eva/artifact-types.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../../lib/eva/artifact-persistence-service.js';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../../../');
@@ -41,7 +47,7 @@ const REPO_ROOT = resolve(__dirname, '../../../../');
 // INFRA-STAGE-LAUNCH-READINESS-001 FR-1) supplies each present type's real
 // artifact_data payload, keyed by artifact_type -- preflightUpstream now reads
 // this column directly instead of a CROSS_STAGE_DEPS-derived stageNData param.
-function buildMockSupabase({ presentTypes = [], artifactData = {}, emitSpy, legalDocsPresent = false } = {}) {
+function buildMockSupabase({ presentTypes = [], artifactData = {}, emitSpy, legalDocsPresent = false, rowExtras = {} } = {}) {
   return {
     from(table) {
       if (table === 'venture_artifacts') {
@@ -53,11 +59,14 @@ function buildMockSupabase({ presentTypes = [], artifactData = {}, emitSpy, lega
                 return {
                   limit() {
                     return Promise.resolve({
+                      // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-5): rowExtras[type] lets a
+                      // test supply metadata/content/created_at for provenance-grading coverage.
                       data: presentTypes.map(t => ({
                         lifecycle_stage: 23,
                         artifact_type: t,
                         is_current: true,
                         artifact_data: artifactData[t] ?? null,
+                        ...(rowExtras[t] || {}),
                       })),
                       error: null,
                     });
@@ -272,7 +281,7 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
       expect(row.event_type).toBe('custom');
       expect(row.event_data.subtype).toBe('stage_skipped');
       expect(row.event_data.reason).toBe('upstream_missing');
-      expect(row.event_data.stage_number).toBe(23);
+      expect(row.event_data.stage_number).toBe(24);
       expect(row.event_data.sd_origin).toBe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001');
     });
 
@@ -296,6 +305,57 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
         expect(Array.isArray(req.anyOf)).toBe(true);
         expect(req.anyOf.length).toBeGreaterThanOrEqual(1);
       }
+    });
+
+    // SD-LEARN-FIX-ADDRESS-PAT-LES-010 (PAT-LES-a7862f7339c4): the pre-renumber stage-23.js
+    // (SD-EVA-FIX-KILL-GATES-001, Feb 2026) gated Go/No-Go on a raw `stage22Data.promotion_
+    // gate.pass` positional param -- a boolean-coercion-fragile shape the retrospective
+    // flagged as risky. That function and its param were fully removed when Launch
+    // Readiness renumbered to stage-24 and its prerequisite check was rewritten onto
+    // preflightUpstream()'s canonical artifact-existence model (asserted above). This guard
+    // is a permanent regression check: the fragile shape must never be reintroduced into
+    // either the current stage-23.js (dedicated_venture_uat) or stage-24.js (launch
+    // readiness) source, or their shared analysis-step module.
+    it('never reintroduces the pre-renumber stage22Data.promotion_gate.pass positional-param check (regression guard)', () => {
+      // TESTING + VALIDATION sub-agent review (PLAN-TO-EXEC / PLAN-TO-LEAD) both flagged that
+      // banning the bare `evaluateKillGate(` identifier is over-broad: stage-03/05/13 already
+      // export a function of that exact name, using the repo's own SAFE destructured-object
+      // convention (never a positional stage22Data param). A future well-designed
+      // evaluateKillGate in stage-24 would trip that assertion spuriously, tempting someone to
+      // delete this whole guard. The `stage22Data.promotion_gate` property-access check alone
+      // fully captures the historical fragile shape and does not share that failure mode.
+      const sourcePaths = [
+        'lib/eva/stage-templates/stage-23.js',
+        'lib/eva/stage-templates/stage-24.js',
+        'lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js',
+        'lib/eva/stage-templates/analysis-steps/stage-23-dedicated-venture-uat.js',
+      ];
+      for (const relPath of sourcePaths) {
+        const source = readFileSync(resolve(REPO_ROOT, relPath), 'utf8');
+        expect(source).not.toMatch(/stage22Data\.promotion_gate/);
+      }
+    });
+  });
+
+  describe('preflightUpstream machine provenance (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G, FR-5, advisory-only)', () => {
+    it('records a present, unprovenanced, post-cutover artifact in provenanceWarnings without affecting ok/missing', async () => {
+      const oneType = UPSTREAM_REQUIREMENTS[0].anyOf[0];
+      const supabase = buildMockSupabase({
+        presentTypes: [oneType],
+        rowExtras: { [oneType]: { metadata: null, created_at: POST_CUTOVER } },
+      });
+      const result = await preflightUpstream({ supabase, ventureId: 'v1', requirements: [UPSTREAM_REQUIREMENTS[0]], logger: { warn() {} } });
+      expect(result.provenanceWarnings).toContain(oneType);
+    });
+
+    it('does not record a provenance warning for a pre-cutover legacy artifact', async () => {
+      const oneType = UPSTREAM_REQUIREMENTS[0].anyOf[0];
+      const supabase = buildMockSupabase({
+        presentTypes: [oneType],
+        rowExtras: { [oneType]: { metadata: null, created_at: '2026-01-01T00:00:00Z' } },
+      });
+      const result = await preflightUpstream({ supabase, ventureId: 'v1', requirements: [UPSTREAM_REQUIREMENTS[0]], logger: { warn() {} } });
+      expect(result.provenanceWarnings).toEqual([]);
     });
   });
 

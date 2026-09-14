@@ -25,6 +25,7 @@ import {
   resolveParkedChairmanSmsRow,
   resolveAllParkedChairmanSmsRows,
   PARK_OUTCOMES,
+  ADAM_ROUTABLE_OUTCOMES,
   AUTO_SUSPEND_UNMATCHED_THRESHOLD,
   AUTO_SUSPEND_INVALID_SIGNATURE_THRESHOLD,
 } from '../../../lib/chairman/sms-bridge.js';
@@ -139,15 +140,36 @@ afterEach(() => {
 describe('PARK_OUTCOMES contract', () => {
   // SD-LEO-INFRA-CHAIRMAN-SMS-DECISION-001 FR-4: extended from ['no_match','rate_limited'] to
   // also cover expired/ambiguous, which previously went fully dark to every alarm once they
-  // aged past the 60-minute surfaceSmsInbound window. This is an intentional widening, not a
-  // regression -- suspended/invalid_signature remain deliberately excluded below.
-  it('parks no_match, rate_limited, expired, and ambiguous — outcomes that terminal-drain without resolving anything', () => {
-    expect(PARK_OUTCOMES).toEqual(['no_match', 'rate_limited', 'expired', 'ambiguous']);
+  // aged past the 60-minute surfaceSmsInbound window. QF-20260913-173 added no_open_question
+  // (a reply to an already-decided/terminal question, previously indistinguishable from
+  // no_match). This is an intentional widening, not a regression -- suspended/invalid_signature
+  // remain deliberately excluded below.
+  it('parks no_match, rate_limited, expired, ambiguous, and no_open_question — outcomes that terminal-drain without resolving anything', () => {
+    expect(PARK_OUTCOMES).toEqual(['no_match', 'rate_limited', 'expired', 'ambiguous', 'no_open_question']);
   });
 
   it('does NOT park suspended or invalid_signature — likely-spoofed/abusive senders, not genuine unanswered messages', () => {
     expect(PARK_OUTCOMES).not.toContain('suspended');
     expect(PARK_OUTCOMES).not.toContain('invalid_signature');
+  });
+});
+
+describe('ADAM_ROUTABLE_OUTCOMES contract (SECURITY EXEC-TO-PLAN finding F8/S1, QF-20260913-173)', () => {
+  // Previously unexported and untested -- PARK_OUTCOMES had a strict array-equality contract
+  // test above; the subset that ALSO mechanically routes to Adam (rather than merely parking
+  // for a human to find later) had none. no_open_question is included: it fires only when a
+  // real candidate decision was found and considered (it just went terminal since), so it is a
+  // provably genuine reply, not noise -- it belongs wherever no_match/rate_limited go.
+  it('routes no_match, rate_limited, and no_open_question — every ADAM_ROUTABLE_OUTCOMES member is also a PARK_OUTCOMES member', () => {
+    expect(ADAM_ROUTABLE_OUTCOMES).toEqual(['no_match', 'rate_limited', 'no_open_question']);
+    for (const outcome of ADAM_ROUTABLE_OUTCOMES) {
+      expect(PARK_OUTCOMES).toContain(outcome);
+    }
+  });
+
+  it('does NOT route expired or ambiguous to Adam — these still terminal-park for a human to find, not a mechanical Adam action', () => {
+    expect(ADAM_ROUTABLE_OUTCOMES).not.toContain('expired');
+    expect(ADAM_ROUTABLE_OUTCOMES).not.toContain('ambiguous');
   });
 });
 
