@@ -417,16 +417,34 @@ export function extractTriggerWhenClause(stmtText) {
   return null;
 }
 
+/** A dollar-quote tag opener at position `i` of `s` (`$$` or `$tag$`), or null. Same
+ *  detection shape as FUNCTION_DEF_RE/CREATE_TRIGGER_STMT_RE's own tag matching above --
+ *  the tag's own closing occurrence (a literal indexOf, never a regex backreference) is
+ *  exactly standard SQL dollar-quote semantics: a tag can never nest with itself. */
+function matchDollarQuoteTagAt(s, i) {
+  const m = /^\$([A-Za-z_]\w*)?\$/.exec(s.slice(i, i + 64));
+  return m ? m[0] : null;
+}
+
 /**
- * Apply `transformFn` to every substring OUTSIDE single-quoted string literals and
- * double-quoted identifiers -- both are case-/content-preserving regions in Postgres (a
- * string literal's characters ARE its data; a quoted identifier's case is significant).
+ * Apply `transformFn` to every substring OUTSIDE single-quoted string literals,
+ * double-quoted identifiers, and dollar-quoted regions -- all three are case-/content-
+ * preserving in Postgres (a string literal's characters ARE its data; a quoted
+ * identifier's case is significant; dollar-quoting is the standard idiom -- live in this
+ * codebase, e.g. `RAISE NOTICE $m$...$m$` or `EXECUTE format($$...$$, ...)` -- for
+ * embedding literal text without escaping). ADVERSARIAL SHIP REVIEW (CRITICAL, fixed
+ * pre-merge): the original version of this function protected only `'`/`"`, so
+ * case-folding silently altered case-sensitive content inside a nested dollar-quoted
+ * literal (demonstrated: "$m$User Not Found$m$" and "$m$user not found$m$" folded equal).
  * Doubled-quote escaping ('' inside a '...' literal, "" inside a "..." identifier) is
  * honoured so the scan never exits a region early on an escaped quote. Same balanced,
- * quote-aware scanning convention as splitTableBodyItems() above.
+ * quote-aware scanning convention as splitTableBodyItems() above; the dollar-quote tag
+ * match is deliberately narrow ($<ident>$ or bare $$, checked with a bounded lookahead) so
+ * a positional parameter like `$1` is never mistaken for a tag opener.
  *
- * SD-LEO-INFRA-APPLY-STATE-VERIFIER-001: shared primitive behind both case-folding and
- * implicit-cast stripping so quoted content is never mangled by either transform.
+ * SD-LEO-INFRA-APPLY-STATE-VERIFIER-001: shared primitive behind case-folding,
+ * implicit-cast stripping, and paren-whitespace trimming so protected content is never
+ * mangled by any of the three transforms.
  */
 function transformOutsideQuotedRegions(s, transformFn) {
   let out = '';
@@ -450,8 +468,27 @@ function transformOutsideQuotedRegions(s, transformFn) {
       i = j;
       continue;
     }
+    if (ch === '$') {
+      const tag = matchDollarQuoteTagAt(s, i);
+      if (tag) {
+        const closeIdx = s.indexOf(tag, i + tag.length);
+        if (closeIdx !== -1) {
+          out += s.slice(i, closeIdx + tag.length);
+          i = closeIdx + tag.length;
+          continue;
+        }
+      }
+      // Not a real tag opener (e.g. a bare positional parameter like `$1`), or an
+      // unbalanced tag (truncated text) -- treat this single '$' as ordinary text and
+      // advance by exactly one character. Must NOT fall through to the scan-chunk loop
+      // below unconditionally: that loop stops AT a '$', so without this explicit advance
+      // it would re-observe the same '$' forever (infinite loop) whenever `tag` is null.
+      out += transformFn(ch);
+      i += 1;
+      continue;
+    }
     let k = i;
-    while (k < s.length && s[k] !== "'" && s[k] !== '"') k += 1;
+    while (k < s.length && s[k] !== "'" && s[k] !== '"' && s[k] !== '$') k += 1;
     out += transformFn(s.slice(i, k));
     i = k;
   }
@@ -489,13 +526,29 @@ function stripImplicitCastArtifacts(s) {
   );
 }
 
-/** Collapse whitespace runs, then trim whitespace immediately touching a paren -- never the
- *  paren itself, so precedence-changing structure ("a AND (b OR c)" vs "(a AND b) OR c")
- *  stays distinguishable. Closes a gap VALIDATION measured (b81e397b): a multi-line, indented
- *  migration-file WHEN clause collapses to "( old.status ..." while a single-line live
- *  reconstruction has no such padding. */
+/**
+ * Trim whitespace immediately touching a paren -- never the paren itself, so
+ * precedence-changing structure ("a AND (b OR c)" vs "(a AND b) OR c") stays
+ * distinguishable. Quote-aware (via transformOutsideQuotedRegions), matching its sibling
+ * transforms above. ADVERSARIAL SHIP REVIEW (CRITICAL, fixed pre-merge): an earlier,
+ * non-quote-scoped version of this trim also stripped padding INSIDE string literals --
+ * demonstrated live, `'text ( padded )'` and `'text (padded)'` normalized equal, a genuine
+ * string-literal content difference silently masked.
+ */
+function trimParenWhitespaceOutsideQuotedRegions(s) {
+  return transformOutsideQuotedRegions(s, (chunk) =>
+    chunk.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')
+  );
+}
+
+/** Collapse whitespace runs (global, matching this file's pre-existing normalizeSqlBody
+ *  behavior -- not quote-scoped; out of scope for this SD to change), then trim
+ *  paren-adjacent whitespace (quote-scoped, see trimParenWhitespaceOutsideQuotedRegions).
+ *  Closes a gap VALIDATION measured (b81e397b): a multi-line, indented migration-file WHEN
+ *  clause collapses to "( old.status ..." while a single-line live reconstruction has no
+ *  such padding. */
 function collapseAndTrimParenWhitespace(s) {
-  return s.replace(/\s+/g, ' ').trim().replace(/\(\s+/g, '(').replace(/\s+\)/g, ')');
+  return trimParenWhitespaceOutsideQuotedRegions(s.replace(/\s+/g, ' ').trim());
 }
 
 /**

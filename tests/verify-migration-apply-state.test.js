@@ -716,6 +716,38 @@ describe('SD-LEO-INFRA-APPLY-STATE-VERIFIER-001 — case-folding + implicit cast
   it('normalizeTriggerWhenClause does not glue adjacent tokens when stripping a cast (regression for the empty-string-replace bug TESTING measured)', () => {
     expect(normalizeTriggerWhenClause('(old.status::text IS DISTINCT FROM new.status)')).not.toMatch(/statusis/);
   });
+
+  // ADVERSARIAL SHIP REVIEW (CRITICAL, PR #8973): paren-adjacent whitespace trimming was
+  // not quote-scoped and silently erased a genuine content difference inside a string
+  // literal (demonstrated: "'text ( padded )'" and "'text (padded)'" normalized equal).
+  it('regression: paren-adjacent whitespace INSIDE a string literal is preserved, not trimmed (would mask genuine content drift)', () => {
+    const a = normalizeSqlBody("SELECT 'text ( padded )';");
+    const b = normalizeSqlBody("SELECT 'text (padded)';");
+    expect(a).not.toBe(b);
+    expect(a).toContain("'text ( padded )'");
+  });
+
+  // ADVERSARIAL SHIP REVIEW (CRITICAL, PR #8973): the quote-aware scanner had no concept of
+  // PL/pgSQL dollar-quoting (a live idiom in this codebase, e.g. RAISE NOTICE $m$...$m$ /
+  // EXECUTE format($$...$$)), so case-folding silently erased case-sensitive content inside
+  // a nested dollar-quoted literal (demonstrated: "$m$User Not Found$m$" and
+  // "$m$user not found$m$" folded equal).
+  it('regression: case-sensitive content inside a nested dollar-quoted literal is preserved, not case-folded', () => {
+    const a = normalizeSqlBody('BEGIN RAISE NOTICE $m$User Not Found$m$; END');
+    const b = normalizeSqlBody('BEGIN RAISE NOTICE $m$user not found$m$; END');
+    expect(a).not.toBe(b);
+    expect(a).toContain('$m$User Not Found$m$');
+  });
+
+  it('regression: a bare positional parameter ($1, $2) does not hang or desync the scanner (not a dollar-quote tag opener)', () => {
+    const result = normalizeSqlBody('BEGIN RETURN $1 + $2; END');
+    expect(result).toBe('begin return $1 + $2; end');
+  });
+
+  it('regression: an unbalanced/truncated dollar-quote tag does not hang the scanner (fail-safe: treated as ordinary text)', () => {
+    const result = normalizeSqlBody('BEGIN RAISE NOTICE $tag$unterminated');
+    expect(result).toBe('begin raise notice $tag$unterminated');
+  });
 });
 
 // TS-5: CEREMONY_PENDING must flow through summarizeResults into `gaps`, not just the
