@@ -420,9 +420,14 @@ export function extractTriggerWhenClause(stmtText) {
 /** A dollar-quote tag opener at position `i` of `s` (`$$` or `$tag$`), or null. Same
  *  detection shape as FUNCTION_DEF_RE/CREATE_TRIGGER_STMT_RE's own tag matching above --
  *  the tag's own closing occurrence (a literal indexOf, never a regex backreference) is
- *  exactly standard SQL dollar-quote semantics: a tag can never nest with itself. */
+ *  exactly standard SQL dollar-quote semantics: a tag can never nest with itself.
+ *  ROUND-2 ADVERSARIAL REVIEW (WARNING): the lookahead bound covers Postgres's own
+ *  identifier limit (NAMEDATALEN-1 = 63 bytes) plus the two '$' delimiters (65), rounded
+ *  up to 70 for headroom -- a legal dollar-quote tag can never exceed this, so a null match
+ *  here means "not a real tag" (falls through to ordinary-text handling), never a
+ *  false-negative on a real, merely-long tag. */
 function matchDollarQuoteTagAt(s, i) {
-  const m = /^\$([A-Za-z_]\w*)?\$/.exec(s.slice(i, i + 64));
+  const m = /^\$([A-Za-z_]\w*)?\$/.exec(s.slice(i, i + 70));
   return m ? m[0] : null;
 }
 
@@ -541,14 +546,25 @@ function trimParenWhitespaceOutsideQuotedRegions(s) {
   );
 }
 
-/** Collapse whitespace runs (global, matching this file's pre-existing normalizeSqlBody
- *  behavior -- not quote-scoped; out of scope for this SD to change), then trim
- *  paren-adjacent whitespace (quote-scoped, see trimParenWhitespaceOutsideQuotedRegions).
+/**
+ * Collapse whitespace runs to a single space, outside quoted/dollar-quoted regions.
+ * ROUND-2 ADVERSARIAL REVIEW (CRITICAL, fixed pre-merge): the original version of this
+ * step used a plain global `.replace(/\s+/g, ' ')`, which -- unlike its case-fold/cast-strip/
+ * paren-trim siblings, all quote-scoped -- also collapsed whitespace INSIDE string and
+ * dollar-quoted literals, masking real content differences (demonstrated: "'a    b'" and
+ * "'a b'" normalized equal; same for "$$Hello     World$$" vs the single-spaced variant).
+ */
+function collapseWhitespaceOutsideQuotedRegions(s) {
+  return transformOutsideQuotedRegions(s, (chunk) => chunk.replace(/\s+/g, ' '));
+}
+
+/** Collapse whitespace runs, then trim paren-adjacent whitespace -- both quote-scoped (see
+ *  collapseWhitespaceOutsideQuotedRegions / trimParenWhitespaceOutsideQuotedRegions).
  *  Closes a gap VALIDATION measured (b81e397b): a multi-line, indented migration-file WHEN
  *  clause collapses to "( old.status ..." while a single-line live reconstruction has no
  *  such padding. */
 function collapseAndTrimParenWhitespace(s) {
-  return trimParenWhitespaceOutsideQuotedRegions(s.replace(/\s+/g, ' ').trim());
+  return trimParenWhitespaceOutsideQuotedRegions(collapseWhitespaceOutsideQuotedRegions(s).trim());
 }
 
 /**

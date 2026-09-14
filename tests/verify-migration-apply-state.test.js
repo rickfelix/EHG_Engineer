@@ -748,6 +748,34 @@ describe('SD-LEO-INFRA-APPLY-STATE-VERIFIER-001 — case-folding + implicit cast
     const result = normalizeSqlBody('BEGIN RAISE NOTICE $tag$unterminated');
     expect(result).toBe('begin raise notice $tag$unterminated');
   });
+
+  // ROUND-2 ADVERSARIAL SHIP REVIEW (CRITICAL, PR #8973): whitespace-run collapsing was the
+  // one remaining step in the pipeline that was NOT quote-scoped (case-fold, cast-strip, and
+  // paren-trim all were), so it still silently erased genuine internal-whitespace content
+  // differences inside string and dollar-quoted literals.
+  it('regression: internal whitespace runs INSIDE a string literal are preserved, not collapsed (would mask genuine content drift)', () => {
+    const a = normalizeSqlBody("SELECT 'a    b';");
+    const b = normalizeSqlBody("SELECT 'a b';");
+    expect(a).not.toBe(b);
+    expect(a).toContain("'a    b'");
+  });
+
+  it('regression: internal whitespace runs INSIDE a dollar-quoted literal are preserved, not collapsed', () => {
+    const a = normalizeSqlBody('BEGIN RAISE NOTICE $$Hello     World$$; END');
+    const b = normalizeSqlBody('BEGIN RAISE NOTICE $$Hello World$$; END');
+    expect(a).not.toBe(b);
+    expect(a).toContain('$$Hello     World$$');
+  });
+
+  // ROUND-2 ADVERSARIAL SHIP REVIEW (WARNING, PR #8973): the dollar-quote tag lookahead
+  // bound must cover the longest legal Postgres identifier-based tag (NAMEDATALEN-1 = 63
+  // bytes + 2 delimiters = 65) so a real, merely-long tag is never silently re-scanned as
+  // ordinary text (which would re-enable content masking for that one input shape).
+  it('regression: a dollar-quote tag at the maximum legal Postgres identifier length (63 chars) is still recognized and its content protected', () => {
+    const tag = 'a'.repeat(63);
+    const result = normalizeSqlBody(`$${tag}$UPPERCASE_Should_Stay$${tag}$`);
+    expect(result).toContain('UPPERCASE_Should_Stay');
+  });
 });
 
 // TS-5: CEREMONY_PENDING must flow through summarizeResults into `gaps`, not just the
