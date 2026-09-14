@@ -502,4 +502,55 @@ describe('FR-3: user_flows coverage -- concatenated multi-journey persona sequen
     expect(result.coverage_selfcheck.flows_covered).toBe(0);
     expect(result.coverage_selfcheck.uncovered_flows.length).toBe(4);
   });
+
+  it('a flow whose real order is the REVERSE of the journey is UNCOVERED even when every visited screen has an unresolved (null) route (regression: null must not satisfy null via route-string equality -- EXEC review finding, live data measures 14/14 null routes)', async () => {
+    const screens = [
+      screen({ screen_id: 'scr-alpha', screen_name: 'Alpha', description: 'The alpha destination screen, with no matching IA page' }),
+      screen({ screen_id: 'scr-beta', screen_name: 'Beta', description: 'The beta destination screen, with no matching IA page' }),
+    ];
+    // Deliberately NO iaPages at all -- both screens' routes resolve to null (route-space collision).
+    const iaPages = [];
+    const userStoryPack = {
+      epics: [{
+        name: 'Null-Route Epic',
+        stories: [
+          story({ as_a: 'Nullperson', i_want_to: 'view the alpha destination screen', so_that: 'alpha is confirmed visited first', acceptance_criteria: ['Given nothing, Then alpha'] }),
+          story({ as_a: 'Nullperson', i_want_to: 'view the beta destination screen', so_that: 'beta is confirmed visited second', acceptance_criteria: ['Given alpha, Then beta'] }),
+        ],
+      }],
+    };
+    const personas = [persona('Nullperson')];
+    // Flow demands the EXACT REVERSE of the real journey order (Beta before Alpha).
+    const userFlows = [{ name: 'Reversed Null-Route Flow', persona: 'Nullperson', steps: ['Beta', 'Alpha'] }];
+    const ctx = {
+      logger: noopLogger,
+      stage10Data: { customerPersonas: personas },
+      userStoryPack,
+      wireframeScreensPayload: { screens, ia_sitemap: { pages: iaPages, user_flows: userFlows } },
+    };
+
+    const result = await generateUserJourneys(ctx);
+    const journeySteps = result.journeys.flatMap((j) => j.steps);
+    // Sanity: both screens really were reached, both really do have a null (unresolved) route,
+    // and the real visit order is Alpha then Beta (story order -- neither is auth-flavored).
+    expect(journeySteps.map((s) => s.screen_ref).sort()).toEqual(['scr-alpha', 'scr-beta']);
+    expect(journeySteps.every((s) => s.route === null)).toBe(true);
+    const alphaIdx = journeySteps.findIndex((s) => s.screen_ref === 'scr-alpha');
+    const betaIdx = journeySteps.findIndex((s) => s.screen_ref === 'scr-beta');
+    expect(alphaIdx).toBeLessThan(betaIdx);
+
+    // The flow's demanded order (Beta, Alpha) is the REVERSE of the actual journey (Alpha, Beta)
+    // -- it must be UNCOVERED. Pre-fix, isOrderedSubsequence([null, null], [null, null]) matched
+    // regardless of which physical screen each null belonged to, reporting a false COVERED.
+    expect(result.coverage_selfcheck.uncovered_flows).toContain('Reversed Null-Route Flow');
+    expect(result.findings.some((f) => f.type === 'FLOW_COVERAGE_MISSING' && f.flow_name === 'Reversed Null-Route Flow')).toBe(true);
+    // Both flow steps ARE resolvable screens (they exist) -- but with unresolved routes, so each
+    // raises its own FLOW_STEP_UNRESOLVED finding, the same treatment as a step with no screen at all.
+    expect(
+      result.findings
+        .filter((f) => f.type === 'FLOW_STEP_UNRESOLVED' && f.flow_name === 'Reversed Null-Route Flow')
+        .map((f) => f.page_name)
+        .sort()
+    ).toEqual(['Alpha', 'Beta']);
+  });
 });
