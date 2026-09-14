@@ -297,6 +297,29 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
         expect(req.anyOf.length).toBeGreaterThanOrEqual(1);
       }
     });
+
+    // SD-LEARN-FIX-ADDRESS-PAT-LES-010 (PAT-LES-a7862f7339c4): the pre-renumber stage-23.js
+    // (SD-EVA-FIX-KILL-GATES-001, Feb 2026) gated Go/No-Go on a raw `stage22Data.promotion_
+    // gate.pass` positional param -- a boolean-coercion-fragile shape the retrospective
+    // flagged as risky. That function and its param were fully removed when Launch
+    // Readiness renumbered to stage-24 and its prerequisite check was rewritten onto
+    // preflightUpstream()'s canonical artifact-existence model (asserted above). This guard
+    // is a permanent regression check: the fragile shape must never be reintroduced into
+    // either the current stage-23.js (dedicated_venture_uat) or stage-24.js (launch
+    // readiness) source, or their shared analysis-step module.
+    it('never reintroduces the pre-renumber stage22Data.promotion_gate.pass positional-param check (regression guard)', () => {
+      const sourcePaths = [
+        'lib/eva/stage-templates/stage-23.js',
+        'lib/eva/stage-templates/stage-24.js',
+        'lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js',
+        'lib/eva/stage-templates/analysis-steps/stage-23-dedicated-venture-uat.js',
+      ];
+      for (const relPath of sourcePaths) {
+        const source = readFileSync(resolve(REPO_ROOT, relPath), 'utf8');
+        expect(source).not.toMatch(/stage22Data\.promotion_gate/);
+        expect(source).not.toMatch(/evaluateKillGate\s*\(/);
+      }
+    });
   });
 
   describe('FR-6: backfill migration', () => {
