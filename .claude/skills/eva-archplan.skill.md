@@ -164,14 +164,17 @@ Then ask:
 }
 ```
 
-**Step 6: On Approve — upsert**
+**Step 6: On Approve — upsert (always `--draft`)**
+
+SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 / FR-2, ratification a588adba: the chairman approves visions, not designs — a design's real sign-off comes from a seat other than its author. "Approve" above confirms SAVING this extracted content, not chairman approval of the design; the upsert always registers as `--draft`. The command **requires** exactly one of `--approved` / `--draft` and errors if neither is given.
 
 ```bash
 node scripts/eva/archplan-command.mjs upsert \
   --plan-key <key> \
   --vision-key <vision-key> \
   --source <source-path> \
-  --dimensions '<dimensions-json>'
+  --dimensions '<dimensions-json>' \
+  --draft
 ```
 
 Display the confirmation output.

@@ -12,9 +12,12 @@
  *
  * Subcommands:
  *   extract  --source <path>              Extract dimensions (includes ADR/capability context)
- *   upsert   --plan-key <key>             Upsert architecture plan after chairman approval
+ *   upsert   --plan-key <key>             Upsert architecture plan
  *            --vision-key <key>           Link to parent vision document
  *            --source <path>              Read content from file
+ *            (--approved | --draft)        REQUIRED: deliberate approval choice.
+ *                                         --approved => active + chairman_approved
+ *                                         --draft    => draft, not approved
  *            [--content <text>]           Inline content (DB-only workflow)
  *            [--sections <json>]          Structured sections JSON (DB-only workflow, mirrors vision-command)
  *            [--dimensions <json>]
@@ -26,7 +29,7 @@
  * Usage:
  *   node scripts/eva/archplan-command.mjs list
  *   node scripts/eva/archplan-command.mjs extract --source docs/plans/eva-platform-architecture.md
- *   node scripts/eva/archplan-command.mjs upsert --plan-key ARCH-EHG-L1-002 --vision-key VISION-EHG-L1-001 --source docs/plans/...
+ *   node scripts/eva/archplan-command.mjs upsert --plan-key ARCH-EHG-L1-002 --vision-key VISION-EHG-L1-001 --source docs/plans/... --draft
  *   node scripts/eva/archplan-command.mjs addendum --plan-key ARCH-EHG-L1-002 --section "New section text"
  */
 
@@ -38,10 +41,17 @@ import { getValidationClient } from '../../lib/llm/client-factory.js';
 import { getSectionSchema, validateSections } from './document-section-registry.mjs';
 import { renderSectionsToMarkdown } from './sections-to-markdown-renderer.mjs';
 import { readStdin } from '../../lib/utils/read-stdin.mjs';
+// SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2): reuse vision-command.mjs's own guard
+// rather than duplicating it -- a string value on a bare boolean flag (e.g. --approved false)
+// must error, never silently coerce to true.
 // SD-LEO-INFRA-COUNT-TRUNCATION-DISCIPLINE-001 FR-6 batch 9: `list` renders every
 // eva_architecture_plans row — an un-paginated read here silently hides plans once the
 // table exceeds the PostgREST 1000-row cap.
 import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
+// SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2, EXEC-TO-PLAN TESTING review M4/M6):
+// pure flag-to-decision resolver lives in its own module so it's unit-testable by
+// direct import (this file has no isMainModule() guard and runs the CLI on import).
+import { resolveApprovalChoice, buildUpsertArgs } from './archplan-approval-choice.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -207,10 +217,17 @@ async function cmdExtract({ source, content: contentArg }) {
   console.log(JSON.stringify(dimensions, null, 2));
 }
 
-async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJson, brainstormId, content: contentArg, sections: sectionsJson, stdin: stdinFlag }) {
+async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJson, brainstormId, content: contentArg, sections: sectionsJson, stdin: stdinFlag, approved: approvedFlag, draft: draftFlag }) {
   if (!planKey) { console.error('--plan-key is required'); process.exit(1); }
   if (!visionKey) { console.error('--vision-key is required (link to parent vision document)'); process.exit(1); }
   if (!source && !contentArg && !sectionsJson && !stdinFlag) { console.error('--source, --content, --sections, or --stdin is required'); process.exit(1); }
+
+  // SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2): mirrors vision-command.mjs's cmdUpsert
+  // exactly -- approval is a DELIBERATE, explicit choice, never a silent default, at this
+  // (the dominant, ~79%-of-rows) write path.
+  const approvalChoice = resolveApprovalChoice({ approvedFlag, draftFlag });
+  if (!approvalChoice.ok) { console.error(approvalChoice.error); process.exit(1); }
+  const approved = approvalChoice.approved;
 
   // Read content from stdin when --stdin is set. Cross-platform alternative to
   // --content which hits OS CLI length limits (~8K on Windows) for large docs.
@@ -318,10 +335,9 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
 
   // Delegate to extracted upsert module (SD-LEO-INFRA-VENTURE-BUILD-READINESS-001-C)
   const { upsertArchPlan } = await import('../../lib/eva/archplan-upsert.js');
-  const { data, error } = await upsertArchPlan({
-    supabase, planKey, visionKey, content, dimensions,
-    brainstormId, createdBy: 'eva-archplan-command',
-  });
+  const { data, error } = await upsertArchPlan(
+    buildUpsertArgs({ supabase, planKey, visionKey, content, dimensions, brainstormId, approved }),
+  );
 
   if (error) { console.error('❌ Upsert failed:', error.message); process.exit(1); }
 

@@ -73,6 +73,12 @@
       "pattern": "^[a-z][a-z0-9_]*\\.md$",
       "reason": "Auto-generated schema-reference docs (scripts/generate-schema-docs-from-db.js) are named after the literal database table they document — renaming would diverge from the DB identifier they mirror and get re-clobbered on the next regeneration",
       "example": "ops_payment_events.md, income_capture_monthly.md"
+    },
+    {
+      "path_prefix": ".claude/skills/",
+      "pattern": "^[a-z][a-z0-9-]*\\.skill\\.md$",
+      "reason": "Claude Code skill definition files — the .skill.md suffix distinguishes skill docs from other markdown in the directory, an established convention already used by 13 files in .claude/skills/ (SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001: touching an existing skill file's content was blocked by this pre-existing naming-validator gap, unrelated to the SD's own change)",
+      "example": "eva-archplan.skill.md, eva-constitution.skill.md"
     }
   ],
   "valid_pattern": {

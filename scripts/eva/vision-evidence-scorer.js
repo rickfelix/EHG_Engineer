@@ -258,7 +258,7 @@ async function main() {
 
   // SD-CRONGENIUS-LEO-INFRA-MAKE-HEAL-VISION-001 (FR-3): fail loudly if derived arch-key not found.
   if (archResolution.derived && !arch) {
-    console.error(`❌ Derived arch-key '${args.archKey}' not found in eva_architecture_plans. Create the arch plan first via 'archplan-command.mjs upsert --plan-key ${args.archKey} --vision-key ${args.visionKey}' OR pass --arch-key explicitly. Refusing silent fallback to EHG architecture.`);
+    console.error(`❌ Derived arch-key '${args.archKey}' not found in eva_architecture_plans. Create the arch plan first via 'archplan-command.mjs upsert --plan-key ${args.archKey} --vision-key ${args.visionKey} --draft' OR pass --arch-key explicitly. Refusing silent fallback to EHG architecture.`);
     process.exit(1);
   }
 
