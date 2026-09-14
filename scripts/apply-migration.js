@@ -168,22 +168,34 @@ async function tryAdvisoryLock(client, id) {
   return false;
 }
 
-async function writeAuditRow(client, row) {
+async function writeAuditRow(client, row, { repoRoot } = {}) {
   // QF-20260903-622: five ledger rows were found asserting a successful apply for a
   // migration_path that never resolved to a tracked file — never queried live (harmless)
   // but a record asserting something that never happened. Refuse loudly at write time
   // rather than let another phantom in: any caller of writeAuditRow claiming success=true
   // must point at a git-tracked path.
-  if (row.success === true && row.migration_path && !isTrackedMigrationPath(row.migration_path)) {
+  //
+  // QF-20260913-250: pass the SAME repoRoot the caller already used for its pre-DDL
+  // isMigrationCommittedToGit check (line ~351), instead of letting this guard default to
+  // getRepoRoot()'s worktree-suffix-stripped MAIN root. A file committed only on a
+  // pre-merge feature branch, applied from that branch's own worktree, passed the pre-DDL
+  // check (which reads the worktree root) and then failed THIS check (which read main) --
+  // the two guards disagreed by construction for every pre-merge worktree deploy.
+  if (row.success === true && row.migration_path && !isTrackedMigrationPath(row.migration_path, { repoRoot })) {
     throw new Error(
       `[MIGRATION_LEDGER_GUARD] refusing to record success=true for a migration_path that ` +
       `does not resolve to a git-tracked file: ${row.migration_path}`
     );
   }
-  const cols = Object.keys(row);
+  // FIX SHAPE (c): record which root vouched for tracked-ness, inside the existing
+  // `metadata` jsonb column (no new column) -- so a pre-merge apply stays legible later.
+  const finalRow = (row.success === true && row.migration_path && repoRoot)
+    ? { ...row, metadata: JSON.stringify({ tracked_root: repoRoot }) }
+    : row;
+  const cols = Object.keys(finalRow);
   const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
   const sql = `INSERT INTO public.schema_migrations_applied (${cols.join(', ')}) VALUES (${placeholders}) RETURNING id`;
-  const r = await client.query(sql, cols.map(c => row[c]));
+  const r = await client.query(sql, cols.map(c => finalRow[c]));
   return r.rows[0].id;
 }
 
@@ -506,7 +518,7 @@ async function applyMode({ args, repoRoot }) {
       statement_count: stmtCount,
       object_diffs: JSON.stringify(diffs),
       success: true,
-    });
+    }, { repoRoot });
 
     await auditClient.query(
       `UPDATE public.schema_migrations_applied
