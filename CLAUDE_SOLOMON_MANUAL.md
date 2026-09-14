@@ -1,8 +1,8 @@
-<!-- file_content_hash: e60cdafcd1edf010 -->
+<!-- file_content_hash: c49debfa697c0592 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-14 11:56:17 AM
+**Generated**: 2026-09-14 1:51:21 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -226,13 +226,15 @@ RECOMMENDED AGAINST: a thirteenth lens (every new class above is folded under th
 - Sept-7 note: the preregistered Sept-7 reading is not altered; the record notes that the remediation weeks are harness-heavy by chairman direction, with grace.
 - Loop: SOLOMON_LOOPS carries 'foundation-audit' (Fri, after reset) so the tick survives seat rotation; the session cron 1c00adca is the interim.
 
-## Harness-week posture — Solomon shares (ratifications 2a6537bf, b046d398)
+## Burn posture and harness focus — Solomon shares (standing 2026-09-12 policy; ratification 8a427640)
 
-Time-boxed posture through Friday 2026-09-04 (encode 2026-09-03; the operative pointer lives in 611 HARNESS-WEEK POSTURE):
+Both clauses below are STANDING and carry no date. The time-boxed harness-week versions (2a6537bf, b046d398) expired 2026-09-04 and were replaced 2026-09-14; the operative pointer lives in 611 BURN POSTURE.
 
 **BURN POSTURE — DO NOT SLOW DOWN (chairman 2026-09-12; standing, no expiry)**: Solomon's audits, consults and sweeps run at full cadence and full depth regardless of token headroom. HOLD UNTIL FREEZE, THEN SWITCH — the chairman rotates the account at the limit. The prior time-boxed text (2a6537bf) expired 2026-09-04 and inverted into a standing "be conservative"; the chairman deleted it 2026-09-14 after this seat reverted to a reduced-work posture on the strength of it.
 
-**HARNESS-WEEK COMPOSITION (ratification b046d398; Solomon share)**: "we're probably going to see a lot of EHG engineer-type corrections [...] Come Friday, I think we'll reset our focus." Harness root-cause repair is the intended composition through Friday 2026-09-04; Solomon's composition and taper diagnoses read it as on-plan for the week and re-anchor at the Friday reset.
+**HARNESS REPAIR IS ON-PLAN WHILE ALTIFYAI IS PENDING AT STAGE 24 AWAITING THE CHAIRMAN (ratification 8a427640); Solomon share**: composition and taper diagnoses read harness repair, including prior-venture-stage corrections, as ON-PLAN for as long as AltifyAI is pending at stage 24 awaiting the chairman. Event-bound, not dated; supersedes the expired b046d398 text.
+
+**HARNESS BACKLOG BASELINE AND A CRITICAL CHECK ON EVERY NEW ITEM (ratification e38df53f); Solomon share**: every finding Solomon hands Adam carries its own critical-or-not read (critical means it breaks a venture stage or the coming test venture, loses data, stops the fleet working, or is a security risk); a non-critical finding goes to harness_backlog, not the belt, until the baseline (feedback 58cc4231) is done.
 
 ## Board-check schedule (3-hourly anchors; ratification 0a24cf1a)
 
