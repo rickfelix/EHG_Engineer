@@ -16,13 +16,13 @@
 //   live send. Counts outcome='sent' OR refusal_code='SEND_IN_PROGRESS' (SECURITY SEC-H2): an
 //   unresolved staged row (crash, throw, or a concurrent fire racing the same window) must count
 //   against the cap exactly like a confirmed send, or the cap can be silently exceeded.
-// FR-2: recipient hash-pinned (tamper-evidence, not secrecy) -- RECIPIENT_SHA256 below is a
-//   HARDCODED module constant (never an env var -- an env-configurable pin could be changed
-//   alongside CHAIRMAN_PHONE, defeating the whole point). It ships as an unset placeholder, which
-//   never matches any real resolved value, so every live send safely refuses
-//   RECIPIENT_HASH_MISMATCH until the chairman's real number's sha256 is set here directly in a
-//   reviewed code change -- an additional chairman-adjacent dependency, named here so it is never
-//   silently discovered as "why did this never send".
+// FR-2: recipient hash-pinned (tamper-evidence, not secrecy) -- QF-20260914-300: the pin is read
+//   FRESH, every attempt, from the private service-role-only michael_checkpoint_send_enabled table
+//   (config_key='recipient_pin', hash string in `reason` -- reuses the existing column, no new
+//   column/table) rather than a hardcoded source constant. This repo is public, and a sha256 of a
+//   ten-digit phone number is reversible by brute-force enumeration in minutes, so a hardcoded pin
+//   would have published the chairman's number the moment it was set. A missing/unreadable pin row
+//   fails exactly like a mismatched one (RECIPIENT_HASH_MISMATCH) -- fail-closed by construction.
 // FR-3: identity via lib/michael/checkpoint-identity.mjs (all MICHAEL_TWILIO_* or null) threaded
 //   through twilio-provider.js's additive `identity` parameter -- never the fleet-lane TWILIO_* vars.
 // FR-4: body is a fixed template + counts + an as-of pointer, never raw personal text.
@@ -56,11 +56,6 @@ const PRODUCING_FEEDER_COUNTS = Object.freeze([
   { feeder: 'todoist-brief', key: 'due_or_overdue', label: 'tasks due/overdue' },
 ]);
 const PRODUCING_FEEDERS = Object.freeze(PRODUCING_FEEDER_COUNTS.map((c) => c.feeder));
-
-// FR-2 / TESTING M9: sha256 of the chairman's RAW expected E.164 string, hardcoded here (never an
-// env var). The empty-string placeholder's hash never equals any real phone number's hash, so this
-// ships fail-closed by construction until a reviewed code change sets the real value.
-export const RECIPIENT_SHA256 = '';
 
 /** Pure: best-effort counts-only summary + the oldest (most conservative) as-of timestamp across the 3 producing feeders' latest runs. Never touches raw text fields. */
 export function summarizeCounts(rowsByFeeder) {
@@ -98,11 +93,9 @@ async function readProducingFeederCounts(sb, etDate) {
 }
 
 /** The verb. deps: { sb, argv, now, sendFn, resolveIdentity, recipientSha256 }. Never throws.
- * recipientSha256 defaults to the real hardcoded RECIPIENT_SHA256 constant -- the override
- * parameter exists ONLY so tests can exercise the full send path without waiting on the real
- * chairman-number hash to be set; main() below never passes it, so production always uses the
- * real constant. */
-export async function runCheckpointSend({ sb, argv = [], now = new Date(), sendFn = twilioProvider.send, resolveIdentity = resolveCheckpointIdentity, recipientSha256 = RECIPIENT_SHA256 } = {}) {
+ * recipientSha256, when supplied, OVERRIDES the DB-read pin -- test-only (main() below never
+ * passes it, so production always reads the live private-store row fresh). */
+export async function runCheckpointSend({ sb, argv = [], now = new Date(), sendFn = twilioProvider.send, resolveIdentity = resolveCheckpointIdentity, recipientSha256 } = {}) {
   const a = parseArgs(argv);
   const isApply = Boolean(a.apply);
   // SEC-H1: --et-date has no legitimate meaning for a LIVE send (you cannot send yesterday's
@@ -166,9 +159,20 @@ export async function runCheckpointSend({ sb, argv = [], now = new Date(), sendF
     return refusal('ALREADY_SENT_THIS_WINDOW', `window ${windowSlot} already sent today`);
   }
 
-  // FR-2: recipient hash-pin, raw string, tamper-evidence not secrecy.
+  // FR-2 / QF-20260914-300: recipient hash-pin, raw string, tamper-evidence not secrecy. Read
+  // FRESH from the private store (never source) unless a test override was supplied.
+  let pinnedHash = recipientSha256;
+  if (pinnedHash === undefined) {
+    const pinRead = await readRows(sb, 'michael_checkpoint_send_enabled', (q) => q.eq('config_key', 'recipient_pin'), { select: 'reason' });
+    if (pinRead.tables_absent || pinRead.error) {
+      const code = pinRead.tables_absent ? 'TABLES_ABSENT' : 'READ_FAILED';
+      await writeRows(sb, 'michael_checkpoint_send_ledger', (t) => t.insert({ et_date: etDate, window_slot: windowSlot, outcome: 'refused', refusal_code: code }));
+      return refusal(code, 'recipient-pin read failed -- fail-closed (refused)');
+    }
+    pinnedHash = pinRead.rows[0]?.reason || '';
+  }
   const recipient = process.env.CHAIRMAN_PHONE || '';
-  if (!recipient || sha256Hex(recipient) !== recipientSha256) {
+  if (!recipient || sha256Hex(recipient) !== pinnedHash) {
     await writeRows(sb, 'michael_checkpoint_send_ledger', (t) => t.insert({ et_date: etDate, window_slot: windowSlot, outcome: 'refused', refusal_code: 'RECIPIENT_HASH_MISMATCH' }));
     return refusal('RECIPIENT_HASH_MISMATCH', 'CHAIRMAN_PHONE does not match the pinned recipient hash');
   }
