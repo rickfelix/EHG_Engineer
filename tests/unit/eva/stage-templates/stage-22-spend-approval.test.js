@@ -22,11 +22,23 @@ describe('FR-2: S21 (Distribution) is in the decision-creating fallback set', ()
 });
 
 // Supabase stub that records every insert payload + every mark-stale update.
+//
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-2): persistCanonicalPair now routes through
+// writeArtifact(), which does `.insert(row).select('id').single()` (needing {data:{id}, error})
+// rather than reading the insert's own resolved {error} directly. insert() below returns an
+// object that is BOTH directly awaitable (persistBlockMarker's raw-insert style, unaffected by
+// this SD) AND chainable via .select().single() (writeArtifact()'s style) off the SAME call.
 function stub() {
   const calls = { updates: [], inserts: [] };
   const builder = {
     update(p) { calls.updates.push(p); return builder; },
-    insert(p) { calls.inserts.push(p); return Promise.resolve({ error: null }); },
+    insert(p) {
+      calls.inserts.push(p);
+      return {
+        then: (resolve) => resolve({ error: null }),
+        select: () => ({ single: () => Promise.resolve({ data: { id: `art-${calls.inserts.length}` }, error: null }) }),
+      };
+    },
     eq() { return builder; },
   };
   return { sb: { from: () => builder }, calls };

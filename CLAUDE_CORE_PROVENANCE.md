@@ -1,8 +1,8 @@
-<!-- file_content_hash: a6e3b22c1726a843 -->
+<!-- file_content_hash: ba521a3040d19b16 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_CORE_PROVENANCE.md — Core Provenance (dated rationale)
 
-**Generated**: 2026-09-13 9:29:54 PM
+**Generated**: 2026-09-14 8:34:49 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each CORE rule exists — the incident narratives and measurements behind the always-read rules
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -24,6 +24,6 @@ The incident narratives and measurements behind the always-read CORE rules. Ever
 
 ---
 
-*Generated from database: 2026-09-13*
+*Generated from database: 2026-09-14*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=core_provenance). Do not hand-edit — edit the DB section and regenerate.*

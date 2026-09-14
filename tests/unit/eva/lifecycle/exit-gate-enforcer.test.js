@@ -18,10 +18,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../../lib/eva/artifact-persistence-service.js';
 
 // We need to control process.env.LEO_S19_EXIT_GATE_ENFORCER per test, but the
 // enforcer reads it at module-load. Use vi.resetModules + dynamic import.
 const VENTURE_ID = '11111111-2222-3333-4444-555555555555';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 function buildSupabaseMock({
   stageConfig = { exit: ['Application deployed', 'GitHub repo URL stored in venture_resources'] },
@@ -444,9 +449,64 @@ describe('exit-gate-enforcer', () => {
         allowed: expect.any(Boolean),
         blocked_by: expect.any(Array),
         gates_checked: expect.any(Array),
+        provenance_warnings: expect.any(Array),
         stage_number: 19,
         flag_enforced: expect.any(Boolean),
       }));
+    });
+  });
+
+  describe('machine provenance (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G, FR-5, advisory-only)', () => {
+    // A dedicated mock supporting .in() on venture_artifacts (buildSupabaseMock's shared
+    // buildEqChain does not implement it), so checkGateProvenance's re-query resolves real data
+    // instead of degrading to [] via its fail-soft catch.
+    function buildProvenanceMock({ buildArtifactRow }) {
+      const buildEqChain = (finalResult) => {
+        const chain = {
+          eq: vi.fn(() => chain),
+          not: vi.fn(() => chain),
+          limit: vi.fn(() => chain),
+          in: vi.fn(() => chain),
+          maybeSingle: vi.fn().mockResolvedValue(finalResult),
+          then: (resolve) => resolve({ data: [buildArtifactRow], error: null }),
+        };
+        return chain;
+      };
+      return {
+        from: vi.fn((table) => {
+          if (table === 'venture_stages') {
+            return { select: vi.fn(() => buildEqChain({ data: { metadata: { gates: { exit: ['Application deployed'] } } }, error: null })) };
+          }
+          if (table === 'venture_artifacts') {
+            return { select: vi.fn(() => buildEqChain({ data: { id: 'art-1' }, error: null })) };
+          }
+          if (table === 'system_events') {
+            return { insert: vi.fn(() => Promise.resolve({ data: null, error: null })) };
+          }
+          return { select: vi.fn() };
+        }),
+      };
+    }
+
+    it('records a present, unprovenanced, post-cutover artifact in provenance_warnings without affecting allowed/blocked_by', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildProvenanceMock({
+        buildArtifactRow: { artifact_type: 'build_mvp_build', metadata: null, created_at: POST_CUTOVER },
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.allowed).toBe(true);
+      expect(result.blocked_by).toEqual([]);
+      expect(result.provenance_warnings.length).toBeGreaterThan(0);
+      expect(result.provenance_warnings[0]).toMatch(/Application deployed \(build_mvp_build\)/);
+    });
+
+    it('does not record a provenance warning for a pre-cutover legacy artifact', async () => {
+      const { checkExitGates } = await importEnforcerWithFlag('on');
+      const supabase = buildProvenanceMock({
+        buildArtifactRow: { artifact_type: 'build_mvp_build', metadata: null, created_at: '2026-01-01T00:00:00Z' },
+      });
+      const result = await checkExitGates({ supabase, ventureId: VENTURE_ID, fromStage: 19 });
+      expect(result.provenance_warnings).toEqual([]);
     });
   });
 });

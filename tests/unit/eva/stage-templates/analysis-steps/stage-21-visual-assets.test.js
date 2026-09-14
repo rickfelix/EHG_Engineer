@@ -251,6 +251,13 @@ describe('stage-21-visual-assets — orchestration', () => {
     expect(inserted.find(i => i.payload.artifact_type === 'visual_device_screenshots')).toBeDefined();
     expect(inserted.find(i => i.payload.artifact_type === 'visual_social_graphics')).toBeDefined();
     expect(inserted.find(i => i.payload.artifact_type === 'launch_test_plan')).toBeDefined();
+
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-2/TS-4): now routed through
+    // writeArtifact(), the canonical pair carries a provenance stamp and non-null content.
+    const screenshots = inserted.find(i => i.payload.artifact_type === 'visual_device_screenshots');
+    expect(screenshots.payload.metadata.machine_provenance.producer).toBe('stage-21-visual-assets');
+    expect(screenshots.payload.metadata.machine_provenance.content_hash).toBeTruthy();
+    expect(screenshots.payload.content).not.toBeNull();
   });
 
   it('FR-1 — single-emit canonical pair only when flag ON', async () => {

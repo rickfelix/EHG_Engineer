@@ -95,15 +95,27 @@
  *       declare the pointer at all), but this MUST be closed (require the match to include the
  *       declaring SD's own identity, or a server-side join) before ACCEPTANCE_ARTIFACT_GATE_BINDING
  *       is ever flipped, or a declaration on one SD could read/leak facts about an unrelated one.
- *   (b) hasProvenance() is a PRESENCE check (non-null source / a present evidence_hash), not a
- *       PRODUCER-INDEPENDENCE check — it does not verify the evidence was authored by a party
- *       other than the one being gated, and does not verify a hash against content. Do not read
- *       ARTIFACT_PROVENANCE_ABSENT as satisfying the chairman-ratified gate-evidence-provenance
- *       rule; it does not, by design, for tables that structurally cannot carry that contract (see
- *       the PROVENANCE section above). A stronger provenance model for these tables is future work.
+ *   (b) [SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G] venture_artifacts.hasProvenance is UPGRADED —
+ *       no longer a bare `source != null` presence check. It now calls
+ *       lib/eva/venture-artifact-provenance.js's hasVentureArtifactProvenance(), which grades a
+ *       cutover boundary (pre-cutover rows pass leniently; the 7972-row/100%-unprovenanced legacy
+ *       corpus is not instantly broken) and, for post-cutover rows, re-derives content_hash from
+ *       content ?? artifact_data and compares it against the stamped metadata.machine_provenance —
+ *       a genuine hash-verification, not mere presence. uat_test_runs.hasProvenance is UNCHANGED
+ *       (its metadata.evidence_hash presence check was already real, not part of this defect
+ *       class) — it still does not verify PRODUCER-INDEPENDENCE (that the evidence was authored
+ *       by a party other than the one being gated), which remains future work for both tables.
  */
 
 import { REASON_CODES, parseSelfReportedVerdict } from '../../../../../../lib/eva/reality-gates.js';
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-6): venture_artifacts.hasProvenance below was a
+// PRESENCE-only check (row?.source != null); replaced with the real machine-provenance model
+// (cutover-aware, hash-verified). uat_test_runs.hasProvenance is left as-is -- its
+// metadata.evidence_hash presence check is already a real (non-vacuous) check, not part of the
+// same defect class; the two were reviewed TOGETHER per the finding that a launch_uat_report
+// declaration and a uat_test_runs declaration form one verification chain, not to imply
+// uat_test_runs needed rewriting too.
+import { hasVentureArtifactProvenance } from '../../../../../../lib/eva/venture-artifact-provenance.js';
 
 const GATE_NAME = 'GATE_ACCEPTANCE_ARTIFACT';
 
@@ -133,13 +145,22 @@ function deepFreeze(obj) {
 // numeric_threshold declaration can only ever name a genuinely numeric column and vice versa.
 const TABLE_CONFIG = deepFreeze({
   venture_artifacts: {
-    selectColumns: ['id', 'venture_id', 'artifact_type', 'is_current', 'source', 'content', 'quality_score', 'created_at'],
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-6): 'metadata' and 'artifact_data' added so
+    // hasProvenance below can grade the real machine_provenance stamp (cutover-aware, hash
+    // re-derived against content ?? artifact_data). NOTE: selectColumns doubles as the order_by
+    // allowlist (validateDeclaration, ~line 242) -- this intentionally also legalizes 'metadata'
+    // and 'artifact_data' as declarable order_by columns; accepted, not a defect.
+    selectColumns: ['id', 'venture_id', 'artifact_type', 'is_current', 'source', 'content', 'artifact_data', 'metadata', 'quality_score', 'created_at'],
     matchColumns: ['id', 'venture_id', 'artifact_type', 'is_current'],
     satisfiedFieldsByKind: {
       self_reported_verdict: ['content'],
       numeric_threshold: ['quality_score'],
     },
-    hasProvenance: (row) => row?.source != null,
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-6): was `(row) => row?.source != null`, a
+    // presence-only check explicitly disclaimed above (KNOWN, DEFERRED (b)) as not doing
+    // producer-independence or hash verification. Now the real, cutover-aware, hash-verified
+    // model shared with every other venture_artifacts reader this SD wires.
+    hasProvenance: (row) => hasVentureArtifactProvenance(row),
   },
   uat_test_runs: {
     selectColumns: ['id', 'sd_id', 'status', 'pass_rate', 'metadata', 'created_at'],

@@ -20,6 +20,11 @@ import {
   evaluateSatisfied,
   isBindingEnabled,
 } from './acceptance-artifact-gate.js';
+import { VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT } from '../../../../../../lib/eva/artifact-persistence-service.js';
+
+// Computed relative to the live cutover constant (not a hardcoded literal) so this suite
+// never silently drifts pre/post when that constant moves (VALIDATION, PLAN-VERIFY).
+const POST_CUTOVER = new Date(Date.parse(VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) + 60_000).toISOString();
 
 function chainable(terminal, calls) {
   const obj = {
@@ -124,11 +129,26 @@ describe('createAcceptanceArtifactGate', () => {
   });
 
   it('a row lacking the minimum provenance field is ARTIFACT_PROVENANCE_ABSENT, not ARTIFACT_MISSING/UNSATISFIED', async () => {
-    const noProvenanceRow = { ...FIXTURE_A_ROW, source: null };
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-6): hasProvenance is now cutover-aware — a
+    // pre-cutover row (FIXTURE_A_ROW's created_at is 2026-08-30, before
+    // VENTURE_ARTIFACT_PROVENANCE_CUTOVER_AT) is graded leniently regardless of source/metadata,
+    // by design (the 7972-row/100%-unprovenanced legacy corpus must not be refused). To genuinely
+    // exercise ABSENT, this fixture must be POST-cutover with no machine_provenance stamp.
+    const noProvenanceRow = { ...FIXTURE_A_ROW, source: null, metadata: null, created_at: POST_CUTOVER };
     const supabase = mockSupabase({ rows: [noProvenanceRow] });
     const gate = createAcceptanceArtifactGate(supabase);
     const result = await gate.validator({ sd: FIXTURE_A_SD });
     expect(result.details.reason_code).toBe('ARTIFACT_PROVENANCE_ABSENT');
+  });
+
+  it('a pre-cutover row with zero provenance fields is graded leniently (legacy corpus, never refused)', async () => {
+    const legacyRow = { ...FIXTURE_A_ROW, source: null, metadata: null };
+    const supabase = mockSupabase({ rows: [legacyRow] });
+    const gate = createAcceptanceArtifactGate(supabase);
+    const result = await gate.validator({ sd: FIXTURE_A_SD });
+    // Falls through to evaluateSatisfied (this fixture's content is a self-reported
+    // {satisfied:false} payload) rather than being refused for provenance.
+    expect(result.details.reason_code).not.toBe('ARTIFACT_PROVENANCE_ABSENT');
   });
 
   it('a malformed declaration (bad table) is DECLARATION_INVALID and passes without querying', async () => {
@@ -203,7 +223,7 @@ describe('createAcceptanceArtifactGate', () => {
     const gate = createAcceptanceArtifactGate(supabase);
     await gate.validator({ sd: FIXTURE_A_SD });
     expect(calls.table).toBe('venture_artifacts');
-    expect(calls.select).toBe('id,venture_id,artifact_type,is_current,source,content,quality_score,created_at');
+    expect(calls.select).toBe('id,venture_id,artifact_type,is_current,source,content,artifact_data,metadata,quality_score,created_at');
     expect(calls.match).toEqual(FIXTURE_A_SD.metadata.acceptance_artifact.match);
     expect(calls.order).toEqual({ col: 'created_at', ascending: false });
     expect(calls.limit).toBe(1);

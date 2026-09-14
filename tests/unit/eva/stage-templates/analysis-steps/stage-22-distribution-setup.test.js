@@ -489,6 +489,11 @@ describe('TS-1: web-SaaS thesis without app_store → full portfolio, no skip, n
     expect(copyInsert).toHaveLength(1);
     expect(configInsert[0].row.lifecycle_stage).toBe(21);
     expect(configInsert[0].row.title.length).toBeGreaterThan(0);
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G (FR-2/TS-4): now routed through
+    // writeArtifact(), this write carries a provenance stamp and non-null content.
+    expect(configInsert[0].row.metadata.machine_provenance.producer).toBe('stage-22-distribution-setup');
+    expect(configInsert[0].row.metadata.machine_provenance.content_hash).toBeTruthy();
+    expect(configInsert[0].row.content).not.toBeNull();
     // No app_store anywhere — the fixed six is gone; open taxonomy is first-class.
     expect(configInsert[0].row.artifact_data.channels.some((c) => c.channel === 'app_store')).toBe(false);
     expect(configInsert[0].row.artifact_data.channels.some((c) => c.channel === 'integration')).toBe(true);
