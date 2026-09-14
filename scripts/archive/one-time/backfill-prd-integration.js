@@ -1,13 +1,43 @@
 #!/usr/bin/env node
 
 /**
+ * ARCHIVED -- DO NOT RUN. Retained for historical reference only.
+ *
  * Backfill integration_operationalization for PRDs with NULL values.
  *
- * Usage:
+ * Usage (historical, disabled below):
  *   node scripts/backfill-prd-integration.js              # Execute backfill
  *   node scripts/backfill-prd-integration.js --dry-run     # Preview only
  *   node scripts/backfill-prd-integration.js --batch-size 50  # Custom batch size
+ *
+ * GUARDED -- SD-LEO-FIX-REPLACE-707-FABRICATED-001 (FR-4).
+ *
+ * This script's `while (offset < nullCount)` loop (below) re-queries the shrinking
+ * `integration_operationalization IS NULL` predicate at a FIXED offset per batch while its
+ * own writes shrink that same predicate -- each subsequent page silently skips roughly half
+ * of what remains, with no error. It ran to completion believing it had processed every NULL
+ * row; in fact it touched only 707 of them, and generateIntegrationContent() below writes
+ * FABRICATED boilerplate prose (not real per-PRD content) into a column a downstream gate
+ * (GATE_INTEGRATION_SECTION_VALIDATION) reads as a completeness signal -- those 707 rows
+ * scored 100%/complete despite carrying no genuine content until corrected by
+ * scripts/one-off/backfill-707-fabricated-integration.mjs (SD-LEO-FIX-REPLACE-707-
+ * FABRICATED-001). Re-running this script today would both re-introduce that fabricated
+ * content on any row whose integration_operationalization is NULL again, and repeat the
+ * same pagination defect. It exits immediately below rather than being deleted, so this
+ * history and root-cause note remain in-repo.
  */
+
+if (true) {
+  console.error(
+    '\nARCHIVED SCRIPT -- REFUSING TO RUN.\n' +
+    'scripts/archive/one-time/backfill-prd-integration.js has a pagination bug (see header\n' +
+    'comment) that fabricates non-informative content and silently skips rows. It has been\n' +
+    'guarded per SD-LEO-FIX-REPLACE-707-FABRICATED-001 and must not be re-run.\n' +
+    'If a NULL-backfill is genuinely needed, use the corrected, keyset-paginated approach in\n' +
+    'scripts/one-off/backfill-integration-operationalization-v2.mjs instead.\n'
+  );
+  process.exit(1);
+}
 
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';

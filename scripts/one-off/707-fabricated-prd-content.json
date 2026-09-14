@@ -1,0 +1,209 @@
+{
+  "executive_summary": "An archived one-time backfill script (scripts/archive/one-time/backfill-prd-integration.js) wrote fabricated boilerplate prose into product_requirements_v2.integration_operationalization for 707 rows before an offset-pagination-over-a-shrinking-predicate bug silently stalled it. These 707 rows are indistinguishable from genuine content at a glance and score 100%/complete on GATE_INTEGRATION_SECTION_VALIDATION despite carrying no real per-PRD content -- identified via the exact predicate integration_operationalization->consumers->0->>name = 'LEO Protocol Engine' (verified live: exactly 707 rows, 15 distinct fabricated jsonb variants sharing one 5-key keyset). This SD replaces those 707 rows' integration_operationalization with the same honest null-per-key placeholder shape (buildDefaultIntegrationOperationalization(), scripts/prd/prd-creator.js:608) already used by the sibling SD-LEARN-FIX-ADDRESS-PAT-LES-012 backfill, which is proven gate-verdict-identical to NULL across every sd_type by the existing tests/unit/gates/integration-section-parity.test.js suite. LEAD-phase Explore + VALIDATION sub-agent review refuted the SD's originally-stated write mechanism: integration_operationalization is its own top-level jsonb column (confirmed via information_schema.columns), separate from metadata, so the generalized mergeJsonbColumn/JSONB_MERGE_ALLOWLIST infrastructure (jsonbColumn:'metadata' hardcoded for this table) cannot target it -- and even if it could, mergeJsonbColumn performs a `||` MERGE not a REPLACE, and has no CAS/extra-guard capability, both of which this SD's safety story requires. The corrected mechanism is a direct guarded UPDATE (supabase-js seam) modeled on the precedented sibling script scripts/one-off/backfill-integration-operationalization-v2.mjs, using its updated_at CAS-guard pattern.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Replace the 707 fabricated integration_operationalization rows with the honest null-per-key placeholder",
+      "description": "Write a one-off backfill script (modeled on scripts/one-off/backfill-integration-operationalization-v2.mjs) that identifies target rows LIVE at execution time via integration_operationalization->consumers->0->>name = 'LEO Protocol Engine' (not a hardcoded 707 count -- VALIDATION measured a 706-vs-707 historical drift in the archived script's own commit message vs. live state), and for each matching row performs a direct guarded UPDATE via supabase-js setting integration_operationalization = buildDefaultIntegrationOperationalization() (imported from scripts/prd/prd-creator.js). The write must NOT use mergeJsonbColumn (confirmed wrong tool: separate top-level column, merge-not-replace semantics, no CAS capability -- see LEAD-phase correction in this SD's description). Use keyset pagination over id (not offset, to avoid repeating the archived script's exact defect class), batch size ~100-500.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Target rows are enumerated via a live query against the fabrication predicate at execution time, not a hardcoded row count or id list",
+        "Each UPDATE sets integration_operationalization to exactly buildDefaultIntegrationOperationalization()'s output (5 canonical keys, each null) -- imported from scripts/prd/prd-creator.js, not reimplemented",
+        "Each UPDATE is guarded by a compare-and-swap on updated_at read immediately before the write (matching backfill-integration-operationalization-v2.mjs's writeBackfillRow pattern), so a row that changed between read and write is skipped, not clobbered",
+        "updated_by is set on every UPDATE to a script/SD-identifying value (never 'EXEC', per enforce_doctrine_of_constraint) -- an improvement over the sibling script, which left it null and got changed_by='SYSTEM' in the audit trail",
+        "Keyset (not offset) pagination is used to enumerate rows in batches",
+        "After the script runs to completion, zero rows remain matching the fabrication predicate live"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Prove gate-verdict parity is preserved (no false-positive/false-negative shift)",
+      "description": "The existing tests/unit/gates/integration-section-parity.test.js suite (from the sibling SD) already proves buildDefaultIntegrationOperationalization()'s output scores byte-identical to NULL on GATE_INTEGRATION_SECTION_VALIDATION across every sd_type -- this SD does not need to re-derive that proof, but must run the suite as part of its own verification (not merely cite it) to confirm it still passes unmodified after this SD's changes (this SD makes no code change to the gate or the placeholder builder, only to data).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "tests/unit/gates/integration-section-parity.test.js passes unmodified after this SD's changes",
+        "A live spot-check of 5+ corrected rows confirms GATE_INTEGRATION_SECTION_VALIDATION's validator scores them identically to how it would score a NULL integration_operationalization value"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Regression/verification coverage for the backfill script itself",
+      "description": "Add tests (or a documented dry-run + live-verification procedure, consistent with how the sibling backfill-integration-operationalization-v2.mjs was verified) proving: the fabrication predicate correctly selects only the 707 (or live-drifted count of) contaminated rows and none of the genuine/v2-placeholder rows; the CAS guard correctly skips a row that changed since being read; the script is idempotent (a second run against already-corrected rows is a no-op, since they no longer match the fabrication predicate).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A unit or integration-style test (against a fixture or a narrowly-scoped live check) proves the fabrication predicate does not match any of the 1,570 pre-existing v2-placeholder rows or the ~2,568 genuine rows",
+        "A test or documented manual verification proves the updated_at CAS guard causes a stale-read row to be skipped rather than overwritten",
+        "Running the script a second time after a successful first run performs zero writes (idempotency), verified by re-running it against a state where the fabrication predicate no longer matches"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Archive-script hardening follow-up (in scope per SD text)",
+      "description": "Guard scripts/archive/one-time/backfill-prd-integration.js so it cannot be accidentally re-run and reproduce the same class of defect -- e.g. a top-of-file guard that exits immediately with an explanatory message (referencing this SD and the corrected sibling script), or deletion if the archived script serves no historical-reference purpose. EXEC's choice between guard-in-place vs. delete, but the decision and rationale must be documented in the PR.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "scripts/archive/one-time/backfill-prd-integration.js either refuses to execute (with a clear message pointing to this SD and the corrected approach) or is removed, with the choice documented in the PR description",
+        "If guarded rather than removed, a smoke-test confirms invoking the script exits non-zero without performing any writes"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No schema change",
+      "description": "This is a code + data-correction fix. No migration, no new table/column. integration_operationalization and metadata remain the existing separate top-level jsonb columns on product_requirements_v2."
+    },
+    {
+      "id": "TR-2",
+      "title": "supabase-js write seam only",
+      "description": "The write path must use supabase-js, not a raw-pg client. updated_at is a `timestamp WITHOUT time zone` column; VALIDATION confirmed the node pg driver shifts naive timestamps by machine offset, which would silently break the updated_at CAS guard on a raw-pg seam (every UPDATE matching 0 rows). supabase-js was verified (read-only round-trip) to compare updated_at correctly."
+    },
+    {
+      "id": "TR-3",
+      "title": "Do not extend JSONB_MERGE_ALLOWLIST/mergeJsonbColumn for this SD",
+      "description": "VALIDATION assessed and rejected extending the shared lib/coordinator/safe-metadata-merge.mjs primitive to support a second jsonb column per table: it would require four separate changes (jsonbColumn scalar->array, new extraGuardColumns entry, a new guard mechanism that doesn't exist today, a new replace-vs-merge mode) driven by a single one-off, and mergeJsonbColumn has zero production callers against product_requirements_v2 today. The precedented, already-fit-for-purpose sibling script is the correct model instead."
+    },
+    {
+      "id": "TR-4",
+      "title": "DB triggers are live constraints, not defects to route around",
+      "description": "trg_validate_integration_section_keys (BEFORE INSERT/UPDATE) hard-rejects any integration_operationalization key outside the canonical 5 -- buildDefaultIntegrationOperationalization()'s output is compliant; no provenance marker may be embedded inside this column (use metadata instead, if a provenance stamp is desired). enforce_doctrine_of_constraint (BEFORE INSERT/UPDATE, SECURITY DEFINER) hard-aborts if COALESCE(created_by, updated_by) = 'EXEC' -- never set updated_by to that value."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Backfill script run against a snapshot/fixture matching the live fabrication predicate correctly identifies and would update all matching rows",
+      "type": "unit",
+      "expected": "Enumeration matches the fabrication predicate exactly, excluding v2-placeholder and genuine rows"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "A row whose updated_at changes between read and write (simulated concurrent modification) is skipped, not overwritten",
+      "type": "unit",
+      "expected": "CAS guard causes the write to affect zero rows for that id; script logs a skip, does not throw"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Running the script a second time after a successful first pass",
+      "type": "integration",
+      "expected": "Zero writes performed (predicate no longer matches any row) -- idempotent"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Corrected rows scored against GATE_INTEGRATION_SECTION_VALIDATION",
+      "type": "unit",
+      "expected": "Score/passed verdict identical to a NULL integration_operationalization value, for every sd_type present among the corrected rows"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "tests/unit/gates/integration-section-parity.test.js (pre-existing suite)",
+      "type": "regression",
+      "expected": "Passes unmodified after this SD's changes"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Archive-script hardening (FR-4) smoke test",
+      "type": "unit",
+      "expected": "Invoking scripts/archive/one-time/backfill-prd-integration.js (if kept, guarded) exits non-zero, performs zero writes"
+    }
+  ],
+  "acceptance_criteria": [
+    "Zero rows remain matching integration_operationalization->consumers->0->>name = 'LEO Protocol Engine' after the backfill runs",
+    "Every corrected row's integration_operationalization is exactly buildDefaultIntegrationOperationalization()'s output",
+    "governance_audit_log contains one attributable (non-'SYSTEM') UPDATE row per corrected row",
+    "tests/unit/gates/integration-section-parity.test.js and all pre-existing product_requirements_v2 / jsonb-merge test suites pass unmodified",
+    "scripts/archive/one-time/backfill-prd-integration.js can no longer reproduce this defect class (guarded or removed)"
+  ],
+  "risks": [
+    {
+      "risk": "RULED OUT DURING LEAD (recorded for history, not a live risk): the SD originally proposed mergeJsonbColumn/JSONB_MERGE_ALLOWLIST as the write mechanism. Explore + VALIDATION sub-agent review confirmed integration_operationalization is a separate top-level jsonb column from metadata, that the allowlist entry hardcodes jsonbColumn:'metadata', and that mergeJsonbColumn performs a merge (not replace) with no CAS capability -- wrong tool regardless of the allowlist. Corrected to a direct guarded UPDATE modeled on the precedented sibling script before PLAN began.",
+      "mitigation": "N/A -- design was corrected in LEAD before PLAN/EXEC; FR-1 now specifies the data-supported mechanism directly.",
+      "severity": "low"
+    },
+    {
+      "risk": "The 707 rows contain 15 distinct fabricated jsonb variants (not 1), all sharing the same 5-key keyset but differing in value -- a naive idempotency/verification check that assumes a single expected old blob would be wrong.",
+      "mitigation": "FR-1/FR-3 require keying verification on the consumers[0].name predicate, never an expected old blob.",
+      "severity": "low"
+    },
+    {
+      "risk": "A raw-pg write seam would silently break the updated_at CAS guard due to the node pg driver's naive-timestamp machine-offset shift, causing every UPDATE to match 0 rows and the script to falsely report zero progress.",
+      "mitigation": "TR-2 mandates the supabase-js seam, verified via a read-only CAS round-trip test (positive/negative control) during LEAD-phase VALIDATION.",
+      "severity": "medium"
+    },
+    {
+      "risk": "A bulk 707-row UPDATE adds meaningfully to governance_audit_log (measured ~29MB against a 5.5GB table, ~0.5% growth).",
+      "mitigation": "Acceptable and desirable -- this is the same mechanism that enabled full rollback of the sibling SD's earlier destroyed-keys incident; not a reason to avoid triggering it.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "GATE_INTEGRATION_SECTION_VALIDATION (lib/gates or equivalent, scores product_requirements_v2.integration_operationalization completeness per PRD)",
+      "prd-auto-iterate quality scoring (reads integration_operationalization presence as a completeness signal)"
+    ],
+    "dependencies": [
+      "product_requirements_v2.integration_operationalization (existing top-level jsonb column, target of this SD's writes)",
+      "product_requirements_v2.metadata (existing jsonb column, untouched by this SD unless a provenance stamp is added)",
+      "scripts/prd/prd-creator.js buildDefaultIntegrationOperationalization() (existing function, read-only import, not modified by this SD)",
+      "scripts/one-off/backfill-integration-operationalization-v2.mjs (existing precedent script, used as the implementation model, not modified)"
+    ],
+    "data_contracts": [
+      "none -- no schema change; write conforms to the existing trg_validate_integration_section_keys 5-key contract"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Verified via the unit/regression test suites named in FR-2/FR-3, a live post-run predicate re-check (0 remaining fabricated rows), and governance_audit_log row inspection for attribution"
+    ]
+  },
+  "system_architecture": {
+    "summary": "A single, self-contained one-off data-correction script, modeled directly on the precedented sibling script from SD-LEARN-FIX-ADDRESS-PAT-LES-012, plus a small hardening follow-up on the original defective archived script. No production code path (gate, scorer, PRD creator) is modified -- only the fabricated data itself is corrected, and the mechanism that could reproduce the defect is neutralized.",
+    "components": [
+      {
+        "name": "scripts/one-off/backfill-707-fabricated-integration.mjs (new)",
+        "change": "NEW -- direct guarded UPDATE backfill script, modeled on backfill-integration-operationalization-v2.mjs, targeting the fabrication predicate instead of the NULL predicate"
+      },
+      {
+        "name": "scripts/archive/one-time/backfill-prd-integration.js",
+        "change": "Guarded against re-execution, or removed, per FR-4"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Write and dry-run the correction script against the live fabrication predicate, verify the enumeration and CAS-guard logic against a small sample before running to completion, execute the full 707-row correction, verify gate-parity and audit attribution, then harden the archived script.",
+    "steps": [
+      "Write scripts/one-off/backfill-707-fabricated-integration.mjs modeled on backfill-integration-operationalization-v2.mjs, targeting the fabrication predicate, using buildDefaultIntegrationOperationalization(), keyset pagination, and an updated_at CAS guard with updated_by attribution (FR-1)",
+      "Dry-run against a small sample (e.g. 5-10 rows) to verify enumeration correctness and CAS behavior before the full run (FR-3)",
+      "Execute the full backfill against all live-matching rows",
+      "Verify zero rows remain matching the fabrication predicate, spot-check corrected rows against GATE_INTEGRATION_SECTION_VALIDATION, and run tests/unit/gates/integration-section-parity.test.js (FR-1, FR-2)",
+      "Verify governance_audit_log attribution for the corrected rows (FR-1)",
+      "Guard or remove scripts/archive/one-time/backfill-prd-integration.js (FR-4)"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "SELECT count(*) FROM product_requirements_v2 WHERE integration_operationalization->'consumers'->0->>'name' = 'LEO Protocol Engine'",
+      "expected_outcome": "0 (started at 707 at SD authoring time; live count re-verified at execution)"
+    },
+    {
+      "step_number": 2,
+      "instruction": "npx vitest run tests/unit/gates/integration-section-parity.test.js",
+      "expected_outcome": "All tests pass unmodified"
+    },
+    {
+      "step_number": 3,
+      "instruction": "SELECT count(*) FROM governance_audit_log WHERE table_name='product_requirements_v2' AND changed_by != 'SYSTEM' AND created_at > '<backfill start time>'",
+      "expected_outcome": "Count matches the number of rows corrected, confirming attribution (not 'SYSTEM')"
+    },
+    {
+      "step_number": 4,
+      "instruction": "Re-run scripts/one-off/backfill-707-fabricated-integration.mjs a second time",
+      "expected_outcome": "Zero rows written (idempotent) -- predicate no longer matches any row"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-FIX-REPLACE-707-FABRICATED-001"
+  }
+}
