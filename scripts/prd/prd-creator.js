@@ -777,12 +777,19 @@ export async function updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llm
   if (llmContent.integration_operationalization) {
     prdUpdate.integration_operationalization = llmContent.integration_operationalization;
   } else {
-    const { data: currentRow } = await supabase
+    // TESTING re-review F6 (evidence db25c91d): a transient read error here must never be
+    // treated as "current value is absent" -- that would write the default placeholder
+    // OVER real authored content this lazy check simply failed to see. Only decide based
+    // on a value we actually read; on a read error, leave the field out of prdUpdate
+    // entirely (untouched), mirroring writeBackfillRow's error handling.
+    const { data: currentRow, error: currentRowError } = await supabase
       .from('product_requirements_v2')
       .select('integration_operationalization')
       .eq('id', prdId)
       .maybeSingle();
-    if (!currentRow?.integration_operationalization) {
+    if (currentRowError) {
+      console.error(`[updatePRDWithLLMContent] pre-write integration_operationalization read failed for ${prdId}: ${currentRowError.message} -- leaving field untouched`);
+    } else if (!currentRow?.integration_operationalization) {
       prdUpdate.integration_operationalization = buildDefaultIntegrationOperationalization();
     }
   }

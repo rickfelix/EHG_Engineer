@@ -220,6 +220,32 @@ describe('SD-LEARN-FIX-ADDRESS-PAT-LES-012: write-path 3 -- updatePRDWithLLMCont
     await updatePRDWithLLMContent(sb, 'prd-id', 'SD-KEY', { sd_type: 'infrastructure' }, { executive_summary: 'x'.repeat(60), integration_operationalization: realIntegrationContent });
     expect(sb.capture.updated.integration_operationalization).toEqual(realIntegrationContent);
   });
+
+  it('F6 (TESTING evidence db25c91d): an errored pre-write read must NOT be treated as absence -- leaves the field untouched rather than writing the default over unseen real content', async () => {
+    const capture = { updated: null };
+    const sb = {
+      capture,
+      from(_table) {
+        return {
+          select: () => ({
+            eq: () => ({
+              // Simulates a transient read failure: `data` is null AND `error` is set.
+              // The pre-fix code destructured only `data`, so this looked identical to
+              // "row genuinely has no integration_operationalization" and would have
+              // written the placeholder over whatever real content actually exists.
+              maybeSingle: async () => ({ data: null, error: { message: 'transient read failure' } }),
+            }),
+          }),
+          update: (rec) => {
+            capture.updated = rec;
+            return { eq: async () => ({ error: null }) };
+          },
+        };
+      },
+    };
+    await updatePRDWithLLMContent(sb, 'prd-id', 'SD-KEY', { sd_type: 'infrastructure' }, { executive_summary: 'x'.repeat(60) });
+    expect(sb.capture.updated.integration_operationalization).toBeUndefined();
+  });
 });
 
 describe('SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-3): naming-drift fix, warn-list uses "bugfix" not "fix"', () => {
