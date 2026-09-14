@@ -54,22 +54,27 @@ function withEnv(vars, fn) {
 }
 
 describe('pure helpers', () => {
-  it('summarizeCounts: counts-only, never raw text; as-of is the OLDEST (most conservative) finished_at', () => {
+  it('summarizeCounts: a NAMED key per feeder (TESTING L4 -- never "the first numeric key", which is JSONB-key-order-dependent and production-unstable), never raw text; as-of is the OLDEST (most conservative) finished_at', () => {
     const r = summarizeCounts({
-      'calendar-read': { counts: { events: 3 }, finished_at: '2026-09-14T10:00:00.000Z' },
-      'gmail-triage': { counts: { unread: 5, ignored: 'text-should-never-appear' }, finished_at: '2026-09-14T04:35:00.000Z' },
+      'calendar-read': { counts: { meetings: 3, coded: 0 }, finished_at: '2026-09-14T10:00:00.000Z' },
+      'gmail-triage': { counts: { threads_seen: 9, unmatched: 5, ignored: 'text-should-never-appear' }, finished_at: '2026-09-14T04:35:00.000Z' },
     });
-    expect(r.summary).toContain('calendar-read:3');
-    expect(r.summary).toContain('gmail-triage:5');
+    expect(r.summary).toContain('3 meetings today');
+    expect(r.summary).toContain('5 untriaged mail');
     expect(r.summary).not.toContain('text-should-never-appear');
+    expect(r.summary).not.toContain('9'); // threads_seen is NOT the named key for gmail-triage -- confirms explicit key selection, not "any number present"
     expect(r.asOf).toBe('2026-09-14T04:35:00.000Z');
+  });
+  it('summarizeCounts: a feeder whose counts object lacks the named key entirely contributes nothing (not a wrong number)', () => {
+    const r = summarizeCounts({ 'calendar-read': { counts: { coded: 0, weekday: 'Sunday' }, finished_at: '2026-09-14T10:00:00.000Z' } });
+    expect(r.summary).toBe('no counts available');
   });
   it('summarizeCounts: no rows at all -> honest "no counts available", asOf null', () => {
     expect(summarizeCounts({})).toEqual({ summary: 'no counts available', asOf: null });
   });
   it('composeCheckpointBody: fixed template, includes the as-of pointer or says it is unavailable', () => {
-    expect(composeCheckpointBody({ summary: 'calendar-read:2', asOf: '2026-09-14T04:00:00.000Z' }))
-      .toBe('Michael checkpoint: calendar-read:2 (as of 2026-09-14T04:00:00.000Z). Reply if anything looks wrong.');
+    expect(composeCheckpointBody({ summary: '2 meetings today', asOf: '2026-09-14T04:00:00.000Z' }))
+      .toBe('Michael checkpoint: 2 meetings today (as of 2026-09-14T04:00:00.000Z). Reply if anything looks wrong.');
     expect(composeCheckpointBody({ summary: 'no counts available', asOf: null }))
       .toBe('Michael checkpoint: no counts available (as-of unavailable). Reply if anything looks wrong.');
   });
@@ -214,6 +219,25 @@ describe('TS-9: successful send + FR-3 identity + FR-6 stage-then-finalize ledge
     });
   });
 
+  it('TESTING M2: the composed body reflects a REAL seeded michael_feeder_runs row (pins the table/column names, not just the pure-helper tier)', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({
+        tables: {
+          michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }],
+          michael_feeder_runs: [{ et_date: ET_DATE, feeder: 'calendar-read', attempt: 1, counts: { meetings: 2 }, finished_at: '2026-09-14T09:00:00.000Z', status: 'ok' }],
+        },
+      });
+      const sent = [];
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+        sendFn: async (args) => { sent.push(args); return { status: 'queued', provider_message_id: 'SM999' }; },
+      });
+      expect(r).toMatchObject({ ok: true, sent: true });
+      expect(sent[0].body).toContain('2 meetings today');
+      expect(sent[0].body).toContain('as of 2026-09-14T09:00:00.000Z');
+    });
+  });
+
   it('a failed provider send finalizes outcome=refused with the provider reason, ledger row still redacted', async () => {
     await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
       const sb = fakeSb({ ...ENABLED_ROW });
@@ -254,10 +278,98 @@ describe('TESTING M9: raw-string hashing, not normalized', () => {
 });
 
 describe('argument handling', () => {
-  it('an invalid --et-date is refused DATE_INVALID before any read', async () => {
+  it('SEC-H1: --et-date under --apply is refused ET_DATE_OVERRIDE_NOT_ALLOWED, even a well-formed date, before any read', async () => {
+    const sb = fakeSb();
+    const r = await runCheckpointSend({ sb, argv: ['--apply', '--et-date', '2099-01-01'], now: NOW_IN_WINDOW });
+    expect(r).toMatchObject({ ok: false, refusal: 'ET_DATE_OVERRIDE_NOT_ALLOWED' });
+    expect(sb.froms).toHaveLength(0);
+  });
+  it('SEC-H1: a MALFORMED --et-date under --apply is ALSO refused ET_DATE_OVERRIDE_NOT_ALLOWED (presence is the problem, not just validity)', async () => {
     const sb = fakeSb();
     const r = await runCheckpointSend({ sb, argv: ['--apply', '--et-date', 'not-a-date'], now: NOW_IN_WINDOW });
-    expect(r).toMatchObject({ ok: false, refusal: 'DATE_INVALID' });
+    expect(r).toMatchObject({ ok: false, refusal: 'ET_DATE_OVERRIDE_NOT_ALLOWED' });
     expect(sb.froms).toHaveLength(0);
+  });
+  it('--et-date is still usable WITHOUT --apply (dry-run only) and a malformed one is DATE_INVALID', async () => {
+    const sb = fakeSb({ ...ENABLED_ROW });
+    const ok = await runCheckpointSend({ sb, argv: ['--et-date', '2026-09-14'], now: NOW_IN_WINDOW });
+    expect(ok).toMatchObject({ ok: true, dry_run: true, et_date: '2026-09-14' });
+    const bad = await runCheckpointSend({ sb, argv: ['--et-date', 'nope'], now: NOW_IN_WINDOW });
+    expect(bad).toMatchObject({ ok: false, refusal: 'DATE_INVALID' });
+  });
+});
+
+describe('SEC-H2: an unresolved SEND_IN_PROGRESS row counts against the cap and per-slot dedup', () => {
+  it('4 already-staged-but-unresolved rows (never finalized) trip CAP_EXCEEDED exactly like 4 confirmed sends', async () => {
+    const inProgressRows = ['06:00', '10:00', '14:00', '18:00'].map((w) => ({ et_date: ET_DATE, window_slot: w, outcome: 'refused', refusal_code: 'SEND_IN_PROGRESS' }));
+    const sb = fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: inProgressRows } });
+    const r = await runCheckpointSend({ sb, argv: ['--apply'], now: NOW_IN_WINDOW });
+    expect(r).toMatchObject({ ok: false, refusal: 'CAP_EXCEEDED' });
+  });
+  it('an in-progress row for THIS exact window is ALREADY_SENT_THIS_WINDOW even though outcome is not yet "sent"', async () => {
+    const sb = fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: [{ et_date: ET_DATE, window_slot: '06:00', outcome: 'refused', refusal_code: 'SEND_IN_PROGRESS' }] } });
+    const r = await runCheckpointSend({ sb, argv: ['--apply'], now: NOW_IN_WINDOW });
+    expect(r).toMatchObject({ ok: false, refusal: 'ALREADY_SENT_THIS_WINDOW' });
+  });
+  it('a genuinely refused (not in-progress) row does NOT count against the cap -- only sent/SEND_IN_PROGRESS do', async () => {
+    const refusedRows = ['06:00', '10:00', '14:00'].map((w) => ({ et_date: ET_DATE, window_slot: w, outcome: 'refused', refusal_code: 'CAP_EXCEEDED' }));
+    const sb = fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: refusedRows } });
+    let sendCalled = false;
+    const r = await runCheckpointSend({
+      sb, argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+      sendFn: async () => { sendCalled = true; return { status: 'queued', provider_message_id: 'SM1' }; },
+    });
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const r2 = await runCheckpointSend({
+        sb: fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: refusedRows } }),
+        argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM1' }),
+      });
+      expect(r2).toMatchObject({ ok: true, sent: true });
+    });
+  });
+});
+
+describe('SEC-M1: provider error reasons are sanitized before touching the ledger or stdout', () => {
+  it('a raw Twilio-style free-text reason (which could embed the recipient number) is replaced with PROVIDER_ERROR', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({ ...ENABLED_ROW });
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+        sendFn: async () => ({ status: 'failed', reason: "The 'To' number +15551234567 is not a valid phone number." }),
+      });
+      expect(r).toMatchObject({ ok: false, refusal: 'PROVIDER_ERROR' });
+      const ledgerWrites = sb.writes.filter((w) => w.table === 'michael_checkpoint_send_ledger');
+      const finalRow = ledgerWrites[ledgerWrites.length - 1].ops[0].args[0];
+      expect(finalRow.refusal_code).toBe('PROVIDER_ERROR');
+      expect(JSON.stringify(finalRow)).not.toContain('+15551234567');
+    });
+  });
+  it('known coded reasons (twilio_not_configured, http_NNN) pass through as-is', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      for (const reason of ['twilio_not_configured', 'http_500', 'test_env_guard']) {
+        const sb = fakeSb({ ...ENABLED_ROW });
+        const r = await runCheckpointSend({
+          sb, argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+          sendFn: async () => ({ status: 'failed', reason }),
+        });
+        expect(r).toMatchObject({ ok: false, refusal: reason });
+      }
+    });
+  });
+});
+
+describe('SEC-M2: a throwing sendFn is caught, never escapes, and finalizes the staged row as SEND_THREW', () => {
+  it('a network-level rejection from sendFn is caught and refused SEND_THREW, not an uncaught throw', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({ ...ENABLED_ROW });
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+        sendFn: async () => { throw new Error('ECONNRESET'); },
+      });
+      expect(r).toMatchObject({ ok: false, refusal: 'SEND_THREW' });
+      const ledgerWrites = sb.writes.filter((w) => w.table === 'michael_checkpoint_send_ledger');
+      expect(ledgerWrites[ledgerWrites.length - 1].ops[0].args[0]).toMatchObject({ outcome: 'refused', refusal_code: 'SEND_THREW' });
+    });
   });
 });
