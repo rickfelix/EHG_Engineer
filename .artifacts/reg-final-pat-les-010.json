@@ -1,0 +1,26 @@
+{
+  "verdict": "PASS",
+  "confidence_score": 96,
+  "summary": "REGRESSION PLAN_TO_LEAD: test-only additive change, zero production code touched, 7925/7925 tests pass in tests/unit/eva/. No API surface changed.",
+  "findings": [
+    { "severity": "INFO", "issue": "Diff scope: git diff main...HEAD --stat shows 4 files, +268/-0 — 1 test file (tests/unit/eva/stage-templates/stage-23-launch-readiness-fr1-4-6.test.js, +29) and 3 scripts/one-off/*.mjs. `git diff main...HEAD --stat -- lib/` is EMPTY: zero production code in lib/eva/ or lib/eva/stage-templates/ was modified.", "recommendation": "None — confirms pure test-only additive change on commits 5ac5947, ef43b42." },
+    { "severity": "INFO", "issue": "Full suite: npx vitest run tests/unit/eva/ => Tests 7925 passed | 34 skipped (7959). Test Files 621 passed | 6 skipped | 1 failed (628). ZERO test-level failures; zero new failures vs baseline.", "recommendation": "None." },
+    { "severity": "LOW", "issue": "Pre-existing environmental failure (excluded from baseline): tests/unit/eva/path-integrity-flags-live-defaults.db.test.js fails at suite setup with DB_TIER_BLOCKED (no_designated_target) because VITEST_DB_ALLOW_REF is unset for the db tier. `git diff main...HEAD -- <that file>` is EMPTY — the file is byte-identical to main and reads leo_feature_flags, unrelated to stage-templates. Environment-gated, not caused by this SD.", "recommendation": "Set VITEST_DB_ALLOW_REF to a non-production ref when db-tier coverage is required; not a blocker for this SD." },
+    { "severity": "INFO", "issue": "API signature check: the new test imports no new symbols — it uses only node:fs readFileSync + node:path resolve against REPO_ROOT. Symbols the enclosing file already consumed (TEMPLATE_23 from stage-24.js, UPSTREAM_REQUIREMENTS/analyzeStage23LaunchReadiness from analysis-steps/stage-23-launch-readiness.js, getAnalysisStep, ARTIFACT_TYPES) are unchanged by construction: no file under lib/ appears in this SD's diff.", "recommendation": "None." },
+    { "severity": "INFO", "issue": "The new guard is a source-text regression check over 4 files (stage-23.js, stage-24.js, analysis-steps/stage-23-launch-readiness.js, analysis-steps/stage-23-dedicated-venture-uat.js) asserting the literal substring stage22Data.promotion_gate never returns. It adds no runtime coupling and cannot alter production behavior.", "recommendation": "None." }
+  ],
+  "metadata": {
+    "provisional": false,
+    "supersedes_provisional_row": "2c150b2c-40ab-4744-99d8-666dc4c891a8",
+    "branch": "feat/SD-LEARN-FIX-ADDRESS-PAT-LES-010",
+    "commits": ["5ac5947c82f", "ef43b42142f"],
+    "test_command": "npx vitest run tests/unit/eva/",
+    "tests_passed": 7925,
+    "tests_failed": 0,
+    "tests_skipped": 34,
+    "test_files_passed": 621,
+    "test_files_failed_env_gated": 1,
+    "production_files_changed": 0,
+    "api_signature_changes": 0
+  }
+}
