@@ -125,7 +125,17 @@ async function run() {
       // is supposed to contain (from the audit log's own record of the backfill event)
       // and check whether the row's CURRENT metadata actually contains it.
       const auditRowCheck = await findPreBackfillMetadata(supabase, row.id);
-      const priorMetadataCheck = auditRowCheck?.old_values?.metadata;
+      if (!auditRowCheck) {
+        // ADVERSARIAL SHIP-REVIEW FINDING (PR #8950, follow-up): distinct from "genuinely
+        // had no prior content" -- the audit trigger is best-effort (EXCEPTION WHEN OTHERS
+        // THEN RAISE WARNING ... RETURN NEW), so a missing audit row means this row's
+        // pre-backfill state is UNKNOWABLE, not confirmed-empty. Flag it rather than
+        // silently folding it into noPriorKeys.
+        noAuditRow++;
+        problems.push({ id: row.id, issue: 'keyCount!==1 row has no governance_audit_log transition row -- prior state unknowable, cannot confirm whether content was lost' });
+        continue;
+      }
+      const priorMetadataCheck = auditRowCheck.old_values?.metadata;
       const hadRealPriorContent = priorMetadataCheck && typeof priorMetadataCheck === 'object' && Object.keys(priorMetadataCheck).length > 0;
       if (!hadRealPriorContent) {
         // Nothing was ever lost on this row -- any extra keys are unrelated legitimate
