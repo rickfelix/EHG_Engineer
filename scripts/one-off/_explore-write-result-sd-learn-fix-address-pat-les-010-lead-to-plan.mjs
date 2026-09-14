@@ -8,6 +8,7 @@
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
 import { getSupabaseClient } from '../../lib/sub-agent-executor/supabase-client.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_KEY = 'SD-LEARN-FIX-ADDRESS-PAT-LES-010';
 
@@ -93,4 +94,6 @@ async function main() {
   process.exit(0);
 }
 
-main().catch(e => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+if (isMainModule(import.meta.url)) {
+  main().catch(e => { console.error('FAILED:', e.message); console.error(e.stack); process.exit(1); });
+}
