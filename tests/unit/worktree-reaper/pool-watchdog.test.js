@@ -217,8 +217,8 @@ describe('computePoolUtilization', () => {
     expect(computePoolUtilization(16, 20).percent).toBe(80);
     expect(computePoolUtilization(15, 20).percent).toBe(75);
   });
-  test('guards a zero/invalid cap (falls back to MAX_WORKTREE_COUNT=40)', () => {
-    expect(computePoolUtilization(10, 0).cap).toBe(40);
+  test('guards a zero/invalid cap (falls back to MAX_WORKTREE_COUNT=60, raised QF-20260914-197)', () => {
+    expect(computePoolUtilization(10, 0).cap).toBe(60);
   });
 });
 
