@@ -11,6 +11,20 @@ import stage25 from '../../../../lib/eva/stage-templates/stage-25.js';
 import stage26 from '../../../../lib/eva/stage-templates/stage-26.js';
 import stage27 from '../../../../lib/eva/stage-templates/stage-27.js';
 
+describe('STAGE_KEY_BY_NUMBER (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J FR-1: extended to all 27 stages)', () => {
+  it('has exactly the keys 1-27, no gaps and no extras', () => {
+    const keys = Object.keys(STAGE_KEY_BY_NUMBER).map(Number).sort((a, b) => a - b);
+    expect(keys).toEqual(Array.from({ length: 27 }, (_, i) => i + 1));
+  });
+
+  it('carries the real venture_stages.stage_key values for the previously-uncovered 1-22 range', () => {
+    expect(STAGE_KEY_BY_NUMBER[1]).toBe('draft_idea');
+    expect(STAGE_KEY_BY_NUMBER[13]).toBe('product_roadmap');
+    expect(STAGE_KEY_BY_NUMBER[20]).toBe('code_quality_gate');
+    expect(STAGE_KEY_BY_NUMBER[22]).toBe('visual_assets');
+  });
+});
+
 describe('validateStageKeyBinding', () => {
   it('is a silent no-op for a template with no declared stageKey (opt-in, stages 1-22)', () => {
     expect(validateStageKeyBinding(5, {})).toEqual({ valid: true, skipped: true });
