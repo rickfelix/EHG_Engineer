@@ -65,18 +65,48 @@ describe('pure helpers', () => {
     expect(r.summary).not.toContain('9'); // threads_seen is NOT the named key for gmail-triage -- confirms explicit key selection, not "any number present"
     expect(r.asOf).toBe('2026-09-14T04:35:00.000Z');
   });
-  it('summarizeCounts: a feeder whose counts object lacks the named key entirely contributes nothing (not a wrong number)', () => {
+  // SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001 FR-3: a feeder present but missing its named count
+  // key is now NAMED ("no run yet today"), not silently dropped -- this is the fix, not a
+  // regression. Updated from the pre-SD assertion that pinned the silent-drop bug.
+  it('summarizeCounts: a feeder whose counts object lacks the named key entirely is named "no run yet today", not silently dropped (FR-3)', () => {
     const r = summarizeCounts({ 'calendar-read': { counts: { coded: 0, weekday: 'Sunday' }, finished_at: '2026-09-14T10:00:00.000Z' } });
-    expect(r.summary).toBe('no counts available');
+    expect(r.summary).toContain('calendar-read: no run yet today');
+    expect(r.summary).toContain('gmail-triage: no run yet today');
+    expect(r.summary).toContain('todoist-brief: no run yet today');
   });
-  it('summarizeCounts: no rows at all -> honest "no counts available", asOf null', () => {
-    expect(summarizeCounts({})).toEqual({ summary: 'no counts available', asOf: null });
+  it('summarizeCounts: no rows at all -> every feeder named "no run yet today", asOf null, asOfAll empty (FR-3)', () => {
+    const r = summarizeCounts({});
+    expect(r.summary).toBe('calendar-read: no run yet today, gmail-triage: no run yet today, todoist-brief: no run yet today');
+    expect(r.asOf).toBeNull();
+    expect(r.asOfAll).toEqual([]);
   });
-  it('composeCheckpointBody: fixed template, includes the as-of pointer or says it is unavailable', () => {
-    expect(composeCheckpointBody({ summary: '2 meetings today', asOf: '2026-09-14T04:00:00.000Z' }))
-      .toBe('Michael checkpoint: 2 meetings today (as of 2026-09-14T04:00:00.000Z). Reply if anything looks wrong.');
+  // SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001 FR-4: plain ET, never a raw ISO-8601 string.
+  // Updated from the pre-SD assertion that pinned the raw-ISO bug.
+  it('composeCheckpointBody: fixed template, plain-ET as-of pointer or says it is unavailable (FR-4)', () => {
+    expect(composeCheckpointBody({ summary: '2 meetings today', asOf: '2026-09-14T04:00:00.000Z', asOfAll: ['2026-09-14T04:00:00.000Z'] }))
+      .toBe('Michael checkpoint: 2 meetings today (as of 12:00am ET). Reply if anything looks wrong.');
     expect(composeCheckpointBody({ summary: 'no counts available', asOf: null }))
       .toBe('Michael checkpoint: no counts available (as-of unavailable). Reply if anything looks wrong.');
+  });
+  it('composeCheckpointBody: no raw ISO-8601 string ever appears in the body (FR-4)', () => {
+    const body = composeCheckpointBody({ summary: 'x', asOf: '2026-09-14T04:00:00.000Z', asOfAll: ['2026-09-14T04:00:00.000Z'] });
+    expect(body).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
+    expect(body).toMatch(/as of \d{1,2}:\d{2}(am|pm) ET/);
+  });
+  // FR-4 TESTING-PIN: 60-minute threshold, tested on both sides.
+  it('composeCheckpointBody: a 45-minute spread across producing feeders does NOT disclose (FR-4 TESTING-PIN, case A)', () => {
+    const body = composeCheckpointBody({
+      summary: 'x', asOf: '2026-09-14T08:00:00.000Z',
+      asOfAll: ['2026-09-14T08:00:00.000Z', '2026-09-14T08:30:00.000Z', '2026-09-14T08:45:00.000Z'],
+    });
+    expect(body).not.toContain('different times');
+  });
+  it('composeCheckpointBody: a 90-minute spread across producing feeders DOES disclose (FR-4 TESTING-PIN, case B)', () => {
+    const body = composeCheckpointBody({
+      summary: 'x', asOf: '2026-09-14T08:00:00.000Z',
+      asOfAll: ['2026-09-14T08:00:00.000Z', '2026-09-14T09:30:00.000Z'],
+    });
+    expect(body).toContain('Counts are from different times.');
   });
 });
 
@@ -238,7 +268,9 @@ describe('TS-9: successful send + FR-3 identity + FR-6 stage-then-finalize ledge
       });
       expect(r).toMatchObject({ ok: true, sent: true });
       expect(sent[0].body).toContain('2 meetings today');
-      expect(sent[0].body).toContain('as of 2026-09-14T09:00:00.000Z');
+      // SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001 FR-4: plain ET, not raw ISO -- 2026-09-14T09:00:00.000Z
+      // is 05:00 ET (EDT, UTC-4).
+      expect(sent[0].body).toContain('as of 5:00am ET');
     });
   });
 
@@ -375,5 +407,325 @@ describe('SEC-M2: a throwing sendFn is caught, never escapes, and finalizes the 
       const ledgerWrites = sb.writes.filter((w) => w.table === 'michael_checkpoint_send_ledger');
       expect(ledgerWrites[ledgerWrites.length - 1].ops[0].args[0]).toMatchObject({ outcome: 'refused', refusal_code: 'SEND_THREW' });
     });
+  });
+});
+
+// SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001 -- FR-2/TR-8/TR-9: the finished_at race fix, tested
+// through the full runCheckpointSend flow (readProducingFeederCounts is not exported) with a real
+// seeded michael_feeder_runs fixture, mirroring the existing TESTING M2 pattern.
+describe('FR-2/TS-1: the finished_at race (2026-09-14 22:00Z incident, ledger a8388820)', () => {
+  it('TS-1: an ADVERSARIALLY ORDERED fixture -- in-flight row (finished_at NULL, HIGHER attempt) listed FIRST, finished row (LOWER attempt) listed SECOND -- uses the finished row, never the in-flight placeholder, and selects `attempt`', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({
+        tables: {
+          michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }],
+          michael_feeder_runs: [
+            // in-flight, HIGHER attempt, listed FIRST -- the exact adversarial shape TS-1 requires.
+            { et_date: ET_DATE, feeder: 'calendar-read', attempt: 3, counts: { phase: 'started' }, finished_at: null, status: 'skipped' },
+            { et_date: ET_DATE, feeder: 'calendar-read', attempt: 2, counts: { meetings: 4 }, finished_at: '2026-09-14T08:30:00.000Z', status: 'ok' },
+          ],
+        },
+      });
+      const sent = [];
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+        sendFn: async (args) => { sent.push(args); return { status: 'queued', provider_message_id: 'SM-race' }; },
+      });
+      expect(r).toMatchObject({ ok: true, sent: true });
+      // The finished (attempt 2) row's count wins -- the in-flight (attempt 3) placeholder never contributes.
+      expect(sent[0].body).toContain('4 meetings today');
+      // Confirms the select actually requested `attempt` (TR-9) -- without it the read call itself would be malformed for this assertion to be meaningful.
+      const feederReads = sb.froms.filter((t) => t === 'michael_feeder_runs');
+      expect(feederReads.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('TS-1b: TWO finished rows for the same feeder, the HIGHER-attempt one listed FIRST in an array-order that would mislead a first-wins implementation -- the higher attempt (the true latest) wins, not array order (TR-8 tiebreak)', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({
+        tables: {
+          michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }],
+          michael_feeder_runs: [
+            // Both FINISHED (survives the finished_at filter). Listed in ASCENDING attempt order
+            // (lower attempt first) so a "last item wins" implementation would ALSO pass -- pair
+            // with the array below to prove it is genuinely attempt-based, not position-based.
+            { et_date: ET_DATE, feeder: 'calendar-read', attempt: 1, counts: { meetings: 1 }, finished_at: '2026-09-14T07:00:00.000Z', status: 'ok' },
+            { et_date: ET_DATE, feeder: 'calendar-read', attempt: 2, counts: { meetings: 9 }, finished_at: '2026-09-14T08:30:00.000Z', status: 'ok' },
+          ],
+        },
+      });
+      const sent = [];
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+        sendFn: async (args) => { sent.push(args); return { status: 'queued', provider_message_id: 'SM-tiebreak' }; },
+      });
+      expect(r).toMatchObject({ ok: true, sent: true });
+      expect(sent[0].body).toContain('9 meetings today');
+      expect(sent[0].body).not.toContain('1 meetings today');
+    });
+  });
+
+  it('TS-2: a feeder with zero finished rows is named "no run yet today" in the composed body, not omitted', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({
+        tables: {
+          michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }],
+          michael_feeder_runs: [
+            { et_date: ET_DATE, feeder: 'calendar-read', attempt: 1, counts: { meetings: 2 }, finished_at: '2026-09-14T08:00:00.000Z', status: 'ok' },
+            { et_date: ET_DATE, feeder: 'gmail-triage', attempt: 1, counts: { unmatched: 5 }, finished_at: '2026-09-14T08:30:00.000Z', status: 'ok' },
+            // todoist-brief has NO row at all for this et_date.
+          ],
+        },
+      });
+      const sent = [];
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+        sendFn: async (args) => { sent.push(args); return { status: 'queued', provider_message_id: 'SM-missing' }; },
+      });
+      expect(r).toMatchObject({ ok: true, sent: true });
+      expect(sent[0].body).toContain('2 meetings today');
+      expect(sent[0].body).toContain('5 untriaged mail');
+      expect(sent[0].body).toContain('todoist-brief: no run yet today');
+    });
+  });
+});
+
+// SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001 -- FR-1/FR-5: the on-demand send path + quiet-hours guard.
+describe('FR-1: on-demand send path (--now)', () => {
+  const NOW_OUT_OF_WINDOW_ON_DEMAND = new Date('2026-09-14T12:00:00.000Z'); // 08:00 ET -- between windows, not quiet
+  const NOW_QUIET_HOURS = new Date('2026-09-15T03:00:00.000Z'); // 23:00 ET Sept 14 -- inside 22:00-06:00
+  const NOW_BOUNDARY_06 = new Date('2026-09-14T10:20:00.000Z'); // 06:20 ET -- just past the fixed 06:00-06:15 window, hour===6
+  const allowQuietHoursFalse = async () => ({ allowQuietHours: false, chairmanZone: 'America/New_York' });
+  const allowQuietHoursTrue = async () => ({ allowQuietHours: true, chairmanZone: 'America/New_York' });
+
+  it('TS-5: outside any fixed window, all guards valid -> sends successfully, one ledger row outcome=sent', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({ ...ENABLED_ROW });
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply', '--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM-ondemand' }),
+      });
+      expect(r).toMatchObject({ ok: true, sent: true });
+      const ledgerWrites = sb.writes.filter((w) => w.table === 'michael_checkpoint_send_ledger');
+      expect(ledgerWrites).toHaveLength(2); // staged + finalized, same FR-6 pattern as a fixed-window send
+      expect(ledgerWrites[0].ops[0].args[0]).toMatchObject({ outcome: 'refused', refusal_code: 'SEND_IN_PROGRESS' });
+      expect(ledgerWrites[1].ops[0].args[0]).toMatchObject({ outcome: 'sent' });
+    });
+  });
+
+  it('TS-6: recipient pin mismatch refuses RECIPIENT_HASH_MISMATCH, same as a fixed-window call', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({ ...ENABLED_ROW });
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply', '--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, recipientSha256: sha256Hex('a-different-number'),
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+      });
+      expect(r).toMatchObject({ ok: false, refusal: 'RECIPIENT_HASH_MISMATCH' });
+    });
+  });
+
+  it('TS-7: disabled refuses DISABLED, same as a fixed-window call', async () => {
+    const sb = fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: false }] } });
+    const r = await runCheckpointSend({
+      sb, argv: ['--apply', '--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND,
+      resolveQuietHours: allowQuietHoursFalse,
+    });
+    expect(r).toMatchObject({ ok: false, refusal: 'DISABLED' });
+  });
+
+  it('TS-8/TS-13: cap already at 4 (mixed fixed-window + on-demand) refuses CAP_EXCEEDED for both a 5th fixed-window AND a 5th on-demand attempt', async () => {
+    const mixedRows = [
+      { et_date: ET_DATE, window_slot: '06:00', outcome: 'sent' },
+      { et_date: ET_DATE, window_slot: '10:00', outcome: 'sent' },
+      { et_date: ET_DATE, window_slot: 'on-demand:08:12', outcome: 'sent' },
+      { et_date: ET_DATE, window_slot: 'on-demand:09:30', outcome: 'sent' },
+    ];
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const r5thFixed = await runCheckpointSend({
+        sb: fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: mixedRows } }),
+        argv: ['--apply'], now: NOW_IN_WINDOW, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+      });
+      expect(r5thFixed).toMatchObject({ ok: false, refusal: 'CAP_EXCEEDED' });
+
+      const r5thOnDemand = await runCheckpointSend({
+        sb: fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: mixedRows } }),
+        argv: ['--apply', '--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, recipientSha256: REAL_RECIPIENT_HASH, resolveIdentity: () => FULL_IDENTITY,
+        resolveQuietHours: allowQuietHoursFalse,
+      });
+      expect(r5thOnDemand).toMatchObject({ ok: false, refusal: 'CAP_EXCEEDED' });
+    });
+  });
+
+  it('TS-9: inside quiet hours (22:00-06:00 ET), no chairman override -> refuses QUIET_HOURS and writes a ledger row', async () => {
+    const sb = fakeSb({ ...ENABLED_ROW });
+    const r = await runCheckpointSend({
+      sb, argv: ['--apply', '--now'], now: NOW_QUIET_HOURS, resolveQuietHours: allowQuietHoursFalse,
+    });
+    expect(r).toMatchObject({ ok: false, refusal: 'QUIET_HOURS' });
+    const ledgerWrites = sb.writes.filter((w) => w.table === 'michael_checkpoint_send_ledger');
+    expect(ledgerWrites).toHaveLength(1);
+    expect(ledgerWrites[0].ops[0].args[0]).toMatchObject({ outcome: 'refused', refusal_code: 'QUIET_HOURS' });
+  });
+
+  it('TS-9b: a chairman-authorized override allows an on-demand send inside the quiet window', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({ ...ENABLED_ROW });
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply', '--now'], now: NOW_QUIET_HOURS, recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursTrue,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM-override' }),
+      });
+      expect(r).toMatchObject({ ok: true, sent: true });
+    });
+  });
+
+  it('TS-10: exactly hour===6 ET (the boundary the 4th fixed window sits on) does NOT refuse on quiet hours', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({ ...ENABLED_ROW });
+      const r = await runCheckpointSend({
+        sb, argv: ['--apply', '--now'], now: NOW_BOUNDARY_06, recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM-boundary' }),
+      });
+      expect(r).toMatchObject({ ok: true, sent: true });
+    });
+  });
+
+  it('TS-11: the full pre-existing fixed-window suite is unaffected (spot-check: out-of-window with no --now stays inert)', async () => {
+    const sb = fakeSb({});
+    const r = await runCheckpointSend({ sb, argv: ['--apply'], now: NOW_OUT_OF_WINDOW });
+    expect(r).toEqual({ ok: true, inert: true, reason: 'outside_et_window' });
+    expect(sb.froms).toHaveLength(0);
+  });
+
+  it('TS-12: the on-demand ledger row\'s window_slot is the non-null on-demand:HH:MM shape, never null and never a bare "on-demand"', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sb = fakeSb({ ...ENABLED_ROW });
+      await runCheckpointSend({
+        sb, argv: ['--apply', '--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM-slot' }),
+      });
+      const staged = sb.writes.find((w) => w.table === 'michael_checkpoint_send_ledger' && w.ops[0].args[0].refusal_code === 'SEND_IN_PROGRESS');
+      const slot = staged.ops[0].args[0].window_slot;
+      expect(slot).not.toBeNull();
+      expect(slot).not.toBe('on-demand');
+      expect(slot).toMatch(/^on-demand:\d{2}:\d{2}$/);
+    });
+  });
+
+  it('TS-14: a second on-demand send at a DIFFERENT ET minute succeeds (not capped at 1/day); two fires in the SAME minute dedup to ALREADY_SENT_THIS_WINDOW', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const priorOnDemand = [{ et_date: ET_DATE, window_slot: 'on-demand:08:00', outcome: 'sent' }];
+      // Different minute (08:05 ET, still 12:05Z) -- must NOT dedup against the 08:00 row.
+      const rDifferentMinute = await runCheckpointSend({
+        sb: fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: priorOnDemand } }),
+        argv: ['--apply', '--now'], now: new Date('2026-09-14T12:05:00.000Z'), recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM-diff-minute' }),
+      });
+      expect(rDifferentMinute).toMatchObject({ ok: true, sent: true });
+
+      // SAME minute (08:00 ET, 12:00Z) as the seeded row -- must dedup.
+      const rSameMinute = await runCheckpointSend({
+        sb: fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: priorOnDemand } }),
+        argv: ['--apply', '--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+      });
+      expect(rSameMinute).toMatchObject({ ok: false, refusal: 'ALREADY_SENT_THIS_WINDOW' });
+    });
+  });
+
+  it('TS-15: guard ORDER proof -- inside quiet hours, with every later guard also failing (disabled, cap reached, pin mismatch, no identity), the refusal is QUIET_HOURS and exactly one ledger row is written', async () => {
+    const capReachedRows = [
+      { et_date: ET_DATE, window_slot: '06:00', outcome: 'sent' },
+      { et_date: ET_DATE, window_slot: '10:00', outcome: 'sent' },
+      { et_date: ET_DATE, window_slot: '14:00', outcome: 'sent' },
+      { et_date: ET_DATE, window_slot: '18:00', outcome: 'sent' },
+    ];
+    const sb = fakeSb({
+      tables: {
+        michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: false }], // DISABLED would also refuse
+        michael_checkpoint_send_ledger: capReachedRows, // CAP_EXCEEDED would also refuse
+      },
+    });
+    const r = await runCheckpointSend({
+      sb, argv: ['--apply', '--now'], now: NOW_QUIET_HOURS,
+      recipientSha256: 'this-will-never-match-anything', // pin mismatch would also refuse
+      resolveIdentity: () => null, // IDENTITY_UNCONFIGURED would also refuse
+      resolveQuietHours: allowQuietHoursFalse,
+    });
+    expect(r).toMatchObject({ ok: false, refusal: 'QUIET_HOURS' });
+    const ledgerWrites = sb.writes.filter((w) => w.table === 'michael_checkpoint_send_ledger');
+    expect(ledgerWrites).toHaveLength(1);
+    expect(ledgerWrites[0].ops[0].args[0]).toMatchObject({ outcome: 'refused', refusal_code: 'QUIET_HOURS' });
+  });
+
+  it('TS-16: prior QUIET_HOURS-refused rows do NOT count against the 4/day cap', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const quietRefusedRows = [
+        { et_date: ET_DATE, window_slot: 'on-demand:23:00', outcome: 'refused', refusal_code: 'QUIET_HOURS' },
+        { et_date: ET_DATE, window_slot: 'on-demand:23:15', outcome: 'refused', refusal_code: 'QUIET_HOURS' },
+        { et_date: ET_DATE, window_slot: 'on-demand:23:30', outcome: 'refused', refusal_code: 'QUIET_HOURS' },
+      ];
+      const r = await runCheckpointSend({
+        sb: fakeSb({ tables: { michael_checkpoint_send_enabled: [{ config_key: 'checkpoint_send', enabled: true }], michael_checkpoint_send_ledger: quietRefusedRows } }),
+        argv: ['--apply', '--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM-not-capped' }),
+      });
+      expect(r).toMatchObject({ ok: true, sent: true });
+    });
+  });
+
+  it('TS-17: the injected quiet-hours resolver THROWS -> fail-closed, refuses QUIET_HOURS (not a permissive default)', async () => {
+    const sb = fakeSb({ ...ENABLED_ROW });
+    const r = await runCheckpointSend({
+      sb, argv: ['--apply', '--now'], now: NOW_QUIET_HOURS,
+      resolveQuietHours: async () => { throw new Error('ChairmanPreferenceStore read failed'); },
+    });
+    expect(r).toMatchObject({ ok: false, refusal: 'QUIET_HOURS' });
+  });
+
+  it('TS-18a: --apply --now with and without --reason produce IDENTICAL ledger row shapes -- --reason is optional and never persisted', async () => {
+    await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
+      const sbNoReason = fakeSb({ ...ENABLED_ROW });
+      await runCheckpointSend({
+        sb: sbNoReason, argv: ['--apply', '--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM-noreason' }),
+      });
+      const sbWithReason = fakeSb({ ...ENABLED_ROW });
+      await runCheckpointSend({
+        sb: sbWithReason, argv: ['--apply', '--now', '--reason', 'chairman asked'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, recipientSha256: REAL_RECIPIENT_HASH,
+        resolveIdentity: () => FULL_IDENTITY, resolveQuietHours: allowQuietHoursFalse,
+        sendFn: async () => ({ status: 'queued', provider_message_id: 'SM-withreason' }),
+      });
+      const stagedNoReason = sbNoReason.writes.find((w) => w.ops[0].args[0].refusal_code === 'SEND_IN_PROGRESS').ops[0].args[0];
+      const stagedWithReason = sbWithReason.writes.find((w) => w.ops[0].args[0].refusal_code === 'SEND_IN_PROGRESS').ops[0].args[0];
+      expect(Object.keys(stagedNoReason).sort()).toEqual(Object.keys(stagedWithReason).sort());
+      expect(JSON.stringify(stagedWithReason)).not.toContain('chairman asked');
+    });
+  });
+
+  it('TS-18b: --now WITHOUT --apply returns the dry_run shape with the on-demand window_slot, writes no ledger row, makes no external call', async () => {
+    const sb = fakeSb({});
+    let sendCalled = false;
+    const r = await runCheckpointSend({
+      sb, argv: ['--now'], now: NOW_OUT_OF_WINDOW_ON_DEMAND, resolveQuietHours: allowQuietHoursFalse,
+      sendFn: async () => { sendCalled = true; return { status: 'queued', provider_message_id: 'SM-dry' }; },
+    });
+    expect(r).toMatchObject({ ok: true, dry_run: true, would_send: true });
+    expect(r.window_slot).toMatch(/^on-demand:\d{2}:\d{2}$/);
+    expect(sb.writes).toHaveLength(0);
+    expect(sendCalled).toBe(false);
+  });
+
+  it('TS-19: SEC-H1 regression -- --apply --now --et-date 2099-01-01 still refuses ET_DATE_OVERRIDE_NOT_ALLOWED before any read', async () => {
+    const sb = fakeSb({});
+    const r = await runCheckpointSend({ sb, argv: ['--apply', '--now', '--et-date', '2099-01-01'], now: NOW_OUT_OF_WINDOW_ON_DEMAND });
+    expect(r).toMatchObject({ ok: false, refusal: 'ET_DATE_OVERRIDE_NOT_ALLOWED' });
+    expect(sb.froms).toHaveLength(0);
   });
 });
