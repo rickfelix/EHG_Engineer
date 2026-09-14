@@ -183,7 +183,7 @@ async function writeAuditRow(client, row, { repoRoot } = {}) {
   // the two guards disagreed by construction for every pre-merge worktree deploy.
   if (row.success === true && row.migration_path && !isTrackedMigrationPath(row.migration_path, { repoRoot })) {
     throw new Error(
-      `[MIGRATION_LEDGER_GUARD] refusing to record success=true for a migration_path that ` +
+      '[MIGRATION_LEDGER_GUARD] refusing to record success=true for a migration_path that ' +
       `does not resolve to a git-tracked file: ${row.migration_path}`
     );
   }
