@@ -37,7 +37,9 @@ function fakeSupabase({ metadata = {}, flagEnabled = false, canonicalArtifacts =
         // metadata/created_at/content for provenance grading; presentArtifacts stays the plain
         // artifact_type-only shape every pre-existing test uses.
         const rows = presentArtifactRows || presentArtifacts.map((a) => ({ artifact_type: a }));
-        return { select: () => ({ eq: () => ({ eq: () => ({ in: () => Promise.resolve({ data: rows, error: null }) }) }) }) };
+        // count-truncation-diff-lint (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G): production code
+        // now chains .in(...).limit(999).
+        return { select: () => ({ eq: () => ({ eq: () => ({ in: () => ({ limit: () => Promise.resolve({ data: rows, error: null }) }) }) }) }) };
       }
       throw new Error(`unexpected table: ${table}`);
     },

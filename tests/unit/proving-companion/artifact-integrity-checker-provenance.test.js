@@ -12,7 +12,9 @@ vi.mock('../../../lib/supabase-client.js', () => ({
     from: () => ({
       select: () => ({
         eq: () => ({
-          in: () => Promise.resolve(queryResult),
+          // count-truncation-diff-lint (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-G): production
+          // code now chains .in(...).limit(999).
+          in: () => ({ limit: () => Promise.resolve(queryResult) }),
         }),
       }),
     }),
