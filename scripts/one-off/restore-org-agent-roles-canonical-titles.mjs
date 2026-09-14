@@ -20,13 +20,17 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { computeCanonicalRoleTitles } from '../../lib/org/canonical-role-titles.mjs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { assertNotCapTruncated } from '../../lib/db/fetch-all-paginated.mjs';
 
 const EXECUTE = process.argv.includes('--execute');
 
 export async function findRepairTargets(supabase) {
   const canonical = computeCanonicalRoleTitles();
-  const { data, error } = await supabase.from('org_agent_roles').select('role_key, title');
+  // count-truncation-diff-lint (count-truncation-discipline): see the matching comment in
+  // scripts/lint/org-agent-roles-canonical-titles-check.mjs -- same table, same reasoning.
+  const { data, error } = await supabase.from('org_agent_roles').select('role_key, title').limit(500);
   if (error) throw new Error(`org_agent_roles select failed: ${error.message}`);
+  assertNotCapTruncated(data, { cap: 500, site: 'restore-org-agent-roles-canonical-titles' });
 
   const targets = [];
   for (const row of data || []) {

@@ -7,7 +7,7 @@ import { findRepairTargets } from '../../../scripts/one-off/restore-org-agent-ro
 
 function fakeSupabase(rows) {
   return {
-    from: () => ({ select: () => Promise.resolve({ data: rows, error: null }) }),
+    from: () => ({ select: () => ({ limit: () => Promise.resolve({ data: rows, error: null }) }) }),
   };
 }
 

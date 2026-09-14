@@ -35,11 +35,18 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { computeCanonicalRoleTitles } from '../../lib/org/canonical-role-titles.mjs';
 import { isMainModule } from '../../lib/utils/is-main-module.js';
+import { assertNotCapTruncated } from '../../lib/db/fetch-all-paginated.mjs';
 
 export async function checkCanonicalTitles(supabase) {
   const canonical = computeCanonicalRoleTitles();
-  const { data, error } = await supabase.from('org_agent_roles').select('role_key, title');
+  // count-truncation-diff-lint (count-truncation-discipline): org_agent_roles is a small,
+  // fixed-taxonomy table (33 rows today) but this is a bulk-processing read, not a sampled
+  // gauge. .limit(500) is well above any plausible role count AND satisfies the lint's
+  // bounded-by-design pattern; assertNotCapTruncated below is defense-in-depth -- fail loud
+  // rather than silently miss coverage if the table ever actually reaches that cap.
+  const { data, error } = await supabase.from('org_agent_roles').select('role_key, title').limit(500);
   if (error) throw new Error(`org_agent_roles select failed: ${error.message}`);
+  assertNotCapTruncated(data, { cap: 500, site: 'org-agent-roles-canonical-titles-check' });
 
   const seen = new Set();
   const drifted = [];

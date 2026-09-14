@@ -11,7 +11,7 @@ function fakeSupabase(rows) {
   return {
     from(table) {
       if (table !== 'org_agent_roles') throw new Error(`unexpected table: ${table}`);
-      return { select: () => Promise.resolve({ data: rows, error: null }) };
+      return { select: () => ({ limit: () => Promise.resolve({ data: rows, error: null }) }) };
     },
   };
 }
@@ -45,7 +45,7 @@ describe('checkCanonicalTitles', () => {
 
   it('propagates a real select error rather than silently reporting no drift', async () => {
     const supabase = {
-      from: () => ({ select: () => Promise.resolve({ data: null, error: { message: 'connection refused' } }) }),
+      from: () => ({ select: () => ({ limit: () => Promise.resolve({ data: null, error: { message: 'connection refused' } }) }) }),
     };
     await expect(checkCanonicalTitles(supabase)).rejects.toThrow('connection refused');
   });
