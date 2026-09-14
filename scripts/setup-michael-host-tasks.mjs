@@ -78,7 +78,7 @@ function windowEtLabel(feederId) {
   return windows.map((x) => `${x.start}-${x.end}`).join(', ');
 }
 
-/** The seven host feeders (spec §5 windows are enforced inside each script, not by the scheduler); windowEt mirrors lib/michael/feeder.mjs FEEDERS. */
+/** The eight host feeders (spec §5 windows are enforced inside each script, not by the scheduler); windowEt mirrors lib/michael/feeder.mjs FEEDERS. */
 export const MICHAEL_TASKS = Object.freeze([
   // QF-20260911-282 / ratification 04c9dd29 point 2 ("dead by construction" -- its parser and
   // producer disagree): registered DISABLED at the OS level until a measurement shows they agree.
@@ -96,6 +96,10 @@ export const MICHAEL_TASKS = Object.freeze([
   // Child J (v1.1): enrichment feeders, windowed after BRIEF_DEADLINE_ET like their FEEDERS registry entries.
   { feeder: 'oracle-extract', taskName: 'EHG Michael oracle-extract', script: 'scripts/michael/oracle-extract.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-oracle-extract-task.cmd'), windowEt: windowEtLabel('oracle-extract') },
   { feeder: 'health-sync', taskName: 'EHG Michael health-sync', script: 'scripts/michael/health-sync.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-health-sync-task.cmd'), windowEt: windowEtLabel('health-sync') },
+  // SD-LEO-INFRA-MICHAEL-TIER2-CHECKPOINT-SEND-001 (ratification 561878ae): the Tier-2 personal
+  // checkpoint send verb. Host-local (needs the chairman-provisioned MICHAEL_TWILIO_* identity),
+  // four narrow windows enforced inside the script per lib/michael/feeder.mjs's FEEDERS entry.
+  { feeder: 'checkpoint-send', taskName: 'EHG Michael checkpoint-send', script: 'scripts/michael/checkpoint-send.mjs --apply', wrapperRelPath: path.join('scripts', 'cron', 'michael-checkpoint-send-task.cmd'), windowEt: windowEtLabel('checkpoint-send') },
 ]);
 
 /** Pure: a task name is refused before any schtasks call when it carries an illegal filename character (QF-20260906-961). */
