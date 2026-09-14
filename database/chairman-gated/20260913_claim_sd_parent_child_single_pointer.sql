@@ -39,6 +39,26 @@
 -- this file. See the _DOWN.sql sibling for the exact rollback (restores the pre-fix body
 -- byte-for-byte).
 
+-- ── BACKPORT CORRECTION (post-apply, zero new DDL) ──────────────────────────────────────────
+-- CHAIRMAN_APPLY_VERIFICATION's BODY_MISMATCH check found this file's committed body no longer
+-- byte-matches the live public.claim_sd function. Root cause (confirmed via pg_get_functiondef
+-- against the live DB, 2026-09-14): this SD's fix (parent-exclusion clause removed, parent_preserved
+-- hardcoded FALSE) IS live and intact -- but a LATER, independently-approved migration,
+-- database/migrations/20260913_claim_sd_quickfix_evict_reset_refuse.sql (SD-LEO-INFRA-FIX-CLAIM-
+-- EVICTION-001), deliberately layered its own FR-1/FR-2/FR-6 changes (quick_fixes eviction
+-- reset-to-open, refuse-on-in-flight-work, distinguishable audit events) on top of THIS file's
+-- already-merged body rather than the original 20260903 baseline, to avoid a silent-revert
+-- ceremony-order collision -- see commit 56cea574c3f's own message: "This file now supersedes
+-- #8853's standalone body for ceremony order -- apply only this one." (#8853 is this SD's PR.)
+--
+-- This edit makes the file below byte-identical to the CURRENT live pg_get_functiondef() output.
+-- It is a documentation/audit-trail correction only -- the live database is NOT being changed by
+-- this file; it already contains this exact body. No new §3c ceremony is required: the substantive
+-- DDL (both this SD's fix and the superseding SD's fix) already went through its own chairman-gated
+-- apply. Re-running this file (CREATE OR REPLACE, idempotent) is a safe no-op against the live
+-- function it is now proven to match.
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+
 CREATE OR REPLACE FUNCTION public.claim_sd(p_sd_id text, p_session_id text, p_track text, p_force_takeover boolean DEFAULT false, p_client_gate_version integer DEFAULT NULL::integer)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -90,6 +110,11 @@ DECLARE
   -- relative to what actually happened on the SD/QF side (those pointers can drift independently
   -- from claude_sessions.sd_key -- that drift is exactly what this whole block exists to fix).
   v_evicted_clear_row_count integer;
+  -- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-2): pr_url/commit_sha of the about-to-be-evicted
+  -- quick_fixes row, read under FOR UPDATE before the claim-switch UPDATE runs, so a row
+  -- carrying real in-flight work can be refused rather than evicted.
+  v_evicted_qf_pr_url      text;
+  v_evicted_qf_commit_sha  text;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtext(p_sd_id));
 
@@ -436,6 +461,50 @@ BEGIN
      AND sd_key IS NOT NULL
      AND sd_key != p_sd_id;
 
+  -- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-2 / part f): if the about-to-be-evicted item is a
+  -- quick_fixes row carrying real in-flight work (pr_url or commit_sha), REFUSE the whole
+  -- claim-switch -- proceeding would clear the caller's OWN claude_sessions.sd_key pointer below
+  -- while leaving the QF's claiming_session_id dangling, reproducing the exact orphan shape
+  -- this SD exists to fix. FOR UPDATE row-locks the evicted QF row for the rest of this
+  -- transaction, matching this function's own existing idiom (see the claude_sessions /
+  -- strategic_directives_v2 FOR UPDATE selects above) -- closes the TOCTOU gap a plain SELECT
+  -- would leave against a concurrent writer of pr_url/commit_sha on the SAME row.
+  IF v_evicted_sd_key IS NOT NULL AND v_evicted_sd_key LIKE 'QF-%' THEN
+    SELECT pr_url, commit_sha INTO v_evicted_qf_pr_url, v_evicted_qf_commit_sha
+      FROM quick_fixes
+     WHERE id = v_evicted_sd_key
+       AND claiming_session_id = p_session_id
+       FOR UPDATE;
+
+    IF v_evicted_qf_pr_url IS NOT NULL OR v_evicted_qf_commit_sha IS NOT NULL THEN
+      INSERT INTO session_lifecycle_events (
+        event_type,
+        session_id,
+        reason,
+        metadata
+      ) VALUES (
+        'CLAIM_SWITCH_REFUSED_MID_CI',
+        p_session_id,
+        'evicted_claim_has_inflight_work',
+        jsonb_build_object(
+          'evicted_sd_key', v_evicted_sd_key,
+          'attempted_sd_id', p_sd_id,
+          'pr_url_present', v_evicted_qf_pr_url IS NOT NULL,
+          'commit_sha_present', v_evicted_qf_commit_sha IS NOT NULL
+        )
+      );
+
+      RETURN jsonb_build_object(
+        'success', FALSE,
+        'error', 'claim_switch_refused_mid_ci',
+        'message', format('[CLAIM_SWITCH_REFUSED] %s carries in-flight work (pr_url or commit_sha set) — refusing to evict it to claim %s. Finish or release %s first.', v_evicted_sd_key, p_sd_id, v_evicted_sd_key),
+        'evicted_sd_key', v_evicted_sd_key,
+        'sd_id', p_sd_id,
+        'session_id', p_session_id
+      );
+    END IF;
+  END IF;
+
   -- Claim-switch path: caller is releasing some OTHER SD to claim p_sd_id. v_evicted_sd_key was
   -- already captured above (pre-UPDATE); this UPDATE no longer relies on RETURNING for it.
   --
@@ -474,10 +543,18 @@ BEGIN
   -- anything on its own.
   IF v_evicted_sd_key IS NOT NULL AND v_evicted_row_count > 0 THEN
     IF v_evicted_sd_key LIKE 'QF-%' THEN
+      -- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-1): reset status to 'open' in the SAME UPDATE
+      -- that clears claiming_session_id, so the row is never left status='in_progress' with no
+      -- claimant. The pr_url/commit_sha predicate is defense-in-depth: the refusal check above
+      -- already returned early if either was set, so this WHERE clause should always match when
+      -- reached -- it costs nothing and protects against future reordering of this code.
       UPDATE quick_fixes
-         SET claiming_session_id = NULL
+         SET claiming_session_id = NULL,
+             status = 'open'
        WHERE id = v_evicted_sd_key
-         AND claiming_session_id = p_session_id;
+         AND claiming_session_id = p_session_id
+         AND pr_url IS NULL
+         AND commit_sha IS NULL;
     ELSE
       UPDATE strategic_directives_v2
          SET claiming_session_id = NULL,
@@ -497,13 +574,17 @@ BEGIN
     -- this, the nested UPDATE above matching zero rows (the SD/QF side already cleared or
     -- re-claimed by someone else) would still log a CLEARED event, overstating the real count.
     IF v_evicted_clear_row_count > 0 THEN
+      -- SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 (FR-6): distinct event_type for the quick_fixes
+      -- reset-to-open case (CLAIM_SWITCH_QF_EVICTED_RESET_OPEN) vs the unchanged
+      -- strategic_directives_v2 clear-only case (CLAIM_SWITCH_EVICTED_CLEARED), so the two
+      -- outcomes are queryable and distinguishable without a COUNT-based check.
       INSERT INTO session_lifecycle_events (
         event_type,
         session_id,
         reason,
         metadata
       ) VALUES (
-        'CLAIM_SWITCH_EVICTED_CLEARED',
+        CASE WHEN v_evicted_sd_key LIKE 'QF-%' THEN 'CLAIM_SWITCH_QF_EVICTED_RESET_OPEN' ELSE 'CLAIM_SWITCH_EVICTED_CLEARED' END,
         p_session_id,
         'claim_switch',
         jsonb_build_object(
@@ -606,8 +687,8 @@ BEGIN
 END;
 $function$;
 
--- Prompt PostgREST to reload its schema cache promptly (unchanged signature, but the
--- function body changed).
+-- Prompt PostgREST to reload its schema cache promptly (unchanged signature; no-op here since
+-- this file now matches the already-live body, but kept for idempotent-reapply safety).
 NOTIFY pgrst, 'reload schema';
 
 DO $$
@@ -618,5 +699,5 @@ BEGIN
   IF v_overload_count != 1 THEN
     RAISE EXCEPTION 'VERIFICATION FAILED: expected exactly 1 claim_sd overload, found %', v_overload_count;
   END IF;
-  RAISE NOTICE 'claim_sd: exactly one overload confirmed (5-arg, parent-exclusion removed, single-pointer fix applied).';
+  RAISE NOTICE 'claim_sd: exactly one overload confirmed (5-arg, parent-exclusion removed, single-pointer fix + SD-LEO-INFRA-FIX-CLAIM-EVICTION-001 layered fix both present).';
 END $$;
