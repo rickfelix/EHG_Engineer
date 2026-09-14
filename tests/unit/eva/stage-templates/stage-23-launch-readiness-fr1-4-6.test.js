@@ -308,6 +308,13 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
     // either the current stage-23.js (dedicated_venture_uat) or stage-24.js (launch
     // readiness) source, or their shared analysis-step module.
     it('never reintroduces the pre-renumber stage22Data.promotion_gate.pass positional-param check (regression guard)', () => {
+      // TESTING + VALIDATION sub-agent review (PLAN-TO-EXEC / PLAN-TO-LEAD) both flagged that
+      // banning the bare `evaluateKillGate(` identifier is over-broad: stage-03/05/13 already
+      // export a function of that exact name, using the repo's own SAFE destructured-object
+      // convention (never a positional stage22Data param). A future well-designed
+      // evaluateKillGate in stage-24 would trip that assertion spuriously, tempting someone to
+      // delete this whole guard. The `stage22Data.promotion_gate` property-access check alone
+      // fully captures the historical fragile shape and does not share that failure mode.
       const sourcePaths = [
         'lib/eva/stage-templates/stage-23.js',
         'lib/eva/stage-templates/stage-24.js',
@@ -317,7 +324,6 @@ describe('SD-LEO-FEAT-STAGE-LAUNCH-READINESS-001 FR-1..FR-4, FR-6', () => {
       for (const relPath of sourcePaths) {
         const source = readFileSync(resolve(REPO_ROOT, relPath), 'utf8');
         expect(source).not.toMatch(/stage22Data\.promotion_gate/);
-        expect(source).not.toMatch(/evaluateKillGate\s*\(/);
       }
     });
   });
