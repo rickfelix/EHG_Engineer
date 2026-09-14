@@ -16,10 +16,54 @@ import { createClient } from '@supabase/supabase-js';
 import { computeStaleFlags, formatDigest } from '../lib/feature-flags/governance-review.js';
 import { buildFlagCodeIndices } from '../lib/feature-flags/flag-reader-scan.js';
 import { stampLastFired } from '../lib/periodic-liveness/stamp-last-fired.js';
+import { NON_BINDING_MODES } from './lint/non-binding-mode-registry-lint.mjs';
 
 const db = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GATE_FLAG = 'FLAG_GOVERNANCE_REVIEW_V1';
+
+/**
+ * SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-E (FR-3). Additive, separate from
+ * computeStaleFlags()/formatDigest() -- does NOT touch that pipeline at all. The 4
+ * non-binding-mode rows (registered by this SD's migration under lifecycle_state=
+ * 'archived') never produce a classifier recommendation (archived is a terminal
+ * state classifyFlag() short-circuits to null for), so there is nothing for the
+ * existing stale-flag digest to say about them. This lists them directly instead.
+ *
+ * Conjunctive filter (flag_key IN the known list AND lifecycle_state='archived') is
+ * load-bearing: a prospective TESTING review found the registry already holds
+ * unrelated pre-existing archived rows (ADAM_SELF_SCORE_CADENCE,
+ * COORD_TEARDOWN_SAFETY_V2, product_pivot_active) that a bare lifecycle_state filter
+ * would wrongly sweep in.
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @returns {Promise<Array<{flag_key:string, gates_what:string|null, enablement_criteria:string|null, lifecycle_state:string}>>}
+ */
+export async function listNonBindingModes(supabase) {
+  const flagKeys = NON_BINDING_MODES.map((m) => m.flagKey);
+  // flag_key is UNIQUE NOT NULL, and the literal bound below is NON_BINDING_MODES.length --
+  // update both together when the curated list grows (it is deliberately hand-maintained).
+  const { data, error } = await supabase
+    .from('leo_feature_flags')
+    .select('flag_key, gates_what, enablement_criteria, lifecycle_state')
+    .in('flag_key', flagKeys)
+    .eq('lifecycle_state', 'archived')
+    .limit(4);
+  if (error) {
+    console.error(`[FLAG-GOV] listNonBindingModes query failed: ${error.message}`);
+    return [];
+  }
+  return data || [];
+}
+
+/** Plain-text rendering of listNonBindingModes()'s rows, appended to the digest output. */
+export function formatNonBindingModesSection(rows) {
+  if (!rows.length) return '';
+  const lines = ['', 'NON-BINDING VENTURE-QUALITY MECHANISMS (registered, not graduated):'];
+  for (const r of rows) {
+    lines.push(`  - ${r.flag_key} [${r.lifecycle_state}] -- ${r.gates_what || '(no gates_what)'}`);
+  }
+  return lines.join('\n');
+}
 
 export async function reviewMain({ force = false } = {}) {
   // Gate: own flag, default-OFF. Absent or disabled → cheap no-op unless --force.
@@ -45,6 +89,11 @@ export async function reviewMain({ force = false } = {}) {
   const { hasLiveReaders, isGraduatedInCode } = buildFlagCodeIndices(REPO_ROOT, (flags || []).map((f) => f.flag_key).filter(Boolean));
   const result = computeStaleFlags(flags || [], Date.now(), { env: process.env, hasLiveReaders, isGraduatedInCode });
   console.log(formatDigest(result));
+
+  // FR-3: additive, separate section -- never touches computeStaleFlags/formatDigest above.
+  const nonBindingModes = await listNonBindingModes(db);
+  const nonBindingSection = formatNonBindingModesSection(nonBindingModes);
+  if (nonBindingSection) console.log(nonBindingSection);
 
   // Stamp last_reviewed_at on every reviewed flag (the automated review touched them this cycle).
   const ids = (flags || []).map((f) => f.id).filter(Boolean);
