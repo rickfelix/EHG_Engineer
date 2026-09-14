@@ -12,6 +12,8 @@
 # Prerequisite: node scripts/one-off/register-eva-stage-literal-lint-periodic-process-001-j.mjs
 # must have run once (registry membership is additive, never auto-created by the stamp call).
 
+name: EVA Stage Literal Lint (weekly graduation gauge)
+
 on:
   schedule:
     - cron: '0 7 * * 1'
