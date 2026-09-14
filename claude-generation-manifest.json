@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-14T17:51:21.120Z",
-  "git_commit": "59c3df57",
+  "generated_at": "2026-09-14T20:30:07.087Z",
+  "git_commit": "9a43d8c6",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 115859,
-      "bytes": 116821,
-      "estimated_tokens": 28965,
-      "content_hash": "d89d79b177742ba3",
+      "chars": 118309,
+      "bytes": 119285,
+      "estimated_tokens": 29578,
+      "content_hash": "4dfc11acbbb4586c",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\contract-regen3-49eabb23\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -125,10 +125,10 @@
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
       "type": "full",
-      "chars": 12643,
-      "bytes": 12707,
-      "estimated_tokens": 3161,
-      "content_hash": "2dca75ea890b56f1",
+      "chars": 13197,
+      "bytes": 13261,
+      "estimated_tokens": 3300,
+      "content_hash": "6b313b6fb42f281e",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\contract-regen3-49eabb23\\CLAUDE_COORDINATOR_MANUAL.md"
     },
     "CLAUDE_COORDINATOR_PROVENANCE.md": {
@@ -149,10 +149,10 @@
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 59425,
-      "bytes": 59762,
-      "estimated_tokens": 14857,
-      "content_hash": "c49debfa697c0592",
+      "chars": 59915,
+      "bytes": 60252,
+      "estimated_tokens": 14979,
+      "content_hash": "49ce42bc5a7f2e94",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\contract-regen3-49eabb23\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "86dd0796a2da60d5",
+    "global": "4319c55ad2195c3e",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -507,7 +507,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "6b5015f1d95ce18b",
+      "601": "2fb76a67dfa2b8a4",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "7400bc8a530b1331",
@@ -525,9 +525,9 @@
       "622": "94a8df85a96ad041",
       "626": "32f06fccc41d79a1",
       "627": "4731706c8b95dbc2",
-      "629": "549f2a743ba7f38a",
+      "629": "2ab49562bb591cb6",
       "630": "7851b31f692ec87c",
-      "632": "df3f3261b608ddbd",
+      "632": "38e2b00a0d9d640c",
       "633": "4736da508d97f111",
       "634": "6518b5f83a72be9e",
       "635": "d8aa183013fa3044",

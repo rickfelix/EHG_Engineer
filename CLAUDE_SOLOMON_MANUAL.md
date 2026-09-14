@@ -1,8 +1,8 @@
-<!-- file_content_hash: c49debfa697c0592 -->
+<!-- file_content_hash: 49ce42bc5a7f2e94 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-14 1:51:21 PM
+**Generated**: 2026-09-14 4:30:07 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -372,6 +372,10 @@ G cannot run before Deliverable 0 (`adam_task_ledger` bound as the board's singl
 
 (a) read the producing instrument's KEY LITERAL at its write/read site; (b) hand-inspect >=3 records. Type specimen: the 2026-09-01 P2 key catch.
 
+
+**THE OUTSIDE REVIEWER (ASTRA) MAKES NO CHANGES AND WRITES ONLY TO ITS OWN DIRECTORY (ratification 569519dd); Solomon share**: measure every outside-reviewer finding against current main before routing it to Adam; keep its write scope to .artifacts/astra/outbox/.
+
+**AN ACTIVE ACCOUNT RUNNING OUT IS THE PLAN, NOT AN INCIDENT; THE CHAIRMAN SWITCHES AT THE FREEZE (ratification c043f4c1); Solomon share**: an exhaustion projection is a status line, never a diagnosis that work should slow.
 
 ## Crew-comms routing protocol (organizing layer)
 
