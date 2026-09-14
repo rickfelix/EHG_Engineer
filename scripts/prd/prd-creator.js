@@ -13,6 +13,10 @@
 import { formatPRDContent } from './formatters.js';
 import { validatePRDFields } from './validate-prd-fields.js';
 import { validatePrdRow, PRDValidationError } from './schema-validator.js';
+// SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-2): import the gate's own canonical subsection
+// list rather than a second hardcoded key array, so the write-path default and the gate
+// that reads it cannot drift apart.
+import { REQUIRED_SUBSECTIONS } from '../modules/handoff/executors/plan-to-exec/gates/integration-section-validation.js';
 
 /**
  * Truncate goal_summary/executive_summary to 300 characters max.
@@ -308,7 +312,17 @@ export async function createPRDWithValidatedContent(
   // PRDs with different IDs for the same SD, causing .single() query failures downstream
   const { data: existingPRD } = await supabase
     .from('product_requirements_v2')
-    .select('id, sd_id, title, status')
+    // SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-2): integration_operationalization added so the
+    // UPDATE-existing branch below can distinguish "already has real content, preserve it"
+    // from "genuinely NULL, needs the default" -- selecting without it would make the
+    // default-builder clobber pre-existing authored content whenever llmContent omits
+    // the section.
+    // metadata added post-incident (SECURITY sub-agent evidence row 9d21ac12, LES-012
+    // remediation): `metadata: llmContent.metadata || undefined` below used to blind-replace
+    // the existing row's metadata whenever a caller supplied llmContent.metadata -- the same
+    // class of bug that destroyed 7,743 keys across 1,382 rows in the one-time backfill this
+    // SD also shipped. Selecting it here lets the update merge instead of replace.
+    .select('id, sd_id, title, status, integration_operationalization, metadata')
     .eq('sd_id', sdIdValue)
     .limit(1)
     .maybeSingle();
@@ -331,10 +345,22 @@ export async function createPRDWithValidatedContent(
         implementation_approach: llmContent.implementation_approach || undefined,
         test_scenarios: llmContent.test_scenarios || undefined,
         risks: llmContent.risks || undefined,
-        integration_operationalization: llmContent.integration_operationalization || undefined,
+        // SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-2): fall through to the EXISTING row's value
+        // before the default, so real authored content already in the DB is never clobbered
+        // by this update just because the new llmContent payload omits the section; only a
+        // genuinely NULL/missing existing value gets the default.
+        integration_operationalization: llmContent.integration_operationalization || existingPRD.integration_operationalization || buildDefaultIntegrationOperationalization(),
         exploration_summary: llmContent.exploration_summary || undefined,
         content: formatPRDContent(sdId, sdData, llmContent),
-        metadata: llmContent.metadata || undefined
+        // INCIDENT FIX: merge into the existing row's metadata rather than replacing it --
+        // a bare `llmContent.metadata || undefined` blind-replaces the whole jsonb column
+        // whenever a caller supplies metadata, discarding whatever was already there
+        // (identical defect class to the FR-5 backfill incident; see SECURITY evidence
+        // 9d21ac12). undefined here (no metadata supplied by either side) correctly omits
+        // the key from the UPDATE payload, leaving the column untouched.
+        metadata: llmContent.metadata
+          ? { ...(existingPRD.metadata || {}), ...llmContent.metadata }
+          : undefined
       })
       .eq('id', existingPRD.id)
       .select()
@@ -355,7 +381,11 @@ export async function createPRDWithValidatedContent(
      llmContent.exploration_summary.patterns_identified?.length > 0);
 
   // Warn when feature/fix PRDs are missing integration_operationalization
-  if (!hasIntegrationSection && ['feature', 'fix'].includes(sdData?.sd_type)) {
+  // SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-3): the live sd_type vocabulary and the
+  // PLAN-TO-EXEC gate both use "bugfix"; "fix" is unreachable (normalized at SD creation
+  // by lib/sd-creation/pipeline.js), so this warning previously never fired for a real
+  // bugfix PRD.
+  if (!hasIntegrationSection && ['feature', 'bugfix'].includes(sdData?.sd_type)) {
     console.warn(`  ⚠️  PRD for ${sdId} missing integration_operationalization (sd_type: ${sdData.sd_type})`);
   }
 
@@ -454,7 +484,9 @@ export async function createPRDWithValidatedContent(
       implementation_approach: llmContent.implementation_approach || buildDefaultImplementationApproach(llmContent, sdData),
       test_scenarios: llmContent.test_scenarios || [],
       risks: llmContent.risks || [],
-      integration_operationalization: llmContent.integration_operationalization || null,
+      // SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-2): default-builder replaces a bare `|| null`
+      // fallback so a new PRD of any sd_type never lands with this column NULL.
+      integration_operationalization: llmContent.integration_operationalization || buildDefaultIntegrationOperationalization(),
       exploration_summary: llmContent.exploration_summary || null,
       progress: progress,
       stakeholders: stakeholderPersonas,
@@ -551,6 +583,30 @@ function buildDefaultImplementationApproach(llmContent, sdData) {
     overview: sdData?.scope || sdData?.strategic_intent || 'Implementation follows functional requirements sequence with regression coverage per phase.',
     phases
   };
+}
+
+/**
+ * Build the default integration_operationalization placeholder.
+ * Prevents integration_operationalization from ever landing/staying NULL when the
+ * PLAN-phase LLM payload omits the section, for ANY sd_type (not just feature/bugfix).
+ * SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-2).
+ *
+ * Shape is measurement-verified (VALIDATION/TESTING/DATABASE sub-agent passes on this SD)
+ * to be the ONLY placeholder shape with parity across all 4 real readers: the
+ * PLAN-TO-EXEC gate (.passed/.score identical to NULL for every sd_type), the
+ * validate_integration_section_keys() DB trigger (accepts exactly these 5 keys),
+ * lib/artifact-contracts prd-contract.js authoring-mode exactKeys check, and
+ * lib/eva/prd-auto-iterate.js's quality scorer (contributes +0, same as NULL --
+ * an empty ARRAY or empty OBJECT per key is JS-truthy and scores +15, indistinguishable
+ * from the 707 rows a prior ad-hoc backfill already fabricated).
+ *
+ * Every value is the literal `null` -- never an empty array/object, never fabricated
+ * content. Do NOT add a provenance/marker key here: the DB trigger whitelists exactly
+ * REQUIRED_SUBSECTIONS and raises on any other key; provenance for the one-time backfill
+ * belongs in product_requirements_v2.metadata, not this column.
+ */
+export function buildDefaultIntegrationOperationalization() {
+  return Object.fromEntries(REQUIRED_SUBSECTIONS.map((key) => [key, null]));
 }
 
 /**
@@ -712,8 +768,23 @@ export async function updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llm
   }
 
   // Update integration_operationalization (SD-LEO-INFRA-PRD-INTEGRATION-SECTION-001)
+  // SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-2): this branch previously only assigned when
+  // llmContent.integration_operationalization was truthy, so a row already NULL stayed
+  // NULL forever through this write path. Pass through real content when supplied; when
+  // it is not, check the CURRENT stored value before deciding -- only a genuinely
+  // NULL/missing stored value gets the default, so real authored content already in the
+  // row (this is a partial-field UPDATE call, not a full replace) is never clobbered.
   if (llmContent.integration_operationalization) {
     prdUpdate.integration_operationalization = llmContent.integration_operationalization;
+  } else {
+    const { data: currentRow } = await supabase
+      .from('product_requirements_v2')
+      .select('integration_operationalization')
+      .eq('id', prdId)
+      .maybeSingle();
+    if (!currentRow?.integration_operationalization) {
+      prdUpdate.integration_operationalization = buildDefaultIntegrationOperationalization();
+    }
   }
 
   // Update exploration_summary (GATE_EXPLORATION_AUDIT requirement)
@@ -732,7 +803,11 @@ export async function updatePRDWithLLMContent(supabase, prdId, sdId, sdData, llm
      llmContent.exploration_summary.patterns_identified?.length > 0);
 
   // Warn when feature/fix PRDs are missing integration_operationalization on update
-  if (!hasIntegrationSection && ['feature', 'fix'].includes(sdData?.sd_type)) {
+  // SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-3): the live sd_type vocabulary and the
+  // PLAN-TO-EXEC gate both use "bugfix"; "fix" is unreachable (normalized at SD creation
+  // by lib/sd-creation/pipeline.js), so this warning previously never fired for a real
+  // bugfix PRD.
+  if (!hasIntegrationSection && ['feature', 'bugfix'].includes(sdData?.sd_type)) {
     console.warn(`  ⚠️  PRD for ${sdId} missing integration_operationalization (sd_type: ${sdData.sd_type})`);
   }
 

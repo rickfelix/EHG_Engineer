@@ -11,6 +11,10 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+// SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-4): shared emptiness predicate + canonical key
+// list, imported from the gate module rather than re-implemented here, so this reader
+// and the PLAN-TO-EXEC gate agree on what "empty" means.
+import { isSubsectionEmpty, REQUIRED_SUBSECTIONS } from '../../handoff/executors/plan-to-exec/gates/integration-section-validation.js';
 
 /**
  * Required fields for dependency entries (FR-4)
@@ -101,9 +105,18 @@ export async function fetchIntegrationDataFromPRD(sdId, supabase = null) {
       return { error: error.message, data: null, prdId: null };
     }
 
+    // SD-LEARN-FIX-ADDRESS-PAT-LES-012 (FR-4): an all-subsections-empty object (the
+    // write-path default this SD introduces, e.g. {consumers: null, dependencies: null,
+    // ...}) must read identically to a genuinely-absent NULL here -- otherwise the
+    // NULL-shaped leak fix flips this reader from passed:true to passed:false for
+    // infrastructure SDs the moment the NULL rows are backfilled. isSubsectionEmpty is
+    // the SAME predicate the PLAN-TO-EXEC gate uses, so "empty" cannot drift between them.
+    const rawData = prd?.integration_operationalization || null;
+    const isAllEmpty = !!rawData && REQUIRED_SUBSECTIONS.every((key) => isSubsectionEmpty(rawData[key]));
+
     return {
       error: null,
-      data: prd?.integration_operationalization || null,
+      data: isAllEmpty ? null : rawData,
       prdId: prd?.id || null
     };
   } catch (err) {
