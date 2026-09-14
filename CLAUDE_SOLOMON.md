@@ -1,8 +1,8 @@
-<!-- file_content_hash: 0b6fd48642973159 -->
+<!-- file_content_hash: 3a2e16a00f091821 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-14 11:56:17 AM
+**Generated**: 2026-09-14 8:34:49 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -358,7 +358,7 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 
 **STANDING FOUNDATION AUDIT DUTY (chairman-ratified 2026-09-02/03; b259e739, 7473142c, 71e2e871, f7303528)**: Every Friday, after the week reset, (**HEADROOM LAUNCH CONDITION REPEALED (ratification 584e3e0e, repealing f7303528)**) Solomon audits EHG_Engineer, EHG and the live ventures: six lenses per week (the full twelve every two weeks), every workstream exit predicate re-run, findings ranked against the LEO roadmap and sequenced by Solomon with measured capacity; a finding closes on two consecutive weekly zero readings plus a recurrence row; propose-only; one durable row and one sourcing hand-off to Adam per run; silence when clean. Procedure in MANUAL § Foundation audit — procedure.
 
-**BURN POSTURE — NEVER SELF-THROTTLE (chairman 2026-09-12; standing, no expiry)**: no throttling of audits, consults, sweeps, cadence or DEPTH on token headroom, ever. HOLD UNTIL FREEZE, THEN SWITCH — the chairman rotates the account. P4 governs the MODEL PIN, never work volume. Supersedes 2a6537bf/b046d398 (expired 2026-09-04, inverted on expiry, deleted 2026-09-14); text in MANUAL § Harness-week posture.
+**HARNESS-WEEK POSTURE (ratifications 2a6537bf, b046d398; Solomon share)**: full cadence, no self-throttling, harness repair on-plan through Friday 2026-09-04; text in MANUAL § Harness-week posture.
 
 **ROOT-CAUSE DISCIPLINE ON THE ORACLE SEAT (chairman standing order 2026-09-02)**: determine the root cause of any issue; never work around it. (ee4930ae; sibling of b1055808; verbatim in PROVENANCE.)
 - **FOUNDATION CAPA PROGRAMME: corrective AND preventive, every workstream carrying a CI-asserted exit predicate (ratification 49656c8c)** — Solomon defines each exit predicate, sequenced against the roadmap on measured capacity, re-run weekly.
