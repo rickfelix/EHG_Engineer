@@ -1,0 +1,2157 @@
+{
+  "altifyai": {
+    "venture_id": "50763b6a-1fad-4e1e-b2fc-296a1d66ebf9",
+    "journey": {
+      "journeys": [
+        {
+          "journey_id": "jny-the-busy-content-image-upload-organizatio",
+          "version": 1,
+          "persona_ref": "The Busy Content Creator",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-2",
+              "screen-4"
+            ]
+          },
+          "entry_conditions": [
+            "The Busy Content Creator begins: Enables users to securely upload images to the AltifyAI platform, view their uploaded assets, and manage them for alt text generation."
+          ],
+          "exit_success": "I can manage my storage and remove unwanted assets.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "upload a single image from my computer",
+              "screen_ref": "screen-2",
+              "route": null,
+              "action": "upload a single image from my computer",
+              "expected_outcome": "I can quickly generate alt text for it.",
+              "side_effects_claimed": [
+                "Given I upload an unsupported file type (e.g., .doc), When I click 'Upload', Then I see an error message indicating invalid file type.",
+                "Given an image is uploaded, When I view my dashboard, Then I see a thumbnail of the image with its filename."
+              ],
+              "story_refs": [
+                "upload a single image from my computer|screen-2|upload a single image from my computer"
+              ],
+              "step_id": "stp-4de9-upload-a-single-imag",
+              "requires": []
+            },
+            {
+              "seq": 20,
+              "goal": "delete an image from my library",
+              "screen_ref": "screen-4",
+              "route": null,
+              "action": "delete an image from my library",
+              "expected_outcome": "I can manage my storage and remove unwanted assets.",
+              "side_effects_claimed": [
+                "Given I confirm the deletion, When the image is deleted, Then it no longer appears in my image library.",
+                "Given an image is deleted, When I try to access its alt text generation history, Then it is no longer available."
+              ],
+              "story_refs": [
+                "delete an image from my library|screen-4|delete an image from my library"
+              ],
+              "step_id": "stp-fc2f-delete-an-image-from",
+              "requires": [
+                "stp-4de9-upload-a-single-imag"
+              ]
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-busy-content-ai-alt-text-generation",
+          "version": 1,
+          "persona_ref": "The Busy Content Creator",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-5"
+            ]
+          },
+          "entry_conditions": [
+            "The Busy Content Creator begins: The core functionality for AltifyAI, enabling the automatic generation of descriptive and SEO-friendly alt text using advanced AI models."
+          ],
+          "exit_success": "I can easily review it.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "automatically generate alt text for an uploaded image",
+              "screen_ref": "screen-5",
+              "route": null,
+              "action": "automatically generate alt text for an uploaded image",
+              "expected_outcome": "I don't have to write it manually.",
+              "side_effects_claimed": [
+                "Given the alt text is generated, When I view the image details, Then I see the AI-generated alt text displayed.",
+                "Given the generation fails, When I view the image details, Then I see an error message and an option to retry."
+              ],
+              "story_refs": [
+                "automatically generate alt text for an uploaded image|screen-5|automatically generate alt text for an uploaded image"
+              ],
+              "step_id": "stp-e3e6-automatically-genera",
+              "requires": []
+            },
+            {
+              "seq": 20,
+              "goal": "see the generated alt text clearly displayed next to its corresponding image",
+              "screen_ref": "screen-5",
+              "route": null,
+              "action": "see the generated alt text clearly displayed next to its corresponding image",
+              "expected_outcome": "I can easily review it.",
+              "side_effects_claimed": [
+                "Given I am in the detail view, When I scroll through my images, Then the alt text updates dynamically for each image.",
+                "Given the alt text is long, When I view it, Then it is displayed in a resizable text area."
+              ],
+              "story_refs": [
+                "see the generated alt text clearly displayed next to its corresponding image|screen-5|see the generated alt text clearly displayed next to its corresponding image"
+              ],
+              "step_id": "stp-6219-see-the-generated-al",
+              "requires": [
+                "stp-e3e6-automatically-genera"
+              ]
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-busy-content-review-editing-workflow",
+          "version": 1,
+          "persona_ref": "The Busy Content Creator",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-5"
+            ]
+          },
+          "entry_conditions": [
+            "The Busy Content Creator begins: Provides tools for users to review, edit, and approve the AI-generated alt text, ensuring accuracy, brand voice, and compliance."
+          ],
+          "exit_success": "I can refine it to my specific needs or brand voice.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "easily edit the AI-generated alt text",
+              "screen_ref": "screen-5",
+              "route": null,
+              "action": "easily edit the AI-generated alt text",
+              "expected_outcome": "I can refine it to my specific needs or brand voice.",
+              "side_effects_claimed": [
+                "Given I have made changes, When I click 'Save', Then my edited alt text is stored and displayed.",
+                "Given I edit the alt text, When I navigate away without saving, Then I am prompted to save or discard changes."
+              ],
+              "story_refs": [
+                "easily edit the AI-generated alt text|screen-5|easily edit the AI-generated alt text"
+              ],
+              "step_id": "stp-ce40-easily-edit-the-ai-g",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-busy-content-export-integration",
+          "version": 1,
+          "persona_ref": "The Busy Content Creator",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-5"
+            ]
+          },
+          "entry_conditions": [
+            "The Busy Content Creator begins: Provides mechanisms for users to retrieve and utilize their finalized alt text in their respective content management systems or websites."
+          ],
+          "exit_success": "I can paste it directly into my content editor.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "easily copy the generated alt text to my clipboard",
+              "screen_ref": "screen-5",
+              "route": null,
+              "action": "easily copy the generated alt text to my clipboard",
+              "expected_outcome": "I can paste it directly into my content editor.",
+              "side_effects_claimed": [
+                "Given the alt text is copied, When I paste into a text editor, Then the exact alt text appears.",
+                "Given the copy operation is successful, When I click 'Copy', Then I see a temporary confirmation message (e.g., 'Copied!')."
+              ],
+              "story_refs": [
+                "easily copy the generated alt text to my clipboard|screen-5|easily copy the generated alt text to my clipboard"
+              ],
+              "step_id": "stp-2496-easily-copy-the-gene",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-seo-consciou-image-upload-organizatio",
+          "version": 1,
+          "persona_ref": "The SEO-Conscious Website Manager",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-3"
+            ]
+          },
+          "entry_conditions": [
+            "The SEO-Conscious Website Manager begins: Enables users to securely upload images to the AltifyAI platform, view their uploaded assets, and manage them for alt text generation."
+          ],
+          "exit_success": "I can efficiently process a large number of assets.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "upload multiple images in a batch",
+              "screen_ref": "screen-3",
+              "route": null,
+              "action": "upload multiple images in a batch",
+              "expected_outcome": "I can efficiently process a large number of assets.",
+              "side_effects_claimed": [
+                "Given I upload a batch of images, When the upload is complete, Then I receive a notification that the batch upload was successful.",
+                "Given a batch upload fails for one image, When the upload completes, Then I am informed which images failed and which succeeded."
+              ],
+              "story_refs": [
+                "upload multiple images in a batch|screen-3|upload multiple images in a batch"
+              ],
+              "step_id": "stp-d8b9-upload-multiple-imag",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-seo-consciou-ai-alt-text-generation",
+          "version": 1,
+          "persona_ref": "The SEO-Conscious Website Manager",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-3"
+            ]
+          },
+          "entry_conditions": [
+            "The SEO-Conscious Website Manager begins: The core functionality for AltifyAI, enabling the automatic generation of descriptive and SEO-friendly alt text using advanced AI models."
+          ],
+          "exit_success": "I can process images in bulk.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "generate alt text for multiple selected images at once",
+              "screen_ref": "screen-3",
+              "route": null,
+              "action": "generate alt text for multiple selected images at once",
+              "expected_outcome": "I can process images in bulk.",
+              "side_effects_claimed": [
+                "Given the batch generation is complete, When I view the image library, Then each processed image shows its generated alt text.",
+                "Given some images fail in a batch, When the batch completes, Then I receive a summary of successful and failed generations."
+              ],
+              "story_refs": [
+                "generate alt text for multiple selected images at once|screen-3|generate alt text for multiple selected images at once"
+              ],
+              "step_id": "stp-bfdb-generate-alt-text-fo",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-seo-consciou-review-editing-workflow",
+          "version": 1,
+          "persona_ref": "The SEO-Conscious Website Manager",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-5"
+            ]
+          },
+          "entry_conditions": [
+            "The SEO-Conscious Website Manager begins: Provides tools for users to review, edit, and approve the AI-generated alt text, ensuring accuracy, brand voice, and compliance."
+          ],
+          "exit_success": "I can track the status of my image optimizations.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "mark alt text as 'Approved' or 'Needs Review'",
+              "screen_ref": "screen-5",
+              "route": null,
+              "action": "mark alt text as 'Approved' or 'Needs Review'",
+              "expected_outcome": "I can track the status of my image optimizations.",
+              "side_effects_claimed": [
+                "Given I want to flag alt text for further review, When I click a 'Needs Review' button, Then the alt text status changes to 'Needs Review'.",
+                "Given an alt text is approved, When I view the image in the library, Then a visual indicator (e.g., a checkmark) shows its approved status."
+              ],
+              "story_refs": [
+                "mark alt text as 'Approved' or 'Needs Review'|screen-5|mark alt text as 'Approved' or 'Needs Review'"
+              ],
+              "step_id": "stp-686d-mark-alt-text-as-app",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-seo-consciou-export-integration",
+          "version": 1,
+          "persona_ref": "The SEO-Conscious Website Manager",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-5"
+            ]
+          },
+          "entry_conditions": [
+            "The SEO-Conscious Website Manager begins: Provides mechanisms for users to retrieve and utilize their finalized alt text in their respective content management systems or websites."
+          ],
+          "exit_success": "I can bulk upload it to my CMS.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "export alt text for multiple images as a CSV file",
+              "screen_ref": "screen-5",
+              "route": null,
+              "action": "export alt text for multiple images as a CSV file",
+              "expected_outcome": "I can bulk upload it to my CMS.",
+              "side_effects_claimed": [
+                "Given the CSV is downloaded, When I open it, Then it contains columns for 'Filename', 'Original Alt Text (if any)', 'Generated Alt Text', and 'Approved Alt Text'.",
+                "Given I export a large number of images, When the export completes, Then the CSV file is correctly formatted and contains all selected data."
+              ],
+              "story_refs": [
+                "export alt text for multiple images as a CSV file|screen-5|export alt text for multiple images as a CSV file"
+              ],
+              "step_id": "stp-abd0-export-alt-text-for-",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-e-commerce-p-image-upload-organizatio",
+          "version": 1,
+          "persona_ref": "The E-commerce Product Manager",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-5"
+            ]
+          },
+          "entry_conditions": [
+            "The E-commerce Product Manager begins: Enables users to securely upload images to the AltifyAI platform, view their uploaded assets, and manage them for alt text generation."
+          ],
+          "exit_success": "I can keep track of my assets.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "view a list of all my uploaded images",
+              "screen_ref": "screen-5",
+              "route": null,
+              "action": "view a list of all my uploaded images",
+              "expected_outcome": "I can keep track of my assets.",
+              "side_effects_claimed": [
+                "Given I have many images, When I view the image list, Then each image displays a thumbnail, filename, and upload date.",
+                "Given I have no images uploaded, When I view my image library, Then I see a message prompting me to upload images."
+              ],
+              "story_refs": [
+                "view a list of all my uploaded images|screen-5|view a list of all my uploaded images"
+              ],
+              "step_id": "stp-6aa6-view-a-list-of-all-m",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-e-commerce-p-ai-alt-text-generation",
+          "version": 1,
+          "persona_ref": "The E-commerce Product Manager",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-2"
+            ]
+          },
+          "entry_conditions": [
+            "The E-commerce Product Manager begins: The core functionality for AltifyAI, enabling the automatic generation of descriptive and SEO-friendly alt text using advanced AI models."
+          ],
+          "exit_success": "the output is highly relevant to my products.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "provide specific keywords or context for alt text generation",
+              "screen_ref": "screen-2",
+              "route": null,
+              "action": "provide specific keywords or context for alt text generation",
+              "expected_outcome": "the output is highly relevant to my products.",
+              "side_effects_claimed": [
+                "Given I provide keywords, When the alt text is generated, Then the output includes or is heavily influenced by the provided keywords.",
+                "Given I provide a short description, When the alt text is generated, Then the output incorporates the provided description into the alt text."
+              ],
+              "story_refs": [
+                "provide specific keywords or context for alt text generation|screen-2|provide specific keywords or context for alt text generation"
+              ],
+              "step_id": "stp-7903-provide-specific-key",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-e-commerce-p-review-editing-workflow",
+          "version": 1,
+          "persona_ref": "The E-commerce Product Manager",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-2"
+            ]
+          },
+          "entry_conditions": [
+            "The E-commerce Product Manager begins: Provides tools for users to review, edit, and approve the AI-generated alt text, ensuring accuracy, brand voice, and compliance."
+          ],
+          "exit_success": "I can optimize it further.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "see suggestions for improving alt text (e.g., keyword density, length)",
+              "screen_ref": "screen-2",
+              "route": null,
+              "action": "see suggestions for improving alt text (e.g., keyword density, length)",
+              "expected_outcome": "I can optimize it further.",
+              "side_effects_claimed": [
+                "Given a suggestion is provided, When I click on it, Then it offers to automatically apply or guide me on how to implement it.",
+                "Given the alt text is optimized, When I review it, Then the suggestions are no longer displayed."
+              ],
+              "story_refs": [
+                "see suggestions for improving alt text (e.g., keyword density, length)|screen-2|see suggestions for improving alt text (e.g., keyword density, length)"
+              ],
+              "step_id": "stp-8c72-see-suggestions-for-",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-the-e-commerce-p-export-integration",
+          "version": 1,
+          "persona_ref": "The E-commerce Product Manager",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-4"
+            ]
+          },
+          "entry_conditions": [
+            "The E-commerce Product Manager begins: Provides mechanisms for users to retrieve and utilize their finalized alt text in their respective content management systems or websites."
+          ],
+          "exit_success": "I can integrate it with my product catalog system.",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "generate a JSON file containing image URLs and their alt text",
+              "screen_ref": "screen-4",
+              "route": null,
+              "action": "generate a JSON file containing image URLs and their alt text",
+              "expected_outcome": "I can integrate it with my product catalog system.",
+              "side_effects_claimed": [
+                "Given the JSON is downloaded, When I open it, Then it contains an array of objects, each with 'imageUrl' and 'altText' keys.",
+                "Given I export a large number of images, When the export completes, Then the JSON file is correctly formatted and contains all selected data."
+              ],
+              "story_refs": [
+                "generate a JSON file containing image URLs and their alt text|screen-4|generate a JSON file containing image URLs and their alt text"
+              ],
+              "step_id": "stp-58cd-generate-a-json-file",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        }
+      ],
+      "coverage_selfcheck": {
+        "stories_total": 14,
+        "stories_covered": 14,
+        "orphan_stories": [],
+        "screens_total": 9,
+        "screens_reached": 4,
+        "unreachable_screens": [
+          "screen-0",
+          "screen-1",
+          "screen-6",
+          "screen-7",
+          "screen-8"
+        ],
+        "journeys_reaching_exit_success": "12/12",
+        "dag_valid": true
+      },
+      "findings": []
+    },
+    "storyPack": {
+      "personas": [
+        {
+          "name": "The Busy Content Creator",
+          "description": "A professional who regularly publishes articles, blog posts, or social media content and needs efficient tools to ensure their visuals are accessible and SEO-friendly without significant time investment."
+        },
+        {
+          "name": "The SEO-Conscious Website Manager",
+          "description": "An individual responsible for the overall search engine performance and technical health of a website, seeking to optimize image alt text at scale to improve rankings and user experience."
+        },
+        {
+          "name": "The E-commerce Product Manager",
+          "description": "A manager overseeing product listings for an online store, focused on enhancing product discoverability, improving accessibility for product images, and ensuring consistent, keyword-rich alt text across a large catalog."
+        }
+      ],
+      "epics": [
+        {
+          "name": "Image Upload & Organization",
+          "description": "Enables users to securely upload images to the AltifyAI platform, view their uploaded assets, and manage them for alt text generation.",
+          "priority": "P0-critical",
+          "stories": [
+            {
+              "as_a": "Busy Content Creator",
+              "i_want_to": "upload a single image from my computer",
+              "so_that": "I can quickly generate alt text for it.",
+              "acceptance_criteria": [
+                "Given I am on the upload page, When I select an image file and click 'Upload', Then the image appears in my dashboard as 'Processing'.",
+                "Given I upload an unsupported file type (e.g., .doc), When I click 'Upload', Then I see an error message indicating invalid file type.",
+                "Given an image is uploaded, When I view my dashboard, Then I see a thumbnail of the image with its filename."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "SEO-Conscious Website Manager",
+              "i_want_to": "upload multiple images in a batch",
+              "so_that": "I can efficiently process a large number of assets.",
+              "acceptance_criteria": [
+                "Given I am on the upload page, When I drag and drop multiple image files, Then all selected images appear in my dashboard as 'Processing'.",
+                "Given I upload a batch of images, When the upload is complete, Then I receive a notification that the batch upload was successful.",
+                "Given a batch upload fails for one image, When the upload completes, Then I am informed which images failed and which succeeded."
+              ],
+              "story_points": 5,
+              "mvp": true
+            },
+            {
+              "as_a": "E-commerce Product Manager",
+              "i_want_to": "view a list of all my uploaded images",
+              "so_that": "I can keep track of my assets.",
+              "acceptance_criteria": [
+                "Given I am logged in, When I navigate to my image library, Then I see a paginated list of all images I have uploaded.",
+                "Given I have many images, When I view the image list, Then each image displays a thumbnail, filename, and upload date.",
+                "Given I have no images uploaded, When I view my image library, Then I see a message prompting me to upload images."
+              ],
+              "story_points": 2,
+              "mvp": true
+            },
+            {
+              "as_a": "Busy Content Creator",
+              "i_want_to": "delete an image from my library",
+              "so_that": "I can manage my storage and remove unwanted assets.",
+              "acceptance_criteria": [
+                "Given I am viewing an image in my library, When I click the 'Delete' icon, Then a confirmation dialog appears.",
+                "Given I confirm the deletion, When the image is deleted, Then it no longer appears in my image library.",
+                "Given an image is deleted, When I try to access its alt text generation history, Then it is no longer available."
+              ],
+              "story_points": 2,
+              "mvp": true
+            }
+          ]
+        },
+        {
+          "name": "AI Alt Text Generation",
+          "description": "The core functionality for AltifyAI, enabling the automatic generation of descriptive and SEO-friendly alt text using advanced AI models.",
+          "priority": "P0-critical",
+          "stories": [
+            {
+              "as_a": "Busy Content Creator",
+              "i_want_to": "automatically generate alt text for an uploaded image",
+              "so_that": "I don't have to write it manually.",
+              "acceptance_criteria": [
+                "Given an image has been uploaded, When I select the image and click 'Generate Alt Text', Then the system starts processing the image.",
+                "Given the alt text is generated, When I view the image details, Then I see the AI-generated alt text displayed.",
+                "Given the generation fails, When I view the image details, Then I see an error message and an option to retry."
+              ],
+              "story_points": 5,
+              "mvp": true
+            },
+            {
+              "as_a": "SEO-Conscious Website Manager",
+              "i_want_to": "generate alt text for multiple selected images at once",
+              "so_that": "I can process images in bulk.",
+              "acceptance_criteria": [
+                "Given I have selected multiple images in my library, When I click 'Generate Alt Text for Selected', Then the system processes all selected images in the background.",
+                "Given the batch generation is complete, When I view the image library, Then each processed image shows its generated alt text.",
+                "Given some images fail in a batch, When the batch completes, Then I receive a summary of successful and failed generations."
+              ],
+              "story_points": 8,
+              "mvp": true
+            },
+            {
+              "as_a": "E-commerce Product Manager",
+              "i_want_to": "provide specific keywords or context for alt text generation",
+              "so_that": "the output is highly relevant to my products.",
+              "acceptance_criteria": [
+                "Given I am about to generate alt text for an image, When I enter keywords (e.g., 'red running shoes, Nike, athletic') in a dedicated input field, Then the AI uses these keywords to influence the generated alt text.",
+                "Given I provide keywords, When the alt text is generated, Then the output includes or is heavily influenced by the provided keywords.",
+                "Given I provide a short description, When the alt text is generated, Then the output incorporates the provided description into the alt text."
+              ],
+              "story_points": 5,
+              "mvp": true
+            },
+            {
+              "as_a": "Busy Content Creator",
+              "i_want_to": "see the generated alt text clearly displayed next to its corresponding image",
+              "so_that": "I can easily review it.",
+              "acceptance_criteria": [
+                "Given alt text has been generated for an image, When I click on the image in my library, Then a detail view opens showing the image and its generated alt text.",
+                "Given I am in the detail view, When I scroll through my images, Then the alt text updates dynamically for each image.",
+                "Given the alt text is long, When I view it, Then it is displayed in a resizable text area."
+              ],
+              "story_points": 2,
+              "mvp": true
+            }
+          ]
+        },
+        {
+          "name": "Review & Editing Workflow",
+          "description": "Provides tools for users to review, edit, and approve the AI-generated alt text, ensuring accuracy, brand voice, and compliance.",
+          "priority": "P0-critical",
+          "stories": [
+            {
+              "as_a": "Busy Content Creator",
+              "i_want_to": "easily edit the AI-generated alt text",
+              "so_that": "I can refine it to my specific needs or brand voice.",
+              "acceptance_criteria": [
+                "Given I am viewing the generated alt text for an image, When I click an 'Edit' button, Then the alt text becomes editable in a text field.",
+                "Given I have made changes, When I click 'Save', Then my edited alt text is stored and displayed.",
+                "Given I edit the alt text, When I navigate away without saving, Then I am prompted to save or discard changes."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "SEO-Conscious Website Manager",
+              "i_want_to": "mark alt text as 'Approved' or 'Needs Review'",
+              "so_that": "I can track the status of my image optimizations.",
+              "acceptance_criteria": [
+                "Given I have reviewed alt text for an image, When I click an 'Approve' button, Then the alt text status changes to 'Approved'.",
+                "Given I want to flag alt text for further review, When I click a 'Needs Review' button, Then the alt text status changes to 'Needs Review'.",
+                "Given an alt text is approved, When I view the image in the library, Then a visual indicator (e.g., a checkmark) shows its approved status."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "E-commerce Product Manager",
+              "i_want_to": "see suggestions for improving alt text (e.g., keyword density, length)",
+              "so_that": "I can optimize it further.",
+              "acceptance_criteria": [
+                "Given I am editing alt text, When the system detects potential improvements (e.g., missing keywords, too short), Then it displays suggestions (e.g., 'Consider adding 'product name'').",
+                "Given a suggestion is provided, When I click on it, Then it offers to automatically apply or guide me on how to implement it.",
+                "Given the alt text is optimized, When I review it, Then the suggestions are no longer displayed."
+              ],
+              "story_points": 5,
+              "mvp": false
+            }
+          ]
+        },
+        {
+          "name": "Export & Integration",
+          "description": "Provides mechanisms for users to retrieve and utilize their finalized alt text in their respective content management systems or websites.",
+          "priority": "P1-important",
+          "stories": [
+            {
+              "as_a": "Busy Content Creator",
+              "i_want_to": "easily copy the generated alt text to my clipboard",
+              "so_that": "I can paste it directly into my content editor.",
+              "acceptance_criteria": [
+                "Given I am viewing the alt text for an image, When I click a 'Copy' button, Then the alt text is copied to my clipboard.",
+                "Given the alt text is copied, When I paste into a text editor, Then the exact alt text appears.",
+                "Given the copy operation is successful, When I click 'Copy', Then I see a temporary confirmation message (e.g., 'Copied!')."
+              ],
+              "story_points": 1,
+              "mvp": true
+            },
+            {
+              "as_a": "SEO-Conscious Website Manager",
+              "i_want_to": "export alt text for multiple images as a CSV file",
+              "so_that": "I can bulk upload it to my CMS.",
+              "acceptance_criteria": [
+                "Given I have selected multiple images with approved alt text, When I click 'Export CSV', Then a CSV file containing image filenames and their alt text is downloaded.",
+                "Given the CSV is downloaded, When I open it, Then it contains columns for 'Filename', 'Original Alt Text (if any)', 'Generated Alt Text', and 'Approved Alt Text'.",
+                "Given I export a large number of images, When the export completes, Then the CSV file is correctly formatted and contains all selected data."
+              ],
+              "story_points": 5,
+              "mvp": true
+            },
+            {
+              "as_a": "E-commerce Product Manager",
+              "i_want_to": "generate a JSON file containing image URLs and their alt text",
+              "so_that": "I can integrate it with my product catalog system.",
+              "acceptance_criteria": [
+                "Given I have selected multiple images with approved alt text, When I click 'Export JSON', Then a JSON file containing image URLs and their alt text is downloaded.",
+                "Given the JSON is downloaded, When I open it, Then it contains an array of objects, each with 'imageUrl' and 'altText' keys.",
+                "Given I export a large number of images, When the export completes, Then the JSON file is correctly formatted and contains all selected data."
+              ],
+              "story_points": 5,
+              "mvp": false
+            }
+          ]
+        },
+        {
+          "name": "User Account & Billing",
+          "description": "Manages user authentication, profile information, and basic subscription/usage tracking.",
+          "priority": "P1-important",
+          "stories": [
+            {
+              "as_a": "new user",
+              "i_want_to": "register for an AltifyAI account",
+              "so_that": "I can start using the service.",
+              "acceptance_criteria": [
+                "Given I am on the registration page, When I provide a valid email and password and click 'Sign Up', Then my account is created and I am logged in.",
+                "Given I provide an email that is already registered, When I click 'Sign Up', Then I receive an error message indicating the email is taken.",
+                "Given my account is created, When I log in, Then I am directed to my dashboard."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "returning user",
+              "i_want_to": "log in to my AltifyAI account",
+              "so_that": "I can access my images and generated alt text.",
+              "acceptance_criteria": [
+                "Given I am on the login page, When I enter my registered email and password and click 'Log In', Then I am successfully authenticated and redirected to my dashboard.",
+                "Given I enter incorrect credentials, When I click 'Log In', Then I receive an error message indicating invalid credentials.",
+                "Given I am logged in, When I close and reopen my browser, Then I remain logged in (session persistence)."
+              ],
+              "story_points": 2,
+              "mvp": true
+            },
+            {
+              "as_a": "user",
+              "i_want_to": "view my current usage (e.g., images processed)",
+              "so_that": "I can monitor my subscription limits.",
+              "acceptance_criteria": [
+                "Given I am logged in, When I navigate to my 'Account Settings' or 'Dashboard', Then I see a clear display of my current image processing count.",
+                "Given I am approaching a limit, When I view my usage, Then I see a warning or indicator that I am near my limit.",
+                "Given my usage is displayed, When I process more images, Then the usage count updates accordingly."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "user",
+              "i_want_to": "update my account password",
+              "so_that": "I can maintain security.",
+              "acceptance_criteria": [
+                "Given I am in my account settings, When I navigate to the password change section, Then I can enter my current password, new password, and confirm new password.",
+                "Given I enter valid passwords, When I click 'Update Password', Then my password is changed successfully.",
+                "Given I enter an incorrect current password, When I click 'Update Password', Then I receive an error message."
+              ],
+              "story_points": 2,
+              "mvp": true
+            }
+          ]
+        }
+      ],
+      "mvp_story_count": 16,
+      "total_story_points": 64
+    },
+    "wireframeScreensPayload": {
+      "screens": [
+        {
+          "screen_id": "screen-0",
+          "screen_name": "Landing Page",
+          "description": "Introduce AltifyAI's value proposition, highlight key features, and drive new user sign-ups.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-1",
+          "screen_name": "Signup/Registration",
+          "description": "Allow new users to create an AltifyAI account.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-2",
+          "screen_name": "Dashboard",
+          "description": "Provide a personalized overview of recent activity, ongoing projects, and quick actions for alt text generation.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-3",
+          "screen_name": "Upload & Process Images",
+          "description": "Enable users to upload images (individually or in batches) and initiate the alt text generation process.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-4",
+          "screen_name": "My Projects",
+          "description": "Organize and manage collections of images, their generated alt text, and project-specific settings.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-5",
+          "screen_name": "Project Details & Edit",
+          "description": "View, review, and manually edit the AI-generated alt text for images within a specific project before export.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-6",
+          "screen_name": "Integrations",
+          "description": "Manage connections and API keys for external platforms and content management systems.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-7",
+          "screen_name": "Account Settings",
+          "description": "Allow users to manage their profile information, personal preferences, and security settings.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-8",
+          "screen_name": "Subscription & Billing",
+          "description": "Allow users to view subscription details, manage payment methods, and access invoices.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        }
+      ],
+      "screenCount": 9,
+      "ia_sitemap": {
+        "pages": [
+          {
+            "name": "Landing Page",
+            "path": "/",
+            "purpose": "Introduce AltifyAI, highlight features, pricing, and drive sign-ups for new users.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": []
+          },
+          {
+            "name": "Sign Up",
+            "path": "/signup",
+            "purpose": "Allow new users to create an AltifyAI account.",
+            "parent": null,
+            "priority": "utility",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Login",
+            "path": "/login",
+            "purpose": "Allow existing users to access their AltifyAI account.",
+            "parent": null,
+            "priority": "utility",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Dashboard",
+            "path": "/dashboard",
+            "purpose": "Provide a personalized overview of recent activity, ongoing projects, and quick actions.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Upload & Process Images",
+            "path": "/upload",
+            "purpose": "Enable users to upload images (individually or in batches) and initiate the alt text generation process.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "My Projects",
+            "path": "/projects",
+            "purpose": "Organize and manage collections of images, their generated alt text, and project-specific settings.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Project Details & Edit",
+            "path": "/projects/{project-id}",
+            "purpose": "View, review, and manually edit the generated alt text for images within a specific project before export.",
+            "parent": "My Projects",
+            "priority": "secondary",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Generation History",
+            "path": "/history",
+            "purpose": "Provide a chronological log of all alt text generation tasks, their status, and quick access to results.",
+            "parent": null,
+            "priority": "secondary",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Integrations",
+            "path": "/integrations",
+            "purpose": "Manage connections and API keys for external platforms and content management systems.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager",
+              "Busy Content Creator"
+            ]
+          },
+          {
+            "name": "Account Settings",
+            "path": "/settings/account",
+            "purpose": "Manage user profile information, personal preferences, and security settings.",
+            "parent": null,
+            "priority": "utility",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Subscription & Billing",
+            "path": "/settings/billing",
+            "purpose": "View subscription details, manage payment methods, and access invoices.",
+            "parent": "Account Settings",
+            "priority": "utility",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Team Management",
+            "path": "/settings/team",
+            "purpose": "Add, remove, and manage team members and their specific roles/permissions.",
+            "parent": "Account Settings",
+            "priority": "utility",
+            "persona_relevance": [
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Help Center",
+            "path": "/help",
+            "purpose": "Access frequently asked questions, tutorials, and contact support for assistance.",
+            "parent": null,
+            "priority": "utility",
+            "persona_relevance": [
+              "Busy Content Creator",
+              "SEO-Conscious Website Manager",
+              "E-commerce Product Manager"
+            ]
+          },
+          {
+            "name": "Pricing",
+            "path": "/pricing",
+            "purpose": "Display different subscription plans, their features, and pricing tiers to prospective users.",
+            "parent": null,
+            "priority": "secondary",
+            "persona_relevance": []
+          }
+        ],
+        "navigation": {
+          "primary": [
+            "Dashboard",
+            "Upload & Process Images",
+            "My Projects",
+            "Integrations"
+          ],
+          "secondary": [
+            "Generation History",
+            "Pricing"
+          ],
+          "utility": [
+            "Account Settings",
+            "Help Center",
+            "Login",
+            "Sign Up"
+          ]
+        },
+        "user_flows": [
+          {
+            "name": "New User Onboarding & First Generation",
+            "persona": "Busy Content Creator",
+            "steps": [
+              "Landing Page",
+              "Sign Up",
+              "Dashboard",
+              "Upload & Process Images",
+              "Project Details & Edit",
+              "Generation History"
+            ],
+            "description": "A new content creator discovers AltifyAI, signs up, uploads their first image batch, generates alt text, reviews it, and views it in their history."
+          },
+          {
+            "name": "Optimize Existing Content (Batch Processing)",
+            "persona": "SEO-Conscious Website Manager",
+            "steps": [
+              "Login",
+              "Dashboard",
+              "Upload & Process Images",
+              "My Projects",
+              "Project Details & Edit",
+              "Integrations"
+            ],
+            "description": "A website manager logs in, uploads a batch of images for an existing content update, organizes them into a project, reviews the generated alt text, and exports/pushes it to their CMS via integration."
+          },
+          {
+            "name": "Product Page Optimization (E-commerce)",
+            "persona": "E-commerce Product Manager",
+            "steps": [
+              "Login",
+              "Dashboard",
+              "Upload & Process Images",
+              "My Projects",
+              "Project Details & Edit",
+              "Integrations"
+            ],
+            "description": "An e-commerce manager uploads new product images, groups them into a product-specific project, refines the generated alt text, and integrates with their e-commerce platform to update product pages."
+          },
+          {
+            "name": "Account & Team Management",
+            "persona": "SEO-Conscious Website Manager",
+            "steps": [
+              "Login",
+              "Dashboard",
+              "Account Settings",
+              "Team Management",
+              "Subscription & Billing"
+            ],
+            "description": "A website manager logs in to manage their team members, update roles, and review/adjust their subscription plan."
+          }
+        ],
+        "hierarchy_depth": 2,
+        "total_pages": 14,
+        "usage": {
+          "inputTokens": 665,
+          "outputTokens": 1722
+        }
+      }
+    }
+  },
+  "apexniche": {
+    "venture_id": "809ec7e7-f688-4a0c-b9f8-c8a8291cf94d",
+    "journey": {
+      "journeys": [
+        {
+          "journey_id": "jny-niche-content-so-niche-profile-setup",
+          "version": 1,
+          "persona_ref": "Niche Content Solopreneur",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-3"
+            ]
+          },
+          "entry_conditions": [
+            "Niche Content Solopreneur begins: Enables users to define their specific niche, target audience, and content goals, allowing the AI to generate highly relevant and personalized content."
+          ],
+          "exit_success": "the AI understands my content context",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "define my primary niche and target audience",
+              "screen_ref": "screen-3",
+              "route": null,
+              "action": "define my primary niche and target audience",
+              "expected_outcome": "the AI understands my content context",
+              "side_effects_claimed": [
+                "Given a niche profile is saved, When I generate new content, Then the AI output reflects the defined niche and audience."
+              ],
+              "story_refs": [
+                "define my primary niche and target audience|screen-3|define my primary niche and target audience"
+              ],
+              "step_id": "stp-f5cc-define-my-primary-ni",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-niche-content-so-ai-content-generation-co",
+          "version": 1,
+          "persona_ref": "Niche Content Solopreneur",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-4"
+            ]
+          },
+          "entry_conditions": [
+            "Niche Content Solopreneur begins: Provides the primary functionality for users to generate various types of niche-specific content using AI."
+          ],
+          "exit_success": "I can quickly produce long-form content",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "generate a blog post outline based on a topic",
+              "screen_ref": "screen-4",
+              "route": null,
+              "action": "generate a blog post outline based on a topic",
+              "expected_outcome": "I have a structured starting point for my content",
+              "side_effects_claimed": [
+                "Given an outline is generated, When I review it, Then I can proceed to full content generation or modify the outline."
+              ],
+              "story_refs": [
+                "generate a blog post outline based on a topic|screen-4|generate a blog post outline based on a topic"
+              ],
+              "step_id": "stp-cfd0-generate-a-blog-post",
+              "requires": []
+            },
+            {
+              "seq": 20,
+              "goal": "generate a full blog post draft from an outline",
+              "screen_ref": "screen-4",
+              "route": null,
+              "action": "generate a full blog post draft from an outline",
+              "expected_outcome": "I can quickly produce long-form content",
+              "side_effects_claimed": [
+                "Given a full draft is generated, When I review it, Then the content is coherent and follows the specified niche and tone."
+              ],
+              "story_refs": [
+                "generate a full blog post draft from an outline|screen-4|generate a full blog post draft from an outline"
+              ],
+              "step_id": "stp-34a0-generate-a-full-blog",
+              "requires": [
+                "stp-cfd0-generate-a-blog-post"
+              ]
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-niche-content-so-content-editing-refineme",
+          "version": 1,
+          "persona_ref": "Niche Content Solopreneur",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-5",
+              "screen-2"
+            ]
+          },
+          "entry_conditions": [
+            "Niche Content Solopreneur begins: Enables users to review, edit, and optimize AI-generated content to ensure quality, accuracy, and alignment with their brand voice."
+          ],
+          "exit_success": "it ranks better in search engines",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "manually edit any generated content directly within the platform",
+              "screen_ref": "screen-5",
+              "route": null,
+              "action": "manually edit any generated content directly within the platform",
+              "expected_outcome": "I can fine-tune it to my exact needs",
+              "side_effects_claimed": [
+                "Given I have made edits, When I save the content, Then my changes are preserved."
+              ],
+              "story_refs": [
+                "manually edit any generated content directly within the platform|screen-5|manually edit any generated content directly within the platform"
+              ],
+              "step_id": "stp-0093-manually-edit-any-ge",
+              "requires": []
+            },
+            {
+              "seq": 20,
+              "goal": "get suggestions for improving SEO for my content",
+              "screen_ref": "screen-2",
+              "route": null,
+              "action": "get suggestions for improving SEO for my content",
+              "expected_outcome": "it ranks better in search engines",
+              "side_effects_claimed": [
+                "Given suggestions are provided, When I implement them, Then the content quality score updates."
+              ],
+              "story_refs": [
+                "get suggestions for improving SEO for my content|screen-2|get suggestions for improving SEO for my content"
+              ],
+              "step_id": "stp-faf5-get-suggestions-for-",
+              "requires": [
+                "stp-0093-manually-edit-any-ge"
+              ]
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-niche-content-so-content-management-expor",
+          "version": 1,
+          "persona_ref": "Niche Content Solopreneur",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-2",
+              "screen-6"
+            ]
+          },
+          "entry_conditions": [
+            "Niche Content Solopreneur begins: Allows users to save, organize, and export their generated content for use on various platforms."
+          ],
+          "exit_success": "I can quickly paste it into my CMS or social media platform",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "save my generated content as a draft",
+              "screen_ref": "screen-2",
+              "route": null,
+              "action": "save my generated content as a draft",
+              "expected_outcome": "I can return to it later for further editing",
+              "side_effects_claimed": [
+                "Given content is saved, When I navigate to my 'Saved Content' dashboard, Then I see the draft listed with its title and last modified date."
+              ],
+              "story_refs": [
+                "save my generated content as a draft|screen-2|save my generated content as a draft"
+              ],
+              "step_id": "stp-9ebf-save-my-generated-co",
+              "requires": []
+            },
+            {
+              "seq": 20,
+              "goal": "copy the generated content to my clipboard with one click",
+              "screen_ref": "screen-6",
+              "route": null,
+              "action": "copy the generated content to my clipboard with one click",
+              "expected_outcome": "I can quickly paste it into my CMS or social media platform",
+              "side_effects_claimed": [
+                "Given content is copied, When I paste it into an external text editor, Then the text appears as expected."
+              ],
+              "story_refs": [
+                "copy the generated content to my clipboard with one click|screen-6|copy the generated content to my clipboard with one click"
+              ],
+              "step_id": "stp-d322-copy-the-generated-c",
+              "requires": [
+                "stp-9ebf-save-my-generated-co"
+              ]
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-small-business-n-niche-profile-setup",
+          "version": 1,
+          "persona_ref": "Small Business Niche Marketer",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-6"
+            ]
+          },
+          "entry_conditions": [
+            "Small Business Niche Marketer begins: Enables users to define their specific niche, target audience, and content goals, allowing the AI to generate highly relevant and personalized content."
+          ],
+          "exit_success": "generated content aligns with my brand identity",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "specify my brand's tone of voice and key messaging",
+              "screen_ref": "screen-6",
+              "route": null,
+              "action": "specify my brand's tone of voice and key messaging",
+              "expected_outcome": "generated content aligns with my brand identity",
+              "side_effects_claimed": [
+                "Given a tone is set, When I generate content, Then the AI output demonstrates the selected tone."
+              ],
+              "story_refs": [
+                "specify my brand's tone of voice and key messaging|screen-6|specify my brand's tone of voice and key messaging"
+              ],
+              "step_id": "stp-69b2-specify-my-brands-to",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-small-business-n-ai-content-generation-co",
+          "version": 1,
+          "persona_ref": "Small Business Niche Marketer",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-11"
+            ]
+          },
+          "entry_conditions": [
+            "Small Business Niche Marketer begins: Provides the primary functionality for users to generate various types of niche-specific content using AI."
+          ],
+          "exit_success": "I can quickly create engaging posts",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "generate social media captions for a specific product or event",
+              "screen_ref": "screen-11",
+              "route": null,
+              "action": "generate social media captions for a specific product or event",
+              "expected_outcome": "I can quickly create engaging posts",
+              "side_effects_claimed": [
+                "Given captions are generated, When I select one, Then I can copy it to my clipboard."
+              ],
+              "story_refs": [
+                "generate social media captions for a specific product or event|screen-11|generate social media captions for a specific product or event"
+              ],
+              "step_id": "stp-913c-generate-social-medi",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-small-business-n-content-editing-refineme",
+          "version": 1,
+          "persona_ref": "Small Business Niche Marketer",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-2"
+            ]
+          },
+          "entry_conditions": [
+            "Small Business Niche Marketer begins: Enables users to review, edit, and optimize AI-generated content to ensure quality, accuracy, and alignment with their brand voice."
+          ],
+          "exit_success": "I can ensure unique content for my brand",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "check the generated content for originality/plagiarism",
+              "screen_ref": "screen-2",
+              "route": null,
+              "action": "check the generated content for originality/plagiarism",
+              "expected_outcome": "I can ensure unique content for my brand",
+              "side_effects_claimed": [
+                "Given the scan is complete, When I view the results, Then I see a percentage of originality and highlighted sections if matches are found."
+              ],
+              "story_refs": [
+                "check the generated content for originality/plagiarism|screen-2|check the generated content for originality/plagiarism"
+              ],
+              "step_id": "stp-b68b-check-the-generated-",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-small-business-n-content-management-expor",
+          "version": 1,
+          "persona_ref": "Small Business Niche Marketer",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-6"
+            ]
+          },
+          "entry_conditions": [
+            "Small Business Niche Marketer begins: Allows users to save, organize, and export their generated content for use on various platforms."
+          ],
+          "exit_success": "I can easily manage content for different campaigns",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "organize my saved content into projects or folders",
+              "screen_ref": "screen-6",
+              "route": null,
+              "action": "organize my saved content into projects or folders",
+              "expected_outcome": "I can easily manage content for different campaigns",
+              "side_effects_claimed": [
+                "Given content is assigned, When I filter by project, Then only content belonging to that project is displayed."
+              ],
+              "story_refs": [
+                "organize my saved content into projects or folders|screen-6|organize my saved content into projects or folders"
+              ],
+              "step_id": "stp-fd49-organize-my-saved-co",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-growth-focused-a-niche-profile-setup",
+          "version": 1,
+          "persona_ref": "Growth-Focused Agency Consultant",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-11"
+            ]
+          },
+          "entry_conditions": [
+            "Growth-Focused Agency Consultant begins: Enables users to define their specific niche, target audience, and content goals, allowing the AI to generate highly relevant and personalized content."
+          ],
+          "exit_success": "I can manage diverse content strategies within one account",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "create multiple niche profiles for different clients",
+              "screen_ref": "screen-11",
+              "route": null,
+              "action": "create multiple niche profiles for different clients",
+              "expected_outcome": "I can manage diverse content strategies within one account",
+              "side_effects_claimed": [
+                "Given multiple profiles exist, When I switch between profiles, Then the content generation interface reflects the selected profile's settings."
+              ],
+              "story_refs": [
+                "create multiple niche profiles for different clients|screen-11|create multiple niche profiles for different clients"
+              ],
+              "step_id": "stp-bd4a-create-multiple-nich",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-growth-focused-a-ai-content-generation-co",
+          "version": 1,
+          "persona_ref": "Growth-Focused Agency Consultant",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-4"
+            ]
+          },
+          "entry_conditions": [
+            "Growth-Focused Agency Consultant begins: Provides the primary functionality for users to generate various types of niche-specific content using AI."
+          ],
+          "exit_success": "I can offer diverse options to my clients",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "generate multiple variations of a content piece (e.g., blog intro)",
+              "screen_ref": "screen-4",
+              "route": null,
+              "action": "generate multiple variations of a content piece (e.g., blog intro)",
+              "expected_outcome": "I can offer diverse options to my clients",
+              "side_effects_claimed": [
+                "Given variations are generated, When I compare them, Then I can select the best fit or request further iterations."
+              ],
+              "story_refs": [
+                "generate multiple variations of a content piece (e.g., blog intro)|screen-4|generate multiple variations of a content piece (e.g., blog intro)"
+              ],
+              "step_id": "stp-a1f3-generate-multiple-va",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-growth-focused-a-content-editing-refineme",
+          "version": 1,
+          "persona_ref": "Growth-Focused Agency Consultant",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-6"
+            ]
+          },
+          "entry_conditions": [
+            "Growth-Focused Agency Consultant begins: Enables users to review, edit, and optimize AI-generated content to ensure quality, accuracy, and alignment with their brand voice."
+          ],
+          "exit_success": "I can guide the AI to better meet client requirements",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "request specific revisions to generated content (e.g., 'make it more formal', 'shorten this paragraph')",
+              "screen_ref": "screen-6",
+              "route": null,
+              "action": "request specific revisions to generated content (e.g., 'make it more formal', 'shorten this paragraph')",
+              "expected_outcome": "I can guide the AI to better meet client requirements",
+              "side_effects_claimed": [
+                "Given a revision is made, When I review it, Then the change reflects my instruction."
+              ],
+              "story_refs": [
+                "request specific revisions to generated content (e.g., 'make it more formal', 'shorten this paragraph')|screen-6|request specific revisions to generated content (e.g., 'make it more formal', 'shorten this paragraph')"
+              ],
+              "step_id": "stp-b990-request-specific-rev",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        },
+        {
+          "journey_id": "jny-growth-focused-a-content-management-expor",
+          "version": 1,
+          "persona_ref": "Growth-Focused Agency Consultant",
+          "generated_from": {
+            "stories": [],
+            "wireframes": [
+              "screen-6"
+            ]
+          },
+          "entry_conditions": [
+            "Growth-Focused Agency Consultant begins: Allows users to save, organize, and export their generated content for use on various platforms."
+          ],
+          "exit_success": "I can deliver it to clients or upload it to other platforms",
+          "steps": [
+            {
+              "seq": 10,
+              "goal": "export generated content in common formats (e.g., .docx, .txt, HTML)",
+              "screen_ref": "screen-6",
+              "route": null,
+              "action": "export generated content in common formats (e.g., .docx, .txt, HTML)",
+              "expected_outcome": "I can deliver it to clients or upload it to other platforms",
+              "side_effects_claimed": [
+                "Given the file is downloaded, When I open it, Then the formatting (headings, paragraphs) is preserved."
+              ],
+              "story_refs": [
+                "export generated content in common formats (e.g., .docx, .txt, HTML)|screen-6|export generated content in common formats (e.g., .docx, .txt, HTML)"
+              ],
+              "step_id": "stp-5898-export-generated-con",
+              "requires": []
+            }
+          ],
+          "tombstones": [],
+          "orphan_story_ids": []
+        }
+      ],
+      "coverage_selfcheck": {
+        "stories_total": 15,
+        "stories_covered": 15,
+        "orphan_stories": [],
+        "screens_total": 12,
+        "screens_reached": 6,
+        "unreachable_screens": [
+          "screen-0",
+          "screen-1",
+          "screen-7",
+          "screen-8",
+          "screen-9",
+          "screen-10"
+        ],
+        "journeys_reaching_exit_success": "12/12",
+        "dag_valid": true
+      },
+      "findings": []
+    },
+    "storyPack": {
+      "personas": [
+        {
+          "name": "Niche Content Solopreneur",
+          "description": "An individual managing their own niche blog, online store, or service business. They need to create high-quality, targeted content efficiently without hiring a team."
+        },
+        {
+          "name": "Small Business Niche Marketer",
+          "description": "A marketing professional or business owner focusing on driving traffic and engagement for a small business targeting a specific niche. They need diverse content types that resonate with their audience and align with their brand."
+        },
+        {
+          "name": "Growth-Focused Agency Consultant",
+          "description": "A consultant working for an agency that serves multiple clients across various niches. They require scalable content solutions, the ability to manage diverse projects, and tools to ensure brand consistency."
+        }
+      ],
+      "epics": [
+        {
+          "name": "Niche Profile & Setup",
+          "description": "Enables users to define their specific niche, target audience, and content goals, allowing the AI to generate highly relevant and personalized content.",
+          "priority": "P0-critical",
+          "stories": [
+            {
+              "as_a": "Niche Content Solopreneur",
+              "i_want_to": "define my primary niche and target audience",
+              "so_that": "the AI understands my content context",
+              "acceptance_criteria": [
+                "Given I am on the niche setup page, When I input my niche (e.g., 'Sustainable Urban Gardening') and target audience (e.g., 'Eco-conscious city dwellers aged 25-45'), Then the system saves this profile.",
+                "Given a niche profile is saved, When I generate new content, Then the AI output reflects the defined niche and audience."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "Small Business Niche Marketer",
+              "i_want_to": "specify my brand's tone of voice and key messaging",
+              "so_that": "generated content aligns with my brand identity",
+              "acceptance_criteria": [
+                "Given I have defined a niche, When I select from predefined tone options (e.g., 'Informative,' 'Playful,' 'Professional') or provide custom tone examples, Then the system applies this tone to future content generation.",
+                "Given a tone is set, When I generate content, Then the AI output demonstrates the selected tone."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "Growth-Focused Agency Consultant",
+              "i_want_to": "create multiple niche profiles for different clients",
+              "so_that": "I can manage diverse content strategies within one account",
+              "acceptance_criteria": [
+                "Given I am logged in, When I navigate to the 'Niche Profiles' section, Then I can create a new profile with a unique name (e.g., 'Client A - Vegan Pet Food').",
+                "Given multiple profiles exist, When I switch between profiles, Then the content generation interface reflects the selected profile's settings."
+              ],
+              "story_points": 5,
+              "mvp": true
+            }
+          ]
+        },
+        {
+          "name": "AI Content Generation Core",
+          "description": "Provides the primary functionality for users to generate various types of niche-specific content using AI.",
+          "priority": "P0-critical",
+          "stories": [
+            {
+              "as_a": "Niche Content Solopreneur",
+              "i_want_to": "generate a blog post outline based on a topic",
+              "so_that": "I have a structured starting point for my content",
+              "acceptance_criteria": [
+                "Given I have selected a niche profile, When I input a topic (e.g., 'Benefits of Composting in Small Apartments'), Then the AI generates a multi-section outline with headings and sub-points.",
+                "Given an outline is generated, When I review it, Then I can proceed to full content generation or modify the outline."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "Small Business Niche Marketer",
+              "i_want_to": "generate social media captions for a specific product or event",
+              "so_that": "I can quickly create engaging posts",
+              "acceptance_criteria": [
+                "Given I have selected a niche profile, When I provide product details (e.g., 'New organic dog treats') and target platform (e.g., 'Instagram'), Then the AI generates 3-5 distinct caption options.",
+                "Given captions are generated, When I select one, Then I can copy it to my clipboard."
+              ],
+              "story_points": 2,
+              "mvp": true
+            },
+            {
+              "as_a": "Growth-Focused Agency Consultant",
+              "i_want_to": "generate multiple variations of a content piece (e.g., blog intro)",
+              "so_that": "I can offer diverse options to my clients",
+              "acceptance_criteria": [
+                "Given I have provided a prompt for a content section, When I request 'more variations', Then the AI generates 2-3 alternative versions of the text.",
+                "Given variations are generated, When I compare them, Then I can select the best fit or request further iterations."
+              ],
+              "story_points": 5,
+              "mvp": true
+            },
+            {
+              "as_a": "Niche Content Solopreneur",
+              "i_want_to": "generate a full blog post draft from an outline",
+              "so_that": "I can quickly produce long-form content",
+              "acceptance_criteria": [
+                "Given I have an approved outline, When I click 'Generate Full Content', Then the AI populates the outline with detailed paragraphs for each section.",
+                "Given a full draft is generated, When I review it, Then the content is coherent and follows the specified niche and tone."
+              ],
+              "story_points": 8,
+              "mvp": true
+            }
+          ]
+        },
+        {
+          "name": "Content Editing & Refinement",
+          "description": "Enables users to review, edit, and optimize AI-generated content to ensure quality, accuracy, and alignment with their brand voice.",
+          "priority": "P1-important",
+          "stories": [
+            {
+              "as_a": "Niche Content Solopreneur",
+              "i_want_to": "manually edit any generated content directly within the platform",
+              "so_that": "I can fine-tune it to my exact needs",
+              "acceptance_criteria": [
+                "Given I have generated content, When I click on the text area, Then I can freely type, delete, and modify the content.",
+                "Given I have made edits, When I save the content, Then my changes are preserved."
+              ],
+              "story_points": 2,
+              "mvp": true
+            },
+            {
+              "as_a": "Small Business Niche Marketer",
+              "i_want_to": "check the generated content for originality/plagiarism",
+              "so_that": "I can ensure unique content for my brand",
+              "acceptance_criteria": [
+                "Given I have generated content, When I click 'Check Originality', Then the system scans the content against public sources.",
+                "Given the scan is complete, When I view the results, Then I see a percentage of originality and highlighted sections if matches are found."
+              ],
+              "story_points": 5,
+              "mvp": false
+            },
+            {
+              "as_a": "Growth-Focused Agency Consultant",
+              "i_want_to": "request specific revisions to generated content (e.g., 'make it more formal', 'shorten this paragraph')",
+              "so_that": "I can guide the AI to better meet client requirements",
+              "acceptance_criteria": [
+                "Given I have generated content, When I highlight a section and provide a textual instruction (e.g., 'Rephrase this to be more concise'), Then the AI modifies the highlighted section accordingly.",
+                "Given a revision is made, When I review it, Then the change reflects my instruction."
+              ],
+              "story_points": 5,
+              "mvp": true
+            },
+            {
+              "as_a": "Niche Content Solopreneur",
+              "i_want_to": "get suggestions for improving SEO for my content",
+              "so_that": "it ranks better in search engines",
+              "acceptance_criteria": [
+                "Given I have a generated blog post, When I click 'SEO Suggestions', Then the system provides recommendations for keywords, readability, and meta descriptions.",
+                "Given suggestions are provided, When I implement them, Then the content quality score updates."
+              ],
+              "story_points": 3,
+              "mvp": false
+            }
+          ]
+        },
+        {
+          "name": "Content Management & Export",
+          "description": "Allows users to save, organize, and export their generated content for use on various platforms.",
+          "priority": "P1-important",
+          "stories": [
+            {
+              "as_a": "Niche Content Solopreneur",
+              "i_want_to": "save my generated content as a draft",
+              "so_that": "I can return to it later for further editing",
+              "acceptance_criteria": [
+                "Given I have generated content, When I click 'Save Draft', Then the content is stored under my account.",
+                "Given content is saved, When I navigate to my 'Saved Content' dashboard, Then I see the draft listed with its title and last modified date."
+              ],
+              "story_points": 2,
+              "mvp": true
+            },
+            {
+              "as_a": "Small Business Niche Marketer",
+              "i_want_to": "organize my saved content into projects or folders",
+              "so_that": "I can easily manage content for different campaigns",
+              "acceptance_criteria": [
+                "Given I have saved content, When I create a new 'Project' (e.g., 'Summer Sale Campaign'), Then I can assign saved content pieces to that project.",
+                "Given content is assigned, When I filter by project, Then only content belonging to that project is displayed."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "Growth-Focused Agency Consultant",
+              "i_want_to": "export generated content in common formats (e.g., .docx, .txt, HTML)",
+              "so_that": "I can deliver it to clients or upload it to other platforms",
+              "acceptance_criteria": [
+                "Given I have finalized content, When I select an export option (e.g., 'Export as .docx'), Then the system downloads the content in the chosen format.",
+                "Given the file is downloaded, When I open it, Then the formatting (headings, paragraphs) is preserved."
+              ],
+              "story_points": 3,
+              "mvp": true
+            },
+            {
+              "as_a": "Niche Content Solopreneur",
+              "i_want_to": "copy the generated content to my clipboard with one click",
+              "so_that": "I can quickly paste it into my CMS or social media platform",
+              "acceptance_criteria": [
+                "Given I have generated content, When I click the 'Copy to Clipboard' button, Then the entire content is copied.",
+                "Given content is copied, When I paste it into an external text editor, Then the text appears as expected."
+              ],
+              "story_points": 1,
+              "mvp": true
+            }
+          ]
+        }
+      ],
+      "mvp_story_count": 13,
+      "total_story_points": 53
+    },
+    "wireframeScreensPayload": {
+      "screens": [
+        {
+          "screen_id": "screen-0",
+          "screen_name": "Landing Page",
+          "description": "Introduce ApexNiche AI, highlight its unique value proposition and features, and drive user sign-ups.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-1",
+          "screen_name": "Signup/Registration",
+          "description": "Allow new users to create an ApexNiche AI account, integrating with Clerk for authentication.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-2",
+          "screen_name": "Dashboard",
+          "description": "Provide an overview of recent activity, content stats, and quick access to core features for an authenticated user.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-3",
+          "screen_name": "Create Niche Profile",
+          "description": "Guide the user through setting up a new niche profile, defining audience, tone, and keywords.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-4",
+          "screen_name": "Generate Article/Blog",
+          "description": "Allow users to generate long-form articles or blog posts based on a selected niche profile and topic.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-5",
+          "screen_name": "Content Editor & Validator",
+          "description": "Allow users to edit generated content and apply 'cascade-validation' and 'synthetic-isolation-audit' tools.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-6",
+          "screen_name": "Content Library",
+          "description": "Store, organize, and manage all generated content; view content status and details.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-7",
+          "screen_name": "Venture Launch Orchestrator",
+          "description": "Streamline go-to-market strategies by testing and optimizing content for specific venture launches.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-8",
+          "screen_name": "Niche Profiles (Overview)",
+          "description": "Display a list of all defined niche profiles, allowing users to view, edit, or create new ones.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-9",
+          "screen_name": "Manage Niche Profile",
+          "description": "Allow users to edit existing niche profiles, including keywords, audience, and validation settings.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-10",
+          "screen_name": "Content Generator (Hub)",
+          "description": "Central hub for initiating content creation across various formats, guiding users to specific generation tools.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        },
+        {
+          "screen_id": "screen-11",
+          "screen_name": "Generate Social Media",
+          "description": "Create social media updates tailored for different platforms and niches.",
+          "deviceType": "DESKTOP",
+          "page_type": null
+        }
+      ],
+      "screenCount": 12,
+      "ia_sitemap": {
+        "pages": [
+          {
+            "name": "Landing Page",
+            "path": "/",
+            "purpose": "Introduce ApexNiche AI, highlight features, benefits, and drive sign-ups.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": []
+          },
+          {
+            "name": "Features",
+            "path": "/features",
+            "purpose": "Detail the core functionalities like content generation, validation tools, and the venture orchestrator.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": []
+          },
+          {
+            "name": "Pricing",
+            "path": "/pricing",
+            "purpose": "Present subscription plans and their associated features and limits.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": []
+          },
+          {
+            "name": "Login",
+            "path": "/login",
+            "purpose": "Allow existing users to access their ApexNiche AI account.",
+            "parent": null,
+            "priority": "utility",
+            "persona_relevance": []
+          },
+          {
+            "name": "Sign Up",
+            "path": "/signup",
+            "purpose": "Enable new users to create an ApexNiche AI account.",
+            "parent": null,
+            "priority": "utility",
+            "persona_relevance": []
+          },
+          {
+            "name": "Dashboard",
+            "path": "/dashboard",
+            "purpose": "Provide an overview of recent activity, content stats, and quick access to core features.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Niche Profiles",
+            "path": "/niche-profiles",
+            "purpose": "Manage and define target niche keywords, audience profiles, and brand guidelines.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Create Niche Profile",
+            "path": "/niche-profiles/new",
+            "purpose": "Step-by-step wizard to set up a new niche profile.",
+            "parent": "Niche Profiles",
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Manage Niche Profile",
+            "path": "/niche-profiles/:id",
+            "purpose": "Edit existing niche profiles, including keywords, audience, and validation settings.",
+            "parent": "Niche Profiles",
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Content Generator",
+            "path": "/content-generator",
+            "purpose": "Central hub for initiating content creation across various formats.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Generate Article/Blog",
+            "path": "/content-generator/article",
+            "purpose": "Generate long-form articles and blog posts based on selected niche profiles and topics.",
+            "parent": "Content Generator",
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Generate Social Media",
+            "path": "/content-generator/social",
+            "purpose": "Create social media updates tailored for different platforms and niches.",
+            "parent": "Content Generator",
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Generate Video Script",
+            "path": "/content-generator/video-script",
+            "purpose": "Produce basic video scripts for various niche content.",
+            "parent": "Content Generator",
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Content Library",
+            "path": "/content-library",
+            "purpose": "Store, organize, and manage all generated content; view content status and details.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Content Editor & Validator",
+            "path": "/content-library/:id/edit",
+            "purpose": "Edit generated content, apply 'cascade-validation' and 'synthetic-isolation-audit' tools.",
+            "parent": "Content Library",
+            "priority": "primary",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Venture Launch Orchestrator",
+            "path": "/venture-orchestrator",
+            "purpose": "Streamline go-to-market strategies by testing and optimizing content for specific venture launches.",
+            "parent": null,
+            "priority": "primary",
+            "persona_relevance": [
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Settings",
+            "path": "/settings",
+            "purpose": "Manage user account details, subscription, billing, and integrations.",
+            "parent": null,
+            "priority": "utility",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          },
+          {
+            "name": "Help & Support",
+            "path": "/help",
+            "purpose": "Access FAQs, tutorials, and contact support.",
+            "parent": null,
+            "priority": "utility",
+            "persona_relevance": [
+              "Niche Content Solopreneur",
+              "Small Business Niche Marketer",
+              "Growth-Focused Agency Consultant"
+            ]
+          }
+        ],
+        "navigation": {
+          "primary": [
+            "Dashboard",
+            "Niche Profiles",
+            "Content Generator",
+            "Content Library",
+            "Venture Launch Orchestrator"
+          ],
+          "secondary": [],
+          "utility": [
+            "Settings",
+            "Help & Support",
+            "Login",
+            "Sign Up"
+          ]
+        },
+        "user_flows": [
+          {
+            "name": "First-Time User Onboarding & Niche Setup",
+            "persona": "Niche Content Solopreneur",
+            "steps": [
+              "Landing Page",
+              "Sign Up",
+              "Dashboard",
+              "Niche Profiles",
+              "Create Niche Profile",
+              "Manage Niche Profile"
+            ],
+            "description": "A new user signing up and configuring their first niche profile within the platform."
+          },
+          {
+            "name": "Generate, Edit & Validate New Article Content",
+            "persona": "Small Business Niche Marketer",
+            "steps": [
+              "Login",
+              "Dashboard",
+              "Content Generator",
+              "Generate Article/Blog",
+              "Content Editor & Validator",
+              "Content Library"
+            ],
+            "description": "An existing user creating a new long-form article, refining it with validation tools, and saving it to their library."
+          },
+          {
+            "name": "Orchestrate a New Venture Launch for a Client",
+            "persona": "Growth-Focused Agency Consultant",
+            "steps": [
+              "Login",
+              "Dashboard",
+              "Niche Profiles",
+              "Create Niche Profile",
+              "Venture Launch Orchestrator",
+              "Content Generator",
+              "Generate Social Media",
+              "Content Editor & Validator",
+              "Content Library"
+            ],
+            "description": "An agency consultant setting up a new client's niche, orchestrating a content-driven launch, and generating social media assets."
+          },
+          {
+            "name": "Manage & Update Existing Niche Content Strategy",
+            "persona": "Niche Content Solopreneur",
+            "steps": [
+              "Login",
+              "Dashboard",
+              "Content Library",
+              "Content Editor & Validator",
+              "Niche Profiles",
+              "Manage Niche Profile"
+            ],
+            "description": "A solopreneur reviewing and updating existing content, then fine-tuning their niche profile based on performance."
+          }
+        ],
+        "hierarchy_depth": 2,
+        "total_pages": 18,
+        "usage": {
+          "inputTokens": 689,
+          "outputTokens": 2146
+        }
+      }
+    }
+  }
+}
