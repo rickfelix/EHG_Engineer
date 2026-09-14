@@ -8,7 +8,7 @@
  * resolves approved:true would otherwise ship green on (M6).
  */
 import { describe, test, expect } from 'vitest';
-import { resolveApprovalChoice } from '../archplan-approval-choice.mjs';
+import { resolveApprovalChoice, buildUpsertArgs } from '../archplan-approval-choice.mjs';
 
 describe('resolveApprovalChoice', () => {
   test('--draft alone resolves approved:false', () => {
@@ -43,5 +43,38 @@ describe('resolveApprovalChoice', () => {
     const result = resolveApprovalChoice({ approvedFlag: undefined, draftFlag: 'true' });
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/--draft/);
+  });
+});
+
+// VERIFY-phase VALIDATION review finding W2: nothing previously proved cmdUpsert's resolved
+// `approved` value actually reaches the upsertArchPlan(...) call -- a mutant deleting the
+// `approved,` token from that call site shipped green on all prior tests, silently restoring
+// the exact bug this SD fixes on the dominant (~85% of rows) CLI write path.
+describe('buildUpsertArgs', () => {
+  test('forwards approved:true unchanged', () => {
+    const args = buildUpsertArgs({ supabase: {}, planKey: 'A-1', visionKey: 'V-1', content: 'x', dimensions: [], brainstormId: null, approved: true });
+    expect(args.approved).toBe(true);
+  });
+
+  test('forwards approved:false unchanged', () => {
+    const args = buildUpsertArgs({ supabase: {}, planKey: 'A-1', visionKey: 'V-1', content: 'x', dimensions: [], brainstormId: null, approved: false });
+    expect(args.approved).toBe(false);
+  });
+
+  test('sets createdBy to the canonical CLI label', () => {
+    const args = buildUpsertArgs({ supabase: {}, planKey: 'A-1', visionKey: 'V-1', content: 'x', dimensions: [], brainstormId: null, approved: true });
+    expect(args.createdBy).toBe('eva-archplan-command');
+  });
+
+  test('passes planKey/visionKey/content/dimensions/brainstormId through unchanged', () => {
+    const supabase = {};
+    const dimensions = [{ name: 'x' }];
+    const args = buildUpsertArgs({ supabase, planKey: 'A-1', visionKey: 'V-1', content: 'body', dimensions, brainstormId: 'bs-1', approved: false });
+    expect(args.supabase).toBe(supabase);
+    expect(args.planKey).toBe('A-1');
+    expect(args.visionKey).toBe('V-1');
+    expect(args.content).toBe('body');
+    expect(args.dimensions).toBe(dimensions);
+    expect(args.brainstormId).toBe('bs-1');
   });
 });

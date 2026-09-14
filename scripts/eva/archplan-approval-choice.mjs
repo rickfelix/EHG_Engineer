@@ -20,3 +20,12 @@ export function resolveApprovalChoice({ approvedFlag, draftFlag }) {
   }
   return { ok: true, approved: Boolean(approvedFlag) };
 }
+
+// VERIFY-phase VALIDATION review finding W2: cmdUpsert's resolved `approved` value was only
+// proven correct up to the point of assembling upsertArchPlan's call args -- nothing asserted
+// that `approved` actually reaches that call (a mutant deleting the `approved,` token from the
+// call site shipped green on all 112 prior tests). Extracted here, alongside
+// resolveApprovalChoice, so the wiring itself is directly unit-testable.
+export function buildUpsertArgs({ supabase, planKey, visionKey, content, dimensions, brainstormId, approved }) {
+  return { supabase, planKey, visionKey, content, dimensions, brainstormId, createdBy: 'eva-archplan-command', approved };
+}

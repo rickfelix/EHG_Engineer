@@ -176,10 +176,15 @@ describe('cascade-watcher main()', () => {
   });
 });
 
-// SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2/B2): cascade-watcher is a fully automated
-// cron with no chairman touch -- Stage 1 must never claim chairman_approved=true, and Stage
-// 2's readiness gate must no longer require it (previously a no-op filter when
-// upsertArchPlan hardcoded chairman_approved=true on every row).
+// SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2/B2, corrected at VERIFY per finding W1):
+// cascade-watcher is a fully automated cron with no chairman touch -- Stage 1 must never
+// claim chairman_approved=true, and Stage 2's readiness gate MUST require it. An earlier
+// version of this fix dropped the Stage 2 filter on the premise that it "was never actually
+// gating anything" (upsertArchPlan used to hardcode chairman_approved=true on every row) --
+// that premise was measured against live data and found false: rows written by OTHER paths
+// (brainstorm-pipeline, seed-l1-vision, batch-migration, etc.) are status='active' AND
+// chairman_approved=false, and dropping the filter would sweep several never-approved plans
+// into automatic orchestrator-SD generation. The filter is restored.
 describe('cascade-watcher chairman-approval honesty (SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001)', () => {
   it("Stage 1's auto-generated archplan is written draft/chairman_approved=false, never claiming chairman approval", async () => {
     const supabase = makeSupabase({
@@ -200,17 +205,31 @@ describe('cascade-watcher chairman-approval honesty (SD-LEO-INFRA-ARCHITECTURE-P
     }
   });
 
-  it("Stage 2's readiness query never filters on chairman_approved (only status='active')", async () => {
+  it("Stage 2's readiness query filters on BOTH status='active' AND chairman_approved=true, excluding never-approved active rows (W1 regression test)", async () => {
     const supabase = makeSupabase({
-      archplans: [{ id: 'a1', vision_id: 'v1', vision_key: 'VISION-TEST-002', plan_key: 'ARCH-TEST-002', status: 'active', chairman_approved: false, content: 'x', venture_id: 'vent1', metadata: {} }],
-      visions: [{ id: 'v1', vision_key: 'VISION-TEST-002', extracted_dimensions: null, venture_id: 'vent1' }],
+      archplans: [
+        { id: 'a1', vision_id: 'v1', vision_key: 'VISION-TEST-APPROVED', plan_key: 'ARCH-TEST-APPROVED-001', status: 'active', chairman_approved: true, content: 'x', venture_id: 'vent1', metadata: {} },
+        { id: 'a2', vision_id: 'v2', vision_key: 'VISION-TEST-UNAPPROVED', plan_key: 'ARCH-TEST-UNAPPROVED-001', status: 'active', chairman_approved: false, content: 'x', venture_id: 'vent1', metadata: {} },
+      ],
+      visions: [
+        { id: 'v1', vision_key: 'VISION-TEST-APPROVED', extracted_dimensions: null, venture_id: 'vent1' },
+        { id: 'v2', vision_key: 'VISION-TEST-UNAPPROVED', extracted_dimensions: null, venture_id: 'vent1' },
+      ],
       orchestrators: [],
       ventures: [{ id: 'vent1', name: 'TestVenture' }],
     });
     await runStage2({ supabase, logger: { log: () => {}, warn: () => {}, error: () => {} } });
 
     const archPlanEqCalls = supabase._eqCalls.filter((c) => c.table === 'eva_architecture_plans');
-    expect(archPlanEqCalls.some((c) => c.col === 'chairman_approved')).toBe(false);
+    expect(archPlanEqCalls.some((c) => c.col === 'chairman_approved' && c.val === true)).toBe(true);
     expect(archPlanEqCalls.some((c) => c.col === 'status' && c.val === 'active')).toBe(true);
+
+    // The mock applies these filters to the archplans fixture, so only the approved plan
+    // becomes a candidate and reaches per-plan processing (content 'x' has no phases, so it
+    // writes an INSUFFICIENT_PHASES error) -- the unapproved plan never becomes a candidate
+    // at all, so no cascade error of any kind is ever written for its plan_key.
+    const errorInserts = supabase._inserts.filter((i) => i.table === 'eva_cascade_errors');
+    expect(errorInserts.some((i) => i.row?.archplan_key === 'ARCH-TEST-APPROVED-001')).toBe(true);
+    expect(errorInserts.some((i) => i.row?.archplan_key === 'ARCH-TEST-UNAPPROVED-001')).toBe(false);
   });
 });

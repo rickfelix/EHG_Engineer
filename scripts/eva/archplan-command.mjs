@@ -51,7 +51,7 @@ import { fetchAllPaginated } from '../../lib/db/fetch-all-paginated.mjs';
 // SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001 (FR-2, EXEC-TO-PLAN TESTING review M4/M6):
 // pure flag-to-decision resolver lives in its own module so it's unit-testable by
 // direct import (this file has no isMainModule() guard and runs the CLI on import).
-import { resolveApprovalChoice } from './archplan-approval-choice.mjs';
+import { resolveApprovalChoice, buildUpsertArgs } from './archplan-approval-choice.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../');
@@ -335,10 +335,9 @@ async function cmdUpsert({ planKey, visionKey, source, dimensions: dimensionsJso
 
   // Delegate to extracted upsert module (SD-LEO-INFRA-VENTURE-BUILD-READINESS-001-C)
   const { upsertArchPlan } = await import('../../lib/eva/archplan-upsert.js');
-  const { data, error } = await upsertArchPlan({
-    supabase, planKey, visionKey, content, dimensions,
-    brainstormId, createdBy: 'eva-archplan-command', approved,
-  });
+  const { data, error } = await upsertArchPlan(
+    buildUpsertArgs({ supabase, planKey, visionKey, content, dimensions, brainstormId, approved }),
+  );
 
   if (error) { console.error('❌ Upsert failed:', error.message); process.exit(1); }
 
