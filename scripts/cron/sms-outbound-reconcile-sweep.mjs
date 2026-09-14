@@ -23,6 +23,10 @@
  *
  * Env: SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (required),
  *      TWILIO_STATUS_CALLBACK_URL (so sends request a delivery callback — FR-2).
+ *      CHAIRMAN_EMAIL (SD-LEO-INFRA-CHAIRMAN-SMS-DURABLE-001, SECURITY finding SEC-B: required as
+ *      of this SD -- a stale decision_question re-ask now stages a chairman_notifications row,
+ *      whose recipient_email column is NOT NULL; an unset CHAIRMAN_EMAIL makes every re-ask's
+ *      staging throw and fail closed, silently never re-asking).
  */
 import 'dotenv/config';
 import { pathToFileURL } from 'url';
