@@ -3,7 +3,7 @@
 // integration) live elsewhere. sendFn is injected throughout -- these tests never touch the real
 // twilio-provider.js or its fetch/test-isolation guard.
 import { describe, it, expect } from 'vitest';
-import { runCheckpointSend, summarizeCounts, composeCheckpointBody, RECIPIENT_SHA256 } from './checkpoint-send.mjs';
+import { runCheckpointSend, summarizeCounts, composeCheckpointBody } from './checkpoint-send.mjs';
 import { sha256Hex } from '../../lib/michael/db.mjs';
 
 const NOW_IN_WINDOW = new Date('2026-09-14T10:03:00.000Z'); // 06:03 ET (within the 06:00-06:15 window)
@@ -166,33 +166,37 @@ describe('TS-7: FR-2 recipient hash-pin (raw string, tamper-evidence)', () => {
       expect(r).toMatchObject({ ok: false, refusal: 'RECIPIENT_HASH_MISMATCH' });
     });
   });
-  it('a CHAIRMAN_PHONE whose hash does not match the pinned constant refuses (proves the pin is live, not a no-op)', async () => {
+  it('a CHAIRMAN_PHONE whose hash does not match the DB-read pin refuses (proves the pin is live, not a no-op)', async () => {
     await withEnv({ CHAIRMAN_PHONE: 'some-other-number' }, async () => {
+      const sb = fakeSb({ tables: { michael_checkpoint_send_enabled: [
+        { config_key: 'checkpoint_send', enabled: true },
+        { config_key: 'recipient_pin', reason: sha256Hex('a-different-real-number') },
+      ] } });
+      const r = await runCheckpointSend({ sb, argv: ['--apply'], now: NOW_IN_WINDOW });
+      expect(r).toMatchObject({ ok: false, refusal: 'RECIPIENT_HASH_MISMATCH' });
+    });
+  });
+  it('QF-20260914-300: a missing recipient_pin row (table exists, zero rows for that key) fails closed exactly like a mismatch', async () => {
+    await withEnv({ CHAIRMAN_PHONE: '+15551234567' }, async () => {
       const sb = fakeSb({ ...ENABLED_ROW });
       const r = await runCheckpointSend({ sb, argv: ['--apply'], now: NOW_IN_WINDOW });
       expect(r).toMatchObject({ ok: false, refusal: 'RECIPIENT_HASH_MISMATCH' });
-      expect(sha256Hex('some-other-number')).not.toBe(RECIPIENT_SHA256);
     });
   });
-  it('the shipped RECIPIENT_SHA256 placeholder never matches any plausible real value (fail-closed-by-construction until the chairman-adjacent dependency is filled in)', () => {
-    expect(RECIPIENT_SHA256).toBe('');
-    expect(sha256Hex('+15551234567')).not.toBe(RECIPIENT_SHA256);
-  });
-});
-
-describe('the shipped RECIPIENT_SHA256 placeholder is honestly fail-closed', () => {
-  it('a full run with the REAL (default, unpinned) constant refuses on the hash check before ever reaching identity/send', async () => {
+  it('QF-20260914-300: a correct recipient_pin row read fresh from the DB resolves the recipient and proceeds past the hash check', async () => {
     await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
-      const sb = fakeSb({ ...ENABLED_ROW });
-      const sent = [];
-      const r = await runCheckpointSend({ sb, argv: ['--apply'], now: NOW_IN_WINDOW, resolveIdentity: () => FULL_IDENTITY, sendFn: async (args) => { sent.push(args); return { status: 'queued', provider_message_id: 'SM123' }; } });
-      expect(r).toMatchObject({ ok: false, refusal: 'RECIPIENT_HASH_MISMATCH' });
-      expect(sent).toHaveLength(0);
+      const sb = fakeSb({ tables: { michael_checkpoint_send_enabled: [
+        { config_key: 'checkpoint_send', enabled: true },
+        { config_key: 'recipient_pin', reason: REAL_RECIPIENT_HASH },
+      ] } });
+      const r = await runCheckpointSend({ sb, argv: ['--apply'], now: NOW_IN_WINDOW, resolveIdentity: () => null });
+      // Proceeds past FR-2 to the next fail-closed check (FR-3 identity), never RECIPIENT_HASH_MISMATCH.
+      expect(r).toMatchObject({ ok: false, refusal: 'IDENTITY_UNCONFIGURED' });
     });
   });
 });
 
-describe('TS-9: successful send + FR-3 identity + FR-6 stage-then-finalize ledger (recipientSha256 injected to exercise the send path -- production always uses the real constant, see the describe block above)', () => {
+describe('TS-9: successful send + FR-3 identity + FR-6 stage-then-finalize ledger (recipientSha256 injected to exercise the send path -- production always reads the live pin row, see the describe block above)', () => {
   it('a matching recipient hash and a real identity sends and finalizes outcome=sent, never storing the raw body', async () => {
     await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
       const sb = fakeSb({ ...ENABLED_ROW });
