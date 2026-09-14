@@ -1128,5 +1128,21 @@
    "input": "Each .js/.mjs/.cjs file under lib/eva/** (excluding lib/eva/stage-templates/stage-key-registry.js itself and fixture-classified paths), scanned line-by-line for a stage-shaped identifier (currentStage/fromStage/toStage/stage_number/stage_by/current_lifecycle_stage etc.) co-occurring on the same line with a comparison operator against a bare 1-27 literal (the full range STAGE_KEY_BY_NUMBER covers as of this SD -- FR-10's own acceptance criterion).",
    "seen": "Real positive observed running node scripts/lint/eva-stage-literal-lint.mjs --all against this repo's actual lib/eva/** during this SD's own EXEC phase (2026-09-14, after extending STAGE_KEY_BY_NUMBER to cover all 27 stages per FR-10): 55 pre-existing violations found across 655 files checked (constraint-drift-detector.js:290, stage-execution-worker.js:699/729/766/818/1048/1147/1230/1481/1576/1655/1671/1697/1814/1841/1883/2532/2801/2979/3195, stage-execution-engine.js and 30+ others) -- all now captured in scripts/lint/eva-stage-literal-lint-allowlist.json with per-line reasons, not a temp-dir fixture. --all now reports 0 violations against that allowlist."
   }
+ },
+ {
+  "name": "org-agent-roles-canonical-titles-check",
+  "script": "scripts/lint/org-agent-roles-canonical-titles-check.mjs",
+  "rootFlag": null,
+  "seedTest": "tests/unit/org/org-agent-roles-canonical-titles-check.test.mjs",
+  "neuter": {
+   "find": "if (row.title !== expected) {",
+   "replace": "if (false) {",
+   "why": "Disables checkCanonicalTitles()'s only drift-detection branch, so a role_key whose live title differs from its canonical form is never added to `drifted` -- the exact SD-LEO-INFRA-STOP-ORG-ROLE-001 defect shape this control exists to catch (28/33 org_agent_roles rows silently holding a venture-named title instead of the canonical one). A neutered control would report 0 drift regardless of real state."
+  },
+  "note": "SD-LEO-INFRA-STOP-ORG-ROLE-001. Uses the seedTest form: checkCanonicalTitles(supabase) is already extracted as a pure, injectable function (takes any supabase-shaped client), so the real detection logic is unit-testable without a live DB connection -- main()'s actual Supabase client construction and process.exitCode side effects are gated behind isMainModule(), same convention as the schema-reference-snapshot control this spec is modeled on.",
+  "observability_proof": {
+   "input": "Each live org_agent_roles row's `title` column, compared against computeCanonicalRoleTitles().get(role_key) -- the exact value whose mismatch determines the `drifted` classification this control reports.",
+   "seen": "Real positive observed live 2026-09-14 (this SD's own root-cause investigation, before the fix): org_agent_roles held 28 of 33 rows with a venture-test-named title (e.g. role_key=VENTURE_CEO, title=\"TEST-59732e35fc-SD-A CEO\" vs canonical \"CEO\"), confirmed via a direct live Supabase query. This control (checkCanonicalTitles) run against that exact live state correctly reported all 28 as drifted; re-run after the --execute repair correctly reported 0 drifted, 33/33 present."
+  }
  }
 ]

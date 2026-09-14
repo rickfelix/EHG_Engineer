@@ -1,0 +1,69 @@
+name: Org Agent Roles Canonical Titles Guard
+
+# SD-LEO-INFRA-STOP-ORG-ROLE-001 (E2). BLOCKING gate: fails loud (non-zero) when
+# org_agent_roles.title (the shared, venture-agnostic role registry) drifts from its
+# canonical, venture-agnostic form -- e.g. a per-venture display name clobbering a
+# canonical title, the exact incident this SD fixes. Runs on push touching the fold or its
+# canonical-title source, and daily (catches drift from any future/unaudited writer, not
+# just a push to these specific files). A real DB outage is demoted to a non-blocking
+# warning so it can never red-X main; only a genuine title mismatch fails the gate.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/org/factory-identity-fold.cjs'
+      - 'lib/org/canonical-role-titles.mjs'
+      - 'lib/agents/venture-ceo-factory.js'
+      - 'scripts/lint/org-agent-roles-canonical-titles-check.mjs'
+      - '.github/workflows/org-agent-roles-canonical-titles-guard.yml'
+  schedule:
+    - cron: '41 9 * * *'   # daily 09:41 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-titles:
+    name: org_agent_roles titles are venture-agnostic (BLOCKING)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install deps
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Check canonical role titles
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set +e
+          out="$(node scripts/lint/org-agent-roles-canonical-titles-check.mjs 2>&1)"
+          code=$?
+          echo "$out"
+          # MISCONFIG (no DB credential at all) is an operator error, NOT a transient
+          # outage -- HARD FAIL so the gate can never sit permanently green while never
+          # actually checking the live DB. Fixed-string whole-line match (-Fxq, not -q),
+          # same convention as migration-deploy-drift-guard.yml, so a role_key or title
+          # value that happens to contain this bracketed text as a SUBSTRING can never
+          # accidentally satisfy the check.
+          if echo "$out" | grep -Fxq '[ORG_AGENT_ROLES_CANONICAL_TITLES_MISCONFIG] no Supabase credential available.'; then
+            echo "::error::Org-agent-roles canonical-titles guard has NO DB credential -- set SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY repo secrets. Failing loud: a credential-less gate verifies nothing."
+            exit 1
+          fi
+          # INFRA = a genuine transient connect/query failure AFTER a credential was
+          # present -- non-blocking so an outage cannot red-X main.
+          if [ "$code" -eq 2 ]; then
+            echo "::warning::Could not reach the database (INFRA) -- not failing the gate on an outage."
+            exit 0
+          fi
+          exit $code
