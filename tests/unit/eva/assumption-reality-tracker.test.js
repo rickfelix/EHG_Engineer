@@ -3,6 +3,12 @@
  * SD-MAN-ORCH-EVA-INTELLIGENCE-LAYER-001-D
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const emitFeedbackMock = vi.fn().mockResolvedValue({ id: 'fb-1', deduped: false });
+vi.mock('../../../lib/governance/emit-feedback.js', () => ({
+  emitFeedback: (...args) => emitFeedbackMock(...args),
+}));
+
 import {
   collectRealityMeasurements,
   buildCalibrationReport,
@@ -694,6 +700,146 @@ describe('updateAssumptionSetStatus', () => {
     updateAssumptionSetStatus(sb, 'v1', 20, report, logger);
 
     expect(warnFn).toHaveBeenCalledWith(expect.stringContaining('update failed'));
+  });
+
+  // PAT-LES-6d8e6a986931: a fire-and-forget write failure must also become durably visible
+  // via emitFeedback, not just a console.warn line.
+  it('routes a .then() error through emitFeedback (harness_backlog) in addition to logging', () => {
+    emitFeedbackMock.mockClear();
+    const thenFn = vi.fn((cb) => {
+      cb({ error: { message: 'update failed' } });
+      return { catch: vi.fn() };
+    });
+
+    const sb = {
+      from: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(() => ({ then: thenFn, catch: vi.fn() })),
+    };
+
+    const report = { aggregate_accuracy: 0.5, category_scores: {} };
+    updateAssumptionSetStatus(sb, 'venture-42', 20, report, silentLogger);
+
+    expect(emitFeedbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        supabase: sb,
+        category: 'harness_backlog',
+        // Regression guard for the exact bug validation-learn154 caught: a source_type not
+        // present in the live feedback_source_type_check constraint makes emitFeedback throw,
+        // silently swallowed by .catch() below -- reproducing the pattern this fix closes.
+        // 'assumption_reality_tracker' is NOT a valid value; 'auto_capture' is (see the
+        // DB-tier cross-check in tests/database/assumption-reality-tracker-source-type.db.test.js).
+        source_type: 'auto_capture',
+        dedup_key: 'assumption-sets-write-failure:venture-42',
+        // validation-learn154 F3 + security-learn154 R2: description feeds emit-feedback.js's
+        // daily dedup_hash, so it must stay STABLE per venture per day -- neither the volatile
+        // error text NOR the venture id belongs in description (both live in metadata/dedup_key
+        // instead; a raw message there would defeat dedup, the exact incident emit-feedback.js's
+        // own header documents for fleet_dormancy).
+        description: expect.not.stringContaining('update failed'),
+        metadata: expect.objectContaining({ error_message: 'update failed', venture_id: 'venture-42' }),
+      }),
+    );
+    expect(emitFeedbackMock.mock.calls[0][0].description).not.toContain('venture-42');
+  });
+
+  it('routes a rejected promise through emitFeedback (harness_backlog) in addition to logging', () => {
+    emitFeedbackMock.mockClear();
+    let catchFn;
+    const sb = {
+      from: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(() => ({
+        then: vi.fn(() => ({
+          catch: vi.fn((cb) => { catchFn = cb; }),
+        })),
+      })),
+    };
+
+    const report = { aggregate_accuracy: 0.5, category_scores: {} };
+    updateAssumptionSetStatus(sb, 'venture-99', 20, report, silentLogger);
+    catchFn({ message: 'network error' });
+
+    expect(emitFeedbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source_type: 'auto_capture',
+        dedup_key: 'assumption-sets-write-failure:venture-99',
+        description: expect.not.stringContaining('network error'),
+        metadata: expect.objectContaining({ error_message: 'network error', venture_id: 'venture-99' }),
+      }),
+    );
+    expect(emitFeedbackMock.mock.calls[0][0].description).not.toContain('venture-99');
+  });
+
+  // security-learn154 R1: a pathological error message must not grow the durable row unbounded.
+  it('truncates an oversized error message to 500 chars in metadata.error_message', () => {
+    emitFeedbackMock.mockClear();
+    const hugeMessage = 'x'.repeat(2000);
+    const thenFn = vi.fn((cb) => {
+      cb({ error: { message: hugeMessage } });
+      return { catch: vi.fn() };
+    });
+
+    const sb = {
+      from: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(() => ({ then: thenFn, catch: vi.fn() })),
+    };
+
+    const report = { aggregate_accuracy: 0.5, category_scores: {} };
+    updateAssumptionSetStatus(sb, 'venture-huge', 20, report, silentLogger);
+
+    const call = emitFeedbackMock.mock.calls[0][0];
+    expect(call.metadata.error_message.length).toBe(500);
+  });
+
+  // security-learn154 W1: a feedback-emission failure (e.g. RLS-denied on a non-service-role
+  // client) must stay severity-visible rather than blending into routine warnings.
+  it('logs at error (not warn) when emitFeedback itself rejects', async () => {
+    emitFeedbackMock.mockClear();
+    emitFeedbackMock.mockRejectedValueOnce(new Error('RLS denied'));
+    const errorFn = vi.fn();
+    const logger = { log: () => {}, warn: () => {}, error: errorFn };
+
+    const thenFn = vi.fn((cb) => {
+      cb({ error: { message: 'update failed' } });
+      return { catch: vi.fn() };
+    });
+    const sb = {
+      from: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(() => ({ then: thenFn, catch: vi.fn() })),
+    };
+
+    const report = { aggregate_accuracy: 0.5, category_scores: {} };
+    updateAssumptionSetStatus(sb, 'v1', 20, report, logger);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(errorFn).toHaveBeenCalledWith(expect.stringContaining('RLS denied'));
+  });
+
+  it('does not call emitFeedback when the write succeeds', () => {
+    emitFeedbackMock.mockClear();
+    const thenFn = vi.fn((cb) => {
+      cb({ error: null });
+      return { catch: vi.fn() };
+    });
+
+    const sb = {
+      from: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn(() => ({ then: thenFn, catch: vi.fn() })),
+    };
+
+    const report = { aggregate_accuracy: 0.85, category_scores: {} };
+    updateAssumptionSetStatus(sb, 'v1', 20, report, silentLogger);
+
+    expect(emitFeedbackMock).not.toHaveBeenCalled();
   });
 });
 
