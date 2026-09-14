@@ -117,9 +117,15 @@ describe('insertCoordinationRow: Adam-directed untyped-kind guard (QF-20260709-0
   });
 
   it('fails open (allows the send) when no live Adam resolves', async () => {
+    // QF-20260913-426: kind changed from 'coordinator_notice' to 'chairman_heads_up' — the
+    // WARN-only drain-set check below this guard now REFUSES a confident mismatch, and
+    // 'coordinator_notice' is not in DRAIN_SETS.adam (a separate, real gap, out of THIS
+    // ticket's scope). 'chairman_heads_up' is both a typed ADAM_INBOX_KINDS entry (so this
+    // guard's own untyped-kind check is a non-issue regardless of live-Adam resolution) and
+    // drain-recognized, isolating this test's actual target: the no-live-Adam fail-open path.
     const sb = stubSupabase({ adamSessionId: null });
-    const row = { message_type: 'INFO', target_session: ADAM_TARGET, payload: { kind: 'coordinator_notice', body: 'fyi' } };
+    const row = { message_type: 'INFO', target_session: ADAM_TARGET, payload: { kind: 'chairman_heads_up', body: 'fyi' } };
     const res = await insertCoordinationRow(sb, row, { logger: silentLog });
-    expect(res.data.payload.kind).toBe('coordinator_notice');
+    expect(res.data.payload.kind).toBe('chairman_heads_up');
   });
 });

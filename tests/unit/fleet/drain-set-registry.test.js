@@ -15,6 +15,7 @@ import {
   resolveRecognizedKinds,
   assertRegistryTablesExist,
   warnIfUndrainedKindViaRegistry,
+  checkKindDrainedByRole,
 } from '../../../lib/fleet/drain-set-registry.js';
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..');
@@ -52,6 +53,9 @@ const RECONCILIATION_MIGRATION_PATHS = [
   // QF-20260911-078: notification_permission_wait's two split siblings, coordinator-only (same
   // addressee, same gap class as the line above if left unregistered).
   path.join(REPO_ROOT, 'database/migrations/20260911_role_drain_sets_add_notification_split_kinds.sql'),
+  // QF-20260913-426: sweep_escalation_decision, coordinator-only — an actionable ask (unlike its
+  // fire-once-alarm siblings) that was never registered when its sending mechanism shipped.
+  path.join(REPO_ROOT, 'database/migrations/20260913_role_drain_sets_add_sweep_escalation_decision.sql'),
 ];
 
 describe('resolveRecognizedKinds (TS-3: fail-open byte-identical to DRAIN_SETS)', () => {
@@ -143,6 +147,56 @@ describe('warnIfUndrainedKindViaRegistry: unrecognized-role guard (adversarial r
   });
 });
 
+describe('checkKindDrainedByRole: the shared predicate (QF-20260913-426 fix-shape item (a))', () => {
+  it('is NOT applicable for a role not present in DRAIN_SETS -- ambiguous, never a confident verdict', async () => {
+    const result = await checkKindDrainedByRole({ supabase: null, targetRole: 'chairman', kind: 'adam_advisory' });
+    expect(result).toEqual({ applicable: false, drained: false, recognized: [] });
+  });
+
+  it('is NOT applicable for a terminal reply kind, regardless of role', async () => {
+    const { TERMINAL_REPLY_KINDS } = require('../../../lib/fleet/worker-status.cjs');
+    const result = await checkKindDrainedByRole({ supabase: null, targetRole: 'adam', kind: TERMINAL_REPLY_KINDS[0] });
+    expect(result.applicable).toBe(false);
+  });
+
+  it('is NOT applicable when kind or targetRole is missing', async () => {
+    expect(await checkKindDrainedByRole({ supabase: null, targetRole: 'adam', kind: null })).toEqual({ applicable: false, drained: false, recognized: [] });
+    expect(await checkKindDrainedByRole({ supabase: null, targetRole: null, kind: 'adam_advisory' })).toEqual({ applicable: false, drained: false, recognized: [] });
+  });
+
+  it('is applicable and drained=true for a known role + a kind that role actually drains', async () => {
+    const result = await checkKindDrainedByRole({ supabase: null, targetRole: 'solomon', kind: 'coordinator_request' });
+    expect(result.applicable).toBe(true);
+    expect(result.drained).toBe(true);
+    expect(result.recognized).toContain('coordinator_request');
+  });
+
+  it('is applicable and drained=false for a known role + a kind that role does NOT drain, with the recognized set populated for a caller to name an alternative', async () => {
+    const result = await checkKindDrainedByRole({ supabase: null, targetRole: 'worker', kind: 'adam_advisory' });
+    expect(result.applicable).toBe(true);
+    expect(result.drained).toBe(false);
+    expect(result.recognized.length).toBeGreaterThan(0);
+    expect(result.recognized).not.toContain('adam_advisory');
+  });
+
+  it('no kind in DRAIN_SETS[role] is ever reported undrained when checked against that exact role -- the predicate agrees with its own source of truth for every known role/kind pairing', async () => {
+    for (const role of ['solomon', 'adam', 'coordinator', 'worker', 'michael']) {
+      for (const kind of DRAIN_SETS[role]) {
+        const result = await checkKindDrainedByRole({ supabase: null, targetRole: role, kind });
+        // A kind that is ALSO a terminal reply kind is legitimately non-applicable, not drained=false.
+        if (!result.applicable) continue;
+        expect(result.drained, `${role}/${kind} should be drained`).toBe(true);
+      }
+    }
+  });
+
+  it('warnIfUndrainedKindViaRegistry stays behaviorally identical after delegating to checkKindDrainedByRole', async () => {
+    const warn = vi.fn();
+    expect(await warnIfUndrainedKindViaRegistry({ supabase: null, targetRole: 'worker', kind: 'adam_advisory', log: warn })).toBe(true);
+    expect(warn).toHaveBeenCalledOnce();
+  });
+});
+
 describe('assertRegistryTablesExist (TS-4: canary shape)', () => {
   it('returns {applied:false, table} on a mocked PGRST205-style error, never throws', async () => {
     const supabase = { from: () => ({ select: () => ({ limit: () =>
@@ -190,9 +244,9 @@ describe('Seed data 1:1 parity with live DRAIN_SETS (TS-2)', () => {
     expect(migrationText).toContain("('michael', 'michael_handoff',");
   });
 
-  it('total seed row count for solomon/adam/coordinator/worker/michael is exactly 120 (118 prior rows + 2 new coordinator rows, QF-20260911-078: notification_idle_prompt, notification_usage_limit_reset)', () => {
+  it('total seed row count for solomon/adam/coordinator/worker/michael is exactly 121 (120 prior rows + 1 new coordinator row, QF-20260913-426: sweep_escalation_decision)', () => {
     const seedRowPattern = /^\s*\('(solomon|adam|coordinator|worker|michael)',/gm;
     const matches = migrationText.match(seedRowPattern) || [];
-    expect(matches.length).toBe(120);
+    expect(matches.length).toBe(121);
   });
 });
