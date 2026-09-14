@@ -32,6 +32,23 @@
  *   C7 CONTRACT_MAP_LINT      (hard)     no duplicate stage keys in the
  *                                        STAGE_CONTRACTS Map source (a duplicate key
  *                                        silently discards the first entry).
+ *   C8 DECLARED_CONTENT_KEYS (advisory) SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C
+ *                                        P2.4. A "declared content key" is a
+ *                                        heuristic, PRD-owned working definition
+ *                                        pending chairman disambiguation (zero
+ *                                        prior art for this term anywhere in the
+ *                                        codebase at authoring time): an object
+ *                                        key an analysis-step producer returns
+ *                                        from its top-level `return { ... }`
+ *                                        block. This check flags a declared key
+ *                                        that is never referenced (property
+ *                                        access or destructuring) anywhere else
+ *                                        under lib/eva/ -- a candidate orphaned
+ *                                        producer field. review_by: 2026-12-01.
+ *                                        FILESYSTEM-ONLY -- runs even when
+ *                                        SUPABASE_SERVICE_ROLE_KEY is absent (see
+ *                                        main()'s partial-mode branch), unlike
+ *                                        C1-C6 which need live DB rows.
  *
  * Exit codes (bracket-tokenized markers per LEO convention):
  *   0 + [STAGE_CONTRACT_OK]          — all hard checks green
@@ -95,6 +112,7 @@ export const CHECK_IDS = Object.freeze({
   C5: 'LEGACY_PARITY',
   C6: 'OBSERVED_PRODUCER',
   C7: 'CONTRACT_MAP_LINT',
+  C8: 'DECLARED_CONTENT_KEYS',
 });
 
 // ── shared helpers ───────────────────────────────────────────────────
@@ -393,9 +411,80 @@ export function checkContractMapLint(sourceText) {
   return failures;
 }
 
+// ── C8 DECLARED_CONTENT_KEYS (advisory) ───────────────────────────────
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C P2.4. See module docblock for the
+// working definition and its chairman-routing status. FILESYSTEM-ONLY: these
+// three functions read only source text, never the DB.
+
+/**
+ * Heuristic extraction of the immediate keys of every top-level `return { ... }`
+ * block in a JS source string. Deliberately regex-based (matching this file's
+ * own C7 CONTRACT_MAP_LINT precedent) rather than an AST parse -- advisory-only,
+ * so an over- or under-collected key costs nothing but a slightly noisier
+ * advisory report, never a build failure.
+ */
+export function extractDeclaredContentKeys(sourceText) {
+  const text = String(sourceText || '');
+  const keys = new Set();
+  const returnBlockRe = /return\s*\{([\s\S]*?)\n\s*\};/g;
+  let block;
+  while ((block = returnBlockRe.exec(text))) {
+    for (const line of block[1].split('\n')) {
+      const trimmed = line.trim();
+      const m = trimmed.match(/^([A-Za-z_$][\w$]*)\s*[:,]/) || trimmed.match(/^([A-Za-z_$][\w$]*)\s*$/);
+      if (m) keys.add(m[1]);
+    }
+  }
+  return [...keys];
+}
+
+/**
+ * Identifiers referenced as a property access (`.foo`) or a destructuring
+ * target (`{ foo } = ...` / `{ foo, bar }`) across a set of source texts.
+ * Used as the "declared consumed key" side of C8's heuristic.
+ */
+export function collectReferencedIdentifiers(sourceTexts) {
+  const refs = new Set();
+  for (const { source } of sourceTexts || []) {
+    const text = String(source || '');
+    let m;
+    const propRe = /\.([A-Za-z_$][\w$]*)\b/g;
+    while ((m = propRe.exec(text))) refs.add(m[1]);
+    const destructureRe = /\{\s*([A-Za-z_$][\w$]*(?:\s*,\s*[A-Za-z_$][\w$]*)*)\s*\}\s*=/g;
+    while ((m = destructureRe.exec(text))) {
+      for (const part of m[1].split(',')) {
+        const name = part.trim().split(':')[0].trim();
+        if (/^[A-Za-z_$][\w$]*$/.test(name)) refs.add(name);
+      }
+    }
+  }
+  return refs;
+}
+
+/**
+ * ADVISORY: a declared content key with no reference anywhere in the supplied
+ * reference index is reported as a possible orphaned producer field. Never
+ * fails the build.
+ */
+export function checkDeclaredContentKeys(perFileDeclaredKeys, referencedIdentifiers) {
+  const advisories = [];
+  for (const { file, keys } of perFileDeclaredKeys || []) {
+    for (const key of keys) {
+      if (referencedIdentifiers.has(key)) continue;
+      advisories.push(failure({
+        check: CHECK_IDS.C8, stage: null, artifact_type: key,
+        expected: `a reference (property access or destructuring) to declared content key '${key}' somewhere under lib/eva/`,
+        got: `no reference found outside ${file}`,
+        nearest_match: null,
+      }));
+    }
+  }
+  return advisories;
+}
+
 // ── aggregation ──────────────────────────────────────────────────────
 
-export function runAllChecks({ ventureStages, boundaries, legacyRows, observedTypes, maxTraversedStage, stageContractsSource }) {
+export function runAllChecks({ ventureStages, boundaries, legacyRows, observedTypes, maxTraversedStage, stageContractsSource, declaredContentKeysInputs }) {
   const failures = [];
   const advisories = [];
 
@@ -416,6 +505,13 @@ export function runAllChecks({ ventureStages, boundaries, legacyRows, observedTy
   failures.push(...checkLegacyParity(legacyRows, ventureStages));
   advisories.push(...checkObservedProducer(ventureStages, observedTypes, maxTraversedStage));
   failures.push(...checkContractMapLint(stageContractsSource));
+
+  if (declaredContentKeysInputs) {
+    advisories.push(...checkDeclaredContentKeys(
+      declaredContentKeysInputs.perFileDeclaredKeys,
+      declaredContentKeysInputs.referencedIdentifiers,
+    ));
+  }
 
   const perCheck = {};
   for (const f of failures) perCheck[f.check] = (perCheck[f.check] || 0) + 1;
@@ -462,6 +558,51 @@ async function loadObserved(supabase) {
   return { observedTypes, maxTraversedStage };
 }
 
+const ANALYSIS_STEPS_DIR = path.resolve(__dirname, '..', 'lib', 'eva', 'stage-templates', 'analysis-steps');
+const EVA_DIR = path.resolve(__dirname, '..', 'lib', 'eva');
+
+/**
+ * C8 input loader — FILESYSTEM-ONLY, no DB. Reads every analysis-step file for
+ * its declared content keys, and every .js file under lib/eva/ (excluding
+ * __tests__/) to build the reference index those keys are checked against.
+ */
+function loadDeclaredContentKeysInputs() {
+  const stepFiles = fs.readdirSync(ANALYSIS_STEPS_DIR).filter((f) => f.endsWith('.js') && f !== 'index.js');
+  const perFileDeclaredKeys = [];
+  for (const f of stepFiles) {
+    const source = fs.readFileSync(path.join(ANALYSIS_STEPS_DIR, f), 'utf8');
+    const keys = extractDeclaredContentKeys(source);
+    if (keys.length > 0) {
+      perFileDeclaredKeys.push({ file: `lib/eva/stage-templates/analysis-steps/${f}`, keys });
+    }
+  }
+
+  const evaFiles = fs.readdirSync(EVA_DIR, { recursive: true })
+    .filter((f) => f.endsWith('.js'))
+    .filter((f) => !f.includes('__tests__'))
+    .map((f) => path.join(EVA_DIR, f));
+  const sourceTexts = evaFiles.map((f) => ({ file: f, source: fs.readFileSync(f, 'utf8') }));
+  const referencedIdentifiers = collectReferencedIdentifiers(sourceTexts);
+
+  return { perFileDeclaredKeys, referencedIdentifiers };
+}
+
+/** FILESYSTEM-ONLY checks (C7 + C8) — runnable with no DB credentials at all. */
+function runFilesystemOnlyChecks() {
+  const stageContractsSource = fs.readFileSync(STAGE_CONTRACTS_SOURCE_PATH, 'utf8');
+  const failures = checkContractMapLint(stageContractsSource);
+  const { perFileDeclaredKeys, referencedIdentifiers } = loadDeclaredContentKeysInputs();
+  const advisories = checkDeclaredContentKeys(perFileDeclaredKeys, referencedIdentifiers);
+  return {
+    ok: failures.length === 0,
+    failures,
+    advisories,
+    summary: failures.length === 0
+      ? `OK (filesystem-only: C7+C8 -- SUPABASE_SERVICE_ROLE_KEY absent, C1-C6 skipped): ${advisories.length} advisory(ies)`
+      : `DRIFT (filesystem-only: C7+C8 -- SUPABASE_SERVICE_ROLE_KEY absent, C1-C6 skipped): ${failures.length} hard failure(s)`,
+  };
+}
+
 async function main() {
   const jsonMode = process.argv.includes('--json');
   const out = jsonMode ? console.error : console.log; // human lines; in --json mode everything human goes to stderr
@@ -469,8 +610,30 @@ async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    console.error('[STAGE_CONTRACT_INFRA_ERROR] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-    process.exit(2);
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C P2.4: previously this hard-exited
+    // 2 before ANY check ran, so C7/C8 (both filesystem-only) never got to run on
+    // a forked PR without secrets. Now: run the filesystem-only checks and report
+    // them; only C1-C6 (which genuinely need live DB rows) are skipped.
+    console.error('[STAGE_CONTRACT_PARTIAL] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY -- running filesystem-only checks (C7, C8); C1-C6 skipped');
+    const result = runFilesystemOnlyChecks();
+    if (jsonMode) {
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    } else {
+      if (result.failures.length > 0) {
+        out('Hard failures:');
+        for (const f of result.failures) out(renderFailureLine(f));
+      }
+      if (result.advisories.length > 0) {
+        out('Advisories (non-blocking):');
+        for (const a of result.advisories) out(renderFailureLine(a));
+      }
+    }
+    if (!result.ok) {
+      console.error('[STAGE_CONTRACT_DRIFT]', result.summary);
+      process.exit(1);
+    }
+    (jsonMode ? console.error : console.log)('[STAGE_CONTRACT_OK]', result.summary);
+    process.exit(0);
   }
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
@@ -506,6 +669,7 @@ async function main() {
     observedTypes: observed.observedTypes,
     maxTraversedStage: observed.maxTraversedStage,
     stageContractsSource,
+    declaredContentKeysInputs: loadDeclaredContentKeysInputs(),
   });
 
   if (jsonMode) {

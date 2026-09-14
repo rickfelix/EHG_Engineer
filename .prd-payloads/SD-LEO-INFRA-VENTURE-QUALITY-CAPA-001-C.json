@@ -1,0 +1,208 @@
+{
+  "executive_summary": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C closes root cause B (the preventive half; -I already shipped the corrective half) of the chairman-ratified Venture Quality Review Programme (ratification 0afc86e4): a producer/reader wiring gate with no blanket escape hatch, so a new analysis step cannot silently ship undispatched and an exemption cannot silently outlive its reason. Four parts, each re-verified against current code by a VALIDATION and a RISK sub-agent (evidence rows 32e78fc4-af04-4cfd-9dce-181c7b7dd505 and c185874e-f8ed-4afc-9ae2-5480f032bb4d) after the original scope text was found to contain three separately-wrong premises: (1) P2.1 -- a producer directive's definition of done requires its reader wired AND an activation test spanning producer->stage-dispatch->reader, authored in the DEFAULT unit/integration tier with injected fakes so it does not inherit GATE_ACTIVATION_INVARIANT's known-unsatisfiable-in-CI trap (no workflow sets VITEST_DB_ALLOW_REF today). (2) P2.2 -- WIRE_CHECK_GATE's blanket lib/eva/stage-templates/ exemption is replaced by a dispatch-registry check, shipped advisory-first because the premise 'every analysis step has exactly one static dispatching template' is FALSE: 18 (of the 51 total analysis-step exports) are additionally reachable via the DEAD lib/eva/stage-templates/analysis-steps/index.js getAnalysisStep/getAcquirabilityStep maps (zero real callers, confirmed independently), and at least 4 more production files import analysis-step modules directly outside any stage-NN.js chain. (3) P2.3 -- the @wire-check-exempt marker (scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js:72) gains a required SD-key + expiry with a CI retire-check inheriting SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-B's corrected fail-CLOSED waiver semantics, via one new shared grammar module consumed by BOTH wire-check-gate.js and the previously-undocumented second reader scripts/modules/handoff/executors/exec-to-plan/gates/wire-check-advisory.js:38 (which today does not check the marker at all -- a real behavior gap, not a documented duplication). The real marker corpus is 124 occurrences/91 files, non-uniform (only ~70 of 74 'exempt'-reading occurrences are canonical; 6 files carry a marker beyond the gate's 2KB read window). Migration is additive, never a mass rewrite. (4) P2.4 -- stage-contract-connectivity.mjs gains check C8 (there is no existing C12; checks today are C1-C7) for 'declared content keys', a concept with zero prior art in the codebase; ships advisory, with the working definition recorded as an explicit PRD-owned assumption carrying a real review_by date, and the disambiguation routed to the chairman via Adam. Excluded: wiring any individual producer (covered by sibling -I).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "P2.1 -- producer/reader definition-of-done + activation test, unit-tier only",
+      "description": "A producer directive is not 'done' until (a) its reader/consumer is wired (imports and uses the producer's output) and (b) an activation test exists asserting the full producer -> stage-dispatch -> reader chain, written with injected fakes in the DEFAULT unit/integration test tier (no live Supabase connection). This deliberately does NOT reuse or extend GATE_ACTIVATION_INVARIANT (scripts/modules/handoff/executors/lead-final-approval/gates/activation-invariant-gate.js) as the enforcement point, because RISK found that gate's TESTING-row limb needs a live DB ref no CI workflow provisions (VITEST_DB_ALLOW_REF is unset everywhere), making its own sanctioned path today actually a bypass token (ACTIV-CHAIN-DEFERRED). The new rule ships as a documented authoring convention plus a lint/gate that checks for the PRESENCE of such a test file alongside a new producer/reader pair, not as an extension of the existing DB-dependent gate.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A documented definition-of-done convention exists (in CLAUDE_PLAN.md or an equivalent authoritative location) stating: reader wired + activation test required, unit-tier with injected fakes.",
+        "A reference activation test exists for at least one real producer/reader pair added or touched by this SD's own P2.2/P2.3 work, demonstrating the pattern end-to-end in CI without any live-DB dependency.",
+        "The new convention's enforcement mechanism cites zero dependency on VITEST_DB_ALLOW_REF or any other live-DB-only gate flag."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "P2.2 -- WIRE_CHECK dispatch-registry check, advisory-first, models both dispatch mechanisms",
+      "description": "Add a dispatch registry (a new data structure, e.g. lib/eva/stage-templates/dispatch-registry.js) enumerating every legitimate way an analysis-step module under lib/eva/stage-templates/analysis-steps/ is reached: (a) the 27 stage-NN.js files' static `TEMPLATE.analysisStep = analyzeStageNN` assignments after a static import (verified: all 27 stage-01.js..stage-27.js contain at least one such import, e.g. stage-24.js:20 imports analyzeStage23LaunchReadiness from ./analysis-steps/stage-23-launch-readiness.js -- note the stage-number-skewed filename, an existing quirk the registry's key design must not choke on); (b) the 4 confirmed cross-cutting production consumers outside the stage-NN.js chain: lib/eva/chairman-product-review.js:20-22 (static), lib/eva/wireframe-surface-normalizer.js:17 (static), lib/eva/stage-17/archetype-generator.js:27 (static, same target file as the previous), lib/eva/stage-handlers/s17.js:114+174 (2 dynamic import() call sites in one file). The dead lib/eva/stage-templates/analysis-steps/index.js getAnalysisStep/getAcquirabilityStep maps (zero external callers found anywhere in lib/, scripts/, server/) are a DELETION candidate for a follow-up, not something this registry models as a live dispatch path. Ship as an in-script hard/advisory split: the BLOCKING limb only asserts every registry entry resolves to a real, existing file (trivially true by construction); the ADVISORY limb reports any analysis-step file with zero or more-than-one registry entry. The existing blanket regex exemption in WIRE_CHECK_GATE for lib/eva/stage-templates/** is explicitly NOT removed in this SD -- it is retired in a later, separate PR once the registry has run advisory for a bake-in period and is proven complete.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The dispatch registry enumerates all 27 stage-NN.js static dispatch sites plus the 4 named cross-cutting external consumers (6 call sites total across those 4 files).",
+        "The registry's blocking limb passes in CI (every entry resolves to a real file) without touching the existing blanket exemption.",
+        "The registry's advisory limb, run against the current codebase, reports its findings without failing the build.",
+        "The blanket lib/eva/stage-templates/** regex exemption in wire-check-gate.js is unchanged by this SD (removal is explicitly out of scope, tracked as a follow-up)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "P2.3 -- @wire-check-exempt SD-key + expiry, shared grammar module, fail-closed retire-check",
+      "description": "Extract the marker-matching logic (today WIRE_CHECK_EXEMPT_MARKER regex + hasWireCheckExemptMarker, both in scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js:72) into a new shared module (e.g. lib/wire-check/exempt-marker-grammar.js, alongside the existing lib/static-analysis/ convention both gates already share identically). The NEW marker format requires an SD-key and an expiry date, e.g. `@wire-check-exempt SD-KEY-001 expires:2026-12-01`, accepted ADDITIVELY alongside the deprecated bare `@wire-check-exempt` marker (each with its own sunset date -- never a single mass find/replace, since the real corpus is 124 occurrences across 91 files with non-uniform comment styles: line vs block vs a third rarer style, ~4 accidental prose matches in 2 files, and 6 files where a marker sits beyond the gate's current 2KB read-window and is today silently invisible, one containing NUL bytes). Both scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js AND the previously-unnamed second reader scripts/modules/handoff/executors/exec-to-plan/gates/wire-check-advisory.js:38 (which imports only isExcludedFromWireCheck today and does NOT check the exempt marker at all -- files marked exempt at LEAD-FINAL are currently still falsely flagged, advisory-only, at EXEC-TO-PLAN) consume the one shared grammar module. Split isExemptionActive() (gate-side; honors a grace window so a sudden fail-closed flip does not redden CI fleet-wide in one commit) from isExemptionCompliant() (retire-check-side; strict fail-closed on missing/malformed expiry, inheriting SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-B's corrected isWaiverActive semantics) -- these are deliberately two different functions with two different consequences (suppressing the reachability check vs failing CI), not one shared boolean. As part of the same 'agree on fail-closed' correction, fix scripts/lint/quarantine-retire-check.mjs's own findOverdueEntries (scripts/lint/quarantine-retire-check.mjs:62), which today fails OPEN on a missing/non-finite review_by -- the same bug class -B fixed in isWaiverActive -- with the same small (~2 line) fail-closed correction, so the two enforcers agree.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A new shared grammar module exists, exporting the marker-parsing logic; both wire-check-gate.js and wire-check-advisory.js import it (not duplicate it).",
+        "wire-check-advisory.js's filter chain checks the exempt marker for the first time (closing the parity gap documented above).",
+        "The new SD-key+expiry marker format is recognized additively alongside the deprecated bare marker; no existing @wire-check-exempt occurrence is mass-rewritten by this SD.",
+        "isExemptionActive (gate-side, grace-windowed) and isExemptionCompliant (retire-check-side, fail-closed) are two distinct, separately-tested functions.",
+        "scripts/lint/quarantine-retire-check.mjs's findOverdueEntries is corrected to fail closed on a missing or malformed review_by, matching -B's isWaiverActive fix pattern."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "P2.4 -- stage-contract-connectivity check C8 for 'declared content keys', advisory, chairman-routed definition",
+      "description": "scripts/validate-stage-contract-connectivity.mjs's existing CHECK_IDS run C1 through C7 only; there is no C12 (the original scope text's reference to 'C12' is a confirmed-wrong premise). Add check C8, advisory (matching the existing C6 advisory precedent), for 'declared content keys' -- a term with zero prior art anywhere in the codebase today. This SD ships a working, PRD-owned definition: a producer's declared content keys are the object keys it writes into a stage artifact; a reader's declared consumed keys are the keys it reads from that artifact; C8 reports (advisory only) any producer-declared key with no reader that consumes it, and any reader-declared consumed key with no producer that writes it. This definition carries a review_by date of 2026-12-01 and is explicitly flagged in the doc as an assumption pending chairman disambiguation, routed via Adam with the shipped advisory counts attached (per SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-B's waiver-and-route precedent) -- it is not a LEAD blocker. Separately, extend scripts/.github/workflows/stage-contract-connectivity.yml's path filter (which today does not cover lib/eva/stage-templates/** or lib/eva/stage-templates/analysis-steps/** at all) to include those paths, and remove the workflow's hard dependency on SUPABASE_SERVICE_ROLE_KEY for the NEW filesystem-only checks (C8 and any other pure-lint check) so a forked PR without secrets does not hard-exit 2 before those checks can run.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Check C8 exists in scripts/validate-stage-contract-connectivity.mjs's CHECK_IDS, runs advisory (does not fail CI), and reports both missing-reader and missing-producer key mismatches under the PRD's stated definition.",
+        "The working definition of 'declared content key' is written into the shipped doc as an explicit, owned assumption with review_by: 2026-12-01, not silently treated as settled.",
+        "A chairman-routing note (via Adam) is sent or logged, carrying the shipped C8 advisory finding counts, asking for disambiguation -- not gating this SD's own completion.",
+        "stage-contract-connectivity.yml's path filter is extended to include lib/eva/stage-templates/** and lib/eva/stage-templates/analysis-steps/**.",
+        "C8 (and any other new pure-filesystem check added by this SD) runs without requiring SUPABASE_SERVICE_ROLE_KEY."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No blanket-exemption removal in this SD",
+      "description": "The existing lib/eva/stage-templates/** regex exemption in wire-check-gate.js stays in place through this SD's entire scope. Its removal is a separate, later PR gated on the dispatch registry (FR-2) running advisory for a bake-in period with zero unexplained gaps."
+    },
+    {
+      "id": "TR-2",
+      "title": "No mass rewrite of existing @wire-check-exempt occurrences",
+      "description": "All 124 occurrences across 91 files are left as-is except where a file is independently touched by other work in this SD. The new SD-key+expiry format and the deprecated bare format coexist, each with its own sunset date recorded in the shared grammar module's own docs."
+    },
+    {
+      "id": "TR-3",
+      "title": "quarantine-retire-check.mjs fail-closed fix is a small, isolated diff",
+      "description": "The findOverdueEntries correction (~2 lines, matching -B's isWaiverActive fix shape: missing/malformed/non-finite review_by all fail closed) is scoped tightly -- no other behavior in that file changes."
+    },
+    {
+      "id": "TR-4",
+      "title": "C8 and P2.1's activation-test convention introduce no new live-DB CI dependency",
+      "description": "Neither FR-1's activation-test convention nor FR-4's C8 check requires a live Supabase connection, a service-role key, or any flag resembling VITEST_DB_ALLOW_REF -- both are pure code/filesystem checks by design, specifically to avoid GATE_ACTIVATION_INVARIANT's known unsatisfiable-in-CI trap."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Dispatch registry blocking limb passes against the real codebase on day one",
+      "type": "unit",
+      "expected": "Every registry entry (27 stage-NN.js static sites + 6 cross-cutting call sites across the 4 named external files) resolves to a file that actually exists; the blocking limb is green with zero changes to production code."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Dispatch registry advisory limb characterizes the known dead map and any genuinely unregistered analysis-step file",
+      "type": "unit",
+      "expected": "The advisory limb, run against the real tree, does not fail the build and its report is inspectable; the dead lib/eva/stage-templates/analysis-steps/index.js dynamic maps are not required to be in the registry (or are explicitly annotated dead, not modeled as reachable)."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Shared grammar module: both readers agree on a file with only the NEW SD-key+expiry marker format",
+      "type": "unit",
+      "expected": "wire-check-gate.js's hasWireCheckExemptMarker-equivalent AND wire-check-advisory.js's (newly added) marker check both recognize the file as exempt -- closing the previously-confirmed parity gap."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Shared grammar module: a file with only the deprecated bare marker still passes (additive migration)",
+      "type": "unit",
+      "expected": "Both readers still recognize the bare @wire-check-exempt marker as exempt; no existing file's exemption silently breaks."
+    },
+    {
+      "id": "TS-5",
+      "scenario": "isExemptionActive (gate-side) vs isExemptionCompliant (retire-check-side) diverge correctly on an expired SD-key marker",
+      "type": "unit",
+      "expected": "isExemptionActive still honors the grace window (does not immediately un-suppress the reachability check); isExemptionCompliant fails closed (the retire-check reports it as overdue) -- demonstrating the two functions are genuinely distinct, not aliases."
+    },
+    {
+      "id": "TS-6",
+      "scenario": "quarantine-retire-check.mjs findOverdueEntries fails closed on missing/malformed review_by",
+      "type": "unit",
+      "expected": "An entry with review_by: null, an unparseable string, or absent entirely is now reported as overdue (previously: silently treated as never-overdue) -- mirroring -B's isWaiverActive test shape."
+    },
+    {
+      "id": "TS-7",
+      "scenario": "C8 advisory check reports a real, current producer-key/reader-key mismatch or confirms none exists",
+      "type": "integration",
+      "expected": "Run against the current lib/eva/stage-templates tree; the check completes without requiring SUPABASE_SERVICE_ROLE_KEY and does not fail the build regardless of findings."
+    },
+    {
+      "id": "TS-8",
+      "scenario": "P2.1 activation test for a real producer/reader pair runs green in the default unit tier with zero live-DB dependency",
+      "type": "unit",
+      "expected": "The reference activation test (FR-1 AC#2) passes in a plain `npm test` / vitest unit run with no VITEST_DB_ALLOW_REF, no Supabase client, and no network call."
+    }
+  ],
+  "acceptance_criteria": [
+    "A producer/reader definition-of-done convention is documented and demonstrated by one real activation test, entirely in the unit tier with injected fakes.",
+    "A dispatch registry models both the 27 static stage-NN.js dispatch sites and the 4 confirmed cross-cutting external consumers; its blocking limb passes without removing the existing blanket exemption.",
+    "@wire-check-exempt gains an SD-key+expiry format, additive alongside the deprecated bare marker, consumed by one shared grammar module used by BOTH wire-check-gate.js and wire-check-advisory.js (closing their current parity gap).",
+    "isExemptionActive (grace-windowed) and isExemptionCompliant (fail-closed) are distinct functions; quarantine-retire-check.mjs's own findOverdueEntries is corrected to the same fail-closed standard.",
+    "stage-contract-connectivity.mjs gains advisory check C8 for 'declared content keys' with a PRD-owned, dated working definition, routed to the chairman via Adam for disambiguation -- not a LEAD blocker.",
+    "stage-contract-connectivity.yml's path filter covers lib/eva/stage-templates/** and its analysis-steps subtree, and the new filesystem-only checks run without a service-role key."
+  ],
+  "risks": [
+    {
+      "risk": "The dispatch registry ships incomplete (misses one of the 18 dynamically-reachable-in-theory steps, or a cross-cutting consumer), making the blocking limb red for files that are legitimately dispatched.",
+      "mitigation": "In-script hard/advisory split: blocking limb only asserts registry entries resolve to real files (trivially true by construction). Never remove the existing blanket exemption in this SD -- swap only after a proven advisory bake-in period.",
+      "severity": "high"
+    },
+    {
+      "risk": "A mechanical find/replace across the 124 @wire-check-exempt occurrences corrupts non-marker occurrences (the gate's own regex literal, test fixtures, negative assertions) or miscounts markers beyond the 2KB scan window.",
+      "mitigation": "Additive migration only: new SD-key+expiry format recognized alongside the deprecated bare marker via one shared grammar module; zero existing occurrences are mass-rewritten by this SD.",
+      "severity": "high"
+    },
+    {
+      "risk": "Flipping the exempt marker's expiry check to fail-closed on a REQUIRED gate in one commit un-exempts ~70 files at once and reddens CI fleet-wide.",
+      "mitigation": "Split isExemptionActive (gate-side, grace-windowed) from isExemptionCompliant (retire-check-side, strict fail-closed) so the consequence differs by call site; no single flip changes both.",
+      "severity": "high"
+    },
+    {
+      "risk": "The new producer/reader activation-test requirement (P2.1) inherits GATE_ACTIVATION_INVARIANT's known-unsatisfiable-in-CI trap (needs a live DB ref no workflow provisions).",
+      "mitigation": "Author the activation test in the default unit/integration tier with injected fakes -- pure wiring assertion, no DB -- and do not extend or reuse GATE_ACTIVATION_INVARIANT as the enforcement mechanism.",
+      "severity": "high"
+    },
+    {
+      "risk": "'Declared content key' has zero prior art; PLAN/EXEC invents a definition that does not match chairman/CAPA-plan intent, especially since the scope text's own 'C12' reference was already confirmed wrong.",
+      "mitigation": "Ship C8 advisory only (matching the C6 precedent); record the working definition as an explicit, dated, owned PRD assumption; route disambiguation to the chairman via Adam with the shipped advisory counts attached -- never a LEAD blocker.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js (P2.2, P2.3 -- consumes the new dispatch registry and the new shared grammar module)",
+      "scripts/modules/handoff/executors/exec-to-plan/gates/wire-check-advisory.js (P2.3 -- newly consumes the shared grammar module; previously had no marker check at all)",
+      "scripts/lint/quarantine-retire-check.mjs (P2.3 -- receives the fail-closed findOverdueEntries fix)",
+      "scripts/validate-stage-contract-connectivity.mjs (P2.4 -- gains check C8)",
+      ".github/workflows/stage-contract-connectivity.yml (P2.4 -- path filter extended)",
+      "27 lib/eva/stage-templates/stage-NN.js files + lib/eva/chairman-product-review.js, lib/eva/wireframe-surface-normalizer.js, lib/eva/stage-17/archetype-generator.js, lib/eva/stage-handlers/s17.js (P2.2 -- enumerated as dispatch-registry entries, not modified)"
+    ],
+    "dependencies": [
+      "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-B (merged, PR #8934/#8931) -- the isWaiverActive fail-closed pattern this SD's isExemptionCompliant and quarantine-retire-check.mjs fixes both inherit",
+      "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-I (corrective half of root cause B -- wires individual producers; explicitly out of scope here)"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Four independent, advisory-first additions to existing gate/lint infrastructure: a new dispatch-registry data structure, a new shared exempt-marker grammar module consumed by two existing gate readers, a small fail-closed correction to an existing retire-check script, and one new advisory connectivity check plus a CI workflow path-filter fix.",
+    "components": [
+      { "name": "lib/eva/stage-templates/dispatch-registry.js", "change": "NEW -- enumerates static + cross-cutting analysis-step dispatch sites" },
+      { "name": "lib/wire-check/exempt-marker-grammar.js", "change": "NEW -- shared marker parsing (SD-key+expiry format, additive alongside the deprecated bare marker)" },
+      { "name": "scripts/modules/handoff/executors/lead-final-approval/gates/wire-check-gate.js", "change": "MODIFIED -- imports the dispatch registry (advisory) and the shared grammar module; blanket exemption unchanged" },
+      { "name": "scripts/modules/handoff/executors/exec-to-plan/gates/wire-check-advisory.js", "change": "MODIFIED -- newly imports and applies the shared grammar module's marker check" },
+      { "name": "scripts/lint/quarantine-retire-check.mjs", "change": "MODIFIED -- findOverdueEntries fail-closed fix (~2 lines)" },
+      { "name": "scripts/validate-stage-contract-connectivity.mjs", "change": "MODIFIED -- adds advisory check C8" },
+      { "name": ".github/workflows/stage-contract-connectivity.yml", "change": "MODIFIED -- path filter extended, new checks run without SUPABASE_SERVICE_ROLE_KEY" },
+      { "name": "docs (definition-of-done convention + declared-content-key working definition)", "change": "NEW -- documents FR-1's convention and FR-4's dated, chairman-routed assumption" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Ship the two lower-risk, self-contained pieces first (the fail-closed retire-check fix and the C8 advisory check), then the dispatch registry (advisory-first, no exemption removal), then the shared grammar module + SD-key/expiry marker format (additive), then document and demonstrate the P2.1 activation-test convention using a real pair from this SD's own new code.",
+    "steps": [
+      "1. Fix scripts/lint/quarantine-retire-check.mjs's findOverdueEntries to fail closed on missing/malformed review_by (small, isolated, immediately testable).",
+      "2. Add stage-contract-connectivity.mjs check C8 (advisory) with the PRD-owned working definition, extend the workflow path filter, remove the new checks' SUPABASE_SERVICE_ROLE_KEY dependency; route the definition to the chairman via Adam.",
+      "3. Build lib/eva/stage-templates/dispatch-registry.js enumerating the 27 static + 4 cross-cutting external consumers; wire it into wire-check-gate.js as an advisory report only, leaving the blanket exemption untouched.",
+      "4. Extract the marker grammar into lib/wire-check/exempt-marker-grammar.js; add the SD-key+expiry format additively; wire wire-check-advisory.js to consume it for the first time; split isExemptionActive/isExemptionCompliant.",
+      "5. Document the P2.1 definition-of-done convention and add one reference activation test covering a real pair touched by steps 1-4, entirely in the unit tier with injected fakes.",
+      "6. Run the full CI predicate suite plus the existing WIRE_CHECK/quarantine/stage-contract-connectivity test suites to confirm zero regressions and zero newly-red required checks."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the dispatch-registry blocking limb against the real repo", "expected_outcome": "Passes; zero production files changed by the registry's mere existence." },
+    { "step_number": 2, "instruction": "Mark a fixture file with only the new SD-key+expiry format and query both wire-check-gate.js and wire-check-advisory.js", "expected_outcome": "Both readers agree the file is exempt." },
+    { "step_number": 3, "instruction": "Set a fixture exemption's expiry in the past and run the retire-check", "expected_outcome": "isExemptionCompliant reports it overdue; isExemptionActive still honors its grace window rather than immediately failing the reachability check." },
+    { "step_number": 4, "instruction": "Run stage-contract-connectivity.mjs including C8 on a forked-PR-style environment with no SUPABASE_SERVICE_ROLE_KEY set", "expected_outcome": "C8 (and other new filesystem-only checks) still run and report; the workflow does not hard-exit 2." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C"
+  }
+}

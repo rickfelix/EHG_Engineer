@@ -36,6 +36,7 @@ import {
   discoverEntryPoints,
   getScopedJsFiles,
   isExcludedFromWireCheck,
+  hasWireCheckExemptMarker,
   // sibling-import-allowed: advisory leg consumes the CANONICAL wire-check engine whole — same implementation at two phases, no policy fork to drift (SD-PAT-FIX-WRITER-CONSUMER-ASYMMETRY-001)
 } from '../../lead-final-approval/gates/wire-check-gate.js';
 
@@ -116,7 +117,14 @@ export function createWireCheckAdvisoryGate(_supabase) {
           .filter((f) => f.startsWith('lib/') || f.startsWith('scripts/'))
           .filter((f) => !f.includes('/tmp-') && !f.includes('/.tmp-'))
           .map((f) => f.replace(/\\/g, '/'))
-          .filter((f) => !isExcludedFromWireCheck(f));
+          .filter((f) => !isExcludedFromWireCheck(f))
+          // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C (P2.3): previously this advisory
+          // gate never checked the @wire-check-exempt marker at all, so a file
+          // exempted at LEAD-FINAL was still falsely flagged unreachable here. Now
+          // consumes the SAME shared grammar the blocking gate uses (via
+          // hasWireCheckExemptMarker, which delegates to lib/wire-check/
+          // exempt-marker-grammar.js), closing that parity gap.
+          .filter((f) => !hasWireCheckExemptMarker(path.resolve(rootDir, f)));
       } catch (err) {
         // ADVISORY: unlike the blocking gate (which fails closed), a diff failure
         // here must NOT block — surface it as a warning and pass.

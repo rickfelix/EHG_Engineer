@@ -21,6 +21,9 @@ import {
   checkLegacyParity,
   checkObservedProducer,
   checkContractMapLint,
+  extractDeclaredContentKeys,
+  collectReferencedIdentifiers,
+  checkDeclaredContentKeys,
   runAllChecks,
 } from '../../../scripts/validate-stage-contract-connectivity.mjs';
 import { ARTIFACT_TYPE_BY_STAGE } from '../../../lib/eva/artifact-types.js';
@@ -285,6 +288,73 @@ describe('C7 CONTRACT_MAP_LINT', () => {
   it('ignores numeric arrays that are not Map entries (CROSS_STAGE_DEPS style)', () => {
     const src = 'const DEPS = {\n  14: [1, 13],\n  15: [1, 6, 10],\n};';
     expect(checkContractMapLint(src)).toEqual([]);
+  });
+});
+
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C P2.4 (TS-7): C8 DECLARED_CONTENT_KEYS
+describe('C8 DECLARED_CONTENT_KEYS (advisory)', () => {
+  describe('extractDeclaredContentKeys', () => {
+    it('collects the immediate keys of a top-level return block (colon and shorthand forms)', () => {
+      const src = 'export function analyzeX() {\n  return {\n    foo: 1,\n    bar,\n  };\n}';
+      expect(extractDeclaredContentKeys(src)).toEqual(['foo', 'bar']);
+    });
+
+    it('returns an empty list when there is no return object', () => {
+      expect(extractDeclaredContentKeys('export function f() { return 1; }')).toEqual([]);
+    });
+
+    it('handles undefined/empty input without throwing', () => {
+      expect(extractDeclaredContentKeys(undefined)).toEqual([]);
+      expect(extractDeclaredContentKeys('')).toEqual([]);
+    });
+  });
+
+  describe('collectReferencedIdentifiers', () => {
+    it('collects property-access identifiers', () => {
+      const refs = collectReferencedIdentifiers([{ source: 'console.log(result.foo, other.bar);' }]);
+      expect(refs.has('foo')).toBe(true);
+      expect(refs.has('bar')).toBe(true);
+    });
+
+    it('collects destructured identifiers', () => {
+      const refs = collectReferencedIdentifiers([{ source: 'const { foo, bar } = producerResult;' }]);
+      expect(refs.has('foo')).toBe(true);
+      expect(refs.has('bar')).toBe(true);
+    });
+  });
+
+  describe('checkDeclaredContentKeys', () => {
+    it('flags a declared key with no reference anywhere in the index', () => {
+      const perFileDeclaredKeys = [{ file: 'producer.js', keys: ['orphan_key'] }];
+      const referencedIdentifiers = new Set(['other_key']);
+      const advisories = checkDeclaredContentKeys(perFileDeclaredKeys, referencedIdentifiers);
+      expect(advisories).toHaveLength(1);
+      expect(advisories[0]).toMatchObject({ check: CHECK_IDS.C8, artifact_type: 'orphan_key' });
+    });
+
+    it('does not flag a declared key that IS referenced', () => {
+      const perFileDeclaredKeys = [{ file: 'producer.js', keys: ['used_key'] }];
+      const referencedIdentifiers = new Set(['used_key']);
+      expect(checkDeclaredContentKeys(perFileDeclaredKeys, referencedIdentifiers)).toEqual([]);
+    });
+
+    it('never blocks: runAllChecks folds C8 advisories into `advisories`, never `failures`', () => {
+      const result = runAllChecks({
+        ventureStages: [{ stage_number: 18, required_artifacts: ['marketing_tagline'] }],
+        boundaries: [],
+        legacyRows: [{ stage_number: 18, artifact_type: 'marketing_tagline' }],
+        observedTypes: new Set(['marketing_tagline']),
+        maxTraversedStage: 23,
+        stageContractsSource: 'new Map([\n  [20, {\n  }],\n]);',
+        declaredContentKeysInputs: {
+          perFileDeclaredKeys: [{ file: 'producer.js', keys: ['orphan_key'] }],
+          referencedIdentifiers: new Set(),
+        },
+      });
+      expect(result.ok).toBe(true);
+      expect(result.failures).toEqual([]);
+      expect(result.advisories.filter((a) => a.check === CHECK_IDS.C8)).toHaveLength(1);
+    });
   });
 });
 

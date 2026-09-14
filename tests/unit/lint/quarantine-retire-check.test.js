@@ -66,6 +66,30 @@ describe('findOverdueEntries (TS-2/TS-3: overdue with/without a cited verdict)',
     const overdue = findOverdueEntries([e], verdicts, { now });
     expect(overdue.map((x) => x.file)).toEqual(['a.test.js']);
   });
+
+  // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C TS-6: fail-closed on a missing/malformed review_by,
+  // matching the isWaiverActive fix in lib/eva/quality-model/predicate.js (sibling -B). A missing
+  // or unparseable revisit commitment must surface as overdue, not silently escape forever.
+  it('TS-6: a missing review_by is treated as overdue, not as never-overdue', () => {
+    const e = entry({ file: 'no-review-by.test.js' });
+    delete e.review_by;
+    const overdue = findOverdueEntries([e], [], { now });
+    expect(overdue.map((x) => x.file)).toEqual(['no-review-by.test.js']);
+  });
+
+  it('TS-6: an unparseable review_by is treated as overdue, not as never-overdue', () => {
+    const e = entry({ file: 'bad-review-by.test.js', review_by: 'not-a-date' });
+    const overdue = findOverdueEntries([e], [], { now });
+    expect(overdue.map((x) => x.file)).toEqual(['bad-review-by.test.js']);
+  });
+
+  it('TS-6: a missing review_by WITH a matching verdict is still not overdue (verdict wins)', () => {
+    const e = entry({ file: 'no-review-by.test.js' });
+    delete e.review_by;
+    const verdicts = [{ file: 'no-review-by.test.js', verdict: 'undetermined', citation: null, note: 'n/a' }];
+    const overdue = findOverdueEntries([e], verdicts, { now });
+    expect(overdue).toEqual([]);
+  });
 });
 
 describe('groupOverdueByReasonClass', () => {
