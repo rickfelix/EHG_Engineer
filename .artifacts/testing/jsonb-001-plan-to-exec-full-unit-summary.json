@@ -1,0 +1,31 @@
+{
+  "_note": "Condensed, programmatically-derived summary of the FULL vitest `unit` project run. The source runner artifact is 19MB and is intentionally NOT committed; its sha256 is recorded here so the derivation is verifiable against it.",
+  "derived_from": {
+    "path": ".artifacts/testing/jsonb-001-plan-to-exec-full-unit.json",
+    "sha256": "7bac279eb782d389df56484ea73e9846838ce08d374829169abc508fa3a8d1ea",
+    "bytes": 20444361
+  },
+  "command": "npx vitest run --project unit --reporter=json --outputFile=.artifacts/testing/jsonb-001-plan-to-exec-full-unit.json",
+  "startTime": 1789384459043,
+  "success": true,
+  "numTotalTestSuites": 17659,
+  "numTotalTests": 52351,
+  "numPassedTests": 52140,
+  "numFailedTests": 0,
+  "numPendingTests": 209,
+  "numTodoTests": 2,
+  "numFiles": 4239,
+  "failedFiles": [],
+  "watched_files": {
+    "tests/unit/coordinator/generic-jsonb-merge.test.js": {
+      "total": 9,
+      "passed": 9,
+      "failed": 0
+    },
+    "tests/unit/coordinator/safe-metadata-merge.test.js": {
+      "total": 24,
+      "passed": 24,
+      "failed": 0
+    }
+  }
+}
