@@ -45,6 +45,19 @@
  *                                        access or destructuring) anywhere else
  *                                        under lib/eva/ -- a candidate orphaned
  *                                        producer field. review_by: 2026-12-01.
+ *                                        DELIBERATELY ONE-DIRECTIONAL (narrowed
+ *                                        during EXEC adversarial review): the
+ *                                        reverse direction -- "a reader consumes
+ *                                        key X but no producer declares it" -- is
+ *                                        explicitly NOT implemented. A reader has
+ *                                        no single syntactic form reliably marking
+ *                                        "the keys I expect from THIS artifact"
+ *                                        (property access / destructuring are
+ *                                        used constantly for unrelated things),
+ *                                        so a reverse-direction heuristic would be
+ *                                        noise-dominated, not signal. That gap is
+ *                                        itself part of the chairman-routed
+ *                                        disambiguation, not something to force.
  *                                        FILESYSTEM-ONLY -- runs even when
  *                                        SUPABASE_SERVICE_ROLE_KEY is absent (see
  *                                        main()'s partial-mode branch), unlike
@@ -423,16 +436,84 @@ export function checkContractMapLint(sourceText) {
  * so an over- or under-collected key costs nothing but a slightly noisier
  * advisory report, never a build failure.
  */
+/**
+ * Extract the body of the `{ ... }` starting at `openBraceIdx` (which must index
+ * the opening `{`) by walking a brace-depth counter, skipping over string and
+ * template-literal contents (including `${...}` interpolation, treated as inert
+ * text -- correctness inside an interpolation is not needed here). Returns null
+ * on an unbalanced/unterminated block (source truncated, parse error, etc.).
+ *
+ * A regex alone CANNOT do this correctly (adversarial-review finding, HIGH): a
+ * non-greedy `return\s*\{([\s\S]*?)\n\s*\};` only closes at a `};` that sits on
+ * its own line, so a common single-line `return { a, b };` has its true close
+ * skipped and the match instead swallows everything up to some LATER unrelated
+ * line-based `};` -- verified empirically to corrupt results on 9+ of the real
+ * analysis-step files in this repo.
+ */
+function extractBalancedBraceBody(text, openBraceIdx) {
+  let depth = 0;
+  let inString = null;
+  for (let i = openBraceIdx; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { inString = ch; continue; }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(openBraceIdx + 1, i);
+    }
+  }
+  return null;
+}
+
+/**
+ * Split on commas at depth 0 only -- so a nested `{ }`/`[ ]`/`( )` or a string's
+ * own commas never fracture a segment. Also means a nested object's OWN keys
+ * are never separately walked (they stay inside their parent's one segment),
+ * which is intentional: only IMMEDIATE (top-level) keys of the return object
+ * are "declared content keys".
+ */
+function splitTopLevelCommas(str) {
+  const parts = [];
+  let depth = 0;
+  let inString = null;
+  let start = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (inString) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { inString = ch; continue; }
+    if (ch === '{' || ch === '[' || ch === '(') depth++;
+    else if (ch === '}' || ch === ']' || ch === ')') depth--;
+    else if (ch === ',' && depth === 0) {
+      parts.push(str.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(str.slice(start));
+  return parts;
+}
+
 export function extractDeclaredContentKeys(sourceText) {
   const text = String(sourceText || '');
   const keys = new Set();
-  const returnBlockRe = /return\s*\{([\s\S]*?)\n\s*\};/g;
-  let block;
-  while ((block = returnBlockRe.exec(text))) {
-    for (const line of block[1].split('\n')) {
-      const trimmed = line.trim();
-      const m = trimmed.match(/^([A-Za-z_$][\w$]*)\s*[:,]/) || trimmed.match(/^([A-Za-z_$][\w$]*)\s*$/);
-      if (m) keys.add(m[1]);
+  const returnOpenRe = /\breturn\s*\{/g;
+  let m;
+  while ((m = returnOpenRe.exec(text))) {
+    const openBraceIdx = m.index + m[0].length - 1;
+    const body = extractBalancedBraceBody(text, openBraceIdx);
+    if (body == null) continue;
+    for (const segment of splitTopLevelCommas(body)) {
+      const trimmed = segment.trim();
+      const km = trimmed.match(/^([A-Za-z_$][\w$]*)\s*:/) || trimmed.match(/^([A-Za-z_$][\w$]*)\s*$/);
+      if (km) keys.add(km[1]);
     }
   }
   return [...keys];
@@ -450,11 +531,21 @@ export function collectReferencedIdentifiers(sourceTexts) {
     let m;
     const propRe = /\.([A-Za-z_$][\w$]*)\b/g;
     while ((m = propRe.exec(text))) refs.add(m[1]);
-    const destructureRe = /\{\s*([A-Za-z_$][\w$]*(?:\s*,\s*[A-Za-z_$][\w$]*)*)\s*\}\s*=/g;
+    // Destructuring assignment: `{ a, b: c, d = 1, ...e } = expr` (not `==`/`=>`).
+    // [^{}]* deliberately does not handle NESTED destructuring (`{ a: { b } }`)
+    // -- out of scope for this heuristic; a nested source key is simply not
+    // recorded as referenced, which only makes C8 report MORE (never fewer)
+    // advisories, consistent with this check's non-blocking, over-inclusive bias.
+    const destructureRe = /\{([^{}]*)\}\s*=(?!=|>)/g;
     while ((m = destructureRe.exec(text))) {
-      for (const part of m[1].split(',')) {
-        const name = part.trim().split(':')[0].trim();
-        if (/^[A-Za-z_$][\w$]*$/.test(name)) refs.add(name);
+      for (const rawSegment of m[1].split(',')) {
+        const seg = rawSegment.trim();
+        if (!seg || seg.startsWith('...')) continue;
+        // `key` | `key = default` | `key: renamed` | `key: renamed = default`
+        const seg2 = seg.match(/^([A-Za-z_$][\w$]*)\s*(?::\s*([A-Za-z_$][\w$]*))?/);
+        if (!seg2) continue;
+        refs.add(seg2[1]); // the source/declared key, even when renamed
+        if (seg2[2]) refs.add(seg2[2]); // the local binding name, when renamed
       }
     }
   }
@@ -614,6 +705,19 @@ async function main() {
     // 2 before ANY check ran, so C7/C8 (both filesystem-only) never got to run on
     // a forked PR without secrets. Now: run the filesystem-only checks and report
     // them; only C1-C6 (which genuinely need live DB rows) are skipped.
+    //
+    // Adversarial-review finding (MEDIUM): a graceful fallback here must not
+    // mask a TRUSTED context (push/schedule/workflow_dispatch) losing secret
+    // access (rotation, org-policy change, typo) -- only a `pull_request` event
+    // (where a forked PR legitimately has no secrets) or a local/non-Actions run
+    // (GITHUB_EVENT_NAME unset) falls back silently-green; any other known
+    // Actions event name with missing secrets is a genuine misconfiguration and
+    // still hard-fails loudly.
+    const eventName = process.env.GITHUB_EVENT_NAME;
+    if (eventName && eventName !== 'pull_request') {
+      console.error(`[STAGE_CONTRACT_INFRA_ERROR] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY on a trusted CI event ('${eventName}') -- this is a misconfiguration, not an expected forked-PR gap`);
+      process.exit(2);
+    }
     console.error('[STAGE_CONTRACT_PARTIAL] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY -- running filesystem-only checks (C7, C8); C1-C6 skipped');
     const result = runFilesystemOnlyChecks();
     if (jsonMode) {
