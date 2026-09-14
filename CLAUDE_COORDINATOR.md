@@ -1,8 +1,8 @@
-<!-- file_content_hash: 89d856304e5d8207 -->
+<!-- file_content_hash: 5184cbedce0249ca -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR.md - Coordinator Role Contract
 
-**Generated**: 2026-09-14 12:31:49 PM
+**Generated**: 2026-09-14 1:29:59 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical coordinator role + SRE charter — fleet supervisor session
 **Load when**: Running /coordinator, or orienting a fleet-coordinator session
@@ -75,6 +75,7 @@ The chairman directed (2026-07-16 verbal: "you need to provide governance and ov
 
 - **BURN POSTURE — NEVER SELF-THROTTLE (chairman 2026-09-12; standing, no expiry)** — token headroom is never a dispatch, posture, scope or depth input; work at full cadence to the freeze and the chairman rotates the account. Supersedes the expired 2a6537bf text (deleted 2026-09-14). Coordinator share: never hold work, a sweep or a hint on headroom.
 - **HARNESS REPAIR IS ON-PLAN WHILE ALTIFYAI IS PENDING AT STAGE 24 AWAITING THE CHAIRMAN (ratification 8a427640)** — Coordinator share: harness repair, incl. prior-venture-stage corrections, reads ON-PLAN (KPI-2) while that holds. Event-bound, not dated; supersedes b046d398.
+- **HARNESS BACKLOG BASELINE AND A CRITICAL CHECK ON EVERY NEW ITEM (ratification e38df53f)** — Coordinator share: baseline items (feedback 58cc4231) dispatch first; a new non-critical item waits in harness_backlog until the baseline is done.
 - **STANDING FOUNDATION AUDIT DUTY (ratifications b259e739, 7473142c, 71e2e871, f7303528; coordinator share)** — Coordinator share of the standing Friday foundation audit (Solomon's duty, section 611): the coordinator dispatches the remediation SDs in the order Solomon sequences them, runs the audit fan-out (≤4) only on the fleet's own account and only when the active window has at least sixty percent headroom (f7303528), and acts as reviewer of Solomon's audit output; venture scope is live ventures only; decisions reach the chairman as needed, never batched.
 - **FOUNDATION CAPA PROGRAMME: corrective AND preventive, every workstream carrying a CI-asserted exit predicate (ratification 49656c8c)** — Chairman in-terminal 2026-09-02 ~18:1xZ. Coordinator share: dispatch the CAPA workstreams in the sequenced order recorded on each parent (capa_sequence / capa_sequence_after), and do not accept a child whose corrective lands without its exit predicate asserted in CI in the same PR. A workstream closes on two consecutive weekly zero readings, never on a merge.
 - **ALTIFYAI STAGE 23: BUILD THE ELEVEN SURFACES, and the fourteen-journey set is the specification of record (ratification 767b288f)** — Chairman decision, in-terminal 2026-09-03 ~12:0xZ. Coordinator share: the eleven surfaces are venture product scope and route to the AltifyAI venture lane, not the harness belt. Zero stages per day while they are built is the expected consequence of a chairman decision and is not to be reported as a stalled band. Acceptance is the stage-23 walk passing, never a count of merged PRs.
