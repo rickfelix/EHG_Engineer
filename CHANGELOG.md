@@ -5,6 +5,7 @@
 
 - [2026-09-14](#2026-09-14)
   - [Infrastructure](#infrastructure-14)
+  - [Bugfix](#bugfix-14)
 - [2026-09-13](#2026-09-13)
   - [Infrastructure](#infrastructure)
   - [Bugfix](#bugfix-13)
@@ -220,6 +221,13 @@
   - `/learn` had minted issue_patterns rows from OLD retrospective text with a FRESH created_at timestamp, without checking whether the underlying issue was already fixed: PAT-LES-7fd10bfaf89a ("no structured logging in 5 EVA stages") and PAT-LES-e72314a404ae ("stage 14 missing security object") both traced verbatim to 2026-02-14 retrospectives, each fixed within 24-48 hours (commits `0dd7e2735dd`, `d5f3ab7d`) -- 7 months before /learn surfaced them as "new". PAT-LES-1a22954978cc's underlying scoring-logic bug was likewise already fixed (`d228da9dac7`, 2026-02-27); its 45 recorded occurrences reflect a gate-timing/sequencing artifact, not a live defect.
   - Added `tests/unit/handoff/validation/validator-registry/gate-l-sd-creation.test.js`: a mutation-tested regression guard for the LIVE `sdObjectivesDefined` validator (`scripts/modules/handoff/validation/validator-registry/gates/gate-l-sd-creation.js`, wired into the real validator registry) -- previously untested, unlike a differently-named sibling file implementing the same threshold logic. Includes the one boundary case (0 objectives + metrics, score exactly 30) that actually distinguishes the current `score >= 30` formula from its pre-fix `issues.length === 0` formula.
   - Confirmed and cancelled a full duplicate, `SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-152` (identical source_items, minted 1 minute apart by a race in `/learn`'s `ALREADY_ASSIGNED_OPEN_SD` filter), reassigning its 3 shared `issue_patterns` rows to this SD.
+
+### Bugfix
+
+- **Fixed a 7-month leak where new PRDs could ship with `integration_operationalization` left NULL, and backfilled all 1,570 affected rows** - SD-LEARN-FIX-ADDRESS-PAT-LES-012 (PR #8950)
+  - `scripts/prd/prd-creator.js` had 3 write paths with no default for this column; all 3 now apply a structurally-valid, honestly-empty placeholder (5 canonical keys, each `null`) instead of leaving NULL or fabricating content. Also fixed a `scripts/modules/uat-assessment/sections/integration-check.js` reader that treated the new placeholder as "has content", and a naming-drift bug that made an authoring-time warning unreachable for real `bugfix` PRDs.
+  - **Incident and remediation**: the production backfill script's first `--execute` run blind-replaced (rather than merged) `metadata` on the same 1,570 rows, destroying 7,743 keys across 1,382 of them, because Supabase's `.update()` replaces a full JSONB column value. Caught before merge by two independent EXEC-phase sub-agent reviews (TESTING and SECURITY, each via a different method), root-caused, and recovered from `governance_audit_log`'s row-level audit trail. Root-cause bug fixed in both the original script and a dormant identical sibling; a deep-tier adversarial ship review found and closed 3 more defects in the recovery path itself (a missing keyset `ORDER BY`, an unenforced concurrency guard, a loose audit-window lookup). 1,364 of 1,382 damaged rows are restored; the final 18 (64 keys) are tracked as a separate, ongoing repair item (`scripts/one-off/repair-18-outstanding-metadata-rows.mjs`), not blocking this fix.
+  - Filed and shipped a generalized atomic-merge helper follow-up the same day (`SD-LEO-INFRA-GENERALIZE-ATOMIC-JSONB-001`) so the underlying unsafe-JSONB-write pattern has a safe primitive to reach for on `product_requirements_v2`, not just `strategic_directives_v2`.
 
 ## 2026-09-13
 
