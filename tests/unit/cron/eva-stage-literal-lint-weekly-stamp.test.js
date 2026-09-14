@@ -12,7 +12,7 @@ let ventureStagesRows = Object.entries(STAGE_KEY_BY_NUMBER).map(([num, key]) => 
 const createClientMock = vi.fn().mockReturnValue({
   from: (table) => {
     if (table !== 'venture_stages') throw new Error(`unexpected table: ${table}`);
-    return { select: () => Promise.resolve({ data: ventureStagesRows, error: null }) };
+    return { select: () => ({ limit: () => Promise.resolve({ data: ventureStagesRows, error: null }) }) };
   },
 });
 

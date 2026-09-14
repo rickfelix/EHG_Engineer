@@ -33,8 +33,12 @@ const PROCESS_KEY = 'standard_loop:eva-stage-literal-lint-weekly';
  * Returns a list of mismatches (empty = clean). Never throws on a resolvable read.
  */
 export async function checkRegistryDrift(supabase) {
-  const { data, error } = await supabase.from('venture_stages').select('stage_number,stage_key');
+  // venture_stages is the canonical, fixed-cardinality stage catalog (27 rows today) -- an
+  // explicit limit well above that (not an unbounded read) so a truncated read can never
+  // silently pass as "no drift found".
+  const { data, error } = await supabase.from('venture_stages').select('stage_number,stage_key').limit(100);
   if (error) throw new Error(`[registry-drift] venture_stages read failed: ${error.message}`);
+  if (data.length >= 100) throw new Error(`[registry-drift] venture_stages returned ${data.length} rows, at the read cap -- raise the limit before trusting this comparison.`);
 
   const mismatches = [];
   const liveByNumber = new Map(data.map((r) => [r.stage_number, r.stage_key]));
