@@ -169,4 +169,62 @@ describe('exec-to-plan createExecToPlanRetrospective', () => {
     const gitLearning = retro.key_learnings.find(l => l.learning.startsWith('Modified'));
     expect(gitLearning).toBeUndefined();
   });
+
+  // PAT-LES-2484eb3fe7bf / PAT-AUTO-2ffdd791 regression guard: the origin incident this
+  // pattern re-surfaced (SD-EVA-QUALITY-VISION-GOVERNANCE-TESTS-001, 2026-02-19) was an
+  // auto-generated retrospective scoring 46/100 for containing "only gate IDs and metrics,
+  // not SD-specific insights" and missing the action-item verification field required by
+  // RETROSPECTIVE_QUALITY_GATE. Both were already fixed within days of the origin incident
+  // (commits "fix(retro): ensure action items always include verification field
+  // (PAT-AUTO-2ffdd791)" and "wire enricher key_learnings and action_items into
+  // exec-to-plan retrospective", both 2026-02-19/20) -- these tests pin that fix so it
+  // cannot silently regress, since LEARN-153's own 5 tests above never asserted on
+  // content specificity, only on the insert/clobber/git-error control flow.
+  it('every action_item carries a non-empty owner, deadline, and verification field', async () => {
+    execSyncMock.mockReturnValue('');
+    const { supabase, getInserted } = buildMockSupabase({ existingRow: null });
+
+    await createExecToPlanRetrospective(supabase, 'SD-TEST-RETRO-001', SD, HANDOFF_RESULT, {});
+
+    const retro = getInserted();
+    expect(retro.action_items.length).toBeGreaterThan(0);
+    for (const item of retro.action_items) {
+      expect(item.owner, `action_item ${JSON.stringify(item)} missing owner`).toBeTruthy();
+      expect(item.deadline, `action_item ${JSON.stringify(item)} missing deadline`).toBeTruthy();
+      expect(item.verification, `action_item ${JSON.stringify(item)} missing verification`).toBeTruthy();
+    }
+  });
+
+  it('references the actual SD title and description, not generic gate-only content', async () => {
+    execSyncMock.mockReturnValue('');
+    const { supabase, getInserted } = buildMockSupabase({ existingRow: null });
+
+    await createExecToPlanRetrospective(supabase, 'SD-TEST-RETRO-001', SD, HANDOFF_RESULT, {});
+
+    const retro = getInserted();
+    const allText = JSON.stringify([retro.what_went_well, retro.key_learnings]);
+    expect(allText).toContain(SD.title);
+    // At least one key_learning references the SD's own strategic objective, not just a
+    // quality-score/gate-ID line -- the origin complaint's exact "only gate IDs and metrics" gap.
+    const objectiveLearning = retro.key_learnings.find(l =>
+      l.learning.includes('Primary objective addressed')
+    );
+    expect(objectiveLearning).toBeDefined();
+  });
+
+  it('git-derived key_learnings appear when git context IS available (happy-path complement to the error-path test above)', async () => {
+    execSyncMock.mockImplementation((cmd) => {
+      if (cmd.includes('diff')) return 'lib/eva/foo.js\nlib/eva/bar.js\n';
+      if (cmd.includes('log')) return 'abc1234 fix: something\ndef5678 feat: something else\n';
+      return '';
+    });
+    const { supabase, getInserted } = buildMockSupabase({ existingRow: null });
+
+    await createExecToPlanRetrospective(supabase, 'SD-TEST-RETRO-001', SD, HANDOFF_RESULT, {});
+
+    const retro = getInserted();
+    const gitLearning = retro.key_learnings.find(l => l.learning.startsWith('Modified'));
+    expect(gitLearning).toBeDefined();
+    expect(gitLearning.learning).toContain('foo.js');
+  });
 });
