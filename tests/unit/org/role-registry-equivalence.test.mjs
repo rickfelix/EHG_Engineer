@@ -135,6 +135,42 @@ describe('role-registry-resolver: equivalence proof (E1b)', () => {
     expect(resolvedCeo).toEqual(STANDARD_VENTURE_TEMPLATE.ceo);
   });
 
+  // Adversarial review finding (deep-tier /ship review): baseRows containing MULTIPLE versions
+  // of one role_key (e.g. an active row plus a superseded one -- org_role_base_versions'
+  // schema explicitly supports this) previously produced DUPLICATE entries in
+  // executives[]/crews[], because the old classification logic filtered over ALL of baseRows
+  // with no dedup.
+  it('a baseRows array containing BOTH an active and a superseded version of one role does not duplicate that role in the output', () => {
+    const baseRows = templateToBaseRows(STANDARD_VENTURE_TEMPLATE);
+    const vpBaseRow = baseRows.find((r) => r.role_key === 'VP_STRATEGY');
+    // Simulate history: a superseded v1 alongside a new active v2 for the same role_key.
+    baseRows.push({ ...vpBaseRow, version: 2, status: 'active' });
+    const supersededOriginal = baseRows.find((r) => r.role_key === 'VP_STRATEGY' && r.version === 1);
+    supersededOriginal.status = 'superseded';
+
+    const pins = buildPinsForAllRoles(templateToBaseRows(STANDARD_VENTURE_TEMPLATE)).map((p) =>
+      p.role_key === 'VP_STRATEGY' ? { ...p, base_version: 2 } : p
+    );
+
+    const resolved = resolveVentureRoles(baseRows, [], pins, FIXTURE_VENTURE_ID, STANDARD_VENTURE_TEMPLATE.budget_distribution);
+    const vpMatches = resolved.executives.filter((e) => e.agent_role === 'VP_STRATEGY');
+    expect(vpMatches).toHaveLength(1);
+    expect(resolved.executives).toHaveLength(STANDARD_VENTURE_TEMPLATE.executives.length);
+  });
+
+  // Adversarial review finding (deep-tier /ship review): a pin naming an overlay_version with no
+  // matching overlay row previously fell through silently and resolved as base-only -- now must
+  // throw, since that data shape means the pin and overlay tables have gone inconsistent.
+  it('a pin naming an overlay_version with no matching overlay row throws rather than silently resolving base-only', () => {
+    const baseRows = templateToBaseRows(STANDARD_VENTURE_TEMPLATE);
+    const pins = buildPinsForAllRoles(baseRows).map((p) =>
+      p.role_key === 'VP_STRATEGY' ? { ...p, overlay_version: 1 } : p
+    );
+    // Deliberately: overlayRows is EMPTY -- no row exists for VP_STRATEGY overlay_version=1.
+    expect(() => resolveVentureRoles(baseRows, [], pins, FIXTURE_VENTURE_ID, STANDARD_VENTURE_TEMPLATE.budget_distribution))
+      .toThrow(/pin for role_key="VP_STRATEGY" names overlay_version=1 but no matching overlay row exists/);
+  });
+
   it('an overlay can never carry a norms field -- mergeRoleLayers only ever reads overlay.structure/overlay.function, never overlay.norms', () => {
     // Structural proof at the JS level (the schema-level proof is TS-6 in the migration-shape
     // suite): even if a caller mistakenly attached a `norms` key to an overlay row object, the

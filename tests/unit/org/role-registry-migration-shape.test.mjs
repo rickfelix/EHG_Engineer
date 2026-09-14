@@ -159,13 +159,26 @@ describe('org_role_venture_overlays / org_role_venture_pins shape (FR-2, FR-3, T
 describe('org_role_change_log shape (FR-4, TS-4)', () => {
   it('carries layer/operation CHECK constraints scoped to the three registry layers', () => {
     expect(changeLog.fwd).toMatch(/layer\s+TEXT NOT NULL CHECK \(layer IN \('base', 'overlay', 'pin'\)\)/i);
-    expect(changeLog.fwd).toMatch(/operation\s+TEXT NOT NULL CHECK \(operation IN \('INSERT', 'UPDATE'\)\)/i);
+    expect(changeLog.fwd).toMatch(/operation\s+TEXT NOT NULL CHECK \(operation IN \('INSERT', 'UPDATE', 'DELETE'\)\)/i);
   });
 
-  it('is populated by AFTER INSERT/UPDATE triggers on all three source tables', () => {
-    expect(changeLog.fwd).toMatch(/AFTER INSERT OR UPDATE ON public\.org_role_base_versions/i);
-    expect(changeLog.fwd).toMatch(/AFTER INSERT OR UPDATE ON public\.org_role_venture_overlays/i);
-    expect(changeLog.fwd).toMatch(/AFTER INSERT OR UPDATE ON public\.org_role_venture_pins/i);
+  // Adversarial review finding (deep-tier /ship review, CRITICAL): a DELETE-blind first draft let
+  // a service_role session erase a role version with zero audit trace -- fixed by adding AFTER
+  // DELETE handling here, and the ENABLE ALWAYS test below.
+  it('is populated by AFTER INSERT/UPDATE/DELETE triggers on all three source tables', () => {
+    expect(changeLog.fwd).toMatch(/AFTER INSERT OR UPDATE OR DELETE ON public\.org_role_base_versions/i);
+    expect(changeLog.fwd).toMatch(/AFTER INSERT OR UPDATE OR DELETE ON public\.org_role_venture_overlays/i);
+    expect(changeLog.fwd).toMatch(/AFTER INSERT OR UPDATE OR DELETE ON public\.org_role_venture_pins/i);
+  });
+
+  it('the three source-table writer triggers are ENABLE ALWAYS -- a replica-mode session cannot silently skip logging a DELETE (or INSERT/UPDATE)', () => {
+    for (const trg of [
+      'trg_org_role_base_versions_log',
+      'trg_org_role_venture_overlays_log',
+      'trg_org_role_venture_pins_log',
+    ]) {
+      expect(changeLog.fwd, `${trg} must be ENABLE ALWAYS`).toMatch(new RegExp(`ENABLE ALWAYS TRIGGER\\s+${trg}`));
+    }
   });
 
   it('TS-4: carries all three append-only guard triggers on itself, all ENABLE ALWAYS', () => {
