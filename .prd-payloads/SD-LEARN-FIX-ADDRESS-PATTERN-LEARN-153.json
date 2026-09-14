@@ -1,0 +1,111 @@
+{
+  "executive_summary": "This /learn-sourced SD bundles 3 pattern findings; each was independently re-verified against current main before PRD authoring (per the standing rule to re-measure a defect premise against live code, not trust the auto-generated pattern text). PAT-LES-cf0f6c6a6289 ('sub-agents did not load PRD fields during EVA EXEC') is CONFIRMED STALE -- lib/sub-agents/database/index.js:159 and lib/sub-agents/design/index.js:386 already query and consume specific product_requirements_v2 fields, fixed by commit ad8b0ee3fe0 (SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001, 2026-02-13). This SD does NOT re-implement it. PAT-LES-8feb1fe0dd07 (Four Buckets parser silent data loss) is CONFIRMED TRUE and unfixed: lib/eva/utils/four-buckets-parser.js's parseFourBuckets() silently `continue`s on a null/non-object array entry (line 44) and on an entry with no/empty claim field (line 46-47), with no log call -- unlike the function's two OTHER malformed-input paths (non-array top-level, invalid bucket enum), which already call logger.warn. PAT-LES-3607a21c136f ('no unit tests existed for either retrospective builder') is REAL but was ambiguous against the actual codebase: of 5 plausible 'retrospective builder' files repo-wide, exactly 2 -- scripts/modules/handoff/executors/lead-to-plan/retrospective.js and scripts/modules/handoff/executors/exec-to-plan/retrospective.js -- have zero test coverage today; a third sibling, plan-to-exec/retrospective.js, already has tests/unit/handoff/executors/plan-to-exec/retrospective.test.js, which is used as the structural template for the two new test files.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Four Buckets parser: log the two currently-silent malformed-entry drop paths",
+      "description": "lib/eva/utils/four-buckets-parser.js's parseFourBuckets() drops two classes of array entries with no logging: a null/non-object entry (line 44: `if (!entry || typeof entry !== 'object') continue;`) and an entry with no/empty claim field (line 46-47: `const claim = ...; if (!claim) continue;`). Add a `logger.warn(...)` call on each path, matching the style and log-message shape of the function's two existing logged paths (non-array top-level input, invalid bucket enum normalization). Do not change the function's return shape, its silent-skip BEHAVIOR (entries are still dropped, not retained or defaulted), or any other branch.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A null or non-object entry in the epistemicClassification array causes logger.warn to be called (with a message identifying the entry as skipped/invalid), and the entry is still excluded from the returned classifications array.",
+        "An entry with a missing or empty claim field causes logger.warn to be called (with a message identifying the claim as missing), and the entry is still excluded from the returned classifications array.",
+        "The two currently-logged paths (non-array top-level, invalid bucket enum) are unchanged.",
+        "All existing tests in lib/eva/utils/__tests__/four-buckets-parser.test.js still pass unmodified (or with only additive logger-assertion changes, never removing/weakening an existing assertion)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Unit test coverage for the two untested per-phase retrospective builders",
+      "description": "Add tests/unit/handoff/executors/lead-to-plan/retrospective.test.js and tests/unit/handoff/executors/exec-to-plan/retrospective.test.js, using tests/unit/handoff/executors/plan-to-exec/retrospective.test.js as the structural template (same buildMockSupabase()/getInserted() pattern, mocking the clobber-guard module before importing the SUT). lead-to-plan/retrospective.js exports createHandoffRetrospective(sdId, sd, handoffResult, retrospectiveType, supabase) -- note the different (supabase-last) argument order versus its siblings. exec-to-plan/retrospective.js exports createExecToPlanRetrospective(supabase, sdId, sd, handoffResult, context = {}) and additionally needs child_process.execSync and ../../shared-git-context.js's getMainRef mocked for its internal getGitContext(sdId) (including an error-path test where execSync throws). Coverage is NOT required to be exhaustive of every branch in these large files (389 and 506 lines) -- match the template's depth (core insert path, update-vs-insert branching, the clobber-guard skip-overwrite path, and the file's own most distinctive branch: interactive-vs-non-interactive generated_by tagging for lead-to-plan; the git-context error path for exec-to-plan).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "tests/unit/handoff/executors/lead-to-plan/retrospective.test.js exists, passes, and exercises at minimum: a successful insert path, the clobber-guard skip-overwrite path, and the interactive-vs-non-interactive generated_by branch.",
+        "tests/unit/handoff/executors/exec-to-plan/retrospective.test.js exists, passes, and exercises at minimum: a successful insert path, the clobber-guard skip-overwrite path, and the getGitContext error path (execSync throws).",
+        "Neither new test file makes a real Supabase, git, or filesystem call -- all dependencies mocked, matching the plan-to-exec template's convention.",
+        "The existing tests/unit/handoff/executors/plan-to-exec/retrospective.test.js is untouched and still passes."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Mark the stale PRD-field-loading pattern resolved so it stops resurfacing",
+      "description": "PAT-LES-cf0f6c6a6289 is confirmed already fixed by commit ad8b0ee3fe0 (SD-LEO-INFRA-PRD-FIELD-CONSUMPTION-001), but the issue_patterns row (and this SD's own metadata.source_items linkage) was still open when this SD was minted, which is how a fixed defect keeps re-entering the /learn pipeline. Update the issue_patterns row for PAT-LES-cf0f6c6a6289 to status resolved, citing the fixing commit and the two file:line locations verified during LEAD, so the pattern does not surface a fourth duplicate SD later.",
+      "priority": "low",
+      "acceptance_criteria": [
+        "The issue_patterns row for PAT-LES-cf0f6c6a6289 has status resolved (or the closest equivalent terminal status this table supports), with resolution_notes citing commit ad8b0ee3fe0 and both verified file:line locations.",
+        "No code changes are made to lib/sub-agents/database/index.js or lib/sub-agents/design/index.js under this FR -- it is a metadata/bookkeeping closure only."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "PAT-LES-cf0f6c6a6289 is explicitly excluded from this SD's scope",
+      "description": "The sub-agent PRD-field-loading pattern is confirmed already fixed on main (commit ad8b0ee3fe0). No code changes are made for it in this SD. The source issue_pattern row should be marked resolved/superseded rather than left open for re-triggering."
+    },
+    {
+      "id": "TR-2",
+      "title": "No behavior change to parseFourBuckets' drop decisions",
+      "description": "FR-1 adds logging only. It must not change which entries are kept vs dropped, must not throw on malformed input, and must not alter the shape of the returned { classifications, summary } object."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "parseFourBuckets logs a warning for a null array entry", "type": "unit", "expected": "logger.warn is called; the entry is excluded from classifications; summary counts are unaffected by the dropped entry." },
+    { "id": "TS-2", "scenario": "parseFourBuckets logs a warning for an entry with an empty/missing claim", "type": "unit", "expected": "logger.warn is called; the entry is excluded from classifications." },
+    { "id": "TS-3", "scenario": "parseFourBuckets's two pre-existing logged paths (non-array input, invalid bucket) are unchanged", "type": "unit", "expected": "Existing tests for these paths pass without modification." },
+    { "id": "TS-4", "scenario": "lead-to-plan/retrospective.js: successful insert creates a retrospective row with populated action_items", "type": "unit", "expected": "Mocked Supabase insert is called with a well-formed row; no real network call." },
+    { "id": "TS-5", "scenario": "lead-to-plan/retrospective.js: an existing manually_curated/MANUAL/CHAIRMAN/OPERATOR row is not overwritten", "type": "unit", "expected": "The function returns early / skips the write; insert/update is not called." },
+    { "id": "TS-6", "scenario": "lead-to-plan/retrospective.js: generated_by is MANUAL when interactive, SUB_AGENT when not", "type": "unit", "expected": "Both branches produce the correct generated_by value in the written row." },
+    { "id": "TS-7", "scenario": "exec-to-plan/retrospective.js: successful insert path", "type": "unit", "expected": "Mocked Supabase insert is called with a well-formed row." },
+    { "id": "TS-8", "scenario": "exec-to-plan/retrospective.js: getGitContext handles execSync throwing", "type": "unit", "expected": "result.summary reads 'Git context unavailable' (or equivalent), no unhandled exception propagates." }
+  ],
+  "acceptance_criteria": [
+    "lib/eva/utils/four-buckets-parser.js's two silent-drop paths now call logger.warn, with zero change to which entries are kept/dropped.",
+    "Two new unit test files exist for the previously-untested lead-to-plan and exec-to-plan retrospective builders, following the plan-to-exec template's mocking conventions.",
+    "PAT-LES-cf0f6c6a6289 is excluded from scope with the staleness evidence recorded (commit ad8b0ee3fe0).",
+    "All existing tests continue to pass; the new tests add coverage without weakening or removing any existing assertion."
+  ],
+  "risks": [
+    {
+      "risk": "Adding logger.warn calls to a hot-path parser (invoked during every EVA analysis step that emits Four Buckets classification) could be noisy if malformed entries are actually common in production LLM output.",
+      "mitigation": "Match the existing two logged paths' message format and log LEVEL (warn, not error), which the function already uses for comparable-frequency malformed-input cases without reported noise complaints. No new log level or destination introduced.",
+      "severity": "low"
+    },
+    {
+      "risk": "The two new retrospective-builder test files could be built against a misunderstanding of the large source files' actual branching (389/506 lines each), producing tests that pass but don't meaningfully exercise the real logic.",
+      "mitigation": "Explore sub-agent read both files in full before authoring and reported exact function signatures, dependencies, and branch points (evidence row persisted at LEAD-TO-PLAN); tests are written directly against that verified structure, using the existing plan-to-exec test as a working, currently-passing reference implementation of the same mocking pattern.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Every EVA analysis step that calls parseFourBuckets on LLM output (25 analysis steps per the four-buckets-parser.js docblock) -- consumers see additional warn-level log lines on malformed entries, no behavior change.",
+      "scripts/modules/handoff/executors/lead-to-plan/handoff.js and exec-to-plan/handoff.js (the callers of the two retrospective builders) -- no change to either builder's behavior, only new test coverage."
+    ],
+    "dependencies": []
+  },
+  "system_architecture": {
+    "summary": "Two small, independent fixes: one logging addition to an existing parser (no new files), and two new unit test files for existing, unmodified production code.",
+    "components": [
+      { "name": "lib/eva/utils/four-buckets-parser.js", "change": "MODIFIED -- add logger.warn on 2 existing silent-drop paths" },
+      { "name": "lib/eva/utils/__tests__/four-buckets-parser.test.js", "change": "MODIFIED -- additive test cases for the 2 new logger assertions" },
+      { "name": "tests/unit/handoff/executors/lead-to-plan/retrospective.test.js", "change": "NEW" },
+      { "name": "tests/unit/handoff/executors/exec-to-plan/retrospective.test.js", "change": "NEW" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Ship the small, self-contained parser fix first (FR-1), then the two new test files (FR-2), each independently verifiable.",
+    "steps": [
+      "1. Add logger.warn calls to four-buckets-parser.js's two silent-drop paths; add corresponding test assertions to the existing test file.",
+      "2. Write tests/unit/handoff/executors/lead-to-plan/retrospective.test.js against the verified function signature and branch list, using the plan-to-exec template.",
+      "3. Write tests/unit/handoff/executors/exec-to-plan/retrospective.test.js the same way, including the execSync-throws git-context error path.",
+      "4. Run the full test suite for all 4 touched/new test files plus the pre-existing plan-to-exec test to confirm zero regressions."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Call parseFourBuckets with a null entry in epistemicClassification and an injected mock logger", "expected_outcome": "logger.warn is called; the entry does not appear in the returned classifications array." },
+    { "step_number": 2, "instruction": "Run the two new retrospective builder test files", "expected_outcome": "Both pass with zero real network/filesystem calls." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-153"
+  }
+}
