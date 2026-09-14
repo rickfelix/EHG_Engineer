@@ -1,0 +1,134 @@
+{
+  "executive_summary": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-B closes root cause A of the chairman-ratified Venture Quality Review Programme (ratification 0afc86e4): there is no Venture Quality Model of record. Today lib/eva/quality-findings/finding-shape.js's FINDING_CATEGORIES is a hand-maintained 17-entry Object.freeze array with no generator, and lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js's REQUIRED_CATEGORIES/ADVISORY_CATEGORIES/GROWTH_CATEGORIES are hardcoded plain-JS arrays (not a DB seed, contradicting the CAPA plan's inherited premise). This SD authors a Venture Quality Model v1 doc plus a machine-readable registry under lib/eva/quality-model/ (per dimension: owner stage, producer, reader/gate, severity policy, applicability), derives both category lists from it, and adds a two-limb CI predicate: every generated category maps to a registry dimension (blocking), and every dimension has a producer+reader or a dated waiver row (advisory at launch, with its own graduation trigger, so this does not become a new ungraduated pilot inside the SD chartered to fix ungraduated pilots). Excluded: building missing producers/readers, and changing any existing gate threshold. Verification: a live probe against the real venture_quality_findings_finding_category_check DB constraint (never a migration file header) plus a characterization test proving the derived stage-23 checklist is byte-identical to today's hand-authored one for both flag states.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Venture Quality Model v1 doc + registry module",
+      "description": "Author docs/04_features/venture-quality-model-v1.md (or equivalent canonical doc location) citing chairman ratification 0afc86e4 verbatim, plus lib/eva/quality-model/registry.js: a frozen array of dimension records ({ id, name, tier, owner_stage, producer, reader_or_gate, severity_policy, applicability, ratification_pointer: {source, quote_hash} }) following the established lib/eva/config/ pattern (venture-default-capabilities.js: versioned, frozen, derived ID lists -- confirmed via Explore sub-agent discovery). Each dimension row's ratification_pointer.source is tagged chairman_verbatim | scribe_paraphrase | reconstructed; any row tagged 'reconstructed' is a BLOCKER for this FR, not a note (RISK sub-agent mitigation M-4). The chairman's own ratification text names only 5 agreement sentences and a scribe paraphrase of ~20 dimensions; the design-quality tier's published rubrics (adherence_rubrics table: design_quality_v1 = 6 dimensions, post_build_adherence_v1 = 4 dimensions = 10 total, NOT the 11 the CAPA plan's prose claims) are the only VERIFIED source for that tier -- ship v1 from those 10 published dimensions with a dated design_tier_incomplete waiver, and route the '10 vs 11' disambiguation as a narrow, non-blocking question to the chairman via Adam (RISK mitigation M-5). Do not invent the eleventh dimension in lane.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "lib/eva/quality-model/registry.js exists, exports a frozen array of dimension records, and every record has owner_stage/producer/reader_or_gate/severity_policy/applicability populated or an explicit waiver reference.",
+        "Every dimension record's ratification_pointer.source is one of chairman_verbatim|scribe_paraphrase|reconstructed; zero records are tagged reconstructed.",
+        "The design tier ships exactly the 10 dimensions verified in adherence_rubrics (design_quality_v1 + post_build_adherence_v1), each carrying a dated design_tier_incomplete waiver, not a silently-invented 11th.",
+        "A markdown doc records the model with a pointer (chairman_ratifications.id + quote_hash per ratification df3186e6), never a copied quote."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Derive FINDING_CATEGORIES from the registry, scope-locked to that one array",
+      "description": "lib/eva/quality-findings/finding-shape.js's FINDING_CATEGORIES (currently Object.freeze([...17 literals]) at line 70) becomes generated from lib/eva/quality-model/registry.js instead of hand-edited. Generation is SCOPE-LOCKED to FINDING_CATEGORIES only: WARN_CAPPED_CATEGORIES (finding-shape.js:97), CAPA_001_A_BASELINE_CATEGORIES (sd-generator.js), and EXPERIENCE_REVIEW_CATEGORIES (experience-review/persist.js) stay hand-authored and are NOT regenerated from the registry (RISK mitigation M-2) -- these 3 sub-lists were each deliberately narrowed this session precisely because a shared list answered more than one question. A CI-time script probes the LIVE venture_quality_findings_finding_category_check constraint (never reads a migration file's header as a proxy for apply-state) and records each generated category's db_constraint_state; the 2 currently-known-rejected categories (feedback_widget_present, error_capture_wired -- verified via 17 live probe inserts by the RISK sub-agent) become dated waiver rows naming a follow-up ticket. This SD authors NO constraint migration.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "FINDING_CATEGORIES in finding-shape.js is generated from the registry; the generated array is order-stable and, on day one, set-equal to today's 17-entry literal (regression parity, not a silent widening or narrowing).",
+        "tests/unit/eva/quality-findings/finding-shape.test.js, vision-detectors.test.js, and any other test hard-pinning FINDING_CATEGORIES.length continue to pass unmodified (or are updated only for the generation mechanism, never the actual member count, on day one).",
+        "tests/unit/eva/experience-review/persist.test.js:72 and tests/unit/lib/eva/quality-findings/fr-c-generator.test.js:443 (guard tests for the 3 scope-locked sub-lists) remain green, UNMODIFIED.",
+        "A live-DB-constraint probe script exists, runs in CI, and both currently-rejected categories are recorded as dated waiver rows (not silently passing, not blocking on a migration this SD does not author)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Derive stage-23 launch-readiness checklist categories from the registry",
+      "description": "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js's REQUIRED_CATEGORIES (line 61), ADVISORY_CATEGORIES (line 62), and GROWTH_CATEGORIES (line 72) become generated from the registry, reusing the ALREADY-EXISTING derivation pattern the file itself establishes for CAPABILITY_CATEGORIES (line 87: CAPABILITY_IDS.map(...) from lib/eva/config/venture-default-capabilities.js) rather than inventing a second mechanism (VALIDATION + Explore sub-agent finding). The file's own measured comment records that flattening the two default-OFF flags (LEO_S24_GROWTH_..., LEO_S24_CAPABILITY_CHECKLIST_REQUIRED) would flip EVERY in-flight venture to HOLD -- this FR must not touch that flag-conditional assembly logic, only the arrays feeding it. Stage-identity note: the file the checklist lives in is named for stage 23, but stage-24.js (line 20) is what dispatches analyzeStage23LaunchReadiness -- reference the checklist by this file/line, never by 'the stage-24 checklist' as a filename or table lookup (root cause E, owned by siblings -H/-J; this FR only needs to not make that drift worse).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "REQUIRED_CATEGORIES/ADVISORY_CATEGORIES/GROWTH_CATEGORIES are generated from the registry using the same derivation shape as the existing CAPABILITY_CATEGORIES line.",
+        "A characterization test asserts the effective checklist (categories + REQUIRED/ADVISORY split + computed verdict) is byte-identical pre/post this change, for BOTH flag states (both default-OFF, and both explicitly ON) -- proving this is a representational change, not a gate-threshold change wearing a refactor's clothes.",
+        "tests/unit/eva/stage-templates/stage-23-launch-readiness-fr1-4-6.test.js, stage-23-growth-categories.test.js, and stage-23-launch-readiness-fr3-capability-checklist.test.js continue to pass without their exact-array assertions changing member values."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Two-limb CI predicate: category->dimension (blocking) + producer+reader-or-waiver (advisory)",
+      "description": "New CI workflow, path-filtered to lib/eva/quality-model/**, finding-shape.js, stage-23-launch-readiness.js, and the predicate script itself (no brace-alternation in the paths: filter -- workflow-path-filter-lint.yml blocks that shape). Limb 1 (blocking): every category emitted by FR-2/FR-3's generation maps to a registry dimension -- trivially true on day one since the categories ARE generated from the registry, but guards future drift if either generator is hand-edited later. Limb 2 (advisory, continue-on-error: true): every registry dimension has both a producer and a reader/gate, or a DATED waiver row. Limb 2 starts advisory because the programme's own root cause B (unwired producers/readers) means most dimensions fail it today; the waiver mechanism carries its own dated graduation trigger (a date after which the advisory limb is re-evaluated for promotion to blocking, recorded in the registry or a tracked follow-up ticket) so this SD's own CI check does not become a new ungraduated pilot (root cause C).",
+      "priority": "high",
+      "acceptance_criteria": [
+        "CI job fails (blocking) when a generated category has no corresponding registry dimension.",
+        "CI job reports (non-blocking, continue-on-error) which dimensions lack a producer+reader/gate and have no dated waiver row, without failing the run.",
+        "The workflow's path filter uses explicit paths, no brace-alternation.",
+        "A dated graduation-trigger record exists (in the registry doc or a linked follow-up ticket) naming when limb 2 is reconsidered for promotion to blocking."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    { "id": "TR-1", "title": "No DB constraint migration in this SD", "description": "The two categories known to be rejected by the live venture_quality_findings_finding_category_check (feedback_widget_present, error_capture_wired) are recorded as dated waivers, not closed by a migration authored here -- migration-authoring for that gap is out of scope and belongs to a follow-up ticket." },
+    { "id": "TR-2", "title": "No gate-threshold change", "description": "The default-OFF LEO_S24_GROWTH_* / LEO_S24_CAPABILITY_CHECKLIST_REQUIRED flags keep their current defaults; the characterization test (FR-3) is the enforcement mechanism proving no threshold moved." },
+    { "id": "TR-3", "title": "Registry module shape follows the established lib/eva/config/ precedent", "description": "Frozen array/object of plain data records (no embedded live function references -- string-keyed indirection per lib/governance/gauge-registry.js's convention where behavior is needed), a version constant, and a documented update procedure, matching venture-default-capabilities.js and house-tech-stack.js." }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "Generated FINDING_CATEGORIES equals today's 17-entry hand list on day one (regression parity)", "type": "unit", "expected": "Set-equality assertion passes; no member added or dropped by the generation mechanism itself." },
+    { "id": "TS-2", "scenario": "CI predicate limb 1 fails when a fixture registry is missing a dimension for an emitted category", "type": "unit", "expected": "Predicate returns a failing/blocking result naming the orphan category." },
+    { "id": "TS-3", "scenario": "CI predicate limb 2 reports (non-blocking) a dimension with neither reader nor waiver", "type": "unit", "expected": "Predicate returns an advisory finding, run stays green (continue-on-error)." },
+    { "id": "TS-4", "scenario": "stage-23 checklist characterization, both flag states", "type": "unit", "expected": "Effective checklist (categories + REQUIRED/ADVISORY split + verdict) is byte-identical pre/post this SD's change, for flags off and for flags on." },
+    { "id": "TS-5", "scenario": "Scope-locked guard tests stay green unmodified", "type": "unit", "expected": "tests/unit/eva/experience-review/persist.test.js:72 and tests/unit/lib/eva/quality-findings/fr-c-generator.test.js:443 pass without edits." },
+    { "id": "TS-6", "scenario": "Live DB constraint probe records the 2 known-rejected categories as dated waivers", "type": "integration", "expected": "Probe against the real venture_quality_findings_finding_category_check confirms rejection; waiver rows exist naming a follow-up ticket, not a migration in this SD." }
+  ],
+  "acceptance_criteria": [
+    "The registry lists every dimension of the ratified model with owner, producer and reader fields populated or a dated waiver.",
+    "FINDING_CATEGORIES equals the derived list (a test compares them).",
+    "CI fails on a category with no dimension or a dimension with neither reader nor waiver (limb 1 blocking, limb 2 advisory with a dated graduation trigger)."
+  ],
+  "risks": [
+    { "risk": "Generated FINDING_CATEGORIES could widen the live DB-constraint gap (2 of 17 categories already dead-by-construction)", "mitigation": "Registry carries db_constraint_state derived by probing the LIVE constraint at CI time; no constraint migration authored in this SD; the 2 rejected categories become dated waivers", "severity": "high" },
+    { "risk": "Naive generation could silently re-widen the 3 SD-specific sub-list carve-outs (WARN_CAPPED_CATEGORIES / CAPA_001_A_BASELINE_CATEGORIES / EXPERIENCE_REVIEW_CATEGORIES)", "mitigation": "Generation scope-locked to FINDING_CATEGORIES only; persist.test.js:72 and fr-c-generator.test.js:443 named as must-stay-green-unmodified guards", "severity": "high" },
+    { "risk": "CI predicate limb 2 (producer+reader-or-waiver) is false today for most dimensions by the programme's own root cause B -- a blocking rollout would red every PR", "mitigation": "Limb 2 ships advisory/continue-on-error with a dated graduation trigger, avoiding a new ungraduated pilot inside the SD chartered to fix ungraduated pilots", "severity": "high" },
+    { "risk": "The stage-23 checklist's growth/capability categories are gated behind two default-OFF flags; flattening them unflagged would flip every in-flight venture to HOLD", "mitigation": "Characterization test asserting byte-identical checklist output pre/post, both flag states", "severity": "high" },
+    { "risk": "The ratified 'eleven design-quality dimensions' has no verbatim chairman record; published rubrics total 10, not 11 -- risk of silently reconstructing an eleventh and re-committing root cause A inside the SD that fixes it", "mitigation": "Dimension table tags each row's ratification-source; any reconstructed row blocks; ship v1 from the 10 published dimensions with a dated waiver; route the disambiguation to the chairman via Adam without blocking", "severity": "medium" },
+    { "risk": "Stage identity drift: this SD's own scope text says 'stage-24 checklist' but the code lives in a file named for stage 23", "mitigation": "PRD and code comments reference the file/line literally, never 'the stage-24 checklist' as a lookup key", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/eva/quality-findings/writer.js, legacy-adapter.js (re-export FINDING_CATEGORIES)",
+      "lib/eva/quality-findings/vision-detectors.js (module-load-time drift-guard against FINDING_CATEGORIES)",
+      "lib/eva/quality-findings/aggregator.js (filters findings by FINDING_CATEGORIES membership)",
+      "lib/eva/stage-templates/stage-20.js, stage-20-code-quality.js (schema enum / set-difference against FINDING_CATEGORIES)",
+      "lib/eva/stage-templates/stage-24.js -> analyzeStage23LaunchReadiness (consumes the generated stage-23 checklist categories)",
+      "lib/eva/chairman-product-review.js (consumes stage-23-launch-readiness.js's other exports)",
+      "5+ existing unit/integration test files asserting exact membership/length on both arrays"
+    ],
+    "dependencies": [
+      "lib/eva/config/venture-default-capabilities.js's existing derivation pattern (model for the new generation mechanism)",
+      "chairman_ratifications table (0afc86e4, df3186e6) for the model's provenance pointers",
+      "adherence_rubrics table (design_quality_v1, post_build_adherence_v1) as the verified source for the design tier"
+    ],
+    "data_contracts": [
+      "No new database table -- the registry is a code module (lib/eva/quality-model/registry.js), not a DB seed.",
+      "Reads (never writes) the live venture_quality_findings_finding_category_check constraint and the adherence_rubrics table."
+    ],
+    "runtime_config": [
+      "New CI workflow only; no new env vars or feature flags for existing code paths. Existing LEO_S24_GROWTH_*/LEO_S24_CAPABILITY_CHECKLIST_REQUIRED flags are read, never modified."
+    ],
+    "observability_rollout": [
+      "CI job output itself (limb 1 blocking pass/fail, limb 2 advisory report) is the primary rollout signal.",
+      "Dated waiver rows are queryable and named in the registry doc for the chairman's sitting review chain."
+    ]
+  },
+  "system_architecture": {
+    "summary": "A new code-only registry module drives generation of two existing, previously hand-maintained category arrays, plus a two-limb CI predicate over the registry.",
+    "components": [
+      { "name": "lib/eva/quality-model/registry.js", "change": "NEW -- frozen array of dimension records" },
+      { "name": "docs/04_features/venture-quality-model-v1.md", "change": "NEW -- the ratified model doc with per-dimension provenance pointers" },
+      { "name": "lib/eva/quality-findings/finding-shape.js", "change": "MODIFIED -- FINDING_CATEGORIES generated from the registry, WARN_CAPPED_CATEGORIES untouched" },
+      { "name": "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js", "change": "MODIFIED -- REQUIRED/ADVISORY/GROWTH_CATEGORIES generated from the registry, flag-conditional assembly logic untouched" },
+      { "name": ".github/workflows/quality-model-predicate.yml", "change": "NEW -- 2-limb CI predicate, path-filtered" }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Author the model doc + registry first (pinning provenance), then generate the two existing arrays from it with regression/characterization tests proving no silent widening of scope-locked sub-lists or gate thresholds, then add the CI predicate.",
+    "steps": [
+      "1. Author the Venture Quality Model v1 doc, citing ratification 0afc86e4 verbatim, tagging each dimension's provenance (chairman_verbatim|scribe_paraphrase|reconstructed); route the '10 vs 11' design-tier question to the chairman via Adam as a narrow, non-blocking item.",
+      "2. Build lib/eva/quality-model/registry.js following the venture-default-capabilities.js pattern (frozen records, versioned, derived ID lists).",
+      "3. Generate FINDING_CATEGORIES from the registry in finding-shape.js; add the live-DB-constraint probe script; record the 2 known-rejected categories as dated waivers.",
+      "4. Generate stage-23-launch-readiness.js's REQUIRED/ADVISORY/GROWTH_CATEGORIES from the registry using the CAPABILITY_CATEGORIES derivation pattern; add the characterization test for both flag states.",
+      "5. Add the 2-limb CI predicate as a new path-filtered workflow.",
+      "6. Verify persist.test.js:72 and fr-c-generator.test.js:443 (scope-locked sub-list guards) remain green, unmodified."
+    ]
+  },
+  "smoke_test_steps": [
+    { "step_number": 1, "instruction": "Run the CI predicate test suite against the real registry", "expected_outcome": "Limb 1 passes; limb 2 reports advisory findings without failing the run." },
+    { "step_number": 2, "instruction": "Remove a reader from a fixture registry dimension and re-run the predicate", "expected_outcome": "Limb 2's advisory report names the dimension as missing a reader; the run still stays green (continue-on-error)." },
+    { "step_number": 3, "instruction": "Run the stage-23 checklist characterization test for both flag states", "expected_outcome": "Effective checklist output is byte-identical to the pre-change baseline in both cases." }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-B"
+  }
+}

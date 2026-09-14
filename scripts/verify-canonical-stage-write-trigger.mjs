@@ -63,7 +63,18 @@ async function runCase(client, label, { stampSql }) {
 }
 
 export async function verifyCanonicalStageWriteTrigger() {
-  const client = new Client({ connectionString: process.env.SUPABASE_POOLER_URL });
+  // EXEC-phase SECURITY review (M1): node-postgres does not default to TLS -- measured this
+  // connected in cleartext against the real production pooler until this fix. Matches the
+  // repo's own established pattern (lib/connection-router.js's pooler_url strategy).
+  // L1: fail loudly on a missing env var rather than letting pg silently fall back to libpq
+  // defaults, which could attribute this verdict to the wrong database entirely.
+  if (!process.env.SUPABASE_POOLER_URL) {
+    throw new Error('SUPABASE_POOLER_URL is required (set it in .env) -- refusing to fall back to libpq defaults.');
+  }
+  const client = new Client({
+    connectionString: process.env.SUPABASE_POOLER_URL,
+    ssl: { rejectUnauthorized: false },
+  });
   await client.connect();
   const results = [];
   try {
@@ -130,5 +141,8 @@ async function main() {
 }
 
 if (isMainModule(import.meta.url)) {
-  main();
+  main().catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  });
 }

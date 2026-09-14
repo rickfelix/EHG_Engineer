@@ -12,15 +12,20 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import crypto from 'node:crypto';
+import { RESERVED_CHAIRMAN_STAGES } from '../lib/eva/autonomy-model.js';
 dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-// Hard gate stages — the live venture_stages.gate_type='kill' set (SD-LEO-INFRA-VENTURE-
-// QUALITY-CAPA-001-H FR-6: this table was entirely fictional vs. the live 27-stage pipeline,
-// live-verified against venture_stages directly rather than the stale in-file comment's claimed
-// cross-reference, which itself no longer resolves to anything in stage-execution-worker.js).
-const HARD_GATE_STAGES = new Set([3, 5, 13, 24]);
+// Hard gate stages — the live venture_stages.gate_type='kill' set, UNIONED with
+// RESERVED_CHAIRMAN_STAGES (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-H FR-6 + EXEC-phase SECURITY
+// finding L9): the table was entirely fictional vs. the live 27-stage pipeline (live-verified
+// directly, not via the stale in-file comment's claimed cross-reference to a since-removed
+// CHAIRMAN_GATES.BLOCKING export). A kill-only set here would have silently dropped stage 10
+// (a promotion gate, but chairman-reserved) from this CLI's --auto refusal, even though
+// RESERVED_CHAIRMAN_STAGES still enforces it at runtime elsewhere -- deriving the union from
+// the same imported source both sets already agree on prevents that drift from recurring.
+const HARD_GATE_STAGES = new Set([3, 5, 13, 24, ...RESERVED_CHAIRMAN_STAGES]);
 
 // Pipeline stage definitions — matches the live venture_stages table (27 stages).
 const PIPELINE_STAGES = [
