@@ -6,8 +6,10 @@
 --   Chairman verification NOT yet obtained. Staged only, per R1 (ratification bb2175d2). Not
 --   applied to any environment by this SD. See the companion base migration
 --   (20260914_org_role_registry_base.sql) for the full provenance and design citation.
---   WHY chairman-gated: RLS policies + REVOKE/GRANT DO block land this in
---   scripts/lib/migration-tier-classifier.mjs's FORBIDDEN_TOPLEVEL set (TIER-2).
+--   WHY chairman-gated: REVOKE/GRANT DDL is unconditionally FORBIDDEN_TOPLEVEL content in
+--   scripts/lib/migration-tier-classifier.mjs -- TIER-2. (classifyMigration() actually reports
+--   the leading BEGIN; as its first hit before reaching that line -- see the base migration's
+--   header for the full note; both are independently sufficient.)
 --
 -- ============================================================================
 -- WHY THESE TWO TABLES EXIST.

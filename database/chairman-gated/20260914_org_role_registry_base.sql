@@ -9,11 +9,14 @@
 --   decision, ratification bb2175d2): "new tables need the ceremony." This SD's own scope states
 --   "the PLAN phase names the exact files and stops at the ceremony" -- this migration is that
 --   naming. It is NOT applied to any environment by this SD.
---   WHY chairman-gated rather than database/migrations/: this file creates TRIGGERS (append-only
---   history plumbing lives in the companion migration 20260914_org_role_registry_change_log.sql,
---   but the RLS policy + REVOKE/GRANT DO block below and the only-one-active partial index put
---   this file's own DDL shape in scripts/lib/migration-tier-classifier.mjs's FORBIDDEN_TOPLEVEL
---   set too (DO blocks, GRANT/REVOKE) -- TIER-2, same classification as the two precedents below.
+--   WHY chairman-gated rather than database/migrations/: this file contains a REVOKE/GRANT DDL
+--   pair, unconditionally FORBIDDEN_TOPLEVEL content in
+--   scripts/lib/migration-tier-classifier.mjs -- TIER-2 regardless of anything else. VALIDATION
+--   sub-agent finding (VERIFY phase): classifyMigration() actually reports
+--   "unrecognized_or_unsafe_statement: begin" as its FIRST hit (the leading BEGIN; is not itself
+--   a recognized-safe statement head, so it bails there before ever reaching the REVOKE/GRANT
+--   line) -- both are independently sufficient for TIER-2, the reported reason is just whichever
+--   fires first in file order.
 --
 -- ============================================================================
 -- WHY THIS TABLE EXISTS.

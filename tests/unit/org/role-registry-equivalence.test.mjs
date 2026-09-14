@@ -91,4 +91,71 @@ describe('role-registry-resolver: equivalence proof (E1b)', () => {
       expect(ROLE_FIELD_KEYS, `template field "${k}" is not in ROLE_FIELD_KEYS -- splitRoleLayers would silently drop it`).toContain(k);
     }
   });
+
+  // VALIDATION sub-agent finding (VERIFY phase): the first version of this suite passed
+  // overlayRows=[] / overlay_version: null for every pin, so mergeRoleLayers' overlay branch
+  // (the entire venture-writes-only-its-overlay mechanism FR-2/FR-3 exist to prove) was never
+  // actually executed by any test.
+  it('a venture WITH an overlay: overlay structure/function fields override the base, base fields absent from the overlay pass through unchanged', () => {
+    const baseRows = templateToBaseRows(STANDARD_VENTURE_TEMPLATE);
+    const baseVp = STANDARD_VENTURE_TEMPLATE.executives.find((e) => e.agent_role === 'VP_STRATEGY');
+
+    const overlayRows = [{
+      role_key: 'VP_STRATEGY',
+      venture_id: FIXTURE_VENTURE_ID,
+      version: 1,
+      status: 'active',
+      // Overlay only touches capabilities (a FUNCTION-layer field) -- everything else on the
+      // role must still come from the base row.
+      structure: null,
+      function: { capabilities: ['venture_overlay_added_capability'] },
+    }];
+
+    const pins = baseRows.map((row) => ({
+      role_key: row.role_key,
+      base_version: 1,
+      overlay_version: row.role_key === 'VP_STRATEGY' ? 1 : null,
+    }));
+
+    const resolved = resolveVentureRoles(baseRows, overlayRows, pins, FIXTURE_VENTURE_ID, STANDARD_VENTURE_TEMPLATE.budget_distribution);
+    const resolvedVp = resolved.executives.find((e) => e.agent_role === 'VP_STRATEGY');
+
+    // Overlay field wins.
+    expect(resolvedVp.capabilities).toEqual(['venture_overlay_added_capability']);
+    expect(resolvedVp.capabilities).not.toEqual(baseVp.capabilities);
+
+    // Every OTHER field is untouched -- still exactly the base value.
+    for (const key of Object.keys(baseVp)) {
+      if (key === 'capabilities') continue;
+      expect(resolvedVp[key], `overlay must not affect untouched field "${key}"`).toEqual(baseVp[key]);
+    }
+
+    // A DIFFERENT role with no overlay for this venture is completely unaffected.
+    const resolvedCeo = resolved.ceo;
+    expect(resolvedCeo).toEqual(STANDARD_VENTURE_TEMPLATE.ceo);
+  });
+
+  it('an overlay can never carry a norms field -- mergeRoleLayers only ever reads overlay.structure/overlay.function, never overlay.norms', () => {
+    // Structural proof at the JS level (the schema-level proof is TS-6 in the migration-shape
+    // suite): even if a caller mistakenly attached a `norms` key to an overlay row object, the
+    // resolver must not consume it.
+    const baseRows = templateToBaseRows(STANDARD_VENTURE_TEMPLATE);
+    const overlayRows = [{
+      role_key: 'venture_ceo',
+      venture_id: FIXTURE_VENTURE_ID,
+      version: 1,
+      status: 'active',
+      structure: null,
+      function: null,
+      norms: { delegation_authority: { can_advance_stage: false } }, // must be ignored
+    }];
+    const pins = baseRows.map((row) => ({
+      role_key: row.role_key,
+      base_version: 1,
+      overlay_version: row.role_key === 'venture_ceo' ? 1 : null,
+    }));
+
+    const resolved = resolveVentureRoles(baseRows, overlayRows, pins, FIXTURE_VENTURE_ID, STANDARD_VENTURE_TEMPLATE.budget_distribution);
+    expect(resolved.ceo.delegation_authority).toEqual(STANDARD_VENTURE_TEMPLATE.ceo.delegation_authority);
+  });
 });
