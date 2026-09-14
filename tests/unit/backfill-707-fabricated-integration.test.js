@@ -7,17 +7,38 @@
  * (integration_operationalization->consumers->0->>name = 'LEO Protocol Engine') instead of
  * an IS NULL predicate, and to its simpler write path (no metadata merge -- a plain
  * updated_by scalar column set alongside the replaced integration_operationalization value).
+ *
+ * EXEC-phase TESTING review finding: an earlier version of this fake client re-derived its
+ * predicate match from the PRODUCTION module's own FABRICATION_PREDICATE_PATH/
+ * FABRICATION_MARKER_VALUE constants, so a mutation to either constant moved the fake and the
+ * code under test in lockstep -- 3 of 6 mutants survived (the exact class of drift the
+ * sibling SD's parity suite header already warns about). Fixed by hardcoding the expected
+ * path/marker as LITERALS independent of any import, so the fake genuinely simulates
+ * PostgREST's WHERE-clause filtering: a mutated constant now produces a real behavioral
+ * divergence (the guard silently fails to match, exactly as a live query would).
  */
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import {
   enumerateFabricatedRows,
   writeCorrectedRow,
   FABRICATION_PREDICATE_PATH,
   FABRICATION_MARKER_VALUE,
 } from '../../scripts/one-off/backfill-707-fabricated-integration.mjs';
+import { buildDefaultIntegrationOperationalization } from '../../scripts/prd/prd-creator.js';
 
-function matchesFabricationPredicate(row) {
-  return row.integration_operationalization?.consumers?.[0]?.name === FABRICATION_MARKER_VALUE;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Hardcoded literals matching the LIVE database predicate -- deliberately NOT imported from
+// the production module, so a mutation to that module's own constants is independently
+// detectable rather than re-derived.
+const REAL_FABRICATION_PREDICATE_PATH = 'integration_operationalization->consumers->0->>name';
+const REAL_FABRICATION_MARKER_VALUE = 'LEO Protocol Engine';
+
+function rowMatchesRealFabricationShape(row) {
+  return row.integration_operationalization?.consumers?.[0]?.name === REAL_FABRICATION_MARKER_VALUE;
 }
 
 /**
@@ -29,13 +50,13 @@ function makeFakeSupabase(rows, { onRead } = {}) {
   return {
     rows,
     from(_table) {
-      let eqCol = null;
-      let eqVal = null;
+      let selectEqCol = null;
+      let selectEqVal = null;
       let gtId = null;
       const selectBuilder = {
         eq: (col, val) => {
-          eqCol = col;
-          eqVal = val;
+          selectEqCol = col;
+          selectEqVal = val;
           return selectBuilder;
         },
         order: () => selectBuilder,
@@ -44,7 +65,12 @@ function makeFakeSupabase(rows, { onRead } = {}) {
           return selectBuilder;
         },
         limit: async (n) => {
-          let matched = rows.filter((r) => matchesFabricationPredicate(r));
+          // Simulate real PostgREST filtering: the SELECT only returns rows when the exact
+          // path AND exact marker value were used to filter -- a mutated predicate constant
+          // produces a genuinely different (non-matching) filter, not a re-derivation of the
+          // same one.
+          const predicateHolds = selectEqCol === REAL_FABRICATION_PREDICATE_PATH && selectEqVal === REAL_FABRICATION_MARKER_VALUE;
+          let matched = predicateHolds ? rows.filter((r) => rowMatchesRealFabricationShape(r)) : [];
           if (gtId !== null) matched = matched.filter((r) => r.id > gtId);
           matched.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
           const page = matched.slice(0, n).map((r) => ({ id: r.id }));
@@ -52,8 +78,8 @@ function makeFakeSupabase(rows, { onRead } = {}) {
           return { data: page, error: null };
         },
         maybeSingle: async () => {
-          const row = rows.find((r) => r.id === eqVal);
-          if (eqCol === 'id' && row) {
+          const row = rows.find((r) => r.id === selectEqVal);
+          if (selectEqCol === 'id' && row) {
             return { data: { updated_at: row.updated_at }, error: null };
           }
           return { data: null, error: null };
@@ -79,11 +105,14 @@ function makeFakeSupabase(rows, { onRead } = {}) {
                   // CAS mismatch: matches real PostgREST behavior -- 0 rows, no write.
                   return { data: null, error: null };
                 }
-                if (
-                  conditions[FABRICATION_PREDICATE_PATH] !== undefined &&
-                  !matchesFabricationPredicate(row)
-                ) {
-                  // Predicate no longer matches (already corrected) -- 0 rows, no write.
+                // Simulate the real WHERE clause: the exact path AND exact marker value must
+                // both be present as recorded conditions, AND the row's current content must
+                // genuinely match -- a mutated predicate constant (wrong path or wrong marker
+                // value passed to .eq()) is a real behavioral divergence here, not a re-import.
+                if (conditions[REAL_FABRICATION_PREDICATE_PATH] !== REAL_FABRICATION_MARKER_VALUE) {
+                  return { data: null, error: null };
+                }
+                if (!rowMatchesRealFabricationShape(row)) {
                   return { data: null, error: null };
                 }
                 Object.assign(row, patch);
@@ -102,7 +131,7 @@ describe('SD-LEO-FIX-REPLACE-707-FABRICATED-001 (FR-3): keyset enumeration survi
   it('visits every fabricated row exactly once across multiple pages, even when rows are corrected (leave the predicate) between pages', async () => {
     const rows = Array.from({ length: 25 }, (_, i) => ({
       id: `r${String(i + 1).padStart(2, '0')}`,
-      integration_operationalization: { consumers: [{ name: FABRICATION_MARKER_VALUE }] },
+      integration_operationalization: { consumers: [{ name: REAL_FABRICATION_MARKER_VALUE }] },
       updated_at: '2026-01-01T00:00:00.000000',
       updated_by: null,
     }));
@@ -137,7 +166,7 @@ describe('SD-LEO-FIX-REPLACE-707-FABRICATED-001 (FR-3): keyset enumeration survi
   it('a batch exactly equal to batchSize still terminates', async () => {
     const rows = Array.from({ length: 5 }, (_, i) => ({
       id: `r${i + 1}`,
-      integration_operationalization: { consumers: [{ name: FABRICATION_MARKER_VALUE }] },
+      integration_operationalization: { consumers: [{ name: REAL_FABRICATION_MARKER_VALUE }] },
     }));
     const sb = makeFakeSupabase(rows);
     const visited = [];
@@ -152,7 +181,7 @@ describe('SD-LEO-FIX-REPLACE-707-FABRICATED-001 (FR-1, FR-3): writeCorrectedRow'
   it('writes the placeholder and sets updated_by', async () => {
     const rows = [{
       id: 'prd-1',
-      integration_operationalization: { consumers: [{ name: FABRICATION_MARKER_VALUE }] },
+      integration_operationalization: { consumers: [{ name: REAL_FABRICATION_MARKER_VALUE }] },
       updated_at: '2026-01-01T00:00:00.000000',
       updated_by: null,
     }];
@@ -187,7 +216,7 @@ describe('SD-LEO-FIX-REPLACE-707-FABRICATED-001 (FR-1, FR-3): writeCorrectedRow'
   it('rejects the write when the row changed (updated_at CAS mismatch) between read and write', async () => {
     const rows = [{
       id: 'prd-3',
-      integration_operationalization: { consumers: [{ name: FABRICATION_MARKER_VALUE }] },
+      integration_operationalization: { consumers: [{ name: REAL_FABRICATION_MARKER_VALUE }] },
       updated_at: '2026-01-01T00:00:00.000000',
       updated_by: null,
     }];
@@ -216,14 +245,14 @@ describe('SD-LEO-FIX-REPLACE-707-FABRICATED-001 (FR-1, FR-3): writeCorrectedRow'
     expect(result.ok).toBe(true);
     expect(result.written).toBe(false);
     // Write never landed -- fabricated content and updated_by are untouched.
-    expect(rows[0].integration_operationalization).toEqual({ consumers: [{ name: FABRICATION_MARKER_VALUE }] });
+    expect(rows[0].integration_operationalization).toEqual({ consumers: [{ name: REAL_FABRICATION_MARKER_VALUE }] });
     expect(rows[0].updated_by).toBeNull();
   });
 
   it('running writeCorrectedRow a second time against an already-corrected row is a no-op (idempotency)', async () => {
     const rows = [{
       id: 'prd-4',
-      integration_operationalization: { consumers: [{ name: FABRICATION_MARKER_VALUE }] },
+      integration_operationalization: { consumers: [{ name: REAL_FABRICATION_MARKER_VALUE }] },
       updated_at: '2026-01-01T00:00:00.000000',
       updated_by: null,
     }];
@@ -236,5 +265,66 @@ describe('SD-LEO-FIX-REPLACE-707-FABRICATED-001 (FR-1, FR-3): writeCorrectedRow'
     expect(second.ok).toBe(true);
     expect(second.written).toBe(false);
     expect(rows[0].integration_operationalization).toEqual(placeholder);
+  });
+
+  it('FR-1 AC2: the placeholder written is exactly buildDefaultIntegrationOperationalization()\'s real output, imported not reimplemented', async () => {
+    const realPlaceholder = buildDefaultIntegrationOperationalization();
+    const rows = [{
+      id: 'prd-5',
+      integration_operationalization: { consumers: [{ name: REAL_FABRICATION_MARKER_VALUE }] },
+      updated_at: '2026-01-01T00:00:00.000000',
+      updated_by: null,
+    }];
+    const sb = makeFakeSupabase(rows);
+
+    const result = await writeCorrectedRow(sb, 'prd-5', realPlaceholder);
+
+    expect(result.written).toBe(true);
+    // Written value is byte-identical to the REAL builder's output, not a hand-rolled
+    // literal that could silently drift from it.
+    expect(rows[0].integration_operationalization).toEqual(realPlaceholder);
+    expect(Object.keys(rows[0].integration_operationalization).sort()).toEqual(
+      ['consumers', 'data_contracts', 'dependencies', 'observability_rollout', 'runtime_config']
+    );
+    expect(Object.values(rows[0].integration_operationalization).every((v) => v === null)).toBe(true);
+  });
+});
+
+describe('SD-LEO-FIX-REPLACE-707-FABRICATED-001: fabrication predicate constants match the live schema', () => {
+  it('FABRICATION_PREDICATE_PATH matches the real jsonb path used to identify fabricated rows', () => {
+    expect(FABRICATION_PREDICATE_PATH).toBe('integration_operationalization->consumers->0->>name');
+  });
+
+  it('FABRICATION_MARKER_VALUE matches the real fabricated marker value', () => {
+    expect(FABRICATION_MARKER_VALUE).toBe('LEO Protocol Engine');
+  });
+});
+
+describe('SD-LEO-FIX-REPLACE-707-FABRICATED-001 (FR-4): archived script refuses to run', () => {
+  const archivedScriptPath = join(__dirname, '..', '..', 'scripts', 'archive', 'one-time', 'backfill-prd-integration.js');
+
+  it('exits non-zero and prints a refusal message, without reaching any DB connection code', () => {
+    let threw = null;
+    let stdout = '';
+    try {
+      stdout = execFileSync(process.execPath, [archivedScriptPath], { encoding: 'utf8', timeout: 10000 });
+    } catch (err) {
+      threw = err;
+      stdout = (err.stdout || '') + (err.stderr || '');
+    }
+    expect(threw).not.toBeNull();
+    expect(threw.status).toBe(1);
+    expect(stdout).toMatch(/ARCHIVED SCRIPT -- REFUSING TO RUN/);
+  });
+
+  it('exits non-zero even when given --dry-run (the guard fires unconditionally, before argv is inspected)', () => {
+    let threw = null;
+    try {
+      execFileSync(process.execPath, [archivedScriptPath, '--dry-run'], { encoding: 'utf8', timeout: 10000 });
+    } catch (err) {
+      threw = err;
+    }
+    expect(threw).not.toBeNull();
+    expect(threw.status).toBe(1);
   });
 });
