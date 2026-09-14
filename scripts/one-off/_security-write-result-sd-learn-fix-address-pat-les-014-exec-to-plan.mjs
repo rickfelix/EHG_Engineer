@@ -105,6 +105,35 @@ const memberOf = (n) =>
     : null;
 
 /**
+ * Collect "argv wrappers": a local binding whose function body calls execFileSync with one of its
+ * OWN PARAMETERS as the argv argument -- the common shape where a one-line helper forwards an
+ * argv array through to git. Such a call site is not evaluable in isolation; its safety lives at
+ * the wrapper's call sites. So it is RESOLVED here rather than either failed (which is what a
+ * naive argv-must-be-a-literal-array rule does, and it produced two false positives on this very
+ * diff) or waved through.
+ */
+function collectArgvWrappers(ast) {
+  const wrappers = new Map(); // wrapperName -> paramName
+  walk(ast, (n) => {
+    if (n.type !== 'VariableDeclarator' || n.id?.type !== 'Identifier') return;
+    const fn = n.init;
+    if (!fn || (fn.type !== 'ArrowFunctionExpression' && fn.type !== 'FunctionExpression')) return;
+    const params = (fn.params || []).filter((p) => p.type === 'Identifier').map((p) => p.name);
+    if (params.length === 0) return;
+    walk(fn.body, (inner) => {
+      if (
+        inner.type === 'CallExpression' &&
+        inner.callee?.type === 'Identifier' && inner.callee.name === 'execFileSync' &&
+        inner.arguments[1]?.type === 'Identifier' && params.includes(inner.arguments[1].name)
+      ) {
+        wrappers.set(n.id.name, inner.arguments[1].name);
+      }
+    });
+  });
+  return wrappers;
+}
+
+/**
  * Parse one changed source file and report ONLY structurally-real occurrences. A construct
  * mentioned in a comment or inside a string literal produces no AST node of the relevant kind,
  * so it cannot reach this report at all.
@@ -120,10 +149,27 @@ function scanFileAst(file) {
     notable_imports: [],
     rpc_calls: [],
     process_argv_reads: [],
-    // execFileSync is permitted, but only in its safe shape: a literal argv ARRAY and no shell.
+    // execFileSync is permitted, but only in its safe shape: a string-literal command, an argv
+    // ARRAY (directly or via a resolved wrapper), and never shell:true.
     exec_file_sync_calls: [],
     unsafe_exec_file_sync: [],
+    argv_wrappers: [],
+    wrapper_call_sites: [],
+    wrapper_call_sites_not_literal_array: [],
   };
+
+  const wrappers = collectArgvWrappers(ast);
+  findings.argv_wrappers = [...wrappers.entries()].map(([wrapper, param]) => ({ wrapper, param }));
+
+  // Every call site of each wrapper must pass a literal argv ARRAY.
+  const badWrapperCalls = [];
+  walk(ast, (n) => {
+    if (n.type !== 'CallExpression' || n.callee?.type !== 'Identifier') return;
+    if (!wrappers.has(n.callee.name)) return;
+    const argvIsArray = n.arguments[0]?.type === 'ArrayExpression';
+    findings.wrapper_call_sites.push({ wrapper: n.callee.name, line: n.loc.start.line, argv_is_literal_array: argvIsArray });
+    if (!argvIsArray) badWrapperCalls.push({ wrapper: n.callee.name, line: n.loc.start.line });
+  });
 
   walk(ast, (n) => {
     if (n.type === 'ImportDeclaration' && typeof n.source?.value === 'string') {
@@ -140,15 +186,29 @@ function scanFileAst(file) {
         findings.forbidden_calls.push({ callee: id, line: n.loc.start.line });
       }
       if (id === 'execFileSync') {
+        const cmdArg = n.arguments[0];
         const argvArg = n.arguments[1];
         const optsArg = n.arguments[2];
+        const commandIsLiteral = cmdArg?.type === 'Literal' && typeof cmdArg.value === 'string';
         const argvIsLiteralArray = argvArg?.type === 'ArrayExpression';
+        // argv may instead be a wrapper parameter, in which case safety is decided at the
+        // wrapper's call sites (all of which are checked above).
+        const argvViaWrapperParam =
+          argvArg?.type === 'Identifier' && [...wrappers.values()].includes(argvArg.name);
         const shellTrue = optsArg?.type === 'ObjectExpression' && optsArg.properties.some(
           (p) => p.type === 'Property' && p.key?.name === 'shell' && p.value?.value === true
         );
-        const record = { line: n.loc.start.line, argv_is_literal_array: !!argvIsLiteralArray, shell_true: !!shellTrue };
+        const record = {
+          line: n.loc.start.line,
+          command: commandIsLiteral ? cmdArg.value : null,
+          command_is_string_literal: !!commandIsLiteral,
+          argv_is_literal_array: !!argvIsLiteralArray,
+          argv_via_wrapper_param: !!argvViaWrapperParam,
+          shell_true: !!shellTrue,
+        };
         findings.exec_file_sync_calls.push(record);
-        if (!argvIsLiteralArray || shellTrue) findings.unsafe_exec_file_sync.push(record);
+        const argvOk = argvIsLiteralArray || (argvViaWrapperParam && badWrapperCalls.length === 0);
+        if (!commandIsLiteral || !argvOk || shellTrue) findings.unsafe_exec_file_sync.push(record);
       }
       if (memberOf(n) === 'rpc') findings.rpc_calls.push({ line: n.loc.start.line });
     }
@@ -164,6 +224,7 @@ function scanFileAst(file) {
     }
   });
 
+  findings.wrapper_call_sites_not_literal_array = badWrapperCalls;
   return findings;
 }
 
@@ -200,6 +261,9 @@ function scanDiff() {
   const unsafeExec = perFile.flatMap((r) => r.unsafe_exec_file_sync.map((c) => ({ file: r.file, ...c })));
   const notableImports = perFile.flatMap((r) => r.notable_imports.map((c) => ({ file: r.file, ...c })));
   const execFileSyncCalls = perFile.flatMap((r) => r.exec_file_sync_calls.map((c) => ({ file: r.file, ...c })));
+  const argvWrappers = perFile.flatMap((r) => r.argv_wrappers.map((c) => ({ file: r.file, ...c })));
+  const wrapperCallSites = perFile.flatMap((r) => r.wrapper_call_sites.map((c) => ({ file: r.file, ...c })));
+  const badWrapperCalls = perFile.flatMap((r) => (r.wrapper_call_sites_not_literal_array || []).map((c) => ({ file: r.file, ...c })));
 
   return {
     diff_range: DIFF_RANGE,
@@ -228,6 +292,9 @@ function scanDiff() {
       notable_imports: notableImports,
       exec_file_sync_calls: execFileSyncCalls,
       unsafe_exec_file_sync: unsafeExec,
+      argv_wrappers: argvWrappers,
+      wrapper_call_sites: wrapperCallSites,
+      wrapper_call_sites_not_literal_array: badWrapperCalls,
     },
     clean:
       hits.length === 0 &&
@@ -238,7 +305,8 @@ function scanDiff() {
       newFunction.length === 0 &&
       rpcCalls.length === 0 &&
       argvReads.length === 0 &&
-      unsafeExec.length === 0,
+      unsafeExec.length === 0 &&
+      badWrapperCalls.length === 0,
   };
 }
 
