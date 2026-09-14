@@ -171,7 +171,7 @@ export async function runStage1({ supabase, ventureId, dryRun = false, logger = 
     const ext = extractArchPlanSection(v.content);
     if (!ext.found) {
       const planKeyDerived = (v.vision_key || '').replace(/^VISION-/, 'ARCH-').replace(/-L\d+/, '').replace(/-001$/, '') + '-001';
-      const remediation = `node scripts/eva/archplan-command.mjs upsert --plan-key ${planKeyDerived} --vision-key ${v.vision_key} --source <path-to-arch-section.md>`;
+      const remediation = `node scripts/eva/archplan-command.mjs upsert --plan-key ${planKeyDerived} --vision-key ${v.vision_key} --source <path-to-arch-section.md> --draft`;
       if (!dryRun) {
         await writeCascadeError(supabase, {
           visionId: v.id,
@@ -210,7 +210,7 @@ export async function runStage1({ supabase, ventureId, dryRun = false, logger = 
         stage: STAGE1,
         errorCode: 'ARCHPLAN_UPSERT_FAILED',
         errorMessage: error.message,
-        remediationCommand: `node scripts/eva/archplan-command.mjs upsert --plan-key ${planKey} --vision-key ${v.vision_key} --source <path-to-arch-section.md>`,
+        remediationCommand: `node scripts/eva/archplan-command.mjs upsert --plan-key ${planKey} --vision-key ${v.vision_key} --source <path-to-arch-section.md> --draft`,
       });
       refusal++;
       continue;
@@ -301,7 +301,7 @@ export async function runStage2({ supabase, ventureId, dryRun = false, logger = 
         stage: STAGE2,
         errorCode: 'INSUFFICIENT_PHASES',
         errorMessage: `Archplan ${p.plan_key} has only ${phases?.length || 0} implementation phase(s); orchestrator decomposition requires ≥3.`,
-        remediationCommand: `node scripts/eva/archplan-command.mjs upsert --plan-key ${p.plan_key} --vision-key ${p.vision_key} --source <rich-arch-content-with-phases.md>`,
+        remediationCommand: `node scripts/eva/archplan-command.mjs upsert --plan-key ${p.plan_key} --vision-key ${p.vision_key} --source <rich-arch-content-with-phases.md> --draft`,
       });
       refusal++;
       continue;

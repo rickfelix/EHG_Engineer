@@ -1,0 +1,253 @@
+{
+  "executive_summary": "lib/eva/archplan-upsert.js's upsertArchPlan() unconditionally hardcodes status='active' and chairman_approved=true on every write (lines 121-122), with no parameter to override it -- so any architecture plan written by any caller is instantly claimed chairman-approved. LEAD-phase Explore + VALIDATION sub-agent review confirmed this is real and found a directly analogous PRIOR FIX already shipped on the VISION side (QF-20260702-262): vision-upsert.js exposes an approved boolean (default true for backward compat) and vision-command.mjs makes the choice MANDATORY at the CLI (hard-errors without --approved|--draft) -- but architecture plans never received either leg. 200 of 235 live rows come from the CLI (archplan-command.mjs), which has zero approval flags today, so a helper-level fix alone would leave the dominant write path unaffected. This SD adds both legs to architecture plans, closes a compounding defect where stage-17-doc-generation.js writes an ACTIVE chairman-approved plan against a DRAFT unapproved parent vision (live today on ARCH-ALTIFYAI-001, the chairman-watched AltifyAI test-cargo venture), stamps the previously-unwritten chairman_approved_at column, and designs a separate gated promotion (draft->active) updater using only existing columns -- including a self-approval guard (promoter != created_by) that meaningfully advances ratification a588adba's reviewer-not-author requirement even before the approved_by column (which does not exist on either table and is named, not built, in this SD per its own chairman-ceremony scope rule) is added in a future migration.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Add an approved parameter to upsertArchPlan(), mirroring vision-upsert.js",
+      "description": "Add an optional `approved` parameter to lib/eva/archplan-upsert.js's upsertArchPlan() signature, default `true` (preserving backward compatibility for existing callers that don't pass it -- matching vision-upsert.js's own default-true precedent). When `approved !== false`, write status='active', chairman_approved=true, chairman_approved_at=now() (see FR-4). When `approved === false`, write status='draft', chairman_approved=false, chairman_approved_at=null.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "upsertArchPlan({..., approved: false}) writes status='draft', chairman_approved=false, chairman_approved_at=null",
+        "upsertArchPlan({...}) with approved omitted writes status='active', chairman_approved=true, chairman_approved_at set (byte-identical outward behavior to today for existing callers, except the new timestamp -- see FR-4)",
+        "upsertArchPlan({..., approved: true}) is explicitly equivalent to omitting the parameter",
+        "No existing caller's positional/keyword usage requires a code change"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Make the approval choice mandatory at the CLI, mirroring vision-command.mjs",
+      "description": "scripts/eva/archplan-command.mjs's upsert subcommand currently calls upsertArchPlan with no approval-related argument (its own help text falsely claims 'after chairman approval' -- nothing enforces this). Mirror vision-command.mjs's mandatory --approved|--draft flag pattern exactly: hard-error with a clear message if neither flag is passed (no default-approve fallback at the CLI layer, even though the underlying helper defaults true for other programmatic callers), and reuse vision-upsert.js's exported rejectStringFlagValue guard so a string 'false' can't coerce to a truthy approved value.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Running the upsert subcommand with neither --approved nor --draft hard-errors before any DB write, with a message naming both flags (mirroring vision-command.mjs:140's wording)",
+        "--draft writes a draft, unapproved plan",
+        "--approved writes an active, chairman_approved plan with chairman_approved_at stamped",
+        "Passing an invalid/string coercion (e.g. --approved false) is rejected via rejectStringFlagValue, not silently coerced to true",
+        "Update the upsert subcommand's help text to accurately describe the required flag, removing the false 'after chairman approval' claim"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Fix stage-17-doc-generation.js's two unfixed architecture-plan call sites",
+      "description": "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js already fixed its VISION call site (line 284, approved:false, under a QF-20260702-262 comment) but its two upsertArchPlan call sites (lines ~373, ~395) still pass nothing approval-related, so this file currently writes a DRAFT unapproved vision immediately followed by an ACTIVE chairman-approved architecture plan claiming alignment to it -- an internally incoherent state independent of any downstream security implication, live today on real venture plans including ARCH-ALTIFYAI-001. Pass approved:false at both call sites, mirroring the vision call site exactly.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "Both upsertArchPlan call sites in stage-17-doc-generation.js pass approved:false",
+        "A new regression-guard test (mirroring stage-17-doc-generation.test.js's existing QF-262 vision guard at line ~174) asserts both arch-plan writes produce status='draft', chairman_approved=false -- and fails if that assertion is reverted (mutation-tested)",
+        "Existing stage-17-doc-generation.test.js suite passes unmodified in all other assertions"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Stamp chairman_approved_at whenever chairman_approved flips true",
+      "description": "chairman_approved_at exists on eva_architecture_plans (nullable timestamptz) but is never written by upsertArchPlan today -- only 4 of 211 currently-approved rows carry a timestamp. Set it to now() whenever the write results in chairman_approved=true (both the approved-by-default path and an explicit approved:true), null when chairman_approved=false. No DDL required -- the column already exists.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "Every write with the resulting chairman_approved=true also sets chairman_approved_at to the write's own timestamp",
+        "Every write with chairman_approved=false sets chairman_approved_at=null",
+        "A unit test proves this for both branches"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Design a separate, gated promotion (draft->active) updater for architecture plans, with a self-approval guard",
+      "description": "There is currently no code path anywhere that promotes an eva_architecture_plans row from draft to active/chairman_approved via UPDATE (only 3 INSERT/upsert writes exist total). Writing plans as draft-only with no promotion path would itself be a regression (artifact-persistence-service.js's ADR-attachment and the planning-completeness PLAN-TO-EXEC gate would silently degrade forever for any plan legitimately reviewed and approved after the fact). Design and implement a new, separate function (NOT inside upsertArchPlan) that UPDATEs an existing draft row to status='active', chairman_approved=true, chairman_approved_at=now(), modeled on lib/eva/stage-execution-worker.js's _autoApproveCloneVision UPDATE pattern (lines ~3935/4017) but adding a genuine self-approval guard per ratification a588adba's reviewer-not-author requirement: the function must accept a `promotedBy` identity and REFUSE the promotion when promotedBy equals the plan row's own created_by (using the EXISTING created_by column -- this meaningfully advances the reviewer!=author requirement even before an approved_by column exists to persist WHO approved; see FR-6). The function must also satisfy eva_architecture_plans' existing UPDATE-only quality-advancement trigger (trg_enforce_archplan_quality_advancement, which requires quality_checked=true) -- do not attempt to bypass or weaken this trigger; a promotion attempt on a row with quality_checked=false must fail with the trigger's own error, not a swallowed/silent no-op.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A new promotion function exists, callable independently of upsertArchPlan, that UPDATEs status/chairman_approved/chairman_approved_at on an existing row",
+        "The function refuses (with a clear, non-silent error) when promotedBy === the target row's created_by",
+        "The function succeeds when promotedBy differs from created_by and the row's quality_checked=true",
+        "The function's UPDATE against a row with quality_checked=false fails via the existing DB trigger (not a separately-implemented, potentially-divergent application-level check)",
+        "Unit tests cover: successful promotion, self-approval refusal, and the quality-trigger failure path"
+      ]
+    },
+    {
+      "id": "FR-6",
+      "title": "Name the approved_by migration need; do not implement it (chairman ceremony)",
+      "description": "Neither eva_architecture_plans nor eva_vision_documents has an approved_by column, and no DDL is authorized in this SD per its own scope text ('New columns or tables are a chairman ceremony: PLAN names the files and stops there'). Document the specific, minimal migration needed (a nullable text/uuid approved_by column on eva_architecture_plans, written by FR-5's promotion function alongside the existing chairman_approved_at) as a named, deferred follow-up -- do not write or apply any migration file in this SD.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "The PR description (or a docs note) names the exact column, table, and write-site (FR-5's promotion function) that a future chairman-ceremony-gated migration SD should add",
+        "No migration file, DDL statement, or schema change of any kind is included in this SD's diff"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "No unconditional default flip",
+      "description": "upsertArchPlan's approved parameter must default to true (backward-compatible), not false -- an unconditional flip would silently degrade artifact-persistence-service.js's ADR-attachment consumer and the planning-completeness gate for every future SD unless FR-5's promotion path is used deliberately. The CLI's mandatory-choice requirement (FR-2) is what actually closes the governance gap for the dominant write path, not the helper default."
+    },
+    {
+      "id": "TR-2",
+      "title": "No DDL",
+      "description": "This SD ships entirely against existing columns (status, chairman_approved, chairman_approved_at, created_by all already exist on eva_architecture_plans). FR-6 documents the one deferred migration need; it is not implemented here."
+    },
+    {
+      "id": "TR-3",
+      "title": "trust-elevation.js safety already verified, no change needed there",
+      "description": "LEAD-phase VALIDATION independently measured that lib/eva/bridge/trust-elevation.js's chairman_approved AND-guard cannot be broken by this fix into a stuck-venture state: every real venture's trust elevation is carried by its vision's chairman_approved status regardless of the arch-plan limb, historical elevations are 100% vision-attributed, and the check is mint-time-only/idempotent. No code change to trust-elevation.js is required or in scope."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "upsertArchPlan with approved:false",
+      "type": "unit",
+      "expected": "Row written with status='draft', chairman_approved=false, chairman_approved_at=null"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "upsertArchPlan with approved omitted (backward compat)",
+      "type": "unit",
+      "expected": "Row written with status='active', chairman_approved=true, chairman_approved_at set to the write time"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "archplan-command.mjs upsert with neither --approved nor --draft",
+      "type": "unit",
+      "expected": "Hard error before any DB write; no row created/updated"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "archplan-command.mjs upsert with --approved 'false' (string coercion attempt)",
+      "type": "unit",
+      "expected": "Rejected via rejectStringFlagValue, not silently treated as true"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "stage-17-doc-generation.js's two arch-plan writes",
+      "type": "unit",
+      "expected": "Both produce status='draft', chairman_approved=false; mutation-tested regression guard fails if approved:false is reverted at either call site"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Promotion function called with promotedBy === row.created_by",
+      "type": "unit",
+      "expected": "Refused with a clear error; row unchanged"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "Promotion function called with promotedBy != row.created_by, quality_checked=true",
+      "type": "unit",
+      "expected": "Row promoted: status='active', chairman_approved=true, chairman_approved_at set"
+    },
+    {
+      "id": "TS-8",
+      "scenario": "Promotion function called against a row with quality_checked=false",
+      "type": "unit",
+      "expected": "UPDATE fails via the existing trg_enforce_archplan_quality_advancement trigger, not a separate application check"
+    },
+    {
+      "id": "TS-9",
+      "scenario": "Full pre-existing archplan-upsert.test.js and stage-17-doc-generation.test.js suites",
+      "type": "regression",
+      "expected": "All pre-existing assertions pass unmodified"
+    }
+  ],
+  "acceptance_criteria": [
+    "No architecture plan can be written chairman-approved via the CLI (the dominant, 200/235-row write path) without an explicit --approved choice",
+    "stage-17-doc-generation.js no longer writes an approved architecture plan against an unapproved parent vision",
+    "A promotion path exists for legitimately reviewing and approving a draft plan, with a genuine self-approval guard using the existing created_by column",
+    "chairman_approved_at is populated going forward for every newly-approved plan",
+    "No DDL is introduced; the approved_by migration need is named for a future chairman-ceremony SD",
+    "trust-elevation.js's venture trust-tier elevation guard is unaffected in behavior for any currently-trusted venture"
+  ],
+  "risks": [
+    {
+      "risk": "RESOLVED DURING LEAD (recorded for history): an initial concern that tightening chairman_approved to be genuinely meaningful could cause trust-elevation.js to block ventures that previously passed via the rubber-stamped arch-plan limb.",
+      "mitigation": "VALIDATION measured directly: every real venture's elevation is carried by the vision limb regardless; historical elevations are 100% vision-attributed; the check is mint-time-only and idempotent so no already-trusted venture is affected. No code change to trust-elevation.js needed.",
+      "severity": "low"
+    },
+    {
+      "risk": "A helper-level-only fix (approved param with no CLI enforcement) would leave the dominant 200/235-row CLI write path unaffected, failing to actually close the gap the SD's title describes.",
+      "mitigation": "FR-2 makes the choice mandatory at the CLI layer specifically, mirroring vision-command.mjs's already-proven pattern rather than relying on a default alone.",
+      "severity": "low"
+    },
+    {
+      "risk": "A promotion function without any self-approval guard would satisfy the mechanical draft/active toggle but not ratification a588adba's substantive reviewer-not-author requirement.",
+      "mitigation": "FR-5 requires the promotion function to compare promotedBy against the row's existing created_by column and refuse on match -- a real, enforced guard achievable without the deferred approved_by column.",
+      "severity": "medium"
+    },
+    {
+      "risk": "eva_architecture_plans' UPDATE-only quality-advancement trigger (missing an INSERT-leg equivalent, unlike eva_vision_documents) means 38 live rows are already chairman_approved=true with quality_checked=false -- a pre-existing gap this SD does not close.",
+      "mitigation": "Out of scope, flagged for a separate ticket per LEAD-phase VALIDATION's recommendation. This SD's promotion function correctly relies on and respects the existing trigger rather than working around it.",
+      "severity": "low"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "lib/eva/bridge/trust-elevation.js (reads chairman_approved for venture trust-tier elevation -- behavior verified unaffected for real ventures)",
+      "lib/eva/artifact-persistence-service.js (reads status='active' for ADR attachment)",
+      "scripts/modules/handoff/executors/plan-to-exec/gates/planning-completeness.js (reads status='active' as a non-blocking warning input)",
+      "scripts/eva/archplan-command.mjs (CLI, gains the mandatory approval choice)",
+      "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js (two call sites, gains approved:false)"
+    ],
+    "dependencies": [
+      "eva_architecture_plans.status, .chairman_approved, .chairman_approved_at, .created_by (existing columns, no schema change)",
+      "trg_enforce_archplan_quality_advancement (existing UPDATE trigger, relied on not modified)",
+      "lib/eva/vision-upsert.js's rejectStringFlagValue (reused, not duplicated)"
+    ],
+    "data_contracts": [
+      "none -- no schema change; FR-6 names a future migration need only"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Verified via the unit/regression test suites named in FR-1 through FR-5; no new dashboard or monitoring surface is in scope"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two additive legs mirroring the already-proven vision-upsert/vision-command pattern (helper-level default-true param + CLI-level mandatory choice), a call-site fix closing a live incoherent-state defect, a cheap timestamp fix, and a new, separate, gated promotion updater with a genuine self-approval guard built from existing columns -- no schema change.",
+    "components": [
+      {
+        "name": "lib/eva/archplan-upsert.js",
+        "change": "Add optional approved parameter (default true); stamp chairman_approved_at"
+      },
+      {
+        "name": "scripts/eva/archplan-command.mjs",
+        "change": "Add mandatory --approved|--draft flag, mirroring vision-command.mjs; correct help text"
+      },
+      {
+        "name": "lib/eva/stage-templates/analysis-steps/stage-17-doc-generation.js",
+        "change": "Both upsertArchPlan call sites pass approved:false"
+      },
+      {
+        "name": "lib/eva/archplan-promote.js (new)",
+        "change": "New function: gated UPDATE-based promotion (draft->active, chairman_approved) with a promotedBy != created_by self-approval guard, respecting the existing quality-advancement trigger"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Implement the helper-level change first (FR-1, FR-4, foundational), then the CLI enforcement (FR-2), then the stage-17 call-site fix (FR-3), then the new promotion function (FR-5), then document the deferred migration need (FR-6).",
+    "steps": [
+      "Add the approved parameter and chairman_approved_at stamping to upsertArchPlan (FR-1, FR-4)",
+      "Add the mandatory --approved|--draft CLI choice to archplan-command.mjs, reusing rejectStringFlagValue (FR-2)",
+      "Fix both stage-17-doc-generation.js arch-plan call sites and add the regression-guard test (FR-3)",
+      "Design and implement the new promotion function with its self-approval guard (FR-5)",
+      "Document the approved_by migration need (FR-6)",
+      "Run the full touched-area test suite (lib/eva/__tests__/archplan-upsert.test.js, lib/eva/__tests__/stage-17-doc-generation.test.js, plus new tests) and mutation-test all new tests"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run scripts/eva/archplan-command.mjs's upsert subcommand for a plan-key WITHOUT --approved or --draft",
+      "expected_outcome": "Command hard-errors before any DB write"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Re-run with --draft, then SELECT status, chairman_approved, chairman_approved_at FROM eva_architecture_plans WHERE plan_key = '<test key>'",
+      "expected_outcome": "status='draft', chairman_approved=false, chairman_approved_at=null"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Call the new promotion function with promotedBy equal to the row's own created_by",
+      "expected_outcome": "Refused with a clear self-approval error; row unchanged"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEO-INFRA-ARCHITECTURE-PLANS-GET-001"
+  }
+}
