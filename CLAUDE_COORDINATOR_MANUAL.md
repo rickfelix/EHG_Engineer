@@ -1,8 +1,8 @@
-<!-- file_content_hash: fbdf249dd9a74a2c -->
+<!-- file_content_hash: 6b313b6fb42f281e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR_MANUAL.md — Coordinator Manual (how-to companion)
 
-**Generated**: 2026-09-14 4:22:07 PM
+**Generated**: 2026-09-14 4:30:07 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — dispatch mechanics, gauge/count verification steps, loop-registry operating detail
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -66,6 +66,8 @@ document; this note closes the RCA's open question with a documented "no conflic
 rather than leaving it unresolved.
 
 **THE OUTSIDE REVIEWER (ASTRA) MAKES NO CHANGES AND WRITES ONLY TO ITS OWN DIRECTORY (ratification 569519dd); coordinator share**: never dispatch, merge or apply a change authored by the outside reviewer; its findings reach the belt only as Adam-sourced items after Solomon measures them.
+
+**AN ACTIVE ACCOUNT RUNNING OUT IS THE PLAN, NOT AN INCIDENT; THE CHAIRMAN SWITCHES AT THE FREEZE (ratification c043f4c1); coordinator share**: an exhaustion projection on the active account never slows dispatch; the fleet spends it down and stops at the freeze.
 
 ---
 

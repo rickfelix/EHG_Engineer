@@ -1,8 +1,8 @@
-<!-- file_content_hash: d04741b3ced0188b -->
+<!-- file_content_hash: 4dfc11acbbb4586c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-14 4:22:07 PM
+**Generated**: 2026-09-14 4:30:07 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -523,6 +523,8 @@ manual is read.
 
 - **Harness-week burn posture — do not slow down, rotate accounts (chairman at the Adam terminal 2026-09-02 12:56Z; ratification 2a6537bf; Adam share)** — REPEALED 2026-09-14: the chairman ordered the time-boxed text deleted ("Delete") because after its date it read as an instruction to be conservative. Superseded by the standing BURN POSTURE — NEVER SELF-THROTTLE policy. This line is the repeal site (c44cd9d8).
 - **Harness-week composition — root-cause repair is the intended composition through Friday (chairman at the Adam terminal 2026-09-02 13:31Z; ratification b046d398; Adam share)** — EXPIRED 2026-09-04 and superseded by 8a427640 (harness repair is on-plan while AltifyAI is pending at stage 24). This line is the repeal site (c44cd9d8).
+
+- **AN ACTIVE ACCOUNT RUNNING OUT IS THE PLAN, NOT AN INCIDENT; THE CHAIRMAN SWITCHES AT THE FREEZE (ratification c043f4c1)** — Chairman at the Adam terminal 2026-09-13: "Hey, if it runs out, say, 12 hours from now, that's fine, because once it runs out, we'll switch to the next account." A projection that the active account will run out is carried as a status line, never escalated as an alarm and never a reason to throttle. The next account follows the chairman's weekly rotation order (Code Street Labs, then rickfelix2000, then a full stop until Deep Soul resets); at each switch Adam asks for the new account's /usage paste. Event-bound, not dated.
 
 ## Crew-comms routing protocol (organizing layer)
 
