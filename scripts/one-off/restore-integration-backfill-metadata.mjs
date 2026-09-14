@@ -45,6 +45,13 @@ const WINDOW_START = '2026-09-14T02:46:00Z';
 const WINDOW_END = '2026-09-14T02:48:00Z';
 
 async function fetchAllMarkedRows(supabase) {
+  // ADVERSARIAL SHIP-REVIEW FINDING (PR #8950, ship-adversarial-review-8950): this
+  // offset-paginated query had NO .order() -- the exact defect class this entire SD
+  // exists to fix (see module header: the prior ad-hoc backfill silently skipped rows
+  // this same way). Without an explicit order, Postgres gives no stable row ordering
+  // guarantee across separate LIMIT/OFFSET pages, and this table has heavy concurrent
+  // write traffic from other sessions -- a row can shift position between page 1 and
+  // page 2 and be silently skipped. Order by id so pagination is deterministic.
   const rows = [];
   let from = 0;
   const pageSize = 1000;
@@ -53,6 +60,7 @@ async function fetchAllMarkedRows(supabase) {
       .from('product_requirements_v2')
       .select('id, metadata')
       .not('metadata->integration_backfill', 'is', null)
+      .order('id', { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw new Error(`fetchAllMarkedRows failed: ${error.message}`);
     if (!data || data.length === 0) break;
@@ -64,6 +72,16 @@ async function fetchAllMarkedRows(supabase) {
 }
 
 async function findPreBackfillMetadata(supabase, recordId) {
+  // ADVERSARIAL SHIP-REVIEW FINDING (PR #8950): the WINDOW_START/END pair alone is not
+  // a correctness guarantee -- it is padded 18s before the measured backfill start with
+  // no filter tying a match to the backfill specifically, so a legitimate unrelated write
+  // to the same row inside that padding window would have been picked up as "pre-backfill"
+  // and silently reverted. Make the match self-identifying instead: the backfill's own
+  // UPDATE is uniquely the one that ADDS the integration_backfill marker where it was
+  // previously absent (new_values has it, old_values does not) -- this is correct
+  // regardless of exact timing or clock skew. The time window is kept as an additional,
+  // non-load-bearing performance narrowing filter (record_id already makes this query
+  // selective and fast -- verified ~36ms per lookup against the live table).
   const { data, error } = await supabase
     .from('governance_audit_log')
     .select('old_values, changed_at')
@@ -72,6 +90,8 @@ async function findPreBackfillMetadata(supabase, recordId) {
     .eq('operation', 'UPDATE')
     .gte('changed_at', WINDOW_START)
     .lte('changed_at', WINDOW_END)
+    .not('new_values->metadata->>integration_backfill', 'is', null)
+    .is('old_values->metadata->>integration_backfill', null)
     .order('changed_at', { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -86,7 +106,8 @@ async function run() {
   console.log(`Marked rows (carrying metadata.integration_backfill): ${markedRows.length}`);
   console.log(`Mode: ${EXECUTE ? 'EXECUTE (writing)' : 'DRY-RUN (no writes)'}`);
 
-  let alreadyRestored = 0;
+  let trulyRestored = 0;
+  let touchedByOtherWriterContentStillLost = 0;
   let noAuditRow = 0;
   let restored = 0;
   let failed = 0;
@@ -97,10 +118,33 @@ async function run() {
   for (const row of markedRows) {
     const keyCount = Object.keys(row.metadata || {}).length;
     if (keyCount !== 1) {
-      // Already has more than the single provenance key -- either already restored by a
-      // prior run of this script, or touched by something else since the backfill.
-      // Either way, never overwrite it here.
-      alreadyRestored++;
+      // ADVERSARIAL SHIP-REVIEW FINDING (PR #8950): this bucket used to silently lump
+      // "genuinely restored" together with "destroyed and then touched by another writer
+      // for an unrelated reason, original content still permanently lost" -- both look
+      // identical from key COUNT alone. Distinguish them honestly: look up what this row
+      // is supposed to contain (from the audit log's own record of the backfill event)
+      // and check whether the row's CURRENT metadata actually contains it.
+      const auditRowCheck = await findPreBackfillMetadata(supabase, row.id);
+      const priorMetadataCheck = auditRowCheck?.old_values?.metadata;
+      const hadRealPriorContent = priorMetadataCheck && typeof priorMetadataCheck === 'object' && Object.keys(priorMetadataCheck).length > 0;
+      if (!hadRealPriorContent) {
+        // Nothing was ever lost on this row -- any extra keys are unrelated legitimate
+        // content, not a restoration outcome either way.
+        noPriorKeys++;
+        continue;
+      }
+      const currentKeys = new Set(Object.keys(row.metadata || {}));
+      const isSuperset = Object.keys(priorMetadataCheck).every((k) => currentKeys.has(k));
+      if (isSuperset) {
+        trulyRestored++;
+      } else {
+        touchedByOtherWriterContentStillLost++;
+        problems.push({
+          id: row.id,
+          issue: 'row was touched by another writer after the incident but does not contain its original destroyed keys -- content still lost, needs manual recovery from governance_audit_log',
+          missingKeys: Object.keys(priorMetadataCheck).filter((k) => !currentKeys.has(k)),
+        });
+      }
       continue;
     }
 
@@ -184,7 +228,8 @@ async function run() {
     restored++;
   }
 
-  console.log(`Already-restored/touched-since-backfill (skipped): ${alreadyRestored}`);
+  console.log(`Genuinely restored, verified (current metadata contains original keys): ${trulyRestored}`);
+  console.log(`⚠ Touched by another writer, ORIGINAL CONTENT STILL LOST (needs manual recovery -- see problems): ${touchedByOtherWriterContentStillLost}`);
   console.log(`No prior metadata to restore (was genuinely empty before): ${noPriorKeys}`);
   console.log(`No audit row found (investigate): ${noAuditRow}`);
   console.log(`Concurrently modified since batch snapshot (skipped, manual recovery still possible): ${concurrentlyModified}`);
