@@ -80,6 +80,99 @@ describe('FR-6: checkSingleSDClosedSource', () => {
   });
 });
 
+// SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: generalizes checkSingleSDClosedSource from
+// "exactly one SD, and it's closed" to "every SD referenced in metadata.sites[] is closed" —
+// a backlog-draining retro-extraction cron can record one historical incident against many
+// sibling SDs, each under its own distinct sd_id, which the strict single-SD check above could
+// never recognize as noise even when every one of those SDs has since completed.
+describe('SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: multi-SD all-closed generalization', () => {
+  const SD_C = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+  it('rejects a pattern whose metadata.sites[] spans 3+ distinct sd_ids, ALL closed, severity=medium', () => {
+    const result = filterPatternsForLearning(
+      [baseline({
+        first_seen_sd_id: SD_A,
+        last_seen_sd_id: SD_C,
+        severity: 'medium',
+        metadata: { sites: [{ key: 'sd:a', sd_id: SD_A }, { key: 'sd:b', sd_id: SD_B }, { key: 'sd:c', sd_id: SD_C }] },
+      })],
+      { sourceSdStatusMap: new Map([[SD_A, 'completed'], [SD_B, 'completed'], [SD_C, 'completed']]) },
+    );
+    expect(result.kept).toHaveLength(0);
+    expect(result.rejected[0].reason).toBe(REJECT_REASONS.SINGLE_SD_CLOSED_SOURCE);
+  });
+
+  it('does NOT reject when one of the 3+ distinct sd_ids is still OPEN', () => {
+    const result = filterPatternsForLearning(
+      [baseline({
+        first_seen_sd_id: SD_A,
+        last_seen_sd_id: SD_C,
+        severity: 'medium',
+        metadata: { sites: [{ key: 'sd:a', sd_id: SD_A }, { key: 'sd:b', sd_id: SD_B }, { key: 'sd:c', sd_id: SD_C }] },
+      })],
+      { sourceSdStatusMap: new Map([[SD_A, 'completed'], [SD_B, 'in_progress'], [SD_C, 'completed']]) },
+    );
+    expect(result.kept).toHaveLength(1);
+  });
+
+  it('resolves a text-key sd_id (not a UUID) among the sites, not just UUID-shaped ids', () => {
+    const TEXT_SD = 'SD-LEARN-FIX-ADDRESS-PAT-AUTO-033';
+    const result = filterPatternsForLearning(
+      [baseline({
+        first_seen_sd_id: TEXT_SD,
+        last_seen_sd_id: SD_B,
+        severity: 'medium',
+        metadata: { sites: [{ key: 'sd:text', sd_id: TEXT_SD }, { key: 'sd:b', sd_id: SD_B }] },
+      })],
+      { sourceSdStatusMap: new Map([[TEXT_SD, 'completed'], [SD_B, 'completed']]) },
+    );
+    expect(result.rejected[0].reason).toBe(REJECT_REASONS.SINGLE_SD_CLOSED_SOURCE);
+  });
+
+  it('critical/high severity is still exempted (bypass applies identically to the multi-SD case)', () => {
+    const result = filterPatternsForLearning(
+      [baseline({
+        first_seen_sd_id: SD_A,
+        last_seen_sd_id: SD_C,
+        severity: 'critical',
+        metadata: { sites: [{ key: 'sd:a', sd_id: SD_A }, { key: 'sd:b', sd_id: SD_B }, { key: 'sd:c', sd_id: SD_C }] },
+      })],
+      { sourceSdStatusMap: new Map([[SD_A, 'completed'], [SD_B, 'completed'], [SD_C, 'completed']]) },
+    );
+    expect(result.kept).toHaveLength(1);
+  });
+
+  it('a pattern with NO metadata.sites[] falls back to the exact original single-SD-only behavior (regression guard)', () => {
+    // Same shape as the pre-existing "passes when first_seen_sd_id != last_seen_sd_id" test
+    // above, restated here to pin the fallback contract explicitly against this SD's change.
+    const result = filterPatternsForLearning(
+      [baseline({ first_seen_sd_id: SD_A, last_seen_sd_id: SD_B, metadata: {} })],
+      { sourceSdStatusMap: new Map([[SD_A, 'completed'], [SD_B, 'completed']]) },
+    );
+    expect(result.kept).toHaveLength(1);
+  });
+
+  it('MUTATION GUARD: fetchPatternSourceSDStatuses resolves every metadata.sites[] sd_id, not just first/last', async () => {
+    const pattern = baseline({
+      first_seen_sd_id: SD_A,
+      last_seen_sd_id: SD_C,
+      metadata: { sites: [{ key: 'sd:a', sd_id: SD_A }, { key: 'sd:b', sd_id: SD_B }, { key: 'sd:c', sd_id: SD_C }] },
+    });
+    const seen = [];
+    const fakeSupabase = {
+      from() {
+        return {
+          select() { return this; },
+          in(_col, ids) { seen.push(...ids); return Promise.resolve({ data: ids.map((id) => ({ id, status: 'completed' })), error: null }); },
+        };
+      },
+    };
+    const map = await fetchPatternSourceSDStatuses(fakeSupabase, [pattern]);
+    expect(new Set(seen)).toEqual(new Set([SD_A, SD_B, SD_C]));
+    expect(map.get(SD_B)).toBe('completed');
+  });
+});
+
 describe('FR-7: checkSingleSDStaleOpenSource', () => {
   it('rejects single-SD pattern when source SD is open AND last_seen_at > 7 days ago', () => {
     const result = filterPatternsForLearning(
@@ -192,7 +285,7 @@ describe('FR-8: checkSessionRetroRequiresMultiSD', () => {
 });
 
 describe('FR-6/FR-7/FR-8 ordering — FR-6 wins over FR-8 when both apply', () => {
-  it("session_retrospective + single-SD + closed source → FR-6 (closed source) reason wins", () => {
+  it('session_retrospective + single-SD + closed source → FR-6 (closed source) reason wins', () => {
     const result = filterPatternsForLearning(
       [baseline({
         category: 'session_retrospective',

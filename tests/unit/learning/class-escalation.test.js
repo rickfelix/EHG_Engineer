@@ -64,6 +64,32 @@ describe('mergeSite — diversity ledger', () => {
     expect(r.added).toBe(false);
     expect(r.distinctCount).toBe(0);
   });
+
+  // SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158: `now` names when the site was first seen, and a
+  // caller backfilling a historical occurrence may supply the real historical time instead of
+  // the default "current wall-clock time" (used by e.g. lib/rca/rca-orchestrator.js's real-time
+  // callers, which never pass this argument at all).
+  it('records first_seen at the supplied historical `now`, not the call time', () => {
+    const historical = new Date('2026-02-28T15:30:47.167Z');
+    const r = mergeSite({}, { file: 'old-incident.js' }, historical);
+    expect(r.metadata.sites[0].first_seen).toBe(historical.toISOString());
+  });
+
+  it('defaults first_seen to the current time when `now` is omitted (unchanged default behavior)', () => {
+    const before = Date.now();
+    const r = mergeSite({}, { file: 'realtime-incident.js' });
+    const recorded = Date.parse(r.metadata.sites[0].first_seen);
+    expect(recorded).toBeGreaterThanOrEqual(before);
+    expect(recorded).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('falls back to the current time (does not throw) when `now` is an invalid Date', () => {
+    const before = Date.now();
+    expect(() => mergeSite({}, { file: 'bad-timestamp.js' }, new Date('not-a-real-date'))).not.toThrow();
+    const r = mergeSite({}, { file: 'bad-timestamp-2.js' }, new Date(NaN));
+    const recorded = Date.parse(r.metadata.sites[0].first_seen);
+    expect(recorded).toBeGreaterThanOrEqual(before);
+  });
 });
 
 describe('minSites — threshold config', () => {

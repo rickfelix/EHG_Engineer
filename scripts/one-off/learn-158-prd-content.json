@@ -1,0 +1,237 @@
+{
+  "executive_summary": "The retro-pattern-extraction backlog drain (hourly cron, scripts/extract-pending-retro-patterns.mjs) processes retrospectives oldest-first without regard to how long ago the underlying event happened. When it drains a batch of sibling SDs (orchestrator children created on the same historical day) that share one common defect, each sibling gets recorded against its own distinct sd_id, which defeats /learn's single-SD noise-filter guards (scripts/modules/learning/filter.mjs) -- all three are keyed on first_seen_sd_id === last_seen_sd_id, so a pattern touching N SDs reads as N independent, genuinely recurring occurrences. A PLAN-phase TESTING review measured the 4 motivating patterns' actual site data and found the sites do NOT share one parent_sd_id or a narrow recording window (7-8 distinct parents each, windows from 5 minutes to 22 hours) -- ruling out a parent+proximity predicate. What the data DOES show cleanly: every single resolved site SD, across all 4 patterns, is status='completed'. The fix generalizes checkSingleSDClosedSource's existing single-SD-and-closed logic to multi-SD-and-ALL-closed: a pattern whose every referenced source SD has since completed is not evidence of an ongoing, active problem, regardless of how many distinct SDs it touched. Separately, lib/learning/class-escalation.js's mergeSite() stamps a site's first_seen at cron-processing wall-clock time rather than the retrospective's real historical created_at, misleading any human reviewer reading a pattern's history -- kept as a secondary, independent fix (deliberately NOT read by the primary fix, avoiding the destructive coupling a proximity-window design would have had with it).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Generalize the single-SD-closed-source guard to ALL-sources-closed",
+      "description": "scripts/modules/learning/filter.mjs's checkSingleSDClosedSource (line ~122) currently fires only when pattern.first_seen_sd_id === pattern.last_seen_sd_id AND that one SD's status is in closedStatuses. PLAN-phase measurement against the 4 motivating patterns' real metadata.sites[] data ruled out a parent_sd_id+proximity-window predicate (sites span 7-8 distinct parent_sd_id values and 5-minute-to-22-hour windows, not one shared parent in a narrow window) -- see risks/PRD-history for the ruled-out design. The correct, data-supported predicate: derive the full set of DISTINCT sd_ids referenced by a pattern's metadata.sites[] array (not just first_seen_sd_id/last_seen_sd_id), resolve each one's status, and reject the pattern as closed-source noise when EVERY distinct sd_id resolves to a closed status (same closedStatuses set already used today) -- regardless of how many distinct SDs are in that set. checkSingleSDStaleOpenSource and checkSingleSDRetroLikeCategory are single-SD-shape-specific by design (they reason about ONE open SD's staleness, or ONE retro-like category's single-SD shape) and are NOT generalized by this SD -- only checkSingleSDClosedSource's closed-check is extended to the multi-SD case, since 'every referenced SD is closed' is a predicate that scales cleanly to N sites while 'this one open SD looks stale' and 'this one retro-like pattern needs 2+ distinct SDs' do not have an analogous N-SD generalization that this investigation has evidence for.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "fetchPatternSourceSDStatuses (scripts/modules/learning/filter.mjs, line ~481) is extended to also collect every sd_id present in each pattern's metadata.sites[] array (in addition to the existing first_seen_sd_id/last_seen_sd_id collection), so their statuses are available to the guard",
+        "checkSingleSDClosedSource is extended (or a new sibling function is added and wired into filterPatternsForLearning at the same call site) so that a pattern whose metadata.sites[] resolves to 2+ distinct sd_ids, ALL of which are in closedStatuses, is rejected -- matching today's behavior for the N=1 case exactly (no regression for existing single-SD-closed patterns)",
+        "A pattern with 2+ distinct sd_ids where at least one resolves to an OPEN status is NOT rejected by this guard (falls through to the existing checkSingleSDStaleOpenSource/other checks as today)",
+        "A pattern whose metadata.sites[] is absent, empty, or contains no resolvable sd_ids falls back to today's exact first_seen_sd_id/last_seen_sd_id-only behavior (no metadata.sites[] dependency introduced for patterns that never had rich site data)",
+        "The severity bypass (SINGLE_SD_SEVERITY_BYPASS, critical/high patterns exempted) is preserved and applies identically to the generalized multi-SD case",
+        "The 4 real patterns that motivated this SD (PAT-LES-8fb5175dce26, PAT-LES-15c6ed980a2e, PAT-LES-752e6a374f67, PAT-LES-e02af6e8e18d -- all severity=medium, all sites status=completed) are, when run through the fixed filter with their real recorded metadata.sites[], correctly rejected as closed-source noise"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Thread the retrospective's real created_at through to mergeSite's first_seen",
+      "description": "lib/learning/class-escalation.js's mergeSite(metadata, site, now = new Date()) stamps a new site's first_seen using cron-processing wall-clock time when no opts.now is supplied. Add an optional occurred_at parameter to IssueKnowledgeBase.recordOccurrence (lib/learning/issue-knowledge-base.js) that flows through recordSiteAndMaybeEscalate's opts.now (lib/learning/class-escalation.js). The correct call site is scripts/auto-extract-patterns-from-retro.js's extractPatternsFromImprovements (declared ~line 197; the recordOccurrence call is at ~line 245) -- NOT extractPatternsFromRetrospective (a wrapper that fetches the retro and dispatches into extractPatternsFromImprovements). Pass retro.created_at as occurred_at at that call site. extractPatternsFromImprovements also has a second write path, kb.createPattern (~line 271), used when NO similar existing pattern is found (a brand-new pattern's first occurrence) -- this path lets the DB default issue_patterns.created_at to now() with the same historical-vs-processing-time mismatch. Extend createPattern (or its caller) to accept and pass the same occurred_at so a brand-new pattern mined from an old retro is not itself born with a falsely-fresh created_at. Must be additive/optional throughout: lib/rca/rca-orchestrator.js's two real-time call sites (~line 319, 382, both inside module-private upsertIssuePattern, reachable only via exported processTriggerEvent) call recordSiteAndMaybeEscalate with 3 positional arguments and no opts object today -- confirmed by direct read this makes them byte-identical by construction once opts.now is additive, since they never pass a 4th argument.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A synthetic retrospective fixture with an old created_at, run through extractPatternsFromImprovements (the update/recordOccurrence branch), produces a recorded site whose first_seen equals the fixture's created_at, not the test-execution time",
+        "A synthetic retrospective fixture with an old created_at whose content matches no existing pattern (forcing the createPattern branch) produces a new issue_patterns row whose created_at reflects the fixture's created_at, not the test-execution time",
+        "If retro.created_at is missing, null, or fails Date.parse (NaN), the extraction falls back to today's exact behavior (current wall-clock time) rather than throwing -- mergeSite's unguarded now.toISOString() must never receive an invalid Date",
+        "lib/rca/rca-orchestrator.js's real-time gate-failure and handoff-failure call paths are unchanged -- confirmed via their existing call signature (3 positional args, no opts) requiring no code change at all in that file",
+        "Existing callers of recordOccurrence that omit occurred_at (all pre-existing call sites) produce byte-identical output to before this change"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Regression coverage for the all-sources-closed generalization",
+      "description": "Add unit tests directly exercising the generalized closed-source guard. Since checkSingleSDClosedSource and its siblings are module-private in scripts/modules/learning/filter.mjs (not in that file's export list), tests must route through the exported filterPatternsForLearning (matching the existing pattern already used by tests/learn/filter-single-sd-noise.test.js) rather than importing the guard function directly, unless this SD also exports it explicitly for direct testing -- EXEC's choice, but must be consistent with the existing test file's approach if that file is extended rather than duplicated.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "New test(s) prove a pattern with metadata.sites[] spanning 3+ distinct sd_ids, all closed, severity=medium (NOT critical/high, to avoid the pre-existing severity bypass masking the result), is rejected by filterPatternsForLearning -- and that reverting FR-1's generalization makes this exact test fail (mutation-tested: comment out or short-circuit the new multi-SD branch, confirm red, restore, confirm green)",
+        "New test(s) prove a pattern with metadata.sites[] spanning 3+ distinct sd_ids where one is OPEN is NOT rejected by this guard (passes through unchanged)",
+        "New test(s) include at least one fixture using a text-form sd_id (e.g. an 'SD-XXX-001' key string rather than a UUID) among the sites, proving the extended fetchPatternSourceSDStatuses resolves it correctly rather than silently returning undefined for non-UUID keys",
+        "Existing filter.mjs / tests/learn/ test suite passes unmodified in assertions (no pre-existing test's expected outcome changes)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Regression coverage for timestamp threading",
+      "description": "Add unit tests for IssueKnowledgeBase.recordOccurrence, recordSiteAndMaybeEscalate, and mergeSite proving the occurred_at parameter, when supplied, produces a first_seen matching it exactly; proving omission preserves today's new Date() default behavior exactly; and proving a malformed/missing occurred_at falls back safely rather than throwing (FR-2's error-handling acceptance criterion).",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "New test(s) fail against the pre-fix code (mutation-testable) and pass against the fixed code",
+        "A malformed-timestamp fixture (null, undefined, non-ISO string) is proven to NOT throw and to fall back to current-time behavior",
+        "Existing class-escalation.js and issue-knowledge-base.js test suites pass unmodified in assertions"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Verify no downstream consumer breaks",
+      "description": "lib/rca/rca-orchestrator.js's two recordSiteAndMaybeEscalate call sites (inside module-private upsertIssuePattern, reachable only via exported processTriggerEvent) and any other production caller of recordOccurrence/recordSiteAndMaybeEscalate must continue to function identically. Because no existing test suite currently imports or exercises upsertIssuePattern directly (confirmed: tests/unit/rca-skip-governance.test.js and tests/unit/rca-trigger-quick-wire.test.js cover adjacent functions, not this one), add at minimum one direct test through the exported processTriggerEvent entry point that exercises the real-time site-recording path, OR explicitly document the call-signature argument (3 positional args, no opts, hence unaffected by construction) as the verification method if a full integration test is judged disproportionate -- do not leave this FR's evidence resting solely on unrelated tests passing.",
+      "priority": "medium",
+      "acceptance_criteria": [
+        "Either a new processTriggerEvent-level test exercises the real-time recordSiteAndMaybeEscalate call path and confirms first_seen reflects current time, OR the PRD/PR description explicitly states the call-signature argument as the verification method and why",
+        "lib/rca/ existing test suite passes unmodified in assertions"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Additive-only change to recordOccurrence's signature",
+      "description": "occurred_at must be an optional, additively-typed parameter (undefined-safe) -- no existing caller's positional/keyword usage may need to change."
+    },
+    {
+      "id": "TR-2",
+      "title": "No schema change",
+      "description": "This is a code-only fix. No migration, no new table/column."
+    },
+    {
+      "id": "TR-3",
+      "title": "vitest coverage config gap (informational, not blocking)",
+      "description": "vitest.config.js's coverage include list covers lib/**/*.{js,mjs} and scripts/**/*.js, but scripts/modules/learning/filter.mjs is a .mjs file under scripts/ and is therefore not measured by coverage today. If a coverage gate applies to this SD, note this pre-existing gap rather than silently reporting zero coverage on the primary changed file; extending the coverage glob is optional and out of scope unless EXEC judges it trivial."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Multi-SD pattern (3+ distinct sd_ids in metadata.sites[]), ALL closed, severity=medium, is correctly rejected as noise by the generalized guard",
+      "type": "unit",
+      "expected": "filterPatternsForLearning rejects the pattern with the closed-source reason"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Multi-SD pattern where one of the distinct sd_ids is OPEN is NOT rejected by the closed-source guard",
+      "type": "unit",
+      "expected": "filterPatternsForLearning does not reject via the closed-source path (may still be rejected/kept by other independent checks, but not this one)"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "extractPatternsFromImprovements (recordOccurrence branch) on a fixture retro with an old created_at produces a site with first_seen matching that created_at",
+      "type": "unit",
+      "expected": "Recorded site.first_seen === fixture retro.created_at, not Date.now()"
+    },
+    {
+      "id": "TS-3b",
+      "scenario": "extractPatternsFromImprovements (createPattern branch, no similar existing pattern) on a fixture retro with an old created_at produces a new pattern whose created_at matches the fixture, not Date.now()",
+      "type": "unit",
+      "expected": "New issue_patterns row's created_at reflects the fixture's historical date"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "recordOccurrence called with no occurred_at (existing call pattern) behaves byte-identically to pre-fix",
+      "type": "unit",
+      "expected": "Recorded site.first_seen approx equals current time at call, matching pre-fix default behavior"
+    },
+    {
+      "id": "TS-4b",
+      "scenario": "recordOccurrence/mergeSite called with a malformed occurred_at (null, undefined, non-ISO string) does not throw",
+      "type": "unit",
+      "expected": "Falls back to current-time behavior, no RangeError from an invalid Date"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "lib/rca/ real-time call path is unaffected",
+      "type": "unit",
+      "expected": "Existing lib/rca/ test suite passes unmodified; if FR-5's new processTriggerEvent-level test is added, it also passes"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Mutation test: short-circuit the new multi-SD-all-closed branch in the generalized guard to always return null (abstain), re-run TS-1",
+      "type": "unit",
+      "expected": "TS-1 fails on the mutated (pre-fix-equivalent) code, passes once the mutation is reverted"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "Full pre-existing filter.mjs/tests-learn, class-escalation.js, and issue-knowledge-base.js test suites",
+      "type": "regression",
+      "expected": "All pre-existing assertions pass unmodified (baseline measured in PLAN: 8 files / 125 tests green across tests/learn/ + tests/unit/learning/{class-escalation,issue-knowledge-base-quarantine-guard,issue-knowledge-base-proven-solutions-guard,batch-resilience}.test.js, plus 3 files / 30 tests green across the RCA suite)"
+    }
+  ],
+  "acceptance_criteria": [
+    "The 4 motivating patterns (PAT-LES-8fb5175dce26, PAT-LES-15c6ed980a2e, PAT-LES-752e6a374f67, PAT-LES-e02af6e8e18d), when their real recorded metadata.sites[] data is run through the fixed filter, are correctly classified as closed-source noise rather than genuine recurrence",
+    "No existing production caller of recordOccurrence/recordSiteAndMaybeEscalate/mergeSite changes behavior when it omits the new optional parameter",
+    "All new and pre-existing tests pass; new tests are proven non-vacuous via mutation testing (revert/short-circuit the fix, confirm exactly the intended test(s) fail, restore)"
+  ],
+  "risks": [
+    {
+      "risk": "RULED OUT DURING PLAN (recorded for history, not a live risk): a parent_sd_id + recording-proximity-window predicate was the first design considered for FR-1. Direct measurement against the 4 motivating patterns' real site data found 7-8 distinct parent_sd_id values per pattern and recording windows from 5 minutes to 22 hours -- neither a shared parent nor a narrow window. That design would have fixed zero of the four motivating patterns and was replaced with the all-sources-closed predicate before EXEC began.",
+      "mitigation": "N/A -- design was corrected in PLAN before implementation; FR-1 now specifies the data-supported predicate directly.",
+      "severity": "low"
+    },
+    {
+      "risk": "Extending fetchPatternSourceSDStatuses to resolve every metadata.sites[] sd_id (not just first/last) could add meaningfully more strategic_directives_v2 rows to resolve per filter run on patterns with many sites.",
+      "mitigation": "The existing function already batches .in() lookups in pages of 100 and dedupes via a Set before querying -- extending its id-collection loop to also read metadata.sites[] reuses that same batching/dedup path, not a new query pattern.",
+      "severity": "low"
+    },
+    {
+      "risk": "Threading occurred_at through recordOccurrence's call chain touches a function with a production caller outside this SD's direct control (lib/rca/rca-orchestrator.js); an implementation mistake could silently change real-time RCA trigger behavior.",
+      "mitigation": "Confirmed by direct read that both RCA call sites pass exactly 3 positional arguments with no opts object, so an additive 4th-argument default cannot affect them without an active code change to that file (which this SD does not make). FR-5's verification requirement still applies as a positive check, not just an absence-of-change argument.",
+      "severity": "low"
+    },
+    {
+      "risk": "A malformed or missing retro.created_at, if not explicitly guarded, would reach mergeSite's unguarded now.toISOString() call as an Invalid Date and throw a RangeError -- silently swallowed by recordSiteAndMaybeEscalate's existing catch-and-warn, which would drop the site write entirely rather than falling back to current time.",
+      "mitigation": "FR-2/FR-4's explicit malformed-timestamp acceptance criteria and test scenario (TS-4b) require a safe fallback to current-time behavior rather than allowing the throw to propagate.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "scripts/modules/learning/filter.mjs (consumed by /learn's auto-approve scoring path)",
+      "lib/rca/rca-orchestrator.js (real-time RCA trigger path, unaffected by construction -- see risks)",
+      "scripts/extract-pending-retro-patterns.mjs (hourly cron, .github/workflows/retro-pattern-extraction-cron.yml)"
+    ],
+    "dependencies": [
+      "strategic_directives_v2.status (existing column, read-only for this SD)",
+      "retrospectives.created_at (existing column, read-only for this SD)",
+      "issue_patterns.metadata.sites[] (existing jsonb field, read-only for FR-1/FR-3; written by FR-2's occurred_at threading)"
+    ],
+    "data_contracts": [
+      "none -- no schema change"
+    ],
+    "runtime_config": [
+      "none"
+    ],
+    "observability_rollout": [
+      "Verified via the unit/regression test suites named in FR-3/FR-4/FR-5; no new dashboard or monitoring surface is in scope"
+    ]
+  },
+  "system_architecture": {
+    "summary": "Two independent, additive changes inside the existing retro-pattern-extraction call chain: (1) the /learn noise filter's closed-source guard generalizes from single-SD to all-distinct-SDs-closed; (2) the site-recording path gains an optional historical-timestamp parameter. Deliberately NOT coupled -- the closed-source predicate does not read timestamps at all, avoiding the destructive interaction a proximity-window design would have had with (2) rewriting those same timestamps.",
+    "components": [
+      {
+        "name": "scripts/modules/learning/filter.mjs",
+        "change": "fetchPatternSourceSDStatuses extended to collect every sd_id from metadata.sites[]; checkSingleSDClosedSource generalized (or a sibling function added at the same call site in filterPatternsForLearning) to reject when ALL distinct referenced sd_ids are closed, not only when exactly one sd_id is referenced"
+      },
+      {
+        "name": "lib/learning/issue-knowledge-base.js",
+        "change": "recordOccurrence(data) gains an optional occurred_at field, forwarded to recordSiteAndMaybeEscalate; createPattern gains the same for the brand-new-pattern path"
+      },
+      {
+        "name": "lib/learning/class-escalation.js",
+        "change": "recordSiteAndMaybeEscalate/mergeSite: no signature change (opts.now already exists) -- only new callers now populate it, guarded against invalid Date input"
+      },
+      {
+        "name": "scripts/auto-extract-patterns-from-retro.js",
+        "change": "extractPatternsFromImprovements passes retro.created_at as occurred_at at both its recordOccurrence and createPattern call sites"
+      }
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Implement FR-2/FR-4 (timestamp threading, lower risk, smaller blast radius, fully independent of FR-1) first as a foundation, then FR-1/FR-3 (closed-source guard generalization, the primary defect) on top, then FR-5 regression verification.",
+    "steps": [
+      "Add occurred_at threading (FR-2, both recordOccurrence and createPattern branches) with the malformed-input fallback guard, with tests (FR-4)",
+      "Extend fetchPatternSourceSDStatuses to collect metadata.sites[] sd_ids; generalize checkSingleSDClosedSource to the all-distinct-SDs-closed predicate (FR-1)",
+      "Add regression tests (FR-3) proving both the fix works and pre-fix behavior is preserved for the N=1 case and for any-open-SD cases",
+      "Add or document FR-5's RCA-path verification",
+      "Run the full touched-area test suite (tests/learn/, tests/unit/learning/class-escalation.test.js, tests/unit/learning/issue-knowledge-base-quarantine-guard.test.js, tests/unit/learning/issue-knowledge-base-proven-solutions-guard.test.js, tests/unit/learning/batch-resilience.test.js, tests/unit/rca-skip-governance.test.js, tests/unit/rca-trigger-quick-wire.test.js, tests/unit/rca-orchestrator-noise.test.js) plus mutation testing on the new tests"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "step_number": 1,
+      "instruction": "Run npx vitest run --project unit tests/learn/ tests/unit/learning/class-escalation.test.js tests/unit/learning/issue-knowledge-base-quarantine-guard.test.js tests/unit/learning/issue-knowledge-base-proven-solutions-guard.test.js tests/unit/learning/batch-resilience.test.js",
+      "expected_outcome": "All tests pass, including new FR-1/FR-2/FR-3/FR-4 regression tests"
+    },
+    {
+      "step_number": 2,
+      "instruction": "Run npx vitest run --project unit tests/unit/rca-skip-governance.test.js tests/unit/rca-trigger-quick-wire.test.js tests/unit/rca-orchestrator-noise.test.js",
+      "expected_outcome": "All pre-existing tests pass unmodified, confirming the real-time RCA path is unaffected"
+    },
+    {
+      "step_number": 3,
+      "instruction": "Mutation-test: short-circuit the new all-closed branch in the generalized guard, re-run TS-1",
+      "expected_outcome": "TS-1 fails on the mutated code, confirming it is non-vacuous; restore the fix and confirm TS-1 passes again"
+    }
+  ],
+  "metadata": {
+    "sd_key": "SD-LEARN-FIX-ADDRESS-PATTERN-LEARN-158"
+  }
+}
