@@ -1,0 +1,334 @@
+{
+  "entries": [
+    {
+      "file": "lib/eva/constraint-drift-detector.js",
+      "line": 290,
+      "snippet": "if (currentStage === 27 && category === 'vision') {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/contract-validator.js",
+      "line": 132,
+      "snippet": "if (requiredStages.length === 0 && targetStage > 1) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/contracts/stage-contracts.js",
+      "line": 751,
+      "snippet": "for (let stage = 1; stage <= 27; stage++) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/cross-venture-learning.js",
+      "line": 201,
+      "snippet": "(v) => v.current_lifecycle_stage >= 18 || (v.status === 'active' && v.current_lifecycle_stage >= 13)",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/cross-venture-learning.js",
+      "line": 315,
+      "snippet": "(v) => v.status === 'archived' || v.status === 'killed' || v.killed_at != null || v.current_lifecycle_stage >= 23",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/cross-venture-learning.js",
+      "line": 369,
+      "snippet": "const completedVentures = ventures.filter(v => v.current_lifecycle_stage >= 13);",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/event-bus/handlers/sd-completed.js",
+      "line": 242,
+      "snippet": "if (currentStage >= 20) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/event-bus/handlers/sd-completed.js",
+      "line": 245,
+      "snippet": "console.log(`[SdCompleted] Skipping Stage 20 write for venture ${ventureId}: current_lifecycle_stage=${currentStage} (< 20) — no phantom future-stage row`);",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/event-bus/handlers/sd-completed.js",
+      "line": 247,
+      "snippet": "if (currentStage >= 21) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/event-bus/handlers/sd-completed.js",
+      "line": 250,
+      "snippet": "console.log(`[SdCompleted] Skipping Stage 21 write for venture ${ventureId}: current_lifecycle_stage=${currentStage} (< 21) — no phantom future-stage row`);",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/gate-bars.js",
+      "line": 145,
+      "snippet": "if (stage === 3) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/gate-bars.js",
+      "line": 197,
+      "snippet": "stage === 3 ? [evaluateG1(intakeInput), evaluateG3(intakeInput), evaluateG4(intakeInput)]",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/gate-bars.js",
+      "line": 198,
+      "snippet": ": stage === 24 || stage === 26 ? [evaluateG2(intakeInput)]",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/launch-workflow/index.js",
+      "line": 39,
+      "snippet": "const inLaunchPhase = currentStage >= 23;",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/launch-workflow/index.js",
+      "line": 229,
+      "snippet": "if (stageNumber <= 2) return 'EVALUATION';",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/launch-workflow/index.js",
+      "line": 230,
+      "snippet": "if (stageNumber <= 5) return 'STRATEGY';",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/launch-workflow/index.js",
+      "line": 231,
+      "snippet": "if (stageNumber <= 10) return 'PLANNING';",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/launch-workflow/index.js",
+      "line": 232,
+      "snippet": "if (stageNumber <= 22) return 'BUILD';",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-artifact-precondition.js",
+      "line": 77,
+      "snippet": "if (legacySkipped && stage === 22) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 139,
+      "snippet": "if (stageNumber < 1 || stageNumber > 15) return { visionKey: null, planKey: null };",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 155,
+      "snippet": "if (stageNumber === 1) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 172,
+      "snippet": "if (stageNumber === 13) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 175,
+      "snippet": "} else if (stageNumber > 13) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 497,
+      "snippet": "if (requiredStages.length === 0 && stageNumber > 1) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 508,
+      "snippet": "if (stageNumber === 1 && !upstreamData.synthesis) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 687,
+      "snippet": "if (stageNumber >= 1 && stageNumber <= 15) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 753,
+      "snippet": "if (!dryRun && evaKeys.visionKey && (stageNumber === 3 || stageNumber === 5)) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-engine.js",
+      "line": 756,
+      "snippet": "if (decision === 'pass' && stageNumber === 5) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 699,
+      "snippet": "if (currentStage === 20) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 729,
+      "snippet": "if (currentStage === 19) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 766,
+      "snippet": "if (currentStage === 19) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 818,
+      "snippet": "if (currentStage === 19) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1048,
+      "snippet": "if (currentStage >= 18 && currentStage <= 23) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1147,
+      "snippet": "if (currentStage === 3 || currentStage === 5) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1230,
+      "snippet": "if (currentStage === 3 || currentStage === 5) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1481,
+      "snippet": "&& currentStage >= 17 && currentStage <= 22",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1576,
+      "snippet": "if (currentStage >= 18 && currentStage <= 23) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1655,
+      "snippet": "if (result.filterDecision?.action === 'REQUIRE_REVIEW' && !this._waitForReview && currentStage !== 19) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1671,
+      "snippet": "if (currentStage === 19 && isVisionDriftGateEnabled()) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1697,
+      "snippet": "if (currentStage === 19) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1814,
+      "snippet": "if (currentStage === 19 && isVisionAcceptanceGateEnabled()) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1841,
+      "snippet": "if (currentStage === 19) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 1883,
+      "snippet": "if (currentStage === 19) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 2532,
+      "snippet": "if (gateType === 'kill_gate' && stageNumber === 5) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 2801,
+      "snippet": "if (prevStage < 1) continue;",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 2979,
+      "snippet": "if (fromStage === 19 && advancementType !== 's19_bridge_cleared') {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-execution-worker.js",
+      "line": 3195,
+      "snippet": "if (fromStage === 19 && toStage === 20) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-templates/analysis-steps/stage-17-blueprint-review.js",
+      "line": 232,
+      "snippet": "severity: stage <= 5 ? 'critical' : 'high',",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-templates/analysis-steps/stage-17-blueprint-review.js",
+      "line": 238,
+      "snippet": "severity: stage <= 5 ? 'critical' : 'high',",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-templates/analysis-steps/stage-22-distribution-setup.js",
+      "line": 338,
+      "snippet": "return { flagged: true, paid_pct: paidPct, message: `Paid channels are ${paidPct}% of budget (>20%) — EHG GTM is organic-first; paid is a later-stage opt-in. Re",
+      "reason": "FALSE POSITIVE (heuristic miss, not a real stage-literal reference) -- census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. The numeric comparison on this line is unrelated to a stage number (a count/percentage threshold); the word \"stage\" elsewhere on the line is coincidental (a template placeholder or unrelated prose), not an identifier naming a stage variable."
+    },
+    {
+      "file": "lib/eva/stage-zero/stage-of-death-predictor.js",
+      "line": 110,
+      "snippet": "if (stage >= 1 && stage <= TOTAL_STAGES) {",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-zero/stage-of-death-predictor.js",
+      "line": 113,
+      "snippet": "if (stage > 1) curve[stage - 1] += perStage * 0.3;",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/stage-zero/thesis-contract.js",
+      "line": 112,
+      "snippet": "return { valid: false, errors: ['kill_criteria requires >=1 pre-registered criterion (\"this venture dies if X by stage Y\")'] };",
+      "reason": "FALSE POSITIVE (heuristic miss, not a real stage-literal reference) -- census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. The numeric comparison on this line is unrelated to a stage number (a count/percentage threshold); the word \"stage\" elsewhere on the line is coincidental (a template placeholder or unrelated prose), not an identifier naming a stage variable."
+    },
+    {
+      "file": "lib/eva/stage-zero/thesis-contract.js",
+      "line": 120,
+      "snippet": "if (!Number.isInteger(c.stage_by) || c.stage_by < 1 || c.stage_by > 26) errors.push(`kill_criteria[${i}].stage_by must be an integer stage 1-26`);",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    },
+    {
+      "file": "lib/eva/workers/stage-advance-worker.js",
+      "line": 69,
+      "snippet": "if (gateStages.has(nextStage) || nextStage > 26) continue;",
+      "reason": "Pre-existing census as of SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J. A real stage-literal comparison predating this SD; fixing today's literals is out of this SD's scope (P5.1 is the preventive lint only -- CAPA-001-H already corrected the specific sites this SD names as its own motivating incident)."
+    }
+  ]
+}

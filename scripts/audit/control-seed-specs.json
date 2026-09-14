@@ -1089,5 +1089,28 @@
    "input": "strategic_directives_v2.metadata (all rows, paginated via fetchAllPaginated to avoid PostgREST's 1000-row cap), scanned for any key matching /^fence_status_\\d{4}_\\d{2}_\\d{2}$/ whose .state === 'CLEARED' alongside metadata.venture_gate_last_verdict === 'NOT_MET'.",
    "seen": "Real positive observed 2026-09-13 running node scripts/audit/venture-gate-fence-consistency.mjs against the live DB: flagged SD-LEO-INFRA-BIND-OBSERVE-ONLY-001 (fence_status_2026_08_17 CLEARED, venture_gate_last_verdict still NOT_MET from the stale 2026-07-28 measurement) -- exactly the specimen shape this QF was filed against, and the reason remeasureVentureFlagshipGate() exists as a governed re-measure writer."
   }
+ },
+ {
+  "name": "eva-stage-literal-lint",
+  "script": "scripts/lint/eva-stage-literal-lint.mjs",
+  "rootFlag": null,
+  "cwdScope": true,
+  "extraArgs": [
+   "--all"
+  ],
+  "note": "SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J (P5.1). No --root, but it enumerates via readdirSync walking lib/eva relative to process.cwd(), so it IS aimable via cwd -- same shape as diagnostic-gauge-citation-lint.",
+  "fixtures": [
+   {
+    "path": "lib/eva/seeded-stage-literal-defect.js",
+    "content": "export function check(currentStage) {\n  if (currentStage === 24) return 'launch';\n  return 'other';\n}\n"
+   }
+  ],
+  "detectTokens": [
+   "seeded-stage-literal-defect"
+  ],
+  "observability_proof": {
+   "input": "Each .js/.mjs/.cjs file under lib/eva/** (excluding lib/eva/stage-templates/stage-key-registry.js itself and fixture-classified paths), scanned line-by-line for a stage-shaped identifier (currentStage/fromStage/toStage/stage_number/stage_by/current_lifecycle_stage etc.) co-occurring on the same line with a comparison operator against a bare 1-27 literal (the full range STAGE_KEY_BY_NUMBER covers as of this SD -- FR-10's own acceptance criterion).",
+   "seen": "Real positive observed running node scripts/lint/eva-stage-literal-lint.mjs --all against this repo's actual lib/eva/** during this SD's own EXEC phase (2026-09-14, after extending STAGE_KEY_BY_NUMBER to cover all 27 stages per FR-10): 55 pre-existing violations found across 655 files checked (constraint-drift-detector.js:290, stage-execution-worker.js:699/729/766/818/1048/1147/1230/1481/1576/1655/1671/1697/1814/1841/1883/2532/2801/2979/3195, stage-execution-engine.js and 30+ others) -- all now captured in scripts/lint/eva-stage-literal-lint-allowlist.json with per-line reasons, not a temp-dir fixture. --all now reports 0 violations against that allowlist."
+  }
  }
 ]

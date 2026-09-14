@@ -1,0 +1,62 @@
+# EVA stage-literal lint — blocks a NEW bare numeric stage-literal (1-27) comparison in
+# lib/eva/** outside stage-key-registry.js. SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-J (P5.1).
+# Modeled directly on diagnostic-gauge-citation-lint.yml.
+#
+# Diff-only: compares ONLY files changed vs the PR base. The pre-existing census (55 lines,
+# scripts/lint/eva-stage-literal-lint-allowlist.json) never blocks an unrelated PR.
+#
+# ROLLOUT — ADVISORY FIRST: continue-on-error is true for a soak, mirroring
+# diagnostic-gauge-citation-lint.yml's own rollout convention for a brand-new lint.
+# FLIP CRITERION (FR-10 acceptance criterion, ratification 49656c8c): graduate to
+# continue-on-error: false only after eva-stage-literal-lint-weekly.yml's
+# standard_loop:eva-stage-literal-lint-weekly periodic_process_registry row shows 2
+# CONSECUTIVE clean weekly stamps (check via periodic-liveness-watcher.mjs's own
+# last_state/consecutive_miss_count reading for that process_key) — never on a single merge,
+# and never on a raw time-elapsed heuristic alone. Escapes (always available):
+# scripts/lint/eva-stage-literal-lint-allowlist.json ({file, line, snippet, reason} entries);
+# inline pragma: a comment containing eva-stage-literal-lint-disable-line.
+name: EVA Stage Literal Lint
+
+on:
+  pull_request:
+    paths:
+      - 'lib/eva/**/*.js'
+      - 'lib/eva/**/*.mjs'
+      - 'lib/eva/**/*.cjs'
+      - 'scripts/lint/eva-stage-literal-lint-*'
+      - '.github/workflows/eva-stage-literal-lint.yml'
+
+concurrency:
+  group: eva-stage-literal-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eva-stage-literal-lint:
+    name: eva-stage-literal-lint
+    runs-on: ubuntu-latest
+    # ADVISORY SOAK — see flip criterion in the header comment.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run eva-stage-literal lint (diff vs PR base)
+        env:
+          EVA_STAGE_LITERAL_LINT_BASE: origin/${{ github.base_ref }}
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1 || true
+          node scripts/lint/eva-stage-literal-lint.mjs --diff | tee lint-output.txt
+          exit_code=${PIPESTATUS[0]}
+          {
+            echo "## EVA Stage Literal Lint"
+            echo ""
+            echo '```'
+            cat lint-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $exit_code
