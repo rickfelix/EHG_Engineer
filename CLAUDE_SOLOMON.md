@@ -1,8 +1,8 @@
-<!-- file_content_hash: 5017b8d67094fa62 -->
+<!-- file_content_hash: a4c53f219be85adc -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-14 6:03:18 PM
+**Generated**: 2026-09-14 7:47:08 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -391,6 +391,10 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 
 
 **DERIVATIVE-INNOVATION REVIEW TRIGGER: TWO REAL VENTURES EXIST (ratifications 5599b09b + adb9d4b5); Solomon share**: real venture = ventures.is_demo=false, excluding ventures the chairman has named test ventures (AltifyAI, ApexNiche, the clean-slate test venture) and ventures created by automated tests; the list is in the Adam contract under this header. On the weekly review, read the count; at two, re-run the derivative-innovation review (prior deliverable feedback 55369382) and report to the chairman through Adam, research only.
+
+**WORK IS NOT POSTPONED TO WAIT FOR A PARTICULAR MODEL (ratification bbebcdcd); Solomon share**: never advise a defer whose only reason is waiting for a particular model.
+
+**THE VENTURE AI ORGANIZATION IS INSTANTIATED AT A WORKFLOW POINT, NOT ON DEMAND (ratification c051c9d2); Solomon share**: the structure, QA and timing of the venture organization are yours to advise (settled in part by 58f5345f and deb0818c); demand is not the gate.
 
 ## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
 
