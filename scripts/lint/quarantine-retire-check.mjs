@@ -13,7 +13,10 @@
  *      limitation, same as that precedent: a hardcoded ceiling never decays if the live count
  *      later drops below it.
  *
- *   2. OVERDUE -- any entry whose review_by has passed must have a matching verdict in
+ *   2. OVERDUE -- any entry whose review_by has passed, OR whose review_by is missing/unparseable
+ *      (fail-closed -- SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C, matching the isWaiverActive fix in
+ *      lib/eva/quality-model/predicate.js from sibling -B: an absent revisit commitment is treated
+ *      as due NOW, never as "not yet due"), must have a matching verdict in
  *      tests/quarantine-retriage-verdicts.json (joined by exact `file` string equality, mirroring
  *      lib/quarantine/retriage.js's byFile Map convention); otherwise it is OVERDUE. Printed
  *      grouped by reason_class.
@@ -29,10 +32,7 @@
  *
  * KNOWN LIMITATION: the BASELINE ceiling is a hardcoded literal (BASELINE_COUNT) that never
  * decays -- if the live entry count later drops well below it, a slow partial regression back up
- * toward the ceiling stays invisible until someone re-tightens it by hand. Separately,
- * findOverdueEntries() treats a missing or unparseable review_by as never-overdue rather than
- * failing closed, so a malformed entry silently escapes the overdue check forever unless a
- * different control (tests/unit/quarantine-manifest.test.js) catches the malformed field first.
+ * toward the ceiling stays invisible until someone re-tightens it by hand.
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { makeHardenedGitRunner, validateBaseRef } from '../../lib/git/hardened-runner.cjs';
@@ -64,7 +64,10 @@ export function findOverdueEntries(entries, verdicts, { now = new Date() } = {})
   const nowMs = now instanceof Date ? now.getTime() : Date.parse(now);
   return (entries || []).filter((e) => {
     const reviewByMs = Date.parse(e.review_by);
-    if (!Number.isFinite(reviewByMs) || reviewByMs > nowMs) return false;
+    // Fail closed: a missing or unparseable review_by is treated as already due, not as "not yet
+    // due". Only a review_by that parses AND sits in the future escapes the overdue check.
+    const isOverdue = !Number.isFinite(reviewByMs) || reviewByMs <= nowMs;
+    if (!isOverdue) return false;
     return !byFile.has(e.file);
   });
 }

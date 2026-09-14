@@ -6,20 +6,27 @@ name: Stage Contract Connectivity
 # required artifacts have declared producers (C1), boundary configs are
 # coherent (C2), S18 consumes are satisfiable (C3), no deprecated alias sits
 # in a live registry (C4), the legacy stage_artifact_requirements table
-# mirrors the SSOT (C5), and the STAGE_CONTRACTS Map has no duplicate stage
-# keys (C7). Prevents the drift class behind the S21/S22 mislabeled-artifact
-# incidents (412 + 1,230 junk venture_artifacts rows from stale exit-gate
-# types feeding the orchestrator's generic fallback).
+# mirrors the SSOT (C5), the STAGE_CONTRACTS Map has no duplicate stage
+# keys (C7), and (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C P2.4, advisory)
+# declared content keys have a reader reference somewhere under lib/eva/ (C8).
+# Prevents the drift class behind the S21/S22 mislabeled-artifact incidents
+# (412 + 1,230 junk venture_artifacts rows from stale exit-gate types feeding
+# the orchestrator's generic fallback).
 #
 # Cloned from boundary-config-coherence.yml (which stays as-is; this solver's
 # C2 supersets its check — fold-in is a follow-up once this workflow soaks).
+#
+# C7 and C8 are FILESYSTEM-ONLY (no DB / no secrets needed) — the solver
+# itself falls back to running just those two when SUPABASE_SERVICE_ROLE_KEY
+# is absent (e.g. a forked PR), rather than hard-exiting before any check
+# runs (SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C P2.4).
 
 on:
   pull_request:
     paths:
       - 'lib/eva/artifact-types.js'
       - 'lib/eva/contracts/**'
-      - 'lib/eva/stage-templates/upstream-artifact-types.js'
+      - 'lib/eva/stage-templates/**'
       - 'database/migrations/*venture_stages*.sql'
       - 'database/migrations/*stage_artifact_requirements*.sql'
       - 'database/migrations/*gate_boundary_config*.sql'
@@ -44,13 +51,6 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - name: Assert secrets present
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          [ -n "$SUPABASE_URL" ] || { echo "[STAGE_CONTRACT_INFRA_ERROR] SUPABASE_URL missing"; exit 2; }
-          [ -n "$SUPABASE_SERVICE_ROLE_KEY" ] || { echo "[STAGE_CONTRACT_INFRA_ERROR] SUPABASE_SERVICE_ROLE_KEY missing"; exit 2; }
       - run: npm ci --no-audit --no-fund
       - name: Run stage-contract connectivity solver
         env:

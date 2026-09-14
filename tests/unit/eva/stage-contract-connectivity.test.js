@@ -21,6 +21,9 @@ import {
   checkLegacyParity,
   checkObservedProducer,
   checkContractMapLint,
+  extractDeclaredContentKeys,
+  collectReferencedIdentifiers,
+  checkDeclaredContentKeys,
   runAllChecks,
 } from '../../../scripts/validate-stage-contract-connectivity.mjs';
 import { ARTIFACT_TYPE_BY_STAGE } from '../../../lib/eva/artifact-types.js';
@@ -285,6 +288,119 @@ describe('C7 CONTRACT_MAP_LINT', () => {
   it('ignores numeric arrays that are not Map entries (CROSS_STAGE_DEPS style)', () => {
     const src = 'const DEPS = {\n  14: [1, 13],\n  15: [1, 6, 10],\n};';
     expect(checkContractMapLint(src)).toEqual([]);
+  });
+});
+
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C P2.4 (TS-7): C8 DECLARED_CONTENT_KEYS
+describe('C8 DECLARED_CONTENT_KEYS (advisory)', () => {
+  describe('extractDeclaredContentKeys', () => {
+    it('collects the immediate keys of a top-level return block (colon and shorthand forms)', () => {
+      const src = 'export function analyzeX() {\n  return {\n    foo: 1,\n    bar,\n  };\n}';
+      expect(extractDeclaredContentKeys(src)).toEqual(['foo', 'bar']);
+    });
+
+    it('returns an empty list when there is no return object', () => {
+      expect(extractDeclaredContentKeys('export function f() { return 1; }')).toEqual([]);
+    });
+
+    it('handles undefined/empty input without throwing', () => {
+      expect(extractDeclaredContentKeys(undefined)).toEqual([]);
+      expect(extractDeclaredContentKeys('')).toEqual([]);
+    });
+
+    // Adversarial-review finding (HIGH): a single-line `return { ... };` (its
+    // closing `};` NOT on its own line) must not be swallowed into a later,
+    // unrelated line-based `};` -- verified to corrupt 9+ real analysis-step
+    // files under the old regex-only implementation.
+    it('correctly bounds a single-line return, without swallowing later unrelated code', () => {
+      const src = 'function helper(t) { return { selfServe: A.test(t), highAcv: B.test(t) }; }\n'
+        + 'function other() { const cfg = { tiers: [1, 2, 3] }; return { tiers: cfg.tiers, gross_margin_pct: 1 }; }';
+      // Each return's OWN immediate keys only -- 'cfg' local var, and nothing from
+      // one return leaking into the other.
+      expect(extractDeclaredContentKeys(src)).toEqual(['selfServe', 'highAcv', 'tiers', 'gross_margin_pct']);
+    });
+
+    it('does not stop early on nested braces before the true close (a nested object in the return)', () => {
+      const src = 'function f() {\n  return {\n    outer: 1,\n    nested: { a: 1, b: 2 },\n    after: 3,\n  };\n}';
+      expect(extractDeclaredContentKeys(src)).toEqual(['outer', 'nested', 'after']);
+    });
+  });
+
+  describe('collectReferencedIdentifiers', () => {
+    it('collects property-access identifiers', () => {
+      const refs = collectReferencedIdentifiers([{ source: 'console.log(result.foo, other.bar);' }]);
+      expect(refs.has('foo')).toBe(true);
+      expect(refs.has('bar')).toBe(true);
+    });
+
+    it('collects destructured identifiers', () => {
+      const refs = collectReferencedIdentifiers([{ source: 'const { foo, bar } = producerResult;' }]);
+      expect(refs.has('foo')).toBe(true);
+      expect(refs.has('bar')).toBe(true);
+    });
+
+    // Adversarial-review finding (MEDIUM): renamed destructuring, default
+    // values, and trailing-comma multi-line destructuring (this codebase's
+    // dominant Prettier style) must all be recognized as references.
+    it('collects the SOURCE key from renamed destructuring (`{ data: ventureData }`)', () => {
+      const refs = collectReferencedIdentifiers([{ source: 'const { data: ventureData } = artifact;' }]);
+      expect(refs.has('data')).toBe(true);
+      expect(refs.has('ventureData')).toBe(true);
+    });
+
+    it('collects a default-valued destructured key (`{ foo = 1 }`)', () => {
+      const refs = collectReferencedIdentifiers([{ source: 'const { foo = 1 } = obj;' }]);
+      expect(refs.has('foo')).toBe(true);
+    });
+
+    it('collects keys from trailing-comma multi-line destructuring', () => {
+      const src = 'const {\n  foo,\n  bar,\n} = obj;';
+      const refs = collectReferencedIdentifiers([{ source: src }]);
+      expect(refs.has('foo')).toBe(true);
+      expect(refs.has('bar')).toBe(true);
+    });
+
+    it('the destructuring path (not the separate property-access path) does not false-positive on == or =>', () => {
+      // Isolate the destructuring regex: no `.identifier` property access anywhere,
+      // so any hit could only have come from misreading `==`/`=>` as `=`.
+      const refs = collectReferencedIdentifiers([{ source: 'if ({ x: 1 } == undefined) {}\nconst f = ({ arrowParam }) => arrowParam;' }]);
+      expect(refs.has('x')).toBe(false);
+      expect(refs.has('arrowParam')).toBe(false);
+    });
+  });
+
+  describe('checkDeclaredContentKeys', () => {
+    it('flags a declared key with no reference anywhere in the index', () => {
+      const perFileDeclaredKeys = [{ file: 'producer.js', keys: ['orphan_key'] }];
+      const referencedIdentifiers = new Set(['other_key']);
+      const advisories = checkDeclaredContentKeys(perFileDeclaredKeys, referencedIdentifiers);
+      expect(advisories).toHaveLength(1);
+      expect(advisories[0]).toMatchObject({ check: CHECK_IDS.C8, artifact_type: 'orphan_key' });
+    });
+
+    it('does not flag a declared key that IS referenced', () => {
+      const perFileDeclaredKeys = [{ file: 'producer.js', keys: ['used_key'] }];
+      const referencedIdentifiers = new Set(['used_key']);
+      expect(checkDeclaredContentKeys(perFileDeclaredKeys, referencedIdentifiers)).toEqual([]);
+    });
+
+    it('never blocks: runAllChecks folds C8 advisories into `advisories`, never `failures`', () => {
+      const result = runAllChecks({
+        ventureStages: [{ stage_number: 18, required_artifacts: ['marketing_tagline'] }],
+        boundaries: [],
+        legacyRows: [{ stage_number: 18, artifact_type: 'marketing_tagline' }],
+        observedTypes: new Set(['marketing_tagline']),
+        maxTraversedStage: 23,
+        stageContractsSource: 'new Map([\n  [20, {\n  }],\n]);',
+        declaredContentKeysInputs: {
+          perFileDeclaredKeys: [{ file: 'producer.js', keys: ['orphan_key'] }],
+          referencedIdentifiers: new Set(),
+        },
+      });
+      expect(result.ok).toBe(true);
+      expect(result.failures).toEqual([]);
+      expect(result.advisories.filter((a) => a.check === CHECK_IDS.C8)).toHaveLength(1);
+    });
   });
 });
 

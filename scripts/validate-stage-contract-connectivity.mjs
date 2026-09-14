@@ -32,6 +32,36 @@
  *   C7 CONTRACT_MAP_LINT      (hard)     no duplicate stage keys in the
  *                                        STAGE_CONTRACTS Map source (a duplicate key
  *                                        silently discards the first entry).
+ *   C8 DECLARED_CONTENT_KEYS (advisory) SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C
+ *                                        P2.4. A "declared content key" is a
+ *                                        heuristic, PRD-owned working definition
+ *                                        pending chairman disambiguation (zero
+ *                                        prior art for this term anywhere in the
+ *                                        codebase at authoring time): an object
+ *                                        key an analysis-step producer returns
+ *                                        from its top-level `return { ... }`
+ *                                        block. This check flags a declared key
+ *                                        that is never referenced (property
+ *                                        access or destructuring) anywhere else
+ *                                        under lib/eva/ -- a candidate orphaned
+ *                                        producer field. review_by: 2026-12-01.
+ *                                        DELIBERATELY ONE-DIRECTIONAL (narrowed
+ *                                        during EXEC adversarial review): the
+ *                                        reverse direction -- "a reader consumes
+ *                                        key X but no producer declares it" -- is
+ *                                        explicitly NOT implemented. A reader has
+ *                                        no single syntactic form reliably marking
+ *                                        "the keys I expect from THIS artifact"
+ *                                        (property access / destructuring are
+ *                                        used constantly for unrelated things),
+ *                                        so a reverse-direction heuristic would be
+ *                                        noise-dominated, not signal. That gap is
+ *                                        itself part of the chairman-routed
+ *                                        disambiguation, not something to force.
+ *                                        FILESYSTEM-ONLY -- runs even when
+ *                                        SUPABASE_SERVICE_ROLE_KEY is absent (see
+ *                                        main()'s partial-mode branch), unlike
+ *                                        C1-C6 which need live DB rows.
  *
  * Exit codes (bracket-tokenized markers per LEO convention):
  *   0 + [STAGE_CONTRACT_OK]          — all hard checks green
@@ -95,6 +125,7 @@ export const CHECK_IDS = Object.freeze({
   C5: 'LEGACY_PARITY',
   C6: 'OBSERVED_PRODUCER',
   C7: 'CONTRACT_MAP_LINT',
+  C8: 'DECLARED_CONTENT_KEYS',
 });
 
 // ── shared helpers ───────────────────────────────────────────────────
@@ -393,9 +424,158 @@ export function checkContractMapLint(sourceText) {
   return failures;
 }
 
+// ── C8 DECLARED_CONTENT_KEYS (advisory) ───────────────────────────────
+// SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C P2.4. See module docblock for the
+// working definition and its chairman-routing status. FILESYSTEM-ONLY: these
+// three functions read only source text, never the DB.
+
+/**
+ * Heuristic extraction of the immediate keys of every top-level `return { ... }`
+ * block in a JS source string. Deliberately regex-based (matching this file's
+ * own C7 CONTRACT_MAP_LINT precedent) rather than an AST parse -- advisory-only,
+ * so an over- or under-collected key costs nothing but a slightly noisier
+ * advisory report, never a build failure.
+ */
+/**
+ * Extract the body of the `{ ... }` starting at `openBraceIdx` (which must index
+ * the opening `{`) by walking a brace-depth counter, skipping over string and
+ * template-literal contents (including `${...}` interpolation, treated as inert
+ * text -- correctness inside an interpolation is not needed here). Returns null
+ * on an unbalanced/unterminated block (source truncated, parse error, etc.).
+ *
+ * A regex alone CANNOT do this correctly (adversarial-review finding, HIGH): a
+ * non-greedy `return\s*\{([\s\S]*?)\n\s*\};` only closes at a `};` that sits on
+ * its own line, so a common single-line `return { a, b };` has its true close
+ * skipped and the match instead swallows everything up to some LATER unrelated
+ * line-based `};` -- verified empirically to corrupt results on 9+ of the real
+ * analysis-step files in this repo.
+ */
+function extractBalancedBraceBody(text, openBraceIdx) {
+  let depth = 0;
+  let inString = null;
+  for (let i = openBraceIdx; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { inString = ch; continue; }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return text.slice(openBraceIdx + 1, i);
+    }
+  }
+  return null;
+}
+
+/**
+ * Split on commas at depth 0 only -- so a nested `{ }`/`[ ]`/`( )` or a string's
+ * own commas never fracture a segment. Also means a nested object's OWN keys
+ * are never separately walked (they stay inside their parent's one segment),
+ * which is intentional: only IMMEDIATE (top-level) keys of the return object
+ * are "declared content keys".
+ */
+function splitTopLevelCommas(str) {
+  const parts = [];
+  let depth = 0;
+  let inString = null;
+  let start = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (inString) {
+      if (ch === '\\') { i++; continue; }
+      if (ch === inString) inString = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { inString = ch; continue; }
+    if (ch === '{' || ch === '[' || ch === '(') depth++;
+    else if (ch === '}' || ch === ']' || ch === ')') depth--;
+    else if (ch === ',' && depth === 0) {
+      parts.push(str.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(str.slice(start));
+  return parts;
+}
+
+export function extractDeclaredContentKeys(sourceText) {
+  const text = String(sourceText || '');
+  const keys = new Set();
+  const returnOpenRe = /\breturn\s*\{/g;
+  let m;
+  while ((m = returnOpenRe.exec(text))) {
+    const openBraceIdx = m.index + m[0].length - 1;
+    const body = extractBalancedBraceBody(text, openBraceIdx);
+    if (body == null) continue;
+    for (const segment of splitTopLevelCommas(body)) {
+      const trimmed = segment.trim();
+      const km = trimmed.match(/^([A-Za-z_$][\w$]*)\s*:/) || trimmed.match(/^([A-Za-z_$][\w$]*)\s*$/);
+      if (km) keys.add(km[1]);
+    }
+  }
+  return [...keys];
+}
+
+/**
+ * Identifiers referenced as a property access (`.foo`) or a destructuring
+ * target (`{ foo } = ...` / `{ foo, bar }`) across a set of source texts.
+ * Used as the "declared consumed key" side of C8's heuristic.
+ */
+export function collectReferencedIdentifiers(sourceTexts) {
+  const refs = new Set();
+  for (const { source } of sourceTexts || []) {
+    const text = String(source || '');
+    let m;
+    const propRe = /\.([A-Za-z_$][\w$]*)\b/g;
+    while ((m = propRe.exec(text))) refs.add(m[1]);
+    // Destructuring assignment: `{ a, b: c, d = 1, ...e } = expr` (not `==`/`=>`).
+    // [^{}]* deliberately does not handle NESTED destructuring (`{ a: { b } }`)
+    // -- out of scope for this heuristic; a nested source key is simply not
+    // recorded as referenced, which only makes C8 report MORE (never fewer)
+    // advisories, consistent with this check's non-blocking, over-inclusive bias.
+    const destructureRe = /\{([^{}]*)\}\s*=(?!=|>)/g;
+    while ((m = destructureRe.exec(text))) {
+      for (const rawSegment of m[1].split(',')) {
+        const seg = rawSegment.trim();
+        if (!seg || seg.startsWith('...')) continue;
+        // `key` | `key = default` | `key: renamed` | `key: renamed = default`
+        const seg2 = seg.match(/^([A-Za-z_$][\w$]*)\s*(?::\s*([A-Za-z_$][\w$]*))?/);
+        if (!seg2) continue;
+        refs.add(seg2[1]); // the source/declared key, even when renamed
+        if (seg2[2]) refs.add(seg2[2]); // the local binding name, when renamed
+      }
+    }
+  }
+  return refs;
+}
+
+/**
+ * ADVISORY: a declared content key with no reference anywhere in the supplied
+ * reference index is reported as a possible orphaned producer field. Never
+ * fails the build.
+ */
+export function checkDeclaredContentKeys(perFileDeclaredKeys, referencedIdentifiers) {
+  const advisories = [];
+  for (const { file, keys } of perFileDeclaredKeys || []) {
+    for (const key of keys) {
+      if (referencedIdentifiers.has(key)) continue;
+      advisories.push(failure({
+        check: CHECK_IDS.C8, stage: null, artifact_type: key,
+        expected: `a reference (property access or destructuring) to declared content key '${key}' somewhere under lib/eva/`,
+        got: `no reference found outside ${file}`,
+        nearest_match: null,
+      }));
+    }
+  }
+  return advisories;
+}
+
 // ── aggregation ──────────────────────────────────────────────────────
 
-export function runAllChecks({ ventureStages, boundaries, legacyRows, observedTypes, maxTraversedStage, stageContractsSource }) {
+export function runAllChecks({ ventureStages, boundaries, legacyRows, observedTypes, maxTraversedStage, stageContractsSource, declaredContentKeysInputs }) {
   const failures = [];
   const advisories = [];
 
@@ -416,6 +596,13 @@ export function runAllChecks({ ventureStages, boundaries, legacyRows, observedTy
   failures.push(...checkLegacyParity(legacyRows, ventureStages));
   advisories.push(...checkObservedProducer(ventureStages, observedTypes, maxTraversedStage));
   failures.push(...checkContractMapLint(stageContractsSource));
+
+  if (declaredContentKeysInputs) {
+    advisories.push(...checkDeclaredContentKeys(
+      declaredContentKeysInputs.perFileDeclaredKeys,
+      declaredContentKeysInputs.referencedIdentifiers,
+    ));
+  }
 
   const perCheck = {};
   for (const f of failures) perCheck[f.check] = (perCheck[f.check] || 0) + 1;
@@ -462,6 +649,51 @@ async function loadObserved(supabase) {
   return { observedTypes, maxTraversedStage };
 }
 
+const ANALYSIS_STEPS_DIR = path.resolve(__dirname, '..', 'lib', 'eva', 'stage-templates', 'analysis-steps');
+const EVA_DIR = path.resolve(__dirname, '..', 'lib', 'eva');
+
+/**
+ * C8 input loader — FILESYSTEM-ONLY, no DB. Reads every analysis-step file for
+ * its declared content keys, and every .js file under lib/eva/ (excluding
+ * __tests__/) to build the reference index those keys are checked against.
+ */
+function loadDeclaredContentKeysInputs() {
+  const stepFiles = fs.readdirSync(ANALYSIS_STEPS_DIR).filter((f) => f.endsWith('.js') && f !== 'index.js');
+  const perFileDeclaredKeys = [];
+  for (const f of stepFiles) {
+    const source = fs.readFileSync(path.join(ANALYSIS_STEPS_DIR, f), 'utf8');
+    const keys = extractDeclaredContentKeys(source);
+    if (keys.length > 0) {
+      perFileDeclaredKeys.push({ file: `lib/eva/stage-templates/analysis-steps/${f}`, keys });
+    }
+  }
+
+  const evaFiles = fs.readdirSync(EVA_DIR, { recursive: true })
+    .filter((f) => f.endsWith('.js'))
+    .filter((f) => !f.includes('__tests__'))
+    .map((f) => path.join(EVA_DIR, f));
+  const sourceTexts = evaFiles.map((f) => ({ file: f, source: fs.readFileSync(f, 'utf8') }));
+  const referencedIdentifiers = collectReferencedIdentifiers(sourceTexts);
+
+  return { perFileDeclaredKeys, referencedIdentifiers };
+}
+
+/** FILESYSTEM-ONLY checks (C7 + C8) — runnable with no DB credentials at all. */
+function runFilesystemOnlyChecks() {
+  const stageContractsSource = fs.readFileSync(STAGE_CONTRACTS_SOURCE_PATH, 'utf8');
+  const failures = checkContractMapLint(stageContractsSource);
+  const { perFileDeclaredKeys, referencedIdentifiers } = loadDeclaredContentKeysInputs();
+  const advisories = checkDeclaredContentKeys(perFileDeclaredKeys, referencedIdentifiers);
+  return {
+    ok: failures.length === 0,
+    failures,
+    advisories,
+    summary: failures.length === 0
+      ? `OK (filesystem-only: C7+C8 -- SUPABASE_SERVICE_ROLE_KEY absent, C1-C6 skipped): ${advisories.length} advisory(ies)`
+      : `DRIFT (filesystem-only: C7+C8 -- SUPABASE_SERVICE_ROLE_KEY absent, C1-C6 skipped): ${failures.length} hard failure(s)`,
+  };
+}
+
 async function main() {
   const jsonMode = process.argv.includes('--json');
   const out = jsonMode ? console.error : console.log; // human lines; in --json mode everything human goes to stderr
@@ -469,8 +701,43 @@ async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    console.error('[STAGE_CONTRACT_INFRA_ERROR] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-    process.exit(2);
+    // SD-LEO-INFRA-VENTURE-QUALITY-CAPA-001-C P2.4: previously this hard-exited
+    // 2 before ANY check ran, so C7/C8 (both filesystem-only) never got to run on
+    // a forked PR without secrets. Now: run the filesystem-only checks and report
+    // them; only C1-C6 (which genuinely need live DB rows) are skipped.
+    //
+    // Adversarial-review finding (MEDIUM): a graceful fallback here must not
+    // mask a TRUSTED context (push/schedule/workflow_dispatch) losing secret
+    // access (rotation, org-policy change, typo) -- only a `pull_request` event
+    // (where a forked PR legitimately has no secrets) or a local/non-Actions run
+    // (GITHUB_EVENT_NAME unset) falls back silently-green; any other known
+    // Actions event name with missing secrets is a genuine misconfiguration and
+    // still hard-fails loudly.
+    const eventName = process.env.GITHUB_EVENT_NAME;
+    if (eventName && eventName !== 'pull_request') {
+      console.error(`[STAGE_CONTRACT_INFRA_ERROR] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY on a trusted CI event ('${eventName}') -- this is a misconfiguration, not an expected forked-PR gap`);
+      process.exit(2);
+    }
+    console.error('[STAGE_CONTRACT_PARTIAL] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY -- running filesystem-only checks (C7, C8); C1-C6 skipped');
+    const result = runFilesystemOnlyChecks();
+    if (jsonMode) {
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    } else {
+      if (result.failures.length > 0) {
+        out('Hard failures:');
+        for (const f of result.failures) out(renderFailureLine(f));
+      }
+      if (result.advisories.length > 0) {
+        out('Advisories (non-blocking):');
+        for (const a of result.advisories) out(renderFailureLine(a));
+      }
+    }
+    if (!result.ok) {
+      console.error('[STAGE_CONTRACT_DRIFT]', result.summary);
+      process.exit(1);
+    }
+    (jsonMode ? console.error : console.log)('[STAGE_CONTRACT_OK]', result.summary);
+    process.exit(0);
   }
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
@@ -506,6 +773,7 @@ async function main() {
     observedTypes: observed.observedTypes,
     maxTraversedStage: observed.maxTraversedStage,
     stageContractsSource,
+    declaredContentKeysInputs: loadDeclaredContentKeysInputs(),
   });
 
   if (jsonMode) {
