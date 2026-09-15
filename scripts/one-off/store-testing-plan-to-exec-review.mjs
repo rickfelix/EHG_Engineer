@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
 import { buildTestExecution } from '../../lib/sub-agents/testing/test-execution-record.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_ID = '0667ff2f-c224-4359-92a7-d156a0a414b1';
 const SD_KEY = 'SD-LEO-INFRA-INSTANTIATEVENTURE-REFUSES-VENTURE-001';
@@ -112,7 +113,9 @@ async function main() {
   console.log('Stored TESTING sub-agent results:', JSON.stringify({ id: stored?.id, verdict: stored?.verdict }, null, 2));
 }
 
-main().catch((err) => {
-  console.error('FAILED to store TESTING results:', err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error('FAILED to store TESTING results:', err);
+    process.exit(1);
+  });
+}

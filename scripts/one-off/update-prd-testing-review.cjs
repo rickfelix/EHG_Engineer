@@ -28,4 +28,6 @@ async function main() {
   console.log('Updated PRD row:', JSON.stringify(data));
 }
 
-main();
+if (require.main === module) {
+  main();
+}
