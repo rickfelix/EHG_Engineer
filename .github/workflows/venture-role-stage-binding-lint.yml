@@ -21,15 +21,30 @@ on:
       # VALIDATION finding (VERIFY phase): the lint's own RUNTIME_DIRS includes 'tests', so the
       # trigger below must too -- a PR touching only tests/** with a reintroduced binding
       # previously never fired this workflow at all.
+      #
+      # Adversarial /ship review finding (deep-tier): the lint's own CODE_RE matches
+      # .ts/.tsx/.jsx too (scripts/lint/venture-role-stage-binding-lint.mjs:54), but this list
+      # only covered .js/.mjs/.cjs -- 102 .ts/.tsx/.jsx files already exist under
+      # scripts/**, lib/**, tests/** (verified via `git ls-files`), so a reintroduction inside
+      # any of them never fired this workflow at all. Extensions below now match CODE_RE exactly.
       - 'scripts/**/*.js'
       - 'scripts/**/*.mjs'
       - 'scripts/**/*.cjs'
+      - 'scripts/**/*.ts'
+      - 'scripts/**/*.tsx'
+      - 'scripts/**/*.jsx'
       - 'lib/**/*.js'
       - 'lib/**/*.mjs'
       - 'lib/**/*.cjs'
+      - 'lib/**/*.ts'
+      - 'lib/**/*.tsx'
+      - 'lib/**/*.jsx'
       - 'tests/**/*.js'
       - 'tests/**/*.mjs'
       - 'tests/**/*.cjs'
+      - 'tests/**/*.ts'
+      - 'tests/**/*.tsx'
+      - 'tests/**/*.jsx'
       - 'scripts/lint/venture-role-stage-binding-lint.mjs'
       - 'scripts/lint/venture-role-stage-binding-lint-allowlist.json'
       - '.github/workflows/venture-role-stage-binding-lint.yml'

@@ -60,11 +60,18 @@ const DISABLE_PRAGMA = 'venture-role-stage-binding-lint-disable-line';
 // a JSON/DB payload always quotes its keys, so this was a real, likely reintroduction shape, not
 // a theoretical one. The ['"\`]? after the key name is the fix; verified by the TESTING
 // sub-agent's own probes (0/6 wrong after the fix, vs 3/6 wrong before it).
+//
+// Adversarial /ship review finding (deep-tier): a COMPUTED/bracket-property key
+// (['stage_ownership']: ... or [`stage_ownership`]: ...) also evaded detection -- \b(KEY) never
+// matches inside a `[...]` wrapper. Each pattern below is now an alternation: bracket-form
+// (captures into group 1) OR plain/quoted form (captures into group 2) -- callers must read
+// `match[1] || match[2]` for the identifier. Verified directly: `['stage_ownership']: [...]`
+// now flags; a control fixture proves it (tests/unit/lint/venture-role-stage-binding-lint.test.js).
 const BANNED_KEYS = ['stage_ownership', 'can_advance_stage', 'requires_advisory_approval'];
-const KEY_RE = new RegExp(`\\b(${BANNED_KEYS.join('|')})['"\`]?\\s*:`);
+const KEY_RE = new RegExp(`(?:\\[\\s*['"\`]?(${BANNED_KEYS.join('|')})['"\`]?\\s*\\]|\\b(${BANNED_KEYS.join('|')})['"\`]?)\\s*:`);
 
 const STAGE_TOKEN_FIELDS = ['post_stage_mandate', 'honest_idle', 'duty_cycle'];
-const STAGE_TOKEN_FIELD_RE = new RegExp(`\\b(${STAGE_TOKEN_FIELDS.join('|')})['"\`]?\\s*:\\s*(['"\`])((?:(?!\\2).)*)\\2`);
+const STAGE_TOKEN_FIELD_RE = new RegExp(`(?:\\[\\s*['"\`]?(${STAGE_TOKEN_FIELDS.join('|')})['"\`]?\\s*\\]|\\b(${STAGE_TOKEN_FIELDS.join('|')})['"\`]?)\\s*:\\s*(['"\`])((?:(?!\\3).)*)\\3`);
 const STAGE_TOKEN_RE = /\bS\d{1,3}\b/;
 
 // A comment LINE (block-comment body, JSDoc line, or `//` line) referencing a banned key or a
@@ -138,13 +145,13 @@ for (const file of files) {
 
     const keyMatch = KEY_RE.exec(line);
     if (keyMatch) {
-      allViolations.push({ file, line: idx + 1, identifier: keyMatch[1], snippet: line.trim().slice(0, 160) });
+      allViolations.push({ file, line: idx + 1, identifier: keyMatch[1] || keyMatch[2], snippet: line.trim().slice(0, 160) });
       return;
     }
 
     const stageFieldMatch = STAGE_TOKEN_FIELD_RE.exec(line);
-    if (stageFieldMatch && STAGE_TOKEN_RE.test(stageFieldMatch[3])) {
-      allViolations.push({ file, line: idx + 1, identifier: `${stageFieldMatch[1]} (stage token)`, snippet: line.trim().slice(0, 160) });
+    if (stageFieldMatch && STAGE_TOKEN_RE.test(stageFieldMatch[4])) {
+      allViolations.push({ file, line: idx + 1, identifier: `${stageFieldMatch[1] || stageFieldMatch[2]} (stage token)`, snippet: line.trim().slice(0, 160) });
     }
   });
 }
