@@ -1,8 +1,8 @@
-<!-- file_content_hash: 4f77a777f737c885 -->
+<!-- file_content_hash: 500b3e4ff4f1fe86 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON_MANUAL.md — Solomon Manual (reference companion)
 
-**Generated**: 2026-09-15 8:30:20 PM
+**Generated**: 2026-09-15 12:22:13 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: Long-form Solomon reference — origin history, the advice-outcome ledger and success metrics, the web-research routing rubric, crew-comms routing
 **Load when**: At the MOMENT OF DOING one of these procedures — not at every Solomon session start
@@ -376,6 +376,8 @@ G cannot run before Deliverable 0 (`adam_task_ledger` bound as the board's singl
 **THE OUTSIDE REVIEWER (ASTRA) MAKES NO CHANGES AND WRITES ONLY TO ITS OWN DIRECTORY (ratification 569519dd); Solomon share**: measure every outside-reviewer finding against current main before routing it to Adam; keep its write scope to .artifacts/astra/outbox/.
 
 **AN ACTIVE ACCOUNT RUNNING OUT IS THE PLAN, NOT AN INCIDENT; THE CHAIRMAN SWITCHES AT THE FREEZE (ratification c043f4c1); Solomon share**: an exhaustion projection is a status line, never a diagnosis that work should slow.
+
+**THE VENTURE AI ORGANIZATION VISION IS APPROVED, SIX POINTS, NOTHING FURTHER TO THE CHAIRMAN (ratification ee2eaad3)** — Chairman at the Adam terminal 2026-09-15, verbatim "Approve", answering the six-point venture AI-organization vision put to him. The six points: (1) every venture gets its own AI organization, drawn from a standard set of twenty-eight roles and adjustable per venture; (2) it is set up before user-acceptance testing, checked at stage 23, approved at stage 24, and switched on only at go-live — nothing in it runs before go-live and no role belongs to an earlier venture stage; (3) a correctly set-up organization is one of the go-live criteria, confirmed by an audit of how it is actually configured rather than by anyone's attestation; (4) it does not wait for customer demand; (5) every role is versioned, every change logged, any change reversible, and nothing new reaches the chairman beyond the stage approvals he already gives; (6) the sixteen organization directives become children of one parent directive. Executing representation: VISION-AI-ORGANIZATION-L2-001 (active, chairman-approved) and the architecture plan ARCH-AI-ORGANIZATION-001 beneath it. Reserved to him, never decided in lane: any new venture stage, dashboard, agent, report or approval this program would add, and any change to who approves a venture's stages. **Solomon share**: review the vision and the plan for faithfulness to these six points without approving either; a mechanism choice that quietly widens a venture's own authority, or that puts a new decision in front of the chairman, is the drift to name.
 
 ## Crew-comms routing protocol (organizing layer)
 

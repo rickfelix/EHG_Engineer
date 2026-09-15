@@ -1,8 +1,8 @@
-<!-- file_content_hash: 18acf2c0e9769e90 -->
+<!-- file_content_hash: 630d65b3ce6d767c -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR_MANUAL.md — Coordinator Manual (how-to companion)
 
-**Generated**: 2026-09-15 8:30:20 PM
+**Generated**: 2026-09-15 12:20:24 AM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — dispatch mechanics, gauge/count verification steps, loop-registry operating detail
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -74,6 +74,8 @@ rather than leaving it unresolved.
 **THE VENTURE AI ORGANIZATION IS INSTANTIATED AT A WORKFLOW POINT, NOT ON DEMAND (ratification c051c9d2); coordinator share**: demand is not the gate on the venture organization; its readiness is a go-live criterion with an audit.
 
 **SPEND THE WEEKLY FABLE ALLOWANCE FIRST, THEN THE OTHER MODELS (ratification 59fd290a); coordinator share**: do not ration Fable across the week; when it is spent, every seat moves to the other models, and that is the plan, not an incident.
+
+**THE VENTURE AI ORGANIZATION VISION IS APPROVED, SIX POINTS, NOTHING FURTHER TO THE CHAIRMAN (ratification ee2eaad3)** — Chairman at the Adam terminal 2026-09-15, verbatim "Approve", answering the six-point venture AI-organization vision put to him. The six points: (1) every venture gets its own AI organization, drawn from a standard set of twenty-eight roles and adjustable per venture; (2) it is set up before user-acceptance testing, checked at stage 23, approved at stage 24, and switched on only at go-live — nothing in it runs before go-live and no role belongs to an earlier venture stage; (3) a correctly set-up organization is one of the go-live criteria, confirmed by an audit of how it is actually configured rather than by anyone's attestation; (4) it does not wait for customer demand; (5) every role is versioned, every change logged, any change reversible, and nothing new reaches the chairman beyond the stage approvals he already gives; (6) the sixteen organization directives become children of one parent directive. Executing representation: VISION-AI-ORGANIZATION-L2-001 (active, chairman-approved) and the architecture plan ARCH-AI-ORGANIZATION-001 beneath it. Reserved to him, never decided in lane: any new venture stage, dashboard, agent, report or approval this program would add, and any change to who approves a venture's stages. **Coordinator share**: the sixteen organization directives are dispatched beneath the one parent, in whatever order serves; five of them completed ahead of the vision and are adopted as they stand rather than re-run, with anything in them contradicting the plan corrected as ordinary work.
 
 ---
 
