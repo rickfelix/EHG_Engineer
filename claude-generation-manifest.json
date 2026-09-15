@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-15T00:30:20.085Z",
-  "git_commit": "24bc3259",
+  "generated_at": "2026-09-15T01:15:14.825Z",
+  "git_commit": "1ba15a48",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 123543,
-      "bytes": 124533,
-      "estimated_tokens": 30886,
-      "content_hash": "8c52644df8d1275a",
+      "chars": 125306,
+      "bytes": 126300,
+      "estimated_tokens": 31327,
+      "content_hash": "e188ce7534a5132d",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\contract-regen3-49eabb23\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -173,10 +173,10 @@
     },
     "CLAUDE_MICHAEL.md": {
       "type": "full",
-      "chars": 39596,
-      "bytes": 39756,
-      "estimated_tokens": 9899,
-      "content_hash": "bf89d3b34cd8ee17",
+      "chars": 40495,
+      "bytes": 40655,
+      "estimated_tokens": 10124,
+      "content_hash": "0720edf31aa084b1",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\contract-regen3-49eabb23\\CLAUDE_MICHAEL.md"
     },
     "CLAUDE_MICHAEL_MODEL_POSTURE.md": {
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "1f693a9bab974caa",
+    "global": "cd4964303270eb62",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -507,7 +507,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "9daa95627747e5c0",
+      "601": "7be9f5b25e2c8532",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "7400bc8a530b1331",
@@ -537,7 +537,7 @@
       "655": "59137a758bb13a65",
       "656": "d2ccb43f1edf9602",
       "657": "11c9181c9e30ef9c",
-      "658": "81eff7353fa84491",
+      "658": "cda5b38072076264",
       "659": "f07759022446ffb1",
       "660": "61acc95edefef269",
       "661": "5a43f70cb1e2438d",
