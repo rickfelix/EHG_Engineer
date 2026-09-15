@@ -345,18 +345,37 @@ export async function runIdleQfHintCore(supabase, { nowMs = Date.now(), dryRun =
   // lands (the QF-20260720-763 / QF-20260724-598 outage class the other readers guard against
   // with a post-error layered retry -- this call site probes first instead, since
   // fetchAllPaginated's thrown error doesn't preserve .code for a post-error retry to key on).
-  const QF_HINT_BASE_COLUMNS = 'id, title, description, severity, status, pr_url, commit_sha, created_at, routing_tier, not_before, owner, release_condition';
+  // QF-20260911-285: compliance_details carries the risk-review stamp getRiskReviewStampFreshness
+  // (via isAutoStartableQF, called from eligibleQfCandidates below) reads -- SD-LEO-FIX-SELF-
+  // CLAIM-PREDICATE-001 added it to belt-depth.cjs's AUTO_START_CANDIDATE_COLUMNS and
+  // worker-checkin.cjs's QF_CANDIDATE_COLUMNS, but never here, so a stamped, reviewed QF still
+  // read as stamp=absent at hint time (found only by a seat that happened to self-claim it
+  // through one of the other two readers). Long-established column, no fallback needed (same
+  // as belt-depth.cjs).
+  const QF_HINT_BASE_COLUMNS = 'id, title, description, severity, status, pr_url, commit_sha, created_at, routing_tier, not_before, owner, release_condition, compliance_details';
   let verifiedAtSelectable = true;
   try {
     const { error: probeErr } = await supabase.from('quick_fixes').select('verified_at').limit(1); // schema-lint-disable-line: verified_at is staged (database/migrations/20260816_add_quick_fixes_disposition_columns.sql), probed here before use
     verifiedAtSelectable = !(probeErr && probeErr.code === '42703');
   } catch { verifiedAtSelectable = false; }
 
+  // QF-20260911-285: factory_lane is isAutoStartableQF's dispatch-only exclusion
+  // (`if (qf.factory_lane) return false`) -- also missing here, which silently blinded that
+  // guard for this reader alone. Staged column (database/migrations/
+  // 20260713_quick_fixes_factory_lane.sql); probed the same way verified_at is above.
+  let factoryLaneSelectable = true;
+  try {
+    const { error: probeErr } = await supabase.from('quick_fixes').select('factory_lane').limit(1); // schema-lint-disable-line: factory_lane is staged, probed here before use
+    factoryLaneSelectable = !(probeErr && probeErr.code === '42703');
+  } catch { factoryLaneSelectable = false; }
+
   let qfs;
   try {
+    const columns = [QF_HINT_BASE_COLUMNS, verifiedAtSelectable ? 'verified_at' : null, factoryLaneSelectable ? 'factory_lane' : null]
+      .filter(Boolean).join(', ');
     qfs = await fetchAllPaginated(() => supabase
       .from('quick_fixes')
-      .select(verifiedAtSelectable ? `${QF_HINT_BASE_COLUMNS}, verified_at` : QF_HINT_BASE_COLUMNS)
+      .select(columns)
       .eq('status', 'open')
       .is('pr_url', null)
       .is('commit_sha', null)

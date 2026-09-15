@@ -1,0 +1,268 @@
+{
+  "executive_summary": "Create the venture AI organization before UAT, QA/QC it at stage 23 (dedicated_venture_uat) alongside the product UAT via the acceptance suite already built this session, surface both results at stage 24 (launch_readiness_gate), and block launch if the organization fails QA/QC. Implemented entirely within the 2 existing stage-template files -- no new stage number, no chairman-gated renumber ceremony.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "In lib/eva/stage-templates/analysis-steps/stage-23-dedicated-venture-uat.js (live DB stage 23), before or alongside the existing checkUatRobustnessGate() call, create a draft AI organization for the venture via VentureFactory.instantiateVenture({ventureId, ventureName, ...}) (lib/agents/venture-ceo-factory.js) if one does not already exist for this venture (checked via agent_registry/org_agent_identities, or by catching VentureNotFoundError-adjacent state -- the venture itself is guaranteed to exist at stage 23, so instantiateVenture()'s own existence guard, SD-LEO-INFRA-INSTANTIATEVENTURE-REFUSES-VENTURE-001, will not fire under normal operation).",
+      "description": "Matches this file's own established pattern (already calls generateLegalDocsForVenture() as a side effect that 'never blocks or alters this stage's own UAT verdict'). Org creation must be idempotent -- calling this stage-23 step twice for the same venture must not create a second organization.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: A mock venture with no prior organization gets one created by the time stage 23's analysis step completes.",
+        "AC-2: Calling the stage-23 step a second time for the same venture does not create a duplicate organization (idempotent -- checked before create).",
+        "AC-3: Organization creation failure (e.g. a thrown error from instantiateVenture()) does not throw out of the stage-23 step -- caught and recorded, mirroring generateLegalDocsForVenture()'s own never-throws contract, surfaced via eva_orchestration_events."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Immediately after organization creation (or confirming one already exists), run the organization acceptance suite (lib/org/acceptance-suite/run-suite.mjs's runSuite(), SD-LEO-INFRA-ORGANIZATION-ACCEPTANCE-SUITE-001) against the venture's organization, and append ONE new entry to analyzeStage23DedicatedVentureUat()'s own RETURNED `artifacts` array (a new ARTIFACT_TYPES.ORGANIZATION_QA_RESULT constant, lib/eva/artifact-types.js) -- NOT a direct venture_artifacts insert. The step never calls supabase.from('venture_artifacts') itself; per direct code reading, this analysis step returns `{..., artifacts: [{artifactType, title, payload, source, metadata, runId}]}` and the caller (writeArtifactBatch(), lib/eva/artifact-persistence-service.js) is what actually performs the insert AND the is_current dedup (marks prior is_current rows false, scoped per artifact_type, before inserting the new batch) -- exactly matching how the existing LAUNCH_UAT_REPORT entry in this same array already works.",
+      "description": "This is the stage-23 half of the SD's success criteria: 'stage 23 records an organization QA/QC result... next to the product UAT result.' PLAN-phase self-review caught an initial draft of this FR that implied a direct venture_artifacts write -- corrected after reading the actual stage-23 handler's return shape and confirming writeArtifactBatch()'s is_current dedup logic (artifact-persistence-service.js:432-439) directly. The payload carries the suite's {suite_version, run_id, content_hash, pass_rate, catch_rate, findings[]} shape verbatim (no reformatting), so provenance is traceable back to the exact suite version that ran.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: analyzeStage23DedicatedVentureUat()'s returned artifacts array contains a second entry (artifactType: ARTIFACT_TYPES.ORGANIZATION_QA_RESULT) alongside the existing LAUNCH_UAT_REPORT entry, with payload equal to runSuite()'s verbatim output.",
+        "AC-2: After writeArtifactBatch() processes this stage's artifacts, a venture_artifacts row with artifact_type=ORGANIZATION_QA_RESULT, is_current=true exists, ALONGSIDE (not replacing) the existing UAT robustness artifact -- both present, both is_current=true (writeArtifactBatch's dedup is scoped per artifact_type, so the 2 types coexist).",
+        "AC-3: Running stage 23 again for the same venture relies on writeArtifactBatch()'s existing dedup (prior is_current rows for this artifact_type marked false before the new insert) -- no bespoke dedup logic written in this SD's own code."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "New REQUIRED checklist category 'organization_qa' added to lib/eva/quality-model/registry.js's dimension list (following the exact entry shape of 'legal': id, name, tier, owner_stage:23, producer pointing at the new FR-1/FR-2 step, reader_or_gate pointing at stage-23-launch-readiness.js, severity_policy:'blocking', stage23_membership:'required', applicability, ratification_pointer, waiver:null), and a corresponding case 'organization_qa' in stage-23-launch-readiness.js's (live DB stage 24) scoring switch -- reading the FR-2 artifact directly (preflight.artifactData.get('organization_qa_result'), mirroring the 'legal' case's dedicated-check pattern, NOT the upstream-preflight anyOf pattern used for S20-S22 cross-stage deps) and scoring status='pass' only when the suite's overall pass_rate/catch_rate indicate a clean run, 'fail' otherwise with the specific failing check(s) named in detail.",
+      "description": "This is the stage-24 half of the SD's success criteria: 'the stage-24 launch-readiness packet shows both... a venture whose organization fails QA/QC cannot pass stage 24.' Reusing the exact registry+switch mechanism every other blocking category already uses, rather than a parallel gate.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: A venture whose FR-2 artifact shows a clean acceptance-suite run scores organization_qa='pass' at stage 24.",
+        "AC-2: A venture whose FR-2 artifact shows one or more failing acceptance-suite checks scores organization_qa='fail' at stage 24, and the overall stage-24 checklist verdict is not PASS (organization_qa is REQUIRED/blocking, matching 'legal').",
+        "AC-3: A venture with NO FR-2 artifact at all (organization creation never ran, e.g. a pre-existing in-flight venture) scores organization_qa as a defined pending/fail state, never silently 'pass' -- absence must never read as success."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "The organization created and QA/QC'd at stage 23 remains entirely mock/rehearsal -- no agent it creates takes any real action, sends any outbound communication, or is switched on for live operation before stage 25 (go_live). This SD does not build the go-live activation switch itself (out of scope, a separate later item); it only guarantees the stage-23/24 creation-and-QA/QC path never activates anything.",
+      "description": "Directly implements the SD's own 'nothing in it runs before go-live' requirement and chairman ruling 90c0b40a's standing mock-first discipline. VentureFactory.instantiateVenture() itself only writes registry/identity rows -- it has no code path that dispatches a live agent action, so this requirement is satisfied by construction as long as FR-1/FR-2 call only instantiateVenture()/runSuite() and nothing else.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: A test confirms that after stage 23 runs, zero rows exist in any outbound-communication or agent-action-log table attributable to the newly created organization.",
+        "AC-2: git diff for this SD's FR-1/FR-2 code touches no publisher/outreach/communication-dispatch module."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "No new database table and no new venture_stages row -- this SD adds one new artifact_type constant, one new registry entry, and new logic inside 2 existing stage-template files.",
+      "rationale": "R1 (chairman ratification bb2175d2 / the standing new-table ceremony rule) does not apply; this SD writes to the existing venture_artifacts table with a new artifact_type value, exactly as every other stage-template producer does."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "Organization creation (FR-1) and the acceptance-suite run (FR-2) must both be wrapped in try/catch that never lets a thrown error propagate out of the stage-23 analysis step -- mirroring the exact pattern this file already uses for generateLegalDocsForVenture() (try/catch around the call, logger.warn on throw, a structured {ok:false, reason:'threw', error} result substituted in place of a real result) rather than inventing a new error-handling shape.",
+      "rationale": "A stage-template analysis step throwing would block the ENTIRE stage 23 pipeline for reasons unrelated to the venture's actual UAT outcome -- this SD's new logic must never become a new source of stage-23 instability. Reusing the file's own established catch-and-substitute pattern (not a fresh design) keeps the new code consistent with its neighbor."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "FR-1/FR-2's org-creation-and-QA/QC result is delivered ONLY via analyzeStage23DedicatedVentureUat()'s own returned `artifacts` array (a second entry alongside the existing LAUNCH_UAT_REPORT entry) -- this SD's code never calls supabase.from('venture_artifacts') directly. The actual insert and is_current dedup are writeArtifactBatch()'s (lib/eva/artifact-persistence-service.js) existing responsibility.",
+      "rationale": "PLAN-phase self-review found and corrected a draft of FR-2 that implied a direct DB write, which would have duplicated (and risked diverging from) writeArtifactBatch()'s own dedup logic. Confirmed by direct code reading of both the stage-23 handler's return shape and writeArtifactBatch()'s is_current handling (artifact-persistence-service.js:432-439) before writing this requirement."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "The new registry entry and switch case follow the 'legal' category's pattern exactly (a dedicated artifact-presence-and-content check), not the UPSTREAM_REQUIREMENTS anyOf pattern (S20-S22 cross-stage deps) -- organization_qa has exactly one producer (this SD's own FR-1/FR-2 step) and no legacy/alternate artifact_type to accept."
+    }
+  ],
+  "system_architecture": {
+    "overview": "Two new pieces of logic inside 2 existing, already-large stage-template files, plus one new registry entry and one new artifact-type constant. No new stage, table, or service.",
+    "components": [
+      {
+        "name": "Organization-creation-and-QA/QC step (new logic in stage-23-dedicated-venture-uat.js)",
+        "responsibility": "Creates the venture's AI organization (if absent) and runs the organization acceptance suite against it, writing the result as a venture_artifacts row.",
+        "technology": "Reuses VentureFactory.instantiateVenture() (lib/agents/venture-ceo-factory.js) and runSuite() (lib/org/acceptance-suite/run-suite.mjs) -- both existing, unmodified."
+      },
+      {
+        "name": "'organization_qa' registry entry (new entry in lib/eva/quality-model/registry.js)",
+        "responsibility": "Declares the new checklist category as REQUIRED/blocking, with producer/reader_or_gate pointers per the Venture Quality Model v1 shape.",
+        "technology": "Existing registry pattern, no new mechanism."
+      },
+      {
+        "name": "'organization_qa' scoring case (new case in stage-23-launch-readiness.js)",
+        "responsibility": "Reads the FR-2 artifact and scores pass/fail at the launch-readiness checklist (live DB stage 24), gating the kill-gate verdict.",
+        "technology": "Existing checklist switch pattern, no new mechanism."
+      }
+    ],
+    "data_flow": "Venture reaches stage 23 -> new step checks for an existing organization, creates one via instantiateVenture() if absent -> runs runSuite() against it -> appends a second entry (ARTIFACT_TYPES.ORGANIZATION_QA_RESULT) to the step's own returned `artifacts` array, alongside the existing LAUNCH_UAT_REPORT entry -> the stage's caller passes this array to writeArtifactBatch(), which performs the actual venture_artifacts insert + is_current dedup (existing mechanism, unmodified) -> venture reaches stage 24 -> launch-readiness checklist's new 'organization_qa' case reads that artifact via preflight.artifactData -> scores pass/fail -> feeds the overall kill-gate verdict exactly as every other REQUIRED category does.",
+    "integration_points": [
+      "lib/agents/venture-ceo-factory.js's VentureFactory.instantiateVenture() (read/write: creates org rows, unmodified by this SD)",
+      "lib/org/acceptance-suite/run-suite.mjs's runSuite() (read-only: evaluates the org, unmodified by this SD)",
+      "lib/eva/artifact-persistence-service.js's writeArtifactBatch() (existing artifact-write + is_current-dedup mechanism, unmodified by this SD -- this SD only adds an entry to the artifacts array passed into it)",
+      "venture_artifacts table (new artifact_type value, existing table/columns, written only via writeArtifactBatch())",
+      "lib/eva/quality-model/registry.js (new entry, existing array)",
+      "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js's REQUIRED_CATEGORIES-driven switch (new case, existing mechanism)"
+    ]
+  },
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "A mock venture with no prior organization gets one created at stage 23",
+      "test_type": "unit",
+      "given": "A mock venture entering stage 23 with no agent_registry/org_agent_identities rows",
+      "when": "The stage-23 analysis step runs",
+      "then": "An organization exists for the venture, and a venture_artifacts row (organization_qa_result) is written"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Idempotent organization creation",
+      "test_type": "unit",
+      "given": "A venture whose organization was already created by a prior stage-23 run",
+      "when": "The stage-23 analysis step runs again",
+      "then": "No duplicate organization is created -- instantiateVenture() is not called a second time (or is called and correctly no-ops), verified via a spy/mock"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "A clean organization passes the stage-24 organization_qa category",
+      "test_type": "unit",
+      "given": "A venture_artifacts row (organization_qa_result) showing a 100%-pass acceptance-suite run",
+      "when": "The stage-24 launch-readiness checklist scores the organization_qa category",
+      "then": "status='pass'"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "A defective organization (seeded MAST fixture) fails the stage-24 organization_qa category and blocks the checklist",
+      "test_type": "unit",
+      "given": "A venture_artifacts row (organization_qa_result) showing a failing acceptance-suite check",
+      "when": "The stage-24 launch-readiness checklist scores the organization_qa category",
+      "then": "status='fail', and the overall checklist verdict is not PASS"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "A venture with no organization_qa_result artifact never silently passes",
+      "test_type": "unit",
+      "given": "A venture reaching stage 24 with no organization_qa_result venture_artifacts row",
+      "when": "The stage-24 checklist scores the organization_qa category",
+      "then": "status is a defined pending/fail state, never 'pass'"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Organization creation/QA-QC never throws out of the stage-23 step",
+      "test_type": "unit",
+      "given": "instantiateVenture() or runSuite() mocked to throw",
+      "when": "The stage-23 analysis step runs",
+      "then": "The step completes without throwing, and the failure is surfaced via eva_orchestration_events, matching generateLegalDocsForVenture()'s existing contract"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "Nothing about the created organization is live before go-live",
+      "test_type": "integration",
+      "given": "A venture that has passed stage 23 and stage 24 with a clean organization_qa result",
+      "when": "Any outbound-communication or agent-action-log table is queried for that organization",
+      "then": "Zero rows exist -- the organization has taken no real action"
+    }
+  ],
+  "acceptance_criteria": [
+    "A mock venture's organization is created before stage 23 completes (idempotently).",
+    "Stage 23 records an organization QA/QC result (the acceptance suite) alongside the existing product UAT result, as a venture_artifacts row.",
+    "The stage-24 launch-readiness packet's checklist includes a new REQUIRED 'organization_qa' category reading that result.",
+    "A venture whose organization fails QA/QC cannot pass the stage-24 kill gate.",
+    "Nothing about the created organization runs/activates before go-live (stage 25) -- verified by an integration test.",
+    "No new stage number, table, or chairman ceremony -- this SD's diff is confined to the 2 existing stage-template files, the registry file, and the artifact-types file."
+  ],
+  "risks": [
+    {
+      "risk": "The scoping decision to implement within existing stages (rather than await Solomon's stage-placement call) could be revisited if Solomon later decides organization-creation warrants a dedicated stage number.",
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "mitigation": "This SD's artifact/registry contract (organization_qa_result artifact_type, the registry entry shape) is stage-number-agnostic -- if a dedicated stage is later created, the producer logic can move into a new stage-template file without changing the artifact contract this SD establishes. Already flagged to the coordinator (spec-conflict signal 7ab3945a) for awareness.",
+      "rollback_plan": "If Solomon's eventual decision conflicts with this implementation, the new registry entry/switch case can be feature-flagged off (mirroring GROWTH_FLAG_KEY/CAPABILITY_CHECKLIST_FLAG_KEY's existing default-OFF rollout pattern) without reverting the underlying artifact-writing logic."
+    },
+    {
+      "risk": "Adding a new REQUIRED/blocking category to an already-complex launch-readiness checklist could unexpectedly flip in-flight ventures from READY to HOLD if they have no organization yet.",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "Per the existing rollout-safety pattern in this same file (LEO_S21_GROWTH_PLAYBOOK_REQUIRED, LEO_S24_CAPABILITY_CHECKLIST_REQUIRED, both default OFF), the new organization_qa category should ship behind a similar feature flag, default OFF, so no existing in-flight venture's checklist/verdict changes until explicitly enabled.",
+      "rollback_plan": "Flip the flag off; the checklist reverts to its pre-SD behavior immediately (no code revert needed)."
+    },
+    {
+      "risk": "This SD depends on 2 other SDs completed earlier this same session (instantiateVenture guard, organization acceptance suite) -- if either has an undiscovered defect, this SD inherits it.",
+      "probability": "LOW",
+      "impact": "LOW",
+      "mitigation": "Both dependency SDs went through their own full LEAD-PLAN-EXEC-VERIFY cycle with adversarial review this session and are merged to main with passing CI; this SD's own EXEC-phase testing will exercise both through this SD's own new integration code paths, providing an additional layer of coverage."
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "description": "Add the organization-creation-and-QA/QC step to stage-23-dedicated-venture-uat.js (FR-1, FR-2, TR-2).",
+        "deliverables": ["New logic in stage-23-dedicated-venture-uat.js, new 'organization_qa_result' entry in lib/eva/artifact-types.js"]
+      },
+      {
+        "phase": "Phase 2",
+        "description": "Add the registry entry and the launch-readiness checklist case, behind a default-OFF feature flag matching the existing rollout pattern (FR-3, TR-3).",
+        "deliverables": ["New registry entry in lib/eva/quality-model/registry.js, new switch case + flag read in stage-23-launch-readiness.js"]
+      },
+      {
+        "phase": "Phase 3",
+        "description": "Write TS-1 through TS-7, including the mock-first/nothing-live-before-go-live integration test (FR-4).",
+        "deliverables": ["New/updated unit and integration tests, all passing"]
+      }
+    ],
+    "technical_decisions": [
+      "Implement entirely within existing stages 23/24 rather than await the reserved stage-placement decision -- signaled to the coordinator, documented in the SD's own metadata.lead_scoping_decision.",
+      "Ship the new checklist category behind a default-OFF feature flag, matching this file's own established rollout-safety pattern for every prior REQUIRED-category addition (growth_playbook, capability checklist)."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      {
+        "name": "stage-23-launch-readiness.js's launch-readiness checklist (live DB stage 24)",
+        "interaction": "Reads the FR-2 artifact via the new organization_qa case, feeding the overall kill-gate verdict.",
+        "frequency": "Every venture that reaches stage 24."
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "VentureFactory.instantiateVenture() (lib/agents/venture-ceo-factory.js)",
+        "type": "upstream",
+        "contract": "Creates an organization for a valid venture id; throws VentureNotFoundError for a nonexistent one (not expected to fire here, since stage 23 always has a real venture).",
+        "failure_handling": "Wrapped in try/catch (TR-2) -- a thrown error is caught, logged via eva_orchestration_events, and does not block the rest of stage 23."
+      },
+      {
+        "name": "runSuite() (lib/org/acceptance-suite/run-suite.mjs)",
+        "type": "upstream",
+        "contract": "Evaluates an organization object against the MAST-seeded acceptance checks, returns {suite_version, run_id, content_hash, pass_rate, catch_rate, findings[]}.",
+        "failure_handling": "Wrapped in try/catch (TR-2), same contract as instantiateVenture() above; the suite's own internal design (built this session) already degrades content_hash to null on error rather than throwing, so a thrown error here would be a genuine infrastructure failure, not a normal evaluation outcome."
+      }
+    ],
+    "data_contracts": [
+      {
+        "name": "venture_artifacts row, artifact_type='organization_qa_result'",
+        "shape": "Verbatim runSuite() output: {suite_version, run_id, content_hash, pass_rate, catch_rate, findings[]}, plus standard venture_artifacts columns (venture_id, lifecycle_stage, is_current, created_at)."
+      }
+    ],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": ["A new default-OFF flag (e.g. LEO_S24_ORGANIZATION_QA_REQUIRED) gating whether the organization_qa category is REQUIRED/blocking vs. absent from the checklist entirely -- mirrors LEO_S21_GROWTH_PLAYBOOK_REQUIRED/LEO_S24_CAPABILITY_CHECKLIST_REQUIRED's existing rollout pattern."],
+      "deployment_considerations": "No migration. The new artifact_type value requires no schema change (venture_artifacts.artifact_type has no enum constraint, confirmed by the existing pattern of adding new artifact types without migrations)."
+    },
+    "observability_rollout": {
+      "monitoring": ["eva_orchestration_events entries for any FR-1/FR-2 failure (subtype pattern matching legal_producer_failed)"],
+      "alerts": [],
+      "rollout_strategy": "Merge with the new feature flag default OFF (checklist unaffected for all in-flight ventures); flag enabled explicitly once the clean-slate test venture (ratification 3c4a6781) is ready to exercise this path, per chairman ruling 212909b9's stated sequencing.",
+      "rollback_trigger": "The organization_qa category incorrectly blocking a venture that should legitimately pass.",
+      "rollback_procedure": "Flip the feature flag OFF; no code revert needed."
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/eva/stage-templates/analysis-steps/stage-23-dedicated-venture-uat.js (full header + checkUatRobustnessGate/generateLegalDocsForVenture pattern)",
+      "lib/eva/stage-templates/analysis-steps/stage-23-launch-readiness.js (REQUIRED_CATEGORIES/ADVISORY_CATEGORIES, preflightUpstream, the per-category scoring switch including the 'legal' dedicated-check pattern)",
+      "lib/eva/quality-model/registry.js (existing REQUIRED-category entry shape)",
+      "lib/eva/stage-templates/analysis-steps/stage-24-go-live.js (confirms the file-name/DB-stage-number offset)",
+      "venture_stages (live DB, stages 22-26)"
+    ],
+    "patterns_identified": [
+      "Every prior REQUIRED-category addition to this checklist (growth_playbook, the 7 capability: categories) shipped behind a default-OFF feature flag so in-flight ventures' verdicts never silently changed -- this SD's organization_qa category follows the same rollout-safety pattern.",
+      "The 'legal' category is the closest existing precedent for organization_qa: both are REQUIRED/blocking, both have exactly one producer with no legacy/alternate artifact_type, both use a dedicated check function rather than the generic upstream-preflight anyOf pattern."
+    ],
+    "key_decisions": [
+      "Implement fully within existing stages 23/24 rather than await Solomon's reserved stage-placement decision -- documented in strategic_directives_v2.metadata.lead_scoping_decision and signaled to the coordinator (7ab3945a).",
+      "Ship the new checklist category behind a default-OFF feature flag, matching this file's own established rollout pattern, rather than making it unconditionally REQUIRED on merge."
+    ],
+    "exploration_date": "2026-09-15"
+  }
+}

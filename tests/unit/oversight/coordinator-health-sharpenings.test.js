@@ -4,6 +4,7 @@ import {
   lacksHoldReason, hasStaleUnreviewedHold, sampleFalseCompletions, classifyFailureClasses,
   FAILURE_CLASSES, REASON_BAND, CONVERSION_FLOOR, LATENCY_CEILING_MS, MIN_COHORT_FOR_ALARM,
   STALE_HOLD_CEILING_HOURS, evaluateCoordinatorLoopLiveness, MIN_OVERDUE_LOOPS_FOR_ALARM,
+  fetchStuckWithoutHold,
 } from '../../../lib/oversight/coordinator-health-sharpenings.mjs';
 
 const NOW = Date.parse('2026-07-16T12:00:00Z');
@@ -195,6 +196,110 @@ describe('S2 STUCK_WITHOUT_HOLD_REASON predicate', () => {
     expect(lacksHoldReason({ ...stale, metadata: { requires_human_action: '' } }, NOW)).toBe(true);
     // Regression guard: a genuinely truthy hold of any shape still counts (object, not just boolean).
     expect(lacksHoldReason({ ...stale, metadata: { lead_blocker: { reason: 'x' } } }, NOW)).toBe(false);
+  });
+
+  // QF-20260911-261 pure-level: isChildHumanHeld's new WAIT branch, via _latestHandoffWait --
+  // the flag fetchChildrenByParentId/attachChildWaitHolds attach to a child row (DB read this
+  // pure predicate itself stays free of). Live specimen: SD-LEO-ORCH-CAPA-DURABILITY-AUDIT-001's
+  // child E, LEAD-FINAL WAIT on CHAIRMAN_APPLY_VERIFICATION, fired the class on the parent for
+  // 4+ days because neither the child's WAIT nor (once unparked) its park_reason was visible.
+  it('QF-20260911-261: a child carrying a documented handoff WAIT (_latestHandoffWait) is exempt, same as a terminal/parked child', () => {
+    const parent = sd({ status: 'in_progress', updated_at: daysAgo(5), sd_type: 'orchestrator', metadata: {} });
+    const completedChild = { sd_key: 'SD-CHILD-A', sd_type: 'feature', status: 'completed', metadata: {} };
+    const waitingChild = { sd_key: 'SD-CHILD-E', sd_type: 'feature', status: 'pending_approval', metadata: {}, _latestHandoffWait: true, _latestHandoffWaitReason: 'CHAIRMAN_APPLY_VERIFICATION' };
+    expect(lacksHoldReason(parent, NOW, 24, [completedChild, waitingChild])).toBe(false);
+  });
+
+  it('[TWO-SIDED] QF-20260911-261: a non-terminal child with NO handoff WAIT flag still breaches -- the flag, not mere non-terminal status, is what exempts', () => {
+    const parent = sd({ status: 'in_progress', updated_at: daysAgo(5), sd_type: 'orchestrator', metadata: {} });
+    const pendingChildNoWait = { sd_key: 'SD-CHILD-E', sd_type: 'feature', status: 'pending_approval', metadata: {} };
+    expect(lacksHoldReason(parent, NOW, 24, [pendingChildNoWait])).toBe(true);
+  });
+});
+
+// QF-20260911-261: end-to-end through the exported S2 fetcher, mocked supabase -- proves the
+// actual SELECT + batched sd_phase_handoffs join (attachChildWaitHolds) resolves correctly, not
+// just the pure isChildHumanHeld branch above.
+describe('QF-20260911-261: fetchStuckWithoutHold — child handoff-WAIT derivation (mocked supabase)', () => {
+  function makeFakeSupabase({ candidateRows = [], childRows = [], handoffRows = [] }) {
+    return {
+      from(table) {
+        const state = { inCol: null };
+        const builder = {
+          select() { return builder; },
+          eq() { return builder; },
+          is() { return builder; },
+          in(col) { state.inCol = col; return builder; },
+          or() { return builder; },
+          order() { return builder; },
+          limit() { return builder; },
+          // Every chain method returns this same thenable builder, so whichever call happens
+          // to be last in the real query (limit/in/order all appear as the terminal call across
+          // the 3 different queries this test exercises) still resolves correctly on await.
+          then(resolve) {
+            if (table === 'strategic_directives_v2') {
+              if (state.inCol === 'parent_sd_id') return resolve({ data: childRows, error: null });
+              return resolve({ data: candidateRows, error: null });
+            }
+            if (table === 'sd_phase_handoffs') return resolve({ data: handoffRows, error: null });
+            return resolve({ data: [], error: null });
+          },
+        };
+        return builder;
+      },
+    };
+  }
+
+  const parentRow = () => sd({ id: 'parent-1', sd_key: 'SD-PARENT-001', sd_type: 'orchestrator', status: 'in_progress', updated_at: daysAgo(5), metadata: {} });
+  const childRow = (over = {}) => ({ id: 'child-1', sd_key: 'SD-CHILD-E', sd_type: 'feature', status: 'pending_approval', metadata: {}, parent_sd_id: 'parent-1', ...over });
+
+  it('a child whose newest handoff is a documented WAIT (status=blocked, metadata.wait=true) exempts the parent', async () => {
+    const sb = makeFakeSupabase({
+      candidateRows: [parentRow()],
+      childRows: [childRow()],
+      handoffRows: [{ sd_id: 'child-1', status: 'blocked', metadata: { wait: true, waiting_gates: ['CHAIRMAN_APPLY_VERIFICATION'] }, created_at: daysAgo(1) }],
+    });
+    const rows = await fetchStuckWithoutHold(sb, { nowMs: NOW });
+    expect(rows).toEqual([]);
+  });
+
+  it('[TWO-SIDED] a child whose newest handoff is NOT a wait (e.g. accepted) does not exempt the parent', async () => {
+    const sb = makeFakeSupabase({
+      candidateRows: [parentRow()],
+      childRows: [childRow()],
+      handoffRows: [{ sd_id: 'child-1', status: 'accepted', metadata: {}, created_at: daysAgo(1) }],
+    });
+    const rows = await fetchStuckWithoutHold(sb, { nowMs: NOW });
+    expect(rows.map((r) => r.id)).toEqual(['parent-1']);
+  });
+
+  it('only the NEWEST handoff row governs -- a stale WAIT beneath a fresher non-wait row does not exempt', async () => {
+    const sb = makeFakeSupabase({
+      candidateRows: [parentRow()],
+      childRows: [childRow()],
+      handoffRows: [
+        { sd_id: 'child-1', status: 'accepted', metadata: {}, created_at: daysAgo(1) }, // newest
+        { sd_id: 'child-1', status: 'blocked', metadata: { wait: true }, created_at: daysAgo(3) }, // older WAIT
+      ],
+    });
+    const rows = await fetchStuckWithoutHold(sb, { nowMs: NOW });
+    expect(rows.map((r) => r.id)).toEqual(['parent-1']);
+  });
+
+  it('resolves a WAIT handoff keyed by the child sd_key (not just id) -- TR-2 dual-keying', async () => {
+    const sb = makeFakeSupabase({
+      candidateRows: [parentRow()],
+      childRows: [childRow()],
+      handoffRows: [{ sd_id: 'SD-CHILD-E', status: 'blocked', metadata: { wait: true }, created_at: daysAgo(1) }],
+    });
+    const rows = await fetchStuckWithoutHold(sb, { nowMs: NOW });
+    expect(rows).toEqual([]);
+  });
+
+  it('a child with no handoffs at all is unaffected (no crash, parent still breaches on its own merits)', async () => {
+    const sb = makeFakeSupabase({ candidateRows: [parentRow()], childRows: [childRow()], handoffRows: [] });
+    const rows = await fetchStuckWithoutHold(sb, { nowMs: NOW });
+    expect(rows.map((r) => r.id)).toEqual(['parent-1']);
   });
 });
 

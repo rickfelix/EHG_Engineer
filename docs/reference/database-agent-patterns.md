@@ -1843,6 +1843,46 @@ docs/reference/schema/
 
 **Update Docs**: `npm run schema:docs:engineer` or `npm run schema:docs:ehg`
 
+### user_stories Table Constraints (NEW - 2026-09-15)
+
+Two `user_stories` CHECK constraints are easy to miss and were previously only
+discoverable via a trial-and-error `INSERT` failure (PAT-LES-455c48ba7d65). Both
+are read directly from `database/schema-reference-snapshot.json` below — re-run
+`npm run schema:snapshot:lint` after any migration touching this table and treat
+that file, not this doc, as the source of truth if they ever diverge.
+
+**`story_key` format** (`user_stories.valid_story_key`):
+
+```sql
+CHECK ((story_key)::text ~ '^[A-Z0-9-]+:US-[0-9]{3,}$')
+```
+
+An SD-key-like prefix, a literal `:US-`, then 3+ digits. Example: `SD-KEY-001:US-001`.
+
+**`priority` enum** (`user_stories.user_stories_priority_check`):
+
+```sql
+CHECK ((priority)::text = ANY (ARRAY['critical', 'high', 'medium', 'low', 'minimal']))
+```
+
+Exactly one of those 5 values — no other string, and no default is silently applied.
+
+**Working example** (all NOT NULL columns satisfied):
+
+```javascript
+await supabase.from('user_stories').insert({
+  story_key: 'SD-EXAMPLE-001:US-001',
+  sd_id: 'SD-EXAMPLE-001',
+  title: 'User can reset their password',
+  user_role: 'registered user',
+  user_want: 'to reset my password via email',
+  user_benefit: 'I can regain access without contacting support',
+  acceptance_criteria: ['Reset link expires after 1 hour', 'Old password is invalidated'],
+  priority: 'high',                 // one of: critical | high | medium | low | minimal
+  implementation_context: 'Uses the existing auth provider password-reset flow.',
+});
+```
+
 ### Related Documentation
 
 - **DESIGN Sub-Agent**: `.claude/agents/design-agent.md`

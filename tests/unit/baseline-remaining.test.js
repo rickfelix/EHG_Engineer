@@ -92,11 +92,13 @@ describe('computeRemaining (deny-list definition, TS-10)', () => {
     return {
       from: vi.fn((table) => ({
         select: vi.fn(() => ({
-          in: vi.fn().mockResolvedValue(
-            table === 'strategic_directives_v2'
-              ? { data: sdRows, error: sdError }
-              : { data: qfRows, error: qfError }
-          ),
+          in: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue(
+              table === 'strategic_directives_v2'
+                ? { data: sdRows, error: sdError }
+                : { data: qfRows, error: qfError }
+            ),
+          })),
         })),
       })),
     };
@@ -199,10 +201,10 @@ describe('run() — fail-loud guards (TS-7, FR-5 AC#3 tamper test)', () => {
           return { select: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: feedbackRow, error: null }) }) }) };
         }
         if (table === 'strategic_directives_v2') {
-          return { select: () => ({ in: () => Promise.resolve({ data: sdRows, error: null }) }) };
+          return { select: () => ({ in: () => ({ limit: () => Promise.resolve({ data: sdRows, error: null }) }) }) };
         }
         if (table === 'quick_fixes') {
-          return { select: () => ({ in: () => Promise.resolve({ data: qfRows, error: null }) }) };
+          return { select: () => ({ in: () => ({ limit: () => Promise.resolve({ data: qfRows, error: null }) }) }) };
         }
         if (table === 'chairman_decisions') {
           return { select: () => ({ eq: () => ({ limit: () => ({ maybeSingle: () => Promise.resolve({ data: decisionExisting, error: null }) }) }) }) };
