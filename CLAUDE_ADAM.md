@@ -1,8 +1,8 @@
-<!-- file_content_hash: f206f63f03d3cf47 -->
+<!-- file_content_hash: 8c52644df8d1275a -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-14 7:47:08 PM
+**Generated**: 2026-09-15 8:30:20 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -536,6 +536,10 @@ manual is read.
 
 - **MICHAEL MAY TEXT OUTSIDE THE FIXED CHECKPOINT WINDOWS (ratification eb7e84b3)** — Chairman at the Adam terminal 2026-09-14, verbatim: "Michael should be able to send messages outside of the regular frequency slots. I authorize it". Michael's chairman texting is no longer limited to the four fixed ET windows; the recipient pin, Michael's own identity, the enable row, a daily cap and the 22:00-06:00 ET quiet hours still apply. Executing representation: SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001 (also fixes unfinished-feeder counts and the raw ISO as-of). **Adam share:** route a chairman request for a Michael text to that on-demand path once built.
 
+- **SPEND THE WEEKLY FABLE ALLOWANCE FIRST, THEN THE OTHER MODELS (ratification 59fd290a)** — Chairman at the Adam terminal 2026-09-14, verbatim in part: "A couple of weeks in a row, Adam, my approach has been to utilize all of our Fable available usage first. That typically lasts us until Saturday night or Sunday morning ... I like this approach because we're maximizing our use of Fable and then our use of the other available tokens ... At least that's the approach for now while Anthropic has this Fable limitation." The policy behind 83222acf, c043f4c1 and bbebcdcd: draw the Fable allowance down from the Friday reset until it is spent, then every seat moves to the other models; no unspent Fable at the weekly reset. Bound to the Fable limitation existing, not to a date. **Adam share:** never propose rationing Fable across the week, and read a mid-weekend Fable exhaustion as the plan.
+
+- **ADAM CHAIRMAN SMS CAP: SIX PER HOUR, THIRTY PER DAY, REFUSALS LOUD (ratification 54013c3a)** — Chairman by verified SMS 2026-09-14, verbatim: "I agree with your recommendations", after delegating the number ("look at the history of how many we've been sending and come up with a conservative number"). Six per hour and thirty per day on Adam's chairman SMS channel, derived from 13 measured days (median 17 a day, max 29, busiest hour 8). Condition he agreed to: a refused send is LOUD to the seat and in the durable record. **Adam share:** the caps are a ceiling, never a target; a refused send is reshaped, never bypassed and never re-sent under a different kind; a real day needing more than thirty is a fresh conversation with him.
+
 ## Crew-comms routing protocol (organizing layer)
 
 Adam operates under the canonical crew-comms routing protocol: `docs/protocol/crew-comms-routing-protocol.md`. (the five bounding rules are summarised in MANUAL) See `docs/protocol/coordinator-adam-comms.md` for this role's wire-level lane contracts, and the organizing doc for the cross-role picture, the cross-check protocol, sync-request rules, and PID-cross-check.
@@ -578,6 +582,6 @@ _Hierarchy note (chairman-ratified D-0719-ORGCHART "A", 2026-07-19): this partne
 
 ---
 
-*Generated from database: 2026-09-14*
+*Generated from database: 2026-09-15*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=adam_role_contract). Do not hand-edit — edit the DB section and regenerate.*
