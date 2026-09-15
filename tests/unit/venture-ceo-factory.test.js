@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { VentureFactory, STANDARD_VENTURE_TEMPLATE, EHG_SHARED_OPERATORS } from '../../lib/agents/venture-ceo-factory.js';
+import { VentureFactory, STANDARD_VENTURE_TEMPLATE, EHG_SHARED_OPERATORS, VentureNotFoundError, defaultVentureExists } from '../../lib/agents/venture-ceo-factory.js';
 
 vi.mock('uuid', () => ({
   v4: () => `mock-uuid-${Math.random().toString(36).slice(2)}`
@@ -149,6 +149,13 @@ describe('SD-FDBK-ENH-ORG-TEMPLATE-DELTA-001 — org-template delta', () => {
 
 describe('VentureFactory.instantiateVenture with mocked Supabase', () => {
   let mockSupabase;
+  // SD-LEO-INFRA-INSTANTIATEVENTURE-REFUSES-VENTURE-001 (FR-3): a stub confirming the venture
+  // exists, injected via deps.ventureExistsFn -- the shared mockSupabase.maybeSingle default
+  // ({data: null, error: null}) is for the UNRELATED instantiateSharedOperators() repair-path
+  // check (line ~481); instantiateVenture() itself never called .maybeSingle() before this SD,
+  // so stubbing at the deps level (not re-wiring the shared mock) keeps the two concerns separate.
+  const ventureExists = { ventureExistsFn: vi.fn(async () => true) };
+  const ventureMissing = { ventureExistsFn: vi.fn(async () => false) };
 
   beforeEach(() => {
     mockSupabase = {
@@ -166,6 +173,8 @@ describe('VentureFactory.instantiateVenture with mocked Supabase', () => {
       single: vi.fn(async () => ({ data: { id: `mock-agent-${Math.random().toString(36).slice(2)}` }, error: null })),
       maybeSingle: vi.fn(async () => ({ data: null, error: null }))
     };
+    ventureExists.ventureExistsFn.mockClear();
+    ventureMissing.ventureExistsFn.mockClear();
   });
 
   it('creates 6 executive agents (was 5), including VP_CUSTOMER', async () => {
@@ -173,7 +182,7 @@ describe('VentureFactory.instantiateVenture with mocked Supabase', () => {
     const result = await factory.instantiateVenture({
       ventureName: 'Test Venture',
       ventureId: 'test-venture-id-123'
-    });
+    }, ventureExists);
 
     expect(Object.keys(result.executive_agent_ids)).toHaveLength(6);
     expect(result.executive_agent_ids).toHaveProperty('VP_MARKETING');
@@ -189,8 +198,129 @@ describe('VentureFactory.instantiateVenture with mocked Supabase', () => {
     const result = await factory.instantiateVenture({
       ventureName: 'Test Venture 2',
       ventureId: 'test-venture-id-456'
-    });
+    }, ventureExists);
 
     expect(result.total_agents_created).toBe(28);
+  });
+});
+
+describe('SD-LEO-INFRA-INSTANTIATEVENTURE-REFUSES-VENTURE-001 — instantiateVenture refuses a nonexistent venture id', () => {
+  let mockSupabase;
+
+  beforeEach(() => {
+    mockSupabase = {
+      from: vi.fn(() => mockSupabase),
+      insert: vi.fn(() => mockSupabase),
+      upsert: vi.fn(() => mockSupabase),
+      select: vi.fn(() => mockSupabase),
+      eq: vi.fn(() => mockSupabase),
+      single: vi.fn(async () => ({ data: { id: `mock-agent-${Math.random().toString(36).slice(2)}` }, error: null })),
+      maybeSingle: vi.fn(async () => ({ data: null, error: null }))
+    };
+  });
+
+  // TS-1 (FR-4a): the guard fires and writes zero rows.
+  it('throws VentureNotFoundError and makes zero insert/upsert calls when the venture does not exist', async () => {
+    const factory = new VentureFactory(mockSupabase);
+    const ventureExistsFn = vi.fn(async () => false);
+
+    await expect(
+      factory.instantiateVenture({ ventureName: 'Ghost Venture', ventureId: 'nonexistent-venture-id' }, { ventureExistsFn })
+    ).rejects.toBeInstanceOf(VentureNotFoundError);
+
+    expect(mockSupabase.insert).not.toHaveBeenCalled();
+    expect(mockSupabase.upsert).not.toHaveBeenCalled();
+    expect(ventureExistsFn).toHaveBeenCalledWith(mockSupabase, 'nonexistent-venture-id');
+  });
+
+  // TS-2 (FR-2 AC-3): the legitimate path is unaffected by the guard's presence.
+  it('proceeds normally when the venture exists', async () => {
+    const factory = new VentureFactory(mockSupabase);
+    const ventureExistsFn = vi.fn(async () => true);
+
+    const result = await factory.instantiateVenture({ ventureName: 'Real Venture', ventureId: 'real-venture-id' }, { ventureExistsFn });
+
+    expect(result.total_agents_created).toBe(28);
+    expect(ventureExistsFn).toHaveBeenCalledWith(mockSupabase, 'real-venture-id');
+  });
+
+  // TS-3 (FR-1 AC-2): defaultVentureExists treats a malformed id as not-found, not a raw error.
+  it('defaultVentureExists resolves false (not throw) on a 22P02 malformed-id error', async () => {
+    const supabaseWith22P02 = {
+      from: vi.fn(() => supabaseWith22P02),
+      select: vi.fn(() => supabaseWith22P02),
+      eq: vi.fn(() => supabaseWith22P02),
+      maybeSingle: vi.fn(async () => ({ data: null, error: { code: '22P02', message: 'invalid input syntax for type uuid' } }))
+    };
+
+    await expect(defaultVentureExists(supabaseWith22P02, 'not-a-uuid')).resolves.toBe(false);
+  });
+
+  // TS-4 (FR-1 AC-2/AC-3): a genuine (non-22P02) database error propagates, never silently false.
+  it('defaultVentureExists propagates a non-22P02 database error', async () => {
+    const supabaseWithConnFailure = {
+      from: vi.fn(() => supabaseWithConnFailure),
+      select: vi.fn(() => supabaseWithConnFailure),
+      eq: vi.fn(() => supabaseWithConnFailure),
+      maybeSingle: vi.fn(async () => ({ data: null, error: { code: '08006', message: 'connection failure' } }))
+    };
+
+    await expect(defaultVentureExists(supabaseWithConnFailure, 'some-id')).rejects.toMatchObject({ code: '08006' });
+  });
+
+  // TS-4b: defaultVentureExists resolves true only when a matching row is returned.
+  it('defaultVentureExists resolves true when the ventures table has a matching row', async () => {
+    const supabaseWithRow = {
+      from: vi.fn(() => supabaseWithRow),
+      select: vi.fn(() => supabaseWithRow),
+      eq: vi.fn(() => supabaseWithRow),
+      maybeSingle: vi.fn(async () => ({ data: { id: 'real-id' }, error: null }))
+    };
+
+    await expect(defaultVentureExists(supabaseWithRow, 'real-id')).resolves.toBe(true);
+  });
+
+  // FR-2 AC-4: a falsy ventureId short-circuits before any DB call, per the creative-brief.js precedent.
+  it('a missing/undefined ventureId throws VentureNotFoundError without calling ventureExistsFn', async () => {
+    const factory = new VentureFactory(mockSupabase);
+    const ventureExistsFn = vi.fn(async () => true);
+
+    await expect(
+      factory.instantiateVenture({ ventureName: 'No Id Venture', ventureId: undefined }, { ventureExistsFn })
+    ).rejects.toBeInstanceOf(VentureNotFoundError);
+
+    expect(ventureExistsFn).not.toHaveBeenCalled();
+  });
+
+  // TS-5 / FR-4c: eva-coo-integration.js's onboardVenture() pattern -- a real, already-fetched
+  // venture.id -- is unaffected by the guard.
+  it('mirrors the eva-coo-integration.js onboardVenture() call pattern: a real venture.id succeeds', async () => {
+    const factory = new VentureFactory(mockSupabase);
+    const venture = { id: 'fetched-real-venture-id', name: 'Onboarded Venture', token_budget: 250000 };
+    const ventureExistsFn = vi.fn(async () => true);
+
+    const result = await factory.instantiateVenture(
+      { ventureName: venture.name, ventureId: venture.id, totalTokenBudget: venture.token_budget },
+      { ventureExistsFn }
+    );
+
+    expect(result.venture_id).toBe(venture.id);
+    expect(result.total_agents_created).toBe(28);
+  });
+
+  // TS-5 / FR-4c: spine-verify-first-run.mjs's pattern -- a freshly-created real ventures row --
+  // is unaffected by the guard.
+  it('mirrors the spine-verify-first-run.mjs harness call pattern: a freshly-created venture id succeeds', async () => {
+    const factory = new VentureFactory(mockSupabase);
+    const manifest = { ventureId: null };
+    manifest.ventureId = 'freshly-created-venture-id'; // set after the (simulated) real ventures INSERT
+    const ventureExistsFn = vi.fn(async () => true);
+
+    const result = await factory.instantiateVenture(
+      { ventureName: 'Spine Verify Venture', ventureId: manifest.ventureId },
+      { ventureExistsFn }
+    );
+
+    expect(result.venture_id).toBe(manifest.ventureId);
   });
 });

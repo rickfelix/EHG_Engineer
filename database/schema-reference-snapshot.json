@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-09-13T02:16:21.052Z",
+ "generated_at": "2026-09-15T05:29:01.494Z",
  "source": "scripts/lint/schema-reference-snapshot.mjs (pg_attribute/pg_class, schema public)",
- "table_count": 895,
+ "table_count": 907,
  "view_count": 197,
- "check_count": 1601,
+ "check_count": 1630,
  "tables": {
   "_migration_metadata": [
    "key",
@@ -1063,6 +1063,12 @@
    "tone_of_voice",
    "messaging_pillars",
    "created_at",
+   "updated_at"
+  ],
+  "browser_actuation_session_caps": [
+   "session_id",
+   "action_count",
+   "cap_limit",
    "updated_at"
   ],
   "build_completion_forecast_log": [
@@ -3131,7 +3137,9 @@
    "quality_checked",
    "quality_issues",
    "quality_checked_at",
-   "content_hash"
+   "content_hash",
+   "approved_by",
+   "approved_by_at"
   ],
   "eva_artifact_dependencies": [
    "id",
@@ -3938,7 +3946,9 @@
    "quality_issues",
    "quality_checked_at",
    "content_hash",
-   "mission_id"
+   "mission_id",
+   "approved_by",
+   "approved_by_at"
   ],
   "eva_vision_gaps": [
    "id",
@@ -6876,6 +6886,27 @@
    "created_at",
    "updated_at"
   ],
+  "michael_checkpoint_send_enabled": [
+   "id",
+   "config_key",
+   "enabled",
+   "updated_by",
+   "reason",
+   "created_at",
+   "updated_at"
+  ],
+  "michael_checkpoint_send_ledger": [
+   "id",
+   "et_date",
+   "window_slot",
+   "outcome",
+   "refusal_code",
+   "provider_message_id",
+   "body_sha256",
+   "body_len",
+   "created_at",
+   "updated_at"
+  ],
   "michael_closures": [
    "id",
    "closure_key",
@@ -7609,6 +7640,51 @@
    "status",
    "created_by",
    "created_at"
+  ],
+  "org_role_base_versions": [
+   "id",
+   "role_key",
+   "version",
+   "status",
+   "structure",
+   "function",
+   "norms",
+   "created_at",
+   "created_by",
+   "superseded_by",
+   "superseded_at"
+  ],
+  "org_role_change_log": [
+   "id",
+   "role_key",
+   "layer",
+   "operation",
+   "occurred_at",
+   "venture_id",
+   "old_value",
+   "new_value",
+   "changed_by",
+   "evidence_ref"
+  ],
+  "org_role_venture_overlays": [
+   "id",
+   "role_key",
+   "venture_id",
+   "version",
+   "status",
+   "structure",
+   "function",
+   "created_at",
+   "created_by"
+  ],
+  "org_role_venture_pins": [
+   "id",
+   "role_key",
+   "venture_id",
+   "base_version",
+   "overlay_version",
+   "pinned_at",
+   "pinned_by"
   ],
   "outcome_signals": [
    "id",
@@ -10440,6 +10516,24 @@
    "correlation_id",
    "delivered_at"
   ],
+  "session_coordination_archive": [
+   "id",
+   "target_session",
+   "target_sd",
+   "message_type",
+   "subject",
+   "body",
+   "payload",
+   "sender_session",
+   "sender_type",
+   "created_at",
+   "expires_at",
+   "read_at",
+   "acknowledged_at",
+   "correlation_id",
+   "delivered_at",
+   "archived_at"
+  ],
   "session_lifecycle_events": [
    "id",
    "event_type",
@@ -12440,6 +12534,14 @@
    "reuse_count",
    "last_reused_at"
   ],
+  "venture_capability_overrides": [
+   "id",
+   "venture_id",
+   "capability_id",
+   "override_reason",
+   "created_at",
+   "updated_at"
+  ],
   "venture_capture_snapshots": [
    "id",
    "venture_id",
@@ -12755,6 +12857,20 @@
    "readiness_score",
    "readiness_threshold",
    "chairman_review_triggered"
+  ],
+  "venture_experience_review_runs": [
+   "id",
+   "venture_id",
+   "run_id",
+   "run_mode",
+   "findings_count_by_category",
+   "severity_breakdown",
+   "duration_ms",
+   "token_usage",
+   "cost_usd",
+   "adapter_version",
+   "deployment_url",
+   "created_at"
   ],
   "venture_financial_contract": [
    "id",
@@ -13082,6 +13198,29 @@
    "recorded_at",
    "recorded_by",
    "created_at"
+  ],
+  "venture_screen_dispositions": [
+   "id",
+   "venture_id",
+   "screen_id",
+   "disposition_class",
+   "disposition_status",
+   "reason",
+   "evidence_ref",
+   "created_at",
+   "updated_at"
+  ],
+  "venture_screen_reconciliation": [
+   "id",
+   "venture_id",
+   "screen_id",
+   "screen_name",
+   "built_surface_artifact_type",
+   "journey_ids",
+   "walked_step_evidence",
+   "reconciliation_status",
+   "created_at",
+   "updated_at"
   ],
   "venture_sd_artifact_mapping": [
    "id",
@@ -17535,6 +17674,7 @@
   "mental_model_effectiveness.mental_model_effectiveness_stage_progression_correlation_check": "CHECK (((stage_progression_correlation >= ('-1'::integer)::numeric) AND (stage_progression_correlation <= (1)::numeric)))",
   "mental_models.mental_models_category_check": "CHECK ((category = ANY (ARRAY['decision'::text, 'market'::text, 'psychology'::text, 'growth'::text, 'framework'::text])))",
   "mental_models.mental_models_difficulty_level_check": "CHECK ((difficulty_level = ANY (ARRAY['basic'::text, 'intermediate'::text, 'advanced'::text])))",
+  "michael_checkpoint_send_ledger.michael_checkpoint_send_ledger_outcome_check": "CHECK ((outcome = ANY (ARRAY['sent'::text, 'held'::text, 'refused'::text])))",
   "michael_closures.michael_closures_provenance_check": "CHECK ((jsonb_typeof(provenance) = 'object'::text))",
   "michael_feedback_ledger.michael_feedback_ledger_dispositions_check": "CHECK ((jsonb_typeof(dispositions) = 'array'::text))",
   "michael_feeder_runs.michael_feeder_runs_counts_check": "CHECK ((jsonb_typeof(counts) = 'object'::text))",
@@ -17615,6 +17755,30 @@
   "org_guard_registry.org_guard_registry_status_check": "CHECK ((status = ANY (ARRAY['active'::text, 'retired'::text])))",
   "org_objective_registry.org_objective_registry_mode_check": "CHECK ((mode = ANY (ARRAY['advisory'::text, 'blocking'::text])))",
   "org_objective_registry.org_objective_registry_status_check": "CHECK ((status = ANY (ARRAY['active'::text, 'retired'::text])))",
+  "org_role_base_versions.org_role_base_versions_created_by_nonempty": "CHECK ((btrim(created_by) <> ''::text))",
+  "org_role_base_versions.org_role_base_versions_function_check": "CHECK ((jsonb_typeof(function) = 'object'::text))",
+  "org_role_base_versions.org_role_base_versions_norms_check": "CHECK ((jsonb_typeof(norms) = 'object'::text))",
+  "org_role_base_versions.org_role_base_versions_role_key_nonempty": "CHECK ((btrim(role_key) <> ''::text))",
+  "org_role_base_versions.org_role_base_versions_status_check": "CHECK ((status = ANY (ARRAY['active'::text, 'superseded'::text, 'draft'::text, 'deprecated'::text])))",
+  "org_role_base_versions.org_role_base_versions_structure_check": "CHECK ((jsonb_typeof(structure) = 'object'::text))",
+  "org_role_base_versions.org_role_base_versions_supersede_consistent": "CHECK ((((superseded_by IS NULL) AND (superseded_at IS NULL)) OR ((superseded_by IS NOT NULL) AND (superseded_at IS NOT NULL))))",
+  "org_role_base_versions.org_role_base_versions_version_check": "CHECK ((version >= 1))",
+  "org_role_change_log.org_role_change_log_changed_by_nonempty": "CHECK ((btrim(changed_by) <> ''::text))",
+  "org_role_change_log.org_role_change_log_delete_has_old": "CHECK (((operation <> 'DELETE'::text) OR ((old_value IS NOT NULL) AND (new_value IS NULL))))",
+  "org_role_change_log.org_role_change_log_insert_has_new": "CHECK (((operation <> 'INSERT'::text) OR (new_value IS NOT NULL)))",
+  "org_role_change_log.org_role_change_log_layer_check": "CHECK ((layer = ANY (ARRAY['base'::text, 'overlay'::text, 'pin'::text])))",
+  "org_role_change_log.org_role_change_log_operation_check": "CHECK ((operation = ANY (ARRAY['INSERT'::text, 'UPDATE'::text, 'DELETE'::text])))",
+  "org_role_change_log.org_role_change_log_role_key_nonempty": "CHECK ((btrim(role_key) <> ''::text))",
+  "org_role_change_log.org_role_change_log_update_has_both": "CHECK (((operation <> 'UPDATE'::text) OR ((old_value IS NOT NULL) AND (new_value IS NOT NULL))))",
+  "org_role_venture_overlays.org_role_venture_overlays_created_by_nonempty": "CHECK ((btrim(created_by) <> ''::text))",
+  "org_role_venture_overlays.org_role_venture_overlays_function_check": "CHECK (((function IS NULL) OR (jsonb_typeof(function) = 'object'::text)))",
+  "org_role_venture_overlays.org_role_venture_overlays_has_content": "CHECK (((structure IS NOT NULL) OR (function IS NOT NULL)))",
+  "org_role_venture_overlays.org_role_venture_overlays_role_key_nonempty": "CHECK ((btrim(role_key) <> ''::text))",
+  "org_role_venture_overlays.org_role_venture_overlays_status_check": "CHECK ((status = ANY (ARRAY['active'::text, 'superseded'::text, 'draft'::text])))",
+  "org_role_venture_overlays.org_role_venture_overlays_structure_check": "CHECK (((structure IS NULL) OR (jsonb_typeof(structure) = 'object'::text)))",
+  "org_role_venture_overlays.org_role_venture_overlays_version_check": "CHECK ((version >= 1))",
+  "org_role_venture_pins.org_role_venture_pins_pinned_by_nonempty": "CHECK ((btrim(pinned_by) <> ''::text))",
+  "org_role_venture_pins.org_role_venture_pins_role_key_nonempty": "CHECK ((btrim(role_key) <> ''::text))",
   "pattern_improvements.pattern_improvements_improvement_type_check": "CHECK (((improvement_type)::text = ANY ((ARRAY['update_signals'::character varying, 'add_prevention'::character varying, 'update_mitigation'::character varying, 'new_pattern'::character varying, 'deprecate'::character varying])::text[])))",
   "pattern_improvements.pattern_improvements_status_check": "CHECK (((status)::text = ANY ((ARRAY['proposed'::character varying, 'under_review'::character varying, 'approved'::character varying, 'implemented'::character varying, 'rejected'::character varying])::text[])))",
   "pattern_resolution_signals.pattern_resolution_signals_confidence_check": "CHECK (((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))",
@@ -18019,7 +18183,7 @@
   "simulation_sessions.simulation_sessions_simulation_tier_check": "CHECK ((simulation_tier = ANY (ARRAY['A'::text, 'B'::text])))",
   "sms_approved_spend_ledger.sms_approved_spend_ledger_amount_usd_check": "CHECK ((amount_usd >= (0)::numeric))",
   "sms_decision_class_whitelist.sms_decision_class_whitelist_decision_class_check": "CHECK (((decision_class = lower(btrim(decision_class))) AND (decision_class <> ''::text)))",
-  "sms_inbound_log.sms_inbound_log_outcome_check": "CHECK ((outcome = ANY (ARRAY['answered'::text, 'expired'::text, 'no_match'::text, 'invalid_signature'::text, 'rate_limited'::text, 'ambiguous'::text, 'suspended'::text, 'undone'::text])))",
+  "sms_inbound_log.sms_inbound_log_outcome_check": "CHECK ((outcome = ANY (ARRAY['answered'::text, 'expired'::text, 'no_match'::text, 'invalid_signature'::text, 'rate_limited'::text, 'ambiguous'::text, 'suspended'::text, 'undone'::text, 'no_open_question'::text])))",
   "sms_outbound_obligations.sms_outbound_obligations_status_check": "CHECK ((status = ANY (ARRAY['owed'::text, 'sending'::text, 'sent'::text, 'delivered'::text, 'undelivered'::text, 'failed'::text, 'canceled'::text, 'owed_escalate'::text])))",
   "sms_relay_secret.sms_relay_secret_id_check": "CHECK ((id = 1))",
   "sms_status_staging.sms_status_staging_message_status_valid": "CHECK ((message_status = ANY (ARRAY['queued'::text, 'sending'::text, 'sent'::text, 'delivered'::text, 'undelivered'::text, 'failed'::text])))",
@@ -18233,6 +18397,7 @@
   "venture_exit_profiles.venture_exit_profiles_target_buyer_type_check": "CHECK ((target_buyer_type = ANY (ARRAY['strategic'::text, 'financial'::text, 'competitor'::text, 'partner'::text, 'unknown'::text])))",
   "venture_exit_readiness.ver_export_status_check": "CHECK ((data_export_status = ANY (ARRAY['not_started'::text, 'in_progress'::text, 'completed'::text, 'failed'::text])))",
   "venture_exit_readiness.ver_secret_status_check": "CHECK ((secret_rotation_status = ANY (ARRAY['not_started'::text, 'in_progress'::text, 'completed'::text, 'failed'::text])))",
+  "venture_experience_review_runs.venture_experience_review_runs_run_mode_check": "CHECK ((run_mode = ANY (ARRAY['in_traversal'::text, 'out_of_band_annex'::text])))",
   "venture_fundamentals.venture_fundamentals_conformance_score_check": "CHECK (((conformance_score >= 0) AND (conformance_score <= 100)))",
   "venture_fundamentals.venture_fundamentals_isolation_tier_check": "CHECK ((isolation_tier = ANY (ARRAY['pool'::text, 'schema'::text, 'separate_project'::text])))",
   "venture_fundamentals.venture_fundamentals_slo_tier_check": "CHECK ((slo_tier = ANY (ARRAY['tier_0_infrastructure'::text, 'tier_1_mvp'::text, 'tier_2_post_pmf'::text])))",
@@ -18273,13 +18438,16 @@
   "venture_provisioning_state.venture_provisioning_state_conformance_score_check": "CHECK (((conformance_score IS NULL) OR ((conformance_score >= 0) AND (conformance_score <= 100))))",
   "venture_provisioning_state.venture_provisioning_state_state_check": "CHECK ((state = ANY (ARRAY['provisioned'::text, 'pending'::text, 'failed'::text])))",
   "venture_provisioning_state.venture_provisioning_state_status_check": "CHECK ((status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'completed'::text, 'failed'::text])))",
-  "venture_quality_findings.venture_quality_findings_finding_category_check": "CHECK ((finding_category = ANY (ARRAY['npm_audit'::text, 'secrets'::text, 'lint'::text, 'test_suite'::text, 'unit_test'::text, 'e2e_test'::text, 'uat_test'::text, 'bug_report'::text, 'uat_signoff'::text, 'capability'::text])))",
+  "venture_quality_findings.venture_quality_findings_finding_category_check": "CHECK ((finding_category = ANY (ARRAY['npm_audit'::text, 'secrets'::text, 'lint'::text, 'test_suite'::text, 'unit_test'::text, 'e2e_test'::text, 'uat_test'::text, 'bug_report'::text, 'uat_signoff'::text, 'capability'::text, 'usability'::text, 'accessibility'::text, 'journey_coherence'::text, 'performance'::text, 'responsive'::text])))",
   "venture_quality_findings.venture_quality_findings_severity_check": "CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))",
   "venture_quality_findings.venture_quality_findings_status_chk": "CHECK ((status = ANY (ARRAY['pending'::text, 'sd_filed'::text, 'resolved'::text, 'cancelled'::text])))",
   "venture_resources.venture_resources_resource_type_check": "CHECK ((resource_type = ANY (ARRAY['github_repo'::text, 'vercel_deployment'::text, 'local_directory'::text, 'supabase_project'::text, 'domain'::text, 'npm_package'::text, 'replit_deployment'::text])))",
   "venture_resources.venture_resources_status_check": "CHECK ((status = ANY (ARRAY['active'::text, 'cleaned'::text, 'failed'::text, 'orphaned'::text])))",
   "venture_revenue_entries.venture_revenue_entries_entry_type_check": "CHECK ((entry_type = ANY (ARRAY['first_dollar'::text, 'mrr'::text, 'signup_count'::text])))",
   "venture_revenue_entries.venture_revenue_entries_value_present": "CHECK (((amount IS NOT NULL) OR (count IS NOT NULL)))",
+  "venture_screen_dispositions.venture_screen_dispositions_disposition_class_check": "CHECK ((disposition_class = ANY (ARRAY['D2_RETIRE'::text, 'D2_BUILD_THIRD_PARTY'::text, 'ENTRY_POINT'::text])))",
+  "venture_screen_dispositions.venture_screen_dispositions_disposition_status_check": "CHECK ((disposition_status = ANY (ARRAY['COMPLETE'::text, 'OPEN'::text])))",
+  "venture_screen_reconciliation.venture_screen_reconciliation_reconciliation_status_check": "CHECK ((reconciliation_status = ANY (ARRAY['built_and_walked'::text, 'built_not_walked'::text, 'not_built'::text, 'unreachable'::text])))",
   "venture_sd_artifact_mapping.venture_sd_artifact_mapping_classification_check": "CHECK ((classification = ANY (ARRAY['universal'::text, 'layer_specific'::text, 'supplemental'::text])))",
   "venture_sd_artifact_mapping.venture_sd_artifact_mapping_sd_layer_check": "CHECK ((sd_layer = ANY (ARRAY['data'::text, 'api'::text, 'ui'::text, 'tests'::text, 'all'::text])))",
   "venture_separability_scores.venture_separability_scores_overall_score_check": "CHECK (((overall_score >= (0)::numeric) AND (overall_score <= (100)::numeric)))",
