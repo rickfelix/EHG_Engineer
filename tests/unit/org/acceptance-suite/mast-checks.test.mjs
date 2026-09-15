@@ -10,6 +10,7 @@ import { MAST_FIXTURES } from '../../../../lib/org/acceptance-suite/fixtures/mas
 import { buildMockVentureOrganization } from '../../../../lib/org/acceptance-suite/fixtures/mock-venture.mjs';
 import * as fm24 from '../../../../lib/org/acceptance-suite/checks/mast/fm-2-4.mjs';
 import * as fm25 from '../../../../lib/org/acceptance-suite/checks/mast/fm-2-5.mjs';
+import * as fm33 from '../../../../lib/org/acceptance-suite/checks/mast/fm-3-3.mjs';
 
 describe('TS-2: each of the 14 MAST checks catches its own broken fixture (14/14 catch rate)', () => {
   for (const checkModule of MAST_CHECKS) {
@@ -74,5 +75,15 @@ describe('FR-2 AC-4: cross-entity checks discriminate the broken entity from a w
     const incorporated = perContribution.find((r) => r.role === 'VP_STRATEGY');
     expect(ignored.passed).toBe(false);
     expect(incorporated.passed).toBe(true);
+  });
+
+  it('FM-3.3 (incorrect verification): 2 tasks in the fixture, only the falsely-claimed one flagged', () => {
+    const org = MAST_FIXTURES['fm-3-3']();
+    expect(org.tasks).toHaveLength(2);
+    const perTask = fm33.checkEach(org);
+    const broken = perTask.find((r) => r.task_id === 'task-strategy-review');
+    const wellFormed = perTask.find((r) => r.task_id === 'task-product-spec-review');
+    expect(broken.passed).toBe(false);
+    expect(wellFormed.passed).toBe(true);
   });
 });
