@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   siteKeyFrom, mergeSite, shouldEscalate, buildClassSdInput,
-  recordSiteAndMaybeEscalate, minSites, DEFAULT_MIN_SITES, MIN_SITES_FLOOR, SITES_CAP,
+  recordSiteAndMaybeEscalate, escalateToClassSd, minSites, DEFAULT_MIN_SITES, MIN_SITES_FLOOR, SITES_CAP,
 } from '../../../lib/learning/class-escalation.js';
 
 // QF-20260911-015: escalateToClassSd lazy-imports these two — mock both so the
@@ -253,6 +253,28 @@ describe('escalateToClassSd — QF-20260911-015: >24h CHAIRMAN_APPLY_VERIFICATIO
     await expect(
       recordSiteAndMaybeEscalate(okSb(), pattern, { file: 'c.js' }, { env: {} })
     ).resolves.toEqual(expect.objectContaining({ escalatedSdKey: null }));
+  });
+
+  // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 (EXEC-TO-PLAN re-verification, TEST-COV-1): the
+  // original FAIL finding was that createSD()'s {ok:true,done:true,routedLater:true} result
+  // (returned when the criticality gate routes a 'later' verdict away instead of inserting)
+  // was previously mishandled as if a real SD existed -- issue_patterns.assigned_sd_id got
+  // stamped with a key that was never actually inserted. This proves the fix directly: no
+  // supabase write happens, and the function returns null (matching the "no key" no-op shape)
+  // rather than a dangling reference.
+  it('a routedLater createSD result is never stamped onto the pattern as if it were a real SD (TEST-COV-1)', async () => {
+    createSD.mockImplementationOnce(async () => ({ ok: true, done: true, routedLater: true }));
+    const updateSpy = vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) }));
+    const sb = { from: vi.fn(() => ({ update: updateSpy })) };
+    let md = {};
+    ({ metadata: md } = mergeSite(md, { file: 'a.js' }));
+    ({ metadata: md } = mergeSite(md, { file: 'b.js' }));
+    const pattern = basePattern({ metadata: md, id: 'pattern-routed-later-test' });
+
+    const sdKey = await escalateToClassSd(sb, pattern, { now: new Date() });
+
+    expect(sdKey).toBeNull();
+    expect(updateSpy).not.toHaveBeenCalled();
   });
 });
 

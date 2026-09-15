@@ -95,4 +95,21 @@ describe('createSdWriter', () => {
     const callArg = createSD.mock.calls[0][0];
     expect(callArg.metadata.sourced_by).toBe('convergence-remediation');
   });
+
+  // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 (EXEC-TO-PLAN re-verification, TEST-COV-1): the
+  // original FAIL finding was that createSD()'s {ok:true,done:true,routedLater:true} result
+  // was previously mishandled via `sd.sd_key || sdKey`, falling back to a generated key that
+  // was never actually inserted -- routeRemediation would then ledger the gap as filed. This
+  // proves the fix directly: a routedLater result throws instead, which routeRemediation's
+  // own try/catch (convergence-loop.js) already re-queues into `deferred` rather than
+  // silently ledgering a dangling reference.
+  it('a routedLater createSD result throws instead of falling back to the un-inserted generated key', async () => {
+    resolveVenturePrefix.mockResolvedValue(null);
+    generateSDKey.mockResolvedValue('SD-LEO-FIX-NEVER-INSERTED-001');
+    createSD.mockResolvedValue({ ok: true, done: true, routedLater: true });
+
+    const writer = createSdWriter();
+    await expect(writer({ title: 'Deferred gap', dimension: 'persona-surface-coverage' }))
+      .rejects.toThrow(/routed to harness_backlog/);
+  });
 });
