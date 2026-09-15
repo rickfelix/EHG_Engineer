@@ -16,6 +16,8 @@
  * incident's shape.
  */
 
+import { fetchAllPaginated } from '../../../../../../lib/db/fetch-all-paginated.mjs';
+
 const AUDITED_PHASES = ['LEAD-TO-PLAN', 'PLAN-TO-EXEC', 'EXEC-TO-PLAN', 'PLAN-TO-LEAD', 'LEAD-FINAL-APPROVAL'];
 
 /** Lowercase for sd_type comparison; sd_type='all' is excluded separately (dead-by-construction
@@ -75,9 +77,17 @@ export function computeNearMissFindings(manifestNames, registryRows, sdType) {
   return findings;
 }
 
-/** AUDIT_INCOMPLETE wins the tie-break over NEAR_MISS: a partial audit could itself be masking
- * additional near-misses in the phase(s) it couldn't evaluate, which is a worse epistemic state
- * than a complete audit that found real, actionable near-misses. */
+/**
+ * SD-LEARN-FIX-ADDRESS-PAT-LES-015 FR-4: why this returns a calibrated 100/90/85 instead of a
+ * constant 100. This gate is `required:false` (never blocks), but `gate.weight` is read via
+ * `gate.weight || 1.0` in ValidationOrchestrator.js -- a falsy `weight:0` does NOT zero out a
+ * gate's contribution to the handoff's weighted-average score (0 || 1.0 evaluates to 1.0 in
+ * JS), so this gate's score DOES feed into the aggregate like any other gate, and a constant
+ * 100 would silently inflate every LEAD-TO-PLAN handoff's score regardless of what this gate
+ * actually found. AUDIT_INCOMPLETE wins the tie-break over NEAR_MISS: a partial audit could
+ * itself be masking additional near-misses in the phase(s) it couldn't evaluate, which is a
+ * worse epistemic state than a complete audit that found real, actionable near-misses.
+ */
 export function scoreFindings(findings) {
   if (findings.some((f) => f.type === 'AUDIT_INCOMPLETE')) return 85;
   if (findings.some((f) => f.type === 'NEAR_MISS')) return 90;
@@ -164,11 +174,13 @@ export function createGateRegistryAuditGate(supabase, opts = {}) {
       let registryRows = [];
       const registryFailures = [...auditIncompletePhases];
       try {
-        const { data, error } = await supabase
-          .from('validation_gate_registry')
-          .select('gate_key, sd_type, applicability');
-        if (error) throw error;
-        registryRows = data || [];
+        // Paginated (POSTGREST_MAX_ROWS=1000 per page) -- matching gate-policy-resolver.js's
+        // own fetch of this same table. Complete today (113 rows), but a plain unbounded
+        // .select() silently truncates past 1000, which would emit FALSE near-misses for
+        // gate_keys whose real sibling-DISABLED row just happened to fall off the page.
+        registryRows = await fetchAllPaginated(() =>
+          supabase.from('validation_gate_registry').select('gate_key, sd_type, applicability').order('gate_key')
+        );
       } catch (err) {
         // The registry read itself failing means near-miss findings can't be computed for ANY
         // phase, regardless of whether that phase's own manifest fetch succeeded -- mark every

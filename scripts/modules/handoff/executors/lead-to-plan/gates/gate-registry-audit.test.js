@@ -70,6 +70,21 @@ describe('computeNearMissFindings (FR-2, TS-1)', () => {
     const findings = computeNearMissFindings(new Set(['GATE_X']), registryRows, 'infrastructure');
     expect(findings).toEqual([]);
   });
+
+  it('matches sd_type case-insensitively on both the sibling row and the SD being audited', () => {
+    const registryRows = [{ gate_key: 'GATE_X', sd_type: 'Feature', applicability: 'DISABLED' }];
+    const findings = computeNearMissFindings(new Set(['GATE_X']), registryRows, 'INFRASTRUCTURE');
+    expect(findings).toEqual([{ type: 'NEAR_MISS', gate_key: 'GATE_X', disabled_for_sd_types: ['Feature'] }]);
+  });
+
+  it('an own-type row matches case-insensitively too, suppressing what would otherwise be a near-miss', () => {
+    const registryRows = [
+      { gate_key: 'GATE_X', sd_type: 'feature', applicability: 'DISABLED' },
+      { gate_key: 'GATE_X', sd_type: 'Infrastructure', applicability: 'REQUIRED' },
+    ];
+    const findings = computeNearMissFindings(new Set(['GATE_X']), registryRows, 'infrastructure');
+    expect(findings).toEqual([]);
+  });
 });
 
 describe('scoreFindings (FR-4, TS-3)', () => {
@@ -160,12 +175,15 @@ describe('auditPhases (FR-1, FR-3, TS-2)', () => {
   it('names the specific phase when dryRunHandoff returns {success:false} for one phase', async () => {
     const orchestrator = {
       dryRunHandoff: async (phase) => {
-        if (phase === 'PLAN-TO-LEAD') return { success: false, error: 'SD not found' };
+        // Deliberately carries a `manifest` array even on failure -- proves the branch is
+        // discriminated by `result.success`, not merely by the absence of `manifest`.
+        if (phase === 'PLAN-TO-LEAD') return { success: false, error: 'SD not found', manifest: [{ name: 'GATE_Z' }] };
         return makeManifest([]);
       },
     };
-    const { auditIncompletePhases } = await auditPhases(orchestrator, 'sd-1');
+    const { manifestNames, auditIncompletePhases } = await auditPhases(orchestrator, 'sd-1');
     expect(auditIncompletePhases).toEqual([{ phase: 'PLAN-TO-LEAD', error: 'SD not found' }]);
+    expect(manifestNames.has('GATE_Z')).toBe(false);
   });
 
   it('records all 5 phases as incomplete when dryRunHandoff throws for every phase', async () => {
