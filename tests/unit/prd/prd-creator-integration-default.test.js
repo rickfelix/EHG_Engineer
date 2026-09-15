@@ -161,6 +161,29 @@ describe('SD-LEARN-FIX-ADDRESS-PAT-LES-012: write-path 1 -- INSERT (createPRDWit
   });
 });
 
+describe('SD-LEARN-FIX-ADDRESS-PAT-LES-016: FR-1 -- fresh PRD insert always lands status=approved', () => {
+  // PAT-LES-2116dd961204 claimed add-prd-to-database.js creates PRDs in status='draft' by
+  // default, silently blocking PLAN-TO-EXEC (which requires 'approved'). LEAD-phase
+  // investigation refuted this against current main -- createPRDWithValidatedContent()'s
+  // INSERT branch (scripts/prd/prd-creator.js:460) has set status='approved' unconditionally
+  // since commit a09c4e48 (2026-02-05). The write-path-1 describe block above already
+  // exercises this exact INSERT branch (existingPRD: null) but never asserted on `status` --
+  // this test closes that specific, previously-unasserted gap.
+  it('TS-1: sets status=approved on a fresh insert with no existing PRD', async () => {
+    const sb = makeSupabase({ existingPRD: null });
+    await createPRDWithValidatedContent(sb, 'PRD-X', 'SD-KEY', UUID_ID, 'T', { sd_type: 'infrastructure' }, goodContent);
+    expect(sb.capture.inserted.status).toBe('approved');
+  });
+
+  it('TS-1: status=approved holds for every sd_type, not just infrastructure', async () => {
+    for (const sd_type of ['infrastructure', 'documentation', 'orchestrator', 'feature', 'bugfix']) {
+      const sb = makeSupabase({ existingPRD: null });
+      await createPRDWithValidatedContent(sb, 'PRD-X', 'SD-KEY', UUID_ID, 'T', { sd_type }, goodContent);
+      expect(sb.capture.inserted.status, `sd_type=${sd_type}`).toBe('approved');
+    }
+  });
+});
+
 describe('SD-LEARN-FIX-ADDRESS-PAT-LES-012: write-path 2 -- UPDATE-existing branch (createPRDWithValidatedContent, PRD already exists)', () => {
   it('TS-1: applies the default when the existing row is genuinely NULL and llmContent omits it', async () => {
     const sb = makeSupabase({ existingPRD: { id: 'existing-prd', status: 'approved', integration_operationalization: null } });

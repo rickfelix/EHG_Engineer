@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-15](#2026-09-15)
+  - [Infrastructure](#infrastructure-15)
 - [2026-09-14](#2026-09-14)
   - [Infrastructure](#infrastructure-14)
   - [Bugfix](#bugfix-14)
@@ -207,6 +209,17 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
+## 2026-09-15
+
+### Infrastructure
+
+- **Added skill-version git-commit pins and fail-closed call-time tool authorization, extending the versioned role registry without a new database table** - SD-LEO-INFRA-SKILL-LIBRARY-VERSIONED-001 (PR #8999)
+  - `lib/skills/skill-loader.js`'s `parseSkillFile()` already parsed and semver-validated a skill's `version:` frontmatter field, but nothing pinned a role to a specific version or resolved one -- it was a field, not a mechanism. Extracted a behavior-preserving `parseSkillContent(raw, {filePath})` so skill content can be parsed from `git show` output, not just a live file on disk; a regression test proves byte-identical output for all 25 real `.claude/skills/*.md` files.
+  - New `lib/skills/pinned-skill-read.mjs` reuses `lib/chairman/pinned-contract-read.mjs`'s git-commit-pin primitives (the same pattern already proven for chairman ratifications) so a role pinned to a skill at commit A keeps resolving to commit A's content even after a later commit edits the live file -- tested against `.claude/skills/eva-vision.skill.md`'s own real git history, not a synthetic fixture.
+  - New `lib/org/role-skill-tools.mjs` adds pure `pinSkillForRole()`/`listPinnedSkillsForRole()` (re-pin replaces exactly one `skill_key` entry, never mutates the input) and a fail-closed `isToolGrantedForRole(resolvedRole, toolName)` -- returns `false`, never throws, for any tool absent from a resolved role's own `.tools` array. Neither reads nor writes the existing `tool_access_grants` table (a separate, agent-instance-scoped grant mechanism this SD does not duplicate).
+  - No new table: skills live in the existing `org_role_base_versions.function` JSONB column added by the dependency SD (SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001), so this SD needed no chairman ceremony. No live caller wired -- 0 diff on `lib/skills/context-matcher.js` or any role-dispatch file.
+  - A deep-tier adversarial `/ship` review (2 rounds) found and fixed a CRITICAL path-traversal hole (an unvalidated skill file name interpolated directly into a git pathspec, empirically confirmed exploitable via git's own `..` normalization) plus 4 WARNING-level validation gaps (unvalidated commit-SHA shape and `skillKey` on write, inconsistent null-guarding, a leaked mutable array reference) -- all closed with dedicated regression tests before merge.
+
 ## 2026-09-14
 
 ### Infrastructure
@@ -226,6 +239,11 @@
   - `scripts/michael/checkpoint-send.mjs`'s `readProducingFeederCounts` selected `finished_at` but never filtered on it, so a feeder mid-run at send time silently vanished from the summary instead of reading as "no run yet today"; fixed by filtering to rows with `finished_at IS NOT NULL` and taking the highest-`attempt` survivor in plain JS (the unit-tier fake only applies `.eq()` filters, so a query-level fix would have shipped untestable). `composeCheckpointBody` rendered a raw ISO `asOf` string instead of chairman-readable ET time, and never disclosed when producing feeders' timestamps meaningfully diverged; fixed with `formatEtTime()` and a 60-minute disclosure threshold. Added an on-demand (`--now`) invocation path that reuses every existing guard (cap, dedup, pin, identity, staged-ledger) unchanged, gated by a new quiet-hours check composing `isSmsQuietHour` (the real in-window predicate) with `resolveQuietHoursContext` (the chairman-zone + override resolver) -- not `resolveAllowQuietHours` alone, which cannot supply the chairman's zone and would have shipped an inverted or non-functional guard.
   - LEAD-phase Explore review self-corrected a citation error before VALIDATION even ran, then VALIDATION caught a deeper one: the initial FR-5 spine cited the override resolver as if it were the quiet-hours gate itself. PLAN-phase TESTING closed 7 pre-implementation gaps (mock-filter limitations, a missing `attempt` field in the select, a `window_slot NOT NULL` risk from an unhandled off-window case, a shared-cap collision risk from a bare `'on-demand'` constant, and others) before any code was written.
   - EXEC-phase SECURITY found and fixed 2 real hardening gaps in the new quiet-hours code (a truthy-vs-strict-boolean override check, and an unhandled throw path that could have failed open instead of closed) -- both closed with mutation-tested regression tests. VERIFY-phase VALIDATION found a residual mutation-testing gap that mirrored an identical pattern from an earlier SD this session: a fixture with only one surviving candidate per feeder couldn't prove the attempt-based tiebreak comparison, only the `finished_at` filter; closed by adding a second fixture row. VERIFY-phase REGRESSION corrected a wrong assumption (propagated across 3 prior evidence artifacts) that the new DDL-tier test was unrunnable pre-merge from a worktree -- `tests/ddl/**` is actually governed by a separate, non-worktree-excluding vitest config and had already passed in CI.
+
+- **Added a proactive LEAD-TO-PLAN advisory that surfaces `validation_gate_registry` "near-miss" gaps before a downstream handoff can discover one live** - SD-LEARN-FIX-ADDRESS-PAT-LES-015 (PR #9001, #9002)
+  - Fixes PAT-LES-5b719daf1d9b: LEAD approved SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001 without any check of `validation_gate_registry`, so `GATE6_BRANCH_ENFORCEMENT` ran fully REQUIRED (registry absence fails open to enforcement) and blocked that SD several phases later, at PLAN-TO-EXEC. New `GATE_REGISTRY_AUDIT` gate (`required:false`, always `passed:true` -- purely advisory) reuses the existing `HandoffOrchestrator.dryRunHandoff()` across all 5 handoff phases and flags a gate that's `DISABLED` for a sibling `sd_type` but undecided for the SD under review -- deliberately narrower than "warn on any gate absent for this sd_type", which a PLAN-phase review measured would flag 85 of 93 gates (91%) on every handoff.
+  - The PRD went through 2 rounds of independent TESTING review before implementation, each catching a real defect: the near-miss query as first worded couldn't actually see the SD's own REQUIRED-applicability row (byte-identical to a correct implementation against today's registry, so only a targeted unit fixture -- not the live integration test -- could ever catch it), and the "own-type decided" check needed to be row-presence-based rather than an applicability allowlist (a live 4th value, OPTIONAL_OVERRIDE, would otherwise be silently dropped). A first live `precheck` run then caught a wrong relative import path before commit. EXEC-phase SECURITY review found one more: an uncaught `orchestratorFactory()` failure could have scored 0 at full weight despite `required:false` (weight exemptions apply to blocking, not scoring) -- closed with a fail-safe outer catch, its own mutation-tested regression test.
+  - Two defects found during review are explicitly out of this SD's scope, logged to the harness_backlog channel instead: a dead `validation_gate_registry_lock_trigger` referencing nonexistent columns, and two inert `sd_type='all'` registry rows.
 
 ### Bugfix
 

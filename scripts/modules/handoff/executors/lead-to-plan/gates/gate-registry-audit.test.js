@@ -241,6 +241,18 @@ describe('createGateRegistryAuditGate (end-to-end wiring)', () => {
     expect(result.findings).toEqual([]);
   });
 
+  it('never propagates an uncaught exception -- an orchestratorFactory failure still returns passed:true, score:85, not a thrown error', async () => {
+    const supabase = createMockSupabase({ selectData: [] });
+    const orchestratorFactory = async () => { throw new Error('cannot construct orchestrator'); };
+    const gate = createGateRegistryAuditGate(supabase, { orchestratorFactory });
+    const result = await gate.validator({ sd: createMockSD({ sd_type: 'infrastructure' }) });
+
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(85);
+    expect(result.maxScore).toBe(100);
+    expect(result.findings).toEqual([{ type: 'AUDIT_INCOMPLETE', phase: 'ALL', error: 'cannot construct orchestrator' }]);
+  });
+
   it('marks every phase AUDIT_INCOMPLETE when the registry query itself fails, even if all 5 phase manifests succeeded', async () => {
     const supabase = createMockSupabase({ selectError: { message: 'db down' } });
     const orchestratorFactory = async () => ({
