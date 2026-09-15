@@ -1,0 +1,54 @@
+{
+  "executive_summary": "Document 2 real, live, previously-undocumented CHECK constraints on the user_stories table (story_key format and priority enum) in docs/reference/database-agent-patterns.md, and extend the existing PLAN-TO-EXEC CLI checklist hint (scripts/modules/handoff/cli/cli-main.js) that already fires at the exact moment this information is needed but currently omits the required priority field. Root-cause fix for PAT-LES-455c48ba7d65: the constraints are correct and stay enforced unchanged; only their discoverability changes.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Document the user_stories.valid_story_key and user_stories.user_stories_priority_check CHECK constraints",
+      "description": "Add a new subsection to docs/reference/database-agent-patterns.md (placed adjacent to the existing 'PRD Workflow Integration: Design -> Database Pattern' section, matching that section's established heading/example conventions) documenting: (1) story_key must match the live constraint ^[A-Z0-9-]+:US-[0-9]{3,}$ (example: SD-KEY-001:US-001), and (2) priority must be one of the 5 live enum values ('critical', 'high', 'medium', 'low', 'minimal'). Include one complete, working example INSERT statement covering both fields plus the other NOT NULL columns (story_key, sd_id, title, user_role, user_want, user_benefit, acceptance_criteria, priority, implementation_context)."
+    },
+    {
+      "id": "FR-2",
+      "title": "Extend the PLAN-TO-EXEC checklist hint to name the priority field and exact story_key format",
+      "description": "scripts/modules/handoff/cli/cli-main.js's existing PLAN-TO-EXEC checklist block (currently ~5 lines around the literal text 'User stories must exist BEFORE this gate') already prints a partial field list for creating a user_stories row but omits 'priority' entirely and gives only a loose story_key example. Extend it to explicitly name the priority field with its 5 valid values and the exact story_key regex, and point at the new docs/reference/database-agent-patterns.md section for the full example."
+    },
+    {
+      "id": "FR-3",
+      "title": "No change to the constraints themselves",
+      "description": "Both CHECK constraints (user_stories.valid_story_key, user_stories.user_stories_priority_check) are correct and remain unchanged -- this SD is documentation/discoverability only, matching its own explicit OUT-OF-SCOPE text (no gate threshold changes, no constraint changes)."
+    }
+  ],
+  "acceptance_criteria": [
+    "docs/reference/database-agent-patterns.md contains a new subsection stating the exact story_key regex and all 5 valid priority values, with one complete working example INSERT statement.",
+    "scripts/modules/handoff/cli/cli-main.js's PLAN-TO-EXEC checklist hint text includes 'priority' among the required fields and names its 5 valid values or points to the doc section.",
+    "No existing test in tests/unit/ that covers cli-main.js's checklist output regresses.",
+    "The 2 live CHECK constraints (user_stories.valid_story_key, user_stories.user_stories_priority_check) are unchanged -- confirmed via database/schema-reference-snapshot.json diff showing zero change to the checks object."
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "description": "Read docs/reference/database-agent-patterns.md and confirm the new section's example INSERT statement, if actually run against a test fixture, would satisfy both CHECK constraints (regex match + enum membership) -- verified by a unit test asserting the example story_key matches the constraint's own regex and the example priority is in the constraint's own enum set, both read from the live schema snapshot rather than hardcoded." },
+    { "id": "TS-2", "description": "A unit test asserts scripts/modules/handoff/cli/cli-main.js's PLAN-TO-EXEC checklist output (captured via the file's existing console.log calls) includes the string 'priority' in the printed field list." },
+    { "id": "TS-3", "description": "A unit test asserts the printed story_key format hint matches (or is consistent with) the live valid_story_key regex, not a stale/incorrect example." }
+  ],
+  "system_architecture": {
+    "components": [
+      { "name": "docs/reference/database-agent-patterns.md", "type": "documentation", "description": "Canonical DB-agent quick-reference doc; gains a new subsection documenting user_stories CHECK constraints." },
+      { "name": "scripts/modules/handoff/cli/cli-main.js", "type": "cli_hint", "description": "PLAN-TO-EXEC checklist hint block; extended to name the priority field and exact story_key format." }
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      { "phase": "EXEC-1", "description": "Add the new documentation subsection to docs/reference/database-agent-patterns.md." },
+      { "phase": "EXEC-2", "description": "Extend the PLAN-TO-EXEC checklist hint text in cli-main.js." },
+      { "phase": "EXEC-3", "description": "Add 3 new unit tests (TS-1/TS-2/TS-3) proving the doc example and hint text stay in sync with the live schema snapshot, with mutation-testing proof of non-vacuousness." }
+    ]
+  },
+  "risks": [
+    { "risk": "The doc's example INSERT could silently drift out of sync with a future constraint change.", "mitigation": "TS-1's unit test reads the example story_key/priority values and re-validates them against the LIVE schema-reference-snapshot.json regex/enum at test-run time, not a hardcoded copy -- a future constraint change that the doc forgets to follow fails this test.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["Any future session or script creating user_stories rows via a raw DB insert (bypassing a higher-level generator)."],
+    "dependencies": ["database/schema-reference-snapshot.json (read-only, for the new regression tests)."],
+    "data_contracts": ["No schema change; documentation and hint-text only."],
+    "runtime_config": ["None -- no new env vars or flags."],
+    "observability_rollout": ["No rollout needed; documentation and CLI hint text ship immediately on merge, no flag gating required (this is pure discoverability, not a behavior change)."]
+  }
+}

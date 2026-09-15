@@ -592,9 +592,12 @@ export async function handlePrecheckCommand(precheckType, precheckSdId) {
     console.log('─'.repeat(50));
     console.log('   ⚠️  PRD executive_summary must be 50+ chars — one-liners cause PRD_SUMMARY_SHORT (0%).');
     console.log('   Fix: update executive_summary in product_requirements_v2 WHERE sd_id=\'<SD-ID>\'.');
-    console.log('   ⚠️  User stories must exist BEFORE this gate. Format: story_key=\'SD-KEY:US-001\'.');
+    console.log('   ⚠️  User stories must exist BEFORE this gate. Format: story_key=\'SD-KEY:US-001\'');
+    console.log('   (regex: ^[A-Z0-9-]+:US-[0-9]{3,}$, 3+ digits).');
     console.log('   Create via DB insert into user_stories with fields: story_key, sd_id, title, user_role,');
-    console.log('   user_want, user_benefit, acceptance_criteria, implementation_context.');
+    console.log('   user_want, user_benefit, acceptance_criteria, priority, implementation_context.');
+    console.log('   ⚠️  priority is REQUIRED and must be one of: critical | high | medium | low | minimal.');
+    console.log('   Full worked example: docs/reference/database-agent-patterns.md (user_stories Table Constraints).');
     console.log('');
   }
 
