@@ -1,0 +1,268 @@
+{
+  "executive_summary": "instantiateVenture() writes agent/identity/relationship rows for any venture id, real or not -- 18,340 live orphan rows prove it. Add a guard that refuses a nonexistent id before any write, matching a proven pattern already in this codebase.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Add a VentureNotFoundError class and a defaultVentureExists(supabase, ventureId) helper to lib/agents/venture-ceo-factory.js, mirroring the exact proven pattern already shipped in lib/creative/creative-brief.js (VentureNotFoundError + defaultVentureExists, PLAN-phase precedent found by LEAD-TO-PLAN VALIDATION) -- not importing the creative-brief.js classes directly (different domain, different error message), but replicating the same shape: a named Error subclass with a .code property, and a helper using .select('id').eq('id', ventureId).maybeSingle() that treats a 22P02 (invalid_text_representation) Postgres error as \"does not exist\" rather than letting it escape as a raw DB error. DEVIATION FROM THE PRECEDENT (deliberate, required): creative-brief.js's defaultVentureExists is a private, unexported module function (verified -- creative-brief.js exports only VentureNotFoundError/CreativeAssetsTableNotLiveError/QualityGateRejectedError/requestCreativeAsset; no test file exists for creative-brief.js to show how its 22P02 path is tested without a direct export). This PRD's own TS-3/TS-4 call defaultVentureExists(mockSupabase, ...) directly, which is only possible if it is exported -- so both VentureNotFoundError and defaultVentureExists MUST be added as named exports of venture-ceo-factory.js (alongside the existing STANDARD_VENTURE_TEMPLATE/EHG_SHARED_OPERATORS/WELL_KNOWN_IDS export statement at line 726).",
+      "description": "The creative-brief.js precedent already solves the exact same problem (refuse an operation for a nonexistent venture, testable without a DB) for a different call site -- copying its proven shape avoids re-deriving error handling for malformed ids from scratch.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: VentureNotFoundError is a proper Error subclass with .name='VentureNotFoundError' and .code='VENTURE_NOT_FOUND', message including the passed ventureId.",
+        "AC-2: defaultVentureExists returns false (not a thrown error) when Postgres returns error.code '22P02' (a malformed/non-UUID id).",
+        "AC-3: defaultVentureExists returns true only when the ventures table has a matching row for the given id.",
+        "AC-4: VentureNotFoundError and defaultVentureExists are both named exports of lib/agents/venture-ceo-factory.js, verified importable from tests/unit/venture-ceo-factory.test.js -- a deliberate, minor deviation from creative-brief.js's private defaultVentureExists, required because TS-3/TS-4 test the helper directly."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Add a guard at the very top of VentureFactory.instantiateVenture() -- immediately after destructuring options (lib/agents/venture-ceo-factory.js:280) and BEFORE the two console.log calls at lines 282-283 and the _getTemplate() call at line 286 (verified current line order: the console.log calls precede _getTemplate(), so 'before the _getTemplate() call' alone under-specifies placement -- the guard must land before line 282, not merely before line 286) -- that mirrors creative-brief.js's exact caller-side short-circuit shape: if (!ventureId || !(await ventureExistsFn(this.supabase, ventureId))) throw new VentureNotFoundError(ventureId); -- the falsy (!ventureId) check runs BEFORE any DB call so a missing/undefined/null ventureId never reaches Supabase, matching creative-brief.js's requestCreativeAsset() exactly (creative-brief.js's own defaultVentureExists has no falsy check -- that check lives in the caller, not the helper) -- before any agent, identity, relationship, or tool-grant row is created.",
+      "description": "The check must run before ANY side effect in the method, including the template lookup (which currently runs first) -- ordering matters because a caller must never observe a partial instantiation for a venture id that turns out not to exist. The venture-existence resolver is injectable via deps.ventureExistsFn (mirroring creative-brief.js's deps.ventureExistsFn seam), passed as an optional second constructor-or-call argument so existing call sites are unaffected and tests can inject a stub.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: Calling instantiateVenture() with a ventureId that has no ventures row throws VentureNotFoundError and creates zero agent_registry / org_agent_identities / org_agent_relationships / tool_access_grants rows.",
+        "AC-2: The guard runs before BOTH console.log calls at lines 282-283 and before the _getTemplate() call at line 286 -- a caller sees only the VentureNotFoundError, no partial 'Instantiating venture...' log output implying work began.",
+        "AC-3: Calling instantiateVenture() with a ventureId that DOES have a ventures row proceeds exactly as before -- zero behavior change on the legitimate path, confirmed by the pre-existing 2 tests in tests/unit/venture-ceo-factory.test.js continuing to pass (after their mock is updated per FR-3).",
+        "AC-4: Calling instantiateVenture() with a missing/undefined/null ventureId throws VentureNotFoundError without ever invoking ventureExistsFn or the database -- mirrors creative-brief.js's caller-side !ventureId short-circuit exactly."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Update the 2 pre-existing tests in tests/unit/venture-ceo-factory.test.js's 'VentureFactory.instantiateVenture with mocked Supabase' describe block (lines 171-195, using synthetic ventureIds 'test-venture-id-123'/'test-venture-id-456' with no real ventures row) so they continue to pass under the new guard -- either by injecting a stub ventureExistsFn that returns true, or by updating the shared mockSupabase.maybeSingle to resolve a truthy row for these 2 tests specifically.",
+      "description": "These 2 tests currently succeed with zero venture-existence check (confirmed: instantiateVenture() has never called .maybeSingle() before this SD -- the ONE existing .maybeSingle() call in this file, line 481, is in the unrelated instantiateSharedOperators() method). Once FR-2's guard is live, both tests would incorrectly throw VentureNotFoundError against the shared mockSupabase's maybeSingle (which resolves {data: null, error: null} by default) unless explicitly updated -- this is a REQUIRED fix to the test's own setup, not a weakening: these tests exist to prove instantiation succeeds for a legitimate venture, so their fixture must now represent a legitimate (existing) venture.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: Both pre-existing tests (6-executive-agents, 28-total-agents) pass after the update, unmodified in their actual assertions -- only the venture-existence stub/mock changes.",
+        "AC-2: The update does not silently make the guard a no-op for these tests -- a companion new test (FR-4) proves the guard DOES fire when the stub returns false, confirming the stub mechanism itself is load-bearing."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Add new regression tests: (a) instantiateVenture() with a nonexistent-venture stub throws VentureNotFoundError and makes zero mockSupabase.insert/.upsert calls; (b) instantiateVenture() with a malformed (non-UUID-shaped) ventureId is refused the same way, not a raw Postgres error; (c) the 2 real call sites' calling pattern (eva-coo-integration.js's onboardVenture(), which fetches a real venture row before calling instantiateVenture(); spine-verify-first-run.mjs, which creates a real ventures row before calling instantiateVenture()) are each represented by a test proving the guard does not fire when a real venture id is used.",
+      "description": "Directly proves E3 (design feedback 20b858dc section 8: 'instantiation for a nonexistent venture id is refused with a named error and writes no rows; a unit test covers it') and closes the exact root cause of the measured 18,340 orphan rows.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: Test (a) asserts zero calls to mockSupabase.insert and mockSupabase.upsert after the thrown error -- proving 'writes no rows', not just 'throws before completing'.",
+        "AC-2: Test (b) proves the malformed-id path returns the SAME VentureNotFoundError type as the genuinely-nonexistent path, not a raw 22P02 Postgres error escaping to the caller.",
+        "AC-3: A mutation test (per this session's established discipline) that disables the guard (comments out or short-circuits the check) confirms test (a) then fails -- proving the guard is load-bearing, not vacuous."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Do NOT retroactively clean up the 18,340 pre-existing orphan org_agent_identities rows, and do NOT touch any other call site or table beyond lib/agents/venture-ceo-factory.js and its own test file.",
+      "description": "Explicitly out of scope per the design's own C2 text ('refuse at the entry point', not 'clean up history'). Scope discipline: this SD's blast radius is exactly 1 production file + 1 test file.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: git diff for this SD touches only lib/agents/venture-ceo-factory.js and tests/unit/venture-ceo-factory.test.js (plus this SD's own one-off evidence scripts).",
+        "AC-2: No DELETE or UPDATE statement against org_agent_identities/agent_registry/org_agent_relationships/tool_access_grants appears anywhere in this SD's diff."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "The venture-existence check uses .select('id').eq('id', ventureId).maybeSingle(), never .single() (which throws PGRST116 on zero rows, a less clean signal to distinguish from a genuine query error) -- matching the creative-brief.js precedent exactly.",
+      "rationale": "maybeSingle() cleanly returns {data: null, error: null} for a genuinely-missing row, distinguishable from a real query error (error !== null) -- the exact distinction FR-1 AC-2/AC-3 depends on."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "The guard is injectable via an optional deps parameter (e.g. instantiateVenture(options, deps = {})), defaulting to the real defaultVentureExists when deps.ventureExistsFn is not supplied -- never a hard-coded direct call that can't be stubbed in a test.",
+      "rationale": "Matches CLAUDE_EXEC's Testability-Aware Implementation guidance (injectable dependencies) and the creative-brief.js precedent's own deps.ventureExistsFn seam -- lets FR-3/FR-4's tests stub the check without needing the shared mockSupabase fixture to correctly emulate a real ventures table query. Note: adding this optional second parameter is verified backward-compatible -- both real call sites (lib/agents/eva-coo-integration.js:356, scripts/harness/spine-verify-first-run.mjs:128) and every test/e2e call site pass exactly one argument (an options object) today; none pass a second argument that could collide with deps."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "No new database table, migration, or schema change -- the guard reads the EXISTING ventures table only.",
+      "rationale": "R1 (chairman ratification bb2175d2: any new table needs the ceremony) does not apply here; this SD reads an existing table, writes nothing new."
+    }
+  ],
+  "system_architecture": {
+    "overview": "A single guard clause added to the top of the existing VentureFactory.instantiateVenture() method, backed by a small injectable venture-existence resolver. No new component, no new file beyond the existing production file and its test file.",
+    "components": [
+      {
+        "name": "VentureNotFoundError (new class in venture-ceo-factory.js)",
+        "responsibility": "A named, typed error thrown when instantiateVenture() is called with a venture id that has no ventures row.",
+        "technology": "Plain JS Error subclass"
+      },
+      {
+        "name": "defaultVentureExists (new function in venture-ceo-factory.js)",
+        "responsibility": "Queries the ventures table for a given id, returning true/false; treats a malformed-id Postgres error (22P02) as false rather than propagating it.",
+        "technology": "@supabase/supabase-js query"
+      },
+      {
+        "name": "VentureFactory.instantiateVenture() (modified)",
+        "responsibility": "Calls the venture-existence resolver first; throws VentureNotFoundError and returns before any other work if the venture does not exist.",
+        "technology": "Existing class method, lib/agents/venture-ceo-factory.js"
+      }
+    ],
+    "data_flow": "instantiateVenture(options, deps) resolves ventureExistsFn = deps.ventureExistsFn || defaultVentureExists; immediately after destructuring options and before either console.log call or _getTemplate(), evaluates if (!options.ventureId || !(await ventureExistsFn(this.supabase, options.ventureId))) throw new VentureNotFoundError(options.ventureId) -- the falsy check short-circuits before any DB call, mirroring creative-brief.js's requestCreativeAsset() caller-side check exactly. If the venture exists, execution proceeds exactly as it did before this SD.",
+    "integration_points": [
+      "ventures table (read-only SELECT, existing table, no schema change)",
+      "lib/agents/eva-coo-integration.js's onboardVenture() (unaffected -- already passes a real venture.id)",
+      "scripts/harness/spine-verify-first-run.mjs (unaffected -- already creates a real ventures row first)"
+    ]
+  },
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "instantiateVenture() refuses a nonexistent venture id and writes zero rows",
+      "test_type": "unit",
+      "given": "A ventureExistsFn stub that resolves false for the given ventureId",
+      "when": "instantiateVenture({ventureName, ventureId}, {ventureExistsFn: stub}) is called",
+      "then": "The call throws VentureNotFoundError and mockSupabase.insert/.upsert are never called"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "instantiateVenture() proceeds normally for an existing venture id",
+      "test_type": "unit",
+      "given": "A ventureExistsFn stub that resolves true for the given ventureId, and the existing agent-creation mocks",
+      "when": "instantiateVenture({ventureName, ventureId}, {ventureExistsFn: stub}) is called",
+      "then": "Instantiation completes exactly as before -- 28 total agents created, no VentureNotFoundError"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "defaultVentureExists treats a malformed (non-UUID) id as not-found, not a raw error",
+      "test_type": "unit",
+      "given": "A mock supabase client whose maybeSingle() resolves {data: null, error: {code: '22P02', message: 'invalid input syntax for type uuid'}}",
+      "when": "defaultVentureExists(mockSupabase, 'not-a-uuid') is called",
+      "then": "It resolves false, does not throw"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "defaultVentureExists propagates a genuine (non-22P02) database error",
+      "test_type": "unit",
+      "given": "A mock supabase client whose maybeSingle() resolves {data: null, error: {code: '08006', message: 'connection failure'}}",
+      "when": "defaultVentureExists(mockSupabase, someId) is called",
+      "then": "It throws/rejects with that error, does not silently resolve false"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "Both pre-existing legitimate-path tests continue to pass after the mock/stub update",
+      "test_type": "unit",
+      "given": "The 2 updated tests in tests/unit/venture-ceo-factory.test.js (6-executive-agents, 28-total-agents), now injecting a ventureExistsFn stub resolving true",
+      "when": "Both tests run",
+      "then": "Both pass with their original assertions unchanged (6 executives, 28 total agents)"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "Mutation test proving the guard is load-bearing",
+      "test_type": "unit",
+      "given": "The guard temporarily disabled (mutated to always proceed)",
+      "when": "TS-1's scenario is re-run against the mutated code",
+      "then": "TS-1 fails (the mutant is caught), confirming the guard was actually preventing the write path -- restored after the mutation test, confirmed byte-identical to the original"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "instantiateVenture() refuses a missing/undefined ventureId without ever calling ventureExistsFn or the database",
+      "test_type": "unit",
+      "given": "options with ventureId omitted (undefined), and a ventureExistsFn spy",
+      "when": "instantiateVenture({ventureName}, {ventureExistsFn: spy}) is called",
+      "then": "The call throws VentureNotFoundError and the ventureExistsFn spy is never invoked -- proves the !ventureId short-circuit runs before any DB round-trip, matching creative-brief.js's requestCreativeAsset() caller-side check"
+    }
+  ],
+  "acceptance_criteria": [
+    "instantiateVenture() throws a named VentureNotFoundError and creates zero rows when called with a venture id that has no row in the ventures table.",
+    "Both existing legitimate call sites (eva-coo-integration.js's onboardVenture(), scripts/harness/spine-verify-first-run.mjs) are unaffected -- confirmed by updated/passing tests representing their exact calling pattern.",
+    "A malformed (non-UUID) venture id is refused via the same typed error, never a raw Postgres exception.",
+    "The guard is proven non-vacuous via a real mutation test (temporarily disable it, confirm the corresponding test fails, restore, confirm byte-identical).",
+    "This SD's diff touches only lib/agents/venture-ceo-factory.js and its test file -- no retroactive cleanup of the 18,340 pre-existing orphan rows, no other file changed."
+  ],
+  "risks": [
+    {
+      "risk": "The guard could break a legitimate caller that intentionally passes a venture id not yet committed (e.g. inside a transaction that creates the ventures row and calls instantiateVenture() before that write is externally visible).",
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "mitigation": "Both current call sites (eva-coo-integration.js, spine-verify-first-run.mjs) were read directly and confirmed to already fetch/create the venture row and pass venture.id AFTER that row exists -- TS-5 pins this ordering with a dedicated test per call site's exact pattern.",
+      "rollback_plan": "If a future caller is found to need pre-commit instantiation, add an explicit opt-out parameter (e.g. skipVentureExistsCheck) documented as a deliberate exception, rather than removing the guard entirely."
+    },
+    {
+      "risk": "The 2 pre-existing tests could be updated in a way that makes the guard silently a no-op for them (e.g. stubbing ventureExistsFn to always return true without ever exercising the false path), masking a broken guard.",
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "mitigation": "FR-3 AC-2 explicitly requires a companion test proving the stub mechanism itself is load-bearing (the guard DOES fire when the stub returns false) -- TS-1/TS-6 cover this directly.",
+      "rollback_plan": "If found post-merge, add the missing negative-path test in a follow-up fix."
+    },
+    {
+      "risk": "Orphan rows already in the database (18,340 identities, 655 venture_ids) remain unaddressed, and a future reader of org_agent_identities could still be confused by them.",
+      "probability": "MEDIUM",
+      "impact": "LOW",
+      "mitigation": "Explicitly out of scope per the design's own C2 text -- documented in this PRD and the SD's risks so it's a deliberate, named deferral, not a silent gap.",
+      "rollback_plan": "N/A -- a separate future SD if the chairman wants the existing rows purged."
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "description": "Add VentureNotFoundError and defaultVentureExists to venture-ceo-factory.js, wire the guard into instantiateVenture() with the injectable deps.ventureExistsFn seam.",
+        "deliverables": ["lib/agents/venture-ceo-factory.js changes (FR-1, FR-2, TR-1, TR-2, TR-3)"]
+      },
+      {
+        "phase": "Phase 2",
+        "description": "Update the 2 pre-existing tests and add the new regression tests covering the refusal path, the malformed-id path, and both real call sites' patterns.",
+        "deliverables": ["tests/unit/venture-ceo-factory.test.js changes (FR-3, FR-4), TS-1 through TS-6 passing"]
+      },
+      {
+        "phase": "Phase 3",
+        "description": "Mutation-test the guard (disable, confirm TS-1 fails, restore, confirm byte-identical) as EXEC-phase verification evidence.",
+        "deliverables": ["TS-6 mutation-testing evidence"]
+      }
+    ],
+    "technical_decisions": [
+      "Replicate (not import) the creative-brief.js VentureNotFoundError/defaultVentureExists shape -- avoids a cross-domain import between lib/creative/ and lib/agents/ while still reusing the proven pattern.",
+      "Injectable deps.ventureExistsFn (not a hard dependency on the real Supabase query) so the 2 existing tests and new tests can stub venture-existence without needing the shared mockSupabase fixture to correctly emulate a real ventures-table round-trip."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      {
+        "name": "lib/agents/eva-coo-integration.js's onboardVenture()",
+        "interaction": "Calls instantiateVenture() with a real, already-fetched venture.id -- unaffected by the new guard (confirmed by TS-5).",
+        "frequency": "Currently zero live callers (confirmed by scripts/audits/venture-ceo-factory-reachability.mjs's own audit) -- dead code transitively, but the guard protects it whenever it becomes live again."
+      },
+      {
+        "name": "scripts/harness/spine-verify-first-run.mjs",
+        "interaction": "Creates a real ventures row, then calls instantiateVenture() with that row's id -- unaffected by the new guard (confirmed by TS-5).",
+        "frequency": "Manually invoked verification harness, no npm-script/cron/CI wiring."
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "ventures table (existing)",
+        "type": "upstream",
+        "contract": "Read-only SELECT by id, no schema change.",
+        "failure_handling": "A genuine query error (not 22P02) propagates as a thrown error rather than being silently treated as 'venture exists' or 'venture does not exist' -- fails loud, never fails open."
+      }
+    ],
+    "data_contracts": [],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": [],
+      "deployment_considerations": "No deployment beyond the code landing on main -- pure additive guard on an existing method, no new env vars, no migration."
+    },
+    "observability_rollout": {
+      "monitoring": ["None new -- a thrown VentureNotFoundError is visible in whatever error-handling wraps the eventual live caller"],
+      "alerts": [],
+      "rollout_strategy": "Direct merge to main once tests pass -- instantiateVenture() currently has no live production caller, so there is no rollout risk to an in-flight system.",
+      "rollback_trigger": "N/A -- additive guard, revert the commit if a real caller is found to need the pre-commit exception.",
+      "rollback_procedure": "git revert the merge commit."
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/agents/venture-ceo-factory.js (full instantiateVenture() method, instantiateSharedOperators() for the existing maybeSingle precedent)",
+      "lib/agents/eva-coo-integration.js (onboardVenture(), the one real call site)",
+      "scripts/harness/spine-verify-first-run.mjs (the other real call site)",
+      "scripts/audits/venture-ceo-factory-reachability.mjs (confirms onboardVenture() has zero live callers)",
+      "lib/creative/creative-brief.js (the VentureNotFoundError/defaultVentureExists precedent)",
+      "tests/unit/venture-ceo-factory.test.js (the 2 pre-existing tests that will break without an explicit fix)"
+    ],
+    "patterns_identified": [
+      "lib/creative/creative-brief.js already solves the identical problem for a different domain -- VentureNotFoundError + defaultVentureExists + injectable deps.ventureExistsFn is the established idiom in this codebase for 'refuse an operation on a nonexistent venture, testably'",
+      "the shared mockSupabase fixture in tests/unit/venture-ceo-factory.test.js already defines maybeSingle (resolving {data:null,error:null} by default) for an UNRELATED existing call site (instantiateSharedOperators(), line 481) -- instantiateVenture() itself has never called maybeSingle before this SD, so the 2 pre-existing tests will silently break under the new guard unless explicitly updated"
+    ],
+    "key_decisions": [
+      "Verify the SD's premise directly against the live database rather than trusting the ticket's '~18,340' approximation -- confirmed exactly 18,340 orphan rows, 655 of 660 distinct venture_ids",
+      "Scope the fix narrowly to lib/agents/venture-ceo-factory.js + its own test file -- no retroactive cleanup, no touching either of the 2 real call sites (both already correct)"
+    ],
+    "exploration_date": "2026-09-15"
+  }
+}
