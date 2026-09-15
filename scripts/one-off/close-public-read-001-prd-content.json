@@ -1,0 +1,50 @@
+{
+  "executive_summary": "Drop 23 confirmed-dead backup/snapshot tables that were publicly readable via the anon key with zero row-level protection, permanently removing roughly 13,000 of the ~15,356 exposed rows the chairman's own Advisors security scan flagged. Chairman-approved (ratification 49686fd3, verbatim 'approve the drops'). The migration was already authored, chairman-approved, committed and applied to the live database (independently re-verified via a direct pg connection to information_schema: 0/23 tables present) before this PRD was written; this PRD formalizes the already-executed, already-safety-verified work through the LEO protocol for a clean audit trail. The 13 remaining live tables with the same exposure, and key rotation, are explicitly out of scope -- reserved as separate follow-up work needing per-table triage.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Drop the 23 chairman-approved dead-snapshot tables",
+      "description": "database/migrations/20260915_close_public_read_drop_dead_snapshots.sql drops exactly the 23 tables named in chairman_drop_approval.scope_exactly (the qparity20260610 parity-run snapshots, the storm-quarantine snapshot, and the sd_baseline_items backup/recon snapshots). No FK references any of them; each is confirmed a stale partial duplicate of a live, populated source table. Already applied to the live database; independently re-verified via a direct pg connection to information_schema.tables (0/23 present)."
+    },
+    {
+      "id": "FR-2",
+      "title": "Re-verify the drop's effect via a connection method immune to PostgREST schema-cache staleness",
+      "description": "Post-DDL verification must use a direct pg connection (scripts/lib/supabase-connection.js createDatabaseClient querying information_schema.tables) rather than the Supabase-js client, which can serve a stale PostgREST schema cache immediately after DDL applied through a different connection path -- a trap both this session and the coordinator's own earlier verification pass independently hit and resolved the same way."
+    },
+    {
+      "id": "FR-3",
+      "title": "Explicitly exclude the 13 live tables and key rotation from this SD's scope",
+      "description": "The 13 live tables carrying the same public-read exposure (door_routing_ledger, scope_completion_chain, north_star, selection_postures, venture_experience_review_runs, coverage_matrix, coverage_matrix_rotation_runs, sourcing_chairman_queue, v_id, claim_rejects, venture_preview_instances, v_hc_flag_enabled, v_s22_flag_enabled) need per-table row-level-security decisions, not removal -- some may be deliberately public for a dashboard. Key rotation is also excluded, deliberately sequenced after DB work since rotating the project secret invalidates the service-role key every live fleet seat currently uses. Both are reserved as separate, later follow-up work, not decided or implemented by this SD."
+    }
+  ],
+  "acceptance_criteria": [
+    "A direct pg-connection query against information_schema.tables for all 23 table names returns 0 rows.",
+    "No foreign-key constraint anywhere in the live schema references any of the 23 dropped table names.",
+    "The migration file carries the chairman-approval provenance trail (ratification id, verbatim quote, approver) in its header, matching the repo's established chairman-gated migration convention."
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "description": "Direct pg-connection query (bypassing PostgREST/Supabase-js, which can serve a stale schema cache after DDL) against information_schema.tables for all 23 names -- expect 0 rows." },
+    { "id": "TS-2", "description": "Confirm the migration file's DROP TABLE statement list matches chairman_drop_approval.scope_exactly exactly (23 names, no extras, no omissions)." }
+  ],
+  "system_architecture": {
+    "components": [
+      { "name": "database/migrations/20260915_close_public_read_drop_dead_snapshots.sql", "type": "migration", "description": "Chairman-gated DDL migration dropping the 23 dead snapshot tables. Already applied to the live database." }
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      { "phase": "EXEC-1 (already complete)", "description": "Migration authored, chairman-approved, committed, and applied to the live database before this SD's formal LEO protocol pass began." },
+      { "phase": "EXEC-2", "description": "Independent re-verification via a direct pg connection (not Supabase-js/PostgREST, which can read stale post-DDL) that all 23 tables are genuinely absent." }
+    ]
+  },
+  "risks": [
+    { "risk": "A Supabase-js/PostgREST-based check can read a stale schema cache immediately after DDL applied via a direct pg connection, producing a false 'still exists' result.", "mitigation": "Any future re-verification of this migration's effect should use a direct pg connection to information_schema, not the Supabase-js client -- documented in this SD's own metadata as a caught, resolved trap.", "severity": "low" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["None -- the 23 dropped tables had no live consumers (confirmed dead by the same triage that recommended dropping them)."],
+    "dependencies": ["Live source tables for each dropped snapshot remain populated and unaffected."],
+    "data_contracts": ["No schema change to any live table; only the 23 dead tables are removed."],
+    "runtime_config": ["None."],
+    "observability_rollout": ["Already applied and verified; no phased rollout needed for a completed DROP TABLE migration."]
+  }
+}
