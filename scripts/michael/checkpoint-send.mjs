@@ -218,18 +218,22 @@ export async function runCheckpointSend({ sb, argv = [], now = new Date(), sendF
   // on-demand path only: the 4 fixed windows never fall inside 22:00-06:00 ET by construction, so
   // the fixed-window path is unaffected (FR-5 AC4).
   if (isOnDemand) {
-    let allowQuietHours = false;
-    let chairmanZone;
+    let isQuiet;
     try {
-      ({ allowQuietHours, chairmanZone } = await resolveQuietHours(now));
+      const { allowQuietHours, chairmanZone } = await resolveQuietHours(now);
+      // SECURITY SEC-1: strict === true, not truthy -- a resolver returning a non-boolean
+      // truthy value (e.g. the string 'false') must not be treated as an override.
+      isQuiet = allowQuietHours !== true && isSmsQuietHour(now, chairmanZone);
     } catch {
-      // FR-5 TESTING-PIN: fail-closed, not permissive -- an injected resolver that throws (or a
-      // real ChairmanPreferenceStore read that fails) must still enforce quiet hours, matching
-      // resolveQuietHoursContext's own internal catch (allowQuietHours:false, default zone).
-      allowQuietHours = false;
-      chairmanZone = undefined;
+      // FR-5 TESTING-PIN + SECURITY SEC-1/SEC-2: fail-closed, not permissive -- ANY failure in
+      // resolving or evaluating quiet hours (a throwing resolver, a failed
+      // ChairmanPreferenceStore read, or a malformed/non-canonical zone string that would make
+      // isSmsQuietHour itself throw) must still enforce quiet hours at THIS instant, using
+      // isSmsQuietHour's own module-default zone rather than a caller-influenced one -- matching
+      // resolveQuietHoursContext's own internal catch shape (allowQuietHours:false, default zone).
+      isQuiet = isSmsQuietHour(now);
     }
-    if (!allowQuietHours && isSmsQuietHour(now, chairmanZone)) {
+    if (isQuiet) {
       if (isApply) {
         // TR-11: an operator-initiated on-demand attempt leaves a trace even when refused.
         // outcome='refused' (not 'held', not SEND_IN_PROGRESS) so it never counts against the

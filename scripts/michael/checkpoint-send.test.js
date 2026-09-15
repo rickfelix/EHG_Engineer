@@ -688,6 +688,25 @@ describe('FR-1: on-demand send path (--now)', () => {
     expect(r).toMatchObject({ ok: false, refusal: 'QUIET_HOURS' });
   });
 
+  // EXEC-TO-PLAN SECURITY review findings SEC-1/SEC-2.
+  it('SEC-1: a resolver returning a non-boolean truthy allowQuietHours (the string "false") is NOT treated as an override -- strict === true, not truthy', async () => {
+    const sb = fakeSb({ ...ENABLED_ROW });
+    const r = await runCheckpointSend({
+      sb, argv: ['--apply', '--now'], now: NOW_QUIET_HOURS,
+      resolveQuietHours: async () => ({ allowQuietHours: 'false', chairmanZone: 'America/New_York' }),
+    });
+    expect(r).toMatchObject({ ok: false, refusal: 'QUIET_HOURS' });
+  });
+
+  it('SEC-2: a malformed chairmanZone that would make isSmsQuietHour itself throw is fail-closed, never an uncaught exception', async () => {
+    const sb = fakeSb({ ...ENABLED_ROW });
+    const r = await runCheckpointSend({
+      sb, argv: ['--apply', '--now'], now: NOW_QUIET_HOURS,
+      resolveQuietHours: async () => ({ allowQuietHours: false, chairmanZone: 'Not/A_Real_Zone' }),
+    });
+    expect(r).toMatchObject({ ok: false, refusal: 'QUIET_HOURS' });
+  });
+
   it('TS-18a: --apply --now with and without --reason produce IDENTICAL ledger row shapes -- --reason is optional and never persisted', async () => {
     await withEnv({ CHAIRMAN_PHONE: REAL_RECIPIENT }, async () => {
       const sbNoReason = fakeSb({ ...ENABLED_ROW });
