@@ -1,4 +1,4 @@
-<!-- file_content_hash: 55904f31e97884a4 -->
+<!-- file_content_hash: 323c5d0fe3cdade0 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE.md - LEO Protocol Orchestrator
 
@@ -90,6 +90,9 @@ Invoke the RCA Sub-Agent (`subagent_type="rca-agent"`). Your prompt MUST contain
 19. **HARNESS BACKLOG BASELINE AND A CRITICAL CHECK ON EVERY NEW ITEM (ratification e38df53f)** — Chairman at the Adam terminal 2026-09-14, verbatim in part: "What if we stick to a baseline of the backlog and, if something comes up that we identify as new, we add it to a new backlog? We continue to work down the current backlog. Maybe there's also an evaluation of anything new prior to adding it to the backlog to say, 'Hey, is this critical?' ... let's make sure it's durable and doesn't rely on memory." Standing effect for every session that files work: the open harness backlog frozen in feedback 58cc4231 (2026-09-14) is the finish line. Before filing ANY new SD or QF, ask "is this critical?" — critical means it breaks a venture stage or the coming test venture, loses data, stops the fleet working, or is a security risk. A critical item is filed normally; anything else is logged to the harness_backlog channel (`node scripts/log-harness-bug.js`) and fixed after the baseline. Record the verdict and a one-line reason on the item. When every baseline item is completed or cancelled, the clean-slate test venture (ratification 3c4a6781) returns to the chairman.
 > Why: the fleet was opening work as fast as it closed it, so a finish line that moves with the inflow never arrives; a fixed baseline plus a check at the door lets the backlog shrink without dropping real problems.
 
+
+20. **CHECKLIST TRUTH IS CHECKED DAILY AND AT THE MOMENT A JOB IS MARKED DONE (ratification ceac3478)** — Chairman typed at the Solomon terminal 2026-09-14 ~15:5xZ, relayed verbatim by Solomon in session_coordination fc200a80, verbatim: "I agree with your timing recommendations, with daily, and I also agree with checking the moment a job is marked done." **(1) DAILY, NOT WEEKLY** — the existing daily sweep (`.github/workflows/template-success-criteria-sweep.yml`) keeps its 09:15 UTC slot and changes WHAT it checks: from whether each success criterion is WORDED properly to whether each success criterion is ACTUALLY TRUE on main. He had floated a weekend slot staggered from Friday and chose daily over it. **(2) CHECK AT THE MOMENT A JOB IS MARKED DONE** — a completion check at LEAD-FINAL-APPROVAL re-runs each success criterion and HOLDS completion on unmet or unrunnable criteria, the checklist equivalent of CHAIRMAN_APPLY_VERIFICATION; the daily run then follows up on whatever is left unmet. **HIS OWN SHAPE FOR THE PER-ITEM RECORD**, his words rather than agreement to a design: "And maybe you need a quality status, a date and time stamp, and comments or something like that, as you check these things. You know where you left off, and you know when you need to follow up." — carried as status / checked_at / note / next_check_at. **NOT RULED, INFER NOTHING:** exempting the new check from `--bypass-validation`; the T1/T2 age thresholds for time-driven escalation; stamping `resolved_at` on superseded blocked handoff rows; the apply-state verifier re-architecture. **VERIFICATION PLAN, carried forward:** shadow-run the completion check against the 47 completed CAPA children first; at least 7 holds are expected, and ZERO holds would mean the check is dead by construction.
+> Why: a success criterion that is merely well-worded is not a criterion anybody checked; verifying truth on main at the moment of completion, and again daily, is what makes a completed checklist evidence rather than a claim.
 
 ## AUTO-PROCEED Mode
 
@@ -224,4 +227,4 @@ Use `*_DIGEST.md` variants only when context is constrained (e.g. smaller models
 > Sub-agent routing and background execution rules are enforced by PreToolUse hooks. See `scripts/hooks/pre-tool-enforce.cjs`.
 
 ---
-*Generated: 2026-09-14 1:51:21 PM | Protocol: LEO 4.4.1 | Source: Database*
+*Generated: 2026-09-15 12:04:51 PM | Protocol: LEO 4.4.1 | Source: Database*
