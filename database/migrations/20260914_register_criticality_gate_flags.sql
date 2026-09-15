@@ -1,3 +1,4 @@
+-- @approved-by: codestreetlabs@gmail.com
 -- 20260914_register_criticality_gate_flags.sql
 -- SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 (TR-2)
 --
