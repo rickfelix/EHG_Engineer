@@ -18,12 +18,18 @@ name: Venture Role Stage-Binding Lint
 on:
   pull_request:
     paths:
+      # VALIDATION finding (VERIFY phase): the lint's own RUNTIME_DIRS includes 'tests', so the
+      # trigger below must too -- a PR touching only tests/** with a reintroduced binding
+      # previously never fired this workflow at all.
       - 'scripts/**/*.js'
       - 'scripts/**/*.mjs'
       - 'scripts/**/*.cjs'
       - 'lib/**/*.js'
       - 'lib/**/*.mjs'
       - 'lib/**/*.cjs'
+      - 'tests/**/*.js'
+      - 'tests/**/*.mjs'
+      - 'tests/**/*.cjs'
       - 'scripts/lint/venture-role-stage-binding-lint.mjs'
       - 'scripts/lint/venture-role-stage-binding-lint-allowlist.json'
       - '.github/workflows/venture-role-stage-binding-lint.yml'

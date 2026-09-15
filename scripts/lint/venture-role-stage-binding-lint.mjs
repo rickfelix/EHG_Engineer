@@ -26,7 +26,10 @@
  *
  * Modes:
  *   --diff (default in CI): lint ONLY files changed vs the merge base with origin/main.
- *   --all: advisory full sweep (confirms 0 violations against the live repo).
+ *   --all: full repo sweep, e.g. for local/manual confirmation of 0 violations. Still exits 1 on
+ *      any violation found -- "advisory" here means "wider scope than the default diff", NOT
+ *      "does not block" (VALIDATION finding, VERIFY phase: the fallback warning below previously
+ *      used the same word in a way that read as soft-fail, which it is not).
  *
  * Escapes (documented in the failure output):
  *   - scripts/lint/venture-role-stage-binding-lint-allowlist.json -- files with a pre-existing,
@@ -97,7 +100,7 @@ function candidateFiles() {
         .filter((f) => !SKIP_DIR_RE.test(f))
         .filter((f) => !isFixturePath(f));
     } catch (e) {
-      console.warn(`⚠️  diff base unavailable (${e.message.split('\n')[0]}) — falling back to --all (advisory)`);
+      console.warn(`⚠️  diff base unavailable (${e.message.split('\n')[0]}) — falling back to --all (still blocking: wider scope, not a soft-fail)`);
       return candidateFilesAll();
     }
   }
