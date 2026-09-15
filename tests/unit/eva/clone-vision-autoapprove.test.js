@@ -82,7 +82,9 @@ describe('_autoApproveCloneVision (FR-1/FR-2)', () => {
     expect(sb.updates).toHaveLength(1);
     expect('status' in sb.updates[0].payload).toBe(false);
     expect('extracted_dimensions' in sb.updates[0].payload).toBe(false);
-    expect(sb.updates[0].payload.created_by).toBe('testing-agent-clone-autoapprove');
+    // SD-LEO-INFRA-GOVERNANCE-ARTIFACTS-RECORD-001 FR-4: the approval-flip no longer overwrites
+    // created_by (the row's original author) -- author provenance must survive an approval action.
+    expect('created_by' in sb.updates[0].payload).toBe(false);
     expect(repairMocks.repairVision).not.toHaveBeenCalled();
   });
 
@@ -93,6 +95,9 @@ describe('_autoApproveCloneVision (FR-1/FR-2)', () => {
     expect(r.mode).toBe('promote_draft');
     expect(sb.updates[0].payload.status).toBe('active');
     expect('extracted_dimensions' in sb.updates[0].payload).toBe(false);
+    // SD-LEO-INFRA-GOVERNANCE-ARTIFACTS-RECORD-001 FR-4, TS-4: the draft-to-active promotion no
+    // longer overwrites created_by (the row's original author).
+    expect('created_by' in sb.updates[0].payload).toBe(false);
     expect(repairMocks.repairVision).not.toHaveBeenCalled();
   });
 
