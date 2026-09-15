@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { runSeededThread, teardownRun } from '../../../scripts/harness/spine-verify-first-run.mjs';
 import { BudgetManager } from '../../../lib/agents/venture-ceo/budget-manager.js';
 import { BudgetExhaustedException } from '../../../lib/agents/venture-ceo/exceptions.js';
+import { purgeOrphanedOrgAgentIdentities } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -22,6 +23,16 @@ test.describe('Venture CEO verify-first seeded thread', () => {
   test.skip(!SUPABASE_URL || !SUPABASE_KEY, 'requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY');
 
   const supabase = createClient(SUPABASE_URL!, SUPABASE_KEY!);
+
+  // SD-LEO-INFRA-ORG-TEST-TEARDOWN-001 FR-3: a crashed prior run (process killed before its own
+  // `finally` -> teardownRun() executes) leaks org_agent_identities rows whose venture_id no
+  // longer resolves. Sweeping this suite's own TEST- prefix at beforeAll bounds that leak to at
+  // most one crashed run's worth, mirroring purgeStaleRealDbResidue()'s established pattern for
+  // the sibling ventures-residue problem.
+  test.beforeAll(async () => {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return;
+    await purgeOrphanedOrgAgentIdentities(supabase, { namePrefix: 'TEST-' });
+  });
 
   test('TS-1: happy path — full seeded thread completes end-to-end against real tables', async () => {
     const runId = `e2e-${Date.now()}`;
