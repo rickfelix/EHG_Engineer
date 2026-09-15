@@ -220,12 +220,26 @@ export function buildDeadCoordinatorMessage(verdict, now = new Date()) {
 
 // QF-20260905-884: the QF-20260905-346 hook writes a notification_permission_wait row when a
 // seat waits on a permission prompt, but nothing ever consumed it -- confirmed 0 consumers by
-// grep. This is the un-shipped second half named in that QF's own scope. Deliberately the SAME
-// windowed edge-trigger shape as evaluateDeadCoordinatorAlert above (no separate DB dedup state):
-// fires only in [staleMin, staleMin+cronIntervalMin) after the wait was observed, never again on
-// later ticks. Re-uses DEAD_COORDINATOR_STALE_MIN/DEAD_COORDINATOR_CRON_INTERVAL_MIN (this file's
-// existing quiet-tick-shaped thresholds for "one seat has gone quiet too long") per the QF's own
-// instruction: "N from the existing quiet-tick threshold table, not a new constant".
+// grep. This is the un-shipped second half named in that QF's own scope.
+//
+// QF-20260915-854 CORRECTION: originally the SAME windowed edge-trigger shape as
+// evaluateDeadCoordinatorAlert above (fires only in [staleMin, staleMin+cronIntervalMin), never
+// again on later ticks) -- but a dead coordinator is checked by a SEPARATE liveness instrument
+// (loop_registry) the instant it recovers, while a stuck SEAT has nothing else watching it: one
+// missed tick (a skipped run, a sleeping host, a check that errored) silences the alarm for the
+// REST of the freeze, with nothing re-raised. Measured live: last alert 2026-09-14T15:11:02Z, the
+// chairman found and released a frozen worker by hand 2026-09-15 ~09:4xZ -- 18.5h silent. Fixed
+// to a FLOOR instead of a window: once elapsedMin >= staleMin (and not recovered), alert:true on
+// EVERY tick, relying on buildStuckPermissionWaitMessage's existing hour-granular dedupeKey (via
+// chairman-sms-gate's onConflict:dedupe_key,ignoreDuplicates upsert) to cap the actual SMS send
+// rate to ~once/hour per session -- no new table, no new dedup state, reusing the exact mechanism
+// this file already ships for dead-coordinator/fleet-down.
+//
+// Re-uses DEAD_COORDINATOR_STALE_MIN/DEAD_COORDINATOR_CRON_INTERVAL_MIN (this file's existing
+// quiet-tick-shaped thresholds for "one seat has gone quiet too long") per the ORIGINAL QF's own
+// instruction: "N from the existing quiet-tick threshold table, not a new constant". cronIntervalMin
+// is now unused by this predicate (kept as a parameter for call-site/signature compatibility);
+// staleMin alone defines the floor.
 //
 // lastToolAt (claude_sessions.last_tool_at), not heartbeat_at, is the "no later tool activity"
 // signal -- heartbeat_at is written by a background timer independent of actual tool use (the
@@ -236,7 +250,7 @@ export function evaluateStuckPermissionWait({
   lastToolAt,
   now = new Date(),
   staleMin = DEAD_COORDINATOR_STALE_MIN,
-  cronIntervalMin = DEAD_COORDINATOR_CRON_INTERVAL_MIN,
+  cronIntervalMin = DEAD_COORDINATOR_CRON_INTERVAL_MIN, // kept for call-site/signature compatibility, see doc comment above
 } = {}) {
   if (!notifiedAt) return { alert: false, reason: 'no notification_permission_wait row', elapsedMin: null };
   const notified = new Date(notifiedAt);
@@ -247,13 +261,27 @@ export function evaluateStuckPermissionWait({
   const lastTool = lastToolAt ? new Date(lastToolAt) : null;
   const recovered = lastTool && !Number.isNaN(lastTool.getTime()) && lastTool.getTime() > notified.getTime();
   if (recovered) {
-    return { alert: false, reason: 'last_tool_at advanced past the wait — seat recovered on its own', elapsedMin };
+    // QF-20260915-854: only a recovery BEFORE the seat ever reached the alert floor is genuinely
+    // silent self-recovery -- past the floor, the seat WAS in the alertable zone (an alert either
+    // fired or should have), so asserting "recovered on its own" here would erase that evidence
+    // the instant last_tool_at advances, whether by real self-recovery or the chairman releasing
+    // the seat by hand (the measured incident: last_tool_at simply resumed after a manual
+    // release, indistinguishable from self-recovery by this field alone). `pastAlertFloor` lets
+    // the caller (checkStuckPermissionWaits) page a distinct RESOLVED notice instead of going
+    // silent, so the freeze is on record rather than erased.
+    const pastAlertFloor = elapsedMin >= staleMin;
+    return {
+      alert: false,
+      recovered: true,
+      pastAlertFloor,
+      reason: pastAlertFloor
+        ? `RESOLVED: last_tool_at advanced after ${elapsedMin.toFixed(0)}min stuck, past the ${staleMin}min alert floor — recorded as resolved rather than silent self-recovery`
+        : 'last_tool_at advanced past the wait — seat recovered on its own',
+      elapsedMin,
+    };
   }
   if (elapsedMin < staleMin) {
     return { alert: false, reason: `permission wait is ${elapsedMin.toFixed(1)}min old, within the ${staleMin}min window`, elapsedMin };
-  }
-  if (elapsedMin >= staleMin + cronIntervalMin) {
-    return { alert: false, reason: `wait has persisted ${elapsedMin.toFixed(1)}min — already past the first alertable tick (edge-trigger dedup)`, elapsedMin };
   }
   return {
     alert: true,
@@ -286,6 +314,27 @@ export function buildStuckPermissionWaitMessage(verdict, sessionId, now = new Da
     body,
     kind: 'stuck_permission_wait_alert',
     dedupeKey: `stuck-permission-wait-${shortId}-${now.toISOString().slice(0, 13)}`,
+  };
+}
+
+/**
+ * Pure: the chairman-SMS message payload for a stuck-permission-wait RESOLUTION —
+ * QF-20260915-854. Sent when a seat that HAD passed the alert floor (verdict.pastAlertFloor)
+ * shows last_tool_at advancing again: this does NOT assert self-recovery vs a hand release (this
+ * file has no signal to distinguish them — last_tool_at simply resumes either way), it only
+ * records that the freeze happened and cleared, so it is on record rather than silently erased.
+ * dedupeKey is keyed on the ORIGINAL notification's timestamp (notifiedAt), not `now`, so this
+ * fires exactly ONCE per freeze episode even though the same recovered row is re-evaluated on
+ * every tick until it ages out of checkStuckPermissionWaits' lookback window.
+ */
+export function buildStuckPermissionWaitResolvedMessage(verdict, sessionId, notifiedAt, now = new Date()) {
+  const shortId = String(sessionId || 'unknown').slice(0, 12);
+  const body = `STUCK SEAT ${shortId}: RESOLVED after ${verdict.elapsedMin.toFixed(0)}min stuck (past the alert floor). last_tool_at has resumed — confirm this was a deliberate release, not an unnoticed recovery of a real problem.`;
+  return {
+    type: 'status',
+    body,
+    kind: 'stuck_permission_wait_resolved',
+    dedupeKey: `stuck-permission-wait-resolved-${shortId}-${new Date(notifiedAt).toISOString()}`,
   };
 }
 
@@ -365,19 +414,12 @@ export async function checkStuckPermissionWaits(db, DRY, sendChairmanSMSFn = nul
 
   let sendFn = sendChairmanSMSFn;
   let chairmanZone = null;
-  for (const [sessionId, row] of latestBySession) {
-    const verdict = evaluateStuckPermissionWait({
-      notifiedAt: row.created_at,
-      lastToolAt: lastToolBySession.get(sessionId) ?? null,
-      now,
-    });
-    console.log(`[stuck-permission-wait] session=${sessionId} ${verdict.alert ? 'ALERT' : 'no-alert'}: ${verdict.reason}`);
-    if (!verdict.alert) continue;
-
-    const message = buildStuckPermissionWaitMessage(verdict, sessionId, now, row.payload?.blocked_action || null);
+  // Shared send path for both the ALERT and RESOLVED messages below (QF-20260915-854) — DRY-check,
+  // lazy sendFn/zone init, send, and log, exactly as the pre-existing alert-only path did.
+  const pageChairman = async (message) => {
     if (DRY) {
-      console.log('[stuck-permission-wait] [DRY] would page chairman via sendChairmanSMS:', message.body);
-      continue;
+      console.log(`[stuck-permission-wait] [DRY] would page chairman (${message.kind}):`, message.body);
+      return;
     }
     if (!sendFn) {
       sendFn = (await import(pathToFileURL(path.resolve('lib/comms/adam-outbound/chairman-sms-gate/index.js')).href)).sendChairmanSMS;
@@ -385,7 +427,26 @@ export async function checkStuckPermissionWaits(db, DRY, sendChairmanSMSFn = nul
       chairmanZone = (await resolveChairmanZone(now)).zone;
     }
     const r = await sendFn(message, { now, chairmanZone });
-    console.log('[stuck-permission-wait] sendChairmanSMS result:', JSON.stringify(r));
+    console.log(`[stuck-permission-wait] sendChairmanSMS (${message.kind}) result:`, JSON.stringify(r));
+  };
+
+  for (const [sessionId, row] of latestBySession) {
+    const verdict = evaluateStuckPermissionWait({
+      notifiedAt: row.created_at,
+      lastToolAt: lastToolBySession.get(sessionId) ?? null,
+      now,
+    });
+    console.log(`[stuck-permission-wait] session=${sessionId} ${verdict.alert ? 'ALERT' : 'no-alert'}: ${verdict.reason}`);
+    if (verdict.alert) {
+      await pageChairman(buildStuckPermissionWaitMessage(verdict, sessionId, now, row.payload?.blocked_action || null));
+      continue;
+    }
+    // QF-20260915-854: a recovery detected past the alert floor is NOT silently dropped — page a
+    // distinct RESOLVED notice (deduped once per freeze episode via the message's own dedupeKey)
+    // so the freeze is on record instead of reading as an untraceable self-recovery.
+    if (verdict.recovered && verdict.pastAlertFloor) {
+      await pageChairman(buildStuckPermissionWaitResolvedMessage(verdict, sessionId, row.created_at, now));
+    }
   }
 }
 
