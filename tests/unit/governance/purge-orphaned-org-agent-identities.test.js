@@ -29,7 +29,8 @@ function makeFakeSupabase({ candidates = [], liveVentures = [] } = {}) {
       if (table === 'ventures') {
         return {
           select() { return this; },
-          in() { return Promise.resolve({ data: liveVentures, error: null }); },
+          in() { return this; },
+          limit() { return Promise.resolve({ data: liveVentures, error: null }); },
         };
       }
       throw new Error(`unexpected table: ${table}`);
@@ -107,7 +108,7 @@ describe('purgeOrphanedOrgAgentIdentities', () => {
             limit: () => Promise.resolve({ data: [{ id: 'oa1', venture_id: 'v1', display_name: 'TEST-x' }], error: null }),
           };
         }
-        return { select() { return this; }, in: () => Promise.resolve({ data: null, error: { message: 'ventures boom' } }) };
+        return { select() { return this; }, in() { return this; }, limit: () => Promise.resolve({ data: null, error: { message: 'ventures boom' } }) };
       },
     };
     const warn = vi.fn();
