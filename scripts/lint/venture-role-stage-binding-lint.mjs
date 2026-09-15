@@ -44,7 +44,7 @@
  * Exit: 1 when violations found outside the allowlist, 0 otherwise.
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { isFixturePath, isFixtureEntry } from '../../lib/lint/added-line-text.mjs';
 
@@ -94,12 +94,18 @@ const allowedFiles = new Set((allowlist.files || []).map((f) => f.replace(/\\/g,
 function candidateFiles() {
   if (mode === 'diff') {
     try {
+      // CI finding (shell-injection-argv-lint, blocking): the original execSync(`...${base}...`)
+      // form is always a shell invocation with the base interpolated as text -- flagged even
+      // though `base` here is only ever an env var this repo's own CI sets. Switched to
+      // execFileSync with an argv array (this file's own sibling lints' established pattern,
+      // e.g. control-seed-test-lint.mjs, eva-logger-required-lint.mjs) -- no shell, so
+      // interpolation is not a concern regardless of where `base` comes from.
       const base = process.env.VENTURE_ROLE_STAGE_BINDING_LINT_BASE || 'origin/main';
       const out = [
-        execSync(`git diff --name-only --diff-filter=ACMR ${base}...HEAD`, { encoding: 'utf8', timeout: 30000 }),
-        execSync('git diff --name-only --diff-filter=ACMR --cached', { encoding: 'utf8', timeout: 30000 }),
-        execSync('git diff --name-only --diff-filter=ACMR', { encoding: 'utf8', timeout: 30000 }),
-        execSync('git ls-files --others --exclude-standard', { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${base}...HEAD`], { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', '--cached'], { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR'], { encoding: 'utf8', timeout: 30000 }),
+        execFileSync('git', ['ls-files', '--others', '--exclude-standard'], { encoding: 'utf8', timeout: 30000 }),
       ].join('\n');
       return [...new Set(out.split('\n').map((s) => s.trim()).filter(Boolean))]
         .filter((f) => CODE_RE.test(f))
