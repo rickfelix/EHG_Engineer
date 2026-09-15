@@ -16,7 +16,7 @@ import {
   evaluatePerHostFreezePredicate, buildPerHostFreezeMessage, checkPerHostFreeze, recordFleetDeadManVerdict,
   fetchEligibleHosts, runAlertArms,
   evaluateFleetLivenessPredicate, buildFleetLivenessMessage, buildWatchdogCannotMeasureMessage, checkFleetLiveness,
-  evaluateStuckPermissionWait, buildStuckPermissionWaitMessage, checkStuckPermissionWaits,
+  evaluateStuckPermissionWait, buildStuckPermissionWaitMessage, buildStuckPermissionWaitResolvedMessage, checkStuckPermissionWaits,
 } from '../../scripts/fleet-down-alert.mjs';
 
 // Helper: build a newest-first pulse list from active_count values.
@@ -1137,10 +1137,20 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
     expect(r.reason).toMatch(/STUCK SEAT/);
   });
 
-  it('does not re-fire on a later tick while still stuck (edge-trigger dedup)', () => {
+  // QF-20260915-854: this used to be edge-trigger dedup (silent forever past one tick) --
+  // corrected to a FLOOR: the alarm keeps firing on every tick a seat stays stuck. The measured
+  // incident (18.5h silent between the last alert and a chairman finding a frozen worker by
+  // hand) is exactly the gap this closes. Actual SMS-send cadence is capped to ~hourly by
+  // buildStuckPermissionWaitMessage's existing dedupeKey, not by this predicate going silent.
+  it('keeps firing on later ticks while still stuck (floor, not a one-tick window) — QF-20260915-854', () => {
     const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(45), lastToolAt: minutesAgo(45), now: NOW, staleMin: 15, cronIntervalMin: 15 });
-    expect(r.alert).toBe(false);
-    expect(r.reason).toMatch(/already past the first alertable tick/);
+    expect(r.alert).toBe(true);
+    expect(r.reason).toMatch(/STUCK SEAT/);
+  });
+
+  it('[TWO-SIDED] still fires many hours into a freeze, not just within one cron interval past the threshold', () => {
+    const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(18.5 * 60), lastToolAt: minutesAgo(18.5 * 60), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    expect(r.alert).toBe(true);
   });
 
   it('a wait within the staleness window does not fire', () => {
@@ -1157,6 +1167,20 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
   it('recovers when last_tool_at advances past the notification — no alert even past threshold', () => {
     const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(20), lastToolAt: minutesAgo(2), now: NOW, staleMin: 15, cronIntervalMin: 15 });
     expect(r.alert).toBe(false);
+    expect(r.recovered).toBe(true);
+    expect(r.pastAlertFloor).toBe(true); // 20min >= 15min staleMin -- was in the alertable zone
+    expect(r.reason).toMatch(/RESOLVED/);
+    expect(r.reason).not.toMatch(/recovered on its own/); // QF-20260915-854: no longer overclaims self-recovery
+  });
+
+  // QF-20260915-854: [TWO-SIDED] genuine early recovery (never reached the alert floor) keeps
+  // the original, honest "recovered on its own" wording -- pastAlertFloor distinguishes the two
+  // cases rather than collapsing them.
+  it('[TWO-SIDED] recovering BEFORE ever reaching the alert floor is genuine silent self-recovery', () => {
+    const r = evaluateStuckPermissionWait({ notifiedAt: minutesAgo(10), lastToolAt: minutesAgo(2), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    expect(r.alert).toBe(false);
+    expect(r.recovered).toBe(true);
+    expect(r.pastAlertFloor).toBe(false); // 10min < 15min staleMin -- never reached the alertable zone
     expect(r.reason).toMatch(/recovered on its own/);
   });
 
@@ -1196,6 +1220,23 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
     const withoutAction = buildStuckPermissionWaitMessage(verdict, 'sess-1', NOW, null);
     expect(withoutAction.body).not.toMatch(/waiting on a permission prompt/);
     expect(withoutAction.body).toMatch(/no further tool activity.*Notification event/);
+  });
+
+  // QF-20260915-854
+  it('buildStuckPermissionWaitResolvedMessage names the session, is a distinct kind, and dedupes on the ORIGINAL notification time (not `now`)', () => {
+    const notifiedAt = minutesAgo(20);
+    const verdict = evaluateStuckPermissionWait({ notifiedAt, lastToolAt: minutesAgo(2), now: NOW, staleMin: 15, cronIntervalMin: 15 });
+    const msg = buildStuckPermissionWaitResolvedMessage(verdict, 'abcdef12-3456-7890', notifiedAt, NOW);
+    expect(msg.body).toMatch(/RESOLVED/);
+    expect(msg.body).toMatch(/abcdef12-345/);
+    expect(msg.kind).toBe('stuck_permission_wait_resolved');
+    expect(msg.dedupeKey).toBe(`stuck-permission-wait-resolved-abcdef12-345-${new Date(notifiedAt).toISOString()}`);
+    // A LATER tick (different `now`) re-evaluating the SAME unresolved row must produce the
+    // SAME dedupeKey -- otherwise the resolved notice would re-send every tick until the row
+    // ages out of the lookback window, the exact spam this dedupe key exists to prevent.
+    const laterNow = new Date(NOW.getTime() + 45 * 60000);
+    const laterMsg = buildStuckPermissionWaitResolvedMessage(verdict, 'abcdef12-3456-7890', notifiedAt, laterNow);
+    expect(laterMsg.dedupeKey).toBe(msg.dedupeKey);
   });
 
   // Stub db supporting exactly the three query shapes checkStuckPermissionWaits issues:
@@ -1243,13 +1284,38 @@ describe('evaluateStuckPermissionWait / checkStuckPermissionWaits (QF-20260905-8
     expect(message.body).toMatch(/STUCK SEAT/);
   });
 
-  it('checkStuckPermissionWaits() does NOT page a session that recovered (last_tool_at advanced past the wait)', async () => {
+  it('checkStuckPermissionWaits() does NOT page a session that recovered BEFORE ever reaching the alert floor', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1' }, created_at: minutesAgo(10) }],
+      sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(2) }],
+    });
+    const sendChairmanSMSFn = vi.fn();
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).not.toHaveBeenCalled();
+  });
+
+  // QF-20260915-854: [TWO-SIDED] a recovery detected AFTER the seat passed the alert floor is no
+  // longer silently dropped -- pages a distinct RESOLVED notice so the freeze is on record.
+  it('checkStuckPermissionWaits() pages a RESOLVED notice for a session that recovered AFTER passing the alert floor', async () => {
+    const db = makeStuckWaitDb({
+      waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1' }, created_at: minutesAgo(20) }],
+      sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(2) }],
+    });
+    const sendChairmanSMSFn = vi.fn().mockResolvedValue({ sent: true });
+    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    expect(sendChairmanSMSFn).toHaveBeenCalledTimes(1);
+    const [message] = sendChairmanSMSFn.mock.calls[0];
+    expect(message.kind).toBe('stuck_permission_wait_resolved');
+    expect(message.body).toMatch(/RESOLVED/);
+  });
+
+  it('checkStuckPermissionWaits() in DRY mode never pages the RESOLVED notice either', async () => {
     const db = makeStuckWaitDb({
       waitRows: [{ payload: { kind: 'notification_permission_wait', session_id: 'sess-1' }, created_at: minutesAgo(20) }],
       sessionRows: [{ session_id: 'sess-1', last_tool_at: minutesAgo(2) }],
     });
     const sendChairmanSMSFn = vi.fn();
-    await checkStuckPermissionWaits(db, false, sendChairmanSMSFn, NOW);
+    await checkStuckPermissionWaits(db, true, sendChairmanSMSFn, NOW);
     expect(sendChairmanSMSFn).not.toHaveBeenCalled();
   });
 
