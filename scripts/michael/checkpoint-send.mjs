@@ -1,15 +1,23 @@
 #!/usr/bin/env node
 // scripts/michael/checkpoint-send.mjs — the Tier-2 personal checkpoint send verb (ratification
-// 561878ae): texts the chairman a fixed-template checkpoint at 4 daily ET windows, and can do
-// nothing else. SD-LEO-INFRA-MICHAEL-TIER2-CHECKPOINT-SEND-001.
+// 561878ae): texts the chairman a fixed-template checkpoint at 4 daily ET windows, plus an
+// on-demand send outside those windows (chairman ratification eb7e84b3, SD-LEO-INFRA-MICHAEL-
+// CHAIRMAN-TEXTING-001), and can do nothing else.
 //
 // Usage (absolute path from the repo root; normally invoked by Task Scheduler via
 // scripts/setup-michael-host-tasks.mjs's checkpoint-send entry, which appends --apply):
 //   node scripts/michael/checkpoint-send.mjs --apply [--json]
-//   node scripts/michael/checkpoint-send.mjs [--et-date YYYY-MM-DD] [--json]   (dry-run only --
-//     --et-date is REFUSED under --apply, SECURITY SEC-H1: a live send has no legitimate use for
-//     an operator-supplied date, and allowing one lets --apply --et-date <fresh-date> mint an
-//     unlimited number of real 4-per-day budgets by walking the calendar.)
+//   node scripts/michael/checkpoint-send.mjs --apply --now [--reason "<text>"] [--json]
+//     (on-demand: sends immediately outside the 4 fixed windows. --reason is optional and is
+//     NEVER persisted -- michael_checkpoint_send_ledger has no free-text column for it; a send
+//     with or without --reason behaves identically. Every existing guard still applies --
+//     recipient pin, identity, enable/disable, daily cap -- PLUS a newly-wired quiet-hours
+//     (22:00-06:00 ET) guard that has no equivalent on the fixed-window path, since none of the
+//     4 fixed windows ever fall inside it by construction.)
+//   node scripts/michael/checkpoint-send.mjs [--now] [--et-date YYYY-MM-DD] [--json]   (dry-run
+//     only -- --et-date is REFUSED under --apply, SECURITY SEC-H1: a live send has no legitimate
+//     use for an operator-supplied date, and allowing one lets --apply --et-date <fresh-date>
+//     mint an unlimited number of real 4-per-day budgets by walking the calendar.)
 //
 // FR-1: same-day cap of 4, fail-closed on BOTH tables_absent and a generic ledger-read error --
 //   read BEFORE the recipient/identity/send steps, so a failed cap read never falls through to a
@@ -35,12 +43,38 @@
 // FR-7: per-slot dedup via the window's own `start` string (lib/michael/feeder.mjs windowIdFor,
 //   app-level, same sent-OR-in-progress set as FR-1) plus the DB's partial unique index on
 //   (et_date, window_slot) WHERE outcome='sent' (defense in depth, proven at
-//   tests/ddl/michael-checkpoint-send-ddl.db.test.js).
+//   tests/ddl/michael-checkpoint-send-ddl.db.test.js). SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001's
+//   on-demand path mints its own non-null, per-minute-stamped slot (`on-demand:HH:MM`) so it
+//   participates in this exact same dedup/cap mechanism -- see TR-4/TR-5 below.
+// SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001:
+//   FR-1: an on-demand invocation (--now) bypasses ONLY the fixed-window check; every guard
+//     after it (enable/disable, cap, dedup, pin, identity, staged-ledger-before-send) is the
+//     SAME code path as a fixed-window send, not a duplicate.
+//   FR-2: readProducingFeederCounts now selects the latest row with finished_at IS NOT NULL per
+//     feeder (in plain JS over an unfiltered read -- the unit-tier fake only applies .eq()
+//     filters, so a query-level .not()/.order() would be invisible to it), never the previous
+//     highest-`attempt`-regardless-of-completion row -- closes the 2026-09-14 22:00Z race
+//     (ledger a8388820) where an in-flight run was read as if it were finished.
+//   FR-3: a feeder with no finished run for the date is named "no run yet today" rather than
+//     silently omitted from the composed text.
+//   FR-4: the as-of pointer renders in plain ET; when the producing feeders' finished_at values
+//     span more than 60 minutes, the body discloses that counts are from different times.
+//   FR-5: a quiet-hours (22:00-06:00 ET) guard is wired into the on-demand path ONLY (the fixed
+//     windows never intersect it by construction) -- composes lib/time/chairman-et-wall-clock.js's
+//     isSmsQuietHour (the actual in-window predicate) with lib/comms/adam-outbound/
+//     quiet-hours-extension.js's resolveQuietHoursContext (the batched chairman-zone + override
+//     resolver -- NOT resolveAllowQuietHours alone, which cannot supply chairmanZone), mirroring
+//     the live composition at scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs:339. Sits
+//     immediately after the window/on-demand branch, before every other guard including the
+//     dry-run return -- a guard placed later would burn a cap slot on a refusal (SEC-H2) or let a
+//     later guard's refusal_code mask the real reason.
 import { isMainModule } from '../../lib/utils/is-main-module.js';
 import { createMichaelClient, parseArgs, readRows, writeRows, refusal, emit, todayEt, sha256Hex } from '../../lib/michael/db.mjs';
-import { FEEDERS, inWindow, windowIdFor, etMinuteOfDay, isUniqueViolation } from '../../lib/michael/feeder.mjs';
+import { FEEDERS, windowIdFor, etMinuteOfDay, isUniqueViolation } from '../../lib/michael/feeder.mjs';
 import { resolveCheckpointIdentity } from '../../lib/michael/checkpoint-identity.mjs';
 import twilioProvider from '../../lib/messaging/providers/twilio-provider.js';
+import { isSmsQuietHour } from '../../lib/time/chairman-et-wall-clock.js';
+import { resolveQuietHoursContext } from '../../lib/comms/adam-outbound/quiet-hours-extension.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CAP_PER_DAY = 4;
@@ -57,26 +91,57 @@ const PRODUCING_FEEDER_COUNTS = Object.freeze([
 ]);
 const PRODUCING_FEEDERS = Object.freeze(PRODUCING_FEEDER_COUNTS.map((c) => c.feeder));
 
-/** Pure: best-effort counts-only summary + the oldest (most conservative) as-of timestamp across the 3 producing feeders' latest runs. Never touches raw text fields. */
+/** Pure: best-effort counts-only summary + the oldest (most conservative) as-of timestamp across
+ * the 3 producing feeders' latest FINISHED runs, plus every contributing finished_at (asOfAll,
+ * FR-4's multi-time-disclosure input). Never touches raw text fields. A feeder with no finished
+ * row is named explicitly (FR-3) rather than silently omitted. */
 export function summarizeCounts(rowsByFeeder) {
   const parts = [];
   const asOfCandidates = [];
   for (const { feeder, key, label } of PRODUCING_FEEDER_COUNTS) {
     const row = rowsByFeeder[feeder];
-    if (!row) continue;
-    if (row.counts && typeof row.counts === 'object' && typeof row.counts[key] === 'number') {
+    const hasCount = row && row.counts && typeof row.counts === 'object' && typeof row.counts[key] === 'number';
+    if (hasCount) {
       parts.push(`${row.counts[key]} ${label}`);
+      if (typeof row.finished_at === 'string') asOfCandidates.push(row.finished_at);
+    } else {
+      // FR-3: no finished row for this feeder today -- name it, never silently drop it.
+      parts.push(`${feeder}: no run yet today`);
     }
-    if (typeof row.finished_at === 'string') asOfCandidates.push(row.finished_at);
   }
-  asOfCandidates.sort();
-  return { summary: parts.length ? parts.join(', ') : 'no counts available', asOf: asOfCandidates[0] || null };
+  const sorted = [...asOfCandidates].sort();
+  return { summary: parts.length ? parts.join(', ') : 'no counts available', asOf: sorted[0] || null, asOfAll: asOfCandidates };
 }
 
+const ET_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', hour12: true });
+
+/** Pure: formats an ISO-8601 timestamp as a plain ET time, e.g. "12:30pm ET" (FR-4). Returns null on an unparseable input. */
+export function formatEtTime(isoString) {
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = ET_TIME_FORMATTER.formatToParts(d);
+  const hour = parts.find((p) => p.type === 'hour')?.value;
+  const minute = parts.find((p) => p.type === 'minute')?.value;
+  const dayPeriod = parts.find((p) => p.type === 'dayPeriod')?.value?.toLowerCase();
+  if (!hour || !minute || !dayPeriod) return null;
+  return `${hour}:${minute}${dayPeriod} ET`;
+}
+
+// FR-4 TESTING-PIN: 60 minutes, not "simply differ" -- the 3 producing feeders are scheduled at
+// 04:00/04:30/04:45 ET, so their finished_at values essentially always differ by a small amount;
+// disclosing on any difference would fire on every send and become noise.
+const MULTI_TIME_DISCLOSURE_THRESHOLD_MS = 60 * 60 * 1000;
+
 /** Pure: the fixed-template body -- counts and an as-of pointer only, never raw personal text. */
-export function composeCheckpointBody({ summary, asOf }) {
-  const asOfText = asOf ? `as of ${asOf}` : 'as-of unavailable';
-  return `Michael checkpoint: ${summary} (${asOfText}). Reply if anything looks wrong.`;
+export function composeCheckpointBody({ summary, asOf, asOfAll = [] }) {
+  const formatted = asOf ? formatEtTime(asOf) : null;
+  const asOfText = formatted ? `as of ${formatted}` : 'as-of unavailable';
+  let disclosure = '';
+  const times = asOfAll.map((t) => new Date(t).getTime()).filter((t) => !Number.isNaN(t));
+  if (times.length > 1 && Math.max(...times) - Math.min(...times) > MULTI_TIME_DISCLOSURE_THRESHOLD_MS) {
+    disclosure = ' Counts are from different times.';
+  }
+  return `Michael checkpoint: ${summary} (${asOfText}).${disclosure} Reply if anything looks wrong.`;
 }
 
 async function readProducingFeederCounts(sb, etDate) {
@@ -84,18 +149,35 @@ async function readProducingFeederCounts(sb, etDate) {
   for (const feeder of PRODUCING_FEEDERS) {
     const read = await readRows(
       sb, 'michael_feeder_runs',
-      (q) => q.eq('et_date', etDate).eq('feeder', feeder).order('attempt', { ascending: false }),
-      { select: 'counts,finished_at,status' },
+      (q) => q.eq('et_date', etDate).eq('feeder', feeder),
+      { select: 'attempt,counts,finished_at,status' },
     );
-    if (!read.tables_absent && !read.error && read.rows.length) rowsByFeeder[feeder] = read.rows[0];
+    if (read.tables_absent || read.error || !read.rows.length) continue;
+    // FR-2/TR-8: finished_at IS NOT NULL is the only unambiguous completion signal (status has no
+    // 'finished' literal and 'skipped' is dual-purpose -- claimAttempt writes it as the START
+    // placeholder too). Selection is done in plain JS over an unfiltered read (TR-7): the
+    // unit-tier fake only applies .eq() filters, so a query-level .not()/.order()/.limit() would
+    // be invisible to it and let an incorrect implementation pass by fixture accident.
+    const finished = read.rows.filter((r) => typeof r.finished_at === 'string' && r.finished_at);
+    if (!finished.length) continue;
+    // TR-9: `attempt` MUST be in the select list above, or this comparison is undefined on every
+    // row and silently degrades to "whichever row Postgres happened to return first".
+    let latest = finished[0];
+    for (const r of finished) {
+      if (r.attempt > latest.attempt) latest = r;
+    }
+    rowsByFeeder[feeder] = latest;
   }
   return rowsByFeeder;
 }
 
-/** The verb. deps: { sb, argv, now, sendFn, resolveIdentity, recipientSha256 }. Never throws.
- * recipientSha256, when supplied, OVERRIDES the DB-read pin -- test-only (main() below never
- * passes it, so production always reads the live private-store row fresh). */
-export async function runCheckpointSend({ sb, argv = [], now = new Date(), sendFn = twilioProvider.send, resolveIdentity = resolveCheckpointIdentity, recipientSha256 } = {}) {
+/** The verb. deps: { sb, argv, now, sendFn, resolveIdentity, recipientSha256, resolveQuietHours }.
+ * Never throws. recipientSha256, when supplied, OVERRIDES the DB-read pin -- test-only (main()
+ * below never passes it, so production always reads the live private-store row fresh).
+ * resolveQuietHours, when supplied, overrides resolveQuietHoursContext -- FR-5 TESTING-PIN: the
+ * production default (undefined -> the real resolver) constructs a live ChairmanPreferenceStore,
+ * so a unit test MUST inject a double here rather than let it hit the database. */
+export async function runCheckpointSend({ sb, argv = [], now = new Date(), sendFn = twilioProvider.send, resolveIdentity = resolveCheckpointIdentity, recipientSha256, resolveQuietHours = resolveQuietHoursContext } = {}) {
   const a = parseArgs(argv);
   const isApply = Boolean(a.apply);
   // SEC-H1: --et-date has no legitimate meaning for a LIVE send (you cannot send yesterday's
@@ -110,12 +192,60 @@ export async function runCheckpointSend({ sb, argv = [], now = new Date(), sendF
 
   const windowConfig = FEEDERS['checkpoint-send'].window;
   const minuteOfDay = etMinuteOfDay(now);
-  if (!inWindow(minuteOfDay, windowConfig)) {
-    // FR-6: an out-of-window fire is inert -- no ledger row, no external call, matching every other
-    // Michael feeder's inert-outside-window convention.
-    return { ok: true, inert: true, reason: 'outside_et_window' };
+  // FR-1: --now bypasses ONLY the fixed-window check below; every guard after it is unchanged.
+  const isOnDemand = Boolean(a.now);
+  let windowSlot = windowIdFor(minuteOfDay, windowConfig);
+  if (windowSlot === null) {
+    if (!isOnDemand) {
+      // FR-6: an out-of-window fire with no --now is inert -- no ledger row, no external call,
+      // matching every other Michael feeder's inert-outside-window convention.
+      return { ok: true, inert: true, reason: 'outside_et_window' };
+    }
+    // TR-4/TR-5: windowIdFor returns null off-window, but window_slot is TEXT NOT NULL -- never
+    // let that null reach an insert. Stamp a per-minute on-demand slot instead: this keeps FR-7
+    // dedup meaningful (two fires in the same ET minute still dedup -- the crash/double-fire case
+    // dedup exists for) while leaving all 4 daily sends reachable on-demand (a bare 'on-demand'
+    // constant would cap on-demand at 1/day via this same dedup check). Never collides with a
+    // fixed-window slot, which is always a bare HH:MM from the FEEDERS registry.
+    const hh = String(Math.floor(minuteOfDay / 60)).padStart(2, '0');
+    const mm = String(minuteOfDay % 60).padStart(2, '0');
+    windowSlot = `on-demand:${hh}:${mm}`;
   }
-  const windowSlot = windowIdFor(minuteOfDay, windowConfig);
+
+  // FR-5 / FR-1 TESTING-PIN (guard order): sits immediately after the window/on-demand branch,
+  // before EVERYTHING else -- including the dry-run return, the enable/disable read, the cap
+  // read, dedup, the pin read, identity, and the staged-ledger-before-send write. Scoped to the
+  // on-demand path only: the 4 fixed windows never fall inside 22:00-06:00 ET by construction, so
+  // the fixed-window path is unaffected (FR-5 AC4).
+  if (isOnDemand) {
+    let isQuiet;
+    try {
+      const { allowQuietHours, chairmanZone } = await resolveQuietHours(now);
+      // SECURITY SEC-1: strict === true, not truthy -- a resolver returning a non-boolean
+      // truthy value (e.g. the string 'false') must not be treated as an override.
+      isQuiet = allowQuietHours !== true && isSmsQuietHour(now, chairmanZone);
+    } catch {
+      // FR-5 TESTING-PIN + SECURITY SEC-1/SEC-2: fail-closed, not permissive -- ANY failure in
+      // resolving or evaluating quiet hours (a throwing resolver, a failed
+      // ChairmanPreferenceStore read, or a malformed/non-canonical zone string that would make
+      // isSmsQuietHour itself throw) must still enforce quiet hours at THIS instant, using
+      // isSmsQuietHour's own module-default zone rather than a caller-influenced one -- matching
+      // resolveQuietHoursContext's own internal catch shape (allowQuietHours:false, default zone).
+      isQuiet = isSmsQuietHour(now);
+    }
+    if (isQuiet) {
+      if (isApply) {
+        // TR-11: an operator-initiated on-demand attempt leaves a trace even when refused.
+        // outcome='refused' (not 'held', not SEND_IN_PROGRESS) so it never counts against the
+        // 4/day cap -- the cap filter below only counts outcome='sent' OR
+        // refusal_code='SEND_IN_PROGRESS'.
+        await writeRows(sb, 'michael_checkpoint_send_ledger', (t) => t.insert({
+          et_date: etDate, window_slot: windowSlot, outcome: 'refused', refusal_code: 'QUIET_HOURS',
+        }));
+      }
+      return refusal('QUIET_HOURS', 'on-demand send refused -- inside the chairman quiet hours (22:00-06:00 ET)');
+    }
+  }
 
   if (!isApply) {
     // FR-6: a dry-run, even in-window, writes NO ledger row and makes NO external call.

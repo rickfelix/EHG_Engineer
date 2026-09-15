@@ -1,0 +1,177 @@
+{
+  "executive_summary": "scripts/michael/checkpoint-send.mjs texts the chairman a fixed-template checkpoint at 4 daily ET windows via Twilio. Chairman ratification eb7e84b3 authorizes an on-demand send outside those windows, which the script currently cannot serve -- an out-of-window fire is unconditionally inert (checkpoint-send.mjs:113-116). Separately, Michael's own audit of his first live text found a real race: readProducingFeederCounts (lines 82-93) selects a feeder's latest attempt by attempt-number with no finished_at filter, so an in-flight (unfinished) run can be read as if it were complete data -- two of three feeders silently vanished from the composed text on 2026-09-14 22:00:03Z (ledger a8388820) because their in-flight rows failed summarizeCounts' numeric-count check. composeCheckpointBody also prints the as-of pointer as a raw UTC ISO-8601 string rather than a plain-ET time. This SD adds a guarded on-demand send path (reusing every existing fail-closed guard: recipient pin, identity, enable/disable, daily cap) plus a newly-wired quiet-hours guard (LEAD-phase Explore found NO quiet-hours enforcement exists anywhere in checkpoint-send.mjs today, despite the SD's own original scope text mistakenly implying one already applied -- corrected before PLAN), and fixes the finished_at race and the as-of formatting for both the fixed-window and on-demand paths (both call the same shared function, so the fix is single-sited).",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Add an on-demand send path, bypassing only the fixed-window check",
+      "description": "Add an explicit on-demand invocation shape (e.g. --now with a --reason) to runCheckpointSend that bypasses ONLY the inWindow() check at checkpoint-send.mjs:113-116 (`if (!inWindow(minuteOfDay, windowConfig)) return {ok:true, inert:true, reason:'outside_et_window'}`). Every guard after that line runs unchanged and in the same order: enable/disable read (:127), same-day cap read (:145), FR-7 per-slot dedup, recipient hash-pin read (:166), identity resolution (:181), the staged-ledger-before-send pattern (:195), and the new quiet-hours check from FR-5. The fixed-window schedule and its own invocation shape are unchanged.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "An on-demand invocation at a minute-of-day that fails inWindow() still proceeds past the window check (does not return the inert/outside_et_window result)",
+        "An on-demand invocation with a valid recipient pin, enabled=true, cap not exceeded, and outside quiet hours delivers exactly one text and writes exactly one ledger row with outcome='sent'",
+        "An on-demand invocation with an invalid pin, disabled state, or cap already at 4 refuses with the SAME refusal_code a fixed-window call would produce for that condition",
+        "The fixed-window invocation shape and its existing behavior are unchanged (TS-11 regression proof)"
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Fix readProducingFeederCounts to use finished_at, not attempt-order alone",
+      "description": "readProducingFeederCounts (checkpoint-send.mjs:82-93) currently orders by `attempt` descending and takes rows[0] with no finished_at or status filter. Change the selection to the latest row with finished_at IS NOT NULL per feeder for the given et_date. michael_feeder_runs.status has no literal 'finished' value, and 'skipped' is dual-purpose (lib/michael/feeder.mjs's claimAttempt writes it as the START placeholder with finished_at NULL, but a feeder's run() can also legitimately return 'skipped' as a final outcome) -- finished_at IS NOT NULL is the only unambiguous completion signal (confirmed via database/migrations/20260906_michael_tables.sql:151-167 and feeder.mjs's claimAttempt/finish paths). This function is called by both the fixed-window and on-demand send paths, so the fix applies to both without duplication.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "With an in-flight (finished_at NULL) row and an older finished row for the same feeder/et_date, the function returns the finished row's data, never the in-flight placeholder",
+        "A unit test reproduces the exact 2026-09-14 22:00Z shape (in-flight row present at send time) and asserts the finished row wins",
+        "No change to the function's return shape (rowsByFeeder keyed by feeder name) -- summarizeCounts and its caller need no signature change"
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Name a feeder with no finished run instead of silently omitting it",
+      "description": "summarizeCounts (checkpoint-send.mjs:61-74) currently skips a feeder entirely (`if (!row) continue`) when rowsByFeeder has no entry for it, which after FR-2's fix means a feeder with zero finished runs today produces no mention at all in the composed text -- indistinguishable from 'this feeder has nothing to report'. Add explicit 'no run yet today' text for a feeder with no finished row for the ET date.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "A feeder with zero finished rows for the et_date appears in the composed body naming it as not yet run",
+        "A unit test with one feeder missing and two present asserts all three are mentioned (two with counts, one as not-yet-run)"
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Render the as-of pointer in plain ET; disclose when feeders' times disagree",
+      "description": "composeCheckpointBody (checkpoint-send.mjs:76-80) interpolates the `asOf` value directly, which is a raw finished_at ISO-8601 string from summarizeCounts' asOfCandidates.sort()[0] (the oldest/most-conservative of the 3 producing feeders' finished_at values). Format it as a plain ET time (e.g. 'as of 12:30pm ET'). When the per-feeder finished_at values used in the composed counts differ meaningfully (not all from the same run cycle), the text should say so rather than presenting one silently-chosen timestamp as if it covered all three counts.",
+      "priority": "high",
+      "acceptance_criteria": [
+        "The composed body's as-of text matches a plain-ET pattern and never contains a raw ISO-8601 timestamp",
+        "When the 3 producing feeders' finished_at values span more than a defined threshold (or simply differ), the body discloses that counts are from different times",
+        "A unit test asserts both the plain-ET format and the multi-time disclosure"
+      ]
+    },
+    {
+      "id": "FR-5",
+      "title": "Wire a quiet-hours (22:00-06:00 ET) guard into the on-demand path",
+      "description": "checkpoint-send.mjs has ZERO references to quiet hours anywhere in its 254 lines (confirmed by LEAD-phase Explore and independently re-confirmed by LEAD-TO-PLAN VALIDATION) -- this was never implemented for the fixed-window path because none of the 4 fixed windows (06:00/10:00/14:00/18:00 ET) ever fall inside 22:00-06:00 by construction, so the gap was invisible until an on-demand send (arbitrary minute-of-day) made it reachable. Add the guard using the SAME composition already live elsewhere in this repo -- `if (!allowQuietHours && isSmsQuietHour(now, chairmanZone))` (verified live at scripts/cron/chairman-hourly-heartbeat-backstop-sweep.mjs:339) -- calling lib/time/chairman-et-wall-clock.js's isSmsQuietHour (the actual in-window predicate: `hour >= SMS_QUIET_START_HOUR || hour < SMS_QUIET_END_HOUR`, i.e. hour>=22 or hour<6) composed with lib/comms/adam-outbound/quiet-hours-extension.js's resolveAllowQuietHours (the chairman-override resolver). Do NOT cite or use resolveAllowQuietHours alone as if it were the gate itself -- it only resolves whether an override is active, not whether the window is quiet.",
+      "priority": "critical",
+      "acceptance_criteria": [
+        "An on-demand invocation at an ET minute-of-day inside 22:00-06:00, with no chairman override active, refuses with a QUIET_HOURS-class refusal_code and writes a ledger row for it",
+        "An on-demand invocation at exactly 06:00 ET (the boundary the 4th fixed window sits on) does NOT refuse on quiet hours -- isSmsQuietHour's predicate is hour>=22 || hour<6, so hour===6 is not quiet",
+        "A chairman-authorized override (resolveAllowQuietHours resolving true) allows an on-demand send inside the quiet window",
+        "The fixed-window path is unaffected (its 4 windows never intersect the quiet window, so no behavior change is expected there, but no regression check is skipped)"
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "Single-sited fix for readProducingFeederCounts",
+      "description": "FR-2/FR-3/FR-4 must be implemented once, in the shared function/helpers both the fixed-window and on-demand paths call -- not duplicated per call site. grep confirms readProducingFeederCounts/summarizeCounts/composeCheckpointBody have exactly 2 repo-wide hits today (the definition file and its test), so there is no other caller to coordinate with."
+    },
+    {
+      "id": "TR-2",
+      "title": "on-demand ledger dedup key",
+      "description": "michael_checkpoint_send_ledger.window_slot is unconstrained TEXT with no CHECK constraint or enum (confirmed via database/migrations/20260914_michael_checkpoint_send.sql:36 and its DDL tests) -- an on-demand send's window_slot value (e.g. 'on-demand' or a timestamped variant) is schema-safe and participates in the same FR-7 dedup/cap logic as fixed-window slot values with no additional DB work."
+    },
+    {
+      "id": "TR-3",
+      "title": "No change to the CLI's --et-date refusal under --apply",
+      "description": "SEC-H1's existing refusal of --et-date under --apply (checkpoint-send.mjs:105-107) is orthogonal to the on-demand path and must remain unchanged -- an on-demand invocation is a live send for the real current ET date, exactly like a fixed-window --apply call, never a historical-date replay."
+    }
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "scenario": "readProducingFeederCounts with an in-flight row + an older finished row for the same feeder/date", "type": "unit", "expected": "Finished row's counts are used; in-flight placeholder is ignored (reproduces the 2026-09-14 22:00Z race)" },
+    { "id": "TS-2", "scenario": "readProducingFeederCounts / summarizeCounts with zero finished rows for one feeder", "type": "unit", "expected": "Composed body names that feeder as not-yet-run rather than omitting it" },
+    { "id": "TS-3", "scenario": "composeCheckpointBody with a real finished_at ISO string", "type": "unit", "expected": "Rendered as-of is plain ET (e.g. 'as of 12:30pm ET'), never a raw ISO-8601 string" },
+    { "id": "TS-4", "scenario": "composeCheckpointBody when the 3 producing feeders' finished_at values differ", "type": "unit", "expected": "Body discloses counts are from different times" },
+    { "id": "TS-5", "scenario": "On-demand send outside any fixed window, all guards valid", "type": "unit", "expected": "Sends successfully, writes one ledger row (outcome='sent', on-demand window_slot)" },
+    { "id": "TS-6", "scenario": "On-demand send with recipient pin mismatch", "type": "unit", "expected": "Refuses with RECIPIENT_HASH_MISMATCH, same as a fixed-window call" },
+    { "id": "TS-7", "scenario": "On-demand send while checkpoint-send is disabled", "type": "unit", "expected": "Refuses with DISABLED, same as a fixed-window call" },
+    { "id": "TS-8", "scenario": "On-demand send when the daily cap (4) is already reached", "type": "unit", "expected": "Refuses with CAP_EXCEEDED, same as a fixed-window call" },
+    { "id": "TS-9", "scenario": "On-demand send at an ET minute inside 22:00-06:00 with no chairman override", "type": "unit", "expected": "Refuses with a QUIET_HOURS-class refusal_code and writes a ledger row for it" },
+    { "id": "TS-10", "scenario": "On-demand send at exactly 06:00 ET (the boundary the 4th fixed window sits on)", "type": "unit", "expected": "Does NOT refuse on quiet hours -- isSmsQuietHour's predicate excludes hour===6" },
+    { "id": "TS-11", "scenario": "Full pre-existing checkpoint-send.test.js suite (fixed-window inert/dry-run/cap/pin/identity/dedup cases)", "type": "unit", "expected": "Passes unmodified after this SD's changes -- zero regressions to the fixed-window path" },
+    { "id": "TS-12", "scenario": "On-demand send's ledger row", "type": "unit", "expected": "window_slot value distinguishes it from a fixed-window slot value (FR-7 dedup key), and it counts toward the same 4/day cap as fixed-window sends" }
+  ],
+  "acceptance_criteria": [
+    "An in-flight feeder run at send time never appears as that feeder's data in the composed text -- the latest FINISHED run is always used",
+    "A feeder with no finished run today is named as not-yet-run, never silently omitted",
+    "The as-of pointer renders in plain ET with no raw ISO-8601 string in any body, and discloses when counts are drawn from different times",
+    "An on-demand send outside the fixed windows delivers one text through Michael's identity, writes a ledger row marked on-demand, and refuses on pin mismatch, disabled, cap reached, or quiet hours -- exactly like the corresponding fixed-window refusal",
+    "The quiet-hours guard uses the real in-window predicate (isSmsQuietHour) composed with the chairman-override resolver, not the override resolver alone",
+    "The pre-existing fixed-window behavior and its full test suite are unchanged"
+  ],
+  "risks": [
+    {
+      "risk": "An on-demand send path that reuses the fixed-window guard chain incorrectly (e.g. skipping the daily cap or recipient-pin check instead of only the window check) would reopen the exact tamper/spam risks FR-1/FR-2 (of the original Tier-2 SD) already closed.",
+      "impact": "high",
+      "likelihood": "low",
+      "mitigation": "Implement the on-demand path as a single additional bypass condition on the existing inWindow() branch only -- every line after that stays the same code path. TS-6/TS-7/TS-8/TS-9 each prove an on-demand call refuses exactly like a fixed-window call would."
+    },
+    {
+      "risk": "Changing readProducingFeederCounts's selection logic could change behavior for the fixed-window path too, since both paths call the same function.",
+      "impact": "medium",
+      "likelihood": "low",
+      "mitigation": "TS-1 reuses the exact 2026-09-14 22:00Z race shape as a fixture, proving the fix against the real incident rather than a synthetic case; TS-11 proves the full existing suite is unaffected."
+    },
+    {
+      "risk": "The quiet-hours guard could ship without being wired at all, or wired against the wrong function (the chairman-override resolver instead of the actual in-window predicate), if EXEC follows an imprecise citation -- this exact citation error was caught and corrected during LEAD-TO-PLAN VALIDATION.",
+      "impact": "high",
+      "likelihood": "low",
+      "mitigation": "FR-5's description names the exact live composition pattern and its file:line precedent; TS-9/TS-10 directly test both the refusal and the boundary case."
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": [
+      "Task Scheduler (invokes checkpoint-send.mjs --apply via scripts/setup-michael-host-tasks.mjs's checkpoint-send entry) -- unaffected; the fixed-window invocation shape is unchanged",
+      "michael_checkpoint_send_ledger (gains new on-demand-marked rows, unconstrained TEXT window_slot, no schema change)",
+      "lib/time/chairman-et-wall-clock.js / lib/comms/adam-outbound/quiet-hours-extension.js (dependency, reused via the existing exported functions, not modified)"
+    ],
+    "dependencies": [
+      "michael_feeder_runs.finished_at, .status, .counts (existing columns, no schema change)",
+      "michael_checkpoint_send_ledger.window_slot (existing, unconstrained TEXT)",
+      "isSmsQuietHour / resolveAllowQuietHours (existing, live, exported functions)"
+    ],
+    "data_contracts": [
+      "runCheckpointSend's return shape is unchanged ({ok, sent|inert|dry_run|refusal fields}) -- the on-demand path returns the same shape as the fixed-window path for each outcome"
+    ],
+    "runtime_config": [
+      "No new environment variables or config rows -- reuses CHAIRMAN_PHONE, MICHAEL_TWILIO_* (existing), and michael_checkpoint_send_enabled's existing config_key rows"
+    ],
+    "observability_rollout": [
+      "No new observability surface -- on-demand sends are visible via the existing michael_checkpoint_send_ledger rows (window_slot distinguishes them) and the existing --json emit() output"
+    ]
+  },
+  "system_architecture": {
+    "components": [
+      "scripts/michael/checkpoint-send.mjs's runCheckpointSend (extended with the on-demand argv shape and the quiet-hours guard)",
+      "readProducingFeederCounts / summarizeCounts / composeCheckpointBody (fixed for the finished_at race, missing-feeder naming, and plain-ET formatting -- shared by both send paths)",
+      "lib/time/chairman-et-wall-clock.js's isSmsQuietHour (reused, not modified)",
+      "lib/comms/adam-outbound/quiet-hours-extension.js's resolveAllowQuietHours (reused, not modified)"
+    ]
+  },
+  "implementation_approach": {
+    "steps": [
+      "1) Fix readProducingFeederCounts to filter on finished_at IS NOT NULL (FR-2)",
+      "2) extend summarizeCounts to name a missing feeder instead of omitting it (FR-3)",
+      "3) fix composeCheckpointBody's as-of formatting and multi-time disclosure (FR-4)",
+      "4) add the on-demand argv shape and bypass condition on the inWindow() branch (FR-1)",
+      "5) add the quiet-hours guard composed with the existing isSmsQuietHour/resolveAllowQuietHours pair, placed in the guard chain after the window check and before the enable/disable read (FR-5)",
+      "Each step is independently testable against the existing test file's established mock patterns"
+    ]
+  },
+  "smoke_test_steps": [
+    {
+      "instruction": "With an in-flight (unfinished) row and an older finished row for the same feeder/et_date, invoke readProducingFeederCounts directly or via the fixed-window path",
+      "step_number": 1,
+      "expected_outcome": "The composed body uses the finished row's counts, never the in-flight placeholder"
+    },
+    {
+      "instruction": "Invoke the new on-demand path outside any fixed ET window with all guards valid",
+      "step_number": 2,
+      "expected_outcome": "The send proceeds and writes an on-demand-marked ledger row with outcome='sent'"
+    },
+    {
+      "instruction": "Invoke the on-demand path at an ET minute inside 22:00-06:00",
+      "step_number": 3,
+      "expected_outcome": "The send refuses with a QUIET_HOURS-class refusal_code"
+    }
+  ],
+  "metadata": { "sd_key": "SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001" }
+}

@@ -172,6 +172,27 @@ describe('apply: two checkpoint-send tables, service-role-only, verify block run
     )).rejects.toMatchObject({ code: '23514' });
   });
 
+  // SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001 TS-20/TR-4: proves the specific concern that motivated
+  // the on-demand path's per-minute window_slot stamp -- lib/michael/feeder.mjs's windowIdFor()
+  // returns null off-window, and if checkpoint-send.mjs's on-demand branch ever let that null reach
+  // an insert (instead of substituting a stamped value), it would hit this constraint in
+  // production. The in-memory unit-tier fake (scripts/michael/checkpoint-send.test.js) does NOT
+  // enforce NOT NULL, so this is the ONLY tier that can prove the production failure mode is real
+  // and that a well-formed on-demand slot value (e.g. 'on-demand:08:12', proven schema-safe since
+  // window_slot carries no format-specific CHECK) does not hit it.
+  it("TS-20: window_slot NOT NULL rejects a null insert, and accepts an on-demand-shaped ('on-demand:HH:MM') value with the same partial-unique dedup as a fixed-window slot", async () => {
+    await expect(client.query(
+      "INSERT INTO public.michael_checkpoint_send_ledger (et_date, window_slot, outcome, refusal_code) VALUES ('2026-09-14', NULL, 'refused', 'QUIET_HOURS')",
+    )).rejects.toMatchObject({ code: '23502' }); // not_null_violation
+    await client.query(
+      "INSERT INTO public.michael_checkpoint_send_ledger (et_date, window_slot, outcome, body_sha256, body_len) VALUES ('2026-09-14', 'on-demand:08:12', 'sent', 'abc123', 42)",
+    );
+    await expect(client.query(
+      "INSERT INTO public.michael_checkpoint_send_ledger (et_date, window_slot, outcome, body_sha256, body_len) VALUES ('2026-09-14', 'on-demand:08:12', 'sent', 'def456', 43)",
+    )).rejects.toMatchObject({ code: '23505' }); // same dedup mechanism as a fixed-window slot
+    await client.query("DELETE FROM public.michael_checkpoint_send_ledger WHERE et_date = '2026-09-14'");
+  });
+
   it('SEC-M5: the verify block goes RED when a table is exposed (it can fail, not only pass)', async () => {
     await client.query('GRANT SELECT ON public.michael_checkpoint_send_enabled TO anon');
     await expect(client.query(VERIFY_BLOCK_SQL)).rejects.toMatchObject({ message: expect.stringMatching(/anon can SELECT|non-service table grant/) });
