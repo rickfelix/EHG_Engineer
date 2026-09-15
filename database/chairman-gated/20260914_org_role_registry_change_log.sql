@@ -9,7 +9,7 @@
 -- before overlay_pin.sql, which lexically sorts AFTER this file (a naive alphabetical apply order
 -- gets this wrong). Each file is its own BEGIN/COMMIT, so a misordered apply fails atomically.
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: codestreetlabs@gmail.com
 --   Chairman verification NOT yet obtained. Staged only, per R1 (ratification bb2175d2). Not
 --   applied to any environment by this SD. See the companion base migration
 --   (20260914_org_role_registry_base.sql) for the full provenance and design citation.

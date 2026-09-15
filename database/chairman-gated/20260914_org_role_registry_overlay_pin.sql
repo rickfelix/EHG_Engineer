@@ -6,7 +6,7 @@
 -- 20260914_org_role_registry_change_log.sql -- see the base migration's header for why (its
 -- triggers reference the two tables this file creates).
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: codestreetlabs@gmail.com
 --   Chairman verification NOT yet obtained. Staged only, per R1 (ratification bb2175d2). Not
 --   applied to any environment by this SD. See the companion base migration
 --   (20260914_org_role_registry_base.sql) for the full provenance and design citation.

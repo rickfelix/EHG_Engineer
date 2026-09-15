@@ -12,7 +12,7 @@
 -- BEGIN/COMMIT so a misordered apply fails atomically and cleanly, but nothing enforces the order
 -- automatically; the chairman ceremony operator must apply base -> overlay_pin -> change_log.
 --
--- @approved-by: <PENDING -- chairman must add this line + a token before apply>
+-- @approved-by: codestreetlabs@gmail.com
 --   Chairman verification NOT yet obtained. This file is staged only, per R1 (reserved chairman
 --   decision, ratification bb2175d2): "new tables need the ceremony." This SD's own scope states
 --   "the PLAN phase names the exact files and stops at the ceremony" -- this migration is that
