@@ -3,7 +3,7 @@
  * Round-trips STANDARD_VENTURE_TEMPLATE through templateToBaseRows() + resolveVentureRoles() and
  * asserts the reconstructed shape is identical to the source template for all 28 roles --
  * comparing KEY PRESENCE, not just value (VALIDATION sub-agent finding, LEAD phase: several
- * fields are legitimately absent on some roles, e.g. crews never carry stage_ownership).
+ * fields are legitimately absent on some roles, e.g. crews never carry post_stage_mandate).
  */
 import { describe, it, expect } from 'vitest';
 import { STANDARD_VENTURE_TEMPLATE } from '../../../lib/agents/venture-ceo-factory.js';
@@ -51,11 +51,15 @@ describe('role-registry-resolver: equivalence proof (E1b)', () => {
 
   it('TS-1 negative control: a deliberately-dropped field is caught, proving the comparison is not a false-green shallow check', () => {
     const baseRows = templateToBaseRows(STANDARD_VENTURE_TEMPLATE);
-    // Seed a defect: drop stage_ownership from one VP's structure layer, simulating a lossy
-    // migration.
+    // Seed a defect: drop capabilities from one VP's function layer, simulating a lossy
+    // migration. (Previously seeded against stage_ownership -- removed by
+    // SD-LEO-INFRA-REMOVE-EVERY-BINDING-001, so that seed would now be a silent no-op since
+    // templateToBaseRows() never populates a key absent on the source role in the first place.
+    // capabilities is a field the resolver still handles on every executive, so the seeded
+    // defect remains genuinely observable.)
     const vpRow = baseRows.find((r) => r.role_key === 'VP_STRATEGY');
     expect(vpRow, 'fixture assumption: VP_STRATEGY exists in the template').toBeDefined();
-    delete vpRow.structure.stage_ownership;
+    delete vpRow.function.capabilities;
 
     const pins = buildPinsForAllRoles(baseRows);
     const resolved = resolveVentureRoles(baseRows, [], pins, FIXTURE_VENTURE_ID, STANDARD_VENTURE_TEMPLATE.budget_distribution);
@@ -183,7 +187,7 @@ describe('role-registry-resolver: equivalence proof (E1b)', () => {
       status: 'active',
       structure: null,
       function: null,
-      norms: { delegation_authority: { can_advance_stage: false } }, // must be ignored
+      norms: { delegation_authority: { can_allocate_budget: false } }, // must be ignored
     }];
     const pins = baseRows.map((row) => ({
       role_key: row.role_key,

@@ -526,6 +526,29 @@
   }
  },
  {
+  "name": "venture-role-stage-binding-lint",
+  "script": "scripts/lint/venture-role-stage-binding-lint.mjs",
+  "rootFlag": null,
+  "cwdScope": true,
+  "extraArgs": [
+   "--all"
+  ],
+  "note": "SD-LEO-INFRA-REMOVE-EVERY-BINDING-001 (FR-8). Per chairman ruling deb0818c: no venture AI agent is bound to a pre-go-live workflow stage. Flags a reintroduced stage_ownership/can_advance_stage/requires_advisory_approval object key anywhere outside scripts/lint/venture-role-stage-binding-lint-allowlist.json, or a workflow-stage token (e.g. \"S12\") inside a post_stage_mandate/honest_idle/duty_cycle string -- cloned from gate-stage-hardcoded-literal-lint.mjs's proven template.",
+  "fixtures": [
+   {
+    "path": "lib/seeded-venture-role-stage-binding-defect.js",
+    "content": "// SEEDED DEFECT: reintroduces a stage-ownership binding this SD deleted.\nexport const VP_PRODUCT = {\n  agent_role: 'vp_product',\n  stage_ownership: [10, 11, 12],\n};\n"
+   }
+  ],
+  "detectTokens": [
+   "stage_ownership"
+  ],
+  "observability_proof": {
+   "input": "Every *.js/*.cjs/*.mjs file TEXT under scripts/, lib/, and tests/ (enumerated via fs.readdirSync directory walk in --all mode, or git diff/ls-files in the default --diff mode), read via readFileSync -- matches a line where stage_ownership, can_advance_stage, or requires_advisory_approval is used as an object-literal key, or where post_stage_mandate/honest_idle/duty_cycle is assigned a quoted string containing a bare \\bS\\d+\\b token, excluding comment lines and lines carrying the venture-role-stage-binding-lint-disable-line pragma, filtered against scripts/lint/venture-role-stage-binding-lint-allowlist.json by repo-relative path. Consumes no DB columns and no environment variables.",
+   "seen": "EXEC run (2026-09-15) of 'node scripts/lint/venture-role-stage-binding-lint.mjs --all' against the live repo reported 0 violations across 4519 files, immediately after this SD's FR-1/FR-2/FR-6 changes removed the last live stage_ownership/can_advance_stage/requires_advisory_approval keys from lib/agents/venture-ceo-factory.js and lib/org/role-registry-resolver.mjs. The same command run against tmp-dir fixtures carrying each of the two check shapes (an object-key reintroduction, and a stage-token inside post_stage_mandate/honest_idle) reported exactly that violation by file:line:identifier and exited 1 (tests/unit/lint/venture-role-stage-binding-lint.test.js, TS-5/TS-6 RED-first proofs), and reported 0 violations again once each fixture was rewritten without the binding."
+  }
+ },
+ {
   "name": "capture-channel-ceremony-scope-lock-lint",
   "script": "scripts/lint/capture-channel-ceremony-scope-lock-lint.mjs",
   "seedTest": "tests/unit/lint/capture-channel-ceremony-scope-lock-lint.test.js",

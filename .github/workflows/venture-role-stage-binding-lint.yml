@@ -1,0 +1,68 @@
+# Venture-role stage-binding reintroduction lint.
+# SD-LEO-INFRA-REMOVE-EVERY-BINDING-001 (FR-8).
+#
+# Per chairman ruling deb0818c (2026-09-14): no venture AI agent is bound to a pre-go-live
+# workflow stage. This SD's FR-1/FR-2/FR-6 deleted stage_ownership, can_advance_stage, and
+# requires_advisory_approval from lib/agents/venture-ceo-factory.js and
+# lib/org/role-registry-resolver.mjs. This gate blocks a PR that reintroduces any of the three as
+# an object key on a venture role definition, or a workflow-stage token (e.g. "S12") inside the
+# post_stage_mandate/honest_idle/duty_cycle prose fields that used to encode one in text.
+#
+# GENUINELY BLOCKING (no continue-on-error) -- same posture as
+# session-coordination-insert-classguard-lint.yml and count-truncation-diff-lint.yml, whose
+# fetch-depth: 0 precedent is repeated below for the identical reason (QF-20260905-934: a
+# shallow clone carries no origin/main ref, so the diff-scoped mode silently degrades to
+# advisory --all without it).
+name: Venture Role Stage-Binding Lint
+
+on:
+  pull_request:
+    paths:
+      # VALIDATION finding (VERIFY phase): the lint's own RUNTIME_DIRS includes 'tests', so the
+      # trigger below must too -- a PR touching only tests/** with a reintroduced binding
+      # previously never fired this workflow at all.
+      #
+      # Adversarial /ship review finding (deep-tier): the lint's own CODE_RE matches
+      # .ts/.tsx/.jsx too (scripts/lint/venture-role-stage-binding-lint.mjs:54), but this list
+      # only covered .js/.mjs/.cjs -- 102 .ts/.tsx/.jsx files already exist under
+      # scripts/**, lib/**, tests/** (verified via `git ls-files`), so a reintroduction inside
+      # any of them never fired this workflow at all. Extensions below now match CODE_RE exactly.
+      - 'scripts/**/*.js'
+      - 'scripts/**/*.mjs'
+      - 'scripts/**/*.cjs'
+      - 'scripts/**/*.ts'
+      - 'scripts/**/*.tsx'
+      - 'scripts/**/*.jsx'
+      - 'lib/**/*.js'
+      - 'lib/**/*.mjs'
+      - 'lib/**/*.cjs'
+      - 'lib/**/*.ts'
+      - 'lib/**/*.tsx'
+      - 'lib/**/*.jsx'
+      - 'tests/**/*.js'
+      - 'tests/**/*.mjs'
+      - 'tests/**/*.cjs'
+      - 'tests/**/*.ts'
+      - 'tests/**/*.tsx'
+      - 'tests/**/*.jsx'
+      - 'scripts/lint/venture-role-stage-binding-lint.mjs'
+      - 'scripts/lint/venture-role-stage-binding-lint-allowlist.json'
+      - '.github/workflows/venture-role-stage-binding-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  venture-role-stage-binding-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Detect a reintroduced venture-role stage binding
+        run: node scripts/lint/venture-role-stage-binding-lint.mjs

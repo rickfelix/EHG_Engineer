@@ -21,7 +21,7 @@ describe('STANDARD_VENTURE_TEMPLATE shape', () => {
     expect(STANDARD_VENTURE_TEMPLATE.executives).toHaveLength(6);
   });
 
-  it('includes VP_MARKETING with the expected capabilities/tools/stage_ownership', () => {
+  it('includes VP_MARKETING with the expected capabilities/tools, never bound to a pre-go-live stage', () => {
     const vpMarketing = STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_MARKETING');
     expect(vpMarketing).toBeDefined();
     expect(vpMarketing.capabilities).toEqual(
@@ -31,8 +31,9 @@ describe('STANDARD_VENTURE_TEMPLATE shape', () => {
     expect(vpMarketing.tools).toEqual(
       expect.arrayContaining(['web_search', 'document_writer', 'sentiment_analyzer', 'email_sender', 'image_generator'])
     );
-    // Continuous mandate: NOT bound to any BUILD-pipeline stage, unlike VP_GROWTH.
-    expect(vpMarketing.stage_ownership).toEqual([]);
+    // SD-LEO-INFRA-REMOVE-EVERY-BINDING-001: no venture AI agent is bound to a pre-go-live
+    // workflow stage — stage_ownership does not exist as a key on any role.
+    expect(vpMarketing).not.toHaveProperty('stage_ownership');
   });
 
   it('is unconditionally present — no flag/threshold field gates its inclusion', () => {
@@ -54,25 +55,36 @@ describe('STANDARD_VENTURE_TEMPLATE shape', () => {
     expect(new Set(capSets).size).toBe(marketingCrews.length);
   });
 
-  it('leaves the other 4 VPs byte-identical to their pre-change shape (zero regression)', () => {
+  it('leaves the other 4 VPs\' capabilities/token_budget byte-identical to their pre-change shape (zero regression), and confirms none is bound to a pre-go-live stage', () => {
     const expected = {
-      VP_STRATEGY: { capabilities: ['market_research', 'competitive_analysis', 'financial_modeling', 'tam_calculation'], stage_ownership: [1, 2, 3, 4, 5, 6, 7, 8, 9], token_budget: 30000 },
-      VP_PRODUCT: { capabilities: ['product_definition', 'user_research', 'narrative_development', 'naming'], stage_ownership: [10, 11, 12], token_budget: 25000 },
-      VP_TECH: { capabilities: ['tech_architecture', 'data_modeling', 'code_generation', 'qa_testing'], stage_ownership: [13, 14, 15, 16, 17, 18, 19, 20, 21], token_budget: 40000 },
-      VP_GROWTH: { capabilities: ['launch_planning', 'analytics', 'optimization', 'user_acquisition'], stage_ownership: [22, 23, 24, 25, 26], token_budget: 25000 }
+      VP_STRATEGY: { capabilities: ['market_research', 'competitive_analysis', 'financial_modeling', 'tam_calculation'], token_budget: 30000 },
+      VP_PRODUCT: { capabilities: ['product_definition', 'user_research', 'narrative_development', 'naming'], token_budget: 25000 },
+      VP_TECH: { capabilities: ['tech_architecture', 'data_modeling', 'code_generation', 'qa_testing'], token_budget: 40000 },
+      VP_GROWTH: { capabilities: ['launch_planning', 'analytics', 'optimization', 'user_acquisition'], token_budget: 25000 }
     };
 
     for (const [role, exp] of Object.entries(expected)) {
       const vp = STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === role);
       expect(vp).toBeDefined();
       expect(vp.capabilities).toEqual(exp.capabilities);
-      expect(vp.stage_ownership).toEqual(exp.stage_ownership);
       expect(vp.token_budget).toBe(exp.token_budget);
+      // SD-LEO-INFRA-REMOVE-EVERY-BINDING-001: no venture AI agent is bound to a pre-go-live
+      // workflow stage — stage_ownership does not exist as a key on any role.
+      expect(vp).not.toHaveProperty('stage_ownership');
     }
   });
 
   it('description reflects the 28-agent per-venture total (1 CEO + 6 VP + 21 crew)', () => {
     expect(STANDARD_VENTURE_TEMPLATE.description).toContain('28-agent');
+  });
+
+  it('SD-LEO-INFRA-REMOVE-EVERY-BINDING-001: CEO delegation_authority no longer carries can_advance_stage or requires_advisory_approval, and its other fields are unchanged', () => {
+    const { delegation_authority } = STANDARD_VENTURE_TEMPLATE.ceo;
+    expect(delegation_authority).not.toHaveProperty('can_advance_stage');
+    expect(delegation_authority).not.toHaveProperty('requires_advisory_approval');
+    expect(delegation_authority.can_create_agents).toBe(false);
+    expect(delegation_authority.can_allocate_budget).toBe(true);
+    expect(delegation_authority.max_budget_per_vp_usd).toBe(5000);
   });
 });
 
@@ -82,7 +94,9 @@ describe('SD-FDBK-ENH-ORG-TEMPLATE-DELTA-001 — org-template delta', () => {
   it('FR-1: VP_CUSTOMER is a standard per-venture executive with a continuous mandate + duty cycle + honest idle', () => {
     const vp = STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_CUSTOMER');
     expect(vp).toBeDefined();
-    expect(vp.stage_ownership).toEqual([]); // continuous, like VP_MARKETING
+    // SD-LEO-INFRA-REMOVE-EVERY-BINDING-001: no venture AI agent is bound to a pre-go-live
+    // workflow stage — stage_ownership does not exist as a key on any role.
+    expect(vp).not.toHaveProperty('stage_ownership');
     expect(vp.duty_cycle).toBeTruthy();
     expect(vp.honest_idle).toBeTruthy();
     expect(vp).not.toHaveProperty('lazy'); // unconditional, no gating flag
@@ -108,10 +122,10 @@ describe('SD-FDBK-ENH-ORG-TEMPLATE-DELTA-001 — org-template delta', () => {
       const vp = STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === role);
       expect(vp.post_stage_mandate, `${role} must carry a post_stage_mandate`).toBeTruthy();
       expect(vp.honest_idle, `${role} mandate extension needs an honest-idle`).toBeTruthy();
+      // SD-LEO-INFRA-REMOVE-EVERY-BINDING-001: post_stage_mandate must not embed a stage-number
+      // anchor (e.g. "S12", "S21") -- the trigger condition is re-expressed by launch/live state.
+      expect(vp.post_stage_mandate).not.toMatch(/\bS\d+\b/);
     }
-    // stage_ownership arrays are UNCHANGED (additive field only — no routing change).
-    expect(STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_TECH').stage_ownership).toEqual([13, 14, 15, 16, 17, 18, 19, 20, 21]);
-    expect(STANDARD_VENTURE_TEMPLATE.executives.find(e => e.agent_role === 'VP_GROWTH').stage_ownership).toEqual([22, 23, 24, 25, 26]);
   });
 
   it('FR-4: EHG_SHARED_OPERATORS exports the 5 named commodity operators (incl. RESEARCH_INTELLIGENCE_OPERATOR), instantiate-once', () => {

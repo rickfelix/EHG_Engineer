@@ -1,0 +1,4 @@
+{
+  "_comment": "SD-LEO-INFRA-REMOVE-EVERY-BINDING-001 (FR-8). Files with a pre-existing, individually-triaged use of a banned key (stage_ownership / can_advance_stage / requires_advisory_approval) or a stage-number token inside post_stage_mandate/honest_idle/duty_cycle, with a genuinely different meaning from a venture-role stage binding. Empty as of this SD -- add an entry only after individual triage, with a written reason here.",
+  "files": []
+}
