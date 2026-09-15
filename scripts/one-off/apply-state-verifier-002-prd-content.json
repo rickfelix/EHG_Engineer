@@ -1,0 +1,261 @@
+{
+  "executive_summary": "The apply-state verifier's case-folding/implicit-cast/quote-scoping fix (SD-LEO-INFRA-APPLY-STATE-VERIFIER-001, PR #8973 + 2 adversarial rounds) has nothing stopping it from regressing. Freeze the sole confirmed false positive plus the real known-applied population that actually exercises the normalizer (150 function/trigger-declaring files, corrected from the SD's miscited ~124) as a DB-free CI regression corpus.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "A one-time (not CI-invoked) generator script that resolves the exact 150 function/trigger-declaring known-applied migration files (via lib/migration-audit-reader.js's listApplied({success:true,limit:1000}) + normalizeMigrationPath(), fs.existsSync, and a CREATE FUNCTION/CREATE TRIGGER regex -- the identical method LEAD Explore/VALIDATION independently verified twice, 393/388/366/150), extracts each file's own declaration text via scripts/verify-migration-apply-state.mjs's exported extractFunctionBodies()/extractTriggerDefs(), queries the live DB for the corresponding prosrc / pg_get_triggerdef(oid,true) text (the same queries resolveLive() already issues), and writes ONE frozen JSON fixture file with an entry per object: {id, class, name, source_migration_path, file_text, live_text, captured_at}. The entry for trg_sd_mutation_audit (database/chairman-gated/20260912_sd_mutation_audit_actor_threading.sql) additionally carries confirmed_false_positive:true and a note citing SD-LEO-INFRA-AUDIT-ACTOR-THREADING-001 and SD-LEO-INFRA-APPLY-STATE-VERIFIER-001.",
+      "description": "This is the corpus's only live-DB touchpoint. Running it once (or on demand, when a real schema change legitimately moves a fixture) produces a fixture that then needs no live database ever again -- matching the SD scope's explicit 'CI needs no live database' requirement.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: The generated fixture's entry count is internally consistent with what the generator itself measures on the run that produced it (logged in the fixture's own provenance) -- NOT hard-coded to LEAD phase's historical count of 150, since schema_migrations_applied grows continuously in this active fleet and the true count at EXEC-generation time may differ; EXEC's PR evidence reports the actual count achieved.",
+        "AC-2: Exactly one entry (trg_sd_mutation_audit) carries confirmed_false_positive:true.",
+        "AC-3: Each entry's file_text is extracted via the existing extractFunctionBodies()/extractTriggerDefs() exports, never re-implemented ad hoc.",
+        "AC-4: Each entry's live_text is captured via the existing resolveLive() export (or an identical query shape, including its DISTINCT ON p.oid / t.oid tiebreak) -- never a hand-rolled SQL query that could silently drift from the query shape the real verifier issues in production, which would invalidate the corpus's fidelity to what it claims to regression-guard."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "A Vitest suite that loads the frozen fixture with zero database connection and, for every entry, replays the SAME comparison classifyFiles() performs internally: function entries via normalizeSqlBody(file_text) === normalizeSqlBody(live_text); trigger entries via normalizeTriggerWhenClause(extractTriggerWhenClause(file_text) ?? '') === normalizeTriggerWhenClause(extractTriggerWhenClause(live_text) ?? ''). Every entry must assert equal (the verifier's real-world APPLIED verdict for a currently-correctly-classified file). A dedicated, separately-labeled test asserts this for the confirmed_false_positive entry specifically, referencing its historical BODY_MISMATCH-to-APPLIED flip.",
+      "description": "This is the actual regression guard: if a future change to normalizeSqlBody()/normalizeTriggerWhenClause() reintroduces case-sensitivity, cast-sensitivity, or breaks quote-scoping (either adversarial-round fix), at least one of the 150 real fixtures will flip from equal to not-equal and fail CI immediately.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: All 150 fixture entries pass (comparison reads equal) against the current, correct normalizer implementation.",
+        "AC-2: The suite imports normalizeSqlBody/normalizeTriggerWhenClause/extractTriggerWhenClause directly from scripts/verify-migration-apply-state.mjs -- no duplicated comparison logic.",
+        "AC-3: The suite runs to completion (all tests execute, none skipped/pending) with DATABASE_URL and SUPABASE_POOLER_URL both unset."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "TWO seeded-mutation tests, not one: clone ONE function-class fixture entry and ONE trigger-class fixture entry, deliberately alter each clone's live_text (e.g. change a compared column/token), and assert the SAME comparison now reads NOT equal for BOTH -- proving the suite can actually fail on EITHER comparison path, not merely on whichever class the single mutated entry happened to be.",
+      "description": "A single seeded mutation only proves non-vacuousness for whichever object class (function or trigger) it happens to mutate -- it says nothing about whether the OTHER class's assertions would also correctly fail under a real divergence (the same single-candidate discrimination gap this session has repeatedly named: a fixture/test with only one candidate proves filtering/presence, never a comparison check across the full space it claims to cover). Directly required by this session's established mutation-testing discipline and by the SD's own exit predicate.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: Both mutation tests operate on in-memory clones of fixture entries, never mutating the frozen fixture file on disk.",
+        "AC-2: The mutated function-class entry's comparison (normalizeSqlBody) reads not-equal.",
+        "AC-3: The mutated trigger-class entry's comparison (normalizeTriggerWhenClause+extractTriggerWhenClause) reads not-equal."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "A README.md in the corpus fixture directory documenting: what the corpus is and why (RC2 normalizer-drift regression guard), how the generator script works and how to re-run it, and step-by-step instructions for hand-adding a new confirmed false positive (capture the file's own declaration text, capture the live pg_get_triggerdef()/prosrc text at the time of discovery, add an entry with confirmed_false_positive:true and a note citing its source SD/PR).",
+      "description": "Closes the SD scope's explicit third deliverable and gives the NEXT confirmed false positive (there will be one eventually) a durable, discoverable home instead of living only in a commit message.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: README.md exists in the same directory as the fixture file.",
+        "AC-2: README.md's hand-add instructions are followable without reading the generator script's source (self-contained)."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "The generator script logs (never throws) each of the up-to-22 known-applied ledger paths that do not resolve to an existing file, printing each path individually -- an unresolvable path is a skip, not a fatal error for the whole generation run.",
+      "description": "LEAD-phase VALIDATION flagged that only a COUNT (22) was measured, not an itemized list -- itemizing at generation time gives a future reader the specific vanished paths without re-deriving the measurement.",
+      "priority": "LOW",
+      "acceptance_criteria": [
+        "AC-1: A generation run with at least one unresolvable ledger path completes successfully (writes the fixture for all resolvable entries) and prints each unresolved path by name."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "Fixture stored as a single JSON data file at tests/fixtures/apply-state-verifier-corpus/corpus.json. Generator script lives under scripts/one-off/ (or scripts/db/), with a header comment explicitly stating it is NOT invoked by CI and is a manual/on-demand regeneration tool only.",
+      "rationale": "Keeps the DB-touching code physically and structurally separate from the CI-run test suite, so a reviewer or future maintainer cannot accidentally wire the generator into a CI workflow."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "The new corpus test file imports normalizeSqlBody, normalizeTriggerWhenClause, and extractTriggerWhenClause directly from scripts/verify-migration-apply-state.mjs -- never a re-implementation or copy of this comparison logic.",
+      "rationale": "A duplicated comparison function would drift from the real verifier over time, defeating the corpus's entire purpose (pinning the REAL normalizer's behavior, not a stand-in)."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "The corpus test file has no import of lib/supabase-connection.js, @supabase/supabase-js's createClient, or any other live-DB-connecting module.",
+      "rationale": "Structurally enforces the SD scope's explicit 'CI needs no live database' requirement -- a grep for these imports in the test file should return zero matches."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "The generator script's live-text capture reuses scripts/verify-migration-apply-state.mjs's exported resolveLive() (or issues a query byte-identical in shape, including its DISTINCT ON p.oid / t.oid tiebreak) -- never a bespoke SQL query written independently for the generator.",
+      "rationale": "PLAN-phase TESTING finding: a hand-rolled query that differs even subtly from resolveLive()'s real shape (e.g. missing the overload/same-named-trigger tiebreak) would let the generator capture text that the REAL verifier would never actually compare in production -- the corpus would then assert a comparison result that does not correspond to any real classifyFiles() run, silently invalidating the whole regression guard while still reporting green."
+    }
+  ],
+  "system_architecture": {
+    "overview": "A one-time live-DB generator produces a frozen JSON fixture; a DB-free Vitest suite replays the verifier's own exported comparison functions over that fixture on every CI run. No change to scripts/verify-migration-apply-state.mjs itself -- purely additive regression coverage.",
+    "components": [
+      {
+        "name": "Corpus generator script (new, scripts/one-off/)",
+        "responsibility": "One-time/on-demand live-DB capture of the 150 function/trigger-declaring known-applied migrations' file text and live text, writing the frozen fixture with provenance.",
+        "technology": "Node.js script reusing scripts/verify-migration-apply-state.mjs's exported extraction functions + lib/migration-audit-reader.js's listApplied()"
+      },
+      {
+        "name": "Frozen corpus fixture (new, tests/fixtures/apply-state-verifier-corpus/corpus.json)",
+        "responsibility": "Durable, DB-free data source for the CI regression suite.",
+        "technology": "Static JSON"
+      },
+      {
+        "name": "Corpus regression test suite (new, tests/)",
+        "responsibility": "Replays classifyFiles()'s real comparison logic over every frozen fixture entry; includes the seeded-mutation non-vacuity proof.",
+        "technology": "Vitest, no DB dependency"
+      },
+      {
+        "name": "Corpus README.md (new)",
+        "responsibility": "Documents the corpus's purpose, regeneration procedure, and how to hand-add a new confirmed false positive.",
+        "technology": "Markdown"
+      }
+    ],
+    "data_flow": "Generator (run manually, once per regeneration) -> live DB query for prosrc/pg_get_triggerdef() text -> frozen corpus.json. CI test run -> loads corpus.json (no DB) -> for each entry, normalizeSqlBody()/normalizeTriggerWhenClause() comparison -> assert equal (or not-equal, for the seeded mutation) -> pass/fail.",
+    "integration_points": [
+      "scripts/verify-migration-apply-state.mjs (read-only: imports exported pure functions, never modifies)",
+      "lib/migration-audit-reader.js (read-only: listApplied()/normalizeMigrationPath(), used only by the generator)",
+      "schema_migrations_applied table (read-only, generator-only, never touched by the CI-run test suite)"
+    ]
+  },
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "The confirmed false positive (trg_sd_mutation_audit) classifies as a match, not a divergence",
+      "test_type": "unit",
+      "given": "The frozen corpus fixture's confirmed_false_positive:true entry",
+      "when": "normalizeTriggerWhenClause(extractTriggerWhenClause(file_text)) is compared to normalizeTriggerWhenClause(extractTriggerWhenClause(live_text))",
+      "then": "The two are equal -- the historically-misclassified specimen stays correctly classified"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Every known-applied function/trigger fixture classifies as a match",
+      "test_type": "unit",
+      "given": "All 150 frozen corpus fixture entries",
+      "when": "Each entry's file_text vs live_text is compared via the appropriate normalizer (function: normalizeSqlBody; trigger: normalizeTriggerWhenClause+extractTriggerWhenClause)",
+      "then": "Every entry compares equal"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "A seeded mutation is caught on BOTH comparison paths (non-vacuity proof, function and trigger)",
+      "test_type": "unit",
+      "given": "An in-memory clone of one function-class fixture entry AND one trigger-class fixture entry, each with live_text deliberately altered",
+      "when": "The same comparison runs against each mutated clone",
+      "then": "Both comparisons read not-equal -- the suite is proven capable of failing on either object class, not just whichever one a single mutation happened to touch"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "The corpus suite runs with no live database connection",
+      "test_type": "integration",
+      "given": "DATABASE_URL and SUPABASE_POOLER_URL both unset in the test environment",
+      "when": "The corpus test file runs",
+      "then": "All tests execute and pass -- zero DB-connection errors, zero skipped tests"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "The generator itemizes unresolvable ledger paths without failing the run",
+      "test_type": "unit",
+      "given": "A ledger response containing at least one migration_path that does not resolve to an existing file",
+      "when": "The generator script runs",
+      "then": "It completes successfully, writes the fixture for all resolvable entries, and logs each unresolved path by name"
+    }
+  ],
+  "acceptance_criteria": [
+    "The frozen corpus contains the sole confirmed false positive plus all 150 function/trigger-declaring known-applied files (corrected from the SD's miscited ~124), each requiring no live database at test time.",
+    "CI fails if any known-applied fixture flips away from a matching comparison, proven by TWO seeded-mutation tests (one function-class, one trigger-class) that each deliberately trigger exactly that failure.",
+    "The corpus test suite runs to completion with DATABASE_URL and SUPABASE_POOLER_URL both unset.",
+    "A README.md in the corpus directory documents how to add a new confirmed false positive.",
+    "This SD's diff adds new files only (generator, fixture, test suite, README) -- scripts/verify-migration-apply-state.mjs itself is untouched."
+  ],
+  "risks": [
+    {
+      "risk": "The SD scope text's '~124' figure for the known-applied set is a miscitation of an unrelated fleet-wide census -- building the corpus from a literal reading of that figure would omit real fixtures or include the wrong population.",
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "mitigation": "LEAD Explore and VALIDATION both independently measured and confirmed the real population (393/388/366/150) via two separate live re-runs producing an exact match -- the PRD scopes the corpus to the verified 150, not the miscited figure.",
+      "rollback_plan": "If PLAN/EXEC discover the 150-file scoping recommendation itself needs revision (e.g. a function/trigger class the regex missed), regenerate the fixture with a corrected classifier -- the generator is designed to be re-run, not a one-shot artifact."
+    },
+    {
+      "risk": "A frozen fixture can go stale if a migration file is legitimately edited post-application (rare) -- the corpus would then assert a false match against text that no longer represents either side's true current state.",
+      "probability": "LOW",
+      "impact": "LOW",
+      "mitigation": "The corpus is explicitly a regression guard over a FROZEN pair, not a live-truth check -- the generator script exists precisely so the corpus can be regenerated when a real, deliberate change occurs; documented in the README (FR-4).",
+      "rollback_plan": "Re-run the generator script; the new corpus.json replaces the stale one in the same PR-review flow as any other fixture update."
+    },
+    {
+      "risk": "22 of 388 known-applied ledger paths do not resolve to an existing file -- if silently skipped without logging, a future reader could wrongly assume the corpus is complete when it is missing entries for vanished migrations.",
+      "probability": "LOW",
+      "impact": "LOW",
+      "mitigation": "FR-5 requires the generator to itemize (not just count) every unresolvable path in its own log output.",
+      "rollback_plan": "N/A -- investigating why those 22 paths vanished is an explicitly out-of-scope data-quality item, not something this SD needs to roll back."
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "description": "Build the corpus generator script: resolve the 150 function/trigger-declaring known-applied files, extract file-side text via existing exported functions, query the live DB once for the corresponding live text, write the frozen fixture with provenance (FR-1, FR-5).",
+        "deliverables": ["scripts/one-off/ generator script", "tests/fixtures/apply-state-verifier-corpus/corpus.json (generated)"]
+      },
+      {
+        "phase": "Phase 2",
+        "description": "Build the DB-free Vitest suite that replays the real comparison over every fixture entry, plus the dedicated confirmed-false-positive assertion and the seeded-mutation non-vacuity test (FR-2, FR-3, TS-1 through TS-4).",
+        "deliverables": ["New corpus test file, all tests passing with DATABASE_URL/SUPABASE_POOLER_URL unset"]
+      },
+      {
+        "phase": "Phase 3",
+        "description": "Write the corpus README.md documenting the corpus, the generator, and how to hand-add a new confirmed false positive (FR-4).",
+        "deliverables": ["tests/fixtures/apply-state-verifier-corpus/README.md"]
+      }
+    ],
+    "technical_decisions": [
+      "Scope the known-applied fixture set to the 150 function/trigger-declaring files (not the literal '~124' or a blanket 366) -- only function/trigger classification invokes the normalizer this SD guards; table/column/index-only migrations would contribute zero regression coverage for the actual RC2 concern.",
+      "Generator script physically separate from the CI-run test suite (different directories, generator has no test-runner wiring) so the DB-free CI requirement is structurally, not just behaviorally, enforced."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      {
+        "name": "CI pipeline (unit/regression tier)",
+        "interaction": "Runs the new corpus test suite on every PR/push, same as any other test file -- no new CI job or workflow needed.",
+        "frequency": "Every CI run"
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "scripts/verify-migration-apply-state.mjs's exported pure functions",
+        "type": "upstream",
+        "contract": "normalizeSqlBody, normalizeTriggerWhenClause, extractTriggerWhenClause, extractFunctionBodies, extractTriggerDefs are read-only imports -- this SD never modifies them.",
+        "failure_handling": "If a future change to these exports alters their signature, the corpus test suite fails loudly at import/type-check time, not silently."
+      },
+      {
+        "name": "schema_migrations_applied table (generator-only)",
+        "type": "upstream",
+        "contract": "Read-only, via lib/migration-audit-reader.js's listApplied() -- used only at fixture-generation time, never by the CI-run test suite.",
+        "failure_handling": "Generator script fails loud on a genuine DB connection error; treats an individual unresolvable file path as a logged skip (FR-5)."
+      }
+    ],
+    "data_contracts": [],
+    "runtime_config": {
+      "environment_variables": [],
+      "feature_flags": [],
+      "deployment_considerations": "No deployment beyond the code landing on main -- new test/fixture/doc files only, zero production code paths touched."
+    },
+    "observability_rollout": {
+      "monitoring": ["CI test-run pass/fail is the only observability surface -- a fixture flip shows as a normal CI test failure with the failing fixture's name in the output"],
+      "alerts": [],
+      "rollout_strategy": "Direct merge to main once tests pass -- purely additive test/fixture/doc content, no behavior change to any production code path.",
+      "rollback_trigger": "N/A -- a failing corpus test after a legitimate normalizer change is expected and resolved by regenerating the fixture, not by reverting this SD.",
+      "rollback_procedure": "git revert the merge commit if the corpus itself is found to be malformed."
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "scripts/verify-migration-apply-state.mjs (full exported-function list, classifyFiles()'s bodyMismatches branch at lines 1031-1043, resolveLive() at 815-905)",
+      "tests/verify-migration-apply-state.test.js (TS-1's confirmed-specimen fixture at lines 640-665, the 2 adversarial-round regression tests)",
+      "lib/migration-audit-reader.js (listApplied(), normalizeMigrationPath())",
+      "strategic_directives_v2 row for SD-LEO-INFRA-APPLY-STATE-VERIFIER-001 (full description, confirming the miscitation and the 2 unconfirmed SUSPECT rows)",
+      "git log/git show for the 3 SD-001 commits (original fix + 2 adversarial rounds)"
+    ],
+    "patterns_identified": [
+      "The verifier's normalizer (normalizeSqlBody/normalizeTriggerWhenClause) is invoked ONLY on function and trigger object classes -- table/column/index/constraint classification never touches it, so a regression corpus scoped to those classes is the only population that provides real coverage for this SD's concern.",
+      "The SD scope's '~124' figure traces to a different, unrelated measurement (Alpha-3's fleet-wide potential-false-positive census, cited in SD-001's own description) -- not the schema_migrations_applied success-row count, which LEAD independently re-measured twice at 393/388/366/150."
+    ],
+    "key_decisions": [
+      "Corrected the SD's miscited premise via direct, twice-independently-verified live measurement rather than building the corpus around the literal '~124' text.",
+      "Scoped the known-applied fixture set to the 150 function/trigger-declaring files, not the full 366 on-disk known-applied set -- the non-function/trigger files would add corpus maintenance weight while testing nothing this SD exists to guard.",
+      "Kept the confirmed-false-positive specimen (trg_sd_mutation_audit) as one entry within the unified 150-file corpus (it is itself one of the known-applied ledger rows) rather than a separate mechanism, with a dedicated tag and test assertion so its historical significance stays legible."
+    ],
+    "exploration_date": "2026-09-15"
+  }
+}
