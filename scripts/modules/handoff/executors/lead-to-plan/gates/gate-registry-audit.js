@@ -168,44 +168,66 @@ export function createGateRegistryAuditGate(supabase, opts = {}) {
         return { name: 'GATE_REGISTRY_AUDIT', passed: true, score: 100, maxScore: 100, findings: [], warnings: [] };
       }
 
-      const orchestrator = await orchestratorFactory();
-      const { manifestNames, auditIncompletePhases } = await auditPhases(orchestrator, sd.id);
-
-      let registryRows = [];
-      const registryFailures = [...auditIncompletePhases];
       try {
-        // Paginated (POSTGREST_MAX_ROWS=1000 per page) -- matching gate-policy-resolver.js's
-        // own fetch of this same table. Complete today (113 rows), but a plain unbounded
-        // .select() silently truncates past 1000, which would emit FALSE near-misses for
-        // gate_keys whose real sibling-DISABLED row just happened to fall off the page.
-        registryRows = await fetchAllPaginated(() =>
-          supabase.from('validation_gate_registry').select('gate_key, sd_type, applicability').order('gate_key')
-        );
-      } catch (err) {
-        // The registry read itself failing means near-miss findings can't be computed for ANY
-        // phase, regardless of whether that phase's own manifest fetch succeeded -- mark every
-        // not-already-incomplete phase incomplete rather than silently reporting zero findings.
-        const message = `registry query failed: ${err?.message || String(err)}`;
-        for (const phase of AUDITED_PHASES) {
-          if (!registryFailures.some((p) => p.phase === phase)) {
-            registryFailures.push({ phase, error: message });
+        const orchestrator = await orchestratorFactory();
+        const { manifestNames, auditIncompletePhases } = await auditPhases(orchestrator, sd.id);
+
+        let registryRows = [];
+        const registryFailures = [...auditIncompletePhases];
+        try {
+          // Paginated (POSTGREST_MAX_ROWS=1000 per page) -- matching gate-policy-resolver.js's
+          // own fetch of this same table. Complete today (113 rows), but a plain unbounded
+          // .select() silently truncates past 1000, which would emit FALSE near-misses for
+          // gate_keys whose real sibling-DISABLED row just happened to fall off the page.
+          registryRows = await fetchAllPaginated(() =>
+            supabase.from('validation_gate_registry').select('gate_key, sd_type, applicability').order('gate_key')
+          );
+        } catch (err) {
+          // The registry read itself failing means near-miss findings can't be computed for ANY
+          // phase, regardless of whether that phase's own manifest fetch succeeded -- mark every
+          // not-already-incomplete phase incomplete rather than silently reporting zero findings.
+          const message = `registry query failed: ${err?.message || String(err)}`;
+          for (const phase of AUDITED_PHASES) {
+            if (!registryFailures.some((p) => p.phase === phase)) {
+              registryFailures.push({ phase, error: message });
+            }
           }
         }
+
+        const findings = [
+          ...computeNearMissFindings(manifestNames, registryRows, sd.sd_type),
+          ...registryFailures.map((p) => ({ type: 'AUDIT_INCOMPLETE', phase: p.phase, error: p.error })),
+        ];
+
+        return {
+          name: 'GATE_REGISTRY_AUDIT',
+          passed: true, // Never blocks -- advisory only (FR-4).
+          score: scoreFindings(findings),
+          maxScore: 100,
+          findings,
+          warnings: findingsToWarnings(findings),
+        };
+      } catch (err) {
+        // SD-LEARN-FIX-ADDRESS-PAT-LES-015 (SECURITY, EXEC-phase review): the per-phase and
+        // per-query try/catches above cover every ANTICIPATED failure, but orchestratorFactory()
+        // itself (the dynamic import + HandoffOrchestrator construction) sat OUTSIDE any guard.
+        // If that throws, an uncaught rejection here does not stay contained to this gate --
+        // ValidationOrchestrator.js substitutes {passed:false, score:0} for the whole gate, and
+        // that 0 DOES enter the weighted-average aggregate at full weight (required:false only
+        // exempts a gate from BLOCKING on failure, not from scoring -- gate.weight is read
+        // unconditionally in the scoring sum). That is a strictly WORSE outcome than this gate's
+        // own worst deliberate case (score:85 for every phase being AUDIT_INCOMPLETE), directly
+        // contradicting FR-4's explicit intent. This outer catch is the fail-safe: whatever went
+        // wrong, still return the same honest-but-bounded floor the rest of this gate uses.
+        return {
+          name: 'GATE_REGISTRY_AUDIT',
+          passed: true,
+          score: 85,
+          maxScore: 100,
+          findings: [{ type: 'AUDIT_INCOMPLETE', phase: 'ALL', error: err?.message || String(err) }],
+          warnings: [`AUDIT_INCOMPLETE: registry audit could not run at all: ${err?.message || String(err)}.`],
+        };
       }
-
-      const findings = [
-        ...computeNearMissFindings(manifestNames, registryRows, sd.sd_type),
-        ...registryFailures.map((p) => ({ type: 'AUDIT_INCOMPLETE', phase: p.phase, error: p.error })),
-      ];
-
-      return {
-        name: 'GATE_REGISTRY_AUDIT',
-        passed: true, // Never blocks -- advisory only (FR-4).
-        score: scoreFindings(findings),
-        maxScore: 100,
-        findings,
-        warnings: findingsToWarnings(findings),
-      };
     },
   };
 }
