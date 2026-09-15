@@ -44,7 +44,10 @@ export async function runDirectCreation(args) {
     // explicit no-reason marker so the gap is COUNTED rather than silent. Deliberately separate
     // from --no-wave: that one writes metadata.wave_disposition, which the linkage gauge reads as
     // LINKED, so reusing it would inflate the coverage number this exception is measured beside.
-    '--roadmap-link-reason'
+    '--roadmap-link-reason',
+    // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 (FR-2): criticality verdict, warn-only unless
+    // SD_CRITICALITY_GATE_ENFORCE is on.
+    '--criticality', '--criticality-reason'
   ]);
   const unknownFlags = args.filter(a => a.startsWith('-') && !knownDirectFlags.has(a));
   if (unknownFlags.length > 0) {
@@ -70,6 +73,7 @@ export async function runDirectCreation(args) {
   const flagsWithValues = new Set([
     '--venture', '--vision-key', '--arch-key', '--target-repos',
     '--wave', '--no-wave', '--roadmap-link-reason',
+    '--criticality', '--criticality-reason',
   ]);
   const cleanedTitleParts = [];
   for (let i = 0; i < titleParts.length; i++) {
@@ -375,6 +379,12 @@ export async function runDirectCreation(args) {
   const directRoadmapLinkIdx = args.indexOf('--roadmap-link-reason');
   const directRoadmapLinkReason = directRoadmapLinkIdx !== -1 ? args[directRoadmapLinkIdx + 1] : null;
 
+  // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 (FR-2): criticality verdict, threaded to createSD().
+  const directCriticalityIdx = args.indexOf('--criticality');
+  const directCriticality = directCriticalityIdx !== -1 ? args[directCriticalityIdx + 1] : null;
+  const directCriticalityReasonIdx = args.indexOf('--criticality-reason');
+  const directCriticalityReason = directCriticalityReasonIdx !== -1 ? args[directCriticalityReasonIdx + 1] : null;
+
   const createRes = await createSD({
     sdKey,
     title,
@@ -382,6 +392,8 @@ export async function runDirectCreation(args) {
     type,
     wave_disposition: directWaveDisposition,
     roadmap_link_reason: directRoadmapLinkReason,
+    criticality: directCriticality,
+    criticalityReason: directCriticalityReason,
     rationale: enriched?.rationale || 'Created via /leo create',
     success_criteria: enriched?.success_criteria || null,
     key_changes: enriched?.key_changes || null,
