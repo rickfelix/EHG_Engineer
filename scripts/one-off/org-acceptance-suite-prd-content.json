@@ -1,0 +1,345 @@
+{
+  "executive_summary": "A CI-runnable, versioned acceptance suite for the AI organization, self-tested against all 14 MAST-taxonomy broken fixtures plus a clean mock-venture control, reporting pass rate, catch rate, and provenance.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "requirement": "Build lib/org/acceptance-suite/run-suite.mjs: a suite runner that accepts an 'organization' (base+overlay+pin resolved via resolveVentureRoles() from lib/org/role-registry-resolver.mjs) and a set of registered checks, and returns {suite_version, run_id, content_hash, pass_rate, catch_rate, findings[]}.",
+      "description": "content_hash is a sha256 of the (suite_version + sorted check ids + organization input) so a result cannot be replayed against a different organization and still claim the same hash (A4: 'the organization never grades itself; results carry suite version, run id and content hash'). run_id is a UUID generated per invocation. suite_version is a semver-like string bumped whenever a check is added/removed/changed.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: Invoking run-suite.mjs against any organization object returns an object with all 5 top-level keys (suite_version, run_id, content_hash, pass_rate, catch_rate) plus a findings array.",
+        "AC-2: Running the suite twice against the byte-identical organization input and suite_version produces the same content_hash both times (deterministic).",
+        "AC-3: Running the suite against two organizations that differ in exactly one field produces two different content_hash values."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "requirement": "Implement 14 MAST-seeded broken-organization fixtures under lib/org/acceptance-suite/fixtures/mast/ (one file per failure mode: fm-1-1.mjs through fm-3-3.mjs), each producing a deliberately-invalid role/task/handoff definition, and 14 corresponding checks (or a smaller number of checks each covering multiple related fixtures, documented explicitly) that the suite runs against every organization.",
+      "description": "Exact taxonomy (arxiv 2503.13657): FC1 System Design -- FM-1.1 disobey task spec, FM-1.2 disobey role spec, FM-1.3 step repetition, FM-1.4 loss of conversation history/context truncation, FM-1.5 unaware of termination conditions. FC2 Inter-Agent Misalignment -- FM-2.1 conversation reset, FM-2.2 fail to ask for clarification, FM-2.3 task derailment, FM-2.4 information withholding, FM-2.5 ignored other agent's input, FM-2.6 reasoning-action mismatch. FC3 Task Verification -- FM-3.1 premature termination, FM-3.2 no/incomplete verification, FM-3.3 incorrect verification. Each fixture is expressed at the DEFINITIONAL level (a role/task/handoff record with a structural defect mapping to that failure mode), since the runtime substrate (memory, tracing, delegation) does not yet exist. A fixture whose failure mode is fundamentally a live-runtime behavior (FM-1.4 context truncation, FM-2.1 conversation reset, FM-1.3 step repetition) is implemented as the closest definitional proxy available today (e.g. a role/task definition missing the field that WOULD prevent that runtime failure) and explicitly labeled 'proxy, pending P3/P4/P6' in its fixture file's docblock -- never silently presented as a full behavioral reproduction. ORGANIZATION-OBJECT SHAPE (PLAN-TO-EXEC review closure): resolveVentureRoles() (lib/org/role-registry-resolver.mjs) returns {ceo, executives[], crews[], budget_distribution} where EACH role entry is a FLAT merged object, NOT a nested {structure, function, norms} object -- mergeRoleLayers() flattens all three layers onto one object before returning. The only fields any real role entry can carry are the 11 named in ROLE_FIELD_KEYS: agent_role, display_name_template, capabilities, tools, token_budget, executive_parent, stage_ownership, honest_idle, duty_cycle, post_stage_mandate, delegation_authority. There is no 'workflows', 'mandate', 'kpis', 'decision_rights', 'reporting_line', 'why', 'obligations', 'permissions', 'prohibitions', or 'self_change_scope' field anywhere in the live resolver's output -- that richer vocabulary is Solomon design v2 section 3.2's ASPIRATIONAL description of the base_versions.structure/function/norms JSONB columns' eventual content; the resolver's actual splitRoleLayers()/ROLE_FIELD_KEYS implements only the 11-field subset migrated from STANDARD_VENTURE_TEMPLATE. CORRECTED FM-1.2 example: FM-1.2 (disobey role spec) = a role whose post_stage_mandate (function-layer field) structurally contradicts its own stage_ownership (structure-layer field) on the SAME real flat role object -- both are real fields, no synthetic extension needed. MAST failure modes that are inherently about TASKS or HANDOFFS (FM-1.1, FM-2.1..FM-2.6, FM-3.1..FM-3.3) have NO corresponding concept anywhere in the live resolver's output or the base_versions/venture_overlays schema -- there is no task table and no handoff table. Each such fixture's organization object is therefore a SYNTHETIC EXTENSION of the real resolveVentureRoles() shape: the real {ceo, executives, crews, budget_distribution} object PLUS additional top-level arrays the fixture itself defines (e.g. organization.tasks[], organization.handoffs[]), used only within this suite's own fixture/check pairs and never read from or written to any live table. Each fixture file's docblock must state explicitly which organization-object fields it uses are real (resolver-sourced) vs. synthetic (fixture-only extension), e.g. FM-2.4 (information withholding) = a synthetic organization.handoffs[] entry with no receiver-visible payload field, documented as a synthetic-extension fixture.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: Running the suite against each of the 14 fixtures individually reports that fixture as FAILED (caught) -- 14/14 catch rate.",
+        "AC-2: Each fixture file's docblock names its MAST code (FM-x.y), its category (FC1/FC2/FC3), whether it is a direct or proxy representation of that failure mode, and which organization-object fields it uses are real (resolver-sourced) vs. synthetic (fixture-only extension, e.g. organization.tasks[]/organization.handoffs[]).",
+        "AC-3: A mutation test (per this session's established discipline) that disables each check individually confirms its corresponding fixture(s) then PASS the suite incorrectly -- proving the check is load-bearing, not vacuous.",
+        "AC-4: Any fixture whose MAST failure mode is inherently a CROSS-ENTITY comparison (at minimum FM-2.4 information withholding and FM-2.5 ignored other agent's input; any FC3 check that compares a verifier's claim against an actual outcome) includes at least 2 roles/tasks/handoffs in its fixture object, at least one of which is well-formed -- proving the corresponding check discriminates the broken entity from a correct one, not merely detects presence/absence of any entity (this session's established single-candidate mutation-testing gotcha: a fixture with only one candidate can prove filtering but never a comparison)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "requirement": "Define the mock venture as lib/org/acceptance-suite/fixtures/mock-venture.mjs: a synthetic, clearly test-only venture id and a correctly-defined baseline organization derived from a real role-registry base+overlay resolution, used as the suite's passing control. CONCRETE BUILD PATH (PLAN-TO-EXEC review closure): resolveVentureRoles(baseRows, overlayRows, pins, ventureId, budgetDistribution) is a pure function requiring explicit baseRows/overlayRows/pins arrays as arguments -- it does NOT resolve from a bare venture id and does NOT read the database itself, so it cannot be called with just a synthetic venture id. Build the fixture entirely in-memory: baseRows = templateToBaseRows(STANDARD_VENTURE_TEMPLATE) (templateToBaseRows from lib/org/role-registry-resolver.mjs, STANDARD_VENTURE_TEMPLATE from lib/agents/venture-ceo-factory.js -- this exact pairing is already used the same way in tests/unit/org/role-registry-equivalence.test.mjs); pins = one {role_key, base_version: 1, overlay_version: null} entry per baseRows row (the buildPinsForAllRoles() helper in that same test file is the reusable pattern); overlayRows = [] (a clean passing control needs no overlay); ventureId = the fixture's synthetic test-only id; budgetDistribution = STANDARD_VENTURE_TEMPLATE.budget_distribution.",
+      "priority": "CRITICAL",
+      "acceptance_criteria": [
+        "AC-1: Running the suite against the mock-venture fixture reports pass_rate=100% (zero findings) across all implemented checks.",
+        "AC-2: The mock-venture fixture is built by calling the real resolveVentureRoles() resolver (not a hand-typed literal that could drift from the resolver's actual output shape), proving the suite is compatible with the real registry's output.",
+        "AC-3: The mock-venture fixture performs zero database reads -- baseRows/pins/overlayRows are all constructed in-memory via templateToBaseRows(STANDARD_VENTURE_TEMPLATE) plus a synthetic pins array, matching TR-5's DB-free scope for every check outside FR-4's 2 integrity checks."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "requirement": "Implement 2 currently-enforceable A2 integrity checks as suite assertions: (a) base-immutable-from-venture-context, (b) norms-unwritable-by-agents, both pinning already-live schema facts from SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001.",
+      "description": "(a) asserts org_role_base_versions has no venture_id column (verified live: database/chairman-gated/20260914_org_role_registry_base.sql:64) and that its RLS grants are service_role-only (REVOKE ALL FROM anon, authenticated, PUBLIC). (b) asserts org_role_venture_overlays has no norms column at all (verified live: ..._overlay_pin.sql:31). Both checks assert against LIVE schema state (not the migration file text, per the standing 'migration header is a ceremony marker, not apply state' rule) so a future migration that reintroduces either column or grant is caught -- but NOT via a direct information_schema query through the Supabase JS/PostgREST client: verified live during PLAN-TO-EXEC review that PostgREST does not expose information_schema (a direct .from('information_schema.columns') read 404s with PGRST205), and this repo's own existing check_column_exists RPC referenced by lib/validation/schema-dependency-checker.js's columnExists() fallback chain does not exist live either (PGRST202). CONCRETE MECHANISM (PLAN-TO-EXEC review closure): (i) column-ABSENCE checks (no venture_id on org_role_base_versions, no norms on org_role_venture_overlays) use the existing service-role @supabase/supabase-js client's own error surface: `await supabase.from(table).select(column).limit(1)`; a Postgres error code 42703 ('column ... does not exist') on that select IS live proof of absence -- verified working live during this review, and matches the existing fallback branch in lib/validation/schema-dependency-checker.js's columnExists(). (ii) the RLS-GRANTS half of base-immutable-from-venture-context (REVOKE ALL ... FROM anon, authenticated, PUBLIC on org_role_base_versions) cannot be read via PostgREST at all and needs a raw Postgres connection -- use scripts/lib/supabase-connection.js's createDatabaseClient() (a raw pg client), following the exact live-RLS-assertion pattern this repo already uses (tests/integration/creative-asset-variant-scores-rls.db.test.js: HAS_REAL_DB/describeDb from tests/helpers/db-available.js, DB_TIER-scoped, self-skips under an undesignated DB_TARGET). The TEST FILE exercising TS-5/TS-6/TS-7 (which needs a live DB to prove non-vacuousness) should follow that same DB_TIER-gated convention so a plain unit-tier test run never attempts an unintended production connection; the check module itself (invoked by run-suite.mjs) connects via the standard service-role client/env vars per this PRD's existing runtime_config, and fails closed (passed:false, per the existing dependencies.failure_handling) if the connection is unreachable.",
+      "priority": "HIGH",
+      "acceptance_criteria": [
+        "AC-1: Both checks pass against the live database today.",
+        "AC-2: A test that simulates (via a mocked select response, not a mocked information_schema read -- see description for why information_schema is not directly queryable) the venture_id column being present on org_role_base_versions confirms the check fails -- proving it is not vacuously true.",
+        "AC-3: A test that simulates a norms column being present on org_role_venture_overlays confirms the check fails."
+      ]
+    },
+    {
+      "id": "FR-5",
+      "requirement": "Document the suite's coverage boundary in a lib/org/acceptance-suite/README.md: every A2/A3 item NOT implemented by this SD is named explicitly with its owning not-yet-built SD (SD-LEO-INFRA-INSTANTIATEVENTURE-REFUSES-VENTURE-001, SD-LEO-INFRA-REGRESSION-GATED-SELF-001, SD-LEO-INFRA-AGENT-MEMORY-WORKING-001, SD-LEO-INFRA-DUTY-LEDGER-TRACING-001, SD-LEO-INFRA-DEFINITION-HANDOFF-ASSURANCE-001), and E6 (100% catch rate on the clean-slate venture) is named as a future commissioning-time event, not a criterion this SD completes.",
+      "description": "Directly serves A6 ('proof of quality = pass rate + catch rate + provenance + escapes, never pass rate alone') and A5 ('stricter is free, looser needs a record') -- every gap is a named, dated record, never a silent omission.",
+      "priority": "MEDIUM",
+      "acceptance_criteria": [
+        "AC-1: README.md lists each deferred check/fixture with its owning SD key.",
+        "AC-2: README.md explicitly states E6 is a Phase-2 commissioning predicate, out of this SD's completable scope, with the ratification id (3c4a6781) that gates when it becomes runnable."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "requirement": "The suite runner and all fixtures live under lib/org/acceptance-suite/ (new directory), imported by tests under tests/unit/org/acceptance-suite/.",
+      "rationale": "Matches the existing lib/org/ location of role-registry-resolver.mjs (SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001) and this repo's established lib/vs/tests/ split."
+    },
+    {
+      "id": "TR-2",
+      "requirement": "Suite run results are NOT persisted to a new database table -- results are returned as a plain object from run-suite.mjs; a CI test asserts the shape directly, and a JSON artifact (content-hashed filename) is optionally written to a build-output directory for CI archival.",
+      "rationale": "R1 (chairman ratification bb2175d2): any new table needs the ceremony. This SD avoids triggering that reserved decision; a durable results table is an explicit, separately-ceremonied follow-up if the suite later needs to be queried historically (e.g. by a dashboard), not assumed here."
+    },
+    {
+      "id": "TR-3",
+      "requirement": "content_hash is computed via node:crypto createHash('sha256') over a canonical serialization of {suite_version, checks_run: [sorted check ids], organization_input}, where 'canonical' means a RECURSIVE sorted-keys stringify -- every nested object's keys sorted, at every nesting level, not a shallow/top-level-only key sort. See TR-6 for the exact mechanism and the specific broken alternative it rules out.",
+      "rationale": "A non-canonical stringify (unsorted keys, or a shallow sort that misses nested objects) would make the same logical input produce different hashes across runs, or silently drop nested content from the hash entirely -- this SD's own AC-2/AC-3 (determinism, and different hashes for a one-field diff) requires a genuinely recursive canonical serialization."
+    },
+    {
+      "id": "TR-4",
+      "requirement": "Each of the 14 MAST fixture files exports a pure function producing the broken organization object -- no I/O, no database reads -- so fixtures are usable in a fast unit-tier CI run with zero external dependencies.",
+      "rationale": "The suite's own self-test (A3) must be runnable in CI on every change, matching A1's 'run... on every change' requirement; a fixture requiring live DB state would make the self-test flaky and slow."
+    },
+    {
+      "id": "TR-5",
+      "requirement": "The 2 A2 integrity checks (FR-4) are the ONLY checks in this SD that touch a live database connection: the 2 column-absence assertions use the existing service-role @supabase/supabase-js client (select-and-42703-error-code pattern, not information_schema), and the RLS-grants assertion additionally uses a raw pg client (scripts/lib/supabase-connection.js's createDatabaseClient()) under the same DB_TIER-gated convention this repo already uses for its other live-RLS *.db.test.js suites. All 14 MAST-fixture checks (FR-2) and the mock-venture check (FR-3) operate purely on in-memory organization objects with zero I/O.",
+      "rationale": "Keeps the bulk of the suite's self-test fast and DB-independent while still delivering the 2 real DB-schema-pinning checks A2 explicitly calls for, using mechanisms actually available through this repo's Supabase JS client (PostgREST does not expose information_schema -- verified live)."
+    },
+    {
+      "id": "TR-6",
+      "requirement": "content_hash's canonical serialization is a RECURSIVE sorted-keys stringify (every nested object's keys sorted, at every level) -- explicitly NOT `JSON.stringify(obj, Object.keys(obj).sort())`. Verified live during PLAN-TO-EXEC review that this array-replacer form silently DROPS all nested object content (the array replacer only allow-lists top-level keys; any nested object serializes as `{}`), which would make content_hash trivially pass a top-level-only determinism check (AC-2) while failing to actually incorporate nested organization data into the hash at all. This repo already has two private (unexported) implementations of the correct recursive algorithm for the identical purpose: lib/sub-agent-executor/evidence-provenance.js's stableStringify() (used for this exact sub_agent_execution_results content-hash chain that this SD's own TESTING evidence will be written through) and lib/gvos/snapshot-locker.js's sortKeys()/canonicalJSON(). EXEC should export and reuse one of these (prefer evidence-provenance.js's, since it already serves the same results-storage chain) rather than hand-rolling a third copy; if reuse is impractical, implement the identical recursive algorithm directly in run-suite.mjs.",
+      "rationale": "TR-3's 'canonical JSON.stringify (sorted keys)' wording is ambiguous enough to be implemented as the broken array-replacer form on a first pass -- confirmed live: `JSON.stringify({b:1,c:{y:2}}, Object.keys({b:1,c:{y:2}}).sort())` => `{\"b\":1,\"c\":{}}`. A silently-wrong content_hash breaks FR-1's own A4 non-replayability guarantee without failing any test that only checks top-level determinism, and duplicates a primitive that already exists twice in this repo."
+    }
+  ],
+  "system_architecture": {
+    "overview": "A pure-function suite runner (lib/org/acceptance-suite/run-suite.mjs) takes an organization object and a list of registered checks, runs each check, aggregates pass/fail into pass_rate and catch_rate, and returns a provenance-stamped result object. Checks are small, independently-testable functions; MAST fixtures are pure-function generators of deliberately-broken organization objects. The suite has zero runtime coupling to any not-yet-built Phase-1 substrate (memory, duty ledger, delegation contracts) -- it operates entirely on the ALREADY-LIVE role-registry's resolved shape (a FLAT per-role object -- agent_role, display_name_template, capabilities, tools, token_budget, executive_parent, stage_ownership, honest_idle, duty_cycle, post_stage_mandate, delegation_authority; NOT a nested structure/function/norms object -- see FR-2 for the exact field list and the synthetic-extension convention MAST fixtures needing task/handoff concepts must use) plus 2 direct schema/RLS checks against the live database.",
+    "components": [
+      {
+        "name": "run-suite.mjs",
+        "responsibility": "Orchestrates check execution against a given organization object; computes pass_rate, catch_rate, content_hash; returns the provenance-stamped result.",
+        "technology": "Node.js ESM, node:crypto for hashing, node:crypto.randomUUID for run_id"
+      },
+      {
+        "name": "checks/ (directory)",
+        "responsibility": "One module per check (14 MAST-derived + 2 A2 integrity checks), each exporting a pure function (organization) => {passed: boolean, finding?: string}.",
+        "technology": "Node.js ESM"
+      },
+      {
+        "name": "fixtures/mast/ (directory)",
+        "responsibility": "14 pure-function generators, one per MAST failure mode, each producing a deliberately-broken organization object.",
+        "technology": "Node.js ESM"
+      },
+      {
+        "name": "fixtures/mock-venture.mjs",
+        "responsibility": "Generates the clean passing-control organization object via templateToBaseRows(STANDARD_VENTURE_TEMPLATE) + a synthetic per-role pins array + the real resolveVentureRoles() resolver, entirely in-memory (see FR-3 for the exact build path).",
+        "technology": "Node.js ESM, imports lib/org/role-registry-resolver.mjs (resolveVentureRoles, templateToBaseRows) and lib/agents/venture-ceo-factory.js (STANDARD_VENTURE_TEMPLATE)"
+      },
+      {
+        "name": "checks/integrity/ (2 files: base-immutable.mjs, norms-unwritable.mjs)",
+        "responsibility": "Column-absence and RLS-grant assertions against the live org_role_base_versions / org_role_venture_overlays tables, confirming the structural invariants hold (see FR-4 for the exact mechanism -- information_schema is NOT directly queryable through PostgREST).",
+        "technology": "Node.js ESM, @supabase/supabase-js (service-role client, select-and-42703-error-code pattern for column-absence) + a raw pg client via scripts/lib/supabase-connection.js's createDatabaseClient() (for the RLS-grants check), the latter exercised in tests under the repo's existing DB_TIER-gated *.db.test.js convention"
+      }
+    ],
+    "data_flow": "A caller (a test, or eventually a CI job) constructs or imports an organization object (either a MAST fixture, the mock-venture fixture, or a real resolveVentureRoles() output) and passes it to run-suite.mjs along with the registered check list. run-suite.mjs iterates checks, calls each with the organization object, collects pass/fail results into findings[], computes aggregate pass_rate/catch_rate, and returns the stamped result object. The 2 integrity checks additionally query live schema state directly (a service-role select-and-error-code check for column absence; a raw pg client for RLS grants) rather than reading only the passed-in organization object, and fail closed (passed:false) if the connection is unreachable.",
+    "integration_points": [
+      "lib/org/role-registry-resolver.mjs (resolveVentureRoles, templateToBaseRows) + lib/agents/venture-ceo-factory.js (STANDARD_VENTURE_TEMPLATE) -- consumed in-memory by the mock-venture fixture; resolveVentureRoles also available for future real-venture invocations",
+      "database.org_role_base_versions / org_role_venture_overlays -- read by the 2 integrity checks via a service-role select-and-error-code check (column absence) and a raw pg client (RLS grants), NOT via a direct information_schema PostgREST query (unavailable; verified live during PLAN-TO-EXEC review)",
+      "CI (tests/unit/org/acceptance-suite/*.test.js, run via the existing unit vitest project) -- asserts the suite catches all 14 fixtures and passes the mock-venture control"
+    ]
+  },
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Suite run against the mock-venture fixture reports 100% pass rate",
+      "test_type": "unit",
+      "given": "The mock-venture fixture object, built via templateToBaseRows(STANDARD_VENTURE_TEMPLATE) + a synthetic per-role pins array + resolveVentureRoles() -- entirely in-memory, no DB (see FR-3)",
+      "when": "run-suite.mjs is invoked with the mock-venture organization and the full check list",
+      "then": "The result's pass_rate is 100 and findings is empty"
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Suite run against each of the 14 MAST fixtures individually catches every one",
+      "test_type": "unit",
+      "given": "Each of the 14 fixture generators (fm-1-1.mjs through fm-3-3.mjs)",
+      "when": "run-suite.mjs is invoked with each fixture's organization object in turn",
+      "then": "Each run reports that fixture's corresponding check as FAILED (caught) -- 14/14 catch rate across all runs"
+    },
+    {
+      "id": "TS-3",
+      "scenario": "content_hash is deterministic for identical input, different for a one-field diff",
+      "test_type": "unit",
+      "given": "The mock-venture organization object twice, and a second copy with one field mutated",
+      "when": "run-suite.mjs is invoked against each",
+      "then": "The two runs against the identical object produce the same content_hash; the run against the mutated object produces a different content_hash"
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Mutation-test each MAST check: disabling it lets its fixture pass",
+      "test_type": "unit",
+      "given": "One of the 14 checks temporarily disabled (mutated to always return passed:true)",
+      "when": "run-suite.mjs is invoked against that check's corresponding fixture",
+      "then": "The fixture is incorrectly reported as PASSED, proving the check (before mutation) was load-bearing -- confirms non-vacuousness per this session's mutation-testing discipline"
+    },
+    {
+      "id": "TS-5",
+      "scenario": "base-immutable-from-venture-context check passes against the live schema",
+      "test_type": "integration",
+      "given": "A live connection to the database with org_role_base_versions present, exercised under the repo's DB_TIER-gated *.db.test.js convention (HAS_REAL_DB/describeDb)",
+      "when": "The base-immutable check performs a service-role select-and-42703-check for venture_id absence, and a raw pg client (createDatabaseClient()) read of the table's RLS grants",
+      "then": "The check reports passed:true (no venture_id column, RLS grants service_role-only)"
+    },
+    {
+      "id": "TS-6",
+      "scenario": "norms-unwritable-by-agents check passes against the live schema",
+      "test_type": "integration",
+      "given": "A live connection to the database with org_role_venture_overlays present",
+      "when": "The norms-unwritable check queries information_schema for the table's columns",
+      "then": "The check reports passed:true (no norms column present)"
+    },
+    {
+      "id": "TS-7",
+      "scenario": "Integrity check fails when the invariant is violated (adversarial simulation)",
+      "test_type": "unit",
+      "given": "An information_schema read mocked to report a venture_id column present on org_role_base_versions",
+      "when": "The base-immutable check runs against this mocked read",
+      "then": "The check reports passed:false with a finding describing the violation -- proving the check is not vacuously true"
+    },
+    {
+      "id": "TS-8",
+      "scenario": "Suite runner rejects an organization object missing required shape",
+      "test_type": "unit",
+      "given": "A malformed organization object missing the top-level ceo/executives/crews/budget_distribution keys resolveVentureRoles() actually returns (e.g. a role entry that is itself nested under a spurious 'structure' key, rather than the real flat role shape -- see FR-2 for the corrected, real organization-object shape)",
+      "when": "run-suite.mjs is invoked with this malformed object",
+      "then": "The suite either raises a clear input-shape error or reports every applicable check as failed with a shape-mismatch finding -- never silently returns pass_rate=100 on malformed input"
+    },
+    {
+      "id": "TS-9",
+      "scenario": "README.md names every deferred check/fixture with its owning SD",
+      "test_type": "unit",
+      "given": "The README.md file at lib/org/acceptance-suite/README.md",
+      "when": "A test greps the file for each of the 5 named owning SD keys (INSTANTIATEVENTURE-REFUSES-VENTURE, REGRESSION-GATED-SELF, AGENT-MEMORY-WORKING, DUTY-LEDGER-TRACING, DEFINITION-HANDOFF-ASSURANCE)",
+      "then": "All 5 keys are present in the README, each attached to a named deferred check or fixture"
+    },
+    {
+      "id": "TS-10",
+      "scenario": "Full suite self-test (A3) runs end-to-end in CI",
+      "test_type": "integration",
+      "given": "The complete check list and all 15 fixtures (14 MAST + 1 mock-venture)",
+      "when": "The full test file is run via the existing unit vitest project",
+      "then": "All assertions pass: 14/14 catch rate, 1/1 pass rate on the clean control, deterministic content_hash, both integrity checks pass against the live schema"
+    }
+  ],
+  "acceptance_criteria": [
+    "A CI-runnable suite runner (lib/org/acceptance-suite/run-suite.mjs) exists and returns a result object with suite_version, run_id, content_hash, pass_rate, catch_rate, and findings[].",
+    "All 14 MAST-seeded broken-organization fixtures are individually caught (failed) by the suite -- 100% catch rate, each mutation-tested to prove its check is load-bearing.",
+    "The mock-venture fixture (built via the real resolveVentureRoles() resolver) passes the suite at 100% pass rate.",
+    "The 2 currently-enforceable A2 integrity checks (base-immutable-from-venture, norms-unwritable-by-agents) pass against the live database and are each proven non-vacuous via an adversarial simulation test.",
+    "lib/org/acceptance-suite/README.md documents every deferred A2/A3 item with its owning not-yet-built SD, and explicitly states E6 is a future Phase-2 commissioning predicate outside this SD's completable scope."
+  ],
+  "risks": [
+    {
+      "risk": "Scope creep into the wider AI-organization design -- this item owns only its own exit predicate; other Phase-1 substrate items (memory, duty ledger, delegation-receiver contracts, definition/handoff assurance, regression-gated self-change, talent-function crews, instantiateVenture guard) are separate, still-draft SDs.",
+      "probability": "MEDIUM",
+      "impact": "MEDIUM",
+      "mitigation": "The suite ships only what is provably testable against the ALREADY-LIVE role registry (FR-1 through FR-4); every deferred check is named with its owning SD in FR-5's README, never silently folded into this SD's scope.",
+      "rollback_plan": "If scope creep is detected mid-EXEC (e.g. an implementer starts building duty-ledger or memory code to make a fixture 'more real'), revert that work and replace it with the documented deferral in the README instead."
+    },
+    {
+      "risk": "A suite that checks only definitional/structural properties (not live runtime agent behavior) could read as the exact 'vacuous instrument' failure class the chairman named this whole design to prevent, since several MAST failure modes (FM-2.1 conversation reset, FM-1.4 context truncation, FM-1.3 step repetition) are fundamentally runtime behaviors this SD cannot yet exercise.",
+      "probability": "MEDIUM",
+      "impact": "HIGH",
+      "mitigation": "A3's self-test (TS-2, TS-4: all 14 fixtures caught, each check mutation-tested) is the direct, mandatory countermeasure; every proxy-representation fixture is labeled as such in its own docblock (FR-2), so the suite never implies coverage it doesn't have.",
+      "rollback_plan": "If a proxy fixture is later found to give false confidence (a real MAST-class failure escapes it in production), record the escape per A5 ('every escape becomes a case'), tighten or replace the fixture, and re-run the suite's own self-test."
+    },
+    {
+      "risk": "R1 (chairman ratification bb2175d2: any new table needs the ceremony) could be inadvertently triggered if an implementer stores suite run results in a new dedicated database table for convenience.",
+      "probability": "LOW",
+      "impact": "MEDIUM",
+      "mitigation": "TR-2 explicitly scopes result storage to a returned object plus an optional content-hashed JSON file artifact -- no new table in this SD's implementation.",
+      "rollback_plan": "If a new table is found mid-EXEC, remove it and replace with the file-artifact approach before PLAN-TO-EXEC re-validation."
+    },
+    {
+      "risk": "lib/breakage-escape/catch-rate-ledger.mjs (SD-LEO-INFRA-BREAKAGE-ESCAPE-INSTRUMENT-001) is a pre-existing, semantically distinct 'catch rate' system that could confuse a reviewer into thinking this SD duplicates it.",
+      "probability": "LOW",
+      "impact": "LOW",
+      "mitigation": "This PRD names both systems explicitly (VALIDATION at LEAD-TO-PLAN already confirmed they are unrelated by reading the source) -- the acceptance suite is org-definition-shaped; the breakage-escape ledger is a harness-wide defect classifier over sub_agent_execution_results/root_cause_reports/quick_fixes/feedback.",
+      "rollback_plan": "N/A -- documentation-only risk, no code change needed to mitigate."
+    }
+  ],
+  "implementation_approach": {
+    "phases": [
+      {
+        "phase": "Phase 1",
+        "description": "Build the suite runner core (run-suite.mjs), its result shape, and content-hash/provenance logic.",
+        "deliverables": ["lib/org/acceptance-suite/run-suite.mjs", "TS-1, TS-3, TS-8 passing"]
+      },
+      {
+        "phase": "Phase 2",
+        "description": "Build all 14 MAST fixture generators and their corresponding checks, plus the mock-venture fixture.",
+        "deliverables": ["lib/org/acceptance-suite/fixtures/mast/fm-1-1.mjs through fm-3-3.mjs", "lib/org/acceptance-suite/fixtures/mock-venture.mjs", "lib/org/acceptance-suite/checks/ (14 modules)", "TS-2, TS-4 passing"]
+      },
+      {
+        "phase": "Phase 3",
+        "description": "Build the 2 A2 integrity checks against the live database schema, with adversarial-simulation tests proving non-vacuousness.",
+        "deliverables": ["lib/org/acceptance-suite/checks/integrity/base-immutable.mjs", "lib/org/acceptance-suite/checks/integrity/norms-unwritable.mjs", "TS-5, TS-6, TS-7 passing"]
+      },
+      {
+        "phase": "Phase 4",
+        "description": "Write lib/org/acceptance-suite/README.md documenting the coverage boundary and E6's deferral; wire the full suite self-test into CI.",
+        "deliverables": ["lib/org/acceptance-suite/README.md", "TS-9, TS-10 passing"]
+      }
+    ],
+    "technical_decisions": [
+      "Suite results are NOT persisted to a new DB table (TR-2), avoiding R1's reserved-decision ceremony -- a plain returned object plus an optional CI-archived JSON artifact is sufficient for this SD's scope.",
+      "All 14 MAST fixtures are pure functions with zero I/O (TR-4), keeping the suite's own self-test fast, deterministic, and runnable on every CI pass per A1.",
+      "Fixtures whose MAST failure mode is fundamentally a runtime behavior are built as explicitly-labeled definitional proxies rather than either faking a full runtime reproduction or silently omitting the fixture -- consistent with A5 ('stricter is free, looser needs a record')."
+    ]
+  },
+  "integration_operationalization": {
+    "consumers": [
+      {
+        "name": "Future CI gate (not built by this SD)",
+        "interaction": "A later SD or workflow step could wire the suite's self-test (TS-10) as a required CI check on any PR touching lib/org/",
+        "frequency": "Per this SD's own delivery: on-demand (test-suite invocation). Per A1's stated design intent: at stand-up, daily, and on every change -- wiring that cadence is a follow-on operational task, not part of this SD's code."
+      },
+      {
+        "name": "Future real-venture staffing flow (Phase 3 of the org design, not yet built)",
+        "interaction": "When real ventures are eventually staffed (ratified trigger: 2+ live-revenue ventures), the suite runner would be invoked against each venture's real resolveVentureRoles() output before staffing -- this SD builds the runner and checks, not that staffing-time invocation.",
+        "frequency": "N/A -- future"
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "lib/org/role-registry-resolver.mjs (resolveVentureRoles)",
+        "type": "upstream",
+        "contract": "Consumed read-only by the mock-venture fixture to produce a realistic organization object shape.",
+        "failure_handling": "If resolveVentureRoles() throws or changes its output shape, the mock-venture fixture's own unit test (TS-1) fails loudly rather than silently producing a stale/wrong shape."
+      },
+      {
+        "name": "org_role_base_versions / org_role_venture_overlays (live database tables)",
+        "type": "upstream",
+        "contract": "Read-only by the 2 integrity checks; no writes. Column-absence reads go through the service-role @supabase/supabase-js client (select-and-42703-error-code, not information_schema, which PostgREST does not expose); the RLS-grants read goes through a raw pg client (scripts/lib/supabase-connection.js's createDatabaseClient()).",
+        "failure_handling": "If the database is unreachable, the 2 integrity checks fail closed (report passed:false with a connection-error finding), never silently reporting passed:true."
+      }
+    ],
+    "data_contracts": [
+      {
+        "contract_name": "Suite result object",
+        "schema": "{suite_version: string, run_id: string (uuid), content_hash: string (sha256 hex), pass_rate: number (0-100), catch_rate: number|null (0-100, null when no seeded-broken fixtures are in the run), findings: Array<{check_id, passed, finding?}>}",
+        "validation": "TS-1, TS-2, TS-3, TS-8 directly assert this shape and its field types.",
+        "versioning": "suite_version is bumped (documented in README.md) whenever a check is added, removed, or its pass/fail logic changes."
+      }
+    ],
+    "runtime_config": {
+      "environment_variables": ["SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL (existing, used only by the 2 integrity checks)", "SUPABASE_SERVICE_ROLE_KEY (existing, used only by the 2 integrity checks)"],
+      "feature_flags": [],
+      "deployment_considerations": "No deployment beyond the code landing on main -- this SD delivers a library + test suite, not a running service. No new env vars are introduced."
+    },
+    "observability_rollout": {
+      "monitoring": ["Suite self-test (TS-10) result in CI logs -- pass_rate and catch_rate printed per run"],
+      "alerts": ["None new -- a future CI-gate wiring SD would add PR-blocking alerts; out of this SD's scope"],
+      "rollout_strategy": "Direct merge to main once tests pass -- no phased rollout needed since this SD introduces no runtime behavior change to any existing system, only new library code and tests.",
+      "rollback_trigger": "N/A -- purely additive new code; a revert of the PR is sufficient if a defect is found.",
+      "rollback_procedure": "git revert the merge commit; no data migration or state cleanup needed since no database writes occur outside the read-only integrity checks."
+    }
+  },
+  "exploration_summary": {
+    "files_read": [
+      "lib/org/role-registry-resolver.mjs",
+      "database/chairman-gated/20260914_org_role_registry_base.sql",
+      "database/chairman-gated/20260914_org_role_registry_overlay_pin.sql",
+      "lib/breakage-escape/catch-rate-ledger.mjs",
+      "CLAUDE_ADAM.md (CONST-002)",
+      "feedback row 20b858dc-30fc-4e14-a8a9-951ce5a988d5 (full 17,110-char design doc)",
+      ".claude/solomon-session-state-d3430608.md (MAST 14-mode enumeration, lines 2359-2385)"
+    ],
+    "patterns_identified": [
+      "This session's established mutation-testing discipline (seed a known-bad input, prove the detector catches it, restore, confirm byte-identical) applies directly to A3's self-test requirement",
+      "The role registry's structure/function/norms 3-layer split (SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001) is the concrete schema every MAST fixture and integrity check targets",
+      "The 'migration header is a ceremony marker, not apply state' standing rule -- integrity checks query live information_schema directly, never trust migration file text"
+    ],
+    "key_decisions": [
+      "Scope this SD to definitional/structural checks against the ALREADY-LIVE role registry, explicitly deferring runtime-behavioral MAST fixtures and E6 (clean-slate commissioning) rather than attempting to fake full runtime coverage",
+      "Store suite results as a returned object + optional file artifact, not a new database table, to avoid triggering R1's reserved ceremony",
+      "Build the mock-venture fixture via the real resolveVentureRoles() resolver rather than a hand-typed literal, so the suite's passing control stays compatible with the real registry's output shape"
+    ],
+    "exploration_date": "2026-09-15"
+  }
+}
