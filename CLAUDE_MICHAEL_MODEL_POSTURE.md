@@ -1,8 +1,8 @@
-<!-- file_content_hash: df3207e7e9d16e29 -->
+<!-- file_content_hash: 5a7ccace79ff8b97 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_MICHAEL_MODEL_POSTURE.md — Michael Model Posture (binding companion)
 
-**Generated**: 2026-09-14 8:34:49 PM
+**Generated**: 2026-09-15 8:30:20 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Opus-at-medium seat pin with Sonnet quota fallback, the Sonnet/Opus/Haiku tiering table, Opus verification on auto_apply flips, stop-sub-agents-when-read, Max-plan-only
 **Load when**: At every /michael startup (Step 1) and on any pin change or budget-state change — before acting on model posture
@@ -36,6 +36,6 @@
 
 ---
 
-*Generated from database: 2026-09-14*
+*Generated from database: 2026-09-15*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=michael_model_posture). Do not hand-edit — edit the DB section and regenerate.*

@@ -1,8 +1,8 @@
-<!-- file_content_hash: 70ecacb7969a682d -->
+<!-- file_content_hash: d499620ff3940de3 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_EXEC_PROVENANCE.md — EXEC Provenance (dated evidence and rationale)
 
-**Generated**: 2026-09-14 8:34:49 PM
+**Generated**: 2026-09-15 8:30:20 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Why each EXEC rule exists — retrospective evidence, incident narratives, measured costs
 **Load when**: When you need to know WHY a rule exists, or before proposing to change one
@@ -87,6 +87,6 @@ unexpected results.
 
 ---
 
-*Generated from database: 2026-09-14*
+*Generated from database: 2026-09-15*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=exec_provenance). Do not hand-edit — edit the DB section and regenerate.*

@@ -1,8 +1,8 @@
-<!-- file_content_hash: 40d13ef1c40ab127 -->
+<!-- file_content_hash: 18acf2c0e9769e90 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR_MANUAL.md — Coordinator Manual (how-to companion)
 
-**Generated**: 2026-09-14 7:47:08 PM
+**Generated**: 2026-09-15 8:30:20 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — dispatch mechanics, gauge/count verification steps, loop-registry operating detail
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -73,8 +73,10 @@ rather than leaving it unresolved.
 
 **THE VENTURE AI ORGANIZATION IS INSTANTIATED AT A WORKFLOW POINT, NOT ON DEMAND (ratification c051c9d2); coordinator share**: demand is not the gate on the venture organization; its readiness is a go-live criterion with an audit.
 
+**SPEND THE WEEKLY FABLE ALLOWANCE FIRST, THEN THE OTHER MODELS (ratification 59fd290a); coordinator share**: do not ration Fable across the week; when it is spent, every seat moves to the other models, and that is the plan, not an incident.
+
 ---
 
-*Generated from database: 2026-09-14*
+*Generated from database: 2026-09-15*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=coordinator_manual). Do not hand-edit — edit the DB section and regenerate.*

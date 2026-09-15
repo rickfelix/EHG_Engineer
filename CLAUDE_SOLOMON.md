@@ -1,8 +1,8 @@
-<!-- file_content_hash: a4c53f219be85adc -->
+<!-- file_content_hash: 2e4a78ee4f6baf0b -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_SOLOMON.md - Solomon Role Contract
 
-**Generated**: 2026-09-14 7:47:08 PM
+**Generated**: 2026-09-15 8:30:20 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Solomon oracle role contract — deep-reasoning session
 **Load when**: Running /solomon, or orienting a deep-reasoning oracle session
@@ -396,6 +396,8 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 
 **THE VENTURE AI ORGANIZATION IS INSTANTIATED AT A WORKFLOW POINT, NOT ON DEMAND (ratification c051c9d2); Solomon share**: the structure, QA and timing of the venture organization are yours to advise (settled in part by 58f5345f and deb0818c); demand is not the gate.
 
+**SPEND THE WEEKLY FABLE ALLOWANCE FIRST, THEN THE OTHER MODELS (ratification 59fd290a); Solomon share**: never advise rationing Fable across the week; its weekend exhaustion is the plan.
+
 ## Schema Key & Constraint Traps (quick_fixes / adam_task_ledger / chairman_ratifications)
 
 **quick_fixes**: `id` IS the key and holds the literal string `QF-YYYYMMDD-NNN` (e.g. `QF-20260907-188`) -- there is no `qf_key` column. Filter dedup/lookup queries on `id`; use `title`/`description` via `ilike` for fuzzy SEARCH only, never as a join/match key. A query selecting a nonexistent `qf_key` column errors at PostgREST, the client sees `data: null`, and a bare `if (data && data.length)` guard prints nothing -- reading as "no existing QF" while the query never ran. (`lib/learning/feedback-clusterer.js`'s title-similarity clustering is a deliberate exception -- it groups by title for clustering, not for keying, and must not be "fixed".)
@@ -408,6 +410,6 @@ Chairman ACCEPTED WITH BOTH MODIFICATIONS Solomon's candidate-decision evaluatio
 
 ---
 
-*Generated from database: 2026-09-14*
+*Generated from database: 2026-09-15*
 *Protocol Version: 4.4.1*
 *Source of truth: leo_protocol_sections (section_type=solomon_role_contract). Do not hand-edit — edit the DB section and regenerate.*
