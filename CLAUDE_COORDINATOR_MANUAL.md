@@ -1,8 +1,8 @@
-<!-- file_content_hash: 6b313b6fb42f281e -->
+<!-- file_content_hash: 40d13ef1c40ab127 -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_COORDINATOR_MANUAL.md — Coordinator Manual (how-to companion)
 
-**Generated**: 2026-09-14 4:30:07 PM
+**Generated**: 2026-09-14 7:47:08 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: How-to procedures lifted out of the role contract — dispatch mechanics, gauge/count verification steps, loop-registry operating detail
 **Load when**: At the MOMENT OF DOING the procedure — not at session start
@@ -68,6 +68,10 @@ rather than leaving it unresolved.
 **THE OUTSIDE REVIEWER (ASTRA) MAKES NO CHANGES AND WRITES ONLY TO ITS OWN DIRECTORY (ratification 569519dd); coordinator share**: never dispatch, merge or apply a change authored by the outside reviewer; its findings reach the belt only as Adam-sourced items after Solomon measures them.
 
 **AN ACTIVE ACCOUNT RUNNING OUT IS THE PLAN, NOT AN INCIDENT; THE CHAIRMAN SWITCHES AT THE FREEZE (ratification c043f4c1); coordinator share**: an exhaustion projection on the active account never slows dispatch; the fleet spends it down and stops at the freeze.
+
+**WORK IS NOT POSTPONED TO WAIT FOR A PARTICULAR MODEL (ratification bbebcdcd); coordinator share**: never hold a work item only to wait for a particular model; dispatch it on the models selected now.
+
+**THE VENTURE AI ORGANIZATION IS INSTANTIATED AT A WORKFLOW POINT, NOT ON DEMAND (ratification c051c9d2); coordinator share**: demand is not the gate on the venture organization; its readiness is a go-live criterion with an audit.
 
 ---
 

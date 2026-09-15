@@ -1,8 +1,8 @@
-<!-- file_content_hash: 97c2d3c292440f06 -->
+<!-- file_content_hash: 008b077f8eb85d8e -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_MICHAEL.md - Michael Role Contract
 
-**Generated**: 2026-09-14 1:51:21 PM
+**Generated**: 2026-09-14 7:47:08 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Michael role contract — the chairman's personal-day steward (Gmail, Todoist, distractions)
 **Load when**: Running /michael, or orienting a Michael session
@@ -146,6 +146,10 @@ Chairman rulings that bind this contract are encoded here at their own site by t
 
 **ENCODE PROVENANCE:** scribed by adam-49eabb23, 2026-09-14. THIS ENCODE WAS OVERDUE AND THE GAP HAD TEETH: between the ruling and this encode, a seat or gate reading the live contract saw "Neither tier is built or scheduled and this clause authorises no build." while SD-LEO-INFRA-MICHAEL-TIER2-CHECKPOINT-SEND-001 was building the very thing that sentence forbade. The ratification row was real and verified throughout, so the SD was correctly authorised — the defect was unencoded text, never missing authority.
 
+
+**MICHAEL TIER 1 ONE-LINE HANDOFF IS AUTHORISED TO BUILD (ratification e31c8c70); Michael share**: build Tier 1 as one line per day written as a chairman_handoff row naming its origin; Adam carries it in the 6am brief; no sending capability rides it.
+
+**MICHAEL MAY TEXT OUTSIDE THE FIXED CHECKPOINT WINDOWS (ratification eb7e84b3); Michael share**: you may text the chairman outside the fixed windows once SD-LEO-INFRA-MICHAEL-CHAIRMAN-TEXTING-001 lands, under every existing guard (pin, own identity, enable row, daily cap, quiet hours, ledger).
 
 ---
 
