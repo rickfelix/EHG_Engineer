@@ -16,7 +16,7 @@ import { teardownRun } from '../../../scripts/harness/spine-verify-first-run.mjs
 import { VentureFactory, EHG_SHARED_OPERATORS } from '../../../lib/agents/venture-ceo-factory.js';
 import { checkFinanceBillingIdle } from '../../../lib/agents/finance-billing-idle-check.js';
 import { buildFixtureVentureRow } from '../../../scripts/harness/s20-fixture.mjs';
-import { insertGuarded, CLASSIFICATION } from '../../../lib/governance/fixture-producer-guard.mjs';
+import { insertGuarded, CLASSIFICATION, purgeOrphanedOrgAgentIdentities } from '../../../lib/governance/fixture-producer-guard.mjs';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -27,6 +27,14 @@ test.describe('Shared-operator holdco arming', () => {
   test.skip(!SUPABASE_URL || !SUPABASE_KEY, 'requires SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY');
 
   const supabase = createClient(SUPABASE_URL!, SUPABASE_KEY!);
+
+  // SD-LEO-INFRA-ORG-TEST-TEARDOWN-001 FR-3: bounds a crashed prior run's per-venture
+  // org_agent_identities residue (TS-5 below creates a per-venture roster). Never touches the
+  // venture_id IS NULL holdco rows this file's own TS-1/TS-2 cleanup already manages correctly.
+  test.beforeAll(async () => {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return;
+    await purgeOrphanedOrgAgentIdentities(supabase, { namePrefix: 'TEST-' });
+  });
 
   async function getSharedIdentityIds(roleKeys: string[]) {
     const { data } = await supabase
