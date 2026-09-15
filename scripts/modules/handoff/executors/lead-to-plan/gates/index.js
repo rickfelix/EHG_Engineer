@@ -119,3 +119,9 @@ export { createMechanismClaimVerifierGate, validateMechanismClaims } from './mec
 // Parent-Exec Gate (QF-20260906-901): refuses LEAD-TO-PLAN for a child SD whose orchestrator
 // parent has not yet completed its own two setup handoffs (LEAD-TO-PLAN, PLAN-TO-EXEC).
 export { createParentExecGate, isParentReadyForChildren, isBindingEnabled as isParentExecGateBindingEnabled } from './parent-exec-gate.js';
+
+// Registry Audit Gate (SD-LEARN-FIX-ADDRESS-PAT-LES-015, PAT-LES-5b719daf1d9b): advisory-only,
+// surfaces validation_gate_registry "near-miss" gaps (a gate DISABLED for a sibling sd_type but
+// undecided for this SD's own type) at LEAD-TO-PLAN, before a downstream handoff can discover
+// one live.
+export { createGateRegistryAuditGate, computeNearMissFindings, scoreFindings as scoreRegistryAuditFindings, findingsToWarnings as registryAuditFindingsToWarnings } from './gate-registry-audit.js';
