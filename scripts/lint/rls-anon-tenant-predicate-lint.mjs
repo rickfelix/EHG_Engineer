@@ -54,6 +54,15 @@
  *
  * Usage:
  *   node scripts/lint/rls-anon-tenant-predicate-lint.mjs [--diff|--all] [--json] [--root <dir>]
+ *
+ * EXEMPTIONS (SD-LEO-INFRA-CONTINUOUS-EXTERNAL-SURFACE-001): rls-anon-tenant-predicate-lint-
+ * exemptions.json — a small, explicit, (table, policy)-keyed allowlist for a policy whose
+ * unconditional anon/authenticated readability is INTENTIONAL, not an oversight (e.g. a
+ * deliberate public-canary row). Mirrors the established sibling precedent
+ * scripts/sentinels/exempted-tables.json (audit-security-linter.mjs) — same shape (data file,
+ * not a predicate-code carve-out), same bar (a genuine, documented, narrowly-scoped exception,
+ * never a name-based general escape hatch — the classifier itself still judges exposure SHAPE;
+ * this only suppresses a KNOWN, individually-justified instance of that shape).
  */
 
 import fs from 'fs';
@@ -71,6 +80,25 @@ import { RLS_LINT_CORPUS_DIRS } from '../../lib/lint/rls-lint-corpus-dirs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
+
+const EXEMPTIONS_PATH = path.join(__dirname, 'rls-anon-tenant-predicate-lint-exemptions.json');
+let EXEMPTED_POLICIES = [];
+try {
+  EXEMPTED_POLICIES = JSON.parse(fs.readFileSync(EXEMPTIONS_PATH, 'utf8')).exempted_policies || [];
+} catch {
+  EXEMPTED_POLICIES = []; // missing/malformed exemptions file => fail closed to zero exemptions, never zero enforcement
+}
+
+/**
+ * Is this exact (table, policy) pair a documented, individually-justified exemption?
+ * Exported so the exemption set is unit-testable directly.
+ * @param {string} table
+ * @param {string} policyName
+ * @returns {boolean}
+ */
+export function isExemptPolicy(table, policyName) {
+  return EXEMPTED_POLICIES.some((e) => e?.table === table && e?.policy === policyName);
+}
 
 const TENANT_COLUMN_RE = /\b(venture_id|tenant_id|org_id|company_id|portfolio_id|account_id)\b/i;
 // auth.uid()/auth.jwt() (raw caller-identity primitives) AND the established
@@ -237,6 +265,7 @@ export function lintSql(sql, filePath = '(inline)') {
   for (const p of extractPolicies(sql)) {
     const violationClass = classifyViolation(p);
     if (!violationClass) continue;
+    if (isExemptPolicy(p.table, p.name)) continue; // documented, individually-justified exception
     out.push({
       filePath,
       policyName: p.name,
@@ -301,19 +330,25 @@ function main() {
 
   const files = mode === 'all' ? candidateFilesAll(repoRoot) : candidateFilesDiff(repoRoot);
   const violations = [];
+  let exemptedCount = 0;
   for (const f of files) {
     let sql;
     try { sql = fs.readFileSync(f, 'utf8'); } catch { continue; }
     const relPath = path.relative(repoRoot, f).split(path.sep).join('/');
     violations.push(...lintSql(sql, relPath));
+    // Visibility only (never silent): count what the exemption list suppressed in this scan,
+    // without changing lintSql()'s existing violations-only return contract.
+    for (const p of extractPolicies(sql)) {
+      if (classifyViolation(p) && isExemptPolicy(p.table, p.name)) exemptedCount++;
+    }
   }
 
-  const result = { mode, scanned: files.length, violations, blocking: mode === 'diff' };
+  const result = { mode, scanned: files.length, violations, exempted: exemptedCount, blocking: mode === 'diff' };
 
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
-    console.log(`[RLS-ANON-TENANT-PREDICATE-LINT] mode=${mode} scanned=${files.length}`);
+    console.log(`[RLS-ANON-TENANT-PREDICATE-LINT] mode=${mode} scanned=${files.length}${exemptedCount > 0 ? ` exempted=${exemptedCount}` : ''}`);
     if (violations.length === 0) {
       console.log('  0 violation(s) -- clean.');
     } else {
