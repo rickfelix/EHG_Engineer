@@ -1,0 +1,11 @@
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+dotenv.config();
+const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await sb.from('sub_agent_execution_results').select('*').eq('sd_id','SD-LEARN-FIX-ADDRESS-PAT-LES-015').eq('sub_agent_code','TESTING').eq('phase','EXEC').order('created_at',{ascending:false}).range(0,0);
+const r = data[0];
+console.log('sub_agent_name:', r.sub_agent_name, '| source:', r.source, '| validation_mode:', r.validation_mode);
+console.log('executed_from_cwd:', r.executed_from_cwd);
+console.log('confidence:', r.confidence, '| execution_time:', r.execution_time);
+console.log('summary:', String(r.summary).slice(0,300));
+console.log('\nFULL METADATA:\n', JSON.stringify(r.metadata, null, 1).slice(0, 3000));
