@@ -1,3 +1,4 @@
+-- @approved-by: rickfelix2000@gmail.com
 -- SD-LEO-INFRA-GOVERNANCE-ARTIFACTS-RECORD-001 FR-1 -- approver-identity columns, distinct from
 -- chairman_approved, on the two governance-artifact tables.
 -- Target DB: EHG_Engineer
