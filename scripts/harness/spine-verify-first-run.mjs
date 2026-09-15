@@ -75,6 +75,13 @@ export async function teardownRun(supabase, manifest) {
     results.agent_registry = await supabase.from('agent_registry').delete().in('id', agentIds);
   }
   if (manifest.ventureId) {
+    // SD-LEO-INFRA-ORG-TEST-TEARDOWN-001 FR-1: org_agent_identities is uniquely keyed by
+    // (venture_id, role_key) with no FK to ventures (confirmed live via pg_constraint), so
+    // deleting the ventures row below does not cascade -- every real-DB org test run
+    // permanently leaked one org_agent_identities row per agent it created until this delete
+    // was added. Scoped to exactly this run's venture_id, so no other venture's rows are
+    // touched.
+    results.org_agent_identities = await supabase.from('org_agent_identities').delete().eq('venture_id', manifest.ventureId);
     results.ventures = await supabase.from('ventures').delete().eq('id', manifest.ventureId);
   }
 
