@@ -123,10 +123,10 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     it('CLI passes args.includes(--security-reviewed) and args.includes(--migration-reviewed) to createFromQF', () => {
       const idx = src.indexOf("args[0] === '--from-qf'");
       expect(idx).toBeGreaterThan(0);
-      // Window widened 1800->2100 (QF-20260912-933 added the backupPlan/deletionApproved
-      // args lines and a preceding comment earlier in this same CLI branch, pushing the
-      // createFromQF call further from the 'args[0] === --from-qf' anchor).
-      const block = src.slice(idx, idx + 2100);
+      // Window widened 1800->2100 (QF-20260912-933) ->2600 (SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001
+      // added --criticality/--criticality-reason parsing lines to this same CLI branch, pushing
+      // the createFromQF call further from the 'args[0] === --from-qf' anchor).
+      const block = src.slice(idx, idx + 2600);
       expect(block).toMatch(/securityReviewed:\s*args\.includes\(['"]--security-reviewed['"]\),/);
       expect(block).toMatch(/migrationReviewed:\s*args\.includes\(['"]--migration-reviewed['"]\),/);
       expect(block).toMatch(/await createFromQF\(args\[1\],\s*\{[\s\S]*?\}\)/);
@@ -144,7 +144,7 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     it('CLI passes args.includes(--backup-plan) / --deletion-approved to createFromQF', () => {
       const idx = src.indexOf("args[0] === '--from-qf'");
       expect(idx).toBeGreaterThan(0);
-      const block = src.slice(idx, idx + 2100);
+      const block = src.slice(idx, idx + 2600);
       expect(block).toMatch(/backupPlan:\s*args\.includes\(['"]--backup-plan['"]\),/);
       expect(block).toMatch(/deletionApproved:\s*args\.includes\(['"]--deletion-approved['"]\),/);
     });
@@ -154,10 +154,10 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
     it('CLI parses --roadmap-link-reason on the --from-qf lane and passes roadmapLinkReason to createFromQF', () => {
       const idx = src.indexOf("args[0] === '--from-qf'");
       expect(idx).toBeGreaterThan(0);
-      // Window widened 1800->2100 (QF-20260912-933 added the backupPlan/deletionApproved
-      // args lines and a preceding comment earlier in this same CLI branch, pushing the
-      // qfLinkReasonIdx/roadmapLinkReason lines further from the anchor).
-      const block = src.slice(idx, idx + 2100);
+      // Window widened 1800->2100 (QF-20260912-933) ->2600 (SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001
+      // added --criticality/--criticality-reason parsing lines), pushing the qfLinkReasonIdx/
+      // roadmapLinkReason lines further from the anchor.
+      const block = src.slice(idx, idx + 2600);
       expect(block).toMatch(/const qfLinkReasonIdx = args\.indexOf\(['"]--roadmap-link-reason['"]\)/);
       expect(block).toMatch(/roadmapLinkReason:\s*qfLinkReasonIdx\s*!==\s*-1\s*\?\s*args\[qfLinkReasonIdx\s*\+\s*1\]\s*:\s*null,/);
     });
@@ -259,6 +259,50 @@ describe('QF-20260509-LEO-CREATE-FLAGS: review flags sibling parity across creat
       // Pin: there is no separate exclusion list that would re-reject these
       const block = src.slice(idx, idx + 300);
       expect(block).toMatch(/!knownDirectFlags\.has\(a\)/);
+    });
+  });
+
+  // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 FR-2 AC#2 (TESTING mutation finding, EXEC-TO-PLAN):
+  // TESTING severed the --criticality threading on both updated lanes and every prior test
+  // still passed -- no test asserted the PARSED value actually reaches createSD()'s options
+  // object, only that the flag was recognized/not-rejected. These tests close that gap by
+  // tying the parsed local variable to its use inside the createSD({...}) call, not just to
+  // its own declaration.
+  describe('--criticality / --criticality-reason threading (FR-2 AC#2)', () => {
+    it('direct-args mode: knownDirectFlags and flagsWithValues both include --criticality/--criticality-reason', () => {
+      // Whole-src match (not a fixed window) -- avoids window-size fragility from unrelated
+      // comment growth above these lines, matching the established pattern used elsewhere in
+      // this file (e.g. the migration_reviewed/security_reviewed propagation test below).
+      expect(src).toMatch(/const knownDirectFlags = new Set\(\[[\s\S]*?'--criticality',\s*'--criticality-reason'/);
+      expect(src).toMatch(/const flagsWithValues = new Set\(\[[\s\S]*?'--criticality',\s*'--criticality-reason'/);
+    });
+
+    it('direct-args mode: the parsed directCriticality/directCriticalityReason variables are threaded into the createSD() call (not merely parsed and discarded)', () => {
+      const idx = src.indexOf('const directCriticalityIdx = args.indexOf');
+      expect(idx).toBeGreaterThan(0);
+      const block = src.slice(idx, idx + 700);
+      expect(block).toMatch(/const directCriticality\s*=\s*directCriticalityIdx\s*!==\s*-1\s*\?\s*args\[directCriticalityIdx\s*\+\s*1\]\s*:\s*null;/);
+      expect(block).toMatch(/const directCriticalityReason\s*=\s*directCriticalityReasonIdx\s*!==\s*-1\s*\?\s*args\[directCriticalityReasonIdx\s*\+\s*1\]\s*:\s*null;/);
+      // The createSD({...}) call must appear within this same window and reference both variables.
+      expect(block).toMatch(/createSD\(\{[\s\S]*?criticality:\s*directCriticality,[\s\S]*?criticalityReason:\s*directCriticalityReason,/);
+    });
+
+    it('--from-qf lane: the parsed qfCriticality/qfCriticalityReason index variables are threaded into createFromQF()\'s opts', () => {
+      const idx = src.indexOf("args[0] === '--from-qf'");
+      expect(idx).toBeGreaterThan(0);
+      const block = src.slice(idx, idx + 2600);
+      expect(block).toMatch(/const qfCriticalityIdx = args\.indexOf\(['"]--criticality['"]\)/);
+      expect(block).toMatch(/const qfCriticalityReasonIdx = args\.indexOf\(['"]--criticality-reason['"]\)/);
+      expect(block).toMatch(/criticality:\s*qfCriticalityIdx\s*!==\s*-1\s*\?\s*args\[qfCriticalityIdx\s*\+\s*1\]\s*:\s*null,/);
+      expect(block).toMatch(/criticalityReason:\s*qfCriticalityReasonIdx\s*!==\s*-1\s*\?\s*args\[qfCriticalityReasonIdx\s*\+\s*1\]\s*:\s*null,/);
+    });
+
+    it('--from-qf lane: createFromQF() itself threads opts.criticality/opts.criticalityReason into its own createSD() call', () => {
+      const idx = src.indexOf('export async function createFromQF');
+      expect(idx).toBeGreaterThan(0);
+      const body = src.slice(idx, idx + 5300);
+      expect(body).toMatch(/criticality:\s*opts\.criticality\s*\|\|\s*null,/);
+      expect(body).toMatch(/criticalityReason:\s*opts\.criticalityReason\s*\|\|\s*null,/);
     });
   });
 });

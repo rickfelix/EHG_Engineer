@@ -56,6 +56,10 @@ describe('SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 FR-1: criticality gate placement
     expect(code).toMatch(/metadata:\s*Object\.keys\(criticalityMetadata\)\.length\s*>\s*0\s*\?\s*criticalityMetadata\s*:\s*null/);
   });
 
+  it('reads the exact literal flag_key "QF_CRITICALITY_GATE_ENFORCE" (a typo here would silently disable the gate forever, TESTING finding EXEC-TO-PLAN)', () => {
+    expect(code).toMatch(/\.eq\('flag_key',\s*'QF_CRITICALITY_GATE_ENFORCE'\)/);
+  });
+
   it('--criticality is NOT aliased to --reason/--force-claim-reason (a distinct flag)', () => {
     // The existing --reason alias line must not also claim --criticality.
     const reasonAliasM = code.match(/arg === '--force-claim-reason' \|\| arg === '--reason'/);

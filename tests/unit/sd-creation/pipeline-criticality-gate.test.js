@@ -56,6 +56,24 @@ vi.mock('../../../lib/sd-creation/context.js', () => ({
 
 const { createSD } = await import('../../../lib/sd-creation/pipeline.js');
 
+// SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 FR-2 AC#5 (TESTING mutation finding, EXEC-TO-PLAN):
+// deleting `...criticalitySdMetadata` from the inserted row's metadata object was not caught
+// by any prior test -- the file_critical mainline path (venture context, vision scorer, type
+// resolution, etc.) is too heavy to fully mock for a behavioral insert-shape test, so this is
+// a source-pattern check tying the computed criticalitySdMetadata variable to its actual use
+// site in the metadata object literal, mirroring the same-class check already used for FR-1's
+// create-quick-fix.js gate (tests/unit/feedback/create-quick-fix-criticality-gate.test.js).
+describe('createSD() FR-2 AC#5: criticalitySdMetadata is spread into the insert row', () => {
+  it('the metadata object literal spreads ...criticalitySdMetadata', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const src = fs.readFileSync(path.resolve(__dirname, '../../../lib/sd-creation/pipeline.js'), 'utf8');
+    expect(src).toMatch(/metadata:\s*\{\s*\r?\n\s*\.\.\.metadata,\s*\r?\n\s*\.\.\.criticalitySdMetadata,/);
+  });
+});
+
 describe('createSD() criticality gate wiring (FR-2)', () => {
   it('refuse: returns ok:false CRITICALITY_REQUIRED, never reaches the strategic_directives_v2 insert', async () => {
     flagRow = { is_enabled: true };
