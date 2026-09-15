@@ -213,6 +213,11 @@
 
 ### Infrastructure
 
+- **Documented 2 previously-undocumented `user_stories` CHECK constraints (story_key format, priority enum), only discoverable before now via a trial-and-error INSERT failure** - SD-LEARN-FIX-ADDRESS-PAT-LES-018 (PR #9029)
+  - New "user_stories Table Constraints" section in `docs/reference/database-agent-patterns.md` documenting the live `valid_story_key` regex (`^[A-Z0-9-]+:US-[0-9]{3,}$`) and `user_stories_priority_check` enum (`critical|high|medium|low|minimal`), with a working example INSERT. Extended the existing PLAN-TO-EXEC checklist hint in `scripts/modules/handoff/cli/cli-main.js` -- which already fires at the exact gate-failure moment this info is needed -- to name the previously-omitted `priority` field. Both constraints are unchanged; this is documentation/discoverability only.
+  - 2 new tests read the live `database/schema-reference-snapshot.json` rather than hardcoding the constraint text, so a future constraint change that the doc/hint forgets to follow fails CI instead of silently drifting stale.
+  - Caught and corrected a data-quality mismatch in the source `issue_patterns` row before building anything: its `proven_solutions` field described an unrelated fix (a retrospective-quality-trigger bug); the real root cause was found in the origin SD's own retrospective text instead.
+
 - **Venture workflow now creates the AI organization at stage 23 (dedicated venture UAT) and can gate stage 24 launch readiness on its acceptance-suite result** - SD-LEO-INFRA-VENTURE-WORKFLOW-CREATES-001 (PR #9021)
   - Stage 23's `analyzeStage23DedicatedVentureUat()` now also creates the venture's AI organization (`VentureFactory.instantiateVenture()`, idempotent on existing `agent_registry` rows) and runs the organization acceptance suite (`runSuite()` + the 14 MAST checks from SD-LEO-INFRA-ORGANIZATION-ACCEPTANCE-SUITE-001) unconditionally, appending a second artifact (`organization_qa_result`) to the same returned array the existing `launch_uat_report` entry already uses -- never blocking on failure, wrapped in try/catch.
   - New, flag-gated `organization_qa` checklist category (`LEO_S24_ORGANIZATION_QA_REQUIRED`, default OFF) added to stage 24's launch-readiness checklist, reading that artifact and failing closed on absence -- ships inert until a future explicit enable.
