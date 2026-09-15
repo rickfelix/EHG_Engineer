@@ -37,16 +37,11 @@ function fakeSupabase({ existingAgents = [], throwOnAgentRegistry = false } = {}
         if (throwOnAgentRegistry) {
           return { select: () => { throw new Error('agent_registry unavailable'); } };
         }
-        // 1st call: existence check (.select().eq().limit(1)).
-        // 2nd call: full read post-creation (.select().eq(), no .limit() -- awaited directly).
-        const isFirstCall = agentRegistryCallCount === 1;
+        // Both calls chain .select().eq().limit(N): the 1st is the existence check
+        // (.limit(1)), the 2nd is the full post-creation read (.limit(999)).
         return {
           select: () => ({
-            eq: () => (
-              isFirstCall
-                ? { limit: async () => ({ data: existingAgents, error: null }) }
-                : Promise.resolve({ data: existingAgents, error: null })
-            ),
+            eq: () => ({ limit: async () => ({ data: existingAgents, error: null }) }),
           }),
         };
       }
