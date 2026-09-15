@@ -148,4 +148,19 @@ describe('routeCriticalityLater (TS-5, FR-3)', () => {
 
     expect(hash1).not.toBe(hash2);
   });
+
+  // Third-party static review (worktree-reap incident, EXEC-TO-PLAN re-verification): the
+  // module documented dedupKey as required but never enforced it -- an omitted/empty value
+  // silently reintroduces the exact SEC-3 collapse with no signal. This is the shared
+  // function's own defense so a future third caller cannot reintroduce it silently.
+  it('throws when dedupKey is omitted, null, or blank -- never silently falls back to no dedup identity', async () => {
+    const supabase = buildSupabase();
+    await expect(routeCriticalityLater({ supabase, title: 'T', description: 'D', loggedVia: 'x' }))
+      .rejects.toThrow(/dedupKey is required/);
+    await expect(routeCriticalityLater({ supabase, title: 'T', description: 'D', loggedVia: 'x', dedupKey: null }))
+      .rejects.toThrow(/dedupKey is required/);
+    await expect(routeCriticalityLater({ supabase, title: 'T', description: 'D', loggedVia: 'x', dedupKey: '   ' }))
+      .rejects.toThrow(/dedupKey is required/);
+    expect(supabase._insert).not.toHaveBeenCalled();
+  });
 });
