@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-09-15T13:44:23.074Z",
-  "git_commit": "2987f611",
+  "generated_at": "2026-09-15T13:59:49.982Z",
+  "git_commit": "de617759",
   "db_snapshot_hash": "99a244a75eacde8a",
   "files": {
     "CLAUDE.md": {
@@ -93,10 +93,10 @@
     },
     "CLAUDE_ADAM.md": {
       "type": "full",
-      "chars": 134523,
-      "bytes": 135563,
-      "estimated_tokens": 33631,
-      "content_hash": "1537ab4987de39ed",
+      "chars": 137030,
+      "bytes": 138084,
+      "estimated_tokens": 34258,
+      "content_hash": "78545ca8d99281c0",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-8\\CLAUDE_ADAM.md"
     },
     "CLAUDE_ADAM_MANUAL.md": {
@@ -125,10 +125,10 @@
     },
     "CLAUDE_COORDINATOR_MANUAL.md": {
       "type": "full",
-      "chars": 22157,
-      "bytes": 22255,
-      "estimated_tokens": 5540,
-      "content_hash": "7e17299e4b7945ad",
+      "chars": 24498,
+      "bytes": 24612,
+      "estimated_tokens": 6125,
+      "content_hash": "4eff2d2597c85e93",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-8\\CLAUDE_COORDINATOR_MANUAL.md"
     },
     "CLAUDE_COORDINATOR_PROVENANCE.md": {
@@ -149,10 +149,10 @@
     },
     "CLAUDE_SOLOMON_MANUAL.md": {
       "type": "full",
-      "chars": 65057,
-      "bytes": 65414,
-      "estimated_tokens": 16265,
-      "content_hash": "c0216667cad6a210",
+      "chars": 67403,
+      "bytes": 67778,
+      "estimated_tokens": 16851,
+      "content_hash": "57e8f6acb49ec7fb",
       "path": "C:\\Users\\rickf\\Projects\\_EHG\\EHG_Engineer\\.worktrees\\adhoc\\adam-encode-8\\CLAUDE_SOLOMON_MANUAL.md"
     },
     "CLAUDE_SOLOMON_PROVENANCE.md": {
@@ -253,7 +253,7 @@
     }
   },
   "section_digests": {
-    "global": "fab2b640a40c5709",
+    "global": "0122893366d608f3",
     "byId": {
       "94": "ef2f1e7ed617b5e0",
       "189": "6398659126897bbb",
@@ -507,7 +507,7 @@
       "596": "0251044882a17550",
       "597": "ca5efc991922f3b8",
       "599": "7ddd3e2178799aa8",
-      "601": "c502b99bfe39c9bb",
+      "601": "d4e4f7bfad6c22a0",
       "602": "4a152018317677fd",
       "603": "98d7b093d064f76a",
       "605": "7400bc8a530b1331",
@@ -525,9 +525,9 @@
       "622": "94a8df85a96ad041",
       "626": "32f06fccc41d79a1",
       "627": "4731706c8b95dbc2",
-      "629": "2c30f8b5f4498f67",
+      "629": "a9979d8b3a275cbe",
       "630": "7851b31f692ec87c",
-      "632": "ca7eaad2f269fe63",
+      "632": "9d65455f9d6cae69",
       "633": "4736da508d97f111",
       "634": "6518b5f83a72be9e",
       "635": "d8aa183013fa3044",
