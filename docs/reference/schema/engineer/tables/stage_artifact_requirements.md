@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 44
+**Generated**: 2026-09-15T16:18:27.599Z
+**Rows**: 45
 **RLS**: Enabled (1 policy)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -36,7 +36,7 @@
 - `stage_artifact_requirements_stage_number_artifact_type_key`: UNIQUE (stage_number, artifact_type)
 
 ### Check Constraints
-- `stage_artifact_requirements_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 26)))
+- `stage_artifact_requirements_stage_number_check`: CHECK (((stage_number >= 1) AND (stage_number <= 27)))
 
 ## Indexes
 
