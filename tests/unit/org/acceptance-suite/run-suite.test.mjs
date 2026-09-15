@@ -65,4 +65,29 @@ describe('TS-8: suite runner never silently passes malformed input', () => {
     expect(result.findings[0].passed).toBe(false);
     expect(result.findings[0].reason).toMatch(/check threw: boom/);
   });
+
+  // EXEC-TO-PLAN SECURITY review: a circular organization object previously crashed the whole
+  // runSuite() call with an uncaught RangeError (stableStringify's content_hash computation runs
+  // OUTSIDE runOneCheck's per-check try/catch) instead of degrading to a reported result.
+  it('a circular organization object does not crash the run -- content_hash degrades gracefully', async () => {
+    const org = { name: 'circular-org' };
+    org.self = org;
+    const passingCheck = { id: 'noop', check: () => ({ passed: true }) };
+    const result = await runSuite({ organization: org, checks: [passingCheck] });
+    expect(result.pass_rate).toBe(100);
+    expect(typeof result.content_hash === 'string' || result.content_hash === null).toBe(true);
+  });
+
+  it('a circular organization object still produces a deterministic content_hash across runs', async () => {
+    const buildCircular = () => {
+      const org = { name: 'circular-org' };
+      org.self = org;
+      return org;
+    };
+    const passingCheck = { id: 'noop', check: () => ({ passed: true }) };
+    const r1 = await runSuite({ organization: buildCircular(), checks: [passingCheck] });
+    const r2 = await runSuite({ organization: buildCircular(), checks: [passingCheck] });
+    expect(r1.content_hash).not.toBeNull();
+    expect(r1.content_hash).toBe(r2.content_hash);
+  });
 });
