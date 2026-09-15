@@ -8,6 +8,7 @@
  * (owner/release_condition) that isChairmanGatedQF reads are unset/stale.
  */
 import { describe, it, expect } from 'vitest';
+import { createRequire } from 'module';
 import {
   isHintExcludedGated,
   tierFitOk,
@@ -17,6 +18,8 @@ import {
   SPIN_UP_GRACE_MS,
   KNOWN_GATED_QF_IDS,
 } from '../../../scripts/coordinator-idle-qf-hint.mjs';
+const require = createRequire(import.meta.url);
+const { computeQfRiskContentHash } = require('../../../lib/fleet/qf-risk-review-stamp.cjs');
 
 const NOW = Date.parse('2026-07-20T12:00:00Z');
 
@@ -263,15 +266,24 @@ describe('eligibleIdleWorkers — raw claim-holder exclusion for hinting specifi
 });
 
 describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live insert)', () => {
+  // QF-20260911-285: mirrors real PostgREST for compliance_details/factory_lane too, not just
+  // verified_at — strip a column from the returned rows whenever the resolved select column
+  // list didn't ask for it, so a regression that drops either column from QF_HINT_BASE_COLUMNS
+  // is caught here rather than only in production.
   function qfsForSelect(qfs, selectedCols) {
-    if (selectedCols.includes('verified_at')) return qfs;
-    return (qfs || []).map(({ verified_at: _verified_at, ...rest }) => rest);
+    const strip = ['verified_at', 'compliance_details', 'factory_lane'].filter((col) => !selectedCols.includes(col));
+    if (strip.length === 0) return qfs;
+    return (qfs || []).map((row) => {
+      const copy = { ...row };
+      for (const col of strip) delete copy[col];
+      return copy;
+    });
   }
 
-  // verifiedAtMissing simulates the staged (not-yet-applied) verified_at column
-  // (SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 FR-6): the pre-flight probe
-  // (.select('verified_at').limit(1)) resolves 42703 when true, null-error otherwise.
-  function makeFakeSupabase({ sessions, qfs, verifiedAtMissing = false, sdHolders = [] }) {
+  // verifiedAtMissing/factoryLaneMissing simulate the staged (not-yet-applied) columns
+  // (SD-LEO-INFRA-STALE-QF-DISPOSITION-SWEEP-001 FR-6, QF-20260911-285): the pre-flight probes
+  // (.select('verified_at'|'factory_lane').limit(1)) resolve 42703 when true, null-error otherwise.
+  function makeFakeSupabase({ sessions, qfs, verifiedAtMissing = false, factoryLaneMissing = false, sdHolders = [] }) {
     return {
       from(table) {
         let selectedCols = '';
@@ -282,11 +294,16 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
           order() { return this; },
           gt() { return this; }, // QF-20260830-454: seat_busy_reservation expires_at filter
           not() { return this; }, // QF-20260830-885: strategic_directives_v2 claiming_session_id filter
-          // The verified_at pre-flight probe's terminal call.
+          // The verified_at/factory_lane pre-flight probes' terminal call.
           limit() {
             if (table === 'quick_fixes' && selectedCols === 'verified_at') {
               return Promise.resolve(verifiedAtMissing
                 ? { data: null, error: { code: '42703', message: 'column quick_fixes.verified_at does not exist' } }
+                : { data: [], error: null });
+            }
+            if (table === 'quick_fixes' && selectedCols === 'factory_lane') {
+              return Promise.resolve(factoryLaneMissing
+                ? { data: null, error: { code: '42703', message: 'column quick_fixes.factory_lane does not exist' } }
                 : { data: [], error: null });
             }
             // QF-20260830-885: the authoritative SD-holder read (.select('claiming_session_id')
@@ -528,5 +545,70 @@ describe('runIdleQfHintCore — end-to-end decision (dry-run seam, no live inser
     const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
     expect(summary.skippedGated).toBe(1);
     expect(summary.claimableWithVerify).toBe(0);
+  });
+
+  // QF-20260911-285: QF_HINT_BASE_COLUMNS never selected compliance_details, so
+  // getRiskReviewStampFreshness (via isAutoStartableQF) always read the stamp as 'absent' here
+  // even when a security-agent had stamped the row fresh — the row was found only by a seat
+  // that happened to self-claim it through belt-depth.cjs or worker-checkin.cjs instead. The
+  // qfsForSelect mock above strips compliance_details when it's absent from the requested
+  // column list, so this reproduces the bug under the OLD select list and proves the fix under
+  // the current one.
+  describe('QF-20260911-285: compliance_details must be selected for the risk-review stamp to be seen', () => {
+    const RISK_TITLE = 'small auth token refresh fix';
+    const RISK_DESC = 'adjusts the auth token refresh interval, no behavior change';
+
+    function freshStampQf(overrides = {}) {
+      return qf({
+        title: RISK_TITLE,
+        description: RISK_DESC,
+        routing_tier: 2, // rederived tier disagreement path (persistedTier < 3) still routes through the stamp check
+        compliance_details: {
+          risk_reviewed: {
+            by: 'sub-agent-row-1',
+            at: '2026-09-11T22:40:48Z',
+            content_hash: computeQfRiskContentHash({ title: RISK_TITLE, description: RISK_DESC }),
+          },
+        },
+        ...overrides,
+      });
+    }
+
+    it('a risk-noun QF with a fresh risk_reviewed stamp IS hinted once compliance_details is selected', async () => {
+      const sb = makeFakeSupabase({ sessions: [worker()], qfs: [freshStampQf()] });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.hinted).toBe(1);
+    });
+
+    it('[TWO-SIDED] the same row without a stamp stays excluded — the stamp, not the risk noun alone, is what unlocks the hint', async () => {
+      const sb = makeFakeSupabase({ sessions: [worker()], qfs: [qf({ title: RISK_TITLE, description: RISK_DESC, routing_tier: 2 })] });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.hinted).toBe(0);
+      expect(summary.skippedGated).toBe(1);
+    });
+  });
+
+  // QF-20260911-285: isAutoStartableQF's dispatch-only guard (`if (qf.factory_lane) return
+  // false`) was also silently blinded here — factory_lane was never in QF_HINT_BASE_COLUMNS,
+  // so a coordinator-dispatch-only QF could be hinted to a worker for self-claim.
+  describe('QF-20260911-285: factory_lane must be selected for the dispatch-only guard to fire', () => {
+    it('a factory_lane=true QF is excluded from hinting once factory_lane is selected', async () => {
+      const sb = makeFakeSupabase({ sessions: [worker()], qfs: [qf({ factory_lane: true })] });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.hinted).toBe(0);
+    });
+
+    it('[TWO-SIDED] an ordinary QF (factory_lane false/unset) is still hinted normally', async () => {
+      const sb = makeFakeSupabase({ sessions: [worker()], qfs: [qf({ factory_lane: false })] });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.hinted).toBe(1);
+    });
+
+    it('factory_lane NOT selectable (migration unapplied): degrades safely, no crash, unaffected rows still hinted', async () => {
+      const sb = makeFakeSupabase({ sessions: [worker()], qfs: [qf()], factoryLaneMissing: true });
+      const summary = await runIdleQfHintCore(sb, { nowMs: NOW, dryRun: true });
+      expect(summary.idleWorkers).toBe(1);
+      expect(summary.hinted).toBe(1);
+    });
   });
 });
