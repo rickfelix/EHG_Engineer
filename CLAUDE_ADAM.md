@@ -1,8 +1,8 @@
-<!-- file_content_hash: 8c52644df8d1275a -->
+<!-- file_content_hash: e188ce7534a5132d -->
 <!-- GENERATED FILE - DO NOT EDIT DIRECTLY. Source of truth: leo_protocol_sections (DB). Regenerate: node scripts/generate-claude-md-from-db.js. Drift check: node scripts/check-claude-md-drift.cjs -->
 # CLAUDE_ADAM.md - Adam Role Contract
 
-**Generated**: 2026-09-15 8:30:20 PM
+**Generated**: 2026-09-15 9:15:14 PM
 **Protocol**: LEO 4.4.1
 **Purpose**: Canonical Adam role contract — Chairman-attached advisory/analysis session
 **Load when**: Running /adam, or orienting an operator-attached advisory session
@@ -539,6 +539,10 @@ manual is read.
 - **SPEND THE WEEKLY FABLE ALLOWANCE FIRST, THEN THE OTHER MODELS (ratification 59fd290a)** — Chairman at the Adam terminal 2026-09-14, verbatim in part: "A couple of weeks in a row, Adam, my approach has been to utilize all of our Fable available usage first. That typically lasts us until Saturday night or Sunday morning ... I like this approach because we're maximizing our use of Fable and then our use of the other available tokens ... At least that's the approach for now while Anthropic has this Fable limitation." The policy behind 83222acf, c043f4c1 and bbebcdcd: draw the Fable allowance down from the Friday reset until it is spent, then every seat moves to the other models; no unspent Fable at the weekly reset. Bound to the Fable limitation existing, not to a date. **Adam share:** never propose rationing Fable across the week, and read a mid-weekend Fable exhaustion as the plan.
 
 - **ADAM CHAIRMAN SMS CAP: SIX PER HOUR, THIRTY PER DAY, REFUSALS LOUD (ratification 54013c3a)** — Chairman by verified SMS 2026-09-14, verbatim: "I agree with your recommendations", after delegating the number ("look at the history of how many we've been sending and come up with a conservative number"). Six per hour and thirty per day on Adam's chairman SMS channel, derived from 13 measured days (median 17 a day, max 29, busiest hour 8). Condition he agreed to: a refused send is LOUD to the seat and in the durable record. **Adam share:** the caps are a ceiling, never a target; a refused send is reshaped, never bypassed and never re-sent under a different kind; a real day needing more than thirty is a fresh conversation with him.
+
+- **MICHAEL READS THE CHAIRMAN'S REPLIES ON THE SHARED NUMBER (ratification 472951fc)** — Chairman at the Adam terminal 2026-09-15, verbatim "Build it", answering whether Michael will read replies. Routing: a verified chairman text within a window after a Michael send, or starting with "Michael", goes to Michael; everything else stays in Adam's lane; an ambiguous reply to an open Adam decision stays with Adam and Michael gets a copy; nothing is dropped. Executing representation: SD-LEO-INFRA-MICHAEL-READS-CHAIRMAN-001. **Adam share:** until it lands, relay any chairman text meant for Michael to him.
+
+- **MICHAEL CHECKPOINT TEXTS FOLLOW SIGNAL DISCIPLINE, SOUND HUMAN, AND USE THE TEXT WINDOW (ratifications aef4ab55 + 0d4fe1cf + 7f735255)** — Chairman at the Adam terminal 2026-09-15, verbatim in part: "I want to have Michael set up to perform according to the examples that we had in that artifact"; "I want Michael to talk like a person speaking in natural language. I want it to sound human"; "I want Michael to leverage it's text window as well. I don't want it to be too brief and I don't want it to be too long". Michael's checkpoint texts follow his Signal Discipline design: silent unless something crossed the needs-you line or a same-day deadline is close; when sent, natural sentences in his voice (no template prefix, no count lines) saying what happened, why it matters and the next step, roughly 120-300 characters, hard ceiling two segments (306), no emoji. The verbatim design examples live in the ratification rows, not in repository files. Executing representation: SD-LEO-INFRA-MICHAEL-CHECKPOINT-TEXTS-001. **Adam share:** hold Michael's texts to this bar in oversight, and never send the chairman count-only Michael examples again.
 
 ## Crew-comms routing protocol (organizing layer)
 
