@@ -1,0 +1,18 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
+const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data: prds } = await sb.from('product_requirements_v2').select('executive_summary,system_architecture,implementation_approach,technical_requirements,metadata,content').eq('sd_id','6b090e53-3732-43e9-9f07-939bae2a0f69');
+const r = prds[0];
+console.log('EXEC SUMMARY (DB), len', String(r.executive_summary).length);
+console.log(r.executive_summary);
+console.log('\ntypeof system_architecture:', typeof r.system_architecture);
+console.log('typeof implementation_approach:', typeof r.implementation_approach);
+console.log('typeof technical_requirements:', typeof r.technical_requirements, Array.isArray(r.technical_requirements));
+const md = String(r.content||'');
+console.log('\nmd markers:');
+for (const p of ['FR-3','FR-4','CONCATENATION','WRONG ORDER','smoke','FLOW_STEP_UNRESOLVED','journeys[].coverage_selfcheck','sibling']) console.log('  ', p, '->', md.includes(p));
+const i = md.indexOf('coverage_selfcheck');
+console.log('\nmd excerpt around data_contracts:');
+const j = md.indexOf('Data Contracts');
+console.log(md.slice(j>=0?j:0, (j>=0?j:0)+900));

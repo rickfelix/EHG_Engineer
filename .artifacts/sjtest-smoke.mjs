@@ -1,0 +1,11 @@
+import 'dotenv/config';
+import { createClient } from '@supabase/supabase-js';
+const sb = createClient(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+const { data } = await sb.from('product_requirements_v2').select('smoke_test_cmd,activation_test_id,acceptance_criteria,plan_checklist,exec_checklist,metadata').eq('sd_id','6b090e53-3732-43e9-9f07-939bae2a0f69');
+const r = data[0];
+console.log('smoke_test_cmd:', JSON.stringify(r.smoke_test_cmd));
+console.log('activation_test_id:', JSON.stringify(r.activation_test_id));
+console.log('acceptance_criteria:', JSON.stringify(r.acceptance_criteria)?.slice(0,300));
+console.log('metadata keys:', Object.keys(r.metadata||{}).join(','));
+const { data: ev } = await sb.from('sub_agent_execution_results').select('id,sub_agent_code,phase,verdict,created_at').eq('sd_id','6b090e53-3732-43e9-9f07-939bae2a0f69').eq('sub_agent_code','TESTING').order('created_at',{ascending:false});
+console.log('existing TESTING rows:', JSON.stringify(ev,null,1));
