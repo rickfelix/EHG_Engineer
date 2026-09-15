@@ -32,13 +32,21 @@ describe('analyzeStage23DedicatedVentureUat', () => {
     expect(result.venture_name).toBe('Test Venture');
   });
 
-  it('wraps the gate result in a LAUNCH_UAT_REPORT artifact', async () => {
+  it('wraps the gate result in a LAUNCH_UAT_REPORT artifact, alongside a second ORGANIZATION_QA_RESULT artifact', async () => {
+    // SD-LEO-INFRA-VENTURE-WORKFLOW-CREATES-001: fakeSupabaseReturning's minimal client
+    // doesn't support the agent_registry .limit() chain the new organization step needs --
+    // this deliberately exercises the catch path (organizationResult.ok === false), proving
+    // the new artifact is present and additive EVEN when organization creation/QA-QC fails,
+    // never displacing the pre-existing LAUNCH_UAT_REPORT entry.
     const supabase = fakeSupabaseReturning({ metadata: {} });
     const result = await analyzeStage23DedicatedVentureUat({ supabase, ventureId: 'v-1' });
-    expect(result.artifacts).toHaveLength(1);
+    expect(result.artifacts).toHaveLength(2);
     expect(result.artifacts[0].artifactType).toBe(ARTIFACT_TYPES.LAUNCH_UAT_REPORT);
     expect(result.artifacts[0].source).toBe('stage-23-dedicated-venture-uat');
     expect(result.artifacts[0].payload.applies).toBe(false);
+    expect(result.artifacts[1].artifactType).toBe(ARTIFACT_TYPES.ORGANIZATION_QA_RESULT);
+    expect(result.artifacts[1].source).toBe('stage-23-dedicated-venture-uat');
+    expect(result.artifacts[1].payload.ok).toBe(false);
   });
 
   it('accepts an injected logger without throwing', async () => {

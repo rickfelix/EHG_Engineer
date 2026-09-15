@@ -1,4 +1,9 @@
 {
   "_doc": "ARTIFACT_TYPES registry values (lib/eva/artifact-types.js) that are registered in code but NOT YET allowed by the live venture_artifacts_artifact_type_check CHECK constraint, because the widening migration is chairman-gated and staged (not yet applied) -- mirrors the requires_chairman_apply convention used by scripts/check-migration-readiness.mjs. Every entry MUST cite the staged migration file and a reason. tests/unit/eva/artifact-type-db-parity.test.js enforces two things: (1) every drifted value not covered here still fails CI (real drift keeps failing), and (2) any entry here that IS already present in the live constraint snapshot fails CI too (a stale exemption that should have been removed once the migration was applied and the schema snapshot regenerated via `npm run schema:snapshot:lint`).",
-  "allow": {}
+  "allow": {
+    "organization_qa_result": {
+      "migration": "database/migrations/20260915_add_organization_qa_result_artifact_type.sql",
+      "reason": "SD-LEO-INFRA-VENTURE-WORKFLOW-CREATES-001: stage-23-dedicated-venture-uat.js's new createAndCheckOrganization() writes an ORGANIZATION_QA_RESULT row alongside the existing LAUNCH_UAT_REPORT row, read by stage-23-launch-readiness.js's new organization_qa checklist category (flag-gated, LEO_S24_ORGANIZATION_QA_REQUIRED, default OFF) -- but the CHECK constraint has never allowed the value. Never blocking: the write call is wrapped in try/catch (FR-1's never-blocks-UAT contract), so until this migration is chairman-approved the QA/QC result is silently dropped rather than persisted, and the flag-gated reader (default OFF) sees no row either way. Widening migration staged, chairman-gated per the truth_demand_thesis precedent."
+    }
+  }
 }
