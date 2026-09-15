@@ -207,6 +207,16 @@
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
 
+## 2026-09-15
+
+### Infrastructure
+
+- **The 28 venture role templates become database-driven and versioned, in three layers, with a structurally clobber-proof venture write path** - SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001 (PR #8991)
+  - Executes chairman directive cba1573f. Adds `org_role_base_versions` (portfolio-level, versioned structure/function/norms per role, no `venture_id` column at all -- a venture-scoped write is structurally impossible, not merely disallowed by convention), `org_role_venture_overlays` (per-venture, structure+function only, no `norms` column), `org_role_venture_pins` (base vN + overlay vM; rollback is a single-row repoint, never a data mutation), and `org_role_change_log` (append-only, trigger-populated across all three layers). Modeled directly on this repo's own `leo_protocols`/`leo_protocol_sections_history`/`chairman_ratifications` precedent -- the same pattern the chairman named as proof this works.
+  - `lib/org/role-registry-resolver.mjs`: DB-independent pure functions round-trip `STANDARD_VENTURE_TEMPLATE` through the three-layer split and back, proving lossless equivalence for all 28 roles by key presence (not just value) -- entirely in-memory, no caller wired (`lib/agents/venture-ceo-factory.js` is unchanged, 0 diff; the caller switch is deferred to a follow-up SD).
+  - Two rounds of deep-tier adversarial `/ship` review found and closed 4 real defects before merge: a **CRITICAL** audit-trail bypass (the change-log's writer triggers only covered INSERT/UPDATE, so a DELETE on any source table left zero trace -- fixed with DELETE handling plus `ENABLE ALWAYS TRIGGER` on all three writer triggers, closing the same replica-mode bypass class `chairman_ratifications` was fixed for on its own guard triggers); a resolver bug producing duplicate role entries when a role has both an active and superseded base version; a resolver bug silently degrading to base-only resolution when a pin named a missing overlay row; and an undocumented migration apply-order hazard (the change-log migration's filename sorts alphabetically before the overlay/pin migration it depends on).
+  - Because every table is new, R1 (a reserved chairman decision) required a ceremony before creation -- the PR named the exact files and stopped there. Applied via the coordinator-delegated apply path shortly after merge; live-verified post-apply: a venture-scoped insert against the base table fails with a genuine schema error, and a real insert-then-delete round trip confirmed the change log correctly captures both operations.
+
 ## 2026-09-14
 
 ### Infrastructure
