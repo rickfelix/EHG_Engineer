@@ -66,8 +66,8 @@ describe('placement and ceremony marker (TS-5)', () => {
       expect(mig.fwd).toMatch(/@chairman-gated/);
     });
 
-    it(`${label}: carries @approved-by: <PENDING> -- not yet ratified, not applied`, () => {
-      expect(mig.fwd).toMatch(/@approved-by:\s*<PENDING/);
+    it(`${label}: carries the chairman @approved-by marker (approved at the Adam terminal 2026-09-15, chairman_decisions 7432cb8f/41f0de8b/6e865280)`, () => {
+      expect(mig.fwd).toMatch(/^--\s*@approved-by: codestreetlabs@gmail\.com\s*$/m);
     });
 
     it(`${label}: classifies TIER-2 (cannot auto-apply)`, () => {
