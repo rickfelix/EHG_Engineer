@@ -1,5 +1,13 @@
 # Apply-state verifier regression corpus
 
+## Metadata
+- **Category**: Testing
+- **Status**: Approved
+- **Version**: 1.0.0
+- **Author**: Claude Sonnet 5
+- **Last Updated**: 2026-09-15
+- **Tags**: testing, apply-state-verifier, regression-corpus
+
 SD-LEO-INFRA-APPLY-STATE-VERIFIER-002.
 
 ## What this is
