@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 26
+**Generated**: 2026-09-15T16:18:27.599Z
+**Rows**: 85
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -42,7 +42,7 @@
 - `venture_quality_findings_unique_hash`: UNIQUE (venture_id, finding_hash)
 
 ### Check Constraints
-- `venture_quality_findings_finding_category_check`: CHECK ((finding_category = ANY (ARRAY['npm_audit'::text, 'secrets'::text, 'lint'::text, 'test_suite'::text, 'unit_test'::text, 'e2e_test'::text, 'uat_test'::text, 'bug_report'::text, 'uat_signoff'::text, 'capability'::text])))
+- `venture_quality_findings_finding_category_check`: CHECK ((finding_category = ANY (ARRAY['npm_audit'::text, 'secrets'::text, 'lint'::text, 'test_suite'::text, 'unit_test'::text, 'e2e_test'::text, 'uat_test'::text, 'bug_report'::text, 'uat_signoff'::text, 'capability'::text, 'usability'::text, 'accessibility'::text, 'journey_coherence'::text, 'performance'::text, 'responsive'::text])))
 - `venture_quality_findings_severity_check`: CHECK ((severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))
 - `venture_quality_findings_status_chk`: CHECK ((status = ANY (ARRAY['pending'::text, 'sd_filed'::text, 'resolved'::text, 'cancelled'::text])))
 

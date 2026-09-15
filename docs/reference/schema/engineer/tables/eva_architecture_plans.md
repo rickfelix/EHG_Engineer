@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 240
+**Generated**: 2026-09-15T16:18:27.599Z
+**Rows**: 256
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (25 total)
+## Columns (27 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -43,6 +43,8 @@
 | quality_issues | `jsonb` | YES | `'[]'::jsonb` | - |
 | quality_checked_at | `timestamp with time zone` | YES | - | - |
 | content_hash | `text` | YES | - | - |
+| approved_by | `text` | YES | - | SD-LEO-INFRA-GOVERNANCE-ARTIFACTS-RECORD-001. Identity of the seat that approved this plan, distinct from created_by (the author) and from chairman_approved (a separate boolean the chairman himself flips). NULL means no distinct-seat approval has been recorded yet -- never a guessed value. Written only by lib/eva/archplan-promote.js promoteArchPlan(), never by the authoring write path. |
+| approved_by_at | `timestamp with time zone` | YES | - | SD-LEO-INFRA-GOVERNANCE-ARTIFACTS-RECORD-001. Timestamp of the approved_by approval. NULL iff approved_by is NULL. |
 
 ## Constraints
 

@@ -4,8 +4,8 @@
 **Database**: dedlbzhpgkmetvhbkyzq
 **Repository**: EHG_Engineer (this repository)
 **Purpose**: Strategic Directive management, PRD tracking, retrospectives, LEO Protocol configuration
-**Generated**: 2026-07-02T14:19:23.450Z
-**Rows**: 288
+**Generated**: 2026-09-15T16:18:27.599Z
+**Rows**: 349
 **RLS**: Enabled (2 policies)
 
 ⚠️ **This is a REFERENCE document** - Query database directly for validation
@@ -14,7 +14,7 @@
 
 ---
 
-## Columns (23 total)
+## Columns (25 total)
 
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
@@ -41,6 +41,8 @@
 | quality_checked_at | `timestamp with time zone` | YES | - | - |
 | content_hash | `text` | YES | - | - |
 | mission_id | `uuid` | YES | - | Mission foundation up-FK (missions). Portfolio mission (venture_id NULL) <-> L1; per-venture mission <-> that venture's L2; consumers COALESCE to portfolio. Only the L1 doc is backfilled. SD-LEO-INFRA-INITIATIVE-BACKBONE-CANONICAL-001. |
+| approved_by | `text` | YES | - | SD-LEO-INFRA-GOVERNANCE-ARTIFACTS-RECORD-001. Identity of the seat that approved this vision document, distinct from created_by (the author) and from chairman_approved. NULL means no distinct-seat approval has been recorded yet -- never a guessed value. Written only by lib/eva/vision-promote.js promoteVisionDocument(), never by the authoring write path. |
+| approved_by_at | `timestamp with time zone` | YES | - | SD-LEO-INFRA-GOVERNANCE-ARTIFACTS-RECORD-001. Timestamp of the approved_by approval. NULL iff approved_by is NULL. |
 
 ## Constraints
 
