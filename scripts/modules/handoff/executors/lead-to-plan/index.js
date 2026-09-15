@@ -42,7 +42,10 @@ import {
   createVerifierParityGate,
   // Parent-Exec Gate (QF-20260906-901): child SDs cannot activate before their orchestrator
   // parent completes its own two setup handoffs.
-  createParentExecGate
+  createParentExecGate,
+  // Registry Audit Gate (SD-LEARN-FIX-ADDRESS-PAT-LES-015): advisory-only validation_gate_registry
+  // near-miss audit, surfaced at LEAD-TO-PLAN.
+  createGateRegistryAuditGate
 } from './gates/index.js';
 
 // Protocol File Read Gate (SD-LEO-INFRA-ENFORCE-PROTOCOL-FILE-001)
@@ -212,6 +215,12 @@ export class LeadToPlanExecutor extends BaseExecutor {
     // Skipped at execute so the execute path stays byte-identical — the verifier
     // (executeSpecific below) remains the sole execute-time enforcer.
     gates.push(createVerifierParityGate(this.supabase));
+
+    // Registry Audit Gate (SD-LEARN-FIX-ADDRESS-PAT-LES-015, PAT-LES-5b719daf1d9b)
+    // ADVISORY-ONLY (required:false, always passed:true): surfaces validation_gate_registry
+    // "near-miss" gaps -- a gate DISABLED for a sibling sd_type but undecided for this SD's own
+    // type -- at the very first handoff, before a downstream phase can discover one live.
+    gates.push(createGateRegistryAuditGate(this.supabase));
 
     return gates;
   }

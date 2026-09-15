@@ -1,0 +1,149 @@
+{
+  "executive_summary": "PAT-LES-5b719daf1d9b (source: SD-MAN-INFRA-VISION-RESCORE-ON-COMPLETION-001 retrospectives): LEAD approved that SD without any check of validation_gate_registry (the DB table of per-(gate_key, sd_type) applicability overrides -- REQUIRED/OPTIONAL/DISABLED). No row existed exempting GATE6_BRANCH_ENFORCEMENT for infrastructure SDs, so the gate ran fully REQUIRED (confirmed: absence in this registry fails OPEN to enforcement, per gate-policy-resolver.js) and blocked that SD at PLAN-TO-EXEC -- several phases and a full PRD-authoring cycle after LEAD had already approved it. The specific historical row is already fixed (GATE6_BRANCH_ENFORCEMENT/infrastructure/DISABLED, created 2026-02-19); this SD is not a backfill. The durable gap the retro's own action items name is structural: nothing surfaces a registry-audit finding proactively, for any sd_type, before a downstream phase discovers a missing exemption live. This SD adds a single new, non-blocking, advisory gate (GATE_REGISTRY_AUDIT) to the LEAD-TO-PLAN handoff -- the very first handoff, before PLAN or EXEC begin -- that surfaces exactly the near-miss class the retro describes: a gate that is DISABLED for at least one OTHER sd_type but has no equivalent decision yet for the SD currently under LEAD review.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "New advisory gate GATE_REGISTRY_AUDIT, added to LEAD-TO-PLAN's getRequiredGates(), reusing HandoffOrchestrator.dryRunHandoff() rather than hand-constructing executors",
+      "priority": "high",
+      "description": "Add scripts/modules/handoff/executors/lead-to-plan/gates/gate-registry-audit.js, exporting createGateRegistryAuditGate(supabase) -- matching the same factory signature convention as its siblings in this directory (e.g. createScopeReductionVerificationGate(supabase)). LeadToPlanExecutor has no back-reference to the HandoffOrchestrator that constructs it (confirmed: HandoffOrchestrator.js:972 does `new LeadToPlanExecutor(executorDeps)`, one-directional), so the gate's validator lazily constructs its OWN lightweight orchestrator instance: `const { HandoffOrchestrator } = await import('../../../HandoffOrchestrator.js'); const orchestrator = new HandoffOrchestrator({ supabase });` (three levels up from gates/lead-to-plan/executors/ to reach scripts/modules/handoff/HandoffOrchestrator.js -- confirmed against the live file path, corrected during EXEC after the first precheck run caught a 2-vs-3-levels-up path error) -- confirmed safe: HandoffOrchestrator's constructor (HandoffOrchestrator.js:94-120) self-constructs every other dependency (sdRepo, prdRepo, handoffRepo, validationOrchestrator, contentBuilder, recorder) from just {supabase}, so this is a side-effect-free, minimal construction, not a duplicate of the real DI graph. Registered in lead-to-plan/index.js's getRequiredGates() as a new gates.push(createGateRegistryAuditGate(this.supabase)) call, alongside the existing ~30 gates. The gate's validator(ctx) does the following, for the CURRENT SD already under LEAD review (ctx.sd, a REAL, already-persisted SD row -- never a synthetic/undefined SD, so this avoids the exact undefined-SD TypeError VALIDATION's review reproduced live in scripts/modules/handoff/executors/plan-to-exec/index.js:133 and plan-to-lead/index.js:245, both of which dereference sd.target_application without optional chaining when getRequiredGates() is called against an undefined SD):\n1. For each of the 5 handoff types (LEAD-TO-PLAN, PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, LEAD-FINAL-APPROVAL), call orchestrator.dryRunHandoff(phase, ctx.sd.id, {}) inside its OWN try/catch (a failure auditing one phase must never crash or block the LEAD-TO-PLAN handoff, and must never be silently absorbed either -- see FR-4 for the required behavior on partial failure). Note: dryRunHandoff('LEAD-TO-PLAN', ...) will itself list this very gate (GATE_REGISTRY_AUDIT) in its own manifest -- this is safe and non-recursive, since dryRunHandoff only lists gate .name values via getRequiredGates(), it never invokes any gate's .validator (confirmed by its own docstring: 'without executing gates').\n2. dryRunHandoff() already performs the exact resolution logic real gate execution uses (applyGatePolicies against validation_gate_registry) and already returns a manifest of {name, enabled, source, required, policyReason, weight} entries covering BOTH hardcoded gates (from getRequiredGates()) AND database-rule-driven validators (from loadValidationRules()) -- reuse this manifest verbatim per phase rather than re-deriving gate lists by hand (VALIDATION correction #2: hand-constructing executors with a minimal {supabase} bag, while empirically safe for a REAL sd_type=infrastructure SD in this session's own testing, duplicates dryRunHandoff's existing, already-hardened logic for no benefit, and VALIDATION correction #4 confirmed a hand-rolled enumeration misses LEAD-TO-PLAN's own gates and the DB-rule namespace that dryRunHandoff's manifest already includes).\n3. Collect the union of all manifest .name values across the 5 phases into a single Set (this SD's full 'known gate/rule universe').",
+      "acceptance_criteria": [
+        "scripts/modules/handoff/executors/lead-to-plan/gates/gate-registry-audit.js exists, exporting createGateRegistryAuditGate(supabase).",
+        "lead-to-plan/index.js's getRequiredGates() pushes this gate into its returned array -- confirmed by a unit test asserting the gate name GATE_REGISTRY_AUDIT is present in the array LeadToPlanExecutor.getRequiredGates(sd, {}) returns for a representative sd object.",
+        "The gate's validator calls handoffOrchestrator.dryRunHandoff() for all 5 handoff types (not just the 4 downstream ones) -- a unit test with a mocked/stubbed dryRunHandoff spy proves all 5 phase strings are passed, in any order.",
+        "No new executor instances are hand-constructed inside this gate's validator (grep confirms zero `new PlanToExecExecutor`/`new ExecToPlanExecutor`/`new PlanToLeadExecutor` inside gate-registry-audit.js)."
+      ]
+    },
+    {
+      "id": "FR-2",
+      "title": "Near-miss discriminator, from ONE unfiltered registry read: warn on a gate DISABLED for another sd_type but undecided for this one -- never on plain absence, never fooled by sentinel sd_types",
+      "priority": "high",
+      "description": "VALIDATION's PLAN-phase design review measured that a naive 'warn on every gate with no registry row for this sd_type' design would flag 85 of 93 gates (91%) on this exact SD's own LEAD-TO-PLAN handoff -- noise nobody would read. TESTING's PLAN-phase PRD review then found the CORRECTED design's own description (in an earlier draft) still steered toward a bug: it instructed querying validation_gate_registry filtered to applicability='DISABLED' ONLY, then separately claimed to check 'no row of ANY applicability' for the SD's own type -- structurally impossible from a DISABLED-filtered rowset (a REQUIRED row for the SD's own type is invisible to it), and TESTING proved empirically that a DISABLED-filtered-read implementation and a correct implementation are BYTE-IDENTICAL against today's live registry (both produce the same 12 gate_keys) precisely because no live specimen happens to exercise the divergent case yet -- meaning only a deliberately-constructed unit fixture (mandated below) can catch this defect; the live integration test (TS-4) CANNOT.\n\nCORRECTED design, ONE query only: after collecting the known gate/rule universe (FR-1.3), issue a SINGLE unfiltered query of validation_gate_registry -- SELECT gate_key, sd_type, applicability FROM validation_gate_registry (no applicability filter). From this ONE rowset, derive BOTH: (a) siblingDisabledMap: gate_key -> the list of DISTINCT, CONCRETE sd_types (see sentinel handling below) that have a DISABLED row for it; (b) ownTypeDecidedSet: the set of gate_keys that have ANY row WHATSOEVER for ctx.sd.sd_type specifically -- membership is by ROW PRESENCE, never by an applicability allowlist. TESTING's second review round found a REQUIRED/OPTIONAL/DISABLED-only allowlist is itself a live-reachable bug: the registry carries a 4th applicability value, OPTIONAL_OVERRIDE (4 live rows, all on GATE_VISION_SCORE, sd_types orchestrator/refactor/feature/enhancement), which an allowlist would silently drop, producing a false NEAR_MISS for a gate that actually already has an explicit decision on file. The applicability value of the SD's own row is IRRELEVANT to this membership test -- only its existence matters (the registry may grow further distinct applicability values over time; row-presence membership is future-proof against that, an allowlist is not). For every gate_key in the known universe (FR-1.3) that: (i) appears in siblingDisabledMap for at least one CONCRETE sd_type OTHER than ctx.sd.sd_type, AND (ii) is NOT in ownTypeDecidedSet -- surface a structured finding {type: 'NEAR_MISS', gate_key, disabled_for_sd_types: [...]} into a `findings` array (see TR-1 for the full result shape -- `findings` is a distinct field from `warnings`, not folded into it). NOTE (corrected during EXEC, TESTING's EXEC-phase review): NEAR_MISS carries NO `phase` field, unlike AUDIT_INCOMPLETE -- FR-1.3 mandates unioning gate/rule names across all 5 phases into a single Set BEFORE the near-miss computation runs, which structurally destroys any single phase attribution a gate_key could be tagged with (the same gate_key can legitimately appear in more than one phase's manifest). An earlier PRD draft declared `phase` on NEAR_MISS anyway; that was a spec/code inconsistency this note corrects, not a behavior change.\n\nSentinel sd_type handling (TESTING finding, live registry has 4 rows with sd_type=NULL and 2 with the literal string sd_type='all' today, none currently DISABLED but latent): a row with sd_type=NULL is a validation_profile-scoped row, not a concrete sd_type decision -- exclude it entirely from BOTH siblingDisabledMap and ownTypeDecidedSet construction. A row with sd_type='all' is dead-by-construction in the live gate-policy-resolver.js (confirmed by VALIDATION's LEAD-phase review: resolveGatePolicy matches sd_type by exact equality, no wildcard handling) -- treat it the same as NULL: excluded entirely, never counted as 'a different sd_type' (which would cause a false near-miss for every sd_type the instant an 'all' row is marked DISABLED) and never counted as 'this SD's own decision' either (since it does not actually protect this sd_type in the live resolver). This is a narrow, targeted defensive read (skip 2 known-inert sentinel values), NOT a fix to the underlying resolver -- that gap is separately logged (harness_backlog row b4b18aac) and explicitly out of this SD's scope (TR-3).",
+      "acceptance_criteria": [
+        "A unit test fixture stubs the registry query to return a SINGLE unfiltered rowset containing (GATE_X, sd_type=feature, applicability=DISABLED) and NO row for sd_type=infrastructure. Auditing an infrastructure SD produces exactly one NEAR_MISS finding for GATE_X; auditing a feature SD produces ZERO findings for it (feature already has its own DISABLED decision).",
+        "A unit test fixture with NO registry rows at all for a given gate_key produces ZERO findings for that gate_key (plain absence, uncorrelated to any sibling sd_type, must never be flagged).",
+        "A unit test fixture where the SAME sd_type has its own REQUIRED row (not DISABLED -- this is the specific case a DISABLED-filtered-read implementation cannot see, and the exact bug this PRD's own earlier draft would have shipped) for a gate_key that ALSO has a sibling DISABLED row for a different sd_type produces ZERO findings for that gate_key. Two further fixture variants repeat this with an OPTIONAL row, and separately an OPTIONAL_OVERRIDE row, for the SD's own type, both also asserting zero findings -- OPTIONAL_OVERRIDE is a live 4th applicability value (found on this SD's own review pass) that a REQUIRED/OPTIONAL/DISABLED-only allowlist would wrongly miss; own-type membership must be tested as ROW PRESENCE regardless of applicability value, not a closed value list.",
+        "A unit test fixture where a gate_key's ONLY DISABLED row has sd_type=NULL (a validation_profile-scoped row) or sd_type='all' produces ZERO findings when auditing ANY concrete sd_type -- these sentinel rows must never register as 'a different sd_type has disabled this.'",
+        "Running the real gate against the live registry for sd_type=infrastructure (this SD's own type) surfaces a reproducible, small (single-digit-to-low-double-digit) finding count -- not the ~85-gate volume the pre-correction design would have produced. Assert `findings.filter(f => f.type === 'NEAR_MISS').length < 20` as a sanity ceiling (TESTING measured 12 live; note in the retrospective at PLAN-TO-LEAD that this leaves only ~8 headroom on a registry that will keep growing, flagging the ceiling itself as a possible future flake source worth revisiting, not something to fix in this SD)."
+      ]
+    },
+    {
+      "id": "FR-3",
+      "title": "Robust partial-failure handling: name the failed phase, never silently truncate, structurally distinct from a near-miss",
+      "priority": "medium",
+      "description": "VALIDATION correction #5 (LEAD phase): a silently truncated list that still prints a confident warning block is worse than no audit. If dryRunHandoff() throws or returns {success:false} for any of the 5 phases, that phase is excluded from FR-1.3's known-universe union for finding-suppression purposes, and the gate's `findings` array (TR-1) MUST include a structured entry {type: 'AUDIT_INCOMPLETE', phase, error} (the caught error's message, truncated to a reasonable length). TESTING's PLAN-phase review found an earlier draft asserted this ONLY as a string-prefix convention on the human-readable `warnings` array ('AUDIT_INCOMPLETE:' vs 'NEAR_MISS:') with no structured, programmatically-distinguishable field -- corrected: `findings[].type` is the authoritative, machine-checkable discriminator ('NEAR_MISS' | 'AUDIT_INCOMPLETE'), and the human-readable `warnings` array is DERIVED from `findings` (one string per finding, prefixed to match its type) purely for the existing handoff CLI's 'Warnings: N' display -- never the other way around.",
+      "acceptance_criteria": [
+        "A unit test stubs dryRunHandoff to throw for exactly one of the 5 phases and succeed for the other 4; `findings` contains exactly one {type:'AUDIT_INCOMPLETE', phase:'<that phase>'} entry, the gate still returns passed:true (never blocks on an audit-infrastructure failure), and any NEAR_MISS findings the 4 successful phases produced are still present in `findings`.",
+        "A unit test stubs dryRunHandoff to throw for all 5 phases; the gate still returns passed:true, `findings` contains exactly 5 AUDIT_INCOMPLETE entries (one per phase, each naming its phase) and zero NEAR_MISS entries (since no phase's universe was collectible).",
+        "A unit test asserts `warnings` (the display array) contains one string per `findings` entry, and that each string's prefix ('NEAR_MISS:' or 'AUDIT_INCOMPLETE:') matches its source finding's `type` -- proving `warnings` is genuinely derived from `findings`, not independently constructed."
+      ]
+    },
+    {
+      "id": "FR-4",
+      "title": "Never blocking, never a scoring outlier -- honest, tie-break-correct score, required:false, explicit design-tradeoff comment",
+      "priority": "high",
+      "description": "This gate must NEVER cause a LEAD-TO-PLAN handoff to fail (out of scope per the SD's own text: no gate-threshold or scoring-algorithm change). Set required:false on the gate object. Separately, VALIDATION correction #3 (LEAD phase) found gate.weight is read via `gate.weight || 1.0` in ValidationOrchestrator.js:475 (TESTING's PLAN-phase review additionally found a second, undocumented read site at :1371, same pattern) -- a falsy weight:0 does NOT zero out a gate's contribution to the weighted average (0 || 1.0 evaluates to 1.0 in JS), so this gate DOES contribute to the handoff's aggregate score like any other gate, exactly like every other pre-existing advisory gate in this same file (SCOPE_REDUCTION_VERIFICATION, PRE_PLAN_ADVERSARIAL_CRITIQUE, DFE_ESCALATION_GATE, etc.). Given this is unavoidable within the current scoring algorithm (which this SD does NOT modify, per its own explicit out-of-scope boundary), the chosen mitigation is a calibrated score computed from `findings` (TR-1), using AUDIT_INCOMPLETE as the tie-break winner when BOTH kinds of finding occur together (a partial audit is a worse outcome than a complete audit that found real near-misses, since an incomplete audit could itself be MASKING additional near-misses in the unaudited phase): score = 85 if `findings.some(f => f.type === 'AUDIT_INCOMPLETE')`; else 90 if `findings.some(f => f.type === 'NEAR_MISS')`; else 100. Never artificially 100 regardless of findings, and never so low it meaningfully drags down an otherwise-healthy SD's aggregate score. Document this specific tradeoff (weight cannot be zeroed; score is deliberately calibrated to be near-neutral-to-slightly-informative rather than a hard pass/fail signal, with the AUDIT_INCOMPLETE-wins tie-break stated explicitly) in a code comment at the gate's definition, citing this PRD's FR-4.",
+      "acceptance_criteria": [
+        "createGateRegistryAuditGate's returned gate object has required:false explicitly set.",
+        "A unit test with zero findings of either type returns score:100, maxScore:100, passed:true.",
+        "A unit test with >=1 NEAR_MISS finding and zero AUDIT_INCOMPLETE findings returns score:90, maxScore:100, passed:true.",
+        "A unit test with >=1 AUDIT_INCOMPLETE finding and ZERO NEAR_MISS findings returns score:85, maxScore:100, passed:true.",
+        "A unit test with BOTH >=1 NEAR_MISS finding AND >=1 AUDIT_INCOMPLETE finding present simultaneously returns score:85 (AUDIT_INCOMPLETE wins the tie-break, not an average or the NEAR_MISS-only score) -- this combined case must be its own explicit test fixture, not merely implied by the two isolated-case tests above.",
+        "A code comment at the gate factory function explicitly documents the weight:0-does-not-work finding, the tie-break rule, and the resulting score-calibration decision, citing this PRD's FR-4."
+      ]
+    }
+  ],
+  "technical_requirements": [
+    {
+      "id": "TR-1",
+      "title": "camelCase gate result shape, with a structured findings array distinct from display warnings",
+      "description": "The gate's result object is {name, passed, score, maxScore, findings, warnings} -- camelCase, matching the shape ValidationOrchestrator.js actually reads (gateResult.score, gateResult.maxScore per lines 470-471 and 1371), NOT the snake_case {pass, score, max_score} shape found in placeholder-content.js (VALIDATION correction #6 confirmed the snake_case sibling gate would be a wrong precedent to copy). `findings` is an array of structured objects, each either {type:'NEAR_MISS', gate_key, disabled_for_sd_types} (FR-2 -- no `phase`, since a gate_key is collected from the UNION across all 5 phases' manifests before near-miss computation runs, so no single phase attribution survives) or {type:'AUDIT_INCOMPLETE', phase, error} (FR-3, which IS phase-specific by construction) -- the authoritative, machine-checkable record every other FR's acceptance criteria assert against. `warnings` is a plain array of human-readable strings DERIVED from `findings` (one per entry, prefixed 'NEAR_MISS:' or 'AUDIT_INCOMPLETE:' matching its type) purely so the existing handoff CLI's pre-existing 'Warnings: N' display surfaces this gate's output without any change to that display code."
+    },
+    {
+      "id": "TR-2",
+      "title": "Factory signature and lazy orchestrator construction",
+      "description": "gate-registry-audit.js exports createGateRegistryAuditGate(supabase) (plain supabase client, matching sibling gate factories' convention). Since LeadToPlanExecutor has no back-reference to its owning HandoffOrchestrator, the gate's validator lazily constructs its own minimal `new HandoffOrchestrator({ supabase })` instance purely to call dryRunHandoff() -- confirmed safe/side-effect-free at construction per FR-1's description."
+    },
+    {
+      "id": "TR-3",
+      "title": "No schema/threshold/scoring-algorithm changes; two found defects routed out-of-scope",
+      "description": "This SD does not modify validation_gate_registry's schema, any existing gate's threshold, any existing gate's weight, or ValidationOrchestrator.js's scoring algorithm. The two defects VALIDATION found during review (the dead validation_gate_registry_lock_trigger referencing nonexistent columns; the two inert sd_type='all' rows) are explicitly OUT OF SCOPE for this SD -- both already logged to the harness_backlog feedback channel (rows 33d99cd1 and b4b18aac) per ratification e38df53f's baseline-and-critical-check discipline, neither meeting the 'critical' bar (no venture stage/data/fleet/security impact today)."
+    },
+    {
+      "id": "TR-4",
+      "title": "Pure LEAD-TO-PLAN addition, read-only against the other 4 phases",
+      "description": "This SD is a pure LEAD-TO-PLAN gate addition -- it does not touch PLAN-TO-EXEC, EXEC-TO-PLAN, PLAN-TO-LEAD, or LEAD-FINAL-APPROVAL's own gate lists (it only READS their gate manifests via dryRunHandoff, a pre-existing read-only method)."
+    }
+  ],
+  "test_scenarios": [
+    {
+      "id": "TS-1",
+      "scenario": "Near-miss discriminator, from one unfiltered read (FR-2)",
+      "type": "unit",
+      "expected": "Stubbed/mocked validation_gate_registry query returning a SINGLE unfiltered rowset (not a live DB call, deterministic, not pre-filtered to DISABLED -- this is the specific defect TESTING's PLAN-phase review found in an earlier draft): a sibling-sd_type DISABLED row with no row for this sd_type yields exactly one NEAR_MISS finding; plain absence across all sd_types yields zero findings; this sd_type already having its own row -- tested across REQUIRED, OPTIONAL, and OPTIONAL_OVERRIDE (a live 4th applicability value an allowlist-based implementation would wrongly miss) -- yields zero findings even with a sibling DISABLED row present, proving own-type membership is by row presence, not an applicability allowlist; a sibling's ONLY disabling row having sd_type=NULL or sd_type='all' yields zero findings (sentinel rows excluded from the sibling-map entirely)."
+    },
+    {
+      "id": "TS-2",
+      "scenario": "Partial-failure handling, structured findings + derived display warnings (FR-3)",
+      "type": "unit",
+      "expected": "A stubbed dryRunHandoff that throws for specific phases produces distinct {type:'AUDIT_INCOMPLETE', phase} entries in `findings` (not just prefixed strings) naming each failed phase, passed:true always, NEAR_MISS findings from the successful phases are still present in `findings`, and `warnings` is proven to be derived from `findings` (one string per entry, prefix matches type)."
+    },
+    {
+      "id": "TS-3",
+      "scenario": "Scoring calibration including the combined tie-break case (FR-4)",
+      "type": "unit",
+      "expected": "score:100/maxScore:100 with zero findings; score:90 with >=1 NEAR_MISS and zero AUDIT_INCOMPLETE; score:85 with >=1 AUDIT_INCOMPLETE and ZERO NEAR_MISS; and, as its own explicit fixture, score:85 when BOTH >=1 NEAR_MISS AND >=1 AUDIT_INCOMPLETE are present simultaneously (proving the tie-break, not merely implied by the two isolated cases)."
+    },
+    {
+      "id": "TS-4",
+      "scenario": "Live end-to-end run against this SD itself",
+      "type": "integration",
+      "expected": "Running the gate against SD-LEARN-FIX-ADDRESS-PAT-LES-015 (sd_type=infrastructure) completes without throwing and the measured NEAR_MISS finding count is small (findings.filter(f => f.type === 'NEAR_MISS').length < 20 -- TESTING measured 12 live), proving the sparsity-preserving design over the rejected ~85-gate-volume premise. NOTE (TESTING finding): today's live registry happens to make a correct implementation and the DISABLED-filtered-read bug (TS-1's core fixture) produce byte-identical results (both 12), so this integration test alone CANNOT catch that regression class -- TS-1's dedicated fixture is the only test that can, and must not be dropped even though this test passes either way."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "Score-inflation side effect from adding any new weighted gate",
+      "mitigation": "Known, accepted, non-zero tradeoff inherent to adding ANY new gate to a weighted-average scoring pipeline that has no true weight:0 mechanism (gate.weight || 1.0 treats 0 as unset) -- not unique to this gate, and out of scope to fix (would require modifying ValidationOrchestrator.js's scoring algorithm). Mitigated by always returning an honest, calibrated score (FR-4) rather than an artificial always-100.",
+      "severity": "low"
+    },
+    {
+      "risk": "dryRunHandoff() called 5 times adds latency to every LEAD-TO-PLAN handoff",
+      "mitigation": "Acceptable: read-only DB query pattern already used elsewhere in this pipeline (precheck/dry-run commands), not a new expensive operation; LEAD-TO-PLAN is a low-frequency, human-paced handoff (once per SD), not a hot path.",
+      "severity": "low"
+    },
+    {
+      "risk": "Near-miss discriminator only catches sibling-sd_type near-misses, not fully novel gate/sd_type combinations",
+      "mitigation": "Deliberate, stated scope boundary (VALIDATION's own recommended narrowing) trading completeness for actionable signal -- the sparse-registry-by-design reality means a fully exhaustive audit is not solvable within this SD's scope without redesigning the registry's coverage model, which is explicitly out of scope.",
+      "severity": "medium"
+    }
+  ],
+  "integration_operationalization": {
+    "consumers": ["LEAD-phase workers running node scripts/handoff.js execute/precheck LEAD-TO-PLAN <SD-ID> -- the warning surfaces directly in existing CLI output"],
+    "dependencies": ["validation_gate_registry table (read-only)", "HandoffOrchestrator.dryRunHandoff() (pre-existing, read-only)"],
+    "data_contracts": ["none -- no schema changes"],
+    "runtime_config": ["none -- no new env vars or flags"],
+    "observability_rollout": ["The gate's warnings surface directly in every LEAD-TO-PLAN handoff's existing Warnings: N output -- no new monitoring surface needed. A future SD could aggregate NEAR_MISS findings across SDs into a periodic report; explicitly out of scope here."]
+  },
+  "system_architecture": {
+    "summary": "One new gate factory file plus one registration line in the existing LEAD-TO-PLAN gate pipeline; no other files or schema touched.",
+    "components": [
+      {"name": "scripts/modules/handoff/executors/lead-to-plan/gates/gate-registry-audit.js", "change": "NEW -- exports createGateRegistryAuditGate(supabase), the {name, required:false, validator} gate factory implementing FR-1 through FR-4"},
+      {"name": "scripts/modules/handoff/executors/lead-to-plan/index.js", "change": "One new gates.push(createGateRegistryAuditGate(this.supabase)) line inside getRequiredGates()"}
+    ]
+  },
+  "implementation_approach": {
+    "summary": "Implement the gate factory per FR-1 through FR-4, register it, write the unit + integration test suite, verify zero regressions against the existing gate suite.",
+    "steps": [
+      "Write gate-registry-audit.js implementing FR-1 through FR-4, including the FR-4 design-tradeoff comment.",
+      "Register it in lead-to-plan/index.js's getRequiredGates().",
+      "Write the unit test suite per TS-1/TS-2/TS-3 (mock-based) and the TS-4 integration test.",
+      "Run the full existing lead-to-plan gate test suite to confirm zero regressions.",
+      "Manually run node scripts/handoff.js precheck LEAD-TO-PLAN <a few representative SD-IDs across sd_types> to visually confirm the new gate appears, is non-blocking, and its warning volume is proportionate."
+    ]
+  },
+  "smoke_test_steps": [
+    {"step_number": 1, "instruction": "Run node scripts/handoff.js precheck LEAD-TO-PLAN SD-LEARN-FIX-ADDRESS-PAT-LES-015", "expected_outcome": "GATE_REGISTRY_AUDIT appears in the gate list with a PASS-equivalent status (never a blocking failure) and a proportionate (single-digit to low-double-digit) warning count"},
+    {"step_number": 2, "instruction": "Run the new unit test file directly (npx vitest run <path to the new test file>)", "expected_outcome": "All TS-1/TS-2/TS-3 test scenarios pass"},
+    {"step_number": 3, "instruction": "Run the existing lead-to-plan gate test suite", "expected_outcome": "Zero new failures relative to the pre-change baseline"}
+  ]
+}

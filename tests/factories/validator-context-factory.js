@@ -116,6 +116,10 @@ export function createMockSupabase(config = {}) {
     order: () => chainable,
     limit: () => chainable,
     single: () => Promise.resolve(defaultSelect),
+    // Terminal, like single() -- supports lib/db/fetch-all-paginated.mjs's
+    // queryFactory().range(offset, limit) contract (a single, full page; the short-page
+    // check in fetchAllPaginated naturally stops after this one resolved page).
+    range: () => Promise.resolve(defaultSelect),
     then: (fn) => Promise.resolve(defaultSelect).then(fn),
   };
 
