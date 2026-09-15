@@ -3,6 +3,8 @@
 
 ## Table of Contents
 
+- [2026-09-15](#2026-09-15)
+  - [Infrastructure](#infrastructure-15)
 - [2026-09-14](#2026-09-14)
   - [Infrastructure](#infrastructure-14)
   - [Bugfix](#bugfix-14)
@@ -206,6 +208,17 @@
   - [Housekeeping & CI](#housekeeping-ci)
   - [EHG_Engineering](#ehg_engineering)
   - [EHG (Venture App)](#ehg-venture-app)
+
+## 2026-09-15
+
+### Infrastructure
+
+- **Added skill-version git-commit pins and fail-closed call-time tool authorization, extending the versioned role registry without a new database table** - SD-LEO-INFRA-SKILL-LIBRARY-VERSIONED-001 (PR #8999)
+  - `lib/skills/skill-loader.js`'s `parseSkillFile()` already parsed and semver-validated a skill's `version:` frontmatter field, but nothing pinned a role to a specific version or resolved one -- it was a field, not a mechanism. Extracted a behavior-preserving `parseSkillContent(raw, {filePath})` so skill content can be parsed from `git show` output, not just a live file on disk; a regression test proves byte-identical output for all 25 real `.claude/skills/*.md` files.
+  - New `lib/skills/pinned-skill-read.mjs` reuses `lib/chairman/pinned-contract-read.mjs`'s git-commit-pin primitives (the same pattern already proven for chairman ratifications) so a role pinned to a skill at commit A keeps resolving to commit A's content even after a later commit edits the live file -- tested against `.claude/skills/eva-vision.skill.md`'s own real git history, not a synthetic fixture.
+  - New `lib/org/role-skill-tools.mjs` adds pure `pinSkillForRole()`/`listPinnedSkillsForRole()` (re-pin replaces exactly one `skill_key` entry, never mutates the input) and a fail-closed `isToolGrantedForRole(resolvedRole, toolName)` -- returns `false`, never throws, for any tool absent from a resolved role's own `.tools` array. Neither reads nor writes the existing `tool_access_grants` table (a separate, agent-instance-scoped grant mechanism this SD does not duplicate).
+  - No new table: skills live in the existing `org_role_base_versions.function` JSONB column added by the dependency SD (SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001), so this SD needed no chairman ceremony. No live caller wired -- 0 diff on `lib/skills/context-matcher.js` or any role-dispatch file.
+  - A deep-tier adversarial `/ship` review (2 rounds) found and fixed a CRITICAL path-traversal hole (an unvalidated skill file name interpolated directly into a git pathspec, empirically confirmed exploitable via git's own `..` normalization) plus 4 WARNING-level validation gaps (unvalidated commit-SHA shape and `skillKey` on write, inconsistent null-guarding, a leaked mutable array reference) -- all closed with dedicated regression tests before merge.
 
 ## 2026-09-14
 
