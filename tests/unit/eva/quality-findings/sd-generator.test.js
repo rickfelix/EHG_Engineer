@@ -151,6 +151,23 @@ describe('buildCreateSdArgs', () => {
   it('rejects invalid finding shape', () => {
     expect(() => buildCreateSdArgs(validFinding({ finding_category: 'invalid' }))).toThrow();
   });
+
+  // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 FR-4 (TS-6): defaults --criticality to 'later'
+  // when the caller supplies no explicit verdict.
+  it('appends --criticality later by default when opts.criticality is omitted', () => {
+    const r = buildCreateSdArgs(validFinding());
+    const idx = r.args.indexOf('--criticality');
+    expect(idx).toBeGreaterThan(-1);
+    expect(r.args[idx + 1]).toBe('later');
+  });
+
+  it('honors an explicit opts.criticality override', () => {
+    const r = buildCreateSdArgs(validFinding(), { criticality: 'critical', criticalityReason: 'measured harm' });
+    const idx = r.args.indexOf('--criticality');
+    expect(r.args[idx + 1]).toBe('critical');
+    const reasonIdx = r.args.indexOf('--criticality-reason');
+    expect(r.args[reasonIdx + 1]).toBe('measured harm');
+  });
 });
 
 describe('generateRemediationSD (dryRun)', () => {

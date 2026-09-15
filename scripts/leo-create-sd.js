@@ -352,12 +352,18 @@ Note: SD keys starting with QF- will be redirected to create-quick-fix.js.
       // (unlike --from-feedback), so a Tier-3 QF whose narrative merely illustrates a
       // deletion-class keyword was unescapably blocked by GR-DELETION-SAFEGUARD.
       const qfLinkReasonIdx = args.indexOf('--roadmap-link-reason');
+      // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 (FR-2): criticality verdict, warn-only unless
+      // SD_CRITICALITY_GATE_ENFORCE is on.
+      const qfCriticalityIdx = args.indexOf('--criticality');
+      const qfCriticalityReasonIdx = args.indexOf('--criticality-reason');
       const qfRes = await createFromQF(args[1], {
         securityReviewed: args.includes('--security-reviewed'),
         migrationReviewed: args.includes('--migration-reviewed'),
         backupPlan: args.includes('--backup-plan'),
         deletionApproved: args.includes('--deletion-approved'),
         roadmapLinkReason: qfLinkReasonIdx !== -1 ? args[qfLinkReasonIdx + 1] : null,
+        criticality: qfCriticalityIdx !== -1 ? args[qfCriticalityIdx + 1] : null,
+        criticalityReason: qfCriticalityReasonIdx !== -1 ? args[qfCriticalityReasonIdx + 1] : null,
       });
       exitFromResult(qfRes);
     } else if (args[0] === '--from-proposal') {

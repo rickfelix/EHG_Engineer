@@ -38,6 +38,7 @@ import { loadActiveApplications, validateTargetApplication, detectMisdesignation
 // site, because the drain cannot outrun the faucet.
 import { applySeverityRule, findDuplicateFinding } from '../lib/quick-fix/uat-filing-gate.js';
 import { isMainModule } from '../lib/utils/is-main-module.js';
+import { resolveCriticalityVerdict, routeCriticalityLater } from '../lib/governance/criticality-verdict.js';
 
 // Cross-platform path resolution (SD-WIN-MIG-005 fix)
 const __filename = fileURLToPath(import.meta.url);
@@ -229,6 +230,60 @@ async function createQuickFix(options = {}) {
     console.log('   Override (audited): --severity-justification "<the measured harm>"');
   }
   severity = severityVerdict.severity;
+
+  // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 FR-1: criticality verdict gate, warn-first via
+  // QF_CRITICALITY_GATE_ENFORCE (leo_feature_flags). Runs before the EVA pre-check / dedup
+  // scans below so a 'later' verdict short-circuits before any expensive Supabase round-trips.
+  let qfCriticalityGateEnabled = false;
+  try {
+    // SECURITY SEC-1 (EXEC-TO-PLAN): supabase-js does NOT throw on a PostgREST error (RLS
+    // denial, permission error, schema-cache miss) -- it resolves {data:null, error:{...}}.
+    // The try/catch below only ever catches a genuine thrown exception (network failure,
+    // etc.); a PostgREST-level error was previously silently indistinguishable from a real
+    // absent/disabled row, with zero log output. Both degrade to "not enabled" (same fail-
+    // safe direction), but only a genuine absent row should be silent -- a query ERROR is a
+    // distinct, logged condition.
+    const { data: flagRow, error: flagQueryErr } = await supabase
+      .from('leo_feature_flags')
+      .select('is_enabled')
+      .eq('flag_key', 'QF_CRITICALITY_GATE_ENFORCE')
+      .maybeSingle();
+    if (flagQueryErr) {
+      console.warn(`⚠️  QF_CRITICALITY_GATE_ENFORCE flag query error (defaulting to not enabled): ${flagQueryErr.message}`);
+    }
+    qfCriticalityGateEnabled = flagRow?.is_enabled === true;
+  } catch (flagErr) {
+    console.warn(`⚠️  QF_CRITICALITY_GATE_ENFORCE flag read threw (defaulting to not enabled): ${flagErr.message}`);
+  }
+  const criticalityVerdict = resolveCriticalityVerdict({
+    criticality: options.criticality,
+    flagEnabled: qfCriticalityGateEnabled,
+  });
+  if (criticalityVerdict.verdict === 'refuse') {
+    console.error(`\n❌ [CRITICALITY_REQUIRED]\n${criticalityVerdict.message}`);
+    process.exit(1);
+  }
+  if (criticalityVerdict.verdict === 'warn_and_file') {
+    console.warn(`\n⚠️  [CRITICALITY_GATE] ${criticalityVerdict.message}`);
+  }
+  if (criticalityVerdict.verdict === 'route_later') {
+    // SECURITY SEC-3 (EXEC-TO-PLAN): finding-identity composite (title+expected+actual),
+    // mirroring the dedup identity this same file already uses at findDuplicateFinding()
+    // below -- distinguishes genuinely different filings so they never collapse into one
+    // harness_backlog row.
+    await routeCriticalityLater({
+      supabase,
+      title,
+      description,
+      criticalityReason: options.criticalityReason,
+      loggedVia: 'create-quick-fix.js',
+      dedupKey: `criticality-later::${[title, expected, actual].join('::')}`,
+    });
+    return { escalated: false, routedLater: true };
+  }
+  const criticalityMetadata = criticalityVerdict.verdict === 'file_critical'
+    ? { criticality: 'critical', criticality_reason: options.criticalityReason || '' }
+    : {};
 
   // EVA Pre-Check: warn if vision/architecture docs exist for this topic
   try {
@@ -499,7 +554,11 @@ async function createQuickFix(options = {}) {
         routing_tier: routingDecision.tier,
         routing_threshold_id: routingDecision.thresholdId !== 'fallback' && routingDecision.thresholdId !== 'error-multiple-active' ? routingDecision.thresholdId : null,
         created_by: createdBy,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 FR-1: criticality verdict stamp (empty {} when
+        // no --criticality was supplied and the gate is warn-only, never silently uncategorized
+        // vs. deliberately unset -- both look the same until the gate is enforced).
+        metadata: Object.keys(criticalityMetadata).length > 0 ? criticalityMetadata : null,
       }));
     if (!insertErr) break;
     if (insertErr.code !== '23505') break;
@@ -967,6 +1026,12 @@ for (let i = 0; i < args.length; i++) {
     options.forceClaim = true;
   } else if (arg === '--force-claim-reason' || arg === '--reason') {
     options.forceClaimReason = args[++i];
+  } else if (arg === '--criticality') {
+    // SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 FR-1: NOT an alias for --reason/--force-claim-reason
+    // (a distinct flag on purpose -- reusing --reason would silently corrupt an unrelated field).
+    options.criticality = args[++i];
+  } else if (arg === '--criticality-reason') {
+    options.criticalityReason = args[++i];
   } else if (arg === '--allow-duplicate') {
     // QF-20260527-250: audited override for dedup gate.
     options.allowDuplicate = args[++i];
@@ -1008,6 +1073,10 @@ Options:
   --target-application   Target repo: any active applications-registry name (auto-detected from cwd)
   --claim                Claim this QF now even if the creator seat already holds another claim
                          (default when already busy: queue unclaimed for pickup instead)
+  --criticality          critical|later -- is this critical? (breaks a venture stage or the
+                         coming test venture, loses data, stops the fleet working, or is a
+                         security risk). Warn-only unless QF_CRITICALITY_GATE_ENFORCE is on.
+  --criticality-reason   One-line reason for the --criticality verdict
   --allow-duplicate      Audited override for dedup gate; requires non-empty <reason>
   --force-liveness       Audited override for STALE_PREMISE gate; requires non-empty <reason>
   --created-by           Override attribution (default: resolved from CLAUDE_SESSION_ID's role, or the raw session id)
