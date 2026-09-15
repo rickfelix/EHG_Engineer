@@ -1,0 +1,82 @@
+{
+  "executive_summary": "Build a continuous, migration-apply-time check that nothing in the public (anon-exposed) schema answers the anonymous Supabase key outside a new chairman-owned allowlist, executing chairman ratification 030d72e8 ('Yes to both'). Extends the existing audit-security-linter.mjs sentinel pattern (direct-pg-connection, proven and already covering catalog-inference checks) with the two capabilities it explicitly lacks: an actual anonymous-role read attempt against every non-allowlisted public table, and a positive canary read that distinguishes a genuinely clean run from a check that silently did not execute (bad key, dead connection, no-op query). Wires the new checker into both the TIER-1 auto-apply post-hook (pending-migrations-check.js) and the manual TIER-2 apply path (apply-migration.js), closing the gap where a table opened on a Saturday would otherwise sit exposed until the sentinel's next weekly Monday cron run.",
+  "functional_requirements": [
+    {
+      "id": "FR-1",
+      "title": "Chairman-owned public-read allowlist table (schema only, never populated by this SD)",
+      "description": "New migration creates public_read_allowlist(table_name text primary key, reason text not null, approved_by text not null, approved_at timestamptz not null, ratification_ref text). This SD's own code never inserts a row -- only the chairman (or a future explicitly chairman-authorized writer) populates it. The checker treats any public-schema table not present in this allowlist as a candidate for the anon-read check."
+    },
+    {
+      "id": "FR-2",
+      "title": "Continuous checker: genuine anonymous-role read attempt (not grant inference)",
+      "description": "New lib/security/continuous-external-surface-checker.mjs, built by extending audit-security-linter.mjs's direct-pg-connection pattern (createDatabaseClient('engineer') for enumeration/allowlist reads) plus a SEPARATE client constructed from SUPABASE_URL + SUPABASE_ANON_KEY for the actual read attempt against each non-allowlisted public table (SELECT ... LIMIT 1 via the anon-role client). A successful anon read on a non-allowlisted table is a FINDING (not merely a grants-based inference, which chronic-red-guard-001 already proved insufficient -- audit-security-linter.mjs only infers via pg_class/pg_namespace, never actually reads)."
+    },
+    {
+      "id": "FR-3",
+      "title": "Positive canary distinguishing a clean run from a silently-broken check",
+      "description": "A new, dedicated public_surface_canary table with exactly one permanently-public row (not repurposing an incidentally-public table, since its public-readability must be intentional and guaranteed, not incidental/RLS-blocked). Every checker run must successfully read this canary row via the anon-role client BEFORE trusting a 'no findings' verdict. If the canary read fails (bad key, dead connection, RLS misconfiguration), the run's verdict is ERROR/VOID, never PASS -- so a broken check can never silently report 'nothing exposed'."
+    },
+    {
+      "id": "FR-4",
+      "title": "Wire into the TIER-1 auto-apply post-hook (pending-migrations-check.js)",
+      "description": "Extend recheckDeclaredObjectsPostApply() (scripts/modules/handoff/pre-checks/pending-migrations-check.js, confirmed call site ~line 356) to invoke the new checker immediately after a TIER-1 migration auto-applies, so a migration that newly exposes a table to anon is flagged/blocked at the moment it applies, not on the next weekly sentinel pass."
+    },
+    {
+      "id": "FR-5",
+      "title": "Wire into the manual TIER-2 apply path (apply-migration.js)",
+      "description": "Add the same checker invocation to scripts/apply-migration.js's manual/--prod-deploy path, since TIER-2 (destructive/ambiguous, chairman-gated) migrations bypass pending-migrations-check.js's auto-apply flow entirely. Without this, a chairman-approved TIER-2 migration that exposes a table would only be caught by the weekly cron -- the exact gap this SD's predicate names."
+    },
+    {
+      "id": "FR-6",
+      "title": "Coverage-report field naming what was measured and what could not be reached",
+      "description": "The checker's own output includes an explicit coverage field: total public-schema tables enumerated, count checked via anon read, count skipped (allowlisted), count that could not be reached (e.g. connection/permission errors) with reasons -- and scoping is per-venture_id within the shared platform database (no separate-Supabase-project-per-venture model exists; confirmed at LEAD phase). A silent 'clean' result with unreported skipped/unreachable tables is never produced."
+    },
+    {
+      "id": "FR-7",
+      "title": "Semantic-shape classifier for allowlist/approval reads -- never name-matching",
+      "description": "Any new classification logic this SD adds (e.g. distinguishing an allowlist 'approved' entry from a fleet coordination 'hold'/'fence' construct) must read an explicit status/verdict field's semantic shape, never a key's literal name -- a design constraint surfaced at LEAD phase (requirement 3's un-locatable near-miss). Regression-tested: a differently-named but equivalently-shaped approval field must classify identically to 'approved_at is-not-null', and an unrelated 'hold'-named field the checker does not use must never be read as an approval."
+    }
+  ],
+  "acceptance_criteria": [
+    "A migration seeded through the wired pending-migrations-check.js hook that creates a new public-schema table with anon SELECT access is flagged/blocked at apply time, not merely logged for the next weekly sentinel run.",
+    "Three checker runs -- one with a deliberately invalid anon key, one with a forced-dead connection, one genuinely clean -- produce three distinguishable verdicts (ERROR/VOID for the first two; PASS or a real finding list for the third); no run misreports a broken check as 'nothing exposed'.",
+    "public_read_allowlist has zero rows inserted by any commit in this SD's own PRs -- schema and reader code only.",
+    "The checker's coverage-report field is present on every run and names counts for enumerated / checked / allowlisted / unreachable tables.",
+    "A regression test proves the SD's own new classifier logic distinguishes an approval-shaped field from a hold-shaped field by semantic content, not by field name."
+  ],
+  "test_scenarios": [
+    { "id": "TS-1", "description": "Seed a TIER-1-eligible migration creating a public table with anon SELECT grant; run it through the wired pending-migrations-check.js post-apply hook; assert a block/flag verdict, not a silent pass." },
+    { "id": "TS-2", "description": "Invoke the checker three times (bad anon key / forced dead connection / genuine clean run) and assert three distinct verdict shapes -- proving the positive canary actually gates trust in a clean result." },
+    { "id": "TS-3", "description": "Query public_read_allowlist directly after this SD's own migration + EXEC commits land; assert 0 rows." },
+    { "id": "TS-4", "description": "Run the checker against a fixture with 2 allowlisted, 1 unreachable (simulated connection error), and 1 genuinely-exposed non-allowlisted table; assert the coverage-report field's counts match exactly (enumerated=4, checked=1 exposed-finding, allowlisted=2, unreachable=1) and the unreachable table is named with a reason." },
+    { "id": "TS-5", "description": "Feed the new semantic-shape classifier two fixtures: an approval-shaped field named unconventionally (e.g. chairman_drop_approval with approved_at set) and a hold-shaped field (e.g. a fence/lock object with no approval verdict); assert the classifier reads the first as approved and the second as not-approved, by shape alone." }
+  ],
+  "system_architecture": {
+    "components": [
+      { "name": "database/migrations/<timestamp>_continuous_external_surface_allowlist_and_canary.sql", "type": "migration", "description": "Creates public_read_allowlist (chairman-owned, this SD never writes rows) and public_surface_canary (one permanently-public seed row owned by this SD's own migration, not the chairman)." },
+      { "name": "lib/security/continuous-external-surface-checker.mjs", "type": "lib", "description": "New checker module: direct-pg enumeration of public-schema tables + allowlist read (createDatabaseClient pattern from audit-security-linter.mjs), a separate anon-role Supabase client for genuine read attempts + the positive canary read, and the coverage-report assembly." },
+      { "name": "scripts/modules/handoff/pre-checks/pending-migrations-check.js", "type": "wiring", "description": "recheckDeclaredObjectsPostApply() extended to invoke the new checker after TIER-1 auto-apply." },
+      { "name": "scripts/apply-migration.js", "type": "wiring", "description": "Manual/--prod-deploy TIER-2 path extended to invoke the same checker after a chairman-gated migration applies." }
+    ]
+  },
+  "implementation_approach": {
+    "phases": [
+      { "phase": "EXEC-1", "description": "Migration: create public_read_allowlist (empty) and public_surface_canary (1 seeded public row) as a TIER-1-eligible additive migration." },
+      { "phase": "EXEC-2", "description": "Build lib/security/continuous-external-surface-checker.mjs: enumeration + allowlist filtering + anon-role read attempts + canary verification + coverage-report assembly + the semantic-shape classifier (FR-7)." },
+      { "phase": "EXEC-3", "description": "Wire the checker into pending-migrations-check.js's recheckDeclaredObjectsPostApply() (FR-4) and apply-migration.js's manual path (FR-5)." },
+      { "phase": "EXEC-4", "description": "Tests: TS-1 through TS-5, each mutation-tested for non-vacuousness per this session's standing evidence discipline." }
+    ]
+  },
+  "risks": [
+    { "risk": "Requirement (3)'s specific 'name-matching hold detector' near-miss could not be located as an existing bug at LEAD phase.", "mitigation": "FR-7 treats this as a forward design constraint on this SD's own new classifier code (semantic-shape only), verified by TS-5, rather than a specific existing-code patch.", "severity": "medium" },
+    { "risk": "'Each live venture project measured separately' assumes separate Supabase projects per venture; none exist -- ventures are venture_id rows in the shared platform DB.", "mitigation": "FR-6's coverage report scopes/reports per venture_id within the shared database. Recorded for the coordinator/chairman to confirm or correct if a separate-project model exists elsewhere.", "severity": "medium" },
+    { "risk": "A dedicated new anon-role Supabase client (distinct from the service-role client audit-security-linter.mjs already uses) is new surface for this SD to get wrong (e.g. accidentally using service-role for the 'anon read' check, which would always succeed and produce false positives).", "mitigation": "TS-2's bad-key/dead-connection scenarios directly exercise the anon-role client's failure paths; code review confirms the read client is constructed from SUPABASE_ANON_KEY, never the service role key.", "severity": "medium" }
+  ],
+  "integration_operationalization": {
+    "consumers": ["scripts/modules/handoff/pre-checks/pending-migrations-check.js (TIER-1 auto-apply path)", "scripts/apply-migration.js (TIER-2 manual/--prod-deploy path)", "Future: could be invoked ad hoc via a dedicated CLI entry point, out of scope for this SD's own FRs."],
+    "dependencies": ["scripts/lib/supabase-connection.js createDatabaseClient (existing, direct-pg)", "SUPABASE_ANON_KEY / NEXT_PUBLIC_SUPABASE_ANON_KEY (existing, confirmed present in .env, no new credential required)", "scripts/sentinels/audit-security-linter.mjs (pattern source, not modified by this SD)"],
+    "data_contracts": ["New table public_read_allowlist(table_name pk, reason, approved_by, approved_at, ratification_ref) -- chairman-owned, this SD's code path never writes rows.", "New table public_surface_canary -- exactly one row, seeded by this SD's own migration, intentionally and permanently anon-readable."],
+    "runtime_config": ["None new -- reuses existing SUPABASE_URL / SUPABASE_ANON_KEY / service-role credentials already present in .env."],
+    "observability_rollout": ["Checker's coverage-report field (FR-6) is the primary observability surface -- every run states what it measured and what it could not reach, rather than a bare pass/fail."]
+  }
+}

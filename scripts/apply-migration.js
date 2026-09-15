@@ -64,6 +64,12 @@ import {
   generateTokenValue,
 } from './lib/migration-guards.js';
 import { getLatestSuccessForPath, isTrackedMigrationPath } from '../lib/migration-audit-reader.js';
+// SD-LEO-INFRA-CONTINUOUS-EXTERNAL-SURFACE-001 FR-5: TIER-2/chairman-gated migrations applied
+// through this manual --prod-deploy path bypass pending-migrations-check.js's auto-apply hook
+// entirely, so the same continuous external-surface check (ratification 030d72e8) is wired here
+// too -- otherwise a chairman-approved migration that exposes a table would only be caught by
+// the sentinel's next weekly cron pass, the exact gap this SD's predicate names.
+import { runContinuousExternalSurfaceCheck } from '../lib/security/continuous-external-surface-checker.mjs';
 
 // SD-LEO-INFRA-ADAM-DBCHANGE-APPLY-DELEGATION-001 (FR-4): audit-always ledger write for delegated
 // applies. SEPARATE short-lived connection so the row survives an apply-tx ROLLBACK (SEC-H cond 7).
@@ -546,7 +552,26 @@ async function applyMode({ args, repoRoot }) {
     });
   }
 
-  if (success) emitMarker('[MIGRATION_APPLY_PROD_PASS]');
+  if (success) {
+    emitMarker('[MIGRATION_APPLY_PROD_PASS]');
+    // FR-5: run post-apply, never inside the DDL transaction above -- a checker-side failure
+    // (e.g. allowlist/canary tables not yet on this DB) must never roll back a genuinely
+    // successful, already-committed migration apply.
+    try {
+      const surfaceCheck = await runContinuousExternalSurfaceCheck();
+      if (surfaceCheck.verdict === 'FINDINGS') {
+        const names = surfaceCheck.findings.map(f => f.table).join(', ');
+        emitMarker('[MIGRATION_APPLY_CONTINUOUS_SURFACE_FINDINGS]');
+        process.stderr.write(`[CONTINUOUS_SURFACE_CHECK] BLOCKING FINDINGS: anon-readable, non-allowlisted table(s): ${names}\n`);
+      } else if (surfaceCheck.verdict === 'ERROR') {
+        process.stderr.write(`[CONTINUOUS_SURFACE_CHECK] did not run: ${surfaceCheck.reason}\n`);
+      } else {
+        process.stderr.write('[CONTINUOUS_SURFACE_CHECK] PASS (no non-allowlisted anon-readable tables)\n');
+      }
+    } catch (e) {
+      process.stderr.write(`[CONTINUOUS_SURFACE_CHECK] threw: ${e.message}\n`);
+    }
+  }
   return success ? 0 : 1;
 }
 
