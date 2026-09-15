@@ -5,6 +5,7 @@
 
 - [2026-09-15](#2026-09-15)
   - [Infrastructure](#infrastructure-15)
+  - [Bugfix](#bugfix-15)
 - [2026-09-14](#2026-09-14)
   - [Infrastructure](#infrastructure-14)
   - [Bugfix](#bugfix-14)
@@ -219,6 +220,13 @@
   - New `lib/org/role-skill-tools.mjs` adds pure `pinSkillForRole()`/`listPinnedSkillsForRole()` (re-pin replaces exactly one `skill_key` entry, never mutates the input) and a fail-closed `isToolGrantedForRole(resolvedRole, toolName)` -- returns `false`, never throws, for any tool absent from a resolved role's own `.tools` array. Neither reads nor writes the existing `tool_access_grants` table (a separate, agent-instance-scoped grant mechanism this SD does not duplicate).
   - No new table: skills live in the existing `org_role_base_versions.function` JSONB column added by the dependency SD (SD-LEO-INFRA-VERSIONED-ROLE-REGISTRY-001), so this SD needed no chairman ceremony. No live caller wired -- 0 diff on `lib/skills/context-matcher.js` or any role-dispatch file.
   - A deep-tier adversarial `/ship` review (2 rounds) found and fixed a CRITICAL path-traversal hole (an unvalidated skill file name interpolated directly into a git pathspec, empirically confirmed exploitable via git's own `..` normalization) plus 4 WARNING-level validation gaps (unvalidated commit-SHA shape and `skillKey` on write, inconsistent null-guarding, a leaked mutable array reference) -- all closed with dedicated regression tests before merge.
+
+### Bugfix
+
+- **Verified and closed a /learn-reported pattern that predated its own detection by 7 months, with no production code change** - SD-LEARN-FIX-ADDRESS-PAT-LES-016 (PR #9006)
+  - PAT-LES-2116dd961204 claimed `add-prd-to-database.js` creates PRDs in `draft` status by default, silently blocking the `PLAN-TO-EXEC` gate. LEAD-phase investigation (2 independent verifications, file:line evidence) refuted this against current main: `createPRDWithValidatedContent()` (`scripts/prd/prd-creator.js:460`) has auto-approved every fresh PRD insert since commit `a09c4e48` (2026-02-05) -- 7 months before the pattern was detected. The `status='planning'` path (`createPRDEntry()`) is dead code.
+  - Closed with the one genuinely-missing regression test (asserting fresh inserts land `status='approved'`) plus a static dead-code guard confirming the dead path has no live caller -- both mutation-verified during authoring, and independently re-verified by an adversarial `/ship` review.
+  - The same adversarial review found a SEPARATE, still-live instance of the identical defect class via a different, non-canonical pipeline (`npm run leo:execute` -> `templates/generate-prd.js`, which does insert `status='draft'`). Logged to the harness backlog rather than expanding this SD's scope, since the pattern literally named `add-prd-to-database.js`, which is genuinely fixed.
 
 ## 2026-09-14
 
