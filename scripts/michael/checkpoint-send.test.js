@@ -16,8 +16,9 @@ const READ_FAILED = { data: null, error: { code: 'XX000', message: 'connection r
 function fakeSb({ tables = {}, readErrors = {}, answerWrite = () => ({ data: { id: 'ledger-1' }, error: null }) } = {}) {
   const writes = [];
   const froms = [];
+  const reads = [];
   const client = {
-    writes, froms,
+    writes, froms, reads,
     from(table) {
       froms.push(table);
       const ops = [];
@@ -27,6 +28,10 @@ function fakeSb({ tables = {}, readErrors = {}, answerWrite = () => ({ data: { i
           if (prop === 'then') {
             return (res, rej) => {
               if (mutating) { writes.push({ table, ops: [...ops] }); return Promise.resolve(answerWrite(table, ops)).then(res, rej); }
+              // TR-7: retain the READ's recorded ops (select/limit/eq/order/...) so a test can assert
+              // WHICH query-level operators were issued -- the returned rows cannot show this, because
+              // this fake applies eq-filters only and never projects `select`.
+              reads.push({ table, ops: [...ops] });
               if (readErrors[table]) return Promise.resolve(readErrors[table]).then(res, rej);
               const eqs = Object.fromEntries(ops.filter((o) => o.op === 'eq').map((o) => o.args));
               const rows = (tables[table] || []).filter((r) => Object.entries(eqs).every(([k, v]) => r[k] === v));
@@ -434,9 +439,16 @@ describe('FR-2/TS-1: the finished_at race (2026-09-14 22:00Z incident, ledger a8
       expect(r).toMatchObject({ ok: true, sent: true });
       // The finished (attempt 2) row's count wins -- the in-flight (attempt 3) placeholder never contributes.
       expect(sent[0].body).toContain('4 meetings today');
-      // Confirms the select actually requested `attempt` (TR-9) -- without it the read call itself would be malformed for this assertion to be meaningful.
-      const feederReads = sb.froms.filter((t) => t === 'michael_feeder_runs');
-      expect(feederReads.length).toBeGreaterThan(0);
+      // TR-9 / FR-2 TESTING-PIN: assert the read ACTUALLY requested `attempt`. An adversarial
+      // fixture ALONE cannot prove this -- fakeSb never projects `select`, so it hands back whole
+      // fixture rows (attempt included) no matter what the select list says. Dropping `attempt`
+      // from the select is therefore invisible to every row-based assertion, which is exactly the
+      // 'green tests over an unfixed verb' failure TR-9 names as this SD's most likely one. Only
+      // the recorded read op can discriminate (TR-7).
+      const feederRead = sb.reads.find((rd) => rd.table === 'michael_feeder_runs');
+      expect(feederRead).toBeDefined();
+      const selectArg = feederRead.ops.find((o) => o.op === 'select').args[0];
+      expect(selectArg.split(',').map((c) => c.trim())).toContain('attempt');
     });
   });
 
