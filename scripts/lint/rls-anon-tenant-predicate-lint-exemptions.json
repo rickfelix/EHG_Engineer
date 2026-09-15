@@ -1,0 +1,10 @@
+{
+  "exempted_policies": [
+    {
+      "table": "public_surface_canary",
+      "policy": "public_surface_canary_anon_read",
+      "reason": "SD-LEO-INFRA-CONTINUOUS-EXTERNAL-SURFACE-001 FR-3: a deliberate, permanently-public, exactly-one-row positive canary. The whole point of this policy is that ANY anon-key holder can read it unconditionally -- that is what proves the continuous external-surface checker's own live anon-read path is genuinely alive on a given run rather than silently no-op'ing (a bad key, a dead connection, or a broken query would all fail this read). Not tenant data, not an oversight -- the checker itself (lib/security/continuous-external-surface-checker.mjs) treats a failed canary read as a hard ERROR/VOID verdict specifically because this table must stay unconditionally readable.",
+      "sd_ref": "SD-LEO-INFRA-CONTINUOUS-EXTERNAL-SURFACE-001"
+    }
+  ]
+}

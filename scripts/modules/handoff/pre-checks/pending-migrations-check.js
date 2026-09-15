@@ -30,6 +30,11 @@ import { createDatabaseClient } from '../../../lib/supabase-connection.js';
 // provably-additive (TIER-1) migrations are eligible for handoff-time auto-apply;
 // TIER-2 (destructive/ambiguous) defer to the unchanged 3-factor @approved-by gate.
 import { classifyMigration } from '../../../lib/migration-tier-classifier.mjs';
+// SD-LEO-INFRA-CONTINUOUS-EXTERNAL-SURFACE-001 FR-4: the migration-apply-time surface check
+// (ratification 030d72e8) -- invoked immediately after a TIER-1 set auto-applies, so a
+// newly-exposed table is flagged at the moment it applies, not on the sentinel's next weekly
+// cron pass.
+import { runContinuousExternalSurfaceCheck } from '../../../../lib/security/continuous-external-surface-checker.mjs';
 
 const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -358,6 +363,10 @@ export async function checkPendingMigrations(supabase, sd, options = {}) {
         if (recheck.allApplied) {
           result.hasPendingMigrations = false;
           console.log('   ✅ Verification passed: All declared objects present in pg after apply');
+          // SD-LEO-INFRA-CONTINUOUS-EXTERNAL-SURFACE-001 FR-4: check the external surface
+          // at the moment migrations apply, not on the sentinel's next weekly pass.
+          result.continuousSurfaceCheck = await runContinuousSurfaceCheckSafely();
+          applyContinuousSurfaceVerdict(result, result.continuousSurfaceCheck);
         } else if (recheck.indeterminate) {
           result.warnings.push(`Re-check indeterminate: ${recheck.indeterminate} file(s) declare no parseable objects`);
           console.log(`   ⚠️  Re-check indeterminate for ${recheck.indeterminate} file(s)`);
@@ -964,6 +973,42 @@ function sleep(ms) {
  * @param {Array<{file:string}>} pendingFiles - files we attempted to apply
  * @returns {Promise<{allApplied:boolean, indeterminate:number, stillMissing:Array, attemptsUsed:number}>}
  */
+/**
+ * SD-LEO-INFRA-CONTINUOUS-EXTERNAL-SURFACE-001 FR-4: wraps runContinuousExternalSurfaceCheck()
+ * so a checker-side failure (allowlist/canary tables not yet on this DB, e.g. before this SD's
+ * own schema migration has merged to main) degrades to a non-blocking warning rather than
+ * throwing out of the handoff pipeline for every unrelated SD.
+ */
+async function runContinuousSurfaceCheckSafely() {
+  try {
+    return await runContinuousExternalSurfaceCheck();
+  } catch (e) {
+    return { verdict: 'ERROR', reason: `checker threw: ${e.message}`, findings: [], coverage: null };
+  }
+}
+
+/**
+ * SD-LEO-INFRA-CONTINUOUS-EXTERNAL-SURFACE-001 FR-4 (TS-1): pure branch so the "a FINDINGS
+ * verdict blocks the handoff" contract is unit-testable without driving the full
+ * checkPendingMigrations() pipeline (git status, the DATABASE sub-agent, etc.) end-to-end.
+ * Mutates `result` in place, mirroring this module's existing result.errors/warnings pattern.
+ *
+ * @param {{errors: string[], warnings: string[]}} result
+ * @param {{verdict: 'PASS'|'FINDINGS'|'ERROR', findings?: Array, reason?: string}} surfaceCheck
+ */
+export function applyContinuousSurfaceVerdict(result, surfaceCheck) {
+  if (surfaceCheck.verdict === 'FINDINGS') {
+    const names = surfaceCheck.findings.map(f => f.table).join(', ');
+    result.errors.push(`BLOCKING: continuous external-surface check found anon-readable, non-allowlisted table(s): ${names}`);
+    console.log(`   🚫 BLOCKING: continuous external-surface check found: ${names}`);
+  } else if (surfaceCheck.verdict === 'ERROR') {
+    result.warnings.push(`Continuous external-surface check could not run: ${surfaceCheck.reason}`);
+    console.log(`   ⚠️  Continuous external-surface check did not run: ${surfaceCheck.reason}`);
+  } else {
+    console.log('   ✅ Continuous external-surface check: PASS (no non-allowlisted anon-readable tables)');
+  }
+}
+
 async function recheckDeclaredObjectsPostApply(pendingFiles) {
   const SETTLE_MS = 250;
   const MAX_ATTEMPTS = 3;
