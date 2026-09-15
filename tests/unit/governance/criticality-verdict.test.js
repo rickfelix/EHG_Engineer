@@ -101,6 +101,7 @@ describe('routeCriticalityLater (TS-5, FR-3)', () => {
       description: 'Not critical right now',
       criticalityReason: 'low priority cleanup',
       loggedVia: 'create-quick-fix.js',
+      dedupKey: 'criticality-later::some-unique-identity',
     });
     expect(result.id).toBe('fb-later-1');
     expect(supabase._insert).toHaveBeenCalledTimes(1);
@@ -115,8 +116,36 @@ describe('routeCriticalityLater (TS-5, FR-3)', () => {
   it('prints where the item went, naming the feedback row id', async () => {
     const supabase = buildSupabase();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    await routeCriticalityLater({ supabase, title: 'T', description: 'D', loggedVia: 'x' });
+    await routeCriticalityLater({ supabase, title: 'T', description: 'D', loggedVia: 'x', dedupKey: 'k1' });
     expect(logSpy.mock.calls.some(([line]) => line.includes('routed to harness_backlog') && line.includes('fb-later-1'))).toBe(true);
     logSpy.mockRestore();
+  });
+
+  it('prints a distinguishable "already routed / deduped" message when emitFeedback reports a dedup hit', async () => {
+    const supabase = buildSupabase({ existing: { id: 'fb-existing-dup' } });
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const result = await routeCriticalityLater({ supabase, title: 'T', description: 'D', loggedVia: 'x', dedupKey: 'k1' });
+    expect(result.deduped).toBe(true);
+    expect(logSpy.mock.calls.some(([line]) => line.includes('deduped'))).toBe(true);
+    logSpy.mockRestore();
+  });
+
+  // SECURITY SEC-3 (EXEC-TO-PLAN): without dedupKey, emitFeedback's dedup hash reduces to
+  // sha256(today::description::""), so two DIFFERENT items filed the same day with an
+  // identical description would collapse into one row -- the harness_backlog row is a
+  // deferred item's ONLY record, so a collapse silently loses it. This proves dedupKey is
+  // actually threaded into emitFeedback's dedup_key parameter (not merely accepted and
+  // dropped) by asserting two calls with identical title/description but different dedupKey
+  // produce different dedup hashes on the inserted row.
+  it('two calls with identical title/description but different dedupKey never collapse into the same dedup hash (SEC-3)', async () => {
+    const supabase1 = buildSupabase();
+    await routeCriticalityLater({ supabase: supabase1, title: 'Same title', description: 'Same description', loggedVia: 'x', dedupKey: 'identity-A' });
+    const hash1 = supabase1._insert.mock.calls[0][0].metadata.dedup_hash;
+
+    const supabase2 = buildSupabase();
+    await routeCriticalityLater({ supabase: supabase2, title: 'Same title', description: 'Same description', loggedVia: 'x', dedupKey: 'identity-B' });
+    const hash2 = supabase2._insert.mock.calls[0][0].metadata.dedup_hash;
+
+    expect(hash1).not.toBe(hash2);
   });
 });

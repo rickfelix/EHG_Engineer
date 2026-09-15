@@ -236,14 +236,24 @@ async function createQuickFix(options = {}) {
   // scans below so a 'later' verdict short-circuits before any expensive Supabase round-trips.
   let qfCriticalityGateEnabled = false;
   try {
-    const { data: flagRow } = await supabase
+    // SECURITY SEC-1 (EXEC-TO-PLAN): supabase-js does NOT throw on a PostgREST error (RLS
+    // denial, permission error, schema-cache miss) -- it resolves {data:null, error:{...}}.
+    // The try/catch below only ever catches a genuine thrown exception (network failure,
+    // etc.); a PostgREST-level error was previously silently indistinguishable from a real
+    // absent/disabled row, with zero log output. Both degrade to "not enabled" (same fail-
+    // safe direction), but only a genuine absent row should be silent -- a query ERROR is a
+    // distinct, logged condition.
+    const { data: flagRow, error: flagQueryErr } = await supabase
       .from('leo_feature_flags')
       .select('is_enabled')
       .eq('flag_key', 'QF_CRITICALITY_GATE_ENFORCE')
       .maybeSingle();
+    if (flagQueryErr) {
+      console.warn(`⚠️  QF_CRITICALITY_GATE_ENFORCE flag query error (defaulting to not enabled): ${flagQueryErr.message}`);
+    }
     qfCriticalityGateEnabled = flagRow?.is_enabled === true;
   } catch (flagErr) {
-    console.warn(`⚠️  QF_CRITICALITY_GATE_ENFORCE flag read failed (defaulting to not enabled): ${flagErr.message}`);
+    console.warn(`⚠️  QF_CRITICALITY_GATE_ENFORCE flag read threw (defaulting to not enabled): ${flagErr.message}`);
   }
   const criticalityVerdict = resolveCriticalityVerdict({
     criticality: options.criticality,
@@ -257,12 +267,17 @@ async function createQuickFix(options = {}) {
     console.warn(`\n⚠️  [CRITICALITY_GATE] ${criticalityVerdict.message}`);
   }
   if (criticalityVerdict.verdict === 'route_later') {
+    // SECURITY SEC-3 (EXEC-TO-PLAN): finding-identity composite (title+expected+actual),
+    // mirroring the dedup identity this same file already uses at findDuplicateFinding()
+    // below -- distinguishes genuinely different filings so they never collapse into one
+    // harness_backlog row.
     await routeCriticalityLater({
       supabase,
       title,
       description,
       criticalityReason: options.criticalityReason,
       loggedVia: 'create-quick-fix.js',
+      dedupKey: `criticality-later::${[title, expected, actual].join('::')}`,
     });
     return { escalated: false, routedLater: true };
   }

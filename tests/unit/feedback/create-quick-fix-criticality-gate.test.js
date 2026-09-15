@@ -22,7 +22,7 @@ const CRITICALITY_GATE_RE = /resolveCriticalityVerdict\s*\(/;
 const SEVERITY_VERDICT_RE = /severity\s*=\s*severityVerdict\.severity;/;
 const EVA_PRECHECK_RE = /EVA Pre-Check/;
 const QF_INSERT_RE = /\.from\(\s*['"]quick_fixes['"]\s*\)\s*\r?\n?\s*\.insert\(/;
-const ROUTE_LATER_RETURN_RE = /if\s*\(criticalityVerdict\.verdict\s*===\s*'route_later'\)\s*\{[\s\S]{0,300}?return\s*\{/;
+const ROUTE_LATER_RETURN_RE = /if\s*\(criticalityVerdict\.verdict\s*===\s*'route_later'\)\s*\{[\s\S]{0,600}?return\s*\{/;
 const REFUSE_EXIT_RE = /if\s*\(criticalityVerdict\.verdict\s*===\s*'refuse'\)\s*\{[\s\S]{0,200}?process\.exit\(1\);/;
 
 describe('SD-LEO-INFRA-FILING-TOOLS-ENFORCE-001 FR-1: criticality gate placement and control flow', () => {
