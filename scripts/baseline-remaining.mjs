@@ -43,16 +43,21 @@ export function computeBaselineHash({ sdKeys, qfIds }) {
  * errored select to a zero count.
  */
 export async function computeRemaining(supabase, { sdKeys, qfIds }) {
+  // Bounded by construction: .in() can never return more rows than sdKeys/qfIds themselves
+  // (currently 29/109) -- the explicit .limit(500) is defensive headroom, not a truncation
+  // risk, and satisfies count-truncation-diff-lint's provably-bounded requirement.
   const { data: sds, error: sdErr } = await supabase
     .from('strategic_directives_v2')
     .select('sd_key, status')
-    .in('sd_key', sdKeys);
+    .in('sd_key', sdKeys)
+    .limit(500);
   if (sdErr) throw new Error(`BASELINE_QUERY_FAILED: strategic_directives_v2 query failed: ${sdErr.message}`);
 
   const { data: qfs, error: qfErr } = await supabase
     .from('quick_fixes')
     .select('id, status')
-    .in('id', qfIds);
+    .in('id', qfIds)
+    .limit(500);
   if (qfErr) throw new Error(`BASELINE_QUERY_FAILED: quick_fixes query failed: ${qfErr.message}`);
 
   const remainingSd = (sds || []).filter((s) => !TERMINAL_STATUSES.has(s.status)).length;
