@@ -51,11 +51,17 @@ const SKIP_DIR_RE = /(^|\/)(node_modules|\.git|\.worktrees|dist|build|coverage|\
 const CODE_RE = /\.(js|cjs|mjs|ts|tsx|jsx)$/;
 const DISABLE_PRAGMA = 'venture-role-stage-binding-lint-disable-line';
 
+// TESTING sub-agent finding (EXEC-TO-PLAN): a QUOTED object key ('stage_ownership': ...) evaded
+// the original \b(KEY)\s*: pattern -- \b matches fine on the opening quote side, but the pattern
+// had no allowance for a closing quote BEFORE the colon. A role definition round-tripped through
+// a JSON/DB payload always quotes its keys, so this was a real, likely reintroduction shape, not
+// a theoretical one. The ['"\`]? after the key name is the fix; verified by the TESTING
+// sub-agent's own probes (0/6 wrong after the fix, vs 3/6 wrong before it).
 const BANNED_KEYS = ['stage_ownership', 'can_advance_stage', 'requires_advisory_approval'];
-const KEY_RE = new RegExp(`\\b(${BANNED_KEYS.join('|')})\\s*:`);
+const KEY_RE = new RegExp(`\\b(${BANNED_KEYS.join('|')})['"\`]?\\s*:`);
 
 const STAGE_TOKEN_FIELDS = ['post_stage_mandate', 'honest_idle', 'duty_cycle'];
-const STAGE_TOKEN_FIELD_RE = new RegExp(`\\b(${STAGE_TOKEN_FIELDS.join('|')})\\s*:\\s*(['"\`])((?:(?!\\2).)*)\\2`);
+const STAGE_TOKEN_FIELD_RE = new RegExp(`\\b(${STAGE_TOKEN_FIELDS.join('|')})['"\`]?\\s*:\\s*(['"\`])((?:(?!\\2).)*)\\2`);
 const STAGE_TOKEN_RE = /\bS\d{1,3}\b/;
 
 // A comment LINE (block-comment body, JSDoc line, or `//` line) referencing a banned key or a

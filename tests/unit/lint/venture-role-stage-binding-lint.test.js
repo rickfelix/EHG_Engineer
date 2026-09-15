@@ -150,6 +150,50 @@ honest_idle: 'idle until S21 begins',
     expect(output).toMatch(/honest_idle/);
   });
 
+  it('flags a QUOTED object key too (a role definition round-tripped through JSON/DB quotes every key)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'venture-role-stage-lint-fixture-quoted-key-'));
+    libFile(dir, 'quoted_key.js', `
+const role = {
+  'stage_ownership': [10, 11, 12],
+};
+`);
+
+    let output = '';
+    let failed = false;
+    try {
+      output = execSync(`node "${LINT_SCRIPT}" --all`, { encoding: 'utf8', cwd: dir });
+    } catch (err) {
+      failed = true;
+      output = err.stdout?.toString() || err.message;
+    }
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(failed).toBe(true);
+    expect(output).toMatch(/stage_ownership/);
+  });
+
+  it('flags a quoted stage-token field key too', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'venture-role-stage-lint-fixture-quoted-field-'));
+    libFile(dir, 'quoted_field.js', `
+const role = {
+  "post_stage_mandate": "live-iteration past S12: keep shipping",
+};
+`);
+
+    let output = '';
+    let failed = false;
+    try {
+      output = execSync(`node "${LINT_SCRIPT}" --all`, { encoding: 'utf8', cwd: dir });
+    } catch (err) {
+      failed = true;
+      output = err.stdout?.toString() || err.message;
+    }
+    rmSync(dir, { recursive: true, force: true });
+
+    expect(failed).toBe(true);
+    expect(output).toMatch(/post_stage_mandate/);
+  });
+
   it('does NOT flag a comment referencing a banned key or stage token in prose', () => {
     const dir = mkdtempSync(join(tmpdir(), 'venture-role-stage-lint-fixture-comment-'));
     libFile(dir, 'comment_only.js', `
