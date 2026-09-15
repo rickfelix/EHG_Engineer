@@ -15,6 +15,7 @@
  */
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_KEY = 'SD-LEO-INFRA-ORGANIZATION-ACCEPTANCE-SUITE-001';
 
@@ -150,7 +151,9 @@ async function main() {
   console.log('SPINE UPDATED:', SD_KEY, 'id=', sdRow.id);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

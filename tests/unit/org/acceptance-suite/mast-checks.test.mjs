@@ -8,8 +8,10 @@ import { describe, it, expect } from 'vitest';
 import { MAST_CHECKS } from '../../../../lib/org/acceptance-suite/checks/mast/index.mjs';
 import { MAST_FIXTURES } from '../../../../lib/org/acceptance-suite/fixtures/mast/index.mjs';
 import { buildMockVentureOrganization } from '../../../../lib/org/acceptance-suite/fixtures/mock-venture.mjs';
+import * as fm11 from '../../../../lib/org/acceptance-suite/checks/mast/fm-1-1.mjs';
 import * as fm24 from '../../../../lib/org/acceptance-suite/checks/mast/fm-2-4.mjs';
 import * as fm25 from '../../../../lib/org/acceptance-suite/checks/mast/fm-2-5.mjs';
+import * as fm32 from '../../../../lib/org/acceptance-suite/checks/mast/fm-3-2.mjs';
 import * as fm33 from '../../../../lib/org/acceptance-suite/checks/mast/fm-3-3.mjs';
 
 describe('TS-2: each of the 14 MAST checks catches its own broken fixture (14/14 catch rate)', () => {
@@ -85,5 +87,28 @@ describe('FR-2 AC-4: cross-entity checks discriminate the broken entity from a w
     const wellFormed = perTask.find((r) => r.task_id === 'task-product-spec-review');
     expect(broken.passed).toBe(false);
     expect(wellFormed.passed).toBe(true);
+  });
+});
+
+describe('VALIDATION PLAN-TO-LEAD review: single-entity checks discriminate the specific broken condition, not a broader proxy for it', () => {
+  it('FM-1.1 (disobey task spec): a present-but-falsy required field is NOT "missing" -- the check is key-presence, not truthiness', () => {
+    // Mutation test (this review): swapping `!(f in output)` for `!output[f]` still passes the
+    // existing clean-baseline/broken-fixture pair (both required fields are truthy in both), so
+    // this case is the one that actually discriminates the two implementations.
+    const org = buildMockVentureOrganization();
+    org.tasks[0].produced.output.tam_usd = 0; // falsy, but the key IS present -- not a spec violation
+    const result = fm11.check(org);
+    expect(result.passed, 'a present-but-zero value must not be reported as a missing output field').toBe(true);
+  });
+
+  it('FM-3.2 (no/incomplete verification): a same-count coverage list that substitutes the wrong check is still incomplete', () => {
+    // Mutation test (this review): comparing `covered.size < required.length` instead of
+    // per-item set membership still passes the existing clean-baseline/broken-fixture pair (the
+    // broken fixture only ever drops the count, never swaps in a same-count wrong item), so this
+    // case is the one that actually discriminates the two implementations.
+    const org = buildMockVentureOrganization();
+    org.tasks[0].produced.verification.covers = ['tam_usd_is_number', 'unrelated_check']; // count matches required.length (2), item does not
+    const result = fm32.check(org);
+    expect(result.passed, 'a same-count coverage list missing the actual required check must still fail').toBe(false);
   });
 });

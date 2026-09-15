@@ -5,6 +5,7 @@
  */
 import { resolveSubAgentRepo, applySubAgentRepoVerdict } from '../../lib/sub-agents/resolve-repo.js';
 import { storeSubAgentResults } from '../../lib/sub-agent-executor/results-storage.js';
+import { isMainModule } from '../../lib/utils/is-main-module.js';
 
 const SD_ID = '4003f694-8f38-4c3f-9f6e-c11655bfcfdc';
 const SD_KEY = 'SD-LEO-INFRA-ORGANIZATION-ACCEPTANCE-SUITE-001';
@@ -78,7 +79,9 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((err) => {
-  console.error('FAILED TO STORE SECURITY RESULTS:', err);
-  process.exit(1);
-});
+if (isMainModule(import.meta.url)) {
+  main().catch((err) => {
+    console.error('FAILED TO STORE SECURITY RESULTS:', err);
+    process.exit(1);
+  });
+}
