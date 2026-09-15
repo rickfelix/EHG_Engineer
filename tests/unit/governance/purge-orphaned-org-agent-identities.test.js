@@ -8,13 +8,16 @@ import { purgeOrphanedOrgAgentIdentities } from '../../../lib/governance/fixture
 
 function makeFakeSupabase({ candidates = [], liveVentures = [] } = {}) {
   const deletedFrom = {};
+  const tablesQueried = [];
+  let notCallArgs = null;
   const client = {
     from(table) {
+      tablesQueried.push(table);
       if (table === 'org_agent_identities') {
         return {
           select() { return this; },
           ilike() { return this; },
-          not() { return this; },
+          not(col, op, val) { notCallArgs = [col, op, val]; return this; },
           limit() { return Promise.resolve({ data: candidates, error: null }); },
           delete() { return this; },
           in(col, ids) {
@@ -32,7 +35,7 @@ function makeFakeSupabase({ candidates = [], liveVentures = [] } = {}) {
       throw new Error(`unexpected table: ${table}`);
     },
   };
-  return { client, deletedFrom };
+  return { client, deletedFrom, getNotCallArgs: () => notCallArgs, tablesQueried };
 }
 
 describe('purgeOrphanedOrgAgentIdentities', () => {
@@ -73,10 +76,11 @@ describe('purgeOrphanedOrgAgentIdentities', () => {
   });
 
   it('no candidates -> no deletes and no ventures lookup fired', async () => {
-    const { client, deletedFrom } = makeFakeSupabase({ candidates: [] });
+    const { client, deletedFrom, tablesQueried } = makeFakeSupabase({ candidates: [] });
     const result = await purgeOrphanedOrgAgentIdentities(client, { namePrefix: 'TEST-' });
     expect(result).toEqual({ purged: 0 });
     expect(deletedFrom).toEqual({});
+    expect(tablesQueried).toEqual(['org_agent_identities']);
   });
 
   it('fails soft (never throws) on a candidate-lookup error', async () => {
@@ -114,5 +118,18 @@ describe('purgeOrphanedOrgAgentIdentities', () => {
 
   it('requires a namePrefix', async () => {
     await expect(purgeOrphanedOrgAgentIdentities({}, {})).rejects.toThrow('namePrefix');
+  });
+
+  // Adversarial /ship review finding, HIGH: the single most safety-critical invariant in this
+  // function -- "NEVER touches a venture_id IS NULL row (the 5 real holdco operators)" -- had
+  // no regression coverage. Every prior test supplied `candidates` directly, bypassing the real
+  // Supabase filter this invariant depends on entirely, so all 7 would still pass even if the
+  // implementation's `.not('venture_id', 'is', null)` call were deleted or weakened. This test
+  // asserts the query filter ITSELF, not just observed output, so a future edit that drops or
+  // alters that line fails here even though it can't be caught by output-only assertions.
+  it('the candidate query filters on venture_id IS NOT NULL -- the invariant protecting the 5 real holdco rows', async () => {
+    const { client, getNotCallArgs } = makeFakeSupabase({ candidates: [] });
+    await purgeOrphanedOrgAgentIdentities(client, { namePrefix: 'TEST-' });
+    expect(getNotCallArgs()).toEqual(['venture_id', 'is', null]);
   });
 });
