@@ -72,3 +72,27 @@ describe('resolveCurrentSkillPin (FR-2)', () => {
     expect(pin).toBeNull();
   });
 });
+
+describe('path-traversal rejection (adversarial /ship review finding, CRITICAL)', () => {
+  const TRAVERSAL_NAMES = [
+    '../../CLAUDE.md',
+    '../secrets.env',
+    'sub/dir/file.skill.md',
+    'a\\b.skill.md',
+    '..',
+  ];
+
+  it.each(TRAVERSAL_NAMES)('readSkillAtPin rejects %s as a skill file name, never reaches git', async (badName) => {
+    await expect(readSkillAtPin(badName, LATER_COMMIT)).rejects.toBeInstanceOf(PinnedReadError);
+  });
+
+  it.each(TRAVERSAL_NAMES)('resolveCurrentSkillPin rejects %s outright rather than silently returning null', async (badName) => {
+    // A bad file name must fail loudly (thrown), NOT be swallowed into the same null result as
+    // "this skill genuinely has no history yet" -- those are different conditions.
+    await expect(resolveCurrentSkillPin(badName)).rejects.toBeInstanceOf(PinnedReadError);
+  });
+
+  it('accepts a plain single-segment file name', async () => {
+    await expect(resolveCurrentSkillPin(SKILL_FILE)).resolves.not.toBeNull();
+  });
+});
